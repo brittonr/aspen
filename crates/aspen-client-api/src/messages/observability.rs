@@ -405,3 +405,66 @@ pub struct AlertEvaluateResultResponse {
     /// Error message if evaluation failed.
     pub error: Option<String>,
 }
+
+// =============================================================================
+// Network metrics wire types
+// =============================================================================
+
+/// Response from `GetNetworkMetrics` containing connection pool and snapshot transfer data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkMetricsResponse {
+    /// Aggregate connection pool metrics.
+    pub total_connections: u32,
+    /// Number of healthy connections.
+    pub healthy_connections: u32,
+    /// Number of degraded connections.
+    pub degraded_connections: u32,
+    /// Number of failed connections.
+    pub failed_connections: u32,
+    /// Total active QUIC streams across all connections.
+    pub total_active_streams: u32,
+    /// Total Raft-priority streams opened.
+    pub raft_streams_opened: u32,
+    /// Total bulk-priority streams opened.
+    pub bulk_streams_opened: u32,
+    /// Total ReadIndex retry attempts.
+    pub read_index_retry_count: u64,
+    /// Total ReadIndex operations that succeeded after retrying.
+    pub read_index_retry_success_count: u64,
+    /// Per-peer connection details.
+    pub peer_connections: Vec<PeerConnectionInfo>,
+    /// Recent snapshot transfer records (bounded ring buffer, last 100).
+    pub recent_snapshots: Vec<SnapshotTransferRecord>,
+    /// Error message if metrics retrieval failed.
+    pub error: Option<String>,
+}
+
+/// Per-peer connection detail.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerConnectionInfo {
+    /// Peer node ID.
+    pub peer_id: u64,
+    /// Connection state: "healthy", "degraded", or "failed".
+    pub state: String,
+    /// Active QUIC streams to this peer.
+    pub active_streams: u32,
+    /// Last activity timestamp in Unix microseconds.
+    pub last_activity_us: u64,
+}
+
+/// Record of a single snapshot transfer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotTransferRecord {
+    /// Peer involved in the transfer.
+    pub peer_id: u64,
+    /// Direction: "send" or "receive".
+    pub direction: String,
+    /// Snapshot size in bytes.
+    pub size_bytes: u64,
+    /// Transfer duration in milliseconds.
+    pub duration_ms: u64,
+    /// Outcome: "success" or "error".
+    pub outcome: String,
+    /// Transfer timestamp in Unix microseconds.
+    pub timestamp_us: u64,
+}

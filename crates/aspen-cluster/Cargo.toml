@@ -79,6 +79,8 @@ blake3 = "1.5"
 base64 = "0.22"
 url = "2"
 tracing = "0.1"
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 parking_lot = "0.12"
 clap = { version = "4.5.4", features = ["derive"] }
 hex = "0.4"

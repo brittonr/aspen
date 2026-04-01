@@ -315,6 +315,8 @@ async fn handle_sharded_rpc_stream(
             RaftRpcResponse::AppendEntries(result)
         }
         RaftRpcProtocol::InstallSnapshot(snapshot_req) => {
+            let recv_start = std::time::Instant::now();
+            let recv_size = snapshot_req.snapshot_data.len() as f64;
             let snapshot_cursor = Cursor::new(snapshot_req.snapshot_data);
             let snapshot = openraft::Snapshot {
                 meta: snapshot_req.snapshot_meta,
@@ -324,6 +326,12 @@ async fn handle_sharded_rpc_stream(
                 .install_full_snapshot(snapshot_req.vote, snapshot)
                 .await
                 .map_err(openraft::error::RaftError::Fatal);
+            let recv_ms = recv_start.elapsed().as_secs_f64() * 1000.0;
+            let outcome = if result.is_ok() { "success" } else { "error" };
+            metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "receive").record(recv_size);
+            metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "receive").record(recv_ms);
+            metrics::counter!("aspen.snapshot.transfers_total", "direction" => "receive", "outcome" => outcome)
+                .increment(1);
             RaftRpcResponse::InstallSnapshot(result)
         }
     };

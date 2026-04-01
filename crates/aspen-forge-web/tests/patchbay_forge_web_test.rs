@@ -261,6 +261,7 @@ fn build_test_context(
         service_executors: Vec::new(),
         app_registry: aspen_core::shared_registry(),
         proxy_config: aspen_rpc_core::ProxyConfig::default(),
+        prometheus_handle: None,
     }
 }
 

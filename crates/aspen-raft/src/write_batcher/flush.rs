@@ -113,6 +113,8 @@ impl WriteBatcher {
             self.config.max_entries
         );
 
+        let flush_start = std::time::Instant::now();
+
         // Build the Raft batch operation
         let operations: Vec<(bool, String, String)> = batch.iter().map(|p| p.operation.clone()).collect();
 
@@ -127,6 +129,10 @@ impl WriteBatcher {
         };
 
         let batch_size = batch.len();
+
+        // Record batch size histogram
+        metrics::histogram!("aspen.write_batcher.batch_size").record(batch_size as f64);
+        metrics::counter!("aspen.write_batcher.flush_total").increment(1);
 
         // Submit to Raft
         let result = self.raft.client_write(app_request).await;
@@ -160,6 +166,10 @@ impl WriteBatcher {
                 }
             }
         };
+
+        // Record flush duration
+        let flush_ms = flush_start.elapsed().as_secs_f64() * 1000.0;
+        metrics::histogram!("aspen.write_batcher.flush_duration_ms").record(flush_ms);
 
         // Clone result for each waiter
         for pending in batch {

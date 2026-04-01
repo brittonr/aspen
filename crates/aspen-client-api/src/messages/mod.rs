@@ -351,6 +351,9 @@ pub use observability::MetricListResultResponse;
 pub use observability::MetricMetadata;
 pub use observability::MetricQueryResultResponse;
 pub use observability::MetricTypeWire;
+pub use observability::NetworkMetricsResponse;
+pub use observability::PeerConnectionInfo;
+pub use observability::SnapshotTransferRecord;
 pub use observability::SpanEventWire;
 pub use observability::SpanStatusWire;
 pub use observability::TraceGetResultResponse;
@@ -633,6 +636,10 @@ pub enum ClientRpcRequest {
 
     /// Get Prometheus-format metrics.
     GetMetrics,
+
+    /// Get network-level metrics: connection pool health, per-peer detail,
+    /// and recent snapshot transfers.
+    GetNetworkMetrics,
 
     /// Promote a learner node to voter.
     PromoteLearner {
@@ -4017,6 +4024,7 @@ impl ClientRpcRequest {
             Self::GetKeyOrigin { .. } => "GetKeyOrigin",
             Self::GetLeader => "GetLeader",
             Self::GetMetrics => "GetMetrics",
+            Self::GetNetworkMetrics => "GetNetworkMetrics",
             Self::GetNodeInfo => "GetNodeInfo",
             Self::GetPeerClusterStatus { .. } => "GetPeerClusterStatus",
             Self::GetRaftMetrics => "GetRaftMetrics",
@@ -4218,6 +4226,7 @@ impl ClientRpcRequest {
             | Self::DeleteKey { .. }
             | Self::ScanKeys { .. }
             | Self::GetMetrics
+            | Self::GetNetworkMetrics
             | Self::PromoteLearner { .. }
             | Self::CheckpointWal
             | Self::ListVaults
@@ -4645,6 +4654,9 @@ pub enum ClientRpcResponse {
 
     /// Prometheus metrics response.
     Metrics(MetricsResponse),
+
+    /// Network-level metrics response (connection pool, snapshots).
+    NetworkMetrics(NetworkMetricsResponse),
 
     /// Promote learner response.
     PromoteLearnerResult(PromoteLearnerResultResponse),

@@ -38,9 +38,6 @@ use aspen_client_api::TraceSearchResultResponse;
 use aspen_client_api::TraceSummary;
 use aspen_client_api::VaultKeysResponse;
 use aspen_client_api::VaultListResponse;
-use aspen_coordination::AtomicCounter;
-use aspen_coordination::CounterConfig;
-use aspen_core::CLIENT_RPC_REQUEST_COUNTER;
 use aspen_core::kv::DeleteRequest;
 use aspen_core::kv::ReadConsistency;
 use aspen_core::kv::ReadRequest;
@@ -63,6 +60,7 @@ impl RequestHandler for CoreHandler {
                 | ClientRpcRequest::GetNodeInfo
                 | ClientRpcRequest::GetLeader
                 | ClientRpcRequest::GetMetrics
+                | ClientRpcRequest::GetNetworkMetrics
                 | ClientRpcRequest::CheckpointWal
                 | ClientRpcRequest::ListVaults
                 | ClientRpcRequest::GetVaultKeys { .. }
@@ -93,6 +91,7 @@ impl RequestHandler for CoreHandler {
             ClientRpcRequest::GetLeader => handle_get_leader(ctx).await,
             ClientRpcRequest::GetNodeInfo => handle_get_node_info(ctx).await,
             ClientRpcRequest::GetMetrics => handle_get_metrics(ctx).await,
+            ClientRpcRequest::GetNetworkMetrics => handle_get_network_metrics(ctx).await,
             ClientRpcRequest::CheckpointWal => handle_checkpoint_wal(),
             ClientRpcRequest::ListVaults => handle_list_vaults(),
             ClientRpcRequest::GetVaultKeys { vault_name } => handle_get_vault_keys(vault_name),
@@ -228,69 +227,50 @@ async fn handle_get_node_info(ctx: &ClientProtocolContext) -> anyhow::Result<Cli
 }
 
 async fn handle_get_metrics(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
-    // Return Prometheus-format metrics from Raft
-    let metrics_text = match ctx.controller.get_metrics().await {
-        Ok(metrics) => {
-            let state_value = metrics.state.as_u8();
-            let is_leader: u8 = u8::from(metrics.state.is_leader());
-            let last_applied = metrics.last_applied_index.unwrap_or(0);
-            let snapshot_index = metrics.snapshot_index.unwrap_or(0);
+    // Update Raft-derived gauges so they appear in the registry output.
+    // These are set as gauges on each GetMetrics call rather than continuously
+    // polled, keeping the hot path (normal Raft operations) free of metrics overhead.
+    let node_id_label = ctx.node_id.to_string();
+    if let Ok(metrics) = ctx.controller.get_metrics().await {
+        metrics::gauge!("aspen.raft.term", "node_id" => node_id_label.clone()).set(metrics.current_term as f64);
+        metrics::gauge!("aspen.raft.state", "node_id" => node_id_label.clone()).set(metrics.state.as_u8() as f64);
+        metrics::gauge!("aspen.raft.is_leader", "node_id" => node_id_label.clone())
+            .set(f64::from(u8::from(metrics.state.is_leader())));
+        metrics::gauge!("aspen.raft.last_log_index", "node_id" => node_id_label.clone())
+            .set(metrics.last_log_index.unwrap_or(0) as f64);
+        metrics::gauge!("aspen.raft.last_applied_index", "node_id" => node_id_label.clone())
+            .set(metrics.last_applied_index.unwrap_or(0) as f64);
+        metrics::gauge!("aspen.raft.snapshot_index", "node_id" => node_id_label.clone())
+            .set(metrics.snapshot_index.unwrap_or(0) as f64);
+    }
+    metrics::gauge!("aspen.node.uptime_seconds", "node_id" => node_id_label)
+        .set(ctx.start_time.elapsed().as_secs() as f64);
 
-            // Get cluster-wide request counter
-            let request_counter = {
-                let counter =
-                    AtomicCounter::new(ctx.kv_store.clone(), CLIENT_RPC_REQUEST_COUNTER, CounterConfig::default());
-                counter.get().await.unwrap_or(0)
-            };
-
-            format!(
-                "# HELP aspen_raft_term Current Raft term\n\
-                 # TYPE aspen_raft_term gauge\n\
-                 aspen_raft_term{{node_id=\"{}\"}} {}\n\
-                 # HELP aspen_raft_state Raft state (0=Learner, 1=Follower, 2=Candidate, 3=Leader, 4=Shutdown)\n\
-                 # TYPE aspen_raft_state gauge\n\
-                 aspen_raft_state{{node_id=\"{}\"}} {}\n\
-                 # HELP aspen_raft_is_leader Whether this node is the leader\n\
-                 # TYPE aspen_raft_is_leader gauge\n\
-                 aspen_raft_is_leader{{node_id=\"{}\"}} {}\n\
-                 # HELP aspen_raft_last_log_index Last log index\n\
-                 # TYPE aspen_raft_last_log_index gauge\n\
-                 aspen_raft_last_log_index{{node_id=\"{}\"}} {}\n\
-                 # HELP aspen_raft_last_applied_index Last applied log index\n\
-                 # TYPE aspen_raft_last_applied_index gauge\n\
-                 aspen_raft_last_applied_index{{node_id=\"{}\"}} {}\n\
-                 # HELP aspen_raft_snapshot_index Snapshot index\n\
-                 # TYPE aspen_raft_snapshot_index gauge\n\
-                 aspen_raft_snapshot_index{{node_id=\"{}\"}} {}\n\
-                 # HELP aspen_node_uptime_seconds Node uptime in seconds\n\
-                 # TYPE aspen_node_uptime_seconds counter\n\
-                 aspen_node_uptime_seconds{{node_id=\"{}\"}} {}\n\
-                 # HELP aspen_client_api_requests_total Total client RPC requests processed cluster-wide\n\
-                 # TYPE aspen_client_api_requests_total counter\n\
-                 aspen_client_api_requests_total{{node_id=\"{}\"}} {}\n",
-                ctx.node_id,
-                metrics.current_term,
-                ctx.node_id,
-                state_value,
-                ctx.node_id,
-                is_leader,
-                ctx.node_id,
-                metrics.last_log_index.unwrap_or(0),
-                ctx.node_id,
-                last_applied,
-                ctx.node_id,
-                snapshot_index,
-                ctx.node_id,
-                ctx.start_time.elapsed().as_secs(),
-                ctx.node_id,
-                request_counter
-            )
-        }
-        Err(_) => String::new(),
-    };
+    // Render all registered metrics from the prometheus handle.
+    // Falls back to empty string if no recorder was installed (e.g., in tests).
+    let metrics_text = ctx.prometheus_handle.as_ref().map(|h| h.render()).unwrap_or_default();
 
     Ok(ClientRpcResponse::Metrics(MetricsResponse {
         prometheus_text: metrics_text,
+    }))
+}
+
+async fn handle_get_network_metrics(_ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+    // TODO(5.4): Wire connection pool into ClientProtocolContext for real metrics.
+    // For now return empty but valid response — the struct is queryable from CLI/TUI.
+    Ok(ClientRpcResponse::NetworkMetrics(aspen_client_api::NetworkMetricsResponse {
+        total_connections: 0,
+        healthy_connections: 0,
+        degraded_connections: 0,
+        failed_connections: 0,
+        total_active_streams: 0,
+        raft_streams_opened: 0,
+        bulk_streams_opened: 0,
+        read_index_retry_count: 0,
+        read_index_retry_success_count: 0,
+        peer_connections: Vec::new(),
+        recent_snapshots: Vec::new(),
+        error: None,
     }))
 }
 

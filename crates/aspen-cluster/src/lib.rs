@@ -138,6 +138,7 @@ pub mod gossip;
 pub mod gossip_discovery;
 pub mod memory_watcher;
 pub mod metadata;
+pub mod metrics_init;
 #[cfg(feature = "relay-server")]
 pub mod relay_server;
 pub mod router_builder;

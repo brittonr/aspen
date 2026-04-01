@@ -81,6 +81,9 @@ impl KeyValueStore for RaftNode {
                     // Complex operations bypass batcher for correctness
                     _ => {}
                 }
+            } else {
+                // Follower skips batcher — record for observability
+                metrics::counter!("aspen.write_batcher.batcher_skipped_total").increment(1);
             }
         }
 
@@ -102,6 +105,7 @@ impl KeyValueStore for RaftNode {
                 {
                     let leader_addr = leader_node.iroh_addr.clone();
                     debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
+                    metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
                     return forwarder.forward_write(leader_id, leader_addr, request).await;
                 }
                 Err(map_raft_write_error(err))

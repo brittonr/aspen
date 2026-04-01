@@ -550,6 +550,7 @@ impl Node {
             service_executors: Vec::new(),
             app_registry: aspen_core::shared_registry(),
             proxy_config: aspen_rpc_handlers::aspen_rpc_core::ProxyConfig::default(),
+            prometheus_handle: None,
             #[cfg(feature = "deploy")]
             drain_state: None,
         }

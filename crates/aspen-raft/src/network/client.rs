@@ -486,6 +486,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             snapshot_data.extend_from_slice(&buffer[..bytes_read]);
         }
 
+        let snapshot_size = snapshot_data.len() as f64;
+        let snapshot_send_start = std::time::Instant::now();
+        let peer_label = self.target.to_string();
+
         let request = RaftSnapshotRequest {
             vote,
             snapshot_meta: snapshot.meta,
@@ -515,7 +519,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         };
 
         // Extract result from response, handling fatal errors gracefully
-        match response {
+        let result = match response {
             RaftRpcResponse::InstallSnapshot(result) => {
                 // Handle remote RaftError as StorageError since snapshot installation failed
                 result.map_err(|raft_err| StreamingError::StorageError(StorageError::read_snapshot(None, &raft_err)))
@@ -537,6 +541,17 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                 std::io::ErrorKind::InvalidData,
                 "unexpected response type for install_snapshot",
             )))),
-        }
+        };
+
+        // Record snapshot transfer metrics
+        let elapsed_ms = snapshot_send_start.elapsed().as_secs_f64() * 1000.0;
+        let outcome = if result.is_ok() { "success" } else { "error" };
+        metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "send", "peer" => peer_label.clone())
+            .record(snapshot_size);
+        metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "send", "peer" => peer_label)
+            .record(elapsed_ms);
+        metrics::counter!("aspen.snapshot.transfers_total", "direction" => "send", "outcome" => outcome).increment(1);
+
+        result
     }
 }

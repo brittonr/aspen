@@ -41,14 +41,17 @@ impl std::error::Error for ForgeUnavailableError {}
 /// an error. Returns a `ForgeUnavailableError` for `CapabilityUnavailable`,
 /// or a generic anyhow error for anything else unexpected.
 fn unexpected_response(resp: ClientRpcResponse) -> anyhow::Error {
-    if let ClientRpcResponse::CapabilityUnavailable(cap) = resp {
-        return ForgeUnavailableError {
+    match resp {
+        ClientRpcResponse::CapabilityUnavailable(cap) => ForgeUnavailableError {
             message: cap.message,
             hints: cap.hints,
         }
-        .into();
+        .into(),
+        ClientRpcResponse::Error(e) => {
+            anyhow::anyhow!("cluster error [{}]: {}", e.code, e.message)
+        }
+        other => anyhow::anyhow!("unexpected response from cluster: {:?}", std::mem::discriminant(&other)),
     }
-    anyhow::anyhow!("unexpected response from cluster: {:?}", std::mem::discriminant(&resp))
 }
 
 /// Kind of file change in a diff.

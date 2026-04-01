@@ -35,6 +35,7 @@ thiserror = "2.0"
 
 # Logging
 tracing = "0.1"
+metrics = { workspace = true }
 
 # Utilities
 bytes = "1.7"

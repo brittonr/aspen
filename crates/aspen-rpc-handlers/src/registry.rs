@@ -141,11 +141,23 @@ impl HandlerRegistry {
         ctx: &ClientProtocolContext,
         proxy_hops: u8,
     ) -> anyhow::Result<ClientRpcResponse> {
+        let operation = request.variant_name();
+        let start = std::time::Instant::now();
+        metrics::counter!("aspen.rpc.requests_total", "operation" => operation).increment(1);
+
         // Handle plugin reload directly — it requires access to the registry itself,
         // which individual handlers don't have.
         #[cfg(feature = "plugins-rpc")]
         if let ClientRpcRequest::PluginReload { ref name } = request {
-            return self.handle_plugin_reload(name.clone(), ctx).await;
+            let result = self.handle_plugin_reload(name.clone(), ctx).await;
+            let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+            metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => "HandlerRegistry")
+                .record(elapsed_ms);
+            if result.is_err() {
+                metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => "HandlerRegistry")
+                    .increment(1);
+            }
+            return result;
         }
 
         // Load the current handler snapshot (lock-free, wait-free)
@@ -161,25 +173,48 @@ impl HandlerRegistry {
         // `claims_kv_prefix` returns false.
         for handler in handlers.iter() {
             if handler.claims_kv_prefix(&request) {
+                let handler_name = handler.name();
                 debug!(
-                    handler = handler.name(),
+                    handler = handler_name,
                     request = ?std::mem::discriminant(&request),
                     "dispatching KV request to prefix-claiming handler"
                 );
-                return handler.handle(request, ctx).await;
+                let result = handler.handle(request, ctx).await;
+                let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+                metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => handler_name)
+                    .record(elapsed_ms);
+                if result.is_err() {
+                    metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => handler_name)
+                        .increment(1);
+                }
+                return result;
             }
         }
 
         for handler in handlers.iter() {
             if handler.can_handle(&request) {
+                let handler_name = handler.name();
                 debug!(
-                    handler = handler.name(),
+                    handler = handler_name,
                     request = ?std::mem::discriminant(&request),
                     "dispatching request to handler"
                 );
-                return handler.handle(request, ctx).await;
+                let result = handler.handle(request, ctx).await;
+                let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+                metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => handler_name)
+                    .record(elapsed_ms);
+                if result.is_err() {
+                    metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => handler_name)
+                        .increment(1);
+                }
+                return result;
             }
         }
+
+        // No handler matched — record error with handler="none"
+        metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => "none").increment(1);
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+        metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => "none").record(elapsed_ms);
 
         // No handler found - check if this is an optional app request
         if let Some(app_id) = request.required_app() {

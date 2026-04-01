@@ -231,6 +231,8 @@ tracing-appender = "0.2.0"
 tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 validit = "0.2.2"
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
 # === Core crates (in workspace) ===
 aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "crates/aspen-client-api" }

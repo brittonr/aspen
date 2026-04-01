@@ -288,6 +288,17 @@
 | 2026-03-29 | c2e index (content→envelope hash) only matches 4/33K entries | **Fixed**: Three bugs: (1) have_set contained envelope BLAKE3 hashes but exporter treated as content hashes (hash domain confusion), (2) content hashes differed due to TreeObject sort divergence, (3) TreeObject used Rust str::cmp instead of git's mode-aware sort. Fix: re-key c2e by SHA-1 hex, fix TreeObject sort to match git, preserve commit/tag message bytes through round-trip, change have_set to SHA-1 domain |
 | 2026-03-29 | Federation resolver created without git exporter — `sync_objects` used generic KV path instead of DAG walk | Blob store not available at federation init time. c2e index writes moved to import path instead |
 
+### Metrics Crate Patterns
+
+| What | How |
+|------|-----|
+| `metrics` crate macros | Use full path `metrics::counter!()`, `metrics::histogram!()` — no `use` import needed |
+| PrometheusBuilder | Call `install_recorder()` once early at startup. Returns `PrometheusHandle` for `render()` |
+| Label values | Must be `&'static str` or `String` — owned strings need `.clone()` for static labels |
+| Multiple exporters | Install only one recorder globally. For fan-out (Prometheus + OTLP), use `metrics-util::layers::FanoutBuilder` |
+| `variant_name()` | `ClientRpcRequest::variant_name()` returns `&'static str` — safe for metric labels |
+| Context construction sites | `TestContextBuilder::build()` in `aspen-rpc-core`, production in `src/bin/aspen_node/setup/client.rs`, testing in `src/node/mod.rs`, forge-web tests |
+
 ## Session Log
 
 ### 2026-03-28: Dogfood self-forwarding fix

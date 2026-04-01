@@ -145,6 +145,12 @@ pub struct ClientProtocolContext {
     ///
     /// Controls whether requests for unavailable apps are forwarded to discovered clusters.
     pub proxy_config: ProxyConfig,
+    /// Prometheus metrics handle for rendering metrics on `GetMetrics` requests.
+    ///
+    /// Installed once at node startup via `metrics_init::install_prometheus_recorder()`.
+    /// All `metrics::counter!()` / `metrics::gauge!()` / `metrics::histogram!()` calls
+    /// across the codebase are captured by this recorder and rendered on demand.
+    pub prometheus_handle: Option<Arc<metrics_exporter_prometheus::PrometheusHandle>>,
     /// Shared drain state for graceful node upgrades (optional).
     ///
     /// When present, the client protocol handler checks this before dispatching RPCs.
@@ -493,6 +499,7 @@ pub mod test_support {
                 service_executors: Vec::new(),
                 app_registry: aspen_core::shared_registry(),
                 proxy_config: ProxyConfig::default(),
+                prometheus_handle: None,
                 #[cfg(feature = "deploy")]
                 drain_state: None,
             }

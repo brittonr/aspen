@@ -1222,6 +1222,8 @@ dependencies = [
  "iroh-tickets",
  "irpc",
  "mainline",
+ "metrics",
+ "metrics-exporter-prometheus",
  "n0-error",
  "n0-future",
  "nix 0.29.0",
@@ -1425,6 +1427,7 @@ dependencies = [
  "aspen-testing",
  "async-trait",
  "hex",
+ "metrics",
  "serde_json",
  "tokio",
  "tokio-util",
@@ -2282,6 +2285,7 @@ dependencies = [
  "iroh-base",
  "irpc",
  "madsim",
+ "metrics",
  "n0-future",
  "openraft",
  "parking_lot",
@@ -2380,6 +2384,8 @@ dependencies = [
  "async-trait",
  "inventory",
  "iroh",
+ "metrics",
+ "metrics-exporter-prometheus",
  "serde",
  "serde_json",
  "tokio",
@@ -2431,6 +2437,7 @@ dependencies = [
  "iroh",
  "iroh-gossip",
  "irpc",
+ "metrics",
  "postcard",
  "proptest",
  "serde",
@@ -2839,6 +2846,7 @@ dependencies = [
  "bytes",
  "iroh",
  "irpc",
+ "metrics",
  "openraft",
  "parking_lot",
  "postcard",
@@ -9730,6 +9738,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrics-exporter-prometheus"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd7399781913e5393588a8d8c6a2867bf85fb38eaf2502fdce465aad2dc6f034"
+dependencies = [
+ "base64 0.22.1",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
+ "indexmap 2.13.0",
+ "ipnet",
+ "metrics",
+ "metrics-util",
+ "quanta",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "metrics-util"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8496cc523d1f94c1385dd8f0f0c2c480b2b8aeccb5b7e4485ad6365523ae376"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "hashbrown 0.15.5",
+ "metrics",
+ "quanta",
+ "rand 0.9.2",
+ "rand_xoshiro 0.7.0",
+ "sketches-ddsketch",
+]
+
+[[package]]
 name = "miette"
 version = "7.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12331,6 +12376,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ab5a9d756f0d97bdc89019bd2e4ea098cf9cde50ee7564dde6b81ccc8f06c7"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "once_cell",
+ "raw-cpuid",
+ "wasi",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12710,6 +12770,15 @@ dependencies = [
  "time",
  "unicode-segmentation",
  "unicode-width 0.2.2",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.11.0",
 ]
 
 [[package]]
@@ -14250,6 +14319,12 @@ name = "siphasher"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
+
+[[package]]
+name = "sketches-ddsketch"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c6f73aeb92d671e0cc4dca167e59b2deb6387c375391bc99ee743f326994a2b"
 
 [[package]]
 name = "slab"
