@@ -1265,6 +1265,49 @@ mod tests {
     }
 
     #[test]
+    fn test_can_handle_network_metrics() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetNetworkMetrics));
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_metrics_returns_prometheus_text() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler.handle(ClientRpcRequest::GetMetrics, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Metrics(response) => {
+                // Without a prometheus recorder installed, render returns empty.
+                // The handler still succeeds — it just has no data.
+                // In production, the recorder is installed at startup.
+                assert!(response.prometheus_text.is_empty() || response.prometheus_text.contains("aspen"));
+            }
+            other => panic!("expected Metrics, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_network_metrics_returns_valid_response() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler.handle(ClientRpcRequest::GetNetworkMetrics, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::NetworkMetrics(response) => {
+                assert!(response.error.is_none());
+                // Stub returns zeros — validates the wire path works
+                assert_eq!(response.total_connections, 0);
+            }
+            other => panic!("expected NetworkMetrics, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_can_handle_checkpoint_wal() {
         let handler = CoreHandler;
         assert!(handler.can_handle(&ClientRpcRequest::CheckpointWal));

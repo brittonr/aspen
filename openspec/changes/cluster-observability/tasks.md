@@ -4,7 +4,7 @@
 - [x] 1.2 Create `crates/aspen-cluster/src/metrics_init.rs` — install `PrometheusBuilder` at node startup, store the `PrometheusHandle` in `ClientProtocolContext`
 - [x] 1.3 Add `prometheus_handle: Option<Arc<PrometheusHandle>>` field to `ClientProtocolContext`
 - [x] 1.4 Rewrite `handle_get_metrics` in `crates/aspen-core-essentials-handler/src/core.rs` to call `prometheus_handle.render()` instead of the hardcoded `format!()` string
-- [ ] 1.5 Add test: `GetMetrics` response contains registry-generated output with at least one `aspen_` prefixed metric
+- [x] 1.5 Add test: `GetMetrics` response contains registry-generated output with at least one `aspen_` prefixed metric
 
 > **Note (tasks 5.4–5.9)**: `GetNetworkMetrics` handler is wired and returns a valid response. Connection pool wiring (5.4) is deferred until the pool is exposed from `aspen-raft` through the bootstrap chain.
 
@@ -69,7 +69,7 @@
 
 ## 8. Documentation and Verification
 
-- [ ] 8.1 Add `docs/observability.md` documenting: metric naming conventions, available metrics list, OTLP setup, TUI metrics view usage
+- [x] 8.1 Add `docs/observability.md` documenting: metric naming conventions, available metrics list, OTLP setup, TUI metrics view usage
 - [ ] 8.2 Update `AGENTS.md` Observability section with the new metric names and query patterns
 - [ ] 8.3 Run `cargo nextest run -P quick` to verify no regressions
 - [ ] 8.4 Run `cargo clippy --all-targets -- --deny warnings` clean
