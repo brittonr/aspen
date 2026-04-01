@@ -582,10 +582,10 @@ impl TriggerService {
         // triggers. All nodes receive gossip, but only one should start a pipeline.
         if let Some(ref is_leader) = self.is_leader {
             if !is_leader() {
-                debug!(
+                info!(
                     repo_id = %repo_hex,
                     ref_name = %trigger.ref_name,
-                    "Dropping CI trigger on follower node (leader-only dedup)"
+                    "Dropping CI trigger on non-leader node (only Raft leader processes triggers)"
                 );
                 return Ok(());
             }
@@ -806,9 +806,15 @@ impl AnnouncementCallback for CiTriggerHandler {
                     buffer.pop_front(); // Evict oldest to stay bounded
                 }
                 buffer.push_back((tokio::time::Instant::now(), trigger));
-                debug!(
-                    repo_id = %repo_id.to_hex(),
+
+                // Log watched set contents for mismatch diagnosis
+                let watched_ids: Vec<String> =
+                    trigger_service.watched_repos.read().await.iter().map(|id| id.to_hex()).collect();
+                info!(
+                    announced_repo_id = %repo_id.to_hex(),
                     buffer_size = buffer.len(),
+                    watched_count = watched_ids.len(),
+                    watched_repos = ?watched_ids,
                     "Buffered announcement for unwatched repo (will replay on watch)"
                 );
                 return;
@@ -824,9 +830,11 @@ impl AnnouncementCallback for CiTriggerHandler {
             }
 
             // Gate federation mirror repos behind federation_ci_enabled
-            if trigger_service.is_mirror_repo(&repo_id).await && !trigger_service.config.federation_ci_enabled {
-                debug!(
+            let is_mirror = trigger_service.is_mirror_repo(&repo_id).await;
+            if is_mirror && !trigger_service.config.federation_ci_enabled {
+                info!(
                     repo_id = %repo_id.to_hex(),
+                    federation_ci_enabled = trigger_service.config.federation_ci_enabled,
                     "federation CI disabled - skipping trigger for mirror repo"
                 );
                 return;

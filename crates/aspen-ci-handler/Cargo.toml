@@ -50,5 +50,9 @@ aspen-testing-core = { path = "../aspen-testing-core" }
 aspen-ci = { path = "../aspen-ci" }
 aspen-ci-core = { path = "../aspen-ci-core" }
 aspen-client-api = { workspace = true }
+aspen-forge = { path = "../aspen-forge" }
+aspen-blob = { path = "../aspen-blob" }
+rand = "0.9"
+blake3 = { workspace = true }
 aspen-traits = { path = "../aspen-traits" }
 serde_json = "1.0"

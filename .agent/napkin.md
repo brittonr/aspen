@@ -264,6 +264,18 @@
 
 ## Investigation Items
 
+### Federation clone completeness (2026-04-01) — VALIDATED
+
+**Status**: Unit tests confirm the full federation roundtrip works. Three new tests added:
+
+1. `test_federation_roundtrip_different_keys_14_object_dag` — 14-object DAG with worst-case ordering, different origin/mirror secret keys, convergent import loop
+2. `test_federation_roundtrip_gpgsig_commit` — GPG-signed commit survives federation path
+3. `test_federation_roundtrip_gitlink_submodule` — Gitlink entries (mode 160000) survive federation path
+
+The import → export path is correct at the unit level. `import_objects` sorts into waves (blobs → trees → commits), the convergent loop retries failed objects with newly-available mappings, and `export_commit_dag` BFS walks the mirror's own BLAKE3 DAG correctly.
+
+**End-to-end validated** (2026-04-01): `dogfood-federation -- full` succeeded through federation clone. All 34,645 objects (18 chunks) cloned from Alice → Bob via federation, then pushed to Bob's Forge with 0 skipped. CI trigger failed separately (unrelated to clone completeness).
+
 ### Federated clone SHA-1 drift in export (2026-03-30) — FIXED
 
 **Symptom**: `dogfood-federation -- full` fails at federated clone. `git-remote-aspen` receives all 34,051 objects (18 chunks) but git reports `Could not read 9970f375...` (a commit).

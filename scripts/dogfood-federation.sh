@@ -475,8 +475,17 @@ do_build() {
   ok "Bob Forge repo: $bob_repo_id"
 
   # Enable CI watch on bob's repo
-  log "Enabling CI watch on bob..."
-  cli_bob_json ci watch "$bob_repo_id" 2>/dev/null || warn "CI watch may already be set"
+  log "Enabling CI watch on bob (repo_id: $bob_repo_id)..."
+  local watch_out
+  watch_out=$(cli_bob_json ci watch "$bob_repo_id" 2>&1) || true
+  local watch_success
+  watch_success=$(parse_json "d.get('is_success', False)" <<< "$watch_out")
+  if [ "$watch_success" = "True" ] || [ "$watch_success" = "true" ]; then
+    ok "CI watch registered for repo $bob_repo_id"
+  else
+    warn "CI watch response: $watch_out"
+    warn "CI auto-trigger may not work — watch registration may have failed"
+  fi
 
   # Federated clone: bob clones from alice's forge via federation URL.
   # Bob's node connects to alice, fetches git objects over iroh QUIC,
@@ -567,12 +576,20 @@ do_build() {
   done
 
   if [ -z "$run_id" ]; then
-    warn "No auto-triggered pipeline, manually triggering..."
+    warn "No auto-triggered pipeline after 120s, manually triggering..."
+    warn "  repo_id: $bob_repo_id"
     local trigger_out
     trigger_out=$(cli_bob_json ci run "$bob_repo_id" 2>&1) || true
+    log "Manual trigger RPC response: $trigger_out"
     run_id=$(parse_json "d.get('run_id','')" <<< "$trigger_out")
+    local trigger_error
+    trigger_error=$(parse_json "d.get('error','')" <<< "$trigger_out")
     if [ -z "$run_id" ]; then
       err "Failed to trigger CI pipeline on bob"
+      if [ -n "$trigger_error" ]; then
+        err "  RPC error: $trigger_error"
+      fi
+      err "  Full response: $trigger_out"
       exit 1
     fi
     ok "Pipeline triggered: $run_id"
