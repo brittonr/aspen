@@ -93,6 +93,8 @@ nix-executor-snix = ["nix-executor", "aspen-ci-executor-nix/snix"]
 nix-executor-snix-eval = ["nix-executor-snix", "aspen-ci-executor-nix/snix-eval"]
 # Nix executor with native build execution (bubblewrap/OCI sandbox)
 nix-executor-snix-build = ["nix-executor-snix-eval", "aspen-ci-executor-nix/snix-build"]
+# Nix executor with CLI fallback (nix eval/build subprocess as last resort)
+nix-cli-fallback = ["nix-executor", "aspen-ci-executor-nix/nix-cli-fallback"]
 # SNIX storage (forwarded to executor crates)
 # In-process Nix evaluation for config deserialization via snix-serde
 nix-config = ["dep:snix-serde", "dep:snix-eval"]

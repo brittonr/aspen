@@ -59,7 +59,9 @@ pub(crate) mod test_support;
 
 #[cfg(feature = "snix-build")]
 pub use build_service::ClosureResult;
+#[cfg(feature = "snix-build")]
 pub use build_service::NativeBuildService;
+#[cfg(feature = "snix-build")]
 pub use build_service::compute_input_closure_via_pathinfo;
 #[cfg(feature = "snix-build")]
 pub mod upstream_cache;

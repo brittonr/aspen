@@ -752,6 +752,8 @@ async fn initialize_job_system(
                         cache_public_key: cache_public_key.clone(),
                         gateway_url: config.nix_cache.gateway_url.clone(),
                         resolved_public_key: tokio::sync::OnceCell::new(),
+                        #[cfg(feature = "snix-build")]
+                        upstream_cache_config: Some(Default::default()),
                     };
 
                     info!(

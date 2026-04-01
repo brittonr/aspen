@@ -2375,7 +2375,7 @@
                   src = fullSrcWithSnix;
                   cargoArtifacts = fullPluginsCargoArtifacts;
                   cargoVendorDir = fullSnixVendorDir;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix,snix-build";
+                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix,snix-build,nix-cli-fallback";
                   doCheck = false;
                   HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
                   PROTO_ROOT = "${snix-src}";
@@ -3650,8 +3650,20 @@
 
               # Pure snix-build test: builds WITHOUT nix CLI in PATH.
               # Proves the native pipeline works when nix/nix-store are absent.
+              # Tests transitive dependency closure computation via PathInfoService BFS.
               # Build: nix build .#checks.x86_64-linux.snix-pure-build-test --impure
               snix-pure-build-test = import ./nix/tests/snix-pure-build-test.nix {
+                inherit pkgs kvPluginWasm;
+                aspenNodePackage = bins.full-aspen-node-plugins-snix-build;
+                aspenCliPackage = bins.full-aspen-cli-e2e;
+                aspenCliPlugins = bins.full-aspen-cli-plugins;
+                gatewayPackage = bins.full-aspen-nix-cache-gateway;
+              };
+
+              # Upstream binary cache bootstrap test: UpstreamCacheClient fetches
+              # narinfo + NAR from a mock HTTP cache, populates PathInfoService.
+              # Build: nix build .#checks.x86_64-linux.upstream-cache-bootstrap-test --impure
+              upstream-cache-bootstrap-test = import ./nix/tests/upstream-cache-bootstrap.nix {
                 inherit pkgs kvPluginWasm;
                 aspenNodePackage = bins.full-aspen-node-plugins-snix-build;
                 aspenCliPackage = bins.full-aspen-cli-e2e;

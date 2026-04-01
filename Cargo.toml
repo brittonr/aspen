@@ -531,10 +531,11 @@ snix-http = ["snix", "dep:nar-bridge", "dep:snix-castore-http"]
 snix-daemon = ["snix", "dep:nix-daemon"]
 snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-serde", "aspen-ci?/nix-executor-snix-eval"]
 snix-build = ["snix-eval", "dep:snix-build", "aspen-ci?/nix-executor-snix-build"]
+nix-cli-fallback = ["ci", "aspen-ci?/nix-cli-fallback"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"nix-cli-fallback\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
