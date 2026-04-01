@@ -24,6 +24,7 @@ use aspen_client_api::MetricIngestResultResponse;
 use aspen_client_api::MetricListResultResponse;
 use aspen_client_api::MetricQueryResultResponse;
 use aspen_client_api::MetricTypeWire;
+use aspen_client_api::NetworkMetricsResponse;
 use aspen_client_api::SpanEventWire;
 use aspen_client_api::SpanStatusWire;
 use aspen_client_api::TraceGetResultResponse;
@@ -776,6 +777,19 @@ impl<'a> ObservabilityClient<'a> {
     }
 
     /// Evaluate an alert rule on-demand.
+    /// Query network metrics (connection pool, snapshot transfers).
+    ///
+    /// Returns aggregate pool stats and recent snapshot transfer history.
+    pub async fn get_network_metrics(&self) -> Result<NetworkMetricsResponse> {
+        let response = self.client.send(ClientRpcRequest::GetNetworkMetrics).await?;
+
+        match response {
+            ClientRpcResponse::NetworkMetrics(result) => Ok(result),
+            ClientRpcResponse::Error(e) => Err(anyhow::anyhow!("get network metrics failed: {}", e.message)),
+            other => Err(anyhow::anyhow!("unexpected response: {:?}", other)),
+        }
+    }
+
     pub async fn evaluate_alert(&self, name: &str, now_us: u64) -> Result<AlertEvaluateResultResponse> {
         let response = self
             .client

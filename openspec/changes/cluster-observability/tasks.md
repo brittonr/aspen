@@ -40,11 +40,11 @@
 - [x] 5.1 Add `GetNetworkMetrics` request variant to `ClientRpcRequest` in `aspen-client-api`
 - [x] 5.2 Add `NetworkMetricsResponse` struct with fields: `pool_metrics` (total/healthy/degraded/failed connections, stream counts, retry stats), `peer_connections` (Vec of per-peer detail), `recent_snapshots` (Vec of transfer records)
 - [x] 5.3 Add `NetworkMetrics(NetworkMetricsResponse)` variant to `ClientRpcResponse`
-- [ ] 5.4 Wire the connection pool into `ClientProtocolContext` — add `connection_pool: Option<Arc<ConnectionPool>>` field
-- [ ] 5.5 Implement `handle_get_network_metrics` in `CoreHandler` — call `connection_pool.metrics()` and build the response
+- [x] 5.4 Wire the connection pool into `ClientProtocolContext` — add `connection_pool: Option<Arc<ConnectionPool>>` field
+- [x] 5.5 Implement `handle_get_network_metrics` in `CoreHandler` — call `connection_pool.metrics()` and build the response
 - [ ] 5.6 Add periodic (10s) network gauge emission: spawn a background task that calls `connection_pool.metrics()` and emits `metrics::gauge!("aspen.network.connections", "state" => ...)` and `metrics::gauge!("aspen.network.active_streams")`
-- [ ] 5.7 Add `network` subcommand to `aspen-cli` that sends `GetNetworkMetrics` and prints formatted output
-- [ ] 5.8 Add client SDK method `get_network_metrics()` to `aspen-client`
+- [x] 5.7 Add `network` subcommand to `aspen-cli` that sends `GetNetworkMetrics` and prints formatted output
+- [x] 5.8 Add client SDK method `get_network_metrics()` to `aspen-client`
 - [ ] 5.9 Add integration test: boot 3-node cluster, query `GetNetworkMetrics` from each node, verify peer counts match
 
 ## 6. TUI Metrics View Upgrade

@@ -19,9 +19,67 @@ use aspen_core::PeerManager;
 use aspen_core::SharedAppRegistry;
 use aspen_core::WatchRegistry;
 use aspen_raft::StateMachineVariant;
+use aspen_raft::connection_pool::ConnectionPoolMetrics;
 use aspen_sharding::ShardTopology;
 
 use crate::proxy::ProxyConfig;
+
+/// Provider trait for connection pool metrics.
+///
+/// Abstracts the concrete `RaftConnectionPool<T>` behind a trait object
+/// so the context doesn't need the transport generic parameter.
+#[async_trait::async_trait]
+pub trait NetworkMetricsProvider: Send + Sync {
+    /// Collect current connection pool metrics.
+    async fn metrics(&self) -> ConnectionPoolMetrics;
+
+    /// Get the snapshot transfer history, if available.
+    fn snapshot_history(&self) -> Vec<aspen_transport::snapshot_history::SnapshotTransferEntry> {
+        Vec::new()
+    }
+}
+
+/// Adapter that implements `NetworkMetricsProvider` for any `RaftConnectionPool<T>`.
+pub struct PoolMetricsAdapter<T>
+where T: aspen_core::NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+{
+    pool: Arc<aspen_raft::connection_pool::RaftConnectionPool<T>>,
+    snapshot_history: Option<Arc<aspen_transport::snapshot_history::SnapshotTransferHistory>>,
+}
+
+impl<T> PoolMetricsAdapter<T>
+where T: aspen_core::NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+{
+    /// Create a new adapter wrapping a connection pool.
+    pub fn new(pool: Arc<aspen_raft::connection_pool::RaftConnectionPool<T>>) -> Self {
+        Self {
+            pool,
+            snapshot_history: None,
+        }
+    }
+
+    /// Attach a snapshot transfer history.
+    pub fn with_snapshot_history(
+        mut self,
+        history: Arc<aspen_transport::snapshot_history::SnapshotTransferHistory>,
+    ) -> Self {
+        self.snapshot_history = Some(history);
+        self
+    }
+}
+
+#[async_trait::async_trait]
+impl<T> NetworkMetricsProvider for PoolMetricsAdapter<T>
+where T: aspen_core::NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+{
+    async fn metrics(&self) -> ConnectionPoolMetrics {
+        self.pool.metrics().await
+    }
+
+    fn snapshot_history(&self) -> Vec<aspen_transport::snapshot_history::SnapshotTransferEntry> {
+        self.snapshot_history.as_ref().map(|h| h.recent()).unwrap_or_default()
+    }
+}
 
 /// Context for Client protocol handler with all dependencies.
 ///
@@ -151,6 +209,10 @@ pub struct ClientProtocolContext {
     /// All `metrics::counter!()` / `metrics::gauge!()` / `metrics::histogram!()` calls
     /// across the codebase are captured by this recorder and rendered on demand.
     pub prometheus_handle: Option<Arc<metrics_exporter_prometheus::PrometheusHandle>>,
+    /// Connection pool metrics provider for `GetNetworkMetrics` handler.
+    ///
+    /// Set during node bootstrap when the connection pool is created.
+    pub network_metrics: Option<Arc<dyn NetworkMetricsProvider>>,
     /// Shared drain state for graceful node upgrades (optional).
     ///
     /// When present, the client protocol handler checks this before dispatching RPCs.
@@ -500,6 +562,7 @@ pub mod test_support {
                 app_registry: aspen_core::shared_registry(),
                 proxy_config: ProxyConfig::default(),
                 prometheus_handle: None,
+                network_metrics: None,
                 #[cfg(feature = "deploy")]
                 drain_state: None,
             }

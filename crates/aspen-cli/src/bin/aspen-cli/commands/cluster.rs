@@ -71,6 +71,9 @@ pub enum ClusterCommand {
 
     /// Update a peer's address in the local network factory (no Raft consensus).
     UpdatePeer(UpdatePeerArgs),
+
+    /// Show network metrics (connection pool, snapshot transfers).
+    Network,
 }
 
 #[derive(Args)]
@@ -162,6 +165,7 @@ impl ClusterCommand {
             ClusterCommand::DeployStatus => deploy_status(client, json).await,
             ClusterCommand::Rollback => rollback(client, json).await,
             ClusterCommand::UpdatePeer(args) => update_peer(client, args, json).await,
+            ClusterCommand::Network => network_metrics(client, json).await,
         }
     }
 }
@@ -286,6 +290,46 @@ async fn prometheus_metrics(client: &AspenClient, json: bool) -> Result<()> {
         ClientRpcResponse::Error(e) => {
             anyhow::bail!("{}: {}", e.code, e.message)
         }
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn network_metrics(client: &AspenClient, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::GetNetworkMetrics).await?;
+
+    match response {
+        ClientRpcResponse::NetworkMetrics(m) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&m)?);
+            } else {
+                println!("Connection Pool");
+                println!("  total:    {}", m.total_connections);
+                println!("  healthy:  {}", m.healthy_connections);
+                println!("  degraded: {}", m.degraded_connections);
+                println!("  failed:   {}", m.failed_connections);
+                println!("Streams");
+                println!("  active:       {}", m.total_active_streams);
+                println!("  raft opened:  {}", m.raft_streams_opened);
+                println!("  bulk opened:  {}", m.bulk_streams_opened);
+                println!("ReadIndex Retries");
+                println!("  attempts:  {}", m.read_index_retry_count);
+                println!("  successes: {}", m.read_index_retry_success_count);
+                if !m.recent_snapshots.is_empty() {
+                    println!("Recent Snapshots ({})", m.recent_snapshots.len());
+                    for s in &m.recent_snapshots {
+                        println!(
+                            "  peer={} dir={} size={} dur={}ms outcome={}",
+                            s.peer_id, s.direction, s.size_bytes, s.duration_ms, s.outcome
+                        );
+                    }
+                }
+                if let Some(err) = &m.error {
+                    println!("Note: {}", err);
+                }
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }

@@ -551,6 +551,7 @@ impl Node {
             app_registry: aspen_core::shared_registry(),
             proxy_config: aspen_rpc_handlers::aspen_rpc_core::ProxyConfig::default(),
             prometheus_handle: None,
+            network_metrics: None,
             #[cfg(feature = "deploy")]
             drain_state: None,
         }

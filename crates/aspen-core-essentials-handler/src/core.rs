@@ -255,23 +255,56 @@ async fn handle_get_metrics(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
     }))
 }
 
-async fn handle_get_network_metrics(_ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
-    // TODO(5.4): Wire connection pool into ClientProtocolContext for real metrics.
-    // For now return empty but valid response — the struct is queryable from CLI/TUI.
-    Ok(ClientRpcResponse::NetworkMetrics(aspen_client_api::NetworkMetricsResponse {
-        total_connections: 0,
-        healthy_connections: 0,
-        degraded_connections: 0,
-        failed_connections: 0,
-        total_active_streams: 0,
-        raft_streams_opened: 0,
-        bulk_streams_opened: 0,
-        read_index_retry_count: 0,
-        read_index_retry_success_count: 0,
-        peer_connections: Vec::new(),
-        recent_snapshots: Vec::new(),
-        error: None,
-    }))
+async fn handle_get_network_metrics(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+    match &ctx.network_metrics {
+        Some(provider) => {
+            let pool = provider.metrics().await;
+            let snapshots: Vec<aspen_client_api::SnapshotTransferRecord> = provider
+                .snapshot_history()
+                .into_iter()
+                .map(|e| aspen_client_api::SnapshotTransferRecord {
+                    peer_id: e.peer_id,
+                    direction: e.direction.to_string(),
+                    size_bytes: e.size_bytes,
+                    duration_ms: e.duration_ms,
+                    outcome: e.outcome.to_string(),
+                    timestamp_us: e.timestamp_us,
+                })
+                .collect();
+
+            Ok(ClientRpcResponse::NetworkMetrics(aspen_client_api::NetworkMetricsResponse {
+                total_connections: pool.total_connections,
+                healthy_connections: pool.healthy_connections,
+                degraded_connections: pool.degraded_connections,
+                failed_connections: pool.failed_connections,
+                total_active_streams: pool.total_active_streams,
+                raft_streams_opened: pool.raft_streams_opened,
+                bulk_streams_opened: pool.bulk_streams_opened,
+                read_index_retry_count: pool.read_index_retry_count,
+                read_index_retry_success_count: pool.read_index_retry_success_count,
+                peer_connections: Vec::new(), // per-peer detail deferred
+                recent_snapshots: snapshots,
+                error: None,
+            }))
+        }
+        None => {
+            // No pool wired — return zeros with explanatory error.
+            Ok(ClientRpcResponse::NetworkMetrics(aspen_client_api::NetworkMetricsResponse {
+                total_connections: 0,
+                healthy_connections: 0,
+                degraded_connections: 0,
+                failed_connections: 0,
+                total_active_streams: 0,
+                raft_streams_opened: 0,
+                bulk_streams_opened: 0,
+                read_index_retry_count: 0,
+                read_index_retry_success_count: 0,
+                peer_connections: Vec::new(),
+                recent_snapshots: Vec::new(),
+                error: Some("connection pool not wired into context".to_string()),
+            }))
+        }
+    }
 }
 
 fn handle_checkpoint_wal() -> anyhow::Result<ClientRpcResponse> {
