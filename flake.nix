@@ -3981,11 +3981,14 @@
                 }
                 trap cleanup EXIT INT TERM
 
+                CLI="${aspenCli}/bin/aspen-cli"
+
                 echo "Starting Aspen node..."
                 ${aspenNode}/bin/aspen-node \
                   --node-id 1 --cookie forge-web-dev \
                   --storage-backend redb --data-dir "$DATA_DIR" \
                   --relay-mode disabled \
+                  --enable-workers --enable-ci --ci-auto-trigger \
                   > "$DATA_DIR/node.log" 2>&1 &
 
                 # Wait for cluster ticket
@@ -4002,8 +4005,38 @@
                 TICKET=$(cat "$DATA_DIR/cluster-ticket.txt")
 
                 echo "Initializing cluster..."
-                ${aspenCli}/bin/aspen-cli --ticket "$TICKET" cluster init 2>/dev/null || true
+                $CLI --ticket "$TICKET" cluster init 2>/dev/null || true
                 sleep 2
+
+                # Seed a demo repo with commits so the UI has content
+                echo "Creating demo repository..."
+                REPO_JSON=$($CLI --ticket "$TICKET" --json git init demo-app --description "Demo application" 2>/dev/null || echo '{}')
+                REPO_ID=$(echo "$REPO_JSON" | ${pkgs.jq}/bin/jq -r '.id // .repo_id // empty')
+                if [ -n "$REPO_ID" ]; then
+                  echo "  repo: $REPO_ID"
+
+                  # Create a blob, tree, commit, and push ref
+                  BLOB=$($CLI --ticket "$TICKET" --json git store-blob -r "$REPO_ID" <(echo '# Demo App') 2>/dev/null || echo '{}')
+                  BLOB_HASH=$(echo "$BLOB" | ${pkgs.jq}/bin/jq -r '.hash // empty')
+                  if [ -n "$BLOB_HASH" ]; then
+                    TREE=$($CLI --ticket "$TICKET" --json git create-tree -r "$REPO_ID" -e "100644:README.md:$BLOB_HASH" 2>/dev/null || echo '{}')
+                    TREE_HASH=$(echo "$TREE" | ${pkgs.jq}/bin/jq -r '.hash // empty')
+                    if [ -n "$TREE_HASH" ]; then
+                      COMMIT=$($CLI --ticket "$TICKET" --json git commit -r "$REPO_ID" --tree "$TREE_HASH" -m "Initial commit" 2>/dev/null || echo '{}')
+                      COMMIT_HASH=$(echo "$COMMIT" | ${pkgs.jq}/bin/jq -r '.hash // empty')
+                      if [ -n "$COMMIT_HASH" ]; then
+                        $CLI --ticket "$TICKET" git push -r "$REPO_ID" --ref-name heads/main --hash "$COMMIT_HASH" -f 2>/dev/null || true
+                        echo "  commit: $COMMIT_HASH"
+
+                        # Try triggering a CI run
+                        $CLI --ticket "$TICKET" ci run "$REPO_ID" --ref main 2>/dev/null || true
+                        echo "  CI triggered (best-effort)"
+                      fi
+                    fi
+                  fi
+                else
+                  echo "  (repo creation skipped — forge handler may not be available)"
+                fi
 
                 echo "Starting Forge web UI..."
                 ${aspenForgeWeb}/bin/aspen-forge-web \
