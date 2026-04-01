@@ -1608,6 +1608,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-dogfood"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-auth",
+ "aspen-ci-core",
+ "aspen-client",
+ "aspen-client-api",
+ "aspen-cluster",
+ "aspen-core",
+ "chrono",
+ "clap",
+ "libc",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "aspen-exec-cache"
 version = "0.1.0"
 dependencies = [

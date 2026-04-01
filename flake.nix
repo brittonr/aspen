@@ -2194,6 +2194,16 @@
                   doCheck = false;
                 }
               );
+              # Dogfood orchestrator — typed replacement for dogfood-local.sh.
+              aspen-dogfood = craneLib.buildPackage (
+                ciCommonArgs
+                // {
+                  pname = "aspen-dogfood";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-dogfood --bin aspen-dogfood";
+                  doCheck = false;
+                }
+              );
             }
             # CI-path builds with plugins (requires --impure for aspen-wasm-plugin).
             # Uses ciSrc with the stub replaced by real aspen-wasm-plugin source.
@@ -4650,11 +4660,6 @@
             # Uses ci-aspen-node-snix-build for native in-process nix builds.
             dogfood-local = let
               dogfoodNode = bins.ci-aspen-node-snix-build;
-              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
-                mkdir -p $out
-                cp -r ${./scripts}/* $out/
-                chmod -R +w $out
-              '';
             in {
               type = "app";
               program = "${pkgs.writeShellScript "dogfood-local" ''
@@ -4683,7 +4688,7 @@
                 export ASPEN_NIX_CACHE_GATEWAY_BIN="${bins.ci-aspen-nix-cache-gateway}/bin/aspen-nix-cache-gateway"
                 export PROJECT_DIR="$PWD"
 
-                exec ${scriptsDir}/dogfood-local.sh "$@"
+                exec ${bins.aspen-dogfood}/bin/aspen-dogfood "$@"
               ''}";
             };
 
@@ -4692,11 +4697,6 @@
             # Alice hosts source in Forge, Bob syncs via federation and builds with CI.
             dogfood-federation = let
               dogfoodNode = bins.ci-aspen-node-snix-build;
-              scriptsDir = pkgs.runCommand "aspen-scripts-fed" {} ''
-                mkdir -p $out
-                cp -r ${./scripts}/* $out/
-                chmod -R +w $out
-              '';
             in {
               type = "app";
               program = "${pkgs.writeShellScript "dogfood-federation" ''
@@ -4713,7 +4713,6 @@
                     pkgs.gnused
                     pkgs.git
                     pkgs.curl
-                    pkgs.python3
                     pkgs.nix
                     pkgs.bubblewrap
                   ]
@@ -4724,7 +4723,7 @@
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export PROJECT_DIR="$PWD"
 
-                exec ${scriptsDir}/dogfood-federation.sh "$@"
+                exec ${bins.aspen-dogfood}/bin/aspen-dogfood --federation "$@"
               ''}";
             };
 
@@ -4814,7 +4813,7 @@
 
                 export PROJECT_DIR="$PWD"
 
-                exec ${scriptsDir}/dogfood-local-vmci.sh "$@"
+                exec ${bins.aspen-dogfood}/bin/aspen-dogfood --vm-ci "$@"
               ''}";
             };
 

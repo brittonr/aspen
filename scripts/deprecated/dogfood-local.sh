@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# DEPRECATED: Use aspen-dogfood binary instead.
-# See: crates/aspen-dogfood/
-#
-# nix run .#dogfood-local      # single-node mode
-# nix run .#dogfood-federation  # federation mode (--federation)
-# nix run .#dogfood-local-vmci  # VM-CI mode (--vm-ci)
 # Self-hosted dogfood: Run a local Aspen cluster and build Aspen from its own Forge + CI.
 #
 # Usage:

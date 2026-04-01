@@ -210,23 +210,27 @@ nix run .#dogfood-local -- start  # Just start the cluster
 
 ### Dogfood (Self-Hosted Build)
 
-Aspen builds itself using its own Forge + CI + Nix pipeline:
+Aspen builds itself using its own Forge + CI + Nix pipeline. The `aspen-dogfood` binary (`crates/aspen-dogfood/`) orchestrates the full pipeline using typed `aspen-client` RPCs over Iroh.
 
 ```bash
-# Full pipeline: cluster → forge repo → git push → CI auto-trigger → nix build → verify
-nix run .#dogfood-local
+# Full pipeline: cluster → forge repo → git push → CI auto-trigger → nix build → verify → stop
+nix run .#dogfood-local -- full
 
 # Step-by-step
 nix run .#dogfood-local -- start      # Start 1-node cluster
 nix run .#dogfood-local -- push       # Push source to Forge
 nix run .#dogfood-local -- build      # Wait for CI pipeline
 nix run .#dogfood-local -- deploy     # Deploy CI-built artifact to cluster
-nix run .#dogfood-local -- verify     # Compare CI-built binary
-nix run .#dogfood-local -- full-loop  # Full loop: start → push → build → deploy → verify
+nix run .#dogfood-local -- verify     # Verify deployed artifact
+nix run .#dogfood-local -- full-loop  # build → deploy → verify
 nix run .#dogfood-local -- stop       # Clean up
+
+# Modes
+nix run .#dogfood-federation          # Two-cluster federation mode
+nix run .#dogfood-local-vmci          # VM-isolated CI execution
 ```
 
-Script: `scripts/dogfood-local.sh`. VM-isolated variant: `scripts/dogfood-local-vmci.sh`.
+Binary: `crates/aspen-dogfood/`. Old shell scripts in `scripts/deprecated/`.
 
 ### NixOS VM Integration Tests
 
