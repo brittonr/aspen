@@ -2553,3 +2553,322 @@ async fn test_verify_dag_integrity_complete() {
     assert_eq!(result.ref_heads.len(), 1, "should have 1 ref head");
     let _ = kv;
 }
+
+// ============================================================================
+// Federation roundtrip: origin → SyncObject → mirror → export
+// ============================================================================
+
+/// Full federation roundtrip: import on origin, extract raw git bytes,
+/// re-import on a mirror (different secret key → different BLAKE3 envelope
+/// hashes), then export from mirror and verify completeness.
+///
+/// This is the path that `federation_import_objects` + `handle_git_bridge_fetch`
+/// exercises in production. The test uses a 14-object DAG:
+///   5 blobs + 5 trees (including nested subtree) + 4 commits (including merge).
+///
+/// Origin and mirror use different secret keys, so every SignedObject gets a
+/// different BLAKE3 envelope hash. The mirror's import must:
+///   1. Store blobs first (no deps)
+///   2. Store trees after blob mappings exist (SHA-1 → BLAKE3 lookup)
+///   3. Store commits after tree mappings exist
+///   4. Create consistent SHA-1 → BLAKE3 mappings
+///
+/// Then the mirror's export must walk the full DAG from HEAD and produce
+/// all 14 objects with correct SHA-1 hashes matching the originals.
+#[tokio::test]
+async fn test_federation_roundtrip_different_keys_14_object_dag() {
+    // ── origin cluster ──
+    let origin = BridgeTestHarness::new();
+
+    // Build the same 14-object DAG as test_federation_import_export_dag_completeness
+    let blob0_bytes = make_git_blob(b"readme content\n");
+    let blob0_sha1 = compute_sha1(&blob0_bytes);
+    origin.importer.import_object(&origin.repo_id, &blob0_bytes).await.unwrap();
+
+    let blob1_bytes = make_git_blob(b"file a content\n");
+    let blob1_sha1 = compute_sha1(&blob1_bytes);
+    origin.importer.import_object(&origin.repo_id, &blob1_bytes).await.unwrap();
+
+    let blob2_bytes = make_git_blob(b"file b content\n");
+    let blob2_sha1 = compute_sha1(&blob2_bytes);
+    origin.importer.import_object(&origin.repo_id, &blob2_bytes).await.unwrap();
+
+    let blob3_bytes = make_git_blob(b"file c content\n");
+    let blob3_sha1 = compute_sha1(&blob3_bytes);
+    origin.importer.import_object(&origin.repo_id, &blob3_bytes).await.unwrap();
+
+    let blob_nested_bytes = make_git_blob(b"nested content\n");
+    let blob_nested_sha1 = compute_sha1(&blob_nested_bytes);
+    origin.importer.import_object(&origin.repo_id, &blob_nested_bytes).await.unwrap();
+
+    let tree0_bytes = make_git_tree(&[make_tree_entry("100644", "readme.txt", &blob0_sha1)]);
+    let tree0_sha1 = compute_sha1(&tree0_bytes);
+    origin.importer.import_object(&origin.repo_id, &tree0_bytes).await.unwrap();
+
+    let tree1_bytes = make_git_tree(&[make_tree_entry("100644", "a.txt", &blob1_sha1)]);
+    let tree1_sha1 = compute_sha1(&tree1_bytes);
+    origin.importer.import_object(&origin.repo_id, &tree1_bytes).await.unwrap();
+
+    let subtree1_bytes = make_git_tree(&[make_tree_entry("100644", "nested.txt", &blob_nested_sha1)]);
+    let subtree1_sha1 = compute_sha1(&subtree1_bytes);
+    origin.importer.import_object(&origin.repo_id, &subtree1_bytes).await.unwrap();
+
+    let tree2_bytes = make_git_tree(&[
+        make_tree_entry("100644", "b.txt", &blob2_sha1),
+        make_tree_entry("40000", "dir", &subtree1_sha1),
+    ]);
+    let tree2_sha1 = compute_sha1(&tree2_bytes);
+    origin.importer.import_object(&origin.repo_id, &tree2_bytes).await.unwrap();
+
+    let tree1b_bytes = make_git_tree(&[make_tree_entry("100644", "c.txt", &blob3_sha1)]);
+    let tree1b_sha1 = compute_sha1(&tree1b_bytes);
+    origin.importer.import_object(&origin.repo_id, &tree1b_bytes).await.unwrap();
+
+    let commit0_bytes = make_git_commit(&tree0_sha1, &[], "initial commit");
+    let commit0_sha1 = compute_sha1(&commit0_bytes);
+    origin.importer.import_object(&origin.repo_id, &commit0_bytes).await.unwrap();
+
+    let commit1_bytes = make_git_commit(&tree1_sha1, &[&commit0_sha1], "add a.txt");
+    let commit1_sha1 = compute_sha1(&commit1_bytes);
+    origin.importer.import_object(&origin.repo_id, &commit1_bytes).await.unwrap();
+
+    let commit1b_bytes = make_git_commit(&tree1b_sha1, &[&commit0_sha1], "branch commit");
+    let commit1b_sha1 = compute_sha1(&commit1b_bytes);
+    origin.importer.import_object(&origin.repo_id, &commit1b_bytes).await.unwrap();
+
+    let commit2_bytes = make_git_commit(&tree2_sha1, &[&commit1_sha1, &commit1b_sha1], "merge");
+    let commit2_sha1 = compute_sha1(&commit2_bytes);
+    origin.importer.import_object(&origin.repo_id, &commit2_bytes).await.unwrap();
+
+    // ── simulate federation transfer: extract raw git content ──
+    // In real federation, the origin's ForgeResourceResolver exports
+    // SyncObjects with raw git content (header stripped). Here we collect
+    // the raw git bytes (WITH header) for the mirror's importer.
+    let all_git_objects: Vec<(Sha1Hash, GitObjectType, Vec<u8>)> = vec![
+        // Shuffle order: commits first, then trees, then blobs.
+        // This is the WORST case for single-pass import.
+        (commit2_sha1, GitObjectType::Commit, commit2_bytes),
+        (commit1b_sha1, GitObjectType::Commit, commit1b_bytes),
+        (commit1_sha1, GitObjectType::Commit, commit1_bytes),
+        (commit0_sha1, GitObjectType::Commit, commit0_bytes),
+        (tree2_sha1, GitObjectType::Tree, tree2_bytes),
+        (tree1b_sha1, GitObjectType::Tree, tree1b_bytes),
+        (subtree1_sha1, GitObjectType::Tree, subtree1_bytes),
+        (tree1_sha1, GitObjectType::Tree, tree1_bytes),
+        (tree0_sha1, GitObjectType::Tree, tree0_bytes),
+        (blob_nested_sha1, GitObjectType::Blob, blob_nested_bytes),
+        (blob3_sha1, GitObjectType::Blob, blob3_bytes),
+        (blob2_sha1, GitObjectType::Blob, blob2_bytes),
+        (blob1_sha1, GitObjectType::Blob, blob1_bytes),
+        (blob0_sha1, GitObjectType::Blob, blob0_bytes),
+    ];
+
+    // ── mirror cluster (DIFFERENT secret key → different BLAKE3 hashes) ──
+    let mirror = BridgeTestHarness::new();
+
+    // Convergent import loop (same algorithm as federation_import_objects)
+    let mut remaining = all_git_objects;
+    let mut total_imported = 0u32;
+    let max_passes = 10u32;
+
+    for pass in 0..max_passes {
+        let mut unmapped = Vec::new();
+        for (sha1, gt, bytes) in remaining {
+            if mirror.mapping.has_sha1(&mirror.repo_id, &sha1).await.unwrap() {
+                continue; // already imported
+            }
+            unmapped.push((sha1, gt, bytes));
+        }
+
+        if unmapped.is_empty() {
+            break;
+        }
+
+        let attempt_count = unmapped.len();
+        let result = mirror.importer.import_objects(&mirror.repo_id, unmapped.clone()).await.unwrap();
+        total_imported += result.objects_imported;
+
+        if result.objects_imported == 0 {
+            panic!(
+                "convergent import stalled at pass {pass}: {attempt_count} objects attempted, \
+                 {} failures: {:?}",
+                result.failures.len(),
+                result.failures.iter().take(5).map(|(s, e)| format!("{}: {}", s.to_hex(), e)).collect::<Vec<_>>()
+            );
+        }
+
+        // Collect failures for next pass
+        let failed_sha1s: std::collections::HashSet<[u8; 20]> =
+            result.failures.iter().map(|(s, _)| *s.as_bytes()).collect();
+        remaining = unmapped.into_iter().filter(|(s, _, _)| failed_sha1s.contains(s.as_bytes())).collect();
+
+        if remaining.is_empty() {
+            break;
+        }
+    }
+
+    assert_eq!(total_imported, 14, "all 14 objects should be imported (got {total_imported})");
+
+    // Set ref on mirror
+    mirror.importer.update_ref(&mirror.repo_id, "refs/heads/main", commit2_sha1).await.unwrap();
+
+    // ── export from mirror and verify completeness ──
+    // Look up the HEAD commit's BLAKE3 on the mirror
+    let (head_blake3, _) = mirror
+        .mapping
+        .get_blake3(&mirror.repo_id, &commit2_sha1)
+        .await
+        .unwrap()
+        .expect("HEAD commit should have a BLAKE3 mapping on mirror");
+
+    let export = mirror
+        .exporter
+        .export_commit_dag(&mirror.repo_id, head_blake3, &std::collections::HashSet::new())
+        .await
+        .unwrap();
+
+    assert_eq!(export.objects.len(), 14, "mirror export must include all 14 objects (got {})", export.objects.len());
+
+    // Verify all SHA-1s match the originals
+    let exported_sha1s: std::collections::HashSet<_> = export.objects.iter().map(|o| o.sha1).collect();
+    let expected_sha1s = [
+        ("blob0", blob0_sha1),
+        ("blob1", blob1_sha1),
+        ("blob2", blob2_sha1),
+        ("blob3", blob3_sha1),
+        ("blob_nested", blob_nested_sha1),
+        ("tree0", tree0_sha1),
+        ("tree1", tree1_sha1),
+        ("subtree1", subtree1_sha1),
+        ("tree2", tree2_sha1),
+        ("tree1b", tree1b_sha1),
+        ("commit0", commit0_sha1),
+        ("commit1", commit1_sha1),
+        ("commit1b", commit1b_sha1),
+        ("commit2", commit2_sha1),
+    ];
+    for (name, sha1) in &expected_sha1s {
+        assert!(exported_sha1s.contains(sha1), "missing {name} ({sha1}) in mirror export");
+    }
+
+    // Verify DAG integrity on the mirror
+    let integrity = super::integrity::verify_dag_integrity(mirror.mapping.kv().as_ref(), &mirror.repo_id).await;
+    assert!(integrity.is_complete(), "mirror DAG should be complete, missing: {:?}", integrity.missing);
+    assert_eq!(integrity.reachable, 14);
+}
+
+/// Federation roundtrip with gpgsig commit — verifies that signed commits
+/// survive the origin → raw bytes → mirror path with SHA-1 fidelity.
+#[tokio::test]
+async fn test_federation_roundtrip_gpgsig_commit() {
+    let origin = BridgeTestHarness::new();
+
+    // Blob + tree
+    let blob_bytes = make_git_blob(b"signed content\n");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+    origin.importer.import_object(&origin.repo_id, &blob_bytes).await.unwrap();
+
+    let tree_bytes = make_git_tree(&[make_tree_entry("100644", "file.txt", &blob_sha1)]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+    origin.importer.import_object(&origin.repo_id, &tree_bytes).await.unwrap();
+
+    // Commit with gpgsig header (like GitHub's GPG-signed commits)
+    let commit_content = format!(
+        "tree {}\n\
+         author Test <t@t.com> 1700000000 +0000\n\
+         committer Test <t@t.com> 1700000000 +0000\n\
+         gpgsig -----BEGIN PGP SIGNATURE-----\n\
+          \n\
+          iQEzBAABCAAdFiEE+fake+signature+data\n\
+          =abcd\n\
+          -----END PGP SIGNATURE-----\n\
+         \n\
+         signed commit\n",
+        tree_sha1
+    );
+    let commit_bytes = {
+        let header = format!("commit {}\0", commit_content.len());
+        let mut b = Vec::with_capacity(header.len() + commit_content.len());
+        b.extend_from_slice(header.as_bytes());
+        b.extend_from_slice(commit_content.as_bytes());
+        b
+    };
+    let commit_sha1 = compute_sha1(&commit_bytes);
+    origin.importer.import_object(&origin.repo_id, &commit_bytes).await.unwrap();
+
+    // Mirror: import all 3 objects
+    let mirror = BridgeTestHarness::new();
+    let objects = vec![
+        (blob_sha1, GitObjectType::Blob, blob_bytes),
+        (tree_sha1, GitObjectType::Tree, tree_bytes),
+        (commit_sha1, GitObjectType::Commit, commit_bytes),
+    ];
+    let result = mirror.importer.import_objects(&mirror.repo_id, objects).await.unwrap();
+    assert_eq!(result.objects_imported, 3, "all 3 objects should import");
+    assert!(result.failures.is_empty());
+
+    // Export from mirror
+    let (head_b3, _) = mirror.mapping.get_blake3(&mirror.repo_id, &commit_sha1).await.unwrap().unwrap();
+    let export = mirror
+        .exporter
+        .export_commit_dag(&mirror.repo_id, head_b3, &std::collections::HashSet::new())
+        .await
+        .unwrap();
+
+    assert_eq!(export.objects.len(), 3);
+    let sha1s: std::collections::HashSet<_> = export.objects.iter().map(|o| o.sha1).collect();
+    assert!(sha1s.contains(&commit_sha1), "gpgsig commit SHA-1 must survive roundtrip");
+    assert!(sha1s.contains(&tree_sha1));
+    assert!(sha1s.contains(&blob_sha1));
+}
+
+/// Federation roundtrip with gitlink entries (submodules) — verifies that
+/// trees with mode 160000 entries survive the mirror path.
+#[tokio::test]
+async fn test_federation_roundtrip_gitlink_submodule() {
+    let origin = BridgeTestHarness::new();
+
+    // Blob + tree with a gitlink entry
+    let blob_bytes = make_git_blob(b"with submodule\n");
+    let blob_sha1 = compute_sha1(&blob_bytes);
+    origin.importer.import_object(&origin.repo_id, &blob_bytes).await.unwrap();
+
+    // External commit SHA-1 (submodule target — doesn't exist in our repo)
+    let submodule_sha1 = Sha1Hash::from_bytes([0x42; 20]);
+
+    let tree_bytes = make_git_tree(&[
+        make_tree_entry("100644", "file.txt", &blob_sha1),
+        make_tree_entry("160000", "vendor/sub", &submodule_sha1),
+    ]);
+    let tree_sha1 = compute_sha1(&tree_bytes);
+    origin.importer.import_object(&origin.repo_id, &tree_bytes).await.unwrap();
+
+    let commit_bytes = make_git_commit(&tree_sha1, &[], "add submodule");
+    let commit_sha1 = compute_sha1(&commit_bytes);
+    origin.importer.import_object(&origin.repo_id, &commit_bytes).await.unwrap();
+
+    // Mirror: import
+    let mirror = BridgeTestHarness::new();
+    let objects = vec![
+        (blob_sha1, GitObjectType::Blob, blob_bytes),
+        (tree_sha1, GitObjectType::Tree, tree_bytes),
+        (commit_sha1, GitObjectType::Commit, commit_bytes),
+    ];
+    let result = mirror.importer.import_objects(&mirror.repo_id, objects).await.unwrap();
+    assert_eq!(result.objects_imported, 3);
+
+    // Export from mirror
+    let (head_b3, _) = mirror.mapping.get_blake3(&mirror.repo_id, &commit_sha1).await.unwrap().unwrap();
+    let export = mirror
+        .exporter
+        .export_commit_dag(&mirror.repo_id, head_b3, &std::collections::HashSet::new())
+        .await
+        .unwrap();
+
+    // 2 real objects (blob + tree + commit), gitlink is NOT a separate object
+    assert_eq!(export.objects.len(), 3);
+    let sha1s: std::collections::HashSet<_> = export.objects.iter().map(|o| o.sha1).collect();
+    assert!(sha1s.contains(&tree_sha1), "tree with gitlink must have correct SHA-1");
+    assert!(sha1s.contains(&commit_sha1));
+    assert!(sha1s.contains(&blob_sha1));
+}
