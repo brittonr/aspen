@@ -5,9 +5,9 @@
 //! the `narHash` from flake.lock. A [`FetchCache`] avoids redundant
 //! downloads for inputs sharing the same narHash.
 //!
-//! All fetching uses `curl` subprocess (always available in nix environments)
-//! piped to in-process `flate2`/`tar` extraction. This avoids adding an
-//! HTTP client dependency and works inside `spawn_blocking` contexts.
+//! When the `snix-build` feature is enabled, uses `reqwest` for HTTP
+//! downloads (zero subprocess). Falls back to `curl` subprocess when
+//! `nix-cli-fallback` is enabled.
 
 use std::collections::HashMap;
 use std::io;
@@ -163,8 +163,8 @@ fn sanitize_cache_key(key: &str) -> String {
 
 /// Download a tarball from `url` and unpack it to `dest_dir`.
 ///
-/// Uses `curl` subprocess for the download (always available in nix
-/// environments) piped to in-process `flate2::GzDecoder` + `tar::Archive`.
+/// When `reqwest` is available (snix-build feature), uses in-process HTTP.
+/// Falls back to `curl` subprocess when `nix-cli-fallback` is enabled.
 ///
 /// Returns the path to the unpacked content. If the tarball contains a
 /// single top-level directory (common for GitHub archives), returns that
@@ -177,15 +177,72 @@ pub fn fetch_and_unpack_tarball(url: &str, dest_dir: &Path) -> io::Result<PathBu
         ));
     }
 
-    info!(url = %url, dest = %dest_dir.display(), "fetching tarball");
+    #[cfg(feature = "snix-build")]
+    {
+        fetch_and_unpack_tarball_reqwest(url, dest_dir)
+    }
 
-    // Spawn curl with size limit and timeout
+    #[cfg(all(not(feature = "snix-build"), feature = "nix-cli-fallback"))]
+    {
+        fetch_and_unpack_tarball_curl(url, dest_dir)
+    }
+
+    #[cfg(all(not(feature = "snix-build"), not(feature = "nix-cli-fallback")))]
+    {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "tarball fetching requires snix-build (reqwest) or nix-cli-fallback (curl)",
+        ))
+    }
+}
+
+/// Download and unpack a tarball using `reqwest` (in-process, zero subprocess).
+///
+/// Creates a temporary tokio runtime for the blocking context, downloads
+/// the response body with timeout and size limits, then pipes through
+/// `flate2::GzDecoder` + `tar::Archive`.
+#[cfg(feature = "snix-build")]
+fn fetch_and_unpack_tarball_reqwest(url: &str, dest_dir: &Path) -> io::Result<PathBuf> {
+    info!(url = %url, dest = %dest_dir.display(), "fetching tarball via reqwest");
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(FETCH_TIMEOUT_SECS))
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| io::Error::other(format!("failed to build HTTP client: {e}")))?;
+
+    let response = client.get(url).send().map_err(|e| io::Error::other(format!("HTTP request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        return Err(io::Error::other(format!("HTTP {} for {url}", response.status())));
+    }
+
+    // Pipe response body through gzip decoder and tar extractor
+    let reader = response;
+    let gz = flate2::read::GzDecoder::new(reader);
+    let limited = LimitedReader::new(gz, MAX_DOWNLOAD_SIZE);
+
+    let mut archive = tar::Archive::new(limited);
+    archive.set_preserve_permissions(true);
+    archive.set_overwrite(true);
+    archive
+        .unpack(dest_dir)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("failed to unpack tarball: {e}")))?;
+
+    strip_single_prefix(dest_dir)
+}
+
+/// Download and unpack a tarball using `curl` subprocess.
+#[cfg(all(not(feature = "snix-build"), feature = "nix-cli-fallback"))]
+fn fetch_and_unpack_tarball_curl(url: &str, dest_dir: &Path) -> io::Result<PathBuf> {
+    info!(url = %url, dest = %dest_dir.display(), "fetching tarball via curl");
+
     let mut child = Command::new("curl")
         .args([
             "--silent",
             "--show-error",
             "--fail",
-            "--location", // follow redirects
+            "--location",
             "--max-time",
             &FETCH_TIMEOUT_SECS.to_string(),
             "--max-filesize",
@@ -202,28 +259,22 @@ pub fn fetch_and_unpack_tarball(url: &str, dest_dir: &Path) -> io::Result<PathBu
         .take()
         .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "failed to capture curl stdout"))?;
 
-    // Pipe curl stdout through gzip decoder and tar extractor
     let gz = flate2::read::GzDecoder::new(stdout);
-
-    // Wrap in a size-limiting reader
     let limited = LimitedReader::new(gz, MAX_DOWNLOAD_SIZE);
 
     let mut archive = tar::Archive::new(limited);
     archive.set_preserve_permissions(true);
     archive.set_overwrite(true);
     archive.unpack(dest_dir).map_err(|e| {
-        // Kill curl if unpack fails
         let _ = child.kill();
         io::Error::new(io::ErrorKind::InvalidData, format!("failed to unpack tarball: {e}"))
     })?;
 
-    // Wait for curl to finish
     let status = child.wait()?;
     if !status.success() {
         return Err(io::Error::other(format!("curl exited with status {status}")));
     }
 
-    // Strip single top-level directory prefix if present
     strip_single_prefix(dest_dir)
 }
 

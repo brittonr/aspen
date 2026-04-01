@@ -58,7 +58,11 @@ mod worker;
 pub(crate) mod test_support;
 
 #[cfg(feature = "snix-build")]
+pub use build_service::ClosureResult;
 pub use build_service::NativeBuildService;
+pub use build_service::compute_input_closure_via_pathinfo;
+#[cfg(feature = "snix-build")]
+pub mod upstream_cache;
 pub use cache::UploadedStorePath;
 pub use config::NixBuildWorkerConfig;
 #[cfg(feature = "snix-eval")]
@@ -240,7 +244,7 @@ mod tests {
 
     /// Verify resolve_drv_path validates the output format.
     /// Uses a fake nix binary that prints a non-drv path.
-    #[cfg(feature = "snix-build")]
+    #[cfg(all(feature = "snix-build", feature = "nix-cli-fallback"))]
     #[tokio::test]
     async fn test_resolve_drv_path_rejects_invalid_output() {
         use std::io::Write;

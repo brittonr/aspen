@@ -536,8 +536,39 @@ async fn build_sandbox_spec(
 ) -> io::Result<snix_build::sandbox::SandboxSpec> {
     let direct_names: Vec<String> = request.inputs.keys().map(|k| k.to_string()).collect();
     let closure_names = match pathinfo_service {
-        Some(pis) => compute_input_closure_via_pathinfo(pis, &direct_names).await,
-        None => compute_input_closure(&direct_names),
+        Some(pis) => {
+            let result = compute_input_closure_via_pathinfo(pis, &direct_names).await;
+            if result.is_complete() {
+                result.closure
+            } else {
+                // Some paths unresolved — try subprocess fallback
+                #[cfg(feature = "nix-cli-fallback")]
+                {
+                    warn!(unresolved = result.unresolved.len(), "falling back to nix-store -qR for complete closure");
+                    compute_input_closure(&direct_names)
+                }
+                #[cfg(not(feature = "nix-cli-fallback"))]
+                {
+                    warn!(
+                        unresolved = result.unresolved.len(),
+                        "incomplete closure, nix-cli-fallback disabled — using partial closure"
+                    );
+                    result.closure
+                }
+            }
+        }
+        None => {
+            #[cfg(feature = "nix-cli-fallback")]
+            {
+                compute_input_closure(&direct_names)
+            }
+            #[cfg(not(feature = "nix-cli-fallback"))]
+            {
+                // No PathInfoService and no subprocess fallback — use direct inputs only
+                warn!("no PathInfoService and nix-cli-fallback disabled, using direct inputs only");
+                direct_names
+            }
+        }
     };
 
     let spec = snix_build::sandbox::SandboxSpec::builder()
@@ -682,27 +713,42 @@ fn register_outputs_in_store(host_paths: &[PathBuf]) {
 // Input closure computation
 // ============================================================================
 
-/// Maximum store paths in a single in-process closure computation.
+/// Maximum number of paths in a transitive closure.
 const MAX_CLOSURE_PATHS: usize = 50_000;
+
+/// Result of in-process closure computation.
+#[derive(Debug)]
+pub struct ClosureResult {
+    /// Deduplicated store path basenames in the closure.
+    pub closure: Vec<String>,
+    /// Basenames that could not be resolved from PathInfoService.
+    pub unresolved: Vec<String>,
+}
+
+impl ClosureResult {
+    /// Whether the closure is complete (all paths resolved).
+    pub fn is_complete(&self) -> bool {
+        self.unresolved.is_empty()
+    }
+}
 
 /// Compute the full runtime closure in-process via PathInfoService.
 ///
 /// BFS over `PathInfo.references` starting from `direct_names`. Each store
 /// path basename is parsed into a `StorePath`, its digest looked up in
-/// PathInfoService, and all references enqueued. Falls back to the
-/// subprocess-based `compute_input_closure` if any path can't be resolved.
+/// PathInfoService, and all references enqueued.
 ///
-/// This replaces `nix-store -qR` for builds where all inputs are registered
-/// in the cluster's PathInfoService (the common case for zero-subprocess
-/// builds via snix-eval + snix-build).
-async fn compute_input_closure_via_pathinfo(
+/// Returns a `ClosureResult` with the resolved closure and any unresolved
+/// paths. The caller decides how to handle unresolved paths (upstream cache,
+/// subprocess fallback, or error).
+pub async fn compute_input_closure_via_pathinfo(
     pathinfo_service: &dyn PathInfoService,
     direct_names: &[String],
-) -> Vec<String> {
+) -> ClosureResult {
     let mut closure = Vec::new();
+    let mut unresolved = Vec::new();
     let mut seen = std::collections::HashSet::new();
     let mut queue = std::collections::VecDeque::new();
-    let mut unresolved_count: u32 = 0;
 
     // Seed the queue with direct inputs
     for name in direct_names {
@@ -742,47 +788,42 @@ async fn compute_input_closure_via_pathinfo(
                 }
             }
             Ok(None) => {
-                // Path not in PathInfoService — include it (it exists on
-                // disk from nix-store --realise) but we can't expand its
-                // references in-process.
-                unresolved_count = unresolved_count.saturating_add(1);
+                unresolved.push(basename.clone());
                 debug!(basename = %basename, "path not in PathInfoService, included without reference expansion");
             }
             Err(e) => {
-                unresolved_count = unresolved_count.saturating_add(1);
+                unresolved.push(basename.clone());
                 debug!(basename = %basename, error = %e, "PathInfoService lookup failed, included without reference expansion");
             }
         }
     }
 
-    if unresolved_count > 0 {
-        // Some paths weren't in PathInfoService — their transitive deps
-        // may be missing from the closure. Fall back to nix-store -qR to
-        // get a complete closure.
-        warn!(
-            unresolved = unresolved_count,
-            closure_so_far = closure.len(),
-            "some paths missing from PathInfoService, falling back to nix-store -qR"
+    if unresolved.is_empty() {
+        info!(
+            direct = direct_names.len(),
+            closure = closure.len(),
+            "computed input closure in-process via PathInfoService"
         );
-        return compute_input_closure(direct_names);
+    } else {
+        warn!(
+            unresolved = unresolved.len(),
+            closure = closure.len(),
+            "partial closure: some paths missing from PathInfoService"
+        );
     }
 
-    info!(
-        direct = direct_names.len(),
-        closure = closure.len(),
-        "computed input closure in-process via PathInfoService"
-    );
-    closure
+    ClosureResult { closure, unresolved }
 }
 
-/// Compute the full runtime closure of a set of store path basenames.
+/// Compute the full runtime closure of a set of store path basenames
+/// via `nix-store -qR` subprocess.
 ///
-/// Uses `nix-store -qR /nix/store/<name>` to find all transitive dependencies.
 /// The builder (bash) needs its dynamic linker (glibc), which needs its own
 /// deps, etc. Without the full closure in the sandbox, dynamically-linked
 /// binaries fail with "No such file or directory" from the ELF loader.
 ///
 /// Returns deduplicated basenames for all paths in the closure.
+#[cfg(feature = "nix-cli-fallback")]
 fn compute_input_closure(direct_names: &[String]) -> Vec<String> {
     let store_paths: Vec<String> = direct_names
         .iter()
@@ -794,9 +835,7 @@ fn compute_input_closure(direct_names: &[String]) -> Vec<String> {
         return direct_names.to_vec();
     }
 
-    // SUBPROCESS-FALLBACK: Used when PathInfoService is unavailable (no snix services
-    // configured) or when some paths are missing from PathInfoService. The primary
-    // in-process path is `compute_input_closure_via_pathinfo` above.
+    // SUBPROCESS-FALLBACK: Used when PathInfoService can't resolve all paths.
     let output = std::process::Command::new("nix-store").arg("-qR").args(&store_paths).output();
 
     match output {
@@ -1840,7 +1879,8 @@ mod tests {
         let result =
             super::compute_input_closure_via_pathinfo(&pis, &["00bgd045z0d4icpbc2yyz4gx48ak44la-hello".into()]).await;
 
-        assert_eq!(result, vec!["00bgd045z0d4icpbc2yyz4gx48ak44la-hello"]);
+        assert!(result.is_complete());
+        assert_eq!(result.closure, vec!["00bgd045z0d4icpbc2yyz4gx48ak44la-hello"]);
     }
 
     #[tokio::test]
@@ -1861,10 +1901,11 @@ mod tests {
             super::compute_input_closure_via_pathinfo(&pis, &["mp57d33657rf34lzvlbpfa1gjfv5gmpg-hello".into()]).await;
 
         // BFS order: hello first, then bash (its ref), then libc (bash's ref)
-        assert_eq!(result.len(), 3);
-        assert_eq!(result[0], "mp57d33657rf34lzvlbpfa1gjfv5gmpg-hello");
-        assert_eq!(result[1], "1b9p07z77phvv2hf42a523hhcs2bl7gn-bash");
-        assert_eq!(result[2], "00bgd045z0d4icpbc2yyz4gx48ak44la-libc");
+        assert!(result.is_complete());
+        assert_eq!(result.closure.len(), 3);
+        assert_eq!(result.closure[0], "mp57d33657rf34lzvlbpfa1gjfv5gmpg-hello");
+        assert_eq!(result.closure[1], "1b9p07z77phvv2hf42a523hhcs2bl7gn-bash");
+        assert_eq!(result.closure[2], "00bgd045z0d4icpbc2yyz4gx48ak44la-libc");
     }
 
     #[tokio::test]
@@ -1890,16 +1931,16 @@ mod tests {
             super::compute_input_closure_via_pathinfo(&pis, &["2nwjxl6bkywkpfcmhz1n69a3z4m0bfy1-app".into()]).await;
 
         // 4 unique paths, no duplicates
-        assert_eq!(result.len(), 4, "closure should have 4 unique paths, got: {:?}", result);
-        let unique: std::collections::HashSet<&String> = result.iter().collect();
+        assert!(result.is_complete());
+        assert_eq!(result.closure.len(), 4, "closure should have 4 unique paths, got: {:?}", result.closure);
+        let unique: std::collections::HashSet<&String> = result.closure.iter().collect();
         assert_eq!(unique.len(), 4, "should have no duplicates");
     }
 
     #[tokio::test]
-    async fn test_closure_via_pathinfo_falls_back_on_missing() {
-        // When a path isn't in PathInfoService, it should fall back to
-        // the nix-store -qR subprocess (which may also fail, returning
-        // just the direct names if nix-store isn't available).
+    async fn test_closure_via_pathinfo_reports_unresolved() {
+        // When a path isn't in PathInfoService, it should be reported
+        // as unresolved (not silently dropped or triggering fallback).
         let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
             "test".into(),
             std::num::NonZeroUsize::new(100).unwrap(),
@@ -1908,10 +1949,27 @@ mod tests {
         let result =
             super::compute_input_closure_via_pathinfo(&pis, &["00bgd045z0d4icpbc2yyz4gx48ak44la-missing".into()]).await;
 
-        // Should fall back to subprocess, which will also likely fail
-        // (path doesn't exist on disk), returning just the direct name.
-        assert!(!result.is_empty(), "should return at least the direct input");
-        assert!(result.contains(&"00bgd045z0d4icpbc2yyz4gx48ak44la-missing".to_string()));
+        assert!(!result.is_complete(), "should report unresolved paths");
+        assert!(!result.closure.is_empty(), "should return at least the direct input");
+        assert!(result.closure.contains(&"00bgd045z0d4icpbc2yyz4gx48ak44la-missing".to_string()));
+        assert!(result.unresolved.contains(&"00bgd045z0d4icpbc2yyz4gx48ak44la-missing".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_closure_via_pathinfo_self_referencing() {
+        // A path that references itself should not cause infinite loop.
+        let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
+            "test".into(),
+            std::num::NonZeroUsize::new(100).unwrap(),
+        );
+        let pi = make_pathinfo("00bgd045z0d4icpbc2yyz4gx48ak44la-self", &["00bgd045z0d4icpbc2yyz4gx48ak44la-self"]);
+        pis.put(pi).await.unwrap();
+
+        let result =
+            super::compute_input_closure_via_pathinfo(&pis, &["00bgd045z0d4icpbc2yyz4gx48ak44la-self".into()]).await;
+
+        assert!(result.is_complete());
+        assert_eq!(result.closure.len(), 1);
     }
 
     #[tokio::test]
@@ -1921,7 +1979,8 @@ mod tests {
             std::num::NonZeroUsize::new(100).unwrap(),
         );
         let result = super::compute_input_closure_via_pathinfo(&pis, &[]).await;
-        assert!(result.is_empty());
+        assert!(result.closure.is_empty());
+        assert!(result.is_complete());
     }
 
     // ====================================================================

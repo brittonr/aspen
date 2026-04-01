@@ -105,17 +105,34 @@ upstream snix-build's FUSE-based input mounting, which fails under systemd's
 `ProtectSystem=strict`.
 
 **Input closure materialization:** When input store paths are missing from the
-local `/nix/store`, the executor materializes them from the cluster's castore
-services (PathInfoService + BlobService + DirectoryService) by walking the
-castore Node tree and writing files/directories/symlinks directly to disk.
-This replaces the previous `nix-store --realise` subprocess fallback.
+local `/nix/store`, the executor resolves them in three stages:
 
-If castore cannot resolve all paths and the `nix-cli-fallback` feature is
-enabled, `nix-store --realise` is used as a last-resort fallback.
+1. **Castore materialization**: Walk PathInfoService + BlobService + DirectoryService
+   Node trees, write files/directories/symlinks directly to disk.
+2. **Upstream cache bootstrap**: For paths not in PathInfoService, query upstream
+   binary caches (default: cache.nixos.org) via `UpstreamCacheClient`. Fetches
+   narinfo + NAR, decompresses (xz/zstd/bzip2), ingests into castore, then
+   retries materialization. BFS over references populates the full transitive closure.
+3. **Subprocess fallback** (opt-in): If `nix-cli-fallback` feature is enabled and
+   upstream cache can't resolve all paths, `nix-store --realise` is used as
+   last resort.
 
-#### 3. Subprocess fallback
+```
+missing paths → castore materialization
+  → still missing? → UpstreamCacheClient::populate_closure()
+    → fetch narinfo from cache.nixos.org
+    → download + decompress NAR
+    → ingest into BlobService + DirectoryService + PathInfoService
+    → retry castore materialization
+  → still missing? → nix-store --realise (nix-cli-fallback only)
+```
 
-When `snix-build` is unavailable or native builds fail.
+#### 3. Subprocess fallback (opt-in via `nix-cli-fallback` feature)
+
+When `snix-build` is unavailable or native builds fail. All nix CLI subprocess
+calls (`nix eval`, `nix build`, `nix path-info`, `nix-store -qR`, `nix-store --realise`,
+`nix flake lock`, and `curl` for tarballs) are gated behind the `nix-cli-fallback`
+feature flag. Without it, the native pipeline is the only build path.
 
 ```
 git push → Forge gossip → CI trigger

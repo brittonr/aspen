@@ -1,5 +1,6 @@
 //! Core Nix build execution logic.
 
+#[cfg(feature = "nix-cli-fallback")]
 use std::process::Stdio;
 #[cfg(feature = "nix-cache-proxy")]
 use std::sync::Arc;
@@ -12,17 +13,24 @@ use aspen_ci_core::Result;
 use aspen_ci_executor_shell::CacheProxy;
 #[cfg(feature = "snix-build")]
 use nix_compat::derivation::Derivation;
+#[cfg(feature = "nix-cli-fallback")]
 use tokio::io::AsyncBufReadExt;
+#[cfg(feature = "nix-cli-fallback")]
 use tokio::io::BufReader;
+#[cfg(feature = "nix-cli-fallback")]
 use tokio::process::Child;
+#[cfg(feature = "nix-cli-fallback")]
 use tokio::process::Command;
 use tokio::sync::mpsc;
+#[cfg(feature = "nix-cli-fallback")]
 use tokio::task::JoinHandle;
+#[cfg(feature = "nix-cli-fallback")]
 use tracing::debug;
 use tracing::info;
 #[cfg(any(feature = "snix-build", feature = "nix-cache-proxy"))]
 use tracing::warn;
 
+#[cfg(feature = "nix-cli-fallback")]
 use crate::config::MAX_LOG_SIZE;
 use crate::config::NixBuildWorkerConfig;
 use crate::payload::NixBuildPayload;
@@ -48,6 +56,7 @@ pub(crate) struct NixBuildOutput {
 }
 
 /// Handles for concurrent stdout/stderr reader tasks.
+#[cfg(feature = "nix-cli-fallback")]
 struct OutputReaders {
     stdout_task: JoinHandle<std::result::Result<(), CiCoreError>>,
     stderr_task: JoinHandle<std::result::Result<(), CiCoreError>>,
@@ -174,7 +183,7 @@ impl NixBuildWorker {
     /// Runs `nix eval --raw <flake_ref>.drvPath` to get the derivation
     /// store path. This is the bridge between flake evaluation and the
     /// native build pipeline — cheap (~100ms) compared to the build itself.
-    #[cfg(feature = "snix-build")]
+    #[cfg(all(feature = "snix-build", feature = "nix-cli-fallback"))]
     pub(crate) async fn resolve_drv_path(
         &self,
         payload: &NixBuildPayload,
@@ -273,7 +282,14 @@ impl NixBuildWorker {
                     let _ = tx.send(format!("in-process eval failed ({eval_err}), using nix eval subprocess\n")).await;
                 }
                 // Fallback: resolve via subprocess, read .drv from disk
-                self.resolve_drv_and_parse(payload, flake_ref).await?
+                #[cfg(feature = "nix-cli-fallback")]
+                {
+                    self.resolve_drv_and_parse(payload, flake_ref).await?
+                }
+                #[cfg(not(feature = "nix-cli-fallback"))]
+                {
+                    return Err(eval_err);
+                }
             }
         };
 
@@ -414,132 +430,214 @@ impl NixBuildWorker {
                     let _ = tx.send(format!("all paths materialized from castore in {realise_ms}ms\n")).await;
                 }
             } else {
-                // SUBPROCESS-LAST-RESORT: Fetch remaining store paths via nix-store --realise.
-                // Only reached when castore didn't have all inputs (e.g. paths not yet
-                // imported into the cluster store). Gated behind nix-cli-fallback feature.
-                #[cfg(feature = "nix-cli-fallback")]
-                {
-                    info!(
-                        missing = still_missing.len(),
-                        "castore could not resolve all paths, falling back to nix-store --realise"
-                    );
+                // Try upstream binary cache before subprocess fallback.
+                // This fetches narinfo + NAR from cache.nixos.org and populates
+                // PathInfoService, then materialize_store_paths can write to disk.
+                #[cfg(feature = "snix-build")]
+                if let (Some(config_cache), Some(bs), Some(ds), Some(ps)) = (
+                    &self.config.upstream_cache_config,
+                    &self.config.snix_blob_service,
+                    &self.config.snix_directory_service,
+                    &self.config.snix_pathinfo_service,
+                ) {
+                    info!(missing = still_missing.len(), "trying upstream cache for remaining store paths");
                     if let Some(ref tx) = log_sender {
-                        let _ = tx
-                            .send(format!(
-                                "fetching {} remaining store paths via nix-store --realise\n",
-                                still_missing.len()
-                            ))
-                            .await;
+                        let _ = tx.send(format!("fetching {} paths from upstream cache\n", still_missing.len())).await;
                     }
 
-                    // First try realising the input derivations (builds their outputs)
-                    let input_drv_paths: Vec<String> =
-                        drv.input_derivations.keys().map(|p| p.to_absolute_path()).collect();
-                    if !input_drv_paths.is_empty() {
-                        let mut cmd = Command::new("nix-store");
-                        cmd.arg("--realise");
-                        for drv_path in &input_drv_paths {
-                            cmd.arg(drv_path);
-                        }
-                        cmd.arg("--option").arg("substitute").arg("true");
-                        if let Some(ref dir) = payload.working_dir {
-                            cmd.current_dir(dir);
-                        }
-                        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+                    // Convert absolute paths to basenames for the cache client
+                    let basenames: Vec<String> = still_missing
+                        .iter()
+                        .filter_map(|p| p.strip_prefix("/nix/store/").map(|s| s.to_string()))
+                        .collect();
 
-                        let realise_timeout = Duration::from_secs(payload.timeout_secs.saturating_sub(60).max(120));
-                        let output = tokio::time::timeout(realise_timeout, cmd.output())
-                            .await
-                            .map_err(|_| CiCoreError::NixBuildFailed {
-                                flake: flake_ref.to_string(),
-                                reason: format!(
-                                    "realising input derivations timed out after {}s",
-                                    realise_timeout.as_secs()
-                                ),
-                            })?
-                            .map_err(|e| CiCoreError::NixBuildFailed {
-                                flake: flake_ref.to_string(),
-                                reason: format!("failed to spawn nix-store --realise: {e}"),
-                            })?;
+                    if let Ok(client) = crate::upstream_cache::UpstreamCacheClient::new(
+                        config_cache.clone(),
+                        std::sync::Arc::clone(bs),
+                        std::sync::Arc::clone(ds),
+                        std::sync::Arc::clone(ps),
+                    ) {
+                        match client.populate_closure(&basenames).await {
+                            Ok(report) => {
+                                info!(
+                                    fetched = report.fetched,
+                                    already_present = report.already_present,
+                                    unresolved = report.unresolved.len(),
+                                    "upstream cache population complete"
+                                );
+                                if let Some(ref tx) = log_sender {
+                                    let _ = tx
+                                        .send(format!(
+                                            "upstream cache: {} fetched, {} already present, {} unresolved\n",
+                                            report.fetched,
+                                            report.already_present,
+                                            report.unresolved.len()
+                                        ))
+                                        .await;
+                                }
 
-                        if !output.status.success() {
-                            let stderr = String::from_utf8_lossy(&output.stderr);
-                            return Err(CiCoreError::NixBuildFailed {
-                                flake: flake_ref.to_string(),
-                                reason: format!(
-                                    "realising input derivations failed (exit {}): {}",
-                                    output.status.code().unwrap_or(-1),
-                                    stderr.chars().take(500).collect::<String>()
-                                ),
-                            });
-                        }
-                    }
-
-                    // Then fetch any remaining missing store paths (builder, sources)
-                    let final_missing: Vec<&String> =
-                        still_missing.iter().filter(|p| !std::path::Path::new(p.as_str()).exists()).collect();
-
-                    if !final_missing.is_empty() {
-                        info!(
-                            missing = final_missing.len(),
-                            paths = ?final_missing,
-                            "fetching remaining missing paths via nix-store --realise"
-                        );
-                        let mut cmd = Command::new("nix-store");
-                        cmd.arg("--realise");
-                        for path in &final_missing {
-                            cmd.arg(path.as_str());
-                        }
-                        cmd.arg("--option").arg("substitute").arg("true");
-                        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-
-                        let fetch_timeout = Duration::from_secs(120);
-                        let output = tokio::time::timeout(fetch_timeout, cmd.output())
-                            .await
-                            .map_err(|_| CiCoreError::NixBuildFailed {
-                                flake: flake_ref.to_string(),
-                                reason: "fetching extra store paths timed out".to_string(),
-                            })?
-                            .map_err(|e| CiCoreError::NixBuildFailed {
-                                flake: flake_ref.to_string(),
-                                reason: format!("nix-store --realise for extra paths failed: {e}"),
-                            })?;
-
-                        if !output.status.success() {
-                            let stderr = String::from_utf8_lossy(&output.stderr);
-                            return Err(CiCoreError::NixBuildFailed {
-                                flake: flake_ref.to_string(),
-                                reason: format!(
-                                    "fetching extra store paths failed (exit {}): {}",
-                                    output.status.code().unwrap_or(-1),
-                                    stderr.chars().take(500).collect::<String>()
-                                ),
-                            });
+                                // Now try materializing again from the newly-populated PathInfoService
+                                if report.fetched > 0 {
+                                    match crate::materialize::materialize_store_paths(
+                                        &still_missing,
+                                        ps.as_ref(),
+                                        bs.as_ref(),
+                                        ds.as_ref(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(retry_report) => {
+                                            still_missing = retry_report.unresolved.clone();
+                                            still_missing.retain(|p| !std::path::Path::new(p.as_str()).exists());
+                                        }
+                                        Err(e) => {
+                                            warn!(error = %e, "retry materialization after upstream fetch failed");
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "upstream cache population failed");
+                            }
                         }
                     }
                 }
 
-                #[cfg(not(feature = "nix-cli-fallback"))]
-                {
-                    return Err(CiCoreError::NixBuildFailed {
-                        flake: flake_ref.to_string(),
-                        reason: format!(
-                            "castore could not resolve {} store paths and nix-cli-fallback feature is disabled: {:?}",
-                            still_missing.len(),
-                            still_missing.iter().take(5).collect::<Vec<_>>()
-                        ),
-                    });
-                }
-
-                #[cfg(feature = "nix-cli-fallback")]
-                {
+                // If upstream cache resolved everything, skip subprocess fallback
+                if still_missing.is_empty() {
                     let realise_ms = realise_start.elapsed().as_millis();
-                    info!(realise_ms = realise_ms, "input closure realised");
+                    info!(realise_ms = realise_ms, "all paths resolved via upstream cache + castore");
                     if let Some(ref tx) = log_sender {
-                        let _ = tx.send(format!("input closure realised in {realise_ms}ms\n")).await;
+                        let _ = tx.send(format!("all paths resolved via upstream cache in {realise_ms}ms\n")).await;
                     }
-                }
-            }
+                } else {
+                    // SUBPROCESS-LAST-RESORT: Fetch remaining store paths via nix-store --realise.
+                    // Only reached when castore AND upstream cache didn't have all inputs.
+                    // Gated behind nix-cli-fallback feature.
+                    #[cfg(feature = "nix-cli-fallback")]
+                    {
+                        info!(
+                            missing = still_missing.len(),
+                            "castore could not resolve all paths, falling back to nix-store --realise"
+                        );
+                        if let Some(ref tx) = log_sender {
+                            let _ = tx
+                                .send(format!(
+                                    "fetching {} remaining store paths via nix-store --realise\n",
+                                    still_missing.len()
+                                ))
+                                .await;
+                        }
+
+                        // First try realising the input derivations (builds their outputs)
+                        let input_drv_paths: Vec<String> =
+                            drv.input_derivations.keys().map(|p| p.to_absolute_path()).collect();
+                        if !input_drv_paths.is_empty() {
+                            let mut cmd = Command::new("nix-store");
+                            cmd.arg("--realise");
+                            for drv_path in &input_drv_paths {
+                                cmd.arg(drv_path);
+                            }
+                            cmd.arg("--option").arg("substitute").arg("true");
+                            if let Some(ref dir) = payload.working_dir {
+                                cmd.current_dir(dir);
+                            }
+                            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+                            let realise_timeout = Duration::from_secs(payload.timeout_secs.saturating_sub(60).max(120));
+                            let output = tokio::time::timeout(realise_timeout, cmd.output())
+                                .await
+                                .map_err(|_| CiCoreError::NixBuildFailed {
+                                    flake: flake_ref.to_string(),
+                                    reason: format!(
+                                        "realising input derivations timed out after {}s",
+                                        realise_timeout.as_secs()
+                                    ),
+                                })?
+                                .map_err(|e| CiCoreError::NixBuildFailed {
+                                    flake: flake_ref.to_string(),
+                                    reason: format!("failed to spawn nix-store --realise: {e}"),
+                                })?;
+
+                            if !output.status.success() {
+                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                return Err(CiCoreError::NixBuildFailed {
+                                    flake: flake_ref.to_string(),
+                                    reason: format!(
+                                        "realising input derivations failed (exit {}): {}",
+                                        output.status.code().unwrap_or(-1),
+                                        stderr.chars().take(500).collect::<String>()
+                                    ),
+                                });
+                            }
+                        }
+
+                        // Then fetch any remaining missing store paths (builder, sources)
+                        let final_missing: Vec<&String> =
+                            still_missing.iter().filter(|p| !std::path::Path::new(p.as_str()).exists()).collect();
+
+                        if !final_missing.is_empty() {
+                            info!(
+                                missing = final_missing.len(),
+                                paths = ?final_missing,
+                                "fetching remaining missing paths via nix-store --realise"
+                            );
+                            let mut cmd = Command::new("nix-store");
+                            cmd.arg("--realise");
+                            for path in &final_missing {
+                                cmd.arg(path.as_str());
+                            }
+                            cmd.arg("--option").arg("substitute").arg("true");
+                            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+                            let fetch_timeout = Duration::from_secs(120);
+                            let output = tokio::time::timeout(fetch_timeout, cmd.output())
+                                .await
+                                .map_err(|_| CiCoreError::NixBuildFailed {
+                                    flake: flake_ref.to_string(),
+                                    reason: "fetching extra store paths timed out".to_string(),
+                                })?
+                                .map_err(|e| CiCoreError::NixBuildFailed {
+                                    flake: flake_ref.to_string(),
+                                    reason: format!("nix-store --realise for extra paths failed: {e}"),
+                                })?;
+
+                            if !output.status.success() {
+                                let stderr = String::from_utf8_lossy(&output.stderr);
+                                return Err(CiCoreError::NixBuildFailed {
+                                    flake: flake_ref.to_string(),
+                                    reason: format!(
+                                        "fetching extra store paths failed (exit {}): {}",
+                                        output.status.code().unwrap_or(-1),
+                                        stderr.chars().take(500).collect::<String>()
+                                    ),
+                                });
+                            }
+                        }
+                    }
+
+                    #[cfg(not(feature = "nix-cli-fallback"))]
+                    {
+                        return Err(CiCoreError::NixBuildFailed {
+                            flake: flake_ref.to_string(),
+                            reason: format!(
+                                "castore could not resolve {} store paths and nix-cli-fallback feature is disabled: {:?}",
+                                still_missing.len(),
+                                still_missing.iter().take(5).collect::<Vec<_>>()
+                            ),
+                        });
+                    }
+
+                    #[cfg(feature = "nix-cli-fallback")]
+                    {
+                        let realise_ms = realise_start.elapsed().as_millis();
+                        info!(realise_ms = realise_ms, "input closure realised");
+                        if let Some(ref tx) = log_sender {
+                            let _ = tx.send(format!("input closure realised in {realise_ms}ms\n")).await;
+                        }
+                    }
+                } // end subprocess-last-resort else
+            } // end upstream-cache else
         }
 
         // Step 3: Execute native build — call build_derivation directly so
@@ -710,7 +808,7 @@ impl NixBuildWorker {
     }
 
     /// Fallback: resolve .drv path via `nix eval` subprocess, then read and parse it.
-    #[cfg(feature = "snix-build")]
+    #[cfg(all(feature = "snix-build", feature = "nix-cli-fallback"))]
     async fn resolve_drv_and_parse(
         &self,
         payload: &NixBuildPayload,
@@ -977,44 +1075,55 @@ impl NixBuildWorker {
             });
         }
 
-        // Subprocess fallback path
-        let build_start_sub = Instant::now();
+        // Subprocess fallback path — only available with nix-cli-fallback
+        #[cfg(feature = "nix-cli-fallback")]
+        {
+            let build_start_sub = Instant::now();
 
-        let mut child = self.spawn_nix_build(payload, &flake_ref)?;
-        let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.is_verbose, log_sender)?;
-        let (output_paths, log, log_size) = Self::collect_output(readers).await?;
-        Self::wait_for_build_completion(&mut child, payload.timeout_secs, &flake_ref, &log).await?;
+            let mut child = self.spawn_nix_build(payload, &flake_ref)?;
+            let readers = Self::spawn_output_readers(&mut child, &flake_ref, self.config.is_verbose, log_sender)?;
+            let (output_paths, log, log_size) = Self::collect_output(readers).await?;
+            Self::wait_for_build_completion(&mut child, payload.timeout_secs, &flake_ref, &log).await?;
 
-        timings.record_build(build_start_sub.elapsed());
+            timings.record_build(build_start_sub.elapsed());
 
-        // Phase 3: Upload/cleanup (proxy shutdown)
-        let upload_start = Instant::now();
+            // Phase 3: Upload/cleanup (proxy shutdown)
+            let upload_start = Instant::now();
 
-        #[cfg(feature = "nix-cache-proxy")]
-        if let Some(proxy) = cache_proxy {
-            debug!("Shutting down cache proxy");
-            proxy.shutdown().await;
+            #[cfg(feature = "nix-cache-proxy")]
+            if let Some(proxy) = cache_proxy {
+                debug!("Shutting down cache proxy");
+                proxy.shutdown().await;
+            }
+
+            timings.record_upload(upload_start.elapsed());
+
+            info!(
+                cluster_id = %self.config.cluster_id,
+                node_id = self.config.node_id,
+                output_paths = ?output_paths,
+                import_ms = timings.import_ms,
+                build_ms = timings.build_ms,
+                upload_ms = timings.upload_ms,
+                "Nix build completed successfully"
+            );
+
+            Ok(NixBuildOutput {
+                output_paths,
+                log,
+                log_truncated: log_size >= MAX_LOG_SIZE,
+                timings,
+                native_uploaded: false,
+            })
         }
 
-        timings.record_upload(upload_start.elapsed());
-
-        info!(
-            cluster_id = %self.config.cluster_id,
-            node_id = self.config.node_id,
-            output_paths = ?output_paths,
-            import_ms = timings.import_ms,
-            build_ms = timings.build_ms,
-            upload_ms = timings.upload_ms,
-            "Nix build completed successfully"
-        );
-
-        Ok(NixBuildOutput {
-            output_paths,
-            log,
-            log_truncated: log_size >= MAX_LOG_SIZE,
-            timings,
-            native_uploaded: false,
-        })
+        #[cfg(not(feature = "nix-cli-fallback"))]
+        {
+            Err(CiCoreError::NixBuildFailed {
+                flake: flake_ref.clone(),
+                reason: "native build not available and nix-cli-fallback feature is disabled".to_string(),
+            })
+        }
     }
 
     /// Start a cache proxy if the worker is configured to use the cluster cache.
@@ -1056,9 +1165,7 @@ impl NixBuildWorker {
     /// Configures the command with cache substituters, sandbox mode, extra args,
     /// working directory, and piped stdout/stderr, then spawns the child process.
     // SUBPROCESS-ESCAPE: This is the full `nix build` subprocess fallback path.
-    // Used when native snix-build is unavailable or fails. Pure-snix replacement:
-    // the entire native pipeline (snix-eval → derivation_to_build_request →
-    // NativeBuildService::build_derivation → upload_native_outputs) replaces this.
+    #[cfg(feature = "nix-cli-fallback")]
     fn spawn_nix_build(&self, payload: &NixBuildPayload, flake_ref: &str) -> Result<Child> {
         let mut cmd = Command::new(&self.config.nix_binary);
         // Use --no-link instead of --out-link to avoid creating a "result"
@@ -1108,7 +1215,11 @@ impl NixBuildWorker {
     }
 
     /// Configure cache substituter arguments on the nix build command.
-    #[cfg(feature = "nix-cache-proxy")]
+    #[cfg(all(feature = "nix-cache-proxy", feature = "nix-cli-fallback"))]
+    #[expect(
+        dead_code,
+        reason = "reserved for future use when cache proxy is integrated with subprocess path"
+    )]
     fn configure_cache_substituter(&self, cmd: &mut Command, proxy: &CacheProxy, flake_ref: &str) -> Result<()> {
         let substituter_url = proxy.substituter_url();
         let public_key = self.config.cache_public_key.as_ref().ok_or_else(|| CiCoreError::NixBuildFailed {
@@ -1133,6 +1244,7 @@ impl NixBuildWorker {
     ///
     /// Returns reader handles and channels for collecting output. Stdout is
     /// filtered for `/nix/store/` paths; stderr is forwarded as build log lines.
+    #[cfg(feature = "nix-cli-fallback")]
     fn spawn_output_readers(
         child: &mut Child,
         flake_ref: &str,
@@ -1170,6 +1282,7 @@ impl NixBuildWorker {
 
     /// Collect output paths and log lines from the reader channels, then
     /// await the reader tasks to check for errors.
+    #[cfg(feature = "nix-cli-fallback")]
     async fn collect_output(readers: OutputReaders) -> Result<(Vec<String>, String, usize)> {
         let OutputReaders {
             stdout_task,
@@ -1215,6 +1328,7 @@ impl NixBuildWorker {
     ///
     /// Returns an error if the process times out, fails to wait, or exits
     /// with a non-zero status code.
+    #[cfg(feature = "nix-cli-fallback")]
     async fn wait_for_build_completion(child: &mut Child, timeout_secs: u64, flake_ref: &str, log: &str) -> Result<()> {
         let timeout = Duration::from_secs(timeout_secs);
         let status = tokio::time::timeout(timeout, child.wait())
@@ -1238,6 +1352,7 @@ impl NixBuildWorker {
 }
 
 /// Read stdout lines and send any `/nix/store/` paths through the channel.
+#[cfg(feature = "nix-cli-fallback")]
 async fn read_stdout_paths(
     mut reader: BufReader<tokio::process::ChildStdout>,
     tx: mpsc::Sender<String>,
@@ -1266,6 +1381,7 @@ async fn read_stdout_paths(
 
 /// Read stderr lines as build log output, optionally logging each line.
 /// When `log_sender` is provided, lines are also forwarded for real-time streaming.
+#[cfg(feature = "nix-cli-fallback")]
 async fn read_stderr_log(
     mut reader: BufReader<tokio::process::ChildStderr>,
     tx: mpsc::Sender<String>,

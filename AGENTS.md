@@ -48,7 +48,8 @@ Default features are empty — users opt-in as needed. The `full` feature enable
 - **snix-http**: nar-bridge HTTP server for Nix binary cache protocol
 - **snix-daemon**: nix-daemon Unix socket protocol (nix path-info, nix copy)
 - **snix-eval**: In-process Nix evaluation via snix-eval/snix-glue (flake eval, config parsing via snix-serde)
-- **snix-build**: Native build execution via snix-build BuildService (bubblewrap/OCI sandbox, replaces `nix build` subprocess)
+- **snix-build**: Native build execution via snix-build BuildService (bubblewrap/OCI sandbox, replaces `nix build` subprocess). Includes `reqwest` for in-process HTTP, `xz2`/`zstd`/`bzip2` for NAR decompression, and `UpstreamCacheClient` for fetching from cache.nixos.org
+- **nix-cli-fallback**: Opt-in last-resort subprocess calls (`nix eval`, `nix build`, `nix path-info`, `nix-store -qR`, `nix-store --realise`, `nix flake lock`, `curl`). Without this feature, the native snix pipeline is the only build path.
 
 Dev features: testing, fuzzing, bolero, simulation
 

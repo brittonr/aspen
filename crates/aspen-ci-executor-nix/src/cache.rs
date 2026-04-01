@@ -8,7 +8,10 @@ use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use aspen_ci_core::CiCoreError;
 use aspen_ci_core::Result;
+#[cfg(feature = "snix")]
+use nix_compat::store_path::StorePath;
 use serde::Serialize;
+#[cfg(feature = "nix-cli-fallback")]
 use tokio::process::Command;
 use tracing::debug;
 use tracing::info;
@@ -23,6 +26,53 @@ pub(crate) struct PathInfo {
     pub(crate) references: Vec<String>,
     /// Deriver store path.
     pub(crate) deriver: Option<String>,
+}
+
+/// Metadata returned by `pathinfo_lookup` from PathInfoService.
+#[cfg(feature = "snix")]
+pub(crate) struct PathInfoMetadata {
+    /// NAR size in bytes.
+    pub(crate) nar_size: u64,
+    /// NAR SHA-256 hash (raw 32 bytes).
+    /// Used by upstream cache client for hash verification.
+    #[expect(dead_code)]
+    pub(crate) nar_sha256: [u8; 32],
+    /// Store paths this entry references (absolute paths).
+    pub(crate) references: Vec<String>,
+    /// Deriver store path (absolute), if any.
+    pub(crate) deriver: Option<String>,
+}
+
+/// Look up store path metadata from PathInfoService without subprocess.
+///
+/// Parses the store path to extract its 20-byte digest, queries
+/// PathInfoService, and returns NAR size, hash, references, and deriver.
+/// Returns `None` if the path is not in PathInfoService or parsing fails.
+#[cfg(feature = "snix")]
+pub(crate) async fn pathinfo_lookup(
+    pathinfo_service: &dyn snix_store::pathinfoservice::PathInfoService,
+    store_path: &str,
+) -> Option<PathInfoMetadata> {
+    let parsed = StorePath::<String>::from_absolute_path(store_path.as_bytes())
+        .inspect_err(|e| debug!(store_path, "failed to parse store path: {e}"))
+        .ok()?;
+
+    let path_info = pathinfo_service
+        .get(*parsed.digest())
+        .await
+        .inspect_err(|e| debug!(store_path, "PathInfoService lookup failed: {e}"))
+        .ok()??;
+
+    let references: Vec<String> = path_info.references.iter().map(|r| r.to_absolute_path()).collect();
+
+    let deriver = path_info.deriver.as_ref().map(|d| d.to_absolute_path());
+
+    Some(PathInfoMetadata {
+        nar_size: path_info.nar_size,
+        nar_sha256: path_info.nar_sha256,
+        references,
+        deriver,
+    })
 }
 
 /// Information about an uploaded store path.
@@ -41,10 +91,36 @@ pub struct UploadedStorePath {
 }
 
 impl NixBuildWorker {
-    /// Check the NAR size of a store path using `nix path-info --json`.
+    /// Check the NAR size of a store path.
     ///
-    /// Returns `None` if the command fails or the output can't be parsed.
+    /// Queries PathInfoService first (zero subprocess). Falls back to
+    /// `nix path-info --json` when `nix-cli-fallback` is enabled.
+    /// Returns `None` if the path can't be resolved.
     pub(crate) async fn check_store_path_size(&self, store_path: &str) -> Option<u64> {
+        // Primary: PathInfoService lookup (zero subprocess)
+        #[cfg(feature = "snix")]
+        if let Some(ref ps) = self.config.snix_pathinfo_service
+            && let Some(meta) = pathinfo_lookup(ps.as_ref(), store_path).await
+        {
+            return Some(meta.nar_size);
+        }
+
+        // Fallback: nix path-info subprocess
+        #[cfg(feature = "nix-cli-fallback")]
+        {
+            return self.check_store_path_size_subprocess(store_path).await;
+        }
+
+        #[cfg(not(feature = "nix-cli-fallback"))]
+        {
+            debug!(store_path, "path not in PathInfoService and nix-cli-fallback disabled");
+            None
+        }
+    }
+
+    /// Subprocess fallback for `check_store_path_size` via `nix path-info --json`.
+    #[cfg(feature = "nix-cli-fallback")]
+    async fn check_store_path_size_subprocess(&self, store_path: &str) -> Option<u64> {
         let output = Command::new(&self.config.nix_binary)
             .args(["path-info", "--json", store_path])
             .output()
@@ -66,9 +142,12 @@ impl NixBuildWorker {
 
     /// Upload store paths to the blob store as NAR archives.
     ///
-    /// Uses nix-compat NAR writer (via aspen_cache::nar) to create a NAR archive of each store
-    /// path, then uploads the archive to the blob store. If a cache index is configured,
-    /// also registers the store path in the distributed Nix binary cache.
+    /// When snix services are configured, uses castore ingestion
+    /// (`ingest_nar_and_hash`) to decompose the NAR into the cluster's
+    /// BlobService/DirectoryService and computes the NAR hash in-process.
+    ///
+    /// Falls back to `aspen_cache::nar::dump_path_nar_async` (reads from
+    /// local filesystem) when snix services are not available.
     pub(crate) async fn upload_store_paths(
         &self,
         output_paths: &[String],
@@ -114,6 +193,52 @@ impl NixBuildWorker {
 
             let nar_size = nar_data.len() as u64;
             let nar_hash = format!("sha256:{}", aspen_cache::nixbase32::encode(&nar_sha256));
+
+            // When snix services are available, also ingest the NAR into
+            // castore so PathInfoService has the decomposed representation.
+            // This replaces the need for `nix nar dump-path` in future
+            // lookups — SimpleRenderer can reconstruct the NAR from castore.
+            #[cfg(feature = "snix")]
+            if let (Some(bs), Some(ds), Some(ps)) = (
+                &self.config.snix_blob_service,
+                &self.config.snix_directory_service,
+                &self.config.snix_pathinfo_service,
+            ) {
+                let mut cursor = std::io::Cursor::new(&nar_data);
+                match snix_store::nar::ingest_nar_and_hash(Arc::clone(bs), Arc::clone(ds), &mut cursor, &None).await {
+                    Ok((root_node, ingested_sha256, ingested_size)) => {
+                        if let Ok(sp) = StorePath::<String>::from_absolute_path(store_path.as_bytes()) {
+                            let path_info = snix_store::path_info::PathInfo {
+                                store_path: sp,
+                                node: root_node,
+                                references: self
+                                    .query_path_info(store_path)
+                                    .await
+                                    .map(|info| {
+                                        info.references
+                                            .iter()
+                                            .filter_map(|r| StorePath::from_absolute_path(r.as_bytes()).ok())
+                                            .collect()
+                                    })
+                                    .unwrap_or_default(),
+                                nar_size: ingested_size,
+                                nar_sha256: ingested_sha256,
+                                signatures: vec![],
+                                deriver: None,
+                                ca: None,
+                            };
+                            if let Err(e) = ps.put(path_info).await {
+                                warn!(store_path = %store_path, error = %e, "failed to store PathInfo during upload");
+                            } else {
+                                debug!(store_path = %store_path, "ingested NAR into castore during upload");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(store_path = %store_path, error = %e, "failed to ingest NAR into castore");
+                    }
+                }
+            }
 
             // Upload to blob store
             let blob_hash = match blob_store.add_bytes(&nar_data).await {
@@ -234,8 +359,38 @@ impl NixBuildWorker {
         Ok(())
     }
 
-    /// Query nix path-info for a store path to get references and deriver.
+    /// Query path-info for a store path to get references and deriver.
+    ///
+    /// Queries PathInfoService first (zero subprocess). Falls back to
+    /// `nix path-info --json` when `nix-cli-fallback` is enabled.
     pub(crate) async fn query_path_info(&self, store_path: &str) -> Option<PathInfo> {
+        // Primary: PathInfoService lookup (zero subprocess)
+        #[cfg(feature = "snix")]
+        if let Some(ref ps) = self.config.snix_pathinfo_service
+            && let Some(meta) = pathinfo_lookup(ps.as_ref(), store_path).await
+        {
+            return Some(PathInfo {
+                references: meta.references,
+                deriver: meta.deriver,
+            });
+        }
+
+        // Fallback: nix path-info subprocess
+        #[cfg(feature = "nix-cli-fallback")]
+        {
+            return self.query_path_info_subprocess(store_path).await;
+        }
+
+        #[cfg(not(feature = "nix-cli-fallback"))]
+        {
+            debug!(store_path, "path not in PathInfoService and nix-cli-fallback disabled");
+            None
+        }
+    }
+
+    /// Subprocess fallback for `query_path_info` via `nix path-info --json`.
+    #[cfg(feature = "nix-cli-fallback")]
+    async fn query_path_info_subprocess(&self, store_path: &str) -> Option<PathInfo> {
         let output = Command::new(&self.config.nix_binary)
             .args(["path-info", "--json", store_path])
             .output()
@@ -275,6 +430,7 @@ impl NixBuildWorker {
 ///   `{"/nix/store/abc-foo": {"narSize": 123, ...}}`
 /// Older versions return an array:
 ///   `[{"narSize": 123, ...}]`
+#[cfg(feature = "nix-cli-fallback")]
 fn path_info_entry<'a>(parsed: &'a serde_json::Value, store_path: &str) -> Option<&'a serde_json::Value> {
     // Try object format first (newer nix): keyed by store path
     if let Some(obj) = parsed.as_object() {
@@ -292,6 +448,7 @@ fn path_info_entry<'a>(parsed: &'a serde_json::Value, store_path: &str) -> Optio
 mod tests {
     use super::*;
 
+    #[cfg(feature = "nix-cli-fallback")]
     #[test]
     fn path_info_entry_object_format() {
         let json: serde_json::Value =
@@ -302,6 +459,7 @@ mod tests {
         assert_eq!(entry.get("references").unwrap().as_array().unwrap().len(), 1);
     }
 
+    #[cfg(feature = "nix-cli-fallback")]
     #[test]
     fn path_info_entry_array_format() {
         let json: serde_json::Value = serde_json::from_str(r#"[{"narSize": 456, "references": []}]"#).unwrap();
@@ -309,6 +467,7 @@ mod tests {
         assert_eq!(entry.get("narSize").unwrap().as_u64().unwrap(), 456);
     }
 
+    #[cfg(feature = "nix-cli-fallback")]
     #[test]
     fn path_info_entry_object_fallback_to_first_value() {
         let json: serde_json::Value =
@@ -318,9 +477,85 @@ mod tests {
         assert_eq!(entry.get("narSize").unwrap().as_u64().unwrap(), 789);
     }
 
+    #[cfg(feature = "nix-cli-fallback")]
     #[test]
     fn path_info_entry_null_returns_none() {
         let json = serde_json::Value::Null;
         assert!(path_info_entry(&json, "/nix/store/foo").is_none());
+    }
+
+    // ================================================================
+    // pathinfo_lookup tests (snix feature)
+    // ================================================================
+
+    #[cfg(feature = "snix")]
+    mod pathinfo_lookup_tests {
+        use std::num::NonZeroUsize;
+        use std::sync::Arc;
+
+        use nix_compat::store_path::StorePath;
+        use snix_castore::Node;
+        use snix_castore::fixtures::DUMMY_DIGEST;
+        use snix_store::path_info::PathInfo as SnixPathInfo;
+        use snix_store::pathinfoservice::LruPathInfoService;
+        use snix_store::pathinfoservice::PathInfoService;
+
+        use super::super::pathinfo_lookup;
+
+        fn make_test_pathinfo_service() -> Arc<dyn PathInfoService> {
+            Arc::new(LruPathInfoService::with_capacity("test".to_string(), NonZeroUsize::new(100).unwrap()))
+        }
+
+        #[tokio::test]
+        async fn test_pathinfo_lookup_returns_metadata() {
+            let ps = make_test_pathinfo_service();
+
+            let sp =
+                StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-hello").unwrap();
+
+            let ref_sp =
+                StorePath::<String>::from_absolute_path(b"/nix/store/mp57d33657rf34lzvlbpfa1gjfv5gmpg-glibc").unwrap();
+
+            let path_info = SnixPathInfo {
+                store_path: sp.clone(),
+                node: Node::File {
+                    digest: DUMMY_DIGEST.clone(),
+                    size: 42,
+                    executable: false,
+                },
+                references: vec![ref_sp.clone()],
+                nar_size: 1234,
+                nar_sha256: [0xAB; 32],
+                signatures: vec![],
+                deriver: None,
+                ca: None,
+            };
+
+            ps.put(path_info).await.unwrap();
+
+            let meta = pathinfo_lookup(ps.as_ref(), "/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-hello")
+                .await
+                .expect("should resolve");
+
+            assert_eq!(meta.nar_size, 1234);
+            assert_eq!(meta.nar_sha256, [0xAB; 32]);
+            assert_eq!(meta.references.len(), 1);
+            assert!(meta.references[0].contains("glibc"));
+            assert!(meta.deriver.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_pathinfo_lookup_missing_path() {
+            let ps = make_test_pathinfo_service();
+            let result = pathinfo_lookup(ps.as_ref(), "/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-missing").await;
+            assert!(result.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_pathinfo_lookup_invalid_path() {
+            let ps = make_test_pathinfo_service();
+            let result = pathinfo_lookup(ps.as_ref(), "not-a-store-path").await;
+            assert!(result.is_none());
+        }
     }
 }

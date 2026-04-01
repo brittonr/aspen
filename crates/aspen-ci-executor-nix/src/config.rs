@@ -27,6 +27,7 @@ pub(crate) const MAX_ATTR_LENGTH: usize = 1024;
 /// Maximum build log size to capture inline (64 KB).
 pub(crate) const INLINE_LOG_THRESHOLD: usize = 64 * 1024;
 /// Maximum total log size (10 MB).
+#[cfg(feature = "nix-cli-fallback")]
 pub(crate) const MAX_LOG_SIZE: usize = 10 * 1024 * 1024;
 /// Default build timeout (30 minutes).
 pub(crate) const DEFAULT_TIMEOUT_SECS: u64 = 1800;
@@ -107,6 +108,13 @@ pub struct NixBuildWorkerConfig {
     /// the worker config was built before init completed.
     #[doc(hidden)]
     pub resolved_public_key: OnceCell<Option<String>>,
+
+    /// Upstream binary cache configuration for closure bootstrap.
+    /// When set, the native build path can fetch missing store paths
+    /// from upstream caches (e.g., cache.nixos.org) instead of falling
+    /// back to `nix-store --realise`.
+    #[cfg(feature = "snix-build")]
+    pub upstream_cache_config: Option<crate::upstream_cache::UpstreamCacheConfig>,
 }
 
 impl Default for NixBuildWorkerConfig {
@@ -133,6 +141,8 @@ impl Default for NixBuildWorkerConfig {
             cache_public_key: None,
             gateway_url: None,
             resolved_public_key: OnceCell::new(),
+            #[cfg(feature = "snix-build")]
+            upstream_cache_config: Some(crate::upstream_cache::UpstreamCacheConfig::default()),
         }
     }
 }
