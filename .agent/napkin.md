@@ -437,3 +437,21 @@ Note: The 7.5K/34K truncation was observed *before* the gitlink/gpgsig fixes (al
 `deploy_wait` in the CLI had `MAX_CONSECUTIVE_ERRORS = 12` (60s at 5s interval) which bailed with "lost connection to cluster" even when the deploy actually succeeded. During a rolling deploy, nodes restart — connection failures are expected. After a heavy CI pipeline (33K git objects), QUIC reconnection under load took >60s, triggering the premature bail. The dogfood script treated this as a deploy failure.
 
 Fix: removed the hard consecutive error bail. The `--deploy-timeout` deadline already provides the real timeout. Errors during deploy are logged periodically (every 5th consecutive error) but don't terminate polling. Added backoff: poll interval doubles from 5s to 10s when errors persist, reducing QUIC pressure during node restarts.
+
+### 2026-04-01: Dogfood binary local connectivity — iroh QUIC fails without relay
+
+The `aspen-dogfood` binary spawns alice/bob on localhost but the client can't connect. Root cause: iroh `Endpoint::connect()` with `RelayMode::Disabled` and no mDNS fails the QUIC handshake even when direct socket addresses are in the ticket. The `N0` preset may require relay for the initial connection establishment (hole-punching bootstrapping).
+
+Attempted fixes:
+
+1. `--relay-mode disabled` on spawned nodes ✅ (no more IPv6 relay errors)
+2. `ASPEN_RELAY_DISABLED=1` env var → `RelayMode::Disabled` in `AspenClient` ✅
+3. Still fails: `I/O error: connection closed` on every connect attempt
+
+The NixOS VM tests work because VMs have their own network stack with proper routing. The dogfood binary needs either:
+
+- iroh mDNS re-enabled for localhost discovery (simplest)
+- A custom discovery mechanism reading from the filesystem discovery files
+- Or the node's `EmptyPreset` approach instead of `presets::N0`
+
+Openspec change created: `fix-dogfood-local-networking`

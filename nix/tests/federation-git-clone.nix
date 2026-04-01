@@ -258,6 +258,109 @@ in
 
           bob.log("Cloned content verified!")
 
+      # ── large repo: 120+ files in nested dirs ───────────────────────
+
+      with subtest("alice creates large repo with nested dirs"):
+          out = cli(alice, "git init large-repo --description 'Large nested repo'")
+          large_repo_id = out.get("id") or out.get("repo_id", "")
+          assert large_repo_id, f"large repo init failed: {out}"
+          alice.log(f"Large repo: {large_repo_id}")
+
+      with subtest("alice pushes 120+ files in nested structure"):
+          ticket = get_ticket(alice)
+          # Create 120+ files: src/{a..z}/{1..4}.txt + docs/{a..j}.md + lib/{a..f}/{x,y}.rs
+          alice.succeed(
+              "mkdir -p /tmp/largerepo && cd /tmp/largerepo && "
+              "git init -b main && "
+              "git config user.email 'alice@test' && "
+              "git config user.name 'Alice' && "
+              f"git remote add origin 'aspen://{ticket}/{large_repo_id}' && "
+              "echo '# Large Repo' > README.md"
+          )
+          # src/{a..z}/{1..4}.txt = 104 files
+          for c in "abcdefghijklmnopqrstuvwxyz":
+              alice.succeed(f"mkdir -p /tmp/largerepo/src/{c}")
+              for n in range(1, 5):
+                  alice.succeed(
+                      f"echo 'content of src/{c}/{n}.txt — line 1' > /tmp/largerepo/src/{c}/{n}.txt && "
+                      f"echo 'unique id: {c}{n}' >> /tmp/largerepo/src/{c}/{n}.txt"
+                  )
+          # docs/{a..j}.md = 10 files
+          alice.succeed("mkdir -p /tmp/largerepo/docs")
+          for c in "abcdefghij":
+              alice.succeed(
+                  f"echo '# Doc {c}' > /tmp/largerepo/docs/{c}.md && "
+                  f"echo 'Documentation content for {c}' >> /tmp/largerepo/docs/{c}.md"
+              )
+          # lib/{a..f}/{x,y}.rs = 12 files
+          for c in "abcdef":
+              alice.succeed(f"mkdir -p /tmp/largerepo/lib/{c}")
+              for name in ["x", "y"]:
+                  alice.succeed(
+                      f"echo '// lib/{c}/{name}.rs' > /tmp/largerepo/lib/{c}/{name}.rs && "
+                      f"echo 'pub fn {name}_{c}() -> u32 {{ 42 }}' >> /tmp/largerepo/lib/{c}/{name}.rs"
+                  )
+          # Total: 1 README + 104 src + 10 docs + 12 lib = 127 files
+          alice.succeed(
+              "cd /tmp/largerepo && git add . && "
+              "git commit -m 'initial: 127 files in nested dirs'"
+          )
+          rc, output = alice.execute(
+              "cd /tmp/largerepo && git push origin main 2>&1"
+          )
+          alice.log(f"large repo push rc={rc} output={output}")
+          assert rc == 0, f"large repo push failed: {output}"
+          time.sleep(3)
+
+      with subtest("alice federates large repo"):
+          fed_result = cli(alice, f"federation federate {large_repo_id} --mode public", check=False)
+          assert isinstance(fed_result, dict) and fed_result.get("is_success"), \
+              f"federate large repo failed: {fed_result}"
+
+      with subtest("bob clones large repo via federation"):
+          bob_ticket = get_ticket(bob)
+          fed_url = f"aspen://{bob_ticket}/fed:{alice_node_id}:{large_repo_id}"
+          bob.log(f"Large repo clone URL: {fed_url}")
+
+          clone_cmd = (
+              f"ASPEN_ORIGIN_ADDR='{alice_addr}' "
+              f"git clone '{fed_url}' /tmp/bob-large-clone 2>&1"
+          )
+          rc, output = bob.execute(clone_cmd)
+          bob.log(f"large repo clone rc={rc} output={output}")
+
+          if rc != 0:
+              bob.log("Large clone failed, retrying after 15s...")
+              time.sleep(15)
+              bob.execute("rm -rf /tmp/bob-large-clone")
+              rc, output = bob.execute(clone_cmd)
+              bob.log(f"Retry large clone rc={rc} output={output}")
+
+          assert rc == 0, f"large repo clone failed: {output}"
+
+      with subtest("verify large repo file count and contents"):
+          # Count files (excluding .git)
+          file_count = int(bob.succeed(
+              "find /tmp/bob-large-clone -not -path '*/.git/*' -type f | wc -l"
+          ).strip())
+          bob.log(f"Large repo file count: {file_count}")
+          assert file_count >= 127, f"Expected 127+ files, got {file_count}"
+
+          # Spot-check specific files
+          content = bob.succeed("cat /tmp/bob-large-clone/src/a/1.txt").strip()
+          assert "unique id: a1" in content, f"src/a/1.txt mismatch: {content!r}"
+
+          content = bob.succeed("cat /tmp/bob-large-clone/src/z/4.txt").strip()
+          assert "unique id: z4" in content, f"src/z/4.txt mismatch: {content!r}"
+
+          content = bob.succeed("cat /tmp/bob-large-clone/docs/e.md").strip()
+          assert "Documentation content for e" in content, f"docs/e.md mismatch: {content!r}"
+
+          content = bob.succeed("cat /tmp/bob-large-clone/lib/c/y.rs").strip()
+          assert "y_c" in content, f"lib/c/y.rs mismatch: {content!r}"
+
+          bob.log("Large repo content verified!")
+
       # ── done ─────────────────────────────────────────────────────────
       alice.log("Federation git clone test passed!")
       bob.log("Federation git clone test passed!")
