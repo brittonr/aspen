@@ -2873,6 +2873,7 @@ dependencies = [
  "anyhow",
  "aspen-ci-core",
  "aspen-client",
+ "aspen-client-api",
  "aspen-core",
  "async-trait",
  "clap",

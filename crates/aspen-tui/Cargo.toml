@@ -11,6 +11,7 @@ categories = ["command-line-utilities"]
 [dependencies]
 # Aspen dependencies
 aspen-client = { workspace = true }
+aspen-client-api = { workspace = true }
 aspen-ci-core = { path = "../aspen-ci-core" }
 aspen-core = { workspace = true }
 

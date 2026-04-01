@@ -16,6 +16,7 @@ use ratatui::widgets::List;
 use ratatui::widgets::ListItem;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Row;
+use ratatui::widgets::Sparkline;
 use ratatui::widgets::Table;
 use ratatui::widgets::Wrap;
 
@@ -134,11 +135,24 @@ fn draw_node_details(frame: &mut Frame, app: &App, area: Rect) {
 pub(super) fn draw_metrics_view(frame: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(8), Constraint::Min(0)])
+        .constraints([
+            Constraint::Length(8), // cluster summary
+            Constraint::Length(6), // sparklines
+            Constraint::Min(0),    // connection health + alerts
+        ])
         .split(area);
 
     draw_cluster_summary(frame, app, chunks[0]);
-    draw_node_metrics_table(frame, app, chunks[1]);
+    draw_latency_sparklines(frame, app, chunks[1]);
+
+    // Bottom split: connection health (left) + alerts (right)
+    let bottom = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(chunks[2]);
+
+    draw_connection_health(frame, app, bottom[0]);
+    draw_active_alerts(frame, app, bottom[1]);
 }
 
 /// Draw cluster summary section of metrics view.
@@ -213,4 +227,111 @@ fn draw_node_metrics_table(frame: &mut Frame, app: &App, area: Rect) {
     .block(Block::default().borders(Borders::ALL).title(" Node Metrics "));
 
     frame.render_widget(table, area);
+}
+
+/// Draw latency sparklines for Read, Write, and Raft commit.
+fn draw_latency_sparklines(frame: &mut Frame, app: &App, area: Rect) {
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+        ])
+        .split(area);
+
+    let render_sparkline = |frame: &mut Frame, data: &std::collections::VecDeque<u64>, title: &str, rect: Rect| {
+        if data.is_empty() {
+            let p = Paragraph::new("No metric data")
+                .block(Block::default().borders(Borders::ALL).title(title))
+                .style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(p, rect);
+        } else {
+            let slice: Vec<u64> = data.iter().copied().collect();
+            let sparkline = Sparkline::default()
+                .block(Block::default().borders(Borders::ALL).title(title))
+                .data(&slice)
+                .style(Style::default().fg(Color::Cyan));
+            frame.render_widget(sparkline, rect);
+        }
+    };
+
+    render_sparkline(frame, &app.read_latency_sparkline, " Read Latency ", cols[0]);
+    render_sparkline(frame, &app.write_latency_sparkline, " Write Latency ", cols[1]);
+    render_sparkline(frame, &app.raft_latency_sparkline, " Raft Commit ", cols[2]);
+}
+
+/// Draw connection health panel.
+fn draw_connection_health(frame: &mut Frame, app: &App, area: Rect) {
+    match &app.network_metrics {
+        Some(m) => {
+            let healthy_style = Style::default().fg(Color::Green);
+            let degraded_style = Style::default().fg(Color::Yellow);
+            let failed_style = Style::default().fg(Color::Red);
+
+            let lines = vec![
+                Line::from(vec![
+                    Span::styled(format!("  {} healthy", m.healthy_connections), healthy_style),
+                    Span::raw("  "),
+                    Span::styled(format!("{} degraded", m.degraded_connections), degraded_style),
+                    Span::raw("  "),
+                    Span::styled(format!("{} failed", m.failed_connections), failed_style),
+                ]),
+                Line::from(vec![
+                    Span::raw(format!("  Streams: {}  ", m.total_active_streams)),
+                    Span::raw(format!("Raft: {}  Bulk: {}", m.raft_streams_opened, m.bulk_streams_opened)),
+                ]),
+                Line::from(format!(
+                    "  ReadIndex retries: {} (ok: {})",
+                    m.read_index_retry_count, m.read_index_retry_success_count
+                )),
+            ];
+
+            let paragraph =
+                Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(" Connection Health "));
+            frame.render_widget(paragraph, area);
+        }
+        None => {
+            let p = Paragraph::new("No connections")
+                .block(Block::default().borders(Borders::ALL).title(" Connection Health "))
+                .style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(p, area);
+        }
+    }
+}
+
+/// Draw active alerts panel.
+fn draw_active_alerts(frame: &mut Frame, app: &App, area: Rect) {
+    if app.active_alerts.is_empty() {
+        let p = Paragraph::new("No active alerts")
+            .block(Block::default().borders(Borders::ALL).title(" Alerts "))
+            .style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(p, area);
+        return;
+    }
+
+    let items: Vec<ListItem> = app
+        .active_alerts
+        .iter()
+        .map(|alert| {
+            let severity_color = match alert.rule.severity {
+                aspen_client_api::AlertSeverity::Critical => Color::Red,
+                aspen_client_api::AlertSeverity::Warning => Color::Yellow,
+                aspen_client_api::AlertSeverity::Info => Color::Cyan,
+            };
+            let status_str = match alert.state.as_ref().map(|s| &s.status) {
+                Some(aspen_client_api::AlertStatus::Pending) => "PEND",
+                Some(aspen_client_api::AlertStatus::Firing) => "FIRE",
+                _ => "--",
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("[{}] ", status_str), Style::default().fg(severity_color)),
+                Span::raw(&alert.rule.name),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title(format!(" Alerts ({}) ", app.active_alerts.len())));
+    frame.render_widget(list, area);
 }

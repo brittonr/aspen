@@ -49,13 +49,13 @@
 
 ## 6. TUI Metrics View Upgrade
 
-- [ ] 6.1 Add `MetricQuery` polling to the TUI app loop — fetch `aspen.rpc.duration_ms` for Read and Write operations, last 5 minutes, 10-second step
-- [ ] 6.2 Store sparkline data in `App` state as `VecDeque<u64>` (30 data points per metric)
-- [ ] 6.3 Replace the bottom section of `draw_metrics_view` with a vertical split: sparklines (top), connection health + alerts (bottom)
-- [ ] 6.4 Render latency sparklines using `ratatui::widgets::Sparkline` for Read latency, Write latency, and Raft commit latency
-- [ ] 6.5 Add connection health panel: poll `GetNetworkMetrics`, render per-peer rows with colored status indicators (green/yellow/red)
-- [ ] 6.6 Add active alerts panel: poll `AlertList`, filter to Pending/Firing, render rule name + severity + value + threshold
-- [ ] 6.7 Handle empty states: "No metric data" for sparklines, "No connections" for pool, "No active alerts" for alerts
+- [x] 6.1 Add `MetricQuery` polling to the TUI app loop — fetch `aspen.rpc.duration_ms` for Read and Write operations, last 5 minutes, 10-second step
+- [x] 6.2 Store sparkline data in `App` state as `VecDeque<u64>` (30 data points per metric)
+- [x] 6.3 Replace the bottom section of `draw_metrics_view` with a vertical split: sparklines (top), connection health + alerts (bottom)
+- [x] 6.4 Render latency sparklines using `ratatui::widgets::Sparkline` for Read latency, Write latency, and Raft commit latency
+- [x] 6.5 Add connection health panel: poll `GetNetworkMetrics`, render per-peer rows with colored status indicators (green/yellow/red)
+- [x] 6.6 Add active alerts panel: poll `AlertList`, filter to Pending/Firing, render rule name + severity + value + threshold
+- [x] 6.7 Handle empty states: "No metric data" for sparklines, "No connections" for pool, "No active alerts" for alerts
 
 ## 7. OTLP Export
 

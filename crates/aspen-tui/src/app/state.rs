@@ -119,6 +119,22 @@ pub struct App {
     /// Receiver for CI log watch events from background task.
     /// Set when a watch-based log viewer is active, None otherwise.
     pub(crate) ci_log_watch_rx: Option<mpsc::Receiver<CiLogLine>>,
+
+    // === Metrics View Sparkline Data ===
+    /// Read latency sparkline data (last 30 data points, microseconds).
+    pub read_latency_sparkline: std::collections::VecDeque<u64>,
+
+    /// Write latency sparkline data (last 30 data points, microseconds).
+    pub write_latency_sparkline: std::collections::VecDeque<u64>,
+
+    /// Raft commit latency sparkline data (last 30 data points, microseconds).
+    pub raft_latency_sparkline: std::collections::VecDeque<u64>,
+
+    /// Cached network metrics from GetNetworkMetrics.
+    pub network_metrics: Option<aspen_client_api::NetworkMetricsResponse>,
+
+    /// Cached active alerts from AlertList.
+    pub active_alerts: Vec<aspen_client_api::AlertRuleWithState>,
 }
 
 impl App {
@@ -164,6 +180,11 @@ impl App {
             ci_state: CiState::default(),
             ci_log_output: rat_streaming::StreamingOutput::new(),
             ci_log_watch_rx: None,
+            read_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            write_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            raft_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            network_metrics: None,
+            active_alerts: Vec::new(),
         }
     }
 
@@ -219,6 +240,11 @@ impl App {
             ci_state: CiState::default(),
             ci_log_output: rat_streaming::StreamingOutput::new(),
             ci_log_watch_rx: None,
+            read_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            write_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            raft_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            network_metrics: None,
+            active_alerts: Vec::new(),
         })
     }
 
@@ -266,6 +292,11 @@ impl App {
             ci_state: CiState::default(),
             ci_log_output: rat_streaming::StreamingOutput::new(),
             ci_log_watch_rx: None,
+            read_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            write_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            raft_latency_sparkline: std::collections::VecDeque::with_capacity(30),
+            network_metrics: None,
+            active_alerts: Vec::new(),
         }
     }
 
