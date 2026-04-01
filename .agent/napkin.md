@@ -32,6 +32,8 @@
 | `aspen-cli kv set` | Not `kv put` |
 | `async-trait` | NOT a workspace dep — each crate specifies `async-trait = "0.1"` directly |
 | `tokio::sync::Notify` | Edge-triggered: create `notified()` future BEFORE checking the condition, then `.await`. If you check-then-await, notification between check and await is lost |
+| iroh `Endpoint::connect()` | First connection to a relay-disabled peer takes 5-10s (iroh tries relay first, fails, falls back to direct). Don't set ASPEN_RELAY_DISABLED on the client side. Don't create fresh endpoints per retry — iroh caches failed connection state. Wait 3s after node startup before first connect |
+| iroh `endpoint.addr()` | With relay disabled, returns no direct IP addresses. Use `endpoint.bound_sockets()` and convert `0.0.0.0` → `127.0.0.1` to populate addresses for tickets/discovery |
 | Worker `mark_started` | If it fails, MUST release the queue item back (nack/release_unchanged). Otherwise job is orphaned: dequeued from queue but never started. Fixed in `run_worker_execute_with_handler` |
 | 3-node dogfood | QUIC stream contention during heavy git push (33K objects) causes 21-140ms node unreachability blips. ReadIndex quorum confirmations fail → forwarded reads fail → `get_job` returns None → `JobNotFound`. Single-node dogfood doesn't hit this |
 | Bash `set -u` + EXIT traps | Local vars go out of scope after function returns, but EXIT trap persists. Use `${var:-}` in cleanup functions called from traps |
@@ -455,6 +457,16 @@ The NixOS VM tests work because VMs have their own network stack with proper rou
 - Or the node's `EmptyPreset` approach instead of `presets::N0`
 
 Openspec change created: `fix-dogfood-local-networking`
+
+### 2026-04-01: Dogfood local connectivity fixed
+
+Three issues blocked `aspen-dogfood start` from connecting to locally spawned nodes:
+
+1. **ASPEN_RELAY_DISABLED global env** — dogfood main() set this globally via `unsafe { set_var(...) }`, which propagated to `AspenClient::create_client_endpoint()`. Client endpoint with relay disabled can't complete QUIC signaling to relay-disabled nodes. Fix: only set on child processes via `cmd.env()`.
+
+2. **Health-check timing** — ticket file is written right after router spawns, but iroh's QUIC endpoint needs ~3s to fully stabilize for incoming connections. First connection attempt during this window gets stuck permanently (iroh caches failed connection state). Fix: 3s sleep after ticket appears.
+
+3. **"healthy" vs "reachable"** — `wait_for_healthy` expected `status=healthy` but the node reports `unhealthy` until `InitCluster` is called (which happens AFTER health-check). Fix: accept any successful health response as "reachable".
 
 ### 2026-04-01: Federation clone validated — 127-file large repo passes VM test
 
