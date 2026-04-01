@@ -85,6 +85,8 @@ pub struct ShardedRaftProtocolHandler {
     shard_cores: Arc<RwLock<HashMap<ShardId, Raft<AppTypeConfig>>>>,
     /// Semaphore to limit concurrent connections.
     connection_semaphore: Arc<Semaphore>,
+    /// Optional snapshot transfer history buffer.
+    snapshot_history: Option<Arc<crate::snapshot_history::SnapshotTransferHistory>>,
 }
 
 impl ShardedRaftProtocolHandler {
@@ -93,7 +95,14 @@ impl ShardedRaftProtocolHandler {
         Self {
             shard_cores: Arc::new(RwLock::new(HashMap::new())),
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize)),
+            snapshot_history: None,
         }
+    }
+
+    /// Set the snapshot transfer history buffer.
+    pub fn with_snapshot_history(mut self, history: Arc<crate::snapshot_history::SnapshotTransferHistory>) -> Self {
+        self.snapshot_history = Some(history);
+        self
     }
 
     /// Register a Raft core for a shard.
@@ -167,7 +176,8 @@ impl ProtocolHandler for ShardedRaftProtocolHandler {
 
         // Handle the connection with bounded resources
         let shard_cores = Arc::clone(&self.shard_cores);
-        let result = handle_sharded_connection(connection, shard_cores).await;
+        let snap_history = self.snapshot_history.clone();
+        let result = handle_sharded_connection(connection, shard_cores, snap_history).await;
 
         // Release permit when done
         drop(permit);
@@ -189,6 +199,7 @@ impl ProtocolHandler for ShardedRaftProtocolHandler {
 async fn handle_sharded_connection(
     connection: Connection,
     shard_cores: Arc<RwLock<HashMap<ShardId, Raft<AppTypeConfig>>>>,
+    snapshot_history: Option<Arc<crate::snapshot_history::SnapshotTransferHistory>>,
 ) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
 
@@ -224,10 +235,11 @@ async fn handle_sharded_connection(
         let active_streams_clone = active_streams.clone();
 
         let shard_cores_clone = Arc::clone(&shard_cores);
+        let snap_history_clone = snapshot_history.clone();
         let (send, recv) = stream;
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(err) = handle_sharded_rpc_stream((recv, send), shard_cores_clone).await {
+            if let Err(err) = handle_sharded_rpc_stream((recv, send), shard_cores_clone, snap_history_clone).await {
                 error!(error = %err, "failed to handle sharded Raft RPC stream");
             }
             active_streams_clone.fetch_sub(1, Ordering::Relaxed);
@@ -238,10 +250,11 @@ async fn handle_sharded_connection(
 }
 
 /// Handle a single sharded Raft RPC message on a bidirectional stream.
-#[instrument(skip(recv, send, shard_cores))]
+#[instrument(skip(recv, send, shard_cores, snapshot_history))]
 async fn handle_sharded_rpc_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     shard_cores: Arc<RwLock<HashMap<ShardId, Raft<AppTypeConfig>>>>,
+    snapshot_history: Option<Arc<crate::snapshot_history::SnapshotTransferHistory>>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -332,6 +345,19 @@ async fn handle_sharded_rpc_stream(
             metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "receive").record(recv_ms);
             metrics::counter!("aspen.snapshot.transfers_total", "direction" => "receive", "outcome" => outcome)
                 .increment(1);
+            if let Some(ref history) = snapshot_history {
+                let now_us =
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
+                        as u64;
+                history.push(crate::snapshot_history::SnapshotTransferEntry {
+                    peer_id: 0, // peer_id not available in this context
+                    direction: "receive",
+                    size_bytes: recv_size as u64,
+                    duration_ms: recv_ms as u64,
+                    outcome,
+                    timestamp_us: now_us,
+                });
+            }
             RaftRpcResponse::InstallSnapshot(result)
         }
     };

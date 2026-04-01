@@ -95,6 +95,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// this cache. On RPC failure, we check for a fresher address here
     /// before retrying with the stale Raft membership address.
     gossip_addrs: Option<Arc<RwLock<std::collections::HashMap<NodeId, iroh::EndpointAddr>>>>,
+    /// Optional snapshot transfer history for observability.
+    snapshot_history: Option<Arc<aspen_transport::snapshot_history::SnapshotTransferHistory>>,
 }
 
 impl<T> IrpcRaftNetwork<T>
@@ -120,7 +122,18 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             shard_id,
             failure_update_tx,
             gossip_addrs: None,
+            snapshot_history: None,
         }
+    }
+
+    /// Attach a snapshot transfer history buffer for observability.
+    #[expect(dead_code, reason = "wired in task 5.4 when connection pool is exposed")]
+    pub(crate) fn with_snapshot_history(
+        mut self,
+        history: Arc<aspen_transport::snapshot_history::SnapshotTransferHistory>,
+    ) -> Self {
+        self.snapshot_history = Some(history);
+        self
     }
 
     /// Attach a shared gossip address cache for dynamic address refresh.
@@ -551,6 +564,19 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "send", "peer" => peer_label)
             .record(elapsed_ms);
         metrics::counter!("aspen.snapshot.transfers_total", "direction" => "send", "outcome" => outcome).increment(1);
+        if let Some(ref history) = self.snapshot_history {
+            let now_us =
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
+                    as u64;
+            history.push(aspen_transport::snapshot_history::SnapshotTransferEntry {
+                peer_id: self.target.0,
+                direction: "send",
+                size_bytes: snapshot_size as u64,
+                duration_ms: elapsed_ms as u64,
+                outcome,
+                timestamp_us: now_us,
+            });
+        }
 
         result
     }

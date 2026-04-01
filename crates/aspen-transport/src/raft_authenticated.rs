@@ -136,6 +136,7 @@ pub struct AuthenticatedRaftProtocolHandler {
     raft_core: Raft<AppTypeConfig>,
     trusted_peers: TrustedPeersRegistry,
     connection_semaphore: Arc<Semaphore>,
+    snapshot_history: Option<Arc<crate::snapshot_history::SnapshotTransferHistory>>,
 }
 
 impl AuthenticatedRaftProtocolHandler {
@@ -153,7 +154,19 @@ impl AuthenticatedRaftProtocolHandler {
             raft_core,
             trusted_peers,
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize)),
+            snapshot_history: None,
         }
+    }
+
+    /// Set the snapshot transfer history buffer.
+    pub fn with_snapshot_history(mut self, history: Arc<crate::snapshot_history::SnapshotTransferHistory>) -> Self {
+        self.snapshot_history = Some(history);
+        self
+    }
+
+    /// Get a reference to the snapshot transfer history.
+    pub fn snapshot_history(&self) -> Option<&Arc<crate::snapshot_history::SnapshotTransferHistory>> {
+        self.snapshot_history.as_ref()
     }
 
     /// Get a reference to the trusted peers registry.
@@ -193,7 +206,7 @@ impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
         debug!(remote_node = %remote_id, "accepted authenticated Raft RPC connection");
 
         // Handle the connection - NO PER-STREAM AUTH NEEDED
-        let result = handle_raft_connection(connection, self.raft_core.clone()).await;
+        let result = handle_raft_connection(connection, self.raft_core.clone(), self.snapshot_history.clone()).await;
 
         drop(permit);
 
@@ -211,7 +224,11 @@ impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
 // ============================================================================
 
 /// Handle Raft RPC connection. No per-stream auth - PublicKey verified at accept.
-async fn handle_raft_connection(connection: Connection, raft_core: Raft<AppTypeConfig>) -> anyhow::Result<()> {
+async fn handle_raft_connection(
+    connection: Connection,
+    raft_core: Raft<AppTypeConfig>,
+    snapshot_history: Option<Arc<crate::snapshot_history::SnapshotTransferHistory>>,
+) -> anyhow::Result<()> {
     let remote_id = connection.remote_id();
 
     // Tiger Style: Fixed limit on concurrent streams per connection
@@ -244,12 +261,13 @@ async fn handle_raft_connection(connection: Connection, raft_core: Raft<AppTypeC
         active_streams.fetch_add(1, Ordering::Relaxed);
         let active_streams_clone = active_streams.clone();
         let raft_core_clone = raft_core.clone();
+        let snap_history_clone = snapshot_history.clone();
         let (send, recv) = stream;
 
         tokio::spawn(async move {
             let _permit = permit;
             // DIRECT RPC - no auth handshake needed
-            if let Err(err) = handle_raft_rpc_stream((recv, send), raft_core_clone).await {
+            if let Err(err) = handle_raft_rpc_stream((recv, send), raft_core_clone, snap_history_clone).await {
                 error!(error = %err, "failed to handle Raft RPC stream");
             }
             active_streams_clone.fetch_sub(1, Ordering::Relaxed);
@@ -265,6 +283,7 @@ async fn handle_raft_connection(connection: Connection, raft_core: Raft<AppTypeC
 async fn handle_raft_rpc_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     raft_core: Raft<AppTypeConfig>,
+    snapshot_history: Option<Arc<crate::snapshot_history::SnapshotTransferHistory>>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -324,6 +343,19 @@ async fn handle_raft_rpc_stream(
             metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "receive").record(recv_ms);
             metrics::counter!("aspen.snapshot.transfers_total", "direction" => "receive", "outcome" => outcome)
                 .increment(1);
+            if let Some(ref history) = snapshot_history {
+                let now_us =
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
+                        as u64;
+                history.push(crate::snapshot_history::SnapshotTransferEntry {
+                    peer_id: 0, // peer_id not available in this context
+                    direction: "receive",
+                    size_bytes: recv_size as u64,
+                    duration_ms: recv_ms as u64,
+                    outcome,
+                    timestamp_us: now_us,
+                });
+            }
             RaftRpcResponse::InstallSnapshot(result)
         }
     };

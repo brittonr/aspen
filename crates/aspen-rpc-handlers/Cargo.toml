@@ -97,6 +97,7 @@ proptest = "1.0"
 tokio = { version = "1.0", features = ["full", "test-util"] }
 bolero = { workspace = true }
 bolero-generator = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 
 # Enable testing feature for integration tests (without sql/dns/blob default features)
 [[test]]
@@ -113,4 +114,8 @@ required-features = ["testing"]
 
 [[test]]
 name = "unit_coordination"
+required-features = ["testing"]
+
+[[test]]
+name = "metrics_rpc_counters"
 required-features = ["testing"]

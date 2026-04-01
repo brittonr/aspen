@@ -119,6 +119,21 @@ impl HandlerRegistry {
         }
     }
 
+    /// Create an empty registry with no handlers.
+    ///
+    /// Useful for tests that want to add specific handlers without
+    /// inventory auto-discovery.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn empty() -> Self {
+        Self {
+            handlers: Arc::new(ArcSwap::from_pointee(Vec::new())),
+            native_handlers: Arc::new(Vec::new()),
+            #[cfg(feature = "plugins-rpc")]
+            plugin_registry: None,
+            proxy_service: None,
+        }
+    }
+
     /// Set the proxy service for cross-cluster request forwarding.
     ///
     /// Must be called after construction and before the registry is cloned/shared.

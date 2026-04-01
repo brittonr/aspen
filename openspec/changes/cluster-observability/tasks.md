@@ -15,7 +15,7 @@
 - [x] 2.3 Emit `metrics::counter!("aspen.rpc.requests_total")` with `operation` label on every request
 - [x] 2.4 Emit `metrics::counter!("aspen.rpc.errors_total")` with `operation` and `handler` labels on handler errors
 - [x] 2.5 Handle the "no handler matched" case: increment error counter with `handler="none"`
-- [ ] 2.6 Add integration test: send 10 Read + 5 Write requests, verify counter values via `GetMetrics` Prometheus output parsing
+- [x] 2.6 Add integration test: send 10 Read + 5 Write requests, verify counter values via `GetMetrics` Prometheus output parsing
 
 ## 3. Write Batcher Metrics
 
@@ -24,7 +24,7 @@
 - [x] 3.3 Emit `metrics::counter!("aspen.write_batcher.flush_total")` on each flush
 - [x] 3.4 In the follower forwarding path, emit `metrics::counter!("aspen.write_batcher.forwarded_total")` when a write is forwarded to leader
 - [x] 3.5 In the follower batcher-skip path, emit `metrics::counter!("aspen.write_batcher.batcher_skipped_total")`
-- [ ] 3.6 Add unit test: flush a batch of known size, verify histogram observation count via the Prometheus handle
+- [x] 3.6 Add unit test: flush a batch of known size, verify histogram observation count via the Prometheus handle
 
 ## 4. Snapshot Transfer Metrics
 
@@ -32,7 +32,7 @@
 - [x] 4.2 At snapshot send completion, emit `metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "send", "peer" => peer_id)` and `metrics::histogram!("aspen.snapshot.transfer_duration_ms", ...)`
 - [x] 4.3 At snapshot receive completion, emit the same metrics with `direction=receive`
 - [x] 4.4 Emit `metrics::counter!("aspen.snapshot.transfers_total", "direction" => ..., "outcome" => "success"|"error")` on completion/failure
-- [ ] 4.5 Add a bounded ring buffer (capacity 100) of `SnapshotTransferRecord` structs in the network layer for the `GetNetworkMetrics` response
+- [x] 4.5 Add a bounded ring buffer (capacity 100) of `SnapshotTransferRecord` structs in the network layer for the `GetNetworkMetrics` response
 - [ ] 4.6 Add test: trigger a snapshot install in a 3-node test cluster, verify snapshot metrics appear in Prometheus output
 
 ## 5. Network Observability RPC

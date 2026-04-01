@@ -16,6 +16,7 @@ pub mod raft;
 pub mod raft_authenticated;
 pub mod raft_sharded;
 pub mod rpc;
+pub mod snapshot_history;
 pub mod verified;
 
 // Re-export commonly used types
@@ -31,3 +32,5 @@ pub use raft::RaftProtocolHandler;
 pub use raft_authenticated::AuthenticatedRaftProtocolHandler;
 pub use raft_authenticated::TrustedPeersRegistry;
 pub use raft_sharded::ShardedRaftProtocolHandler;
+pub use snapshot_history::SnapshotTransferEntry;
+pub use snapshot_history::SnapshotTransferHistory;
