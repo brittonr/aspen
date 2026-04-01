@@ -3971,86 +3971,119 @@
             forge-web = {
               type = "app";
               program = "${pkgs.writeShellScript "aspen-forge-web-dev" ''
-                set -e
-                DATA_DIR="$(mktemp -d /tmp/aspen-forge-web-XXXXXX)"
-                cleanup() {
-                  trap - EXIT INT TERM
-                  echo "Cleaning up..."
-                  kill 0 2>/dev/null || true
-                  rm -rf "$DATA_DIR"
+                                set -e
+                                DATA_DIR="$(mktemp -d /tmp/aspen-forge-web-XXXXXX)"
+                                cleanup() {
+                                  trap - EXIT INT TERM
+                                  echo "Cleaning up..."
+                                  kill 0 2>/dev/null || true
+                                  rm -rf "$DATA_DIR"
+                                }
+                                trap cleanup EXIT INT TERM
+
+                                CLI="${aspenCli}/bin/aspen-cli"
+
+                                echo "Starting Aspen node..."
+                                ${aspenNode}/bin/aspen-node \
+                                  --node-id 1 --cookie forge-web-dev \
+                                  --storage-backend redb --data-dir "$DATA_DIR" \
+                                  --relay-mode disabled \
+                                  --enable-workers --enable-ci --ci-auto-trigger \
+                                  > "$DATA_DIR/node.log" 2>&1 &
+
+                                # Wait for cluster ticket
+                                echo "Waiting for node to start..."
+                                for i in $(seq 1 30); do
+                                  [ -f "$DATA_DIR/cluster-ticket.txt" ] && break
+                                  sleep 1
+                                done
+                                if [ ! -f "$DATA_DIR/cluster-ticket.txt" ]; then
+                                  echo "ERROR: cluster ticket not written after 30s"
+                                  cat "$DATA_DIR/node.log"
+                                  exit 1
+                                fi
+                                TICKET=$(cat "$DATA_DIR/cluster-ticket.txt")
+
+                                echo "Initializing cluster..."
+                                $CLI --ticket "$TICKET" cluster init 2>/dev/null || true
+                                sleep 2
+
+                                JQ="${pkgs.jq}/bin/jq"
+                                cl() { $CLI --ticket "$TICKET" --json "$@" 2>/dev/null || echo '{}'; }
+                                jv() { $JQ -r "$1" 2>/dev/null; }
+
+                                # Seed a demo repo with a CI config so the dashboard has content
+                                echo "Creating demo repository..."
+                                REPO_ID=$(cl git init demo-app --description "Demo application" | jv '.id // .repo_id // empty')
+                                if [ -n "$REPO_ID" ]; then
+                                  echo "  repo: $REPO_ID"
+
+                                  # Watch repo for CI auto-trigger
+                                  cl ci watch "$REPO_ID" > /dev/null
+
+                                  # Create blobs: README + .aspen/ci.ncl
+                                  README_HASH=$(cl git store-blob -r "$REPO_ID" <(printf '# Demo App\n\nA sample repository for testing the Forge web UI.\n') | jv '.hash // empty')
+                                  CI_NCL_HASH=$(cl git store-blob -r "$REPO_ID" <(cat <<'NICKEL'
+                {
+                  stages = [
+                    {
+                      name = "check",
+                      jobs = [
+                        { name = "lint", type = "shell", command = "echo 'Running lint...' && sleep 1 && echo 'Lint passed'" },
+                        { name = "format", type = "shell", command = "echo 'Checking format...' && echo 'Format OK'" },
+                      ]
+                    },
+                    {
+                      name = "build",
+                      jobs = [
+                        { name = "compile", type = "shell", command = "echo 'Compiling...' && sleep 2 && echo 'Build succeeded'" },
+                      ]
+                    },
+                    {
+                      name = "test",
+                      jobs = [
+                        { name = "unit-tests", type = "shell", command = "echo 'Running tests...' && sleep 1 && echo '42 tests passed'" },
+                      ]
+                    },
+                  ]
                 }
-                trap cleanup EXIT INT TERM
+                NICKEL
+                ) | jv '.hash // empty')
 
-                CLI="${aspenCli}/bin/aspen-cli"
+                                  if [ -n "$README_HASH" ] && [ -n "$CI_NCL_HASH" ]; then
+                                    # Build tree: .aspen/ subtree, then root tree
+                                    ASPEN_TREE=$(cl git create-tree -r "$REPO_ID" -e "100644:ci.ncl:$CI_NCL_HASH" | jv '.hash // empty')
+                                    ROOT_TREE=$(cl git create-tree -r "$REPO_ID" -e "100644:README.md:$README_HASH" -e "40000:.aspen:$ASPEN_TREE" | jv '.hash // empty')
 
-                echo "Starting Aspen node..."
-                ${aspenNode}/bin/aspen-node \
-                  --node-id 1 --cookie forge-web-dev \
-                  --storage-backend redb --data-dir "$DATA_DIR" \
-                  --relay-mode disabled \
-                  --enable-workers --enable-ci --ci-auto-trigger \
-                  > "$DATA_DIR/node.log" 2>&1 &
+                                    if [ -n "$ROOT_TREE" ]; then
+                                      COMMIT=$(cl git commit -r "$REPO_ID" --tree "$ROOT_TREE" -m "Initial commit with CI config" | jv '.hash // empty')
+                                      if [ -n "$COMMIT" ]; then
+                                        $CLI --ticket "$TICKET" git push -r "$REPO_ID" --ref-name heads/main --hash "$COMMIT" -f 2>/dev/null || true
+                                        echo "  commit: $COMMIT"
 
-                # Wait for cluster ticket
-                echo "Waiting for node to start..."
-                for i in $(seq 1 30); do
-                  [ -f "$DATA_DIR/cluster-ticket.txt" ] && break
-                  sleep 1
-                done
-                if [ ! -f "$DATA_DIR/cluster-ticket.txt" ]; then
-                  echo "ERROR: cluster ticket not written after 30s"
-                  cat "$DATA_DIR/node.log"
-                  exit 1
-                fi
-                TICKET=$(cat "$DATA_DIR/cluster-ticket.txt")
+                                        # Explicitly trigger CI (auto-trigger may also fire)
+                                        RUN_ID=$(cl ci run "$REPO_ID" --ref main | jv '.run_id // empty')
+                                        echo "  CI run: ''${RUN_ID:-triggered}"
+                                      fi
+                                    fi
+                                  fi
+                                else
+                                  echo "  (repo creation skipped — forge handler not available)"
+                                fi
 
-                echo "Initializing cluster..."
-                $CLI --ticket "$TICKET" cluster init 2>/dev/null || true
-                sleep 2
+                                echo "Starting Forge web UI..."
+                                ${aspenForgeWeb}/bin/aspen-forge-web \
+                                  --ticket "$TICKET" --tcp-port 3450 &
 
-                # Seed a demo repo with commits so the UI has content
-                echo "Creating demo repository..."
-                REPO_JSON=$($CLI --ticket "$TICKET" --json git init demo-app --description "Demo application" 2>/dev/null || echo '{}')
-                REPO_ID=$(echo "$REPO_JSON" | ${pkgs.jq}/bin/jq -r '.id // .repo_id // empty')
-                if [ -n "$REPO_ID" ]; then
-                  echo "  repo: $REPO_ID"
-
-                  # Create a blob, tree, commit, and push ref
-                  BLOB=$($CLI --ticket "$TICKET" --json git store-blob -r "$REPO_ID" <(echo '# Demo App') 2>/dev/null || echo '{}')
-                  BLOB_HASH=$(echo "$BLOB" | ${pkgs.jq}/bin/jq -r '.hash // empty')
-                  if [ -n "$BLOB_HASH" ]; then
-                    TREE=$($CLI --ticket "$TICKET" --json git create-tree -r "$REPO_ID" -e "100644:README.md:$BLOB_HASH" 2>/dev/null || echo '{}')
-                    TREE_HASH=$(echo "$TREE" | ${pkgs.jq}/bin/jq -r '.hash // empty')
-                    if [ -n "$TREE_HASH" ]; then
-                      COMMIT=$($CLI --ticket "$TICKET" --json git commit -r "$REPO_ID" --tree "$TREE_HASH" -m "Initial commit" 2>/dev/null || echo '{}')
-                      COMMIT_HASH=$(echo "$COMMIT" | ${pkgs.jq}/bin/jq -r '.hash // empty')
-                      if [ -n "$COMMIT_HASH" ]; then
-                        $CLI --ticket "$TICKET" git push -r "$REPO_ID" --ref-name heads/main --hash "$COMMIT_HASH" -f 2>/dev/null || true
-                        echo "  commit: $COMMIT_HASH"
-
-                        # Try triggering a CI run
-                        $CLI --ticket "$TICKET" ci run "$REPO_ID" --ref main 2>/dev/null || true
-                        echo "  CI triggered (best-effort)"
-                      fi
-                    fi
-                  fi
-                else
-                  echo "  (repo creation skipped — forge handler may not be available)"
-                fi
-
-                echo "Starting Forge web UI..."
-                ${aspenForgeWeb}/bin/aspen-forge-web \
-                  --ticket "$TICKET" --tcp-port 3450 &
-
-                echo ""
-                echo "  Forge web UI: http://127.0.0.1:3450"
-                echo "  CI dashboard: http://127.0.0.1:3450/ci"
-                echo "  Cluster:      http://127.0.0.1:3450/cluster"
-                echo ""
-                echo "  Data dir: $DATA_DIR"
-                echo "  Press Ctrl-C to stop."
-                echo ""
-                wait
+                                echo ""
+                                echo "  Forge web UI: http://127.0.0.1:3450"
+                                echo "  CI dashboard: http://127.0.0.1:3450/ci"
+                                echo "  Cluster:      http://127.0.0.1:3450/cluster"
+                                echo ""
+                                echo "  Data dir: $DATA_DIR"
+                                echo "  Press Ctrl-C to stop."
+                                echo ""
+                                wait
               ''}";
             };
 
