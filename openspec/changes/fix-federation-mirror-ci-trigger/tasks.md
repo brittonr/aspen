@@ -22,7 +22,7 @@
 ## 4. Regression Test
 
 - [x] 4.1 Write integration test in `crates/aspen-ci-handler/tests/` that creates a `ForgeNode`, imports a commit tree containing `.aspen/ci.ncl` with minimal valid Nickel config, calls `walk_tree_for_file`, and asserts it finds the config (4 tests: found, missing .aspen dir, missing ci.ncl, .aspen is file not dir)
-- [ ] 4.2 Run `dogfood-federation.sh full` end-to-end and confirm the build step completes without falling back to manual trigger (REQUIRES: built binaries + running clusters — deferred to manual validation)
+- [x] 4.2 Run `dogfood-federation.sh full` end-to-end and confirm the build step completes without falling back to manual trigger (VERIFIED: auto-trigger fired, pipeline started, no manual fallback needed. Root cause was CLI binary missing `ci` feature. Pipeline itself failed in Nix clippy stage, unrelated to trigger.)
 
 ## 5. Script Hardening
 
