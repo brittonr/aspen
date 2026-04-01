@@ -136,6 +136,7 @@ pub mod endpoint_manager;
 pub mod federation;
 pub mod gossip;
 pub mod gossip_discovery;
+pub mod iroh_metrics_bridge;
 pub mod memory_watcher;
 pub mod metadata;
 pub mod metrics_init;

@@ -46,6 +46,7 @@ iroh-blobs = { version = "0.99.0", optional = true }
 iroh-gossip = "0.97.0"
 iroh-docs = { version = "0.97.0", optional = true }
 iroh-relay = { version = "0.97.0", features = ["server"], optional = true }
+iroh-metrics = "0.38"
 iroh-tickets = "0.4.0"
 irpc = { version = "0.13.0", features = ["derive"] }
 

@@ -1218,6 +1218,7 @@ dependencies = [
  "iroh-blobs",
  "iroh-docs",
  "iroh-gossip",
+ "iroh-metrics",
  "iroh-relay",
  "iroh-tickets",
  "irpc",

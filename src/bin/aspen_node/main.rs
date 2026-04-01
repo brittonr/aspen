@@ -216,6 +216,12 @@ async fn async_main() -> Result<()> {
         aspen_core_essentials_handler::spawn_alert_evaluator(client_context.clone(), config, node_mode.shutdown_token())
     });
 
+    // Bridge iroh-metrics counters into our Prometheus registry.
+    // Samples iroh endpoint metrics every 10s and emits as metrics::gauge!().
+    let _iroh_metrics_bridge_cancel = aspen_cluster::iroh_metrics_bridge::spawn_iroh_metrics_bridge(Arc::new(
+        node_mode.iroh_manager().endpoint().clone(),
+    ));
+
     // Spawn commit DAG garbage collection (periodically cleans expired commit entries)
     #[cfg(feature = "commit-dag")]
     let _commit_gc_handle = {

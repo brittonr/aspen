@@ -71,6 +71,6 @@
 
 - [x] 8.1 Add `docs/observability.md` documenting: metric naming conventions, available metrics list, OTLP setup, TUI metrics view usage
 - [ ] 8.2 Update `AGENTS.md` Observability section with the new metric names and query patterns
-- [ ] 8.3 Run `cargo nextest run -P quick` to verify no regressions
+- [x] 8.3 Run `cargo nextest run -P quick` to verify no regressions
 - [ ] 8.4 Run `cargo clippy --all-targets -- --deny warnings` clean
 - [ ] 8.5 Verify `GetMetrics` output includes at least: `aspen_rpc_duration_ms`, `aspen_rpc_requests_total`, `aspen_write_batcher_batch_size`, `aspen_network_connections`

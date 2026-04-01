@@ -64,6 +64,29 @@ Prometheus export normalizes dots to underscores: `aspen.rpc.duration_ms` → `a
 | `aspen.snapshot.transfer_duration_ms` | histogram | `direction`, `peer` | Transfer duration |
 | `aspen.snapshot.transfers_total` | counter | `direction`, `outcome` | Transfer count (success/error) |
 
+#### Iroh Endpoint (bridged)
+
+Iroh's internal metrics are sampled every 10 seconds and bridged into the Prometheus registry under the `iroh.` prefix:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `iroh.socket.send_ipv4` | gauge | IPv4 packets sent |
+| `iroh.socket.send_ipv6` | gauge | IPv6 packets sent |
+| `iroh.socket.send_relay` | gauge | Packets sent via relay |
+| `iroh.socket.recv_data_ipv4` | gauge | IPv4 data packets received |
+| `iroh.socket.recv_data_relay` | gauge | Relay data packets received |
+| `iroh.socket.recv_datagrams` | gauge | QUIC datagrams received |
+| `iroh.socket.num_conns_opened` | gauge | Connections opened |
+| `iroh.socket.num_conns_closed` | gauge | Connections closed |
+| `iroh.socket.paths_direct` | gauge | Direct (holepunched) paths |
+| `iroh.socket.paths_relay` | gauge | Relayed paths |
+| `iroh.socket.holepunch_attempts` | gauge | Holepunch attempts |
+| `iroh.socket.relay_home_change` | gauge | Relay home changes |
+| `iroh.net_report.reports` | gauge | Net reports executed |
+| `iroh.portmapper.*` | gauge | Portmapper metrics |
+
+These are emitted as gauges (point-in-time counter snapshots) since iroh uses its own `iroh_metrics::Counter` system rather than the `metrics` crate.
+
 ### Querying Metrics
 
 ```bash
