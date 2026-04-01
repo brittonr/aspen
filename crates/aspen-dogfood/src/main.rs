@@ -68,6 +68,10 @@ enum Command {
 
 #[tokio::main]
 async fn main() {
+    // Disable iroh relay for local dogfood testing
+    // SAFETY: called before any threads are spawned
+    unsafe { std::env::set_var("ASPEN_RELAY_DISABLED", "1") };
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

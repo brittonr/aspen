@@ -14,6 +14,7 @@ pub use aspen_ticket::AspenClusterTicket;
 pub use aspen_ticket::BootstrapPeer;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
+use iroh::RelayMode;
 use iroh::endpoint::VarInt;
 use serde::Deserialize;
 use serde::Serialize;
@@ -107,14 +108,7 @@ impl AspenClient {
             anyhow::bail!("ticket contains no bootstrap peers");
         }
 
-        // Create Iroh endpoint
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
-            .secret_key(secret_key)
-            .alpns(vec![CLIENT_ALPN.to_vec()])
-            .bind()
-            .await
-            .context("failed to create Iroh endpoint")?;
+        let endpoint = Self::create_client_endpoint().await?;
 
         debug!(
             endpoint_id = %endpoint.id(),
@@ -142,13 +136,7 @@ impl AspenClient {
             anyhow::bail!("ticket contains no bootstrap peers");
         }
 
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
-            .secret_key(secret_key)
-            .alpns(vec![CLIENT_ALPN.to_vec()])
-            .bind()
-            .await
-            .context("failed to create Iroh endpoint")?;
+        let endpoint = Self::create_client_endpoint().await?;
 
         debug!(
             endpoint_id = %endpoint.id(),
@@ -162,6 +150,22 @@ impl AspenClient {
             rpc_timeout,
             token,
         })
+    }
+
+    /// Create an iroh Endpoint for the client.
+    ///
+    /// Respects `ASPEN_RELAY_DISABLED=1` for local/offline testing.
+    async fn create_client_endpoint() -> Result<Endpoint> {
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key)
+            .alpns(vec![CLIENT_ALPN.to_vec()]);
+
+        if std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1" {
+            builder = builder.relay_mode(RelayMode::Disabled);
+        }
+
+        builder.bind().await.context("failed to create Iroh endpoint")
     }
 
     /// Create a client with an existing Iroh endpoint.

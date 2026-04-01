@@ -66,7 +66,9 @@ impl NodeManager {
             .arg("3000")
             .arg("--enable-workers")
             .arg("--enable-ci")
-            .arg("--ci-auto-trigger");
+            .arg("--ci-auto-trigger")
+            .arg("--relay-mode")
+            .arg("disabled");
 
         if let Some(ref gw_bin) = config.nix_cache_gateway_bin {
             // Only add gateway URL if the binary is available
@@ -76,7 +78,8 @@ impl NodeManager {
         }
 
         // Standard env vars the node expects
-        cmd.env("ASPEN_DOCS_ENABLED", "true")
+        cmd.env("ASPEN_RELAY_DISABLED", "1")
+            .env("ASPEN_DOCS_ENABLED", "true")
             .env("ASPEN_DOCS_IN_MEMORY", "true")
             .env("ASPEN_HOOKS_ENABLED", "true")
             .env("ASPEN_RESTART_METHOD", "execve")
