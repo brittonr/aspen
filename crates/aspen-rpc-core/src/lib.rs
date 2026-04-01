@@ -46,6 +46,7 @@ pub mod service;
 pub use context::ClientProtocolContext;
 pub use context::NetworkMetricsProvider;
 pub use context::PoolMetricsAdapter;
+pub use context::SpanForwarder;
 #[cfg(feature = "testing")]
 pub use context::test_support;
 pub use handler::HandlerFactory;

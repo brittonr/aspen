@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aspen_auth::TokenVerifier;
+use aspen_client_api::IngestSpan;
 use aspen_core::ClusterController;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
@@ -37,6 +38,19 @@ pub trait NetworkMetricsProvider: Send + Sync {
     fn snapshot_history(&self) -> Vec<aspen_transport::snapshot_history::SnapshotTransferEntry> {
         Vec::new()
     }
+}
+
+/// Optional forwarder for exporting trace spans to an external collector.
+///
+/// When configured, the `TraceIngest` handler sends spans both to KV storage
+/// and to this forwarder (e.g., an OTLP trace exporter).
+#[async_trait::async_trait]
+pub trait SpanForwarder: Send + Sync {
+    /// Forward a batch of ingested spans to an external collector.
+    ///
+    /// Errors are logged but do not fail the ingest — KV storage is the
+    /// primary store, OTLP is best-effort.
+    async fn forward(&self, spans: &[IngestSpan]);
 }
 
 /// Adapter that implements `NetworkMetricsProvider` for any `RaftConnectionPool<T>`.
@@ -213,6 +227,10 @@ pub struct ClientProtocolContext {
     ///
     /// Set during node bootstrap when the connection pool is created.
     pub network_metrics: Option<Arc<dyn NetworkMetricsProvider>>,
+    /// Optional span forwarder for OTLP trace export.
+    ///
+    /// When set, `TraceIngest` sends spans here in addition to KV storage.
+    pub span_forwarder: Option<Arc<dyn SpanForwarder>>,
     /// Shared drain state for graceful node upgrades (optional).
     ///
     /// When present, the client protocol handler checks this before dispatching RPCs.
@@ -563,6 +581,7 @@ pub mod test_support {
                 proxy_config: ProxyConfig::default(),
                 prometheus_handle: None,
                 network_metrics: None,
+                span_forwarder: None,
                 #[cfg(feature = "deploy")]
                 drain_state: None,
             }

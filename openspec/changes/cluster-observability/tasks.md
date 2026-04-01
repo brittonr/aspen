@@ -63,14 +63,14 @@
 - [x] 7.2 Add `--otlp-endpoint` CLI flag to `aspen-node` (only available when `otlp` feature is enabled)
 - [x] 7.3 In `metrics_init.rs`, when `otlp` is enabled and endpoint is configured, install the OpenTelemetry metrics exporter alongside the Prometheus exporter (fan-out)
 - [x] 7.4 Add OTLP resource attributes: `service.name=aspen-node`, `service.instance.id=<node_id>`, `aspen.cluster.cookie=<cookie>`
-- [ ] 7.5 Wire `TraceIngest` handler to forward spans to the OTLP trace exporter when enabled (in addition to KV storage)
+- [x] 7.5 Wire `TraceIngest` handler to forward spans to the OTLP trace exporter when enabled (in addition to KV storage)
 - [x] 7.6 Add `otlp` to the `full` feature set in the root `Cargo.toml`
 - [x] 7.7 Add compile test: `cargo check --features otlp` passes, `cargo check` (no features) still compiles without OTLP deps
 
 ## 8. Documentation and Verification
 
 - [x] 8.1 Add `docs/observability.md` documenting: metric naming conventions, available metrics list, OTLP setup, TUI metrics view usage
-- [ ] 8.2 Update `AGENTS.md` Observability section with the new metric names and query patterns
+- [x] 8.2 Update `AGENTS.md` Observability section with the new metric names and query patterns
 - [x] 8.3 Run `cargo nextest run -P quick` to verify no regressions
 - [x] 8.4 Run `cargo clippy --all-targets -- --deny warnings` clean
 - [x] 8.5 Verify `GetMetrics` output includes at least: `aspen_rpc_duration_ms`, `aspen_rpc_requests_total`, `aspen_write_batcher_batch_size`, `aspen_network_connections` (first 3 verified in tests 2.6/3.6; `aspen_network_connections` pending task 5.6)

@@ -344,10 +344,13 @@ async fn handle_trace_ingest(ctx: &ClientProtocolContext, spans: Vec<IngestSpan>
     let accepted_count = total_count.min(max_batch) as u32;
     let dropped_count = total_count.saturating_sub(max_batch) as u32;
 
+    // Truncate to max batch and keep a reference for OTLP forwarding.
+    let accepted: Vec<IngestSpan> = spans.into_iter().take(max_batch).collect();
+
     // Store each span as a KV entry under _sys:traces:{trace_id}:{span_id}
-    for span in spans.into_iter().take(max_batch) {
+    for span in &accepted {
         let key = format!("_sys:traces:{}:{}", span.trace_id, span.span_id);
-        let value_json = serde_json::to_string(&span).map_err(|e| anyhow::anyhow!("serialize span: {}", e))?;
+        let value_json = serde_json::to_string(span).map_err(|e| anyhow::anyhow!("serialize span: {}", e))?;
         let write_req = aspen_core::kv::WriteRequest::set(key, value_json);
         if let Err(e) = ctx.kv_store.write(write_req).await {
             tracing::warn!(error = %e, "failed to store trace span");
@@ -358,6 +361,11 @@ async fn handle_trace_ingest(ctx: &ClientProtocolContext, spans: Vec<IngestSpan>
                 error: Some(format!("storage error: {}", e)),
             }));
         }
+    }
+
+    // Forward spans to OTLP (best-effort, errors logged not propagated).
+    if let Some(ref forwarder) = ctx.span_forwarder {
+        forwarder.forward(&accepted).await;
     }
 
     Ok(ClientRpcResponse::TraceIngestResult(TraceIngestResultResponse {

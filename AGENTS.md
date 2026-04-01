@@ -126,6 +126,43 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 
 See `docs/` for design documents (federation, forge, plugins, simulations, nix integration).
 
+## Observability
+
+Metrics use the `metrics` crate facade with a Prometheus recorder installed at startup. All metric names use dot-separated namespaces (the recorder converts dots to underscores in Prometheus output).
+
+**Key metrics:**
+
+| Metric | Type | Labels | Source |
+|--------|------|--------|--------|
+| `aspen.rpc.requests_total` | counter | `operation` | `HandlerRegistry::dispatch` |
+| `aspen.rpc.duration_ms` | histogram | `operation`, `handler` | `HandlerRegistry::dispatch` |
+| `aspen.rpc.errors_total` | counter | `operation`, `handler` | `HandlerRegistry::dispatch` |
+| `aspen.write_batcher.batch_size` | histogram | | `WriteBatcher::flush_batch` |
+| `aspen.write_batcher.flush_total` | counter | | `WriteBatcher::flush_batch` |
+| `aspen.write_batcher.flush_duration_ms` | histogram | | `WriteBatcher::flush_batch` |
+| `aspen.write_batcher.forwarded_total` | counter | | follower forwarding path |
+| `aspen.snapshot.transfer_size_bytes` | histogram | `direction`, `peer` | snapshot send/receive |
+| `aspen.snapshot.transfer_duration_ms` | histogram | `direction` | snapshot send/receive |
+| `aspen.snapshot.transfers_total` | counter | `direction`, `outcome` | snapshot send/receive |
+| `aspen.network.connections` | gauge | `state` (healthy/degraded/failed) | periodic 10s task |
+| `aspen.network.active_streams` | gauge | | periodic 10s task |
+| `aspen.raft.term` | gauge | `node_id` | `GetMetrics` handler |
+| `aspen.raft.state` | gauge | `node_id` | `GetMetrics` handler |
+| `aspen.node.uptime_seconds` | gauge | `node_id` | `GetMetrics` handler |
+
+**Querying metrics:**
+
+- `GetMetrics` RPC → Prometheus text format (all registered metrics)
+- `GetNetworkMetrics` RPC → connection pool stats + snapshot transfer history
+- `aspen-cli cluster prometheus` → raw Prometheus output
+- `aspen-cli cluster network` → formatted pool/stream/snapshot summary
+
+**OTLP export** (optional, `otlp` feature flag):
+
+```bash
+cargo run --features otlp --bin aspen-node -- --otlp-endpoint http://localhost:4317
+```
+
 ## Development Commands
 
 ```bash

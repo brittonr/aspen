@@ -384,6 +384,7 @@ pub async fn setup_client_protocol(
             }
         },
         network_metrics: None, // wired after bootstrap when pool is available
+        span_forwarder: None,  // wired when OTLP trace exporter is configured
         #[cfg(feature = "deploy")]
         drain_state: Some(aspen_cluster::upgrade::DrainState::new()),
     };
