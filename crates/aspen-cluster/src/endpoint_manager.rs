@@ -118,8 +118,25 @@ impl IrohEndpointManager {
 
         let endpoint = builder.bind().await.context("failed to bind Iroh endpoint")?;
 
-        // Extract node address for discovery (synchronous in 0.95.1)
-        let node_addr = endpoint.addr();
+        // Extract node address for discovery (synchronous in 0.95.1).
+        // With relay disabled, addr() may return no direct addresses.
+        // Fall back to bound_sockets() converted to loopback.
+        let mut node_addr = endpoint.addr();
+        let has_ip_addrs = node_addr.addrs.iter().any(|a| matches!(a, iroh::TransportAddr::Ip(_)));
+        if !has_ip_addrs {
+            for sock in endpoint.bound_sockets() {
+                let fixed = if sock.ip().is_unspecified() {
+                    std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), sock.port())
+                } else {
+                    sock
+                };
+                node_addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
+            }
+            tracing::debug!(
+                addrs = ?node_addr.addrs,
+                "populated endpoint address from bound sockets"
+            );
+        }
 
         // Set endpoint ID on cluster discovery so publish() works,
         // then publish our initial address immediately.

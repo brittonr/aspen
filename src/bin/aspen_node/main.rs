@@ -312,13 +312,36 @@ async fn async_main() -> Result<()> {
         dag_sync_handler,
     );
 
-    // Get fresh endpoint address (may have discovered more addresses since startup)
-    let endpoint_addr = node_mode.iroh_manager().endpoint().addr();
+    // Get fresh endpoint address (may have discovered more addresses since startup).
+    // With relay disabled, iroh may not have discovered direct addresses yet,
+    // so fall back to bound_sockets() converted to loopback addresses.
+    let mut endpoint_addr = node_mode.iroh_manager().endpoint().addr();
+    let has_ip_addrs = endpoint_addr.addrs.iter().any(|a| matches!(a, iroh::TransportAddr::Ip(_)));
+    if !has_ip_addrs {
+        for sock in node_mode.iroh_manager().endpoint().bound_sockets() {
+            let fixed = if sock.ip().is_unspecified() {
+                std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), sock.port())
+            } else {
+                sock
+            };
+            endpoint_addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
+        }
+        info!(
+            addrs = ?endpoint_addr.addrs,
+            "populated endpoint address from bound sockets (relay disabled)"
+        );
+    }
     info!(
         endpoint_id = %endpoint_addr.id,
+        direct_addrs = endpoint_addr.addrs.len(),
         sharding = config.sharding.is_enabled,
         "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
     );
+
+    // Re-publish discovery file with the populated address so sibling nodes can find us
+    if let Some(disc) = node_mode.iroh_manager().cluster_discovery() {
+        disc.publish_endpoint_addr(&endpoint_addr);
+    }
 
     // Generate and print cluster ticket (V2 with direct addresses)
     print_cluster_ticket(&config, &endpoint_addr, node_mode.iroh_manager().endpoint().secret_key());

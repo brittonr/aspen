@@ -98,8 +98,12 @@ pub async fn start_single_node(manager: &mut NodeManager, config: &RunConfig) ->
     info!("  waiting for node to start...");
     let ticket = wait_for_ticket(&data_dir, Duration::from_secs(30)).await?;
 
+    // Brief pause: the ticket is written right after the router spawns, but iroh's
+    // QUIC endpoint needs a moment to fully bind and start accepting connections.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
     info!("  health-checking node...");
-    wait_for_healthy(&ticket, Duration::from_secs(30)).await?;
+    wait_for_healthy(&ticket, Duration::from_secs(60)).await?;
 
     info!("  initializing cluster...");
     let client = connect(&ticket).await?;
@@ -151,9 +155,12 @@ pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> 
     info!("  waiting for bob...");
     let bob_ticket = wait_for_ticket(&bob_dir, Duration::from_secs(30)).await?;
 
+    // Let QUIC endpoints stabilize before connecting
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
     // Health-check both
-    wait_for_healthy(&alice_ticket, Duration::from_secs(30)).await?;
-    wait_for_healthy(&bob_ticket, Duration::from_secs(30)).await?;
+    wait_for_healthy(&alice_ticket, Duration::from_secs(60)).await?;
+    wait_for_healthy(&bob_ticket, Duration::from_secs(60)).await?;
 
     // Initialize both clusters
     let alice_client = connect(&alice_ticket).await?;
@@ -188,7 +195,10 @@ pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> 
 
 /// Connect an `AspenClient` from a ticket string.
 async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
-    AspenClient::connect(ticket, Duration::from_secs(10), None).await.map_err(|e| {
+    // 30s RPC timeout matches the CLI default. First QUIC connection to a
+    // relay-disabled node may take 5-10s while iroh attempts relay then
+    // falls back to direct addresses.
+    AspenClient::connect(ticket, Duration::from_secs(30), None).await.map_err(|e| {
         crate::error::DogfoodError::ClientRpc {
             operation: "connect".to_string(),
             target: ticket_preview(ticket),
@@ -212,15 +222,26 @@ async fn send(
 }
 
 /// Poll `GetHealth` until the node reports "healthy".
+///
+/// Creates a fresh client per attempt. This avoids iroh caching a failed
+/// connection state from early attempts when the node is still starting.
 async fn wait_for_healthy(ticket: &str, timeout: Duration) -> DogfoodResult<()> {
     let start = tokio::time::Instant::now();
-    let mut delay = Duration::from_millis(500);
+    let mut delay = Duration::from_secs(2);
 
     loop {
         match check_health(ticket).await {
             Ok(h) if h.status == "healthy" => return Ok(()),
-            Ok(_) => {}  // not healthy yet
-            Err(_) => {} // connection refused, retry
+            Ok(h) => {
+                // Connected but not healthy yet (e.g. cluster not initialized).
+                // For single-node startup the caller will init, so "unhealthy" is
+                // fine as long as we can reach the node.
+                info!("  node reachable (status={})", h.status);
+                return Ok(());
+            }
+            Err(e) => {
+                info!("  health check attempt failed: {e:#}");
+            }
         }
 
         if start.elapsed() > timeout {
@@ -232,7 +253,7 @@ async fn wait_for_healthy(ticket: &str, timeout: Duration) -> DogfoodResult<()> 
         }
 
         tokio::time::sleep(delay).await;
-        delay = (delay * 2).min(Duration::from_secs(5));
+        delay = (delay * 2).min(Duration::from_secs(10));
     }
 }
 

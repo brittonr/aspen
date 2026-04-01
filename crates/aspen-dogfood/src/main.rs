@@ -68,9 +68,9 @@ enum Command {
 
 #[tokio::main]
 async fn main() {
-    // Disable iroh relay for local dogfood testing
-    // SAFETY: called before any threads are spawned
-    unsafe { std::env::set_var("ASPEN_RELAY_DISABLED", "1") };
+    // Note: ASPEN_RELAY_DISABLED is set on spawned node processes only (in spawn_node),
+    // NOT globally. The client endpoint needs relay enabled for QUIC signaling even
+    // when connecting to local nodes.
 
     tracing_subscriber::fmt()
         .with_env_filter(
