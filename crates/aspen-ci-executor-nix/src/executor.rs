@@ -640,6 +640,20 @@ impl NixBuildWorker {
             } // end upstream-cache else
         }
 
+        // Step 2.5: Pre-build input verification — check all required paths exist
+        // on disk before starting the sandbox. Catches missing inputs early with
+        // a clear error listing every missing path, instead of opaque bwrap failures.
+        if let Err(e) = crate::build_service::verify_inputs_present(&drv) {
+            warn!(error = %e, "pre-build input verification failed");
+            if let Some(ref tx) = log_sender {
+                let _ = tx.send(format!("pre-build verification failed: {e}\n")).await;
+            }
+            return Err(CiCoreError::NixBuildFailed {
+                flake: flake_ref.to_string(),
+                reason: format!("pre-build input verification failed: {e}"),
+            });
+        }
+
         // Step 3: Execute native build — call build_derivation directly so
         // we keep the NativeBuildResult for upload_native_outputs below.
         let build_result =
@@ -885,6 +899,18 @@ impl NixBuildWorker {
 
         if let Some(ref tx) = log_sender {
             let _ = tx.send(format!("npins native eval: {} → {}\n", project_dir, drv_path_str)).await;
+        }
+
+        // Step 2.5: Pre-build input verification
+        if let Err(e) = crate::build_service::verify_inputs_present(&drv) {
+            warn!(error = %e, "pre-build input verification failed (npins)");
+            if let Some(ref tx) = log_sender {
+                let _ = tx.send(format!("pre-build verification failed: {e}\n")).await;
+            }
+            return Err(CiCoreError::NixBuildFailed {
+                flake: project_dir.clone(),
+                reason: format!("pre-build input verification failed: {e}"),
+            });
         }
 
         // Step 3: Execute native build

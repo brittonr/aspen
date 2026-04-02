@@ -289,18 +289,32 @@ impl NativeBuildService {
     /// Traverses `input_derivations` and `input_sources`, looking up each
     /// store path in the PathInfoService to get its root Node.
     async fn resolve_build_inputs(&self, drv: &Derivation) -> io::Result<BTreeMap<StorePath<String>, Node>> {
-        let paths_to_resolve = collect_input_store_paths(drv).await;
+        let report = collect_input_store_paths(drv).await;
 
-        if paths_to_resolve.len() > MAX_BUILD_INPUTS {
+        if !report.unresolved.is_empty() {
+            warn!(unresolved_count = report.unresolved.len(), "some input derivations could not be read or parsed");
+            for (path, reason) in &report.unresolved {
+                warn!(drv = %path, reason = %reason, "unresolved input derivation");
+            }
+        }
+
+        if report.resolved.len() > MAX_BUILD_INPUTS {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("too many build inputs: {} exceeds limit {}", paths_to_resolve.len(), MAX_BUILD_INPUTS),
+                format!("too many build inputs: {} exceeds limit {}", report.resolved.len(), MAX_BUILD_INPUTS),
             ));
         }
 
         let mut resolved = BTreeMap::new();
-        for store_path in paths_to_resolve {
-            if let Some(node) = resolve_single_input(&*self.pathinfo_service, &store_path).await {
+        for store_path in report.resolved {
+            if let Some(node) = resolve_single_input(
+                &*self.pathinfo_service,
+                &*self.blob_service,
+                &*self.directory_service,
+                &store_path,
+            )
+            .await
+            {
                 resolved.insert(store_path, node);
             }
         }
@@ -313,71 +327,213 @@ impl NativeBuildService {
 // Input resolution helpers
 // ============================================================================
 
+/// Result from `collect_input_store_paths`: resolved paths + unresolved derivations.
+#[derive(Debug, Default)]
+pub struct InputCollectionReport {
+    /// Store paths successfully resolved from input derivations + input sources.
+    pub resolved: Vec<StorePath<String>>,
+    /// Input derivation paths that could not be read or parsed, with reasons.
+    /// Each entry is `(drv_absolute_path, reason)`.
+    pub unresolved: Vec<(String, String)>,
+}
+
 /// Collect all store paths that a derivation needs as build inputs.
 ///
 /// Reads `input_derivations` (parsing each `.drv` from local disk to find
-/// output paths) and `input_sources` (used directly).
-async fn collect_input_store_paths(drv: &Derivation) -> Vec<StorePath<String>> {
-    let mut paths: Vec<StorePath<String>> = Vec::new();
+/// output paths) and `input_sources` (used directly). Returns a structured
+/// report including unresolved derivation paths.
+async fn collect_input_store_paths(drv: &Derivation) -> InputCollectionReport {
+    let mut report = InputCollectionReport::default();
 
     for (drv_path, output_names) in &drv.input_derivations {
         let drv_abs = drv_path.to_absolute_path();
         debug!(drv = %drv_abs, outputs = ?output_names, "resolving input derivation outputs");
 
         match tokio::fs::read(drv_abs.to_string()).await {
+            Ok(bytes) => match Derivation::from_aterm_bytes(&bytes) {
+                Ok(input_drv) => {
+                    for output_name in output_names {
+                        if let Some(output) = input_drv.outputs.get(output_name)
+                            && let Some(path) = &output.path
+                        {
+                            report.resolved.push(path.clone());
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(drv = %drv_abs, error = ?e, "failed to parse input derivation");
+                    report.unresolved.push((drv_abs.clone(), format!("parse error: {e:?}")));
+                }
+            },
+            Err(e) => {
+                warn!(drv = %drv_abs, error = %e, "input derivation not on local disk");
+                report.unresolved.push((drv_abs.clone(), format!("not found: {e}")));
+            }
+        }
+    }
+
+    for source_path in &drv.input_sources {
+        report.resolved.push(source_path.clone());
+    }
+
+    report
+}
+
+/// Verify that all required store paths for a derivation exist on disk.
+///
+/// Checks input derivation outputs, input sources, and the builder path.
+/// Returns `Ok(())` if all paths are present, or an error listing every
+/// missing path with its category (builder, input source, input derivation).
+pub fn verify_inputs_present(drv: &Derivation) -> Result<(), MissingInputsError> {
+    let mut missing: Vec<(String, &'static str)> = Vec::new();
+
+    // Check builder
+    if drv.builder.starts_with("/nix/store/") {
+        // Only check the top-level store path component
+        let components: Vec<&str> = drv.builder.splitn(5, '/').collect();
+        if components.len() >= 4 {
+            let store_root = components[..4].join("/");
+            if !std::path::Path::new(&store_root).exists() {
+                missing.push((drv.builder.clone(), "builder"));
+            }
+        }
+    }
+
+    // Check input sources
+    for source in &drv.input_sources {
+        let abs = source.to_absolute_path();
+        if !std::path::Path::new(&abs).exists() {
+            missing.push((abs, "input_source"));
+        }
+    }
+
+    // Check input derivation outputs
+    for (drv_path, output_names) in &drv.input_derivations {
+        let drv_abs = drv_path.to_absolute_path();
+        match std::fs::read(&drv_abs) {
             Ok(bytes) => {
                 if let Ok(input_drv) = Derivation::from_aterm_bytes(&bytes) {
                     for output_name in output_names {
                         if let Some(output) = input_drv.outputs.get(output_name)
                             && let Some(path) = &output.path
                         {
-                            paths.push(path.clone());
+                            let out_abs = path.to_absolute_path();
+                            if !std::path::Path::new(&out_abs).exists() {
+                                missing.push((out_abs, "input_derivation_output"));
+                            }
                         }
                     }
-                } else {
-                    warn!(drv = %drv_abs, "failed to parse input derivation");
                 }
             }
             Err(_) => {
-                debug!(drv = %drv_abs, "input derivation not on local disk, skipping");
+                // .drv file itself missing — already reported by collect_input_store_paths
             }
         }
     }
 
-    for source_path in &drv.input_sources {
-        paths.push(source_path.clone());
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(MissingInputsError { missing })
+    }
+}
+
+/// Error returned by `verify_inputs_present` when store paths are missing.
+#[derive(Debug)]
+pub struct MissingInputsError {
+    /// `(absolute_path, category)` for each missing path.
+    /// Category is one of: "builder", "input_source", "input_derivation_output".
+    pub missing: Vec<(String, &'static str)>,
+}
+
+impl std::fmt::Display for MissingInputsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} missing input store paths:", self.missing.len())?;
+        for (path, category) in &self.missing {
+            write!(f, "\n  [{category}] {path}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for MissingInputsError {}
+
+/// Ingest a local filesystem path into BlobService/DirectoryService and return
+/// a proper `Node` with real B3Digest and accurate size.
+///
+/// Uses `snix_castore::import::fs::ingest_path` to walk the filesystem,
+/// upload blobs, and build directory entries. The returned Node can be used
+/// in `BuildRequest` inputs with correct metadata.
+pub async fn ingest_local_store_path(
+    path: &std::path::Path,
+    blob_service: &dyn BlobService,
+    directory_service: &dyn DirectoryService,
+) -> io::Result<Node> {
+    // Use symlink_metadata to detect symlinks (path.exists() follows symlinks
+    // and returns false for dangling symlinks).
+    if path.symlink_metadata().is_err() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, format!("path does not exist: {}", path.display())));
     }
 
-    paths
+    let node = snix_castore::import::fs::ingest_path(
+        blob_service,
+        directory_service,
+        path,
+        Option::<&snix_castore::refscan::ReferenceScanner<&[u8]>>::None,
+    )
+    .await
+    .map_err(|e| io::Error::other(format!("failed to ingest {}: {e}", path.display())))?;
+
+    debug!(
+        path = %path.display(),
+        "ingested local store path into castore"
+    );
+
+    Ok(node)
 }
 
 /// Resolve a single store path to a castore Node.
 ///
-/// Tries PathInfoService first. Falls back to a synthetic placeholder Node
-/// when the path exists on the local filesystem but hasn't been imported
-/// into PathInfoService yet (the common case after `nix-store --realise`).
-async fn resolve_single_input(pathinfo_service: &dyn PathInfoService, store_path: &StorePath<String>) -> Option<Node> {
+/// Tries PathInfoService first. Falls back to ingesting the local filesystem
+/// path into BlobService/DirectoryService when the path exists on disk but
+/// hasn't been imported into PathInfoService yet (the common case after
+/// `nix-store --realise`). If ingestion fails, falls back to a synthetic
+/// placeholder Node with a warning.
+async fn resolve_single_input(
+    pathinfo_service: &dyn PathInfoService,
+    blob_service: &dyn BlobService,
+    directory_service: &dyn DirectoryService,
+    store_path: &StorePath<String>,
+) -> Option<Node> {
     match pathinfo_service.get(*store_path.digest()).await {
         Ok(Some(path_info)) => Some(path_info.node),
         Ok(None) => {
             let abs_path = store_path.to_absolute_path();
             let local = std::path::Path::new(&abs_path);
             if local.exists() {
-                let placeholder = snix_castore::B3Digest::from(&[0u8; 32]);
-                let node = if local.is_dir() {
-                    Node::Directory {
-                        digest: placeholder,
-                        size: 0,
+                match ingest_local_store_path(local, blob_service, directory_service).await {
+                    Ok(node) => {
+                        debug!(path = %abs_path, "input ingested from local /nix/store into castore");
+                        Some(node)
                     }
-                } else {
-                    Node::File {
-                        digest: placeholder,
-                        size: 0,
-                        executable: false,
+                    Err(e) => {
+                        warn!(path = %abs_path, error = %e, "failed to ingest local store path, using placeholder");
+                        let placeholder = snix_castore::B3Digest::from(&[0u8; 32]);
+                        let node = if local.is_dir() {
+                            Node::Directory {
+                                digest: placeholder,
+                                size: 0,
+                            }
+                        } else {
+                            Node::File {
+                                digest: placeholder,
+                                size: 0,
+                                executable: false,
+                            }
+                        };
+                        Some(node)
                     }
-                };
-                debug!(path = %abs_path, "input resolved from local /nix/store (not in PathInfoService)");
-                Some(node)
+                }
             } else {
                 warn!(path = %abs_path, "input store path not found in PathInfoService or local store");
                 None
@@ -2107,17 +2263,24 @@ mod tests {
 
         assert!(resolved.contains_key(&store_path), "local store path should have been resolved via fallback");
 
-        // The placeholder node should be a Directory (busybox store path is a dir).
+        // After the hardening change, resolve_single_input ingests the local
+        // path into BlobService/DirectoryService and returns a Node with a
+        // real B3Digest and accurate size (not a placeholder).
         match resolved.get(&store_path).unwrap() {
             Node::Directory { digest, size } => {
-                // Placeholder digest is all zeros, size is 0
-                assert_eq!(*size, 0, "placeholder size should be 0");
-                assert_eq!(digest.as_slice(), &[0u8; 32], "placeholder digest should be zeros");
+                // Real ingestion: digest should NOT be all zeros, size may be > 0
+                assert_ne!(digest.as_slice(), &[0u8; 32], "digest should be real, not a placeholder");
+                // Size is directory metadata size from castore, may vary
+                let _ = size;
             }
-            Node::File { .. } => {
-                // Also acceptable if the store path happens to be a file
+            Node::File { digest, size, .. } => {
+                // If the store path is a file, digest should also be real
+                assert_ne!(digest.as_slice(), &[0u8; 32], "file digest should be real");
+                assert!(*size > 0, "file size should be > 0");
             }
-            other => panic!("unexpected node type: {:?}", other),
+            Node::Symlink { .. } => {
+                // Also valid for symlink store paths
+            }
         }
     }
 
@@ -2663,6 +2826,271 @@ mod tests {
     // ====================================================================
     // Task 2.4: Integration test for bwrap build + output registration
     // ====================================================================
+
+    // ====================================================================
+    // ingest_local_store_path tests
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_ingest_local_store_path_file() {
+        let (bs, ds, _ps) = make_in_memory_services();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let file_path = tmpdir.path().join("hello.txt");
+        std::fs::write(&file_path, b"hello world").unwrap();
+
+        let node = ingest_local_store_path(&file_path, &*bs, &*ds).await.unwrap();
+        match node {
+            Node::File { size, executable, .. } => {
+                assert_eq!(size, 11, "file size should match content length");
+                assert!(!executable, "regular file should not be executable");
+            }
+            other => panic!("expected File node, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ingest_local_store_path_executable_file() {
+        let (bs, ds, _ps) = make_in_memory_services();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let file_path = tmpdir.path().join("run.sh");
+        std::fs::write(&file_path, b"#!/bin/sh\necho hi").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let node = ingest_local_store_path(&file_path, &*bs, &*ds).await.unwrap();
+        match node {
+            Node::File { executable, .. } => {
+                assert!(executable, "file with 0o755 should be executable");
+            }
+            other => panic!("expected File node, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ingest_local_store_path_directory() {
+        let (bs, ds, _ps) = make_in_memory_services();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dir_path = tmpdir.path().join("mydir");
+        std::fs::create_dir(&dir_path).unwrap();
+        std::fs::write(dir_path.join("a.txt"), b"aaa").unwrap();
+        std::fs::write(dir_path.join("b.txt"), b"bbb").unwrap();
+
+        let node = ingest_local_store_path(&dir_path, &*bs, &*ds).await.unwrap();
+        match node {
+            Node::Directory { size, digest, .. } => {
+                assert!(size > 0, "directory size should be non-zero");
+                assert_ne!(digest, snix_castore::B3Digest::from(&[0u8; 32]), "digest should not be zeroed");
+            }
+            other => panic!("expected Directory node, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ingest_local_store_path_symlink() {
+        let (bs, ds, _ps) = make_in_memory_services();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let link_path = tmpdir.path().join("link");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/nix/store/some-target", &link_path).unwrap();
+
+        let node = ingest_local_store_path(&link_path, &*bs, &*ds).await.unwrap();
+        match node {
+            Node::Symlink { target } => {
+                assert_eq!(std::str::from_utf8(target.as_ref()).unwrap(), "/nix/store/some-target");
+            }
+            other => panic!("expected Symlink node, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ingest_local_store_path_empty_directory() {
+        let (bs, ds, _ps) = make_in_memory_services();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let dir_path = tmpdir.path().join("empty");
+        std::fs::create_dir(&dir_path).unwrap();
+
+        let node = ingest_local_store_path(&dir_path, &*bs, &*ds).await.unwrap();
+        match node {
+            Node::Directory { .. } => { /* pass */ }
+            other => panic!("expected Directory node, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ingest_local_store_path_nonexistent() {
+        let (bs, ds, _ps) = make_in_memory_services();
+        let result = ingest_local_store_path(std::path::Path::new("/nonexistent/path"), &*bs, &*ds).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().kind() == io::ErrorKind::NotFound);
+    }
+
+    // ====================================================================
+    // resolve_single_input tests
+    // ====================================================================
+
+    // ====================================================================
+    // verify_inputs_present tests
+    // ====================================================================
+
+    #[test]
+    fn test_verify_inputs_present_all_present() {
+        // A derivation with /bin/sh builder (always exists) and no inputs.
+        let drv = make_test_drv("all-present");
+        let result = verify_inputs_present(&drv);
+        assert!(result.is_ok(), "trivial drv with /bin/sh should pass: {result:?}");
+    }
+
+    #[test]
+    fn test_verify_inputs_present_builder_missing() {
+        let mut drv = make_test_drv("builder-missing");
+        drv.builder = "/nix/store/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz4-bash/bin/bash".to_string();
+
+        let result = verify_inputs_present(&drv);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.missing.len(), 1);
+        assert_eq!(err.missing[0].1, "builder");
+        assert!(err.to_string().contains("builder"));
+    }
+
+    #[test]
+    fn test_verify_inputs_present_source_missing() {
+        let mut drv = make_test_drv("source-missing");
+        let missing_source =
+            StorePath::<String>::from_absolute_path(b"/nix/store/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz1-src").unwrap();
+        drv.input_sources.insert(missing_source);
+
+        let result = verify_inputs_present(&drv);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.missing.len(), 1);
+        assert_eq!(err.missing[0].1, "input_source");
+    }
+
+    #[test]
+    fn test_verify_inputs_present_multiple_missing() {
+        let mut drv = make_test_drv("multi-missing");
+        drv.builder = "/nix/store/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz2-bash/bin/bash".to_string();
+        let missing_source =
+            StorePath::<String>::from_absolute_path(b"/nix/store/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz3-lib").unwrap();
+        drv.input_sources.insert(missing_source);
+
+        let result = verify_inputs_present(&drv);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.missing.len(), 2);
+        // Should list both categories
+        let categories: Vec<&str> = err.missing.iter().map(|(_, c)| *c).collect();
+        assert!(categories.contains(&"builder"));
+        assert!(categories.contains(&"input_source"));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_single_input_from_pathinfo() {
+        let (bs, ds, ps) = make_in_memory_services();
+        let store_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-cached").unwrap();
+
+        // Put a PathInfo entry
+        let node = Node::File {
+            digest: *DUMMY_DIGEST,
+            size: 42,
+            executable: false,
+        };
+        let path_info = snix_store::path_info::PathInfo {
+            store_path: store_path.clone(),
+            node: node.clone(),
+            references: vec![],
+            nar_size: 100,
+            nar_sha256: [0u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        ps.put(path_info).await.unwrap();
+
+        let result = resolve_single_input(&*ps, &*bs, &*ds, &store_path).await;
+        assert!(result.is_some());
+        let resolved = result.unwrap();
+        match resolved {
+            Node::File { digest, size, .. } => {
+                assert_eq!(digest, *DUMMY_DIGEST);
+                assert_eq!(size, 42);
+            }
+            other => panic!("expected cached File node, got {other:?}"),
+        }
+    }
+
+    // ====================================================================
+    // collect_input_store_paths tests
+    // ====================================================================
+
+    #[tokio::test]
+    async fn test_collect_input_store_paths_sources_only() {
+        // A derivation with input_sources but no input_derivations.
+        let mut drv = make_test_drv("sources-only");
+        let source =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-src").unwrap();
+        drv.input_sources.insert(source.clone());
+
+        let report = collect_input_store_paths(&drv).await;
+        assert_eq!(report.resolved.len(), 1);
+        assert!(report.unresolved.is_empty());
+        assert_eq!(report.resolved[0], source);
+    }
+
+    #[tokio::test]
+    async fn test_collect_input_store_paths_missing_drv() {
+        // A derivation referencing an input .drv that doesn't exist on disk.
+        let mut drv = make_test_drv("missing-drv");
+        let fake_drv_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1-nonexistent.drv")
+                .unwrap();
+        drv.input_derivations.insert(fake_drv_path, BTreeSet::from(["out".to_string()]));
+
+        let report = collect_input_store_paths(&drv).await;
+        assert_eq!(report.unresolved.len(), 1, "missing .drv should be unresolved");
+        assert!(
+            report.unresolved[0].1.contains("not found"),
+            "reason should mention 'not found': {}",
+            report.unresolved[0].1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_collect_input_store_paths_bad_drv_content() {
+        // A derivation referencing a .drv file that exists but contains garbage.
+        let tmpdir = tempfile::tempdir().unwrap();
+        let fake_drv = tmpdir.path().join("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2-garbage.drv");
+        std::fs::write(&fake_drv, b"this is not valid ATerm").unwrap();
+
+        let mut drv = make_test_drv("bad-drv");
+        // We can't easily make from_aterm_bytes fail with a real StorePath pointing
+        // to tmpdir, but we can verify the report structure by checking that the
+        // function handles a missing /nix/store path gracefully.
+        let fake_store_drv =
+            StorePath::<String>::from_absolute_path(b"/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2-garbage.drv")
+                .unwrap();
+        drv.input_derivations.insert(fake_store_drv, BTreeSet::from(["out".to_string()]));
+
+        let report = collect_input_store_paths(&drv).await;
+        // The .drv won't exist at /nix/store/... so it'll be "not found"
+        assert_eq!(report.unresolved.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_single_input_missing_entirely() {
+        let (bs, ds, ps) = make_in_memory_services();
+        let store_path =
+            StorePath::<String>::from_absolute_path(b"/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-ghost").unwrap();
+
+        // Path not in PathInfoService and not on disk → None
+        let result = resolve_single_input(&*ps, &*bs, &*ds, &store_path).await;
+        assert!(result.is_none());
+    }
 
     #[tokio::test]
     #[ignore = "requires bubblewrap + nix daemon"]

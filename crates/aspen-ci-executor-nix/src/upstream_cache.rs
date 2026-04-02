@@ -173,114 +173,33 @@ impl UpstreamCacheClient {
 
     /// Download a NAR from the upstream cache and ingest it into snix services.
     ///
-    /// Returns `(root_node, nar_sha256, nar_size)` on success.
+    /// Delegates to `fetch_and_ingest_nar_inner` with this client's services.
     pub async fn fetch_and_ingest_nar(&self, cache_url: &str, narinfo: &NarInfoResponse) -> Result<(), FetchError> {
-        if narinfo.nar_size > MAX_NAR_FETCH_SIZE {
-            return Err(FetchError::TooLarge {
-                path: narinfo.store_path.clone(),
-                size: narinfo.nar_size,
-                limit: MAX_NAR_FETCH_SIZE,
-            });
-        }
-
-        // Build absolute URL for NAR file
-        let nar_url = if narinfo.url.starts_with("http://") || narinfo.url.starts_with("https://") {
-            narinfo.url.clone()
-        } else {
-            format!("{}/{}", cache_url.trim_end_matches('/'), narinfo.url)
-        };
-
-        debug!(url = %nar_url, compression = %narinfo.compression, "fetching NAR");
-
-        let response = self
-            .client
-            .get(&nar_url)
-            .send()
-            .await
-            .map_err(|e| FetchError::Network(format!("fetching NAR {nar_url}: {e}")))?;
-
-        if !response.status().is_success() {
-            return Err(FetchError::Network(format!("NAR download failed: HTTP {} for {nar_url}", response.status())));
-        }
-
-        let compressed_bytes =
-            response.bytes().await.map_err(|e| FetchError::Network(format!("reading NAR body: {e}")))?;
-
-        // Decompress based on compression type
-        let nar_bytes = decompress_nar(&compressed_bytes, &narinfo.compression)
-            .map_err(|e| FetchError::Decompress(format!("{}: {e}", narinfo.compression)))?;
-
-        // Ingest into castore
-        let mut cursor = Cursor::new(&nar_bytes);
-        let (root_node, nar_sha256, nar_size) = ingest_nar_and_hash(
+        fetch_and_ingest_nar_inner(
+            &self.client,
+            cache_url,
+            narinfo,
             Arc::clone(&self.blob_service),
             Arc::clone(&self.directory_service),
-            &mut cursor,
-            &None,
+            &*self.pathinfo_service,
         )
         .await
-        .map_err(|e| FetchError::Ingest(format!("NAR ingest failed: {e}")))?;
-
-        // Verify hash matches narinfo
-        if nar_sha256 != narinfo.nar_sha256 {
-            return Err(FetchError::HashMismatch {
-                path: narinfo.store_path.clone(),
-                expected: hex::encode(narinfo.nar_sha256),
-                actual: hex::encode(nar_sha256),
-            });
-        }
-
-        // Build PathInfo and store it
-        let store_path =
-            StorePath::<String>::from_absolute_path(format!("/nix/store/{}", narinfo.store_path).as_bytes())
-                .map_err(|e| FetchError::Parse(format!("invalid store path: {e}")))?;
-
-        let references: Vec<StorePath<String>> = narinfo
-            .references
-            .iter()
-            .filter_map(|r| StorePath::<String>::from_absolute_path(format!("/nix/store/{r}").as_bytes()).ok())
-            .collect();
-
-        let deriver = narinfo
-            .deriver
-            .as_ref()
-            .and_then(|d| StorePath::<String>::from_absolute_path(format!("/nix/store/{d}").as_bytes()).ok());
-
-        let path_info = snix_store::path_info::PathInfo {
-            store_path,
-            node: root_node,
-            references,
-            nar_size,
-            nar_sha256,
-            signatures: vec![],
-            deriver,
-            ca: None,
-        };
-
-        self.pathinfo_service
-            .put(path_info)
-            .await
-            .map_err(|e| FetchError::Ingest(format!("PathInfoService put failed: {e}")))?;
-
-        info!(
-            path = %narinfo.store_path,
-            nar_size = nar_size,
-            "ingested path from upstream cache"
-        );
-
-        Ok(())
     }
 
     /// Populate the cluster's PathInfoService with the transitive closure
     /// of the given store path basenames from upstream caches.
     ///
-    /// BFS over narinfo references. Skips paths already in PathInfoService.
-    /// Bounded by `MAX_CLOSURE_PATHS`.
+    /// BFS over narinfo references with concurrent NAR fetching bounded by
+    /// `MAX_CONCURRENT_FETCHES`. Narinfo lookups (cheap) run inline to
+    /// discover references; NAR downloads (expensive) run concurrently via
+    /// a `JoinSet`. Completed fetches enqueue newly-discovered references
+    /// back into the BFS queue.
     pub async fn populate_closure(&self, initial_basenames: &[String]) -> Result<PopulateReport, FetchError> {
         let mut report = PopulateReport::default();
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
         let semaphore = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_FETCHES));
+        let mut fetch_tasks: tokio::task::JoinSet<FetchTaskResult> = tokio::task::JoinSet::new();
 
         // Seed queue
         for name in initial_basenames {
@@ -289,75 +208,126 @@ impl UpstreamCacheClient {
             }
         }
 
-        while let Some(basename) = queue.pop_front() {
-            if visited.len() > MAX_CLOSURE_PATHS {
-                warn!(limit = MAX_CLOSURE_PATHS, visited = visited.len(), "closure population hit path limit");
-                report.hit_limit = true;
+        loop {
+            // Drain the BFS queue: resolve narinfos inline, spawn NAR fetches
+            while let Some(basename) = queue.pop_front() {
+                if visited.len() > MAX_CLOSURE_PATHS {
+                    warn!(limit = MAX_CLOSURE_PATHS, visited = visited.len(), "closure population hit path limit");
+                    report.hit_limit = true;
+                    break;
+                }
+
+                // Check if already in PathInfoService
+                let abs_path = format!("/nix/store/{basename}");
+                if let Ok(sp) = StorePath::<String>::from_absolute_path(abs_path.as_bytes())
+                    && let Ok(Some(existing)) = self.pathinfo_service.get(*sp.digest()).await
+                {
+                    report.already_present = report.already_present.saturating_add(1);
+                    for reference in &existing.references {
+                        let ref_name = reference.to_string();
+                        if visited.insert(ref_name.clone()) {
+                            queue.push_back(ref_name);
+                        }
+                    }
+                    continue;
+                }
+
+                // Extract store path hash from basename
+                let hash_part = match basename.find('-') {
+                    Some(idx) => basename[..idx].to_string(),
+                    None => {
+                        report.unresolved.push(basename.clone());
+                        continue;
+                    }
+                };
+
+                // Fetch narinfo inline (cheap, ~50ms)
+                let narinfo = match self.fetch_narinfo(&hash_part).await {
+                    Ok(ni) => ni,
+                    Err(FetchError::NotFound(_)) => {
+                        debug!(basename = %basename, "not found in any upstream cache");
+                        report.unresolved.push(basename);
+                        continue;
+                    }
+                    Err(e) => {
+                        warn!(basename = %basename, error = %e, "upstream narinfo fetch failed");
+                        report.errors.push(format!("{basename}: {e}"));
+                        continue;
+                    }
+                };
+
+                // Enqueue references for BFS immediately
+                for reference in &narinfo.references {
+                    if visited.insert(reference.clone()) {
+                        queue.push_back(reference.clone());
+                    }
+                }
+
+                // Spawn concurrent NAR fetch (expensive, seconds)
+                let cache_url =
+                    self.config.caches.first().map(|c| c.url.clone()).unwrap_or_else(|| DEFAULT_CACHE_URL.to_string());
+                let client = self.client.clone();
+                let blob_svc = Arc::clone(&self.blob_service);
+                let dir_svc = Arc::clone(&self.directory_service);
+                let pathinfo_svc = Arc::clone(&self.pathinfo_service);
+                let permit = semaphore
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .map_err(|_| FetchError::Network("semaphore closed".to_string()))?;
+                let bn = basename.clone();
+
+                fetch_tasks.spawn(async move {
+                    let result =
+                        fetch_nar_with_retry(client, cache_url, narinfo, blob_svc, dir_svc, pathinfo_svc).await;
+                    drop(permit);
+                    FetchTaskResult { basename: bn, result }
+                });
+            }
+
+            // No more items in queue — drain remaining fetch tasks
+            if fetch_tasks.is_empty() {
                 break;
             }
 
-            // Check if already in PathInfoService
-            let abs_path = format!("/nix/store/{basename}");
-            if let Ok(sp) = StorePath::<String>::from_absolute_path(abs_path.as_bytes())
-                && let Ok(Some(existing)) = self.pathinfo_service.get(*sp.digest()).await
-            {
-                report.already_present = report.already_present.saturating_add(1);
-                for reference in &existing.references {
-                    let ref_name = reference.to_string();
-                    if visited.insert(ref_name.clone()) {
-                        queue.push_back(ref_name);
+            // Wait for the next fetch to complete
+            match fetch_tasks.join_next().await {
+                Some(Ok(task_result)) => {
+                    match task_result.result {
+                        Ok(retries) => {
+                            report.fetched = report.fetched.saturating_add(1);
+                            report.retries = report.retries.saturating_add(retries);
+                        }
+                        Err(e) => {
+                            warn!(basename = %task_result.basename, error = %e, "NAR fetch/ingest failed");
+                            report.errors.push(format!("{}: {e}", task_result.basename));
+                        }
                     }
+                    // The BFS queue may have new items from earlier narinfo lookups;
+                    // loop back to drain it before waiting for more fetches.
                 }
-                continue;
+                Some(Err(e)) => {
+                    warn!(error = %e, "NAR fetch task panicked");
+                    report.errors.push(format!("task panic: {e}"));
+                }
+                None => break,
             }
+        }
 
-            // Extract store path hash from basename
-            let hash_part = match basename.find('-') {
-                Some(idx) => &basename[..idx],
-                None => {
-                    report.unresolved.push(basename.clone());
-                    continue;
-                }
-            };
-
-            // Fetch narinfo
-            let _permit = semaphore
-                .clone()
-                .acquire_owned()
-                .await
-                .map_err(|_| FetchError::Network("semaphore closed".to_string()))?;
-
-            let narinfo = match self.fetch_narinfo(hash_part).await {
-                Ok(ni) => ni,
-                Err(FetchError::NotFound(_)) => {
-                    debug!(basename = %basename, "not found in any upstream cache");
-                    report.unresolved.push(basename);
-                    continue;
-                }
+        // Drain any remaining completed tasks
+        while let Some(result) = fetch_tasks.join_next().await {
+            match result {
+                Ok(task_result) => match task_result.result {
+                    Ok(retries) => {
+                        report.fetched = report.fetched.saturating_add(1);
+                        report.retries = report.retries.saturating_add(retries);
+                    }
+                    Err(e) => {
+                        report.errors.push(format!("{}: {e}", task_result.basename));
+                    }
+                },
                 Err(e) => {
-                    warn!(basename = %basename, error = %e, "upstream narinfo fetch failed");
-                    report.errors.push(format!("{basename}: {e}"));
-                    continue;
-                }
-            };
-
-            // Enqueue references for BFS
-            for reference in &narinfo.references {
-                if visited.insert(reference.clone()) {
-                    queue.push_back(reference.clone());
-                }
-            }
-
-            // Find which cache had it and fetch the NAR
-            let cache_url = self.config.caches.first().map(|c| c.url.as_str()).unwrap_or(DEFAULT_CACHE_URL);
-
-            match self.fetch_and_ingest_nar(cache_url, &narinfo).await {
-                Ok(()) => {
-                    report.fetched = report.fetched.saturating_add(1);
-                }
-                Err(e) => {
-                    warn!(basename = %basename, error = %e, "NAR fetch/ingest failed");
-                    report.errors.push(format!("{basename}: {e}"));
+                    report.errors.push(format!("task panic: {e}"));
                 }
             }
         }
@@ -367,10 +337,80 @@ impl UpstreamCacheClient {
             already_present = report.already_present,
             unresolved = report.unresolved.len(),
             errors = report.errors.len(),
+            retries = report.retries,
             "closure population complete"
         );
 
         Ok(report)
+    }
+}
+
+/// Result from a single concurrent NAR fetch task.
+struct FetchTaskResult {
+    basename: String,
+    /// Ok(retry_count) on success, Err on failure.
+    result: Result<u32, FetchError>,
+}
+
+/// Maximum number of retry attempts for transient errors.
+const MAX_RETRIES: u32 = 2;
+
+/// Fetch and ingest a NAR with retry for transient HTTP errors.
+///
+/// Retries on 5xx, timeout, and connection reset. Does NOT retry on
+/// 404, hash mismatch, or decompression errors.
+///
+/// Takes `Arc`s so it can be spawned into a `JoinSet`.
+async fn fetch_nar_with_retry(
+    client: reqwest::Client,
+    cache_url: String,
+    narinfo: NarInfoResponse,
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
+    pathinfo_service: Arc<dyn PathInfoService>,
+) -> Result<u32, FetchError> {
+    let mut retries = 0u32;
+
+    loop {
+        match fetch_and_ingest_nar_inner(
+            &client,
+            &cache_url,
+            &narinfo,
+            Arc::clone(&blob_service),
+            Arc::clone(&directory_service),
+            &*pathinfo_service,
+        )
+        .await
+        {
+            Ok(()) => return Ok(retries),
+            Err(e) if is_transient_error(&e) && retries < MAX_RETRIES => {
+                retries = retries.saturating_add(1);
+                let backoff_ms = 1000u64.saturating_mul(retries as u64);
+                debug!(
+                    path = %narinfo.store_path,
+                    retry = retries,
+                    backoff_ms = backoff_ms,
+                    error = %e,
+                    "retrying transient NAR fetch error"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Check if a FetchError is transient and should be retried.
+fn is_transient_error(e: &FetchError) -> bool {
+    match e {
+        FetchError::Network(msg) => {
+            // 5xx, timeout, connection reset
+            msg.contains("5") || msg.contains("timeout") || msg.contains("reset") || msg.contains("connect")
+        }
+        FetchError::NotFound(_) | FetchError::Parse(_) | FetchError::Decompress(_) => false,
+        FetchError::HashMismatch { .. } => false,
+        FetchError::TooLarge { .. } => false,
+        FetchError::Ingest(_) => false,
     }
 }
 
@@ -391,6 +431,8 @@ pub struct PopulateReport {
     pub errors: Vec<String>,
     /// Whether the closure population hit the path limit.
     pub hit_limit: bool,
+    /// Total retry attempts across all fetches.
+    pub retries: u32,
 }
 
 // ============================================================================
@@ -436,6 +478,104 @@ impl std::fmt::Display for FetchError {
             Self::Ingest(msg) => write!(f, "ingest error: {msg}"),
         }
     }
+}
+
+// ============================================================================
+// Standalone NAR fetch + ingest (used by concurrent tasks)
+// ============================================================================
+
+/// Download, decompress, verify, and ingest a NAR into castore services.
+///
+/// Standalone function (no `&self`) so it can be called from spawned tasks.
+async fn fetch_and_ingest_nar_inner(
+    client: &reqwest::Client,
+    cache_url: &str,
+    narinfo: &NarInfoResponse,
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
+    pathinfo_service: &dyn PathInfoService,
+) -> Result<(), FetchError> {
+    if narinfo.nar_size > MAX_NAR_FETCH_SIZE {
+        return Err(FetchError::TooLarge {
+            path: narinfo.store_path.clone(),
+            size: narinfo.nar_size,
+            limit: MAX_NAR_FETCH_SIZE,
+        });
+    }
+
+    let nar_url = if narinfo.url.starts_with("http://") || narinfo.url.starts_with("https://") {
+        narinfo.url.clone()
+    } else {
+        format!("{}/{}", cache_url.trim_end_matches('/'), narinfo.url)
+    };
+
+    debug!(url = %nar_url, compression = %narinfo.compression, "fetching NAR");
+
+    let response = client
+        .get(&nar_url)
+        .send()
+        .await
+        .map_err(|e| FetchError::Network(format!("fetching NAR {nar_url}: {e}")))?;
+
+    if !response.status().is_success() {
+        return Err(FetchError::Network(format!("NAR download failed: HTTP {} for {nar_url}", response.status())));
+    }
+
+    let compressed_bytes = response.bytes().await.map_err(|e| FetchError::Network(format!("reading NAR body: {e}")))?;
+
+    let nar_bytes = decompress_nar(&compressed_bytes, &narinfo.compression)
+        .map_err(|e| FetchError::Decompress(format!("{}: {e}", narinfo.compression)))?;
+
+    let mut cursor = Cursor::new(&nar_bytes);
+    let (root_node, nar_sha256, nar_size) = ingest_nar_and_hash(blob_service, directory_service, &mut cursor, &None)
+        .await
+        .map_err(|e| FetchError::Ingest(format!("NAR ingest failed: {e}")))?;
+
+    if nar_sha256 != narinfo.nar_sha256 {
+        return Err(FetchError::HashMismatch {
+            path: narinfo.store_path.clone(),
+            expected: hex::encode(narinfo.nar_sha256),
+            actual: hex::encode(nar_sha256),
+        });
+    }
+
+    let store_path = StorePath::<String>::from_absolute_path(format!("/nix/store/{}", narinfo.store_path).as_bytes())
+        .map_err(|e| FetchError::Parse(format!("invalid store path: {e}")))?;
+
+    let references: Vec<StorePath<String>> = narinfo
+        .references
+        .iter()
+        .filter_map(|r| StorePath::<String>::from_absolute_path(format!("/nix/store/{r}").as_bytes()).ok())
+        .collect();
+
+    let deriver = narinfo
+        .deriver
+        .as_ref()
+        .and_then(|d| StorePath::<String>::from_absolute_path(format!("/nix/store/{d}").as_bytes()).ok());
+
+    let path_info = snix_store::path_info::PathInfo {
+        store_path,
+        node: root_node,
+        references,
+        nar_size,
+        nar_sha256,
+        signatures: vec![],
+        deriver,
+        ca: None,
+    };
+
+    pathinfo_service
+        .put(path_info)
+        .await
+        .map_err(|e| FetchError::Ingest(format!("PathInfoService put failed: {e}")))?;
+
+    info!(
+        path = %narinfo.store_path,
+        nar_size = nar_size,
+        "ingested path from upstream cache"
+    );
+
+    Ok(())
 }
 
 // ============================================================================
@@ -724,5 +864,47 @@ References: ";
             limit: 100,
         };
         assert!(e.to_string().contains("too large"));
+    }
+
+    #[test]
+    fn test_is_transient_error_network_5xx() {
+        let e = FetchError::Network("NAR download failed: HTTP 503 for http://example.com".to_string());
+        assert!(is_transient_error(&e), "503 should be transient");
+    }
+
+    #[test]
+    fn test_is_transient_error_timeout() {
+        let e = FetchError::Network("connection timeout after 30s".to_string());
+        assert!(is_transient_error(&e), "timeout should be transient");
+    }
+
+    #[test]
+    fn test_is_transient_error_not_found() {
+        let e = FetchError::NotFound("abc123".to_string());
+        assert!(!is_transient_error(&e), "404 should not be transient");
+    }
+
+    #[test]
+    fn test_is_transient_error_hash_mismatch() {
+        let e = FetchError::HashMismatch {
+            path: "test".to_string(),
+            expected: "aaa".to_string(),
+            actual: "bbb".to_string(),
+        };
+        assert!(!is_transient_error(&e), "hash mismatch should not be transient");
+    }
+
+    #[test]
+    fn test_is_transient_error_decompress() {
+        let e = FetchError::Decompress("invalid xz stream".to_string());
+        assert!(!is_transient_error(&e), "decompress error should not be transient");
+    }
+
+    #[test]
+    fn test_populate_report_has_retries_field() {
+        let mut report = PopulateReport::default();
+        assert_eq!(report.retries, 0);
+        report.retries = 5;
+        assert_eq!(report.retries, 5);
     }
 }
