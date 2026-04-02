@@ -6,7 +6,10 @@
 # (to be used in 'shell.nix').
 {
   src,
-  system ? builtins.currentSystem or "unknown-system",
+  system ?
+    if builtins ? currentSystem
+    then builtins.currentSystem
+    else "unknown-system",
 }: let
   inherit (builtins) mapAttrs;
 
@@ -15,116 +18,133 @@
   lockFile = builtins.fromJSON (builtins.readFile lockFilePath);
 
   fetchTree =
-    builtins.fetchTree
-    or (
-      info:
-        if info.type == "github"
-        then {
-          outPath = fetchTarball (
-            {
-              url = "https://api.${info.host or "github.com"}/repos/${info.owner}/${info.repo}/tarball/${info.rev}";
-            }
-            // (
-              if info ? narHash
-              then {sha256 = info.narHash;}
-              else {}
-            )
-          );
-          rev = info.rev;
-          shortRev = builtins.substring 0 7 info.rev;
-          lastModified = info.lastModified;
-          lastModifiedDate = formatSecondsSinceEpoch info.lastModified;
-          narHash = info.narHash;
-        }
-        else if info.type == "git"
-        then
-          {
-            outPath = builtins.fetchGit (
+    if builtins ? fetchTree
+    then builtins.fetchTree
+    else
+      (
+        info:
+          if info.type == "github"
+          then {
+            outPath = fetchTarball (
               {
-                url = info.url;
+                url = "https://api.${
+                  if info ? host
+                  then info.host
+                  else "github.com"
+                }/repos/${info.owner}/${info.repo}/tarball/${info.rev}";
               }
               // (
-                if info ? rev
-                then {inherit (info) rev;}
-                else {}
-              )
-              // (
-                if info ? ref
-                then {inherit (info) ref;}
-                else {}
-              )
-              // (
-                if info ? submodules
-                then {inherit (info) submodules;}
+                if info ? narHash
+                then {sha256 = info.narHash;}
                 else {}
               )
             );
+            rev = info.rev;
+            shortRev = builtins.substring 0 7 info.rev;
             lastModified = info.lastModified;
             lastModifiedDate = formatSecondsSinceEpoch info.lastModified;
             narHash = info.narHash;
-            revCount = info.revCount or 0;
           }
-          // (
-            if info ? rev
-            then {
-              rev = info.rev;
-              shortRev = builtins.substring 0 7 info.rev;
-            }
-            else {}
-          )
-        else if info.type == "path"
-        then {
-          outPath = builtins.path {
-            path = info.path;
-            sha256 = info.narHash;
-          };
-          narHash = info.narHash;
-        }
-        else if info.type == "tarball"
-        then {
-          outPath = fetchTarball (
-            {inherit (info) url;}
-            // (
-              if info ? narHash
-              then {sha256 = info.narHash;}
-              else {}
-            )
-          );
-        }
-        else if info.type == "gitlab"
-        then {
-          inherit (info) rev narHash lastModified;
-          outPath = fetchTarball (
+          else if info.type == "git"
+          then
             {
-              url = "https://${info.host or "gitlab.com"}/api/v4/projects/${info.owner}%2F${info.repo}/repository/archive.tar.gz?sha=${info.rev}";
+              outPath = builtins.fetchGit (
+                {
+                  url = info.url;
+                }
+                // (
+                  if info ? rev
+                  then {inherit (info) rev;}
+                  else {}
+                )
+                // (
+                  if info ? ref
+                  then {inherit (info) ref;}
+                  else {}
+                )
+                // (
+                  if info ? submodules
+                  then {inherit (info) submodules;}
+                  else {}
+                )
+              );
+              lastModified = info.lastModified;
+              lastModifiedDate = formatSecondsSinceEpoch info.lastModified;
+              narHash = info.narHash;
+              revCount =
+                if info ? revCount
+                then info.revCount
+                else 0;
             }
             // (
-              if info ? narHash
-              then {sha256 = info.narHash;}
+              if info ? rev
+              then {
+                rev = info.rev;
+                shortRev = builtins.substring 0 7 info.rev;
+              }
               else {}
             )
-          );
-          shortRev = builtins.substring 0 7 info.rev;
-        }
-        else if info.type == "sourcehut"
-        then {
-          inherit (info) rev narHash lastModified;
-          outPath = fetchTarball (
-            {
-              url = "https://${info.host or "git.sr.ht"}/${info.owner}/${info.repo}/archive/${info.rev}.tar.gz";
-            }
-            // (
-              if info ? narHash
-              then {sha256 = info.narHash;}
-              else {}
-            )
-          );
-          shortRev = builtins.substring 0 7 info.rev;
-        }
-        else
-          # FIXME: add Mercurial, tarball inputs.
-          throw "flake input has unsupported input type '${info.type}'"
-    );
+          else if info.type == "path"
+          then {
+            outPath = builtins.path {
+              path = info.path;
+              sha256 = info.narHash;
+            };
+            narHash = info.narHash;
+          }
+          else if info.type == "tarball"
+          then {
+            outPath = fetchTarball (
+              {inherit (info) url;}
+              // (
+                if info ? narHash
+                then {sha256 = info.narHash;}
+                else {}
+              )
+            );
+          }
+          else if info.type == "gitlab"
+          then {
+            inherit (info) rev narHash lastModified;
+            outPath = fetchTarball (
+              {
+                url = "https://${
+                  if info ? host
+                  then info.host
+                  else "gitlab.com"
+                }/api/v4/projects/${info.owner}%2F${info.repo}/repository/archive.tar.gz?sha=${info.rev}";
+              }
+              // (
+                if info ? narHash
+                then {sha256 = info.narHash;}
+                else {}
+              )
+            );
+            shortRev = builtins.substring 0 7 info.rev;
+          }
+          else if info.type == "sourcehut"
+          then {
+            inherit (info) rev narHash lastModified;
+            outPath = fetchTarball (
+              {
+                url = "https://${
+                  if info ? host
+                  then info.host
+                  else "git.sr.ht"
+                }/${info.owner}/${info.repo}/archive/${info.rev}.tar.gz";
+              }
+              // (
+                if info ? narHash
+                then {sha256 = info.narHash;}
+                else {}
+              )
+            );
+            shortRev = builtins.substring 0 7 info.rev;
+          }
+          else
+            # FIXME: add Mercurial, tarball inputs.
+            throw "flake input has unsupported input type '${info.type}'"
+      );
 
   callFlake4 = flakeSrc: locks: let
     flake = import (flakeSrc + "/flake.nix");
@@ -132,7 +152,10 @@
     inputs =
       mapAttrs (
         _n: v:
-          if v.flake or true
+          if
+            if v ? flake
+            then v.flake
+            else true
           then callFlake4 (fetchTree (v.locked // v.info)) v.inputs
           else fetchTree (v.locked // v.info)
       )
@@ -240,7 +263,14 @@
   allNodes =
     mapAttrs (
       key: node: let
-        isRelative = node.locked.type or null == "path" && builtins.substring 0 1 node.locked.path != "/";
+        isRelative =
+          (
+            if node.locked ? type
+            then node.locked.type
+            else null
+          )
+          == "path"
+          && builtins.substring 0 1 node.locked.path != "/";
 
         parentNode = allNodes.${getInputByPath lockFile.root node.parent};
 
@@ -249,12 +279,19 @@
           then rootSrc
           else if isRelative
           then parentNode.sourceInfo
-          else fetchTree (node.info or {} // removeAttrs node.locked ["dir"]);
+          else
+            fetchTree (
+              if node ? info
+              then node.info
+              else {} // removeAttrs node.locked ["dir"]
+            );
 
         subdir =
           if key == lockFile.root
           then ""
-          else node.locked.dir or "";
+          else if node.locked ? dir
+          then node.locked.dir
+          else "";
 
         outPath =
           if isRelative
@@ -276,7 +313,9 @@
         flake = import (outPath + "/flake.nix");
 
         inputs = mapAttrs (_inputName: inputSpec: allNodes.${resolveInput inputSpec}.result) (
-          node.inputs or {}
+          if node ? inputs
+          then node.inputs
+          else {}
         );
 
         # Resolve a input spec into a node name. An input spec is
@@ -319,7 +358,10 @@
           };
       in {
         result =
-          if node.flake or true
+          if
+            if node ? flake
+            then node.flake
+            else true
           then assert builtins.isFunction flake.outputs; result
           else sourceInfo // {inherit sourceInfo outPath;};
 
