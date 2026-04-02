@@ -20,4 +20,4 @@
 
 - [x] 4.1 Remove the dummy comment added to `flake_compat.rs` (no longer needed as cache bust) — kept: factually accurate documentation
 - [x] 4.2 Run all snix VM tests to confirm no regressions — snix-flake-native-build-test passes; cargo check --workspace clean
-- [ ] 4.3 Commit with verification evidence
+- [x] 4.3 Commit with verification evidence — eae3985d3
