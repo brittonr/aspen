@@ -1,4 +1,5 @@
 //! Embedded NixOS/flake-compat for in-process flake evaluation.
+//! Patched to replace `or` keyword with `if ? then else` for rnix compatibility.
 //!
 //! flake-compat is a pure Nix file that parses `flake.lock`, fetches inputs
 //! via `fetchTarball`/`builtins.path`, and calls the flake's `outputs` function.
