@@ -235,8 +235,8 @@ async fn cmd_push(config: &RunConfig) -> DogfoodResult<()> {
     let state = state::read_state(&config.state_file_path())?;
     let ticket = state.primary_ticket();
 
-    forge::ensure_repo_exists(ticket, "aspen").await?;
-    forge::git_push(config, ticket, "aspen").await?;
+    let repo_id = forge::ensure_repo_exists(ticket, "aspen").await?;
+    forge::git_push(config, ticket, &repo_id).await?;
 
     info!("✅ Source pushed to Forge");
     Ok(())

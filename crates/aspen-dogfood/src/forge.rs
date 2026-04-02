@@ -13,7 +13,8 @@ use crate::error::ForgeSnafu;
 use crate::error::GitPushSnafu;
 
 /// Ensure a Forge repository exists, creating it if needed.
-pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<()> {
+/// Returns the hex-encoded repo ID (needed for the aspen:// URL).
+pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<String> {
     let client = connect(ticket).await?;
 
     // Check if repo already exists by listing repos
@@ -35,8 +36,14 @@ pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<
     };
 
     if already_exists {
-        info!("  repo '{repo_name}' already exists, skipping create");
-        return Ok(());
+        // Extract existing repo ID
+        if let ClientRpcResponse::ForgeRepoListResult(list) = &resp {
+            if let Some(repo) = list.repos.iter().find(|r| r.name == repo_name) {
+                info!("  repo '{repo_name}' already exists (id: {})", &repo.id[..16]);
+                return Ok(repo.id.clone());
+            }
+        }
+        // Shouldn't happen, but fall through to create
     }
 
     // Create the repo
@@ -56,9 +63,9 @@ pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<
 
     match &create_resp {
         ClientRpcResponse::ForgeRepoResult(r) if r.is_success => {
-            let repo_id = r.repo.as_ref().map(|r| r.id.as_str()).unwrap_or("?");
-            info!("  repo created (id: {repo_id})");
-            Ok(())
+            let repo_id = r.repo.as_ref().map(|r| r.id.clone()).unwrap_or_default();
+            info!("  repo created (id: {})", &repo_id[..repo_id.len().min(16)]);
+            Ok(repo_id)
         }
         ClientRpcResponse::ForgeRepoResult(r) => ForgeSnafu {
             operation: "create repo",
@@ -74,8 +81,8 @@ pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<
 }
 
 /// Push workspace source to the Forge repo via `git push` with git-remote-aspen.
-pub async fn git_push(config: &RunConfig, ticket: &str, repo_name: &str) -> DogfoodResult<()> {
-    let remote_url = format!("aspen://{ticket}/{repo_name}");
+pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> DogfoodResult<()> {
+    let remote_url = format!("aspen://{ticket}/{repo_id}");
 
     // Configure the remote (idempotent)
     let _ = tokio::process::Command::new("git")
