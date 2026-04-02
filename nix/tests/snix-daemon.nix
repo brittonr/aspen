@@ -36,8 +36,6 @@ pkgs.testers.nixosTest {
   };
 
   testScript = ''
-    import time
-
     start_all()
 
     DAEMON_SOCKET = "/tmp/aspen-nix-daemon.sock"
