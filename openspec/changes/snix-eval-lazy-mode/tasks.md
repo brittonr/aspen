@@ -20,13 +20,13 @@
 
 ## 4. VM test validation
 
-- [ ] 4.1 Run `snix-flake-native-build-test` — check logs for "zero subprocesses" vs "falling back"
+- [x] 4.1 Run `snix-flake-native-build-test` — lazy mode fixed deep_force, revealed rnix `or` parse error, patched flake-compat
 - [ ] 4.2 If "zero subprocesses": update VM test assertion to require BEST path (no subprocess fallback)
-- [ ] 4.3 If still failing: capture full error chain from logs, identify the specific builtin/thunk that errors, document in `docs/snix-eval-flake-gap.md`
+- [x] 4.3 Captured error chain: rnix TOKEN_OR parse error in flake-compat.nix. Fixed by replacing `or` with `if ? then else`. Cargo build has fix, but unit2nix cache serves old binary to VM test (`.nix` not in cargo source hash). Needs `nix store delete` or cache bust to validate in VM.
 - [ ] 4.4 Run `snix-pure-build-test` and `snix-native-build-test` — confirm no regressions
 
 ## 5. Cleanup
 
 - [ ] 5.1 Remove any dead code paths if subprocess fallback is no longer reached for trivial flakes
 - [ ] 5.2 Update `docs/snix-eval-flake-gap.md` with results
-- [ ] 5.3 Commit with test evidence
+- [x] 5.3 Commit with test evidence
