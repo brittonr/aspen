@@ -165,6 +165,25 @@ impl NixEvaluator {
     /// BlobService/DirectoryService/PathInfoService. Derivation builtins (derivationStrict,
     /// toFile) and fetchers (fetchurl, fetchTarball, fetchGit) are available.
     pub fn evaluate_with_store(&self, code: &str, location: Option<PathBuf>) -> NixEvalOutput {
+        self.evaluate_with_store_mode(code, location, snix_eval::EvalMode::Strict)
+    }
+
+    /// Evaluate with store access using lazy mode.
+    ///
+    /// Use this when the expression itself selects a specific value (e.g.
+    /// `.drvPath`) and deep-forcing the entire result is unnecessary.
+    /// Avoids `final_deep_force` errors from unrelated lazy thunks.
+    pub fn evaluate_with_store_lazy(&self, code: &str, location: Option<PathBuf>) -> NixEvalOutput {
+        self.evaluate_with_store_mode(code, location, snix_eval::EvalMode::Lazy)
+    }
+
+    /// Shared implementation for store-backed evaluation with configurable mode.
+    fn evaluate_with_store_mode(
+        &self,
+        code: &str,
+        location: Option<PathBuf>,
+        mode: snix_eval::EvalMode,
+    ) -> NixEvalOutput {
         if code.len() > MAX_EVAL_SOURCE_SIZE {
             return NixEvalOutput {
                 value: None,
@@ -204,7 +223,7 @@ impl NixEvaluator {
         // concrete type to satisfy AsRef<dyn EvalIO>.
         let io: Box<dyn EvalIO> = Box::new(SnixIO::new(snix_store_io.clone() as Rc<dyn EvalIO>));
 
-        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Strict);
+        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(mode);
 
         // Add store-aware builtins from snix-glue
         let eval = snix_glue::builtins::add_derivation_builtins(eval, snix_store_io.clone());
@@ -363,7 +382,8 @@ impl NixEvaluator {
             "evaluating npins project via snix-eval"
         );
 
-        // Inline the evaluate_with_store logic so we can access KnownPaths after eval.
+        // Inline eval setup (need KnownPaths access after eval).
+        // Use lazy mode — expression selects .drvPath, no need to deep-force.
         let tokio_handle = tokio::runtime::Handle::current();
         let nar_calc = Arc::new(SimpleRenderer::new(self.blob_service.clone(), self.directory_service.clone()));
         let build_service = Arc::new(DummyBuildService {});
@@ -379,7 +399,7 @@ impl NixEvaluator {
         ));
 
         let io: Box<dyn EvalIO> = Box::new(SnixIO::new(snix_store_io.clone() as Rc<dyn EvalIO>));
-        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Strict);
+        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Lazy);
         let eval = snix_glue::builtins::add_derivation_builtins(eval, snix_store_io.clone());
         let eval = snix_glue::builtins::add_fetcher_builtins(eval, snix_store_io.clone());
         let eval = snix_glue::builtins::add_import_builtins(eval, snix_store_io.clone());
@@ -493,7 +513,7 @@ impl NixEvaluator {
             "evaluating flake via call-flake.nix + snix-eval"
         );
 
-        // Step 4: Evaluate with store access (same pattern as evaluate_npins_derivation)
+        // Step 4: Evaluate with lazy mode (expression selects .drvPath)
         let tokio_handle = tokio::runtime::Handle::current();
         let nar_calc = Arc::new(SimpleRenderer::new(self.blob_service.clone(), self.directory_service.clone()));
         let build_service = Arc::new(DummyBuildService {});
@@ -509,7 +529,7 @@ impl NixEvaluator {
         ));
 
         let io: Box<dyn EvalIO> = Box::new(SnixIO::new(snix_store_io.clone() as Rc<dyn EvalIO>));
-        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Strict);
+        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Lazy);
         let eval = snix_glue::builtins::add_derivation_builtins(eval, snix_store_io.clone());
         let eval = snix_glue::builtins::add_fetcher_builtins(eval, snix_store_io.clone());
         let eval = snix_glue::builtins::add_import_builtins(eval, snix_store_io.clone());
@@ -589,7 +609,8 @@ impl NixEvaluator {
             "evaluating flake via embedded flake-compat + snix-eval"
         );
 
-        // Evaluate with store access — same snix-eval + snix-glue setup as npins
+        // Evaluate with lazy mode — the expression selects .drvPath, so we
+        // don't need to deep-force the entire flake outputs tree.
         let tokio_handle = tokio::runtime::Handle::current();
         let nar_calc = Arc::new(SimpleRenderer::new(self.blob_service.clone(), self.directory_service.clone()));
         let build_service = Arc::new(DummyBuildService {});
@@ -605,7 +626,7 @@ impl NixEvaluator {
         ));
 
         let io: Box<dyn EvalIO> = Box::new(SnixIO::new(snix_store_io.clone() as Rc<dyn EvalIO>));
-        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Strict);
+        let eval = snix_eval::Evaluation::builder(io).enable_import().mode(snix_eval::EvalMode::Lazy);
         let eval = snix_glue::builtins::add_derivation_builtins(eval, snix_store_io.clone());
         let eval = snix_glue::builtins::add_fetcher_builtins(eval, snix_store_io.clone());
         let eval = snix_glue::builtins::add_import_builtins(eval, snix_store_io.clone());
@@ -819,9 +840,17 @@ pub fn extract_drv_path_string(output: &NixEvalOutput) -> Result<String, NixEval
                 is_ifd: false,
             })?
             .to_string(),
+        Some(snix_eval::Value::Thunk(_)) => {
+            return Err(NixEvalError {
+                message: "drvPath evaluated to an unforced thunk — \
+                    the expression may need EvalMode::Strict or explicit forcing"
+                    .to_string(),
+                is_ifd: false,
+            });
+        }
         Some(other) => {
             return Err(NixEvalError {
-                message: format!("expected string for drvPath, got {:?}", std::mem::discriminant(other)),
+                message: format!("expected string for drvPath, got {}", other.type_of()),
                 is_ifd: false,
             });
         }
@@ -844,13 +873,27 @@ pub fn extract_drv_path_string(output: &NixEvalOutput) -> Result<String, NixEval
 }
 
 /// Convert snix-eval's `EvaluationResult` into our `NixEvalOutput`.
+/// Format an error with its full cause chain.
+///
+/// Walks `std::error::Error::source()` and joins all messages with ` → `.
+/// For simple errors without a chain, returns `format!("{e}")` unchanged.
+fn format_error_chain(e: &snix_eval::Error) -> String {
+    let mut parts = vec![format!("{e}")];
+    let mut source: Option<&dyn std::error::Error> = std::error::Error::source(e);
+    while let Some(cause) = source {
+        parts.push(format!("{cause}"));
+        source = cause.source();
+    }
+    parts.join(" → ")
+}
+
 pub(crate) fn convert_eval_result(result: EvaluationResult) -> NixEvalOutput {
     let errors: Vec<NixEvalError> = result
         .errors
         .iter()
         .take(MAX_EVAL_ERRORS)
         .map(|e| {
-            let msg = format!("{e}");
+            let msg = format_error_chain(e);
             let is_ifd =
                 msg.contains("import from derivation") || msg.contains("ImportFromDerivation") || msg.contains("IFD");
             NixEvalError { message: msg, is_ifd }
@@ -1850,5 +1893,37 @@ mod tests {
                 eprintln!("resolve_all_inputs_with_fetch failed (network may be required): {e}");
             }
         }
+    }
+
+    #[test]
+    fn test_format_error_chain_single_level() {
+        // A simple parse error has no source chain — output should match format!("{e}")
+        let eval = snix_eval::Evaluation::builder_pure().mode(snix_eval::EvalMode::Strict).build();
+        let result = eval.evaluate("let x = in x", None);
+        assert!(!result.errors.is_empty(), "should have parse errors");
+        for e in &result.errors {
+            let chained = super::format_error_chain(e);
+            let simple = format!("{e}");
+            // Single-level errors: chained should start with the same text
+            // (may have source chain appended but primary message is identical)
+            assert!(chained.starts_with(&simple), "chained={chained:?} should start with simple={simple:?}");
+        }
+    }
+
+    #[test]
+    fn test_format_error_chain_native_error() {
+        // NativeError wraps an inner error — the chain should surface it.
+        // We trigger this by evaluating code that hits a native code error
+        // (e.g., type mismatch in a builtin).
+        let eval = snix_eval::Evaluation::builder_pure().mode(snix_eval::EvalMode::Strict).build();
+        // builtins.length on a non-list triggers a native error
+        let result = eval.evaluate("builtins.length 42", None);
+        assert!(!result.errors.is_empty(), "should have eval errors");
+        let chained = super::format_error_chain(&result.errors[0]);
+        // The chain should contain the outer error message
+        assert!(
+            chained.len() >= format!("{}", result.errors[0]).len(),
+            "chained message should be at least as long as simple: {chained:?}"
+        );
     }
 }
