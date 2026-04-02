@@ -17,6 +17,7 @@ pub struct BuildPhaseTimings {
     pub upload_ms: u64,
 }
 
+#[allow(dead_code)] // Methods used by feature-gated code (snix-build, nix-cli-fallback)
 impl BuildPhaseTimings {
     /// Record import phase duration.
     pub fn record_import(&mut self, duration: Duration) {

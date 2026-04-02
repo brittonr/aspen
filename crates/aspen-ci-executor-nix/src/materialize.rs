@@ -299,7 +299,7 @@ pub async fn materialize_store_paths(
 // Tests
 // ============================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "snix"))]
 mod tests {
     use snix_castore::B3Digest;
     use snix_castore::Directory;

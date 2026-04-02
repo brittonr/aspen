@@ -54,7 +54,7 @@ mod snix;
 mod timing;
 mod worker;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "snix"))]
 pub(crate) mod test_support;
 
 #[cfg(feature = "snix-build")]

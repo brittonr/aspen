@@ -446,6 +446,7 @@ fn path_info_entry<'a>(parsed: &'a serde_json::Value, store_path: &str) -> Optio
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[cfg(feature = "nix-cli-fallback")]

@@ -4,6 +4,7 @@
 use std::process::Stdio;
 #[cfg(feature = "nix-cache-proxy")]
 use std::sync::Arc;
+#[cfg(any(feature = "snix-build", feature = "nix-cli-fallback"))]
 use std::time::Duration;
 use std::time::Instant;
 
@@ -969,6 +970,7 @@ impl NixBuildWorker {
     ///
     /// If `log_sender` is provided, stderr lines are also forwarded to it
     /// in real-time for streaming to the CI log infrastructure.
+    #[allow(unused_variables)]
     pub(crate) async fn execute_build(
         &self,
         payload: &NixBuildPayload,

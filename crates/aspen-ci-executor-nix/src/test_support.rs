@@ -5,8 +5,11 @@
 //! any `nix` or `nix-store` subprocess.
 
 use std::collections::HashMap;
+#[cfg(feature = "snix-build")]
 use std::io;
+#[cfg(feature = "snix")]
 use std::num::NonZeroUsize;
+#[cfg(feature = "snix")]
 use std::sync::Arc;
 
 #[cfg(feature = "snix-build")]
@@ -17,11 +20,17 @@ use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::BuildResult;
 #[cfg(feature = "snix-build")]
 use snix_build::buildservice::BuildService;
+#[cfg(feature = "snix")]
 use snix_castore::blobservice::BlobService;
+#[cfg(feature = "snix")]
 use snix_castore::blobservice::MemoryBlobService;
+#[cfg(feature = "snix")]
 use snix_castore::directoryservice::DirectoryService;
+#[cfg(feature = "snix")]
 use snix_castore::directoryservice::RedbDirectoryService;
+#[cfg(feature = "snix")]
 use snix_store::pathinfoservice::LruPathInfoService;
+#[cfg(feature = "snix")]
 use snix_store::pathinfoservice::PathInfoService;
 
 // ============================================================================
@@ -115,12 +124,14 @@ impl BuildService for FakeBuildService {
 // ============================================================================
 
 /// In-memory snix service stack for testing. No disk, no network, no nix CLI.
+#[cfg(feature = "snix")]
 pub struct TestSnixStack {
     pub blob_service: Arc<dyn BlobService>,
     pub directory_service: Arc<dyn DirectoryService>,
     pub pathinfo_service: Arc<dyn PathInfoService>,
 }
 
+#[cfg(feature = "snix")]
 impl TestSnixStack {
     /// Create a new stack with in-memory implementations.
     pub fn new() -> Self {
