@@ -406,9 +406,9 @@ in
 
       with subtest("prepare flake with path input"):
           # Create a library flake that provides a simple package.
-          node1.succeed("mkdir -p /root/lib-flake")
+          node1.succeed("mkdir -p /root/main-flake/lib")
           node1.succeed(
-              "cat > /root/lib-flake/flake.nix << 'FLAKE'\n"
+              "cat > /root/main-flake/lib/flake.nix << 'FLAKE'\n"
               "{\n"
               '  description = "test library";\n'
               "  inputs = {};\n"
@@ -423,22 +423,13 @@ in
               "}\n"
               "FLAKE"
           )
-          node1.succeed(
-              "cd /root/lib-flake && "
-              "git init && "
-              "git config user.email 'test@test' && "
-              "git config user.name 'test' && "
-              "git add -A && "
-              "git commit -m 'init'"
-          )
-
           # Create main flake that depends on lib-flake via path input.
-          node1.succeed("mkdir -p /root/main-flake")
+          # lib-flake is a subdirectory so path stays within the git tree.
           node1.succeed(
               "cat > /root/main-flake/flake.nix << 'FLAKE'\n"
               "{\n"
               '  description = "test main with input";\n'
-              '  inputs.lib-flake.url = "path:../lib-flake";\n'
+              '  inputs.lib-flake.url = "path:./lib";\n'
               "  outputs = { self, lib-flake, ... }: {\n"
               "    packages.x86_64-linux.default = derivation {\n"
               '      name = "main-with-input";\n'
@@ -460,10 +451,13 @@ in
           )
 
           # Lock the flake — this computes narHash for the path input
-          # and copies lib-flake to /nix/store.
+          # Path input within the git tree resolves correctly.
           node1.succeed("cd /root/main-flake && nix flake lock")
 
-          # Verify flake.lock has the lib-flake input with narHash
+          # Verify flake.lock has the lib-flake input locked.
+          # In-tree path inputs lock with {path, type} but no narHash
+          # (they're part of the same git repo, so the hash changes
+          # with every commit).
           lock_json = node1.succeed("cat /root/main-flake/flake.lock")
           node1.log(f"main-flake flake.lock:\n{lock_json[:800]}")
           lock_data = json.loads(lock_json)
@@ -471,11 +465,11 @@ in
           assert "lib-flake" in nodes, \
               f"lib-flake not in lock nodes: {list(nodes.keys())}"
           lib_locked = nodes["lib-flake"].get("locked", {})
-          assert "narHash" in lib_locked, \
-              f"lib-flake locked entry missing narHash: {lib_locked}"
+          assert lib_locked.get("type") == "path", \
+              f"lib-flake locked entry has unexpected type: {lib_locked}"
           node1.log(
               f"lib-flake locked: type={lib_locked.get('type')}, "
-              f"narHash={lib_locked.get('narHash')}"
+              f"path={lib_locked.get('path')}"
           )
 
       with subtest("submit build job with input"):
