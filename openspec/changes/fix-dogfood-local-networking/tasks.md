@@ -22,7 +22,11 @@
 
 ## 4. Run full dogfood-federation pipeline
 
-- [ ] 4.1 After fixing connectivity: `nix run .#dogfood-federation -- full`
+- [x] 4.1 After fixing connectivity: `target/debug/aspen-dogfood --federation full`
 - [ ] 4.2 Verify git push of Aspen workspace (34K objects) completes
 - [ ] 4.3 Verify CI pipeline triggers on bob
 - [ ] 4.4 Check alice.log and bob.log for federation sync stats and DAG integrity
+
+Note: 4.1 confirmed working through the push stage. Full workspace push (34K
+objects) exceeds 10min timeout — same constraint documented in napkin.
+Tasks 4.2-4.4 need longer timeout or smaller test repo.
