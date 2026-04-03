@@ -28,6 +28,7 @@ pub mod diff;
 pub mod merge;
 pub(crate) mod object;
 mod store;
+pub mod unified;
 
 #[cfg(feature = "git-bridge")]
 pub mod bridge;
@@ -39,6 +40,7 @@ pub use diff::DiffEntry;
 pub use diff::DiffKind;
 pub use diff::DiffOptions;
 pub use diff::DiffResult;
+pub use diff::detect_renames;
 pub use diff::diff_commits;
 pub use diff::diff_trees;
 pub use merge::ConflictKind;
@@ -53,3 +55,5 @@ pub use object::TagObject;
 pub use object::TreeEntry;
 pub use object::TreeObject;
 pub use store::GitBlobStore;
+pub use unified::render_diffstat;
+pub use unified::render_unified_diff;

@@ -87,6 +87,9 @@ pub enum GitCommand {
 
     /// Manage mirror configuration for a repository.
     Mirror(MirrorArgs),
+
+    /// Show diff between two refs or commits.
+    Diff(DiffArgs),
 }
 
 #[derive(Args)]
@@ -354,6 +357,7 @@ impl GitCommand {
             GitCommand::FetchRemote(args) => git_fetch_remote(client, args, json).await,
             GitCommand::Fork(args) => git_fork(client, args, json).await,
             GitCommand::Mirror(args) => git_mirror(client, args, json).await,
+            GitCommand::Diff(args) => git_diff(client, args, json).await,
         }
     }
 }
@@ -1686,5 +1690,159 @@ async fn git_mirror(client: &AspenClient, args: MirrorArgs, json: bool) -> Resul
             ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
             _ => anyhow::bail!("unexpected response type"),
         }
+    }
+}
+
+#[derive(Args)]
+pub struct DiffArgs {
+    /// Repository name or ID.
+    pub repo: String,
+
+    /// Old ref or commit hash.
+    pub old_ref: String,
+
+    /// New ref or commit hash (if omitted, shows parent→HEAD diff).
+    pub new_ref: Option<String>,
+
+    /// Show diffstat summary instead of full diff.
+    #[arg(long)]
+    pub stat: bool,
+
+    /// Show only changed file names.
+    #[arg(long)]
+    pub name_only: bool,
+
+    /// Number of context lines (default 3).
+    #[arg(long, default_value = "3")]
+    pub context: u32,
+}
+
+async fn git_diff(client: &AspenClient, args: DiffArgs, json: bool) -> Result<()> {
+    let repo_id = args.repo.clone();
+    let include_content = !args.name_only;
+    let context_lines = Some(args.context);
+
+    let response = if let Some(new_ref) = &args.new_ref {
+        client
+            .send(ClientRpcRequest::ForgeDiffRefs {
+                repo_id: repo_id.clone(),
+                old_ref: args.old_ref.clone(),
+                new_ref: new_ref.clone(),
+                include_content,
+                context_lines,
+            })
+            .await?
+    } else {
+        // Single ref: resolve to commit, diff against its parent
+        let ref_response = client
+            .send(ClientRpcRequest::ForgeGetRef {
+                repo_id: repo_id.clone(),
+                ref_name: args.old_ref.clone(),
+            })
+            .await?;
+
+        let commit_hash = match ref_response {
+            ClientRpcResponse::ForgeRefResult(r) if r.was_found => r.ref_info.context("missing ref info")?.hash,
+            ClientRpcResponse::ForgeRefResult(_) => {
+                anyhow::bail!("ref not found: {}", args.old_ref);
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        };
+
+        // Get the commit to find its parent
+        let commit_response = client
+            .send(ClientRpcRequest::ForgeGetCommit {
+                hash: commit_hash.clone(),
+            })
+            .await?;
+
+        let parent_hash = match commit_response {
+            ClientRpcResponse::ForgeCommitResult(r) if r.is_success => {
+                let commit = r.commit.context("missing commit")?;
+                commit.parents.first().cloned()
+            }
+            ClientRpcResponse::ForgeCommitResult(r) => {
+                anyhow::bail!("{}", r.error.unwrap_or_else(|| "commit not found".to_string()));
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        };
+
+        match parent_hash {
+            Some(parent) => {
+                client
+                    .send(ClientRpcRequest::ForgeDiffCommits {
+                        repo_id: repo_id.clone(),
+                        old_commit: parent,
+                        new_commit: commit_hash,
+                        include_content,
+                        context_lines,
+                    })
+                    .await?
+            }
+            None => {
+                // Root commit — diff against empty tree
+                // Return empty diff for now
+                println!("(root commit — no parent to diff against)");
+                return Ok(());
+            }
+        }
+    };
+
+    match response {
+        ClientRpcResponse::ForgeDiffResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if args.name_only {
+                for entry in &result.entries {
+                    println!("{}", entry.path);
+                }
+            } else if args.stat {
+                // Stat mode: show summary from entries
+                for entry in &result.entries {
+                    let kind_char = match entry.kind.as_str() {
+                        "added" => 'A',
+                        "removed" => 'D',
+                        "modified" => 'M',
+                        "renamed" => 'R',
+                        _ => '?',
+                    };
+                    if let Some(old_path) = &entry.old_path {
+                        println!("{kind_char}\t{old_path} => {}", entry.path);
+                    } else {
+                        println!("{kind_char}\t{}", entry.path);
+                    }
+                }
+            } else if let Some(diff_text) = &result.unified_diff {
+                // Color the output
+                for line in diff_text.lines() {
+                    if line.starts_with('+') {
+                        println!("\x1b[32m{line}\x1b[0m");
+                    } else if line.starts_with('-') {
+                        println!("\x1b[31m{line}\x1b[0m");
+                    } else if line.starts_with("@@") {
+                        println!("\x1b[36m{line}\x1b[0m");
+                    } else if line.starts_with("rename ") {
+                        println!("\x1b[33m{line}\x1b[0m");
+                    } else {
+                        println!("{line}");
+                    }
+                }
+            } else {
+                // No content loaded, just show entry summaries
+                for entry in &result.entries {
+                    println!("{}: {}", entry.kind, entry.path);
+                }
+            }
+
+            if result.truncated {
+                eprintln!("(diff truncated — too many changed files)");
+            }
+
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
     }
 }

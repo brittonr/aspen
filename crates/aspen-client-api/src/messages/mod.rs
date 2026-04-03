@@ -248,10 +248,12 @@ pub use federation::ForgeFetchFederatedResultResponse;
 pub use federation::SyncPeerResourceInfo;
 pub use federation::TrustClusterResultResponse;
 pub use federation::UntrustClusterResultResponse;
+pub use forge::DiffEntryResponse;
 pub use forge::ForgeBlobResultResponse;
 pub use forge::ForgeCommentInfo;
 pub use forge::ForgeCommitInfo;
 pub use forge::ForgeCommitResultResponse;
+pub use forge::ForgeDiffResultResponse;
 pub use forge::ForgeDiscussionInfo;
 pub use forge::ForgeDiscussionListResultResponse;
 pub use forge::ForgeDiscussionResultResponse;
@@ -2338,6 +2340,34 @@ pub enum ClientRpcRequest {
         sha1s: Vec<String>,
     },
 
+    /// Diff two commits.
+    ForgeDiffCommits {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// Old commit hash (hex-encoded BLAKE3).
+        old_commit: String,
+        /// New commit hash (hex-encoded BLAKE3).
+        new_commit: String,
+        /// Whether to load blob content for unified diff rendering.
+        include_content: bool,
+        /// Context lines for unified diff (default 3).
+        context_lines: Option<u32>,
+    },
+
+    /// Diff two refs (resolves to commits, then diffs).
+    ForgeDiffRefs {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// Old ref name (e.g., "heads/main").
+        old_ref: String,
+        /// New ref name (e.g., "heads/feature").
+        new_ref: String,
+        /// Whether to load blob content for unified diff rendering.
+        include_content: bool,
+        /// Context lines for unified diff (default 3).
+        context_lines: Option<u32>,
+    },
+
     // =========================================================================
     // Job operations - High-level job scheduling and management
     // =========================================================================
@@ -3983,6 +4013,8 @@ impl ClientRpcRequest {
             Self::ForgeSetMirror { .. } => "ForgeSetMirror",
             Self::ForgeDisableMirror { .. } => "ForgeDisableMirror",
             Self::ForgeGetMirrorStatus { .. } => "ForgeGetMirrorStatus",
+            Self::ForgeDiffCommits { .. } => "ForgeDiffCommits",
+            Self::ForgeDiffRefs { .. } => "ForgeDiffRefs",
             Self::ForgeGetBlob { .. } => "ForgeGetBlob",
             Self::ForgeGetCommit { .. } => "ForgeGetCommit",
             Self::ForgeGetDelegateKey { .. } => "ForgeGetDelegateKey",
@@ -4441,7 +4473,9 @@ impl ClientRpcRequest {
             | Self::GitBridgePushStart { .. }
             | Self::GitBridgePushChunk { .. }
             | Self::GitBridgePushComplete { .. }
-            | Self::GitBridgeProbeObjects { .. } => Some("forge"),
+            | Self::GitBridgeProbeObjects { .. }
+            | Self::ForgeDiffCommits { .. }
+            | Self::ForgeDiffRefs { .. } => Some("forge"),
 
             // SQL
             Self::ExecuteSql { .. } => Some("sql"),
@@ -5405,6 +5439,9 @@ pub enum ClientRpcResponse {
     CalendarExpandResult(CalendarExpandResponse),
     /// Calendar export result.
     CalendarExportResult(CalendarExportResponse),
+
+    /// Forge diff result.
+    ForgeDiffResult(ForgeDiffResultResponse),
 
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)

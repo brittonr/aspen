@@ -24,7 +24,7 @@ mod tests {
         let handles = crate::ForgeServiceExecutor::HANDLES;
         // Includes repo, object, commit, ref, issue, patch, delegate, federation,
         // git bridge, nostr, discussion, subscription, token handlers
-        assert_eq!(handles.len(), 71);
+        assert_eq!(handles.len(), 73);
     }
 
     #[test]

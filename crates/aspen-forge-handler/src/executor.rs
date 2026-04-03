@@ -188,6 +188,8 @@ impl ForgeServiceExecutor {
         "NostrAuthChallenge",
         "NostrAuthVerify",
         "NostrGetProfile",
+        "ForgeDiffCommits",
+        "ForgeDiffRefs",
     ];
 
     pub const SERVICE_NAME: &'static str = "forge";
@@ -521,6 +523,119 @@ impl ForgeServiceExecutor {
             result.push(commit_to_info(hash, &commit));
         }
         Ok(result)
+    }
+
+    // ========================================================================
+    // Diff Operations
+    // ========================================================================
+
+    async fn handle_diff_commits(
+        &self,
+        repo_id: String,
+        old_commit: String,
+        new_commit: String,
+        include_content: bool,
+        context_lines: Option<u32>,
+    ) -> Result<ClientRpcResponse> {
+        use aspen_client_api::DiffEntryResponse;
+        use aspen_client_api::ForgeDiffResultResponse;
+        use aspen_forge::git::DiffOptions;
+        use aspen_forge::git::diff_commits;
+        use aspen_forge::git::render_unified_diff;
+
+        let _ = repo_id; // diff_commits operates on the shared git store
+        let old_hash =
+            blake3::Hash::from_hex(&old_commit).map_err(|e| anyhow::anyhow!("invalid old commit hash: {e}"))?;
+        let new_hash =
+            blake3::Hash::from_hex(&new_commit).map_err(|e| anyhow::anyhow!("invalid new commit hash: {e}"))?;
+
+        let opts = DiffOptions { include_content };
+        match diff_commits(&self.forge_node.git, &old_hash, &new_hash, &opts).await {
+            Ok(result) => {
+                let unified_diff = if include_content {
+                    let ctx = context_lines.unwrap_or(3);
+                    Some(render_unified_diff(&result.entries, ctx))
+                } else {
+                    None
+                };
+
+                let entries: Vec<DiffEntryResponse> = result
+                    .entries
+                    .iter()
+                    .map(|e| DiffEntryResponse {
+                        path: e.path.clone(),
+                        kind: match e.kind {
+                            aspen_forge::git::DiffKind::Added => "added".to_string(),
+                            aspen_forge::git::DiffKind::Removed => "removed".to_string(),
+                            aspen_forge::git::DiffKind::Modified => "modified".to_string(),
+                            aspen_forge::git::DiffKind::Renamed => "renamed".to_string(),
+                        },
+                        old_path: e.old_path.clone(),
+                        old_mode: e.old_mode,
+                        new_mode: e.new_mode,
+                        old_hash: e.old_hash.map(hex::encode),
+                        new_hash: e.new_hash.map(hex::encode),
+                    })
+                    .collect();
+
+                Ok(ClientRpcResponse::ForgeDiffResult(ForgeDiffResultResponse {
+                    entries,
+                    truncated: result.truncated,
+                    unified_diff,
+                }))
+            }
+            Err(e) => Ok(ClientRpcResponse::error("DIFF_FAILED", format!("{e}"))),
+        }
+    }
+
+    async fn handle_diff_refs(
+        &self,
+        repo_id: String,
+        old_ref: String,
+        new_ref: String,
+        include_content: bool,
+        context_lines: Option<u32>,
+    ) -> Result<ClientRpcResponse> {
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
+        let rid = aspen_forge::identity::RepoId::from_hash(hash);
+
+        let resolve_ref = |ref_name: &str| -> Vec<String> {
+            vec![
+                ref_name.to_string(),
+                format!("heads/{ref_name}"),
+                format!("refs/heads/{ref_name}"),
+            ]
+        };
+
+        let mut old_commit = None;
+        for candidate in resolve_ref(&old_ref) {
+            if let Some(h) = self.forge_node.refs.get(&rid, &candidate).await? {
+                old_commit = Some(h);
+                break;
+            }
+        }
+        let old_commit = match old_commit {
+            Some(h) => h.to_hex().to_string(),
+            None => {
+                return Ok(ClientRpcResponse::error("REF_NOT_FOUND", format!("ref not found: {old_ref}")));
+            }
+        };
+
+        let mut new_commit = None;
+        for candidate in resolve_ref(&new_ref) {
+            if let Some(h) = self.forge_node.refs.get(&rid, &candidate).await? {
+                new_commit = Some(h);
+                break;
+            }
+        }
+        let new_commit = match new_commit {
+            Some(h) => h.to_hex().to_string(),
+            None => {
+                return Ok(ClientRpcResponse::error("REF_NOT_FOUND", format!("ref not found: {new_ref}")));
+            }
+        };
+
+        self.handle_diff_commits(repo_id, old_commit, new_commit, include_content, context_lines).await
     }
 
     // ========================================================================
@@ -2087,6 +2202,21 @@ impl ServiceExecutor for ForgeServiceExecutor {
 
                 Ok(ClientRpcResponse::NostrGetProfileResult { display_name, nip05 })
             }
+
+            ClientRpcRequest::ForgeDiffCommits {
+                repo_id,
+                old_commit,
+                new_commit,
+                include_content,
+                context_lines,
+            } => self.handle_diff_commits(repo_id, old_commit, new_commit, include_content, context_lines).await,
+            ClientRpcRequest::ForgeDiffRefs {
+                repo_id,
+                old_ref,
+                new_ref,
+                include_content,
+                context_lines,
+            } => self.handle_diff_refs(repo_id, old_ref, new_ref, include_content, context_lines).await,
 
             _ => unreachable!("ForgeServiceExecutor received unhandled request"),
         }

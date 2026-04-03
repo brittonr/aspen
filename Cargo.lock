@@ -1723,6 +1723,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1 0.10.6",
+ "similar",
  "snafu",
  "ssh-key",
  "tempfile",

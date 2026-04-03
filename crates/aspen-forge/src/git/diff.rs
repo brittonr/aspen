@@ -4,6 +4,8 @@
 //! structured `DiffEntry` records. Recurses into subdirectories, with
 //! early-out when subtree hashes match.
 
+use std::collections::HashMap;
+
 use aspen_blob::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -24,6 +26,8 @@ pub enum DiffKind {
     Removed,
     /// File was modified (content or mode changed).
     Modified,
+    /// File was renamed (same content hash, different path).
+    Renamed,
 }
 
 /// A single entry in a diff result.
@@ -41,6 +45,8 @@ pub struct DiffEntry {
     pub old_hash: Option<[u8; 32]>,
     /// New BLAKE3 hash (None for Removed).
     pub new_hash: Option<[u8; 32]>,
+    /// Previous path (populated only for Renamed entries).
+    pub old_path: Option<String>,
     /// Old file content (populated on request, None for large blobs or Added).
     #[serde(skip)]
     pub old_content: Option<Vec<u8>>,
@@ -90,7 +96,9 @@ pub async fn diff_trees<B: BlobStore>(
     // Sort by path for deterministic output
     entries.sort_by(|a, b| a.path.cmp(&b.path));
 
-    Ok(DiffResult { entries, truncated })
+    let mut result = DiffResult { entries, truncated };
+    detect_renames(&mut result);
+    Ok(result)
 }
 
 /// Compute a diff between two commits.
@@ -122,7 +130,7 @@ fn diff_trees_recursive<'a, B: BlobStore>(
     opts: &'a DiffOptions,
     entries: &'a mut Vec<DiffEntry>,
     truncated: &'a mut bool,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = ForgeResult<()>> + 'a>> {
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = ForgeResult<()>> + Send + 'a>> {
     Box::pin(async move {
         let old_entries = &old_tree.entries;
         let new_entries = &new_tree.entries;
@@ -219,6 +227,7 @@ async fn diff_matching_entries<B: BlobStore>(
             new_mode: Some(new.mode),
             old_hash: Some(old.hash),
             new_hash: Some(new.hash),
+            old_path: None,
             old_content,
             new_content,
         });
@@ -267,6 +276,7 @@ async fn collect_removed<B: BlobStore>(
             new_mode: None,
             old_hash: Some(entry.hash),
             new_hash: None,
+            old_path: None,
             old_content,
             new_content: None,
         });
@@ -313,6 +323,7 @@ async fn collect_added<B: BlobStore>(
             new_mode: Some(entry.mode),
             old_hash: None,
             new_hash: Some(entry.hash),
+            old_path: None,
             old_content: None,
             new_content,
         });
@@ -355,6 +366,72 @@ fn format_path(prefix: &str, name: &str) -> String {
         name.to_string()
     } else {
         format!("{}/{}", prefix, name)
+    }
+}
+
+/// Detect file renames by matching content hashes between Removed and Added entries.
+///
+/// Builds a HashMap of Removed entries keyed by `old_hash`, then scans Added entries
+/// for matching `new_hash`. Matching pairs are collapsed into a single Renamed entry.
+/// First match wins when multiple entries share the same hash.
+pub fn detect_renames(result: &mut DiffResult) {
+    // Index Removed entries by their content hash → index in entries vec
+    let mut removed_by_hash: HashMap<[u8; 32], usize> = HashMap::new();
+    for (i, entry) in result.entries.iter().enumerate() {
+        if entry.kind == DiffKind::Removed
+            && let Some(hash) = entry.old_hash
+        {
+            // First Removed entry with this hash wins
+            removed_by_hash.entry(hash).or_insert(i);
+        }
+    }
+
+    if removed_by_hash.is_empty() {
+        return;
+    }
+
+    // Find Added entries whose new_hash matches a Removed entry's old_hash
+    let mut rename_pairs: Vec<(usize, usize)> = Vec::new(); // (removed_idx, added_idx)
+    let mut consumed_removed: HashMap<[u8; 32], bool> = HashMap::new();
+
+    for (i, entry) in result.entries.iter().enumerate() {
+        if entry.kind == DiffKind::Added
+            && let Some(hash) = entry.new_hash
+            && let Some(&removed_idx) = removed_by_hash.get(&hash)
+        {
+            consumed_removed.entry(hash).or_insert_with(|| {
+                rename_pairs.push((removed_idx, i));
+                true
+            });
+        }
+    }
+
+    if rename_pairs.is_empty() {
+        return;
+    }
+
+    // Mark indices to remove (the original Removed entries)
+    let mut indices_to_remove: Vec<usize> = rename_pairs.iter().map(|(r, _)| *r).collect();
+    indices_to_remove.sort_unstable();
+
+    // Convert Added entries into Renamed entries
+    for (removed_idx, added_idx) in &rename_pairs {
+        let old_path = result.entries[*removed_idx].path.clone();
+        let old_mode = result.entries[*removed_idx].old_mode;
+        let old_hash = result.entries[*removed_idx].old_hash;
+        let old_content = result.entries[*removed_idx].old_content.take();
+
+        let entry = &mut result.entries[*added_idx];
+        entry.kind = DiffKind::Renamed;
+        entry.old_path = Some(old_path);
+        entry.old_mode = old_mode;
+        entry.old_hash = old_hash;
+        entry.old_content = old_content;
+    }
+
+    // Remove the consumed Removed entries (iterate in reverse to preserve indices)
+    for idx in indices_to_remove.into_iter().rev() {
+        result.entries.remove(idx);
     }
 }
 
@@ -575,5 +652,105 @@ mod tests {
         assert_eq!(result.entries.len(), 1);
         assert_eq!(result.entries[0].path, "f.txt");
         assert_eq!(result.entries[0].kind, DiffKind::Modified);
+    }
+
+    #[tokio::test]
+    async fn test_rename_single() {
+        let store = test_store();
+        let h1 = store.store_blob(b"content".to_vec()).await.unwrap();
+
+        let old = store.create_tree(&[TreeEntry::file("old.rs", h1)]).await.unwrap();
+        let new = store.create_tree(&[TreeEntry::file("new.rs", h1)]).await.unwrap();
+
+        let old_tree = store.get_tree(&old).await.unwrap();
+        let new_tree = store.get_tree(&new).await.unwrap();
+
+        let result = diff_trees(&store, &old_tree, &new_tree, &DiffOptions::default()).await.unwrap();
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].kind, DiffKind::Renamed);
+        assert_eq!(result.entries[0].path, "new.rs");
+        assert_eq!(result.entries[0].old_path.as_deref(), Some("old.rs"));
+    }
+
+    #[tokio::test]
+    async fn test_rename_multiple() {
+        let store = test_store();
+        let h1 = store.store_blob(b"content_a".to_vec()).await.unwrap();
+        let h2 = store.store_blob(b"content_b".to_vec()).await.unwrap();
+
+        let old = store.create_tree(&[TreeEntry::file("a.rs", h1), TreeEntry::file("b.rs", h2)]).await.unwrap();
+        let new = store.create_tree(&[TreeEntry::file("x.rs", h1), TreeEntry::file("y.rs", h2)]).await.unwrap();
+
+        let old_tree = store.get_tree(&old).await.unwrap();
+        let new_tree = store.get_tree(&new).await.unwrap();
+
+        let result = diff_trees(&store, &old_tree, &new_tree, &DiffOptions::default()).await.unwrap();
+        assert_eq!(result.entries.len(), 2);
+        assert!(result.entries.iter().all(|e| e.kind == DiffKind::Renamed));
+
+        let x = result.entries.iter().find(|e| e.path == "x.rs").unwrap();
+        assert_eq!(x.old_path.as_deref(), Some("a.rs"));
+
+        let y = result.entries.iter().find(|e| e.path == "y.rs").unwrap();
+        assert_eq!(y.old_path.as_deref(), Some("b.rs"));
+    }
+
+    #[tokio::test]
+    async fn test_rename_and_modify_no_match() {
+        let store = test_store();
+        let h1 = store.store_blob(b"old content".to_vec()).await.unwrap();
+        let h2 = store.store_blob(b"new content".to_vec()).await.unwrap();
+
+        let old = store.create_tree(&[TreeEntry::file("old.rs", h1)]).await.unwrap();
+        let new = store.create_tree(&[TreeEntry::file("new.rs", h2)]).await.unwrap();
+
+        let old_tree = store.get_tree(&old).await.unwrap();
+        let new_tree = store.get_tree(&new).await.unwrap();
+
+        let result = diff_trees(&store, &old_tree, &new_tree, &DiffOptions::default()).await.unwrap();
+        // Different content hashes: no rename, just removed + added
+        assert_eq!(result.entries.len(), 2);
+        assert!(result.entries.iter().any(|e| e.kind == DiffKind::Removed && e.path == "old.rs"));
+        assert!(result.entries.iter().any(|e| e.kind == DiffKind::Added && e.path == "new.rs"));
+    }
+
+    #[tokio::test]
+    async fn test_rename_duplicate_hashes_first_wins() {
+        let store = test_store();
+        let h1 = store.store_blob(b"same content".to_vec()).await.unwrap();
+
+        // Two files with same content in old, one file in new
+        let old = store.create_tree(&[TreeEntry::file("a.rs", h1), TreeEntry::file("b.rs", h1)]).await.unwrap();
+        let new = store.create_tree(&[TreeEntry::file("c.rs", h1)]).await.unwrap();
+
+        let old_tree = store.get_tree(&old).await.unwrap();
+        let new_tree = store.get_tree(&new).await.unwrap();
+
+        let result = diff_trees(&store, &old_tree, &new_tree, &DiffOptions::default()).await.unwrap();
+        // One Renamed (first removed wins), one Removed left over
+        assert_eq!(result.entries.len(), 2);
+        let renamed = result.entries.iter().filter(|e| e.kind == DiffKind::Renamed).count();
+        let removed = result.entries.iter().filter(|e| e.kind == DiffKind::Removed).count();
+        assert_eq!(renamed, 1);
+        assert_eq!(removed, 1);
+    }
+
+    #[tokio::test]
+    async fn test_no_renames_passthrough() {
+        let store = test_store();
+        let h1 = store.store_blob(b"v1".to_vec()).await.unwrap();
+        let h2 = store.store_blob(b"v2".to_vec()).await.unwrap();
+
+        let old = store.create_tree(&[TreeEntry::file("f.txt", h1)]).await.unwrap();
+        let new = store.create_tree(&[TreeEntry::file("f.txt", h2)]).await.unwrap();
+
+        let old_tree = store.get_tree(&old).await.unwrap();
+        let new_tree = store.get_tree(&new).await.unwrap();
+
+        let result = diff_trees(&store, &old_tree, &new_tree, &DiffOptions::default()).await.unwrap();
+        // No renames, just a modification
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].kind, DiffKind::Modified);
+        assert!(result.entries[0].old_path.is_none());
     }
 }

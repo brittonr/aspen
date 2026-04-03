@@ -33,6 +33,36 @@ pub struct ForgeDiscussionResultResponse {
     pub discussion: ForgeDiscussionInfo,
 }
 
+/// A single entry in a diff result (wire format).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffEntryResponse {
+    /// Full path from repo root.
+    pub path: String,
+    /// Kind of change: "added", "removed", "modified", "renamed".
+    pub kind: String,
+    /// Previous path (for renames only).
+    pub old_path: Option<String>,
+    /// Old file mode (None for Added).
+    pub old_mode: Option<u32>,
+    /// New file mode (None for Removed).
+    pub new_mode: Option<u32>,
+    /// Old BLAKE3 hash as hex (None for Added).
+    pub old_hash: Option<String>,
+    /// New BLAKE3 hash as hex (None for Removed).
+    pub new_hash: Option<String>,
+}
+
+/// Result of a diff operation (wire format).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForgeDiffResultResponse {
+    /// Changed entries.
+    pub entries: Vec<DiffEntryResponse>,
+    /// Whether the result was truncated due to MAX_DIFF_ENTRIES.
+    pub truncated: bool,
+    /// Pre-rendered unified diff text (when include_content was true).
+    pub unified_diff: Option<String>,
+}
+
 /// Fork info in repo responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeForkInfo {
@@ -318,6 +348,24 @@ pub enum ForgeRequest {
     GitBridgeFetchChunk { session_id: String, chunk_id: u32 },
     /// Complete a chunked fetch session.
     GitBridgeFetchComplete { session_id: String },
+
+    // Diff operations
+    /// Diff two commits.
+    ForgeDiffCommits {
+        repo_id: String,
+        old_commit: String,
+        new_commit: String,
+        include_content: bool,
+        context_lines: Option<u32>,
+    },
+    /// Diff two refs (resolves to commits, then diffs).
+    ForgeDiffRefs {
+        repo_id: String,
+        old_ref: String,
+        new_ref: String,
+        include_content: bool,
+        context_lines: Option<u32>,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -383,7 +431,9 @@ impl ForgeRequest {
             | Self::GitBridgeFetchStart { .. }
             | Self::GitBridgeFetchChunk { .. }
             | Self::GitBridgeFetchComplete { .. }
-            | Self::GitBridgeProbeObjects { .. } => Some(Operation::Read {
+            | Self::GitBridgeProbeObjects { .. }
+            | Self::ForgeDiffCommits { .. }
+            | Self::ForgeDiffRefs { .. } => Some(Operation::Read {
                 key: "_forge:".to_string(),
             }),
         }
