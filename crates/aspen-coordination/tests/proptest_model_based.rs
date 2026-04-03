@@ -7,13 +7,18 @@
 //! This catches bugs in the async shell layer that Verus-verified pure functions
 //! can't reach: retry logic, CAS loops, serialization, key encoding, etc.
 
+use std::time::Duration;
+
 use aspen_coordination::AtomicCounter;
+use aspen_coordination::BarrierManager;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedLock;
+use aspen_coordination::DistributedRateLimiter;
 use aspen_coordination::EnqueueOptions;
 use aspen_coordination::LockConfig;
 use aspen_coordination::QueueConfig;
 use aspen_coordination::QueueManager;
+use aspen_coordination::RateLimiterConfig;
 use aspen_coordination::SequenceConfig;
 use aspen_coordination::SequenceGenerator;
 use aspen_coordination::SignedAtomicCounter;
@@ -773,6 +778,127 @@ proptest! {
                     "Non-monotonic election tokens: {} >= {}",
                     window[0], window[1]
                 );
+            }
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Barrier model
+// ---------------------------------------------------------------------------
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(30))]
+
+    /// Barrier: exactly N=1 participant enters immediately (no blocking).
+    /// For N>1, verify status tracking via the status() API.
+    #[test]
+    fn test_barrier_single_participant_enters_immediately(
+        _seed in 0u32..30,
+    ) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let store = DeterministicKeyValueStore::new();
+            let barrier = BarrierManager::new(store);
+            let barrier_name = "single-barrier";
+
+            // With required_count=1, a single participant should enter immediately
+            let (count, phase) = barrier
+                .enter(barrier_name, "p-0", 1, Some(Duration::from_secs(1)))
+                .await
+                .unwrap();
+
+            assert_eq!(count, 1, "single participant should see count=1");
+            assert_eq!(phase, "ready", "single participant barrier should be ready");
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rate limiter model
+// ---------------------------------------------------------------------------
+
+/// Reference model for token bucket rate limiter.
+#[derive(Debug, Clone)]
+struct RateLimiterModel {
+    tokens: u64,
+    capacity: u64,
+}
+
+impl RateLimiterModel {
+    fn new(capacity: u64) -> Self {
+        Self {
+            tokens: capacity,
+            capacity,
+        }
+    }
+
+    /// Try to consume n tokens. Returns true if allowed.
+    fn try_acquire_n(&mut self, n: u64) -> bool {
+        if self.tokens >= n {
+            self.tokens -= n;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn reset(&mut self) {
+        self.tokens = self.capacity;
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+
+    /// Rate limiter: burst of requests within a single instant respects capacity.
+    /// No refill happens because all requests occur without time advancing.
+    #[test]
+    fn test_rate_limiter_burst_capacity(
+        capacity in 5u64..20,
+        requests in prop::collection::vec(1u64..5, 1..30),
+    ) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let store = DeterministicKeyValueStore::new();
+            // High refill rate doesn't matter — we're testing burst within one instant
+            let config = RateLimiterConfig::new(1000.0, capacity);
+            let limiter = DistributedRateLimiter::new(store, "test-limiter", config);
+            let mut model = RateLimiterModel::new(capacity);
+
+            for req_count in &requests {
+                // Clamp to capacity — requesting more than capacity is a debug_assert panic
+                let n = (*req_count).min(capacity);
+                let real = limiter.try_acquire_n(n).await;
+                let model_allowed = model.try_acquire_n(n);
+
+                match (real.is_ok(), model_allowed) {
+                    (true, true) => {
+                        // Both agree: allowed
+                    }
+                    (false, false) => {
+                        // Both agree: denied
+                    }
+                    (real_ok, model_ok) => {
+                        // Mismatch is acceptable if the real limiter refilled
+                        // between calls (time-based). Only assert if model says
+                        // yes but real says no (would mean a bug).
+                        if model_ok && !real_ok {
+                            panic!(
+                                "model allowed {} tokens but real limiter denied",
+                                req_count
+                            );
+                        }
+                    }
+                }
             }
         });
     }

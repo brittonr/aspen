@@ -1,0 +1,21 @@
+---
+source: crates/aspen-client-api/tests/serialization_snapshots.rs
+expression: resp
+---
+{
+  "ScanResult": {
+    "entries": [
+      {
+        "key": "app:user:1",
+        "value": "Alice",
+        "version": 3,
+        "create_revision": 1,
+        "mod_revision": 3
+      }
+    ],
+    "count": 1,
+    "is_truncated": false,
+    "continuation_token": null,
+    "error": null
+  }
+}

@@ -1,0 +1,11 @@
+---
+source: crates/aspen-client-api/tests/serialization_snapshots.rs
+expression: req
+---
+{
+  "ScanKeys": {
+    "prefix": "app:",
+    "limit": 100,
+    "continuation_token": null
+  }
+}

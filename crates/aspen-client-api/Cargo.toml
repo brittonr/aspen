@@ -22,6 +22,11 @@ aspen-jobs-protocol = { path = "../aspen-jobs-protocol" }
 # Error handling
 thiserror = "2.0"
 
+[dev-dependencies]
+insta = { version = "1.42", features = ["json", "redactions"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["macros", "rt"] }
+
 [features]
 default = ["auth", "ci", "secrets", "automerge"]
 auth = ["dep:aspen-auth"]

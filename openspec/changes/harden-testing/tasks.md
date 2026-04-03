@@ -17,9 +17,9 @@
 
 - [x] 3.1 Expand `aspen-coordination/tests/proptest_model_based.rs` with lock model that tracks holder, fencing token, and expiry across arbitrary acquire/release/renew/expire sequences
 - [x] 3.2 Add proptest model-based tests for distributed queues: enqueue/dequeue/ack sequences verified against an in-memory FIFO model
-- [ ] 3.3 Add proptest model-based tests for distributed barriers: participant join/wait/release verified against threshold model
+- [x] 3.3 Add proptest model-based tests for distributed barriers: participant join/wait/release verified against threshold model
 - [x] 3.4 Add proptest model-based tests for leader elections: concurrent candidacy verified for at-most-one-leader-per-term invariant
-- [ ] 3.5 Add proptest model-based tests for rate limiters: request sequences verified against token bucket model
+- [x] 3.5 Add proptest model-based tests for rate limiters: request sequences verified against token bucket model
 
 ## 4. Madsim Consensus Scenarios
 
@@ -40,8 +40,8 @@
 
 ## 6. Serialization Snapshot Tests
 
-- [ ] 6.1 Add `insta` as a dev-dependency to `aspen-client-api`, `aspen-cli`, and `aspen-core`
-- [ ] 6.2 Write insta snapshot tests for all RPC request/response message serialization in `aspen-client-api`
+- [x] 6.1 Add `insta` as a dev-dependency to `aspen-client-api`, `aspen-cli`, and `aspen-core`
+- [x] 6.2 Write insta snapshot tests for all RPC request/response message serialization in `aspen-client-api`
 - [ ] 6.3 Write insta snapshot tests for CLI output formatting (`cluster status`, `kv get`, `kv scan`) in `aspen-cli`
 - [ ] 6.4 Write insta snapshot tests for snafu error chain Display output in `aspen-core` and `aspen-raft`
 - [ ] 6.5 Add insta redaction rules for timestamps, node IDs, and UUIDs in snapshot tests

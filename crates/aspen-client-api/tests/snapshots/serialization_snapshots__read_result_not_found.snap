@@ -1,0 +1,11 @@
+---
+source: crates/aspen-client-api/tests/serialization_snapshots.rs
+expression: resp
+---
+{
+  "ReadResult": {
+    "value": null,
+    "was_found": false,
+    "error": null
+  }
+}

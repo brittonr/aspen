@@ -1,0 +1,10 @@
+---
+source: crates/aspen-client-api/tests/serialization_snapshots.rs
+expression: resp
+---
+{
+  "Error": {
+    "code": "NOT_LEADER",
+    "message": "This node is not the current leader"
+  }
+}

@@ -1,0 +1,11 @@
+---
+source: crates/aspen-client-api/tests/serialization_snapshots.rs
+expression: resp
+---
+{
+  "DeleteResult": {
+    "key": "my-key",
+    "was_deleted": true,
+    "error": null
+  }
+}

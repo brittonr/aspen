@@ -1,0 +1,22 @@
+---
+source: crates/aspen-client-api/tests/serialization_snapshots.rs
+expression: req
+---
+{
+  "WriteKey": {
+    "key": "my-key",
+    "value": [
+      104,
+      101,
+      108,
+      108,
+      111,
+      32,
+      119,
+      111,
+      114,
+      108,
+      100
+    ]
+  }
+}
