@@ -113,6 +113,22 @@ pub struct SearchResults {
     pub files_examined: usize,
 }
 
+/// Lightweight representation of a commit CI status for display purposes.
+///
+/// Deserialized from `forge:status:{repo}:{commit}:{context}` KV entries
+/// written by `ForgeStatusReporter`.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CommitStatusEntry {
+    /// Context string identifying the check (e.g., "ci/pipeline").
+    pub context: String,
+    /// Current state: "pending", "success", "failure", "error".
+    pub state: String,
+    /// Human-readable description.
+    pub description: String,
+    /// Pipeline run ID that produced this status.
+    pub pipeline_run_id: Option<String>,
+}
+
 /// Shared application state containing the client connection.
 #[derive(Clone)]
 pub struct AppState {
@@ -896,6 +912,109 @@ impl AppState {
     pub async fn get_latest_ci_status(&self, repo_id: &str) -> Option<CiRunInfo> {
         let resp = self.list_runs(Some(repo_id), None, Some(1)).await.ok()?;
         resp.runs.into_iter().next()
+    }
+
+    /// Get commit statuses for a given repo and commit hash.
+    ///
+    /// Scans the `forge:status:{repo_hex}:{commit_hex}:` prefix.
+    /// Returns empty on any error (commit status is supplementary info).
+    pub async fn get_commit_statuses(&self, repo_id: &str, commit_hash: &str) -> Vec<CommitStatusEntry> {
+        let prefix = format!("forge:status:{repo_id}:{commit_hash}:");
+        let resp = self
+            .client
+            .send(ClientRpcRequest::ScanKeys {
+                prefix,
+                limit: Some(20),
+                continuation_token: None,
+            })
+            .await;
+        let resp = match resp {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+        match resp {
+            ClientRpcResponse::ScanResult(scan) => scan
+                .entries
+                .iter()
+                .filter_map(|entry| serde_json::from_str::<CommitStatusEntry>(&entry.value).ok())
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Get latest CI status for a specific ref (branch/tag).
+    ///
+    /// Returns None if no CI status exists or on error (best-effort).
+    pub async fn get_ref_status(&self, repo_id: &str, ref_name: &str) -> Option<CiGetStatusResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiGetRefStatus {
+                repo_id: repo_id.to_string(),
+                ref_name: ref_name.to_string(),
+            })
+            .await
+            .ok()?;
+        match resp {
+            ClientRpcResponse::CiGetRefStatusResult(r) if r.was_found => Some(r),
+            _ => None,
+        }
+    }
+
+    /// Cancel a running CI pipeline.
+    pub async fn cancel_run(&self, run_id: &str) -> Result<aspen_client_api::messages::CiCancelRunResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiCancelRun {
+                run_id: run_id.to_string(),
+                reason: None,
+            })
+            .await
+            .context("ci cancel run")?;
+        match resp {
+            ClientRpcResponse::CiCancelRunResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Re-trigger a CI pipeline for the same repo and ref.
+    pub async fn retrigger_run(
+        &self,
+        repo_id: &str,
+        ref_name: &str,
+    ) -> Result<aspen_client_api::messages::CiTriggerPipelineResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiTriggerPipeline {
+                repo_id: repo_id.to_string(),
+                ref_name: ref_name.to_string(),
+                commit_hash: None,
+            })
+            .await
+            .context("ci retrigger")?;
+        match resp {
+            ClientRpcResponse::CiTriggerPipelineResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// List artifacts for a CI job.
+    pub async fn list_artifacts(
+        &self,
+        job_id: &str,
+        run_id: Option<&str>,
+    ) -> Result<aspen_client_api::messages::CiListArtifactsResponse> {
+        let resp = self
+            .client
+            .send(ClientRpcRequest::CiListArtifacts {
+                job_id: job_id.to_string(),
+                run_id: run_id.map(|s| s.to_string()),
+            })
+            .await
+            .context("ci list artifacts")?;
+        match resp {
+            ClientRpcResponse::CiListArtifactsResult(r) => Ok(r),
+            other => Err(unexpected_response(other)),
+        }
     }
 
     // ── Cluster operations ────────────────────────────────────────

@@ -557,6 +557,7 @@ pub async fn handle_list_runs(
             ref_name: run.context.ref_name,
             status: pipeline_status_to_string(&run.status),
             created_at_ms: run.created_at.timestamp_millis() as u64,
+            completed_at_ms: run.completed_at.map(|t| t.timestamp_millis() as u64),
         })
         .collect();
 

@@ -124,6 +124,8 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
             [repo_id, "issues", id, "reopen"] => reopen_issue_post(state, repo_id, id).await,
             [repo_id, "patches", id, "merge"] => merge_patch_post(state, repo_id, id, &form).await,
             [repo_id, "patches", id, "approve"] => approve_patch_post(state, repo_id, id).await,
+            [repo_id, "ci", run_id, "cancel"] => ci_cancel_post(state, repo_id, run_id).await,
+            [repo_id, "ci", run_id, "retrigger"] => ci_retrigger_post(state, repo_id, run_id).await,
             ["login", "verify"] => login_verify_post(state, &form).await,
             _ => method_not_allowed(),
         };
@@ -187,6 +189,17 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
     });
     let ci_status = st.get_latest_ci_status(repo_id).await;
     let ticket = st.ticket_str();
+
+    // Fetch per-branch CI status (best-effort, cap at 20 branches)
+    let mut branch_ci: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for branch in branches.iter().take(20) {
+        if let Some(ref_status) = st.get_ref_status(repo_id, &branch.name).await {
+            if let Some(ref status) = ref_status.status {
+                branch_ci.insert(branch.name.clone(), status.clone());
+            }
+        }
+    }
+
     ok(templates::repo_overview(
         &repo,
         &branches,
@@ -194,6 +207,7 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
         readme_html.as_deref(),
         &ticket,
         ci_status.as_ref(),
+        &branch_ci,
     ))
 }
 
@@ -312,7 +326,10 @@ async fn commit_detail(st: &AppState, repo_id: &str, hash: &str) -> RouteRespons
         file_diffs.push((file, lines));
     }
 
-    ok(templates::commit_detail(&repo, &commit, &file_diffs, truncated))
+    // Fetch CI statuses for this commit (best-effort)
+    let ci_statuses = st.get_commit_statuses(repo_id, hash).await;
+
+    ok(templates::commit_detail(&repo, &commit, &file_diffs, truncated, &ci_statuses))
 }
 
 async fn commits(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -552,19 +569,77 @@ async fn ci_job_logs(
         None => return not_found(&format!("/{repo_id}/ci/{run_id}/{job_id}")),
     };
 
+    // Full output mode: ?full=1
+    let is_full = query.get("full").is_some_and(|v| v == "1");
+    if is_full {
+        match st.get_job_output(run_id, job_id).await {
+            Ok(output) => {
+                return ok(templates::job_full_output_viewer(&templates::JobFullOutputParams {
+                    repo_id,
+                    repo_name: &repo.name,
+                    run_id,
+                    job_id,
+                    job_name,
+                    job_status,
+                    job_started_ms: job_started,
+                    job_ended_ms: job_ended,
+                    output_resp: &output,
+                }));
+            }
+            Err(e) => return err(e),
+        }
+    }
+
+    // Fetch artifacts (best-effort)
+    let artifacts = st.list_artifacts(job_id, Some(run_id)).await.ok();
+
     match st.get_job_logs(run_id, job_id, start_index, Some(100)).await {
-        Ok(logs) => ok(templates::job_log_viewer(&templates::JobLogParams {
-            repo_id,
-            repo_name: &repo.name,
-            run_id,
-            job_id,
-            job_name,
-            job_status,
-            job_started_ms: job_started,
-            job_ended_ms: job_ended,
-            logs_resp: &logs,
-            start_index,
-        })),
+        Ok(logs) => ok(templates::job_log_viewer_with_artifacts(
+            &templates::JobLogParams {
+                repo_id,
+                repo_name: &repo.name,
+                run_id,
+                job_id,
+                job_name,
+                job_status,
+                job_started_ms: job_started,
+                job_ended_ms: job_ended,
+                logs_resp: &logs,
+                start_index,
+            },
+            artifacts.as_ref(),
+        )),
+        Err(e) => err(e),
+    }
+}
+
+async fn ci_cancel_post(st: &AppState, repo_id: &str, run_id: &str) -> RouteResponse {
+    match st.cancel_run(run_id).await {
+        Ok(resp) if resp.is_success => redirect(&format!("/{repo_id}/ci/{run_id}")),
+        Ok(resp) => {
+            let msg = resp.error.unwrap_or_else(|| "cancel failed".into());
+            err(anyhow::anyhow!(msg))
+        }
+        Err(e) => err(e),
+    }
+}
+
+async fn ci_retrigger_post(st: &AppState, repo_id: &str, run_id: &str) -> RouteResponse {
+    // Fetch the original run to get ref_name
+    let run_status = match st.get_run_status(run_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+    let ref_name = run_status.ref_name.as_deref().unwrap_or("main");
+    match st.retrigger_run(repo_id, ref_name).await {
+        Ok(resp) if resp.is_success => {
+            let new_id = resp.run_id.as_deref().unwrap_or(run_id);
+            redirect(&format!("/{repo_id}/ci/{new_id}"))
+        }
+        Ok(resp) => {
+            let msg = resp.error.unwrap_or_else(|| "retrigger failed".into());
+            err(anyhow::anyhow!(msg))
+        }
         Err(e) => err(e),
     }
 }
@@ -930,6 +1005,7 @@ mod tests {
                 ref_name: "main".into(),
                 status: "succeeded".into(),
                 created_at_ms: 1700000000000,
+                completed_at_ms: Some(1700000060000),
             },
             aspen_client_api::messages::CiRunInfo {
                 run_id: "xyz789".into(),
@@ -937,6 +1013,7 @@ mod tests {
                 ref_name: "main".into(),
                 status: "failed".into(),
                 created_at_ms: 1700000100000,
+                completed_at_ms: Some(1700000145000),
             },
         ];
         let html = templates::pipeline_list(&runs, None, None, "").into_string();
@@ -944,6 +1021,24 @@ mod tests {
         assert!(html.contains("ci-succeeded"));
         assert!(html.contains("ci-failed"));
         assert!(html.contains("main"));
+        // Duration column: 60s for first run, 45s for second
+        assert!(html.contains("Duration"));
+        assert!(html.contains("1m 0s"));
+        assert!(html.contains("45s"));
+    }
+
+    #[test]
+    fn pipeline_list_running_shows_running_duration() {
+        let runs = vec![aspen_client_api::messages::CiRunInfo {
+            run_id: "running1".into(),
+            repo_id: "repo1".into(),
+            ref_name: "main".into(),
+            status: "running".into(),
+            created_at_ms: 1700000000000,
+            completed_at_ms: None,
+        }];
+        let html = templates::pipeline_list(&runs, None, None, "").into_string();
+        assert!(html.contains("running…"));
     }
 
     #[test]
@@ -1023,6 +1118,173 @@ mod tests {
     }
 
     #[test]
+    fn pipeline_detail_error_callout() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-err".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("failed".into()),
+            stages: vec![],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: Some(1700000010000),
+            error: Some("checkout failed: repository not found".into()),
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(html.contains("ci-error-callout"));
+        assert!(html.contains("checkout failed: repository not found"));
+    }
+
+    #[test]
+    fn pipeline_detail_no_error_when_none() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-ok".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("succeeded".into()),
+            stages: vec![],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: Some(1700000060000),
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        // ci-error-callout div should not render (CSS class in stylesheet doesn't count)
+        assert!(!html.contains("<div class=\"ci-error-callout\""));
+    }
+
+    #[test]
+    fn job_row_shows_error() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-je".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("failed".into()),
+            stages: vec![aspen_client_api::messages::CiStageInfo {
+                name: "build".into(),
+                status: "failed".into(),
+                jobs: vec![aspen_client_api::messages::CiJobInfo {
+                    id: "job1".into(),
+                    name: "compile".into(),
+                    status: "failed".into(),
+                    started_at_ms: Some(1700000000000),
+                    ended_at_ms: Some(1700000010000),
+                    error: Some("exit code 1".into()),
+                }],
+            }],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: Some(1700000010000),
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(html.contains("ci-job-error"));
+        assert!(html.contains("exit code 1"));
+    }
+
+    #[test]
+    fn stage_timeline_renders_segments() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-tl".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("running".into()),
+            stages: vec![
+                aspen_client_api::messages::CiStageInfo {
+                    name: "checkout".into(),
+                    status: "succeeded".into(),
+                    jobs: vec![],
+                },
+                aspen_client_api::messages::CiStageInfo {
+                    name: "build".into(),
+                    status: "running".into(),
+                    jobs: vec![],
+                },
+                aspen_client_api::messages::CiStageInfo {
+                    name: "test".into(),
+                    status: "pending".into(),
+                    jobs: vec![],
+                },
+            ],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: None,
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(html.contains("stage-timeline"));
+        assert!(html.contains("stage-seg-succeeded"));
+        assert!(html.contains("stage-seg-running"));
+        assert!(html.contains("stage-seg-pending"));
+        assert!(html.contains("checkout"));
+        assert!(html.contains("build"));
+        assert!(html.contains("test"));
+    }
+
+    #[test]
+    fn stage_timeline_empty_stages_no_render() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-empty".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("pending".into()),
+            stages: vec![],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: None,
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        // stage-timeline div should not render for empty stages
+        assert!(!html.contains("<div class=\"stage-timeline\""));
+    }
+
+    #[test]
+    fn pipeline_detail_running_shows_cancel_button() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-active".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("running".into()),
+            stages: vec![],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: None,
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(html.contains("btn-cancel"));
+        assert!(html.contains("/cancel"));
+        assert!(!html.contains("Re-trigger"));
+    }
+
+    #[test]
+    fn pipeline_detail_completed_shows_retrigger_button() {
+        let resp = aspen_client_api::messages::CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-done".into()),
+            repo_id: Some("repo1".into()),
+            ref_name: Some("main".into()),
+            commit_hash: None,
+            status: Some("succeeded".into()),
+            stages: vec![],
+            created_at_ms: Some(1700000000000),
+            completed_at_ms: Some(1700000060000),
+            error: None,
+        };
+        let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
+        assert!(html.contains("Re-trigger"));
+        assert!(html.contains("/retrigger"));
+        assert!(!html.contains("<button class=\"btn-cancel\""));
+    }
+
+    #[test]
     fn job_log_viewer_running_has_meta_refresh() {
         let logs = aspen_client_api::messages::CiGetJobLogsResponse {
             was_found: true,
@@ -1051,6 +1313,51 @@ mod tests {
         .into_string();
         assert!(html.contains("meta http-equiv=\"refresh\""));
         assert!(html.contains("Building..."));
+        // Line numbers
+        assert!(html.contains("log-line-number"));
+    }
+
+    #[test]
+    fn job_log_viewer_line_numbers_sequential() {
+        let logs = aspen_client_api::messages::CiGetJobLogsResponse {
+            was_found: true,
+            chunks: vec![
+                aspen_client_api::messages::CiLogChunkInfo {
+                    index: 0,
+                    content: "line one\nline two\n".into(),
+                    timestamp_ms: 1700000000000,
+                },
+                aspen_client_api::messages::CiLogChunkInfo {
+                    index: 1,
+                    content: "line three\nline four\n".into(),
+                    timestamp_ms: 1700000001000,
+                },
+            ],
+            last_index: 1,
+            has_more: false,
+            is_complete: true,
+            error: None,
+        };
+        let html = templates::job_log_viewer(&templates::JobLogParams {
+            repo_id: "repo1",
+            repo_name: "my-repo",
+            run_id: "run1",
+            job_id: "job1",
+            job_name: "build",
+            job_status: "succeeded",
+            job_started_ms: Some(1700000000000),
+            job_ended_ms: Some(1700000005000),
+            logs_resp: &logs,
+            start_index: 0,
+        })
+        .into_string();
+        // Lines should be numbered 1 through 4
+        assert!(html.contains(">1<"));
+        assert!(html.contains(">2<"));
+        assert!(html.contains(">3<"));
+        assert!(html.contains(">4<"));
+        assert!(html.contains("line one"));
+        assert!(html.contains("line four"));
     }
 
     #[test]
@@ -1077,6 +1384,195 @@ mod tests {
         })
         .into_string();
         assert!(html.contains("Load more"));
+    }
+
+    #[test]
+    fn commit_status_badges_render() {
+        let repo = aspen_forge_protocol::ForgeRepoInfo {
+            id: "repo1".into(),
+            name: "my-repo".into(),
+            description: None,
+            default_branch: "main".into(),
+            delegates: vec![],
+            threshold_delegates: 0,
+            created_at_ms: 0,
+        };
+        let commit = aspen_forge_protocol::ForgeCommitInfo {
+            hash: "abcdef1234567890".into(),
+            tree: "tree1".into(),
+            parents: vec![],
+            author_name: "alice".into(),
+            author_email: Some("alice@example.com".into()),
+            author_key: None,
+            author_npub: None,
+            author_display_name: None,
+            message: "test commit".into(),
+            timestamp_ms: 1700000000000,
+        };
+        let statuses = vec![
+            crate::state::CommitStatusEntry {
+                context: "ci/pipeline".into(),
+                state: "success".into(),
+                description: "passed".into(),
+                pipeline_run_id: Some("run-abc".into()),
+            },
+            crate::state::CommitStatusEntry {
+                context: "ci/deploy".into(),
+                state: "failure".into(),
+                description: "deploy failed".into(),
+                pipeline_run_id: Some("run-xyz".into()),
+            },
+        ];
+        let html = templates::commit_detail(&repo, &commit, &[], false, &statuses).into_string();
+        assert!(html.contains("commit-ci-badges"));
+        assert!(html.contains("ci/pipeline: passed"));
+        assert!(html.contains("ci-succeeded"));
+        assert!(html.contains("ci/deploy: failed"));
+        assert!(html.contains("ci-failed"));
+        assert!(html.contains("run-abc"));
+    }
+
+    #[test]
+    fn commit_no_statuses_no_badges() {
+        let repo = aspen_forge_protocol::ForgeRepoInfo {
+            id: "repo1".into(),
+            name: "my-repo".into(),
+            description: None,
+            default_branch: "main".into(),
+            delegates: vec![],
+            threshold_delegates: 0,
+            created_at_ms: 0,
+        };
+        let commit = aspen_forge_protocol::ForgeCommitInfo {
+            hash: "abcdef1234567890".into(),
+            tree: "tree1".into(),
+            parents: vec![],
+            author_name: "alice".into(),
+            author_email: Some("alice@example.com".into()),
+            author_key: None,
+            author_npub: None,
+            author_display_name: None,
+            message: "test commit".into(),
+            timestamp_ms: 1700000000000,
+        };
+        let html = templates::commit_detail(&repo, &commit, &[], false, &[]).into_string();
+        // The CSS class name appears in the stylesheet, but the actual <div> should not render
+        assert!(!html.contains("<div class=\"commit-ci-badges\""));
+    }
+
+    #[test]
+    fn format_bytes_units() {
+        assert_eq!(templates::format_bytes(0), "0 B");
+        assert_eq!(templates::format_bytes(512), "512 B");
+        assert_eq!(templates::format_bytes(1024), "1.0 KB");
+        assert_eq!(templates::format_bytes(1536), "1.5 KB");
+        assert_eq!(templates::format_bytes(1048576), "1.0 MB");
+        assert_eq!(templates::format_bytes(1073741824), "1.0 GB");
+    }
+
+    #[test]
+    fn artifacts_section_renders_in_log_viewer() {
+        let logs = aspen_client_api::messages::CiGetJobLogsResponse {
+            was_found: true,
+            chunks: vec![],
+            last_index: 0,
+            has_more: false,
+            is_complete: true,
+            error: None,
+        };
+        let artifacts = aspen_client_api::messages::CiListArtifactsResponse {
+            is_success: true,
+            artifacts: vec![aspen_client_api::messages::CiArtifactInfo {
+                blob_hash: "abc123".into(),
+                name: "/nix/store/xyz-hello".into(),
+                size_bytes: 2048,
+                content_type: "application/x-nix-nar".into(),
+                created_at: "2024-01-01".into(),
+                metadata: std::collections::HashMap::new(),
+            }],
+            error: None,
+        };
+        let html = templates::job_log_viewer_with_artifacts(
+            &templates::JobLogParams {
+                repo_id: "repo1",
+                repo_name: "my-repo",
+                run_id: "run1",
+                job_id: "job1",
+                job_name: "build",
+                job_status: "succeeded",
+                job_started_ms: Some(1700000000000),
+                job_ended_ms: Some(1700000005000),
+                logs_resp: &logs,
+                start_index: 0,
+            },
+            Some(&artifacts),
+        )
+        .into_string();
+        assert!(html.contains("Artifacts"));
+        assert!(html.contains("/nix/store/xyz-hello"));
+        assert!(html.contains("2.0 KB"));
+        assert!(html.contains("abc123"));
+    }
+
+    #[test]
+    fn job_full_output_stdout_only() {
+        let output = aspen_client_api::messages::CiGetJobOutputResponse {
+            was_found: true,
+            stdout: Some("hello world\n".into()),
+            stderr: None,
+            stdout_was_blob: false,
+            stderr_was_blob: false,
+            stdout_size: 12,
+            stderr_size: 0,
+            error: None,
+        };
+        let html = templates::job_full_output_viewer(&templates::JobFullOutputParams {
+            repo_id: "repo1",
+            repo_name: "my-repo",
+            run_id: "run1",
+            job_id: "job1",
+            job_name: "build",
+            job_status: "succeeded",
+            job_started_ms: Some(1700000000000),
+            job_ended_ms: Some(1700000005000),
+            output_resp: &output,
+        })
+        .into_string();
+        assert!(html.contains("log-stdout"));
+        assert!(html.contains("hello world"));
+        // stderr section should not render (CSS class in stylesheet doesn't count)
+        assert!(!html.contains("<pre class=\"log-viewer log-stderr\""));
+        assert!(html.contains("View chunked logs"));
+    }
+
+    #[test]
+    fn job_full_output_stdout_and_stderr() {
+        let output = aspen_client_api::messages::CiGetJobOutputResponse {
+            was_found: true,
+            stdout: Some("build ok\n".into()),
+            stderr: Some("warning: unused var\n".into()),
+            stdout_was_blob: false,
+            stderr_was_blob: false,
+            stdout_size: 9,
+            stderr_size: 20,
+            error: None,
+        };
+        let html = templates::job_full_output_viewer(&templates::JobFullOutputParams {
+            repo_id: "repo1",
+            repo_name: "my-repo",
+            run_id: "run1",
+            job_id: "job1",
+            job_name: "build",
+            job_status: "succeeded",
+            job_started_ms: Some(1700000000000),
+            job_ended_ms: Some(1700000005000),
+            output_resp: &output,
+        })
+        .into_string();
+        assert!(html.contains("log-stdout"));
+        assert!(html.contains("log-stderr"));
+        assert!(html.contains("build ok"));
+        assert!(html.contains("warning: unused var"));
     }
 
     #[test]
@@ -1127,6 +1623,35 @@ mod tests {
     }
 
     #[test]
+    fn repo_overview_branch_ci_dots() {
+        let repo = aspen_forge_protocol::ForgeRepoInfo {
+            id: "repo1".into(),
+            name: "my-repo".into(),
+            description: None,
+            default_branch: "main".into(),
+            delegates: vec![],
+            threshold_delegates: 0,
+            created_at_ms: 0,
+        };
+        let branches = vec![
+            aspen_forge_protocol::ForgeRefInfo {
+                name: "main".into(),
+                hash: "abc123".into(),
+            },
+            aspen_forge_protocol::ForgeRefInfo {
+                name: "dev".into(),
+                hash: "def456".into(),
+            },
+        ];
+        let mut branch_ci = std::collections::HashMap::new();
+        branch_ci.insert("main".to_string(), "succeeded".to_string());
+        branch_ci.insert("dev".to_string(), "failed".to_string());
+        let html = templates::repo_overview(&repo, &branches, &[], None, "ticket", None, &branch_ci).into_string();
+        assert!(html.contains("branch-ci-passed"));
+        assert!(html.contains("branch-ci-failed"));
+    }
+
+    #[test]
     fn ci_status_badge_variants() {
         let run = aspen_client_api::messages::CiRunInfo {
             run_id: "r1".into(),
@@ -1134,6 +1659,7 @@ mod tests {
             ref_name: "main".into(),
             status: "succeeded".into(),
             created_at_ms: 0,
+            completed_at_ms: Some(60000),
         };
         let html = templates::ci_status_badge("repo1", &run).into_string();
         assert!(html.contains("CI: passing"));

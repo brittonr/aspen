@@ -1,8 +1,11 @@
 //! HTML templates using maud for the Forge web frontend.
 
+use aspen_client_api::messages::CiArtifactInfo;
 use aspen_client_api::messages::CiGetJobLogsResponse;
+use aspen_client_api::messages::CiGetJobOutputResponse;
 use aspen_client_api::messages::CiGetStatusResponse;
 use aspen_client_api::messages::CiJobInfo;
+use aspen_client_api::messages::CiListArtifactsResponse;
 use aspen_client_api::messages::CiRunInfo;
 use aspen_client_api::messages::CiStageInfo;
 use aspen_client_api::messages::ClusterStateResponse;
@@ -224,6 +227,7 @@ pub fn repo_overview(
     readme_html: Option<&str>,
     ticket: &str,
     ci_status: Option<&CiRunInfo>,
+    branch_ci: &std::collections::HashMap<String, String>,
 ) -> Markup {
     let clone_cmd = format!("git clone aspen://{}/{} {}", ticket, repo.id, repo.name);
     base_layout(&repo.name, html! {
@@ -258,6 +262,10 @@ pub fn repo_overview(
             ul {
                 @for b in branches {
                     li {
+                        @if let Some(status) = branch_ci.get(&b.name) {
+                            span class=(branch_ci_dot_class(status)) { "" }
+                            " "
+                        }
                         a href=(format!("/{}/tree/{}", repo.id, b.name)) { (&b.name) }
                         " → " code { (short_hash(&b.hash)) }
                     }
@@ -355,6 +363,7 @@ pub fn commit_detail(
     commit: &ForgeCommitInfo,
     file_diffs: &[(&crate::state::FileDiff, Vec<crate::state::DiffLine>)],
     truncated: bool,
+    ci_statuses: &[crate::state::CommitStatusEntry],
 ) -> Markup {
     use crate::state::DiffKind;
     use crate::state::DiffLine;
@@ -363,6 +372,10 @@ pub fn commit_detail(
         h1 {
             a href=(format!("/{}", repo.id)) { (&repo.name) }
             " / commit"
+        }
+
+        @if !ci_statuses.is_empty() {
+            (commit_status_badges(&repo.id, ci_statuses))
         }
 
         div.card {
@@ -961,6 +974,7 @@ pub fn pipeline_list(
                         th { "Status" }
                         th { "Pipeline" }
                         th { "Ref" }
+                        th { "Duration" }
                         th { "Created" }
                     }
                 }
@@ -976,6 +990,7 @@ pub fn pipeline_list(
                                 }
                             }
                             td { code { (&run.ref_name) } }
+                            td.meta { (format_duration_ms(Some(run.created_at_ms), run.completed_at_ms)) }
                             td.meta { (format_time(run.created_at_ms)) }
                         }
                     }
@@ -1002,6 +1017,17 @@ pub fn pipeline_detail(repo_id: &str, repo_name: &str, status_resp: &CiGetStatus
             " "
             span class=(status_badge_class(status)) { (status_label(status)) }
         }
+        div.ci-actions {
+            @if is_active {
+                form.inline method="POST" action=(format!("/{repo_id}/ci/{run_id}/cancel")) {
+                    button.btn-cancel type="submit" { "✕ Cancel" }
+                }
+            } @else {
+                form.inline method="POST" action=(format!("/{repo_id}/ci/{run_id}/retrigger")) {
+                    button.btn type="submit" { "↻ Re-trigger" }
+                }
+            }
+        }
         div.commit-meta {
             @if let Some(ref ref_name) = status_resp.ref_name {
                 "Ref: " code { (ref_name) }
@@ -1012,7 +1038,14 @@ pub fn pipeline_detail(repo_id: &str, repo_name: &str, status_resp: &CiGetStatus
             @if let Some(created) = status_resp.created_at_ms {
                 " · Created: " (format_time(created))
             }
+            @if let (Some(created), Some(completed)) = (status_resp.created_at_ms, status_resp.completed_at_ms) {
+                " · Duration: " (format_duration_ms(Some(created), Some(completed)))
+            }
         }
+        @if let Some(ref err) = status_resp.error {
+            div.ci-error-callout { strong { "Error: " } (err) }
+        }
+        (stage_timeline(&status_resp.stages))
         @for stage in &status_resp.stages {
             (stage_section(repo_id, run_id, stage))
         }
@@ -1020,6 +1053,49 @@ pub fn pipeline_detail(repo_id: &str, repo_name: &str, status_resp: &CiGetStatus
             p.muted { "No stages defined for this pipeline." }
         }
     })
+}
+
+/// Horizontal stage progress bar.
+fn stage_timeline(stages: &[CiStageInfo]) -> Markup {
+    if stages.is_empty() {
+        return html! {};
+    }
+    html! {
+        div.stage-timeline {
+            @for stage in stages {
+                div class=(format!("stage-segment stage-seg-{}", stage_segment_status(&stage.status))) {
+                    div.stage-seg-name { (&stage.name) }
+                    div.stage-seg-status {
+                        (stage_segment_icon(&stage.status))
+                        " "
+                        (status_label(&stage.status))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Map a status string to a CSS modifier for segment coloring.
+fn stage_segment_status(status: &str) -> &'static str {
+    match status {
+        "succeeded" => "succeeded",
+        "failed" => "failed",
+        "running" => "running",
+        "cancelled" => "cancelled",
+        _ => "pending",
+    }
+}
+
+/// Icon for a stage segment status.
+fn stage_segment_icon(status: &str) -> &'static str {
+    match status {
+        "succeeded" => "\u{2713}",
+        "failed" => "\u{2717}",
+        "running" => "\u{25cf}",
+        "cancelled" => "\u{25cb}",
+        _ => "\u{25cb}",
+    }
 }
 
 /// Render a single stage section with its jobs.
@@ -1057,7 +1133,12 @@ fn job_row(repo_id: &str, run_id: &str, job: &CiJobInfo) -> Markup {
             td {
                 span class=(status_badge_class(&job.status)) { (status_label(&job.status)) }
             }
-            td { (&job.name) }
+            td {
+                (&job.name)
+                @if let Some(ref err) = job.error {
+                    div.ci-job-error { (err) }
+                }
+            }
             td.meta { (format_duration_ms(job.started_at_ms, job.ended_at_ms)) }
             td {
                 a href=(format!("/{repo_id}/ci/{run_id}/{}", job.id)) { "logs →" }
@@ -1085,10 +1166,19 @@ pub fn job_log_viewer(params: &JobLogParams<'_>) -> Markup {
     let is_active = params.job_status == "running";
     let title = format!("{} — {} logs", params.repo_name, params.job_name);
 
-    let mut log_html = String::new();
+    // Build numbered log lines from chunks
+    let mut log_lines: Vec<String> = Vec::new();
     for chunk in &params.logs_resp.chunks {
-        log_html.push_str(&ansi_to_html_safe(&chunk.content));
+        for line in chunk.content.split('\n') {
+            log_lines.push(ansi_to_html_safe(line));
+        }
     }
+    // Remove trailing empty line from final newline
+    if log_lines.last().is_some_and(|l| l.is_empty()) {
+        log_lines.pop();
+    }
+
+    let full_url = format!("/{}/ci/{}/{}?full=1", params.repo_id, params.run_id, params.job_id);
 
     base_layout(&title, html! {
         (repo_tabs_with_ci(&ForgeRepoInfo { id: params.repo_id.to_string(), name: params.repo_name.to_string(), ..dummy_repo() }, "ci"))
@@ -1105,10 +1195,19 @@ pub fn job_log_viewer(params: &JobLogParams<'_>) -> Markup {
                 "Duration: " (format_duration_ms(params.job_started_ms, params.job_ended_ms))
                 " · "
                 a href=(format!("/{}/ci/{}", params.repo_id, params.run_id)) { "← Back to pipeline" }
+                " · "
+                a href=(&full_url) { "View full output" }
             }
         }
-        pre.log-viewer {
-            (PreEscaped(&log_html))
+        div.log-viewer {
+            table.log-table {
+                @for (i, line_html) in log_lines.iter().enumerate() {
+                    tr {
+                        td.log-line-number { (i + 1) }
+                        td.log-line { code { (PreEscaped(line_html)) } }
+                    }
+                }
+            }
         }
         @if params.logs_resp.has_more {
             div.ci-load-more {
@@ -1118,6 +1217,201 @@ pub fn job_log_viewer(params: &JobLogParams<'_>) -> Markup {
             }
         }
     })
+}
+
+/// CSS class for a branch CI status dot.
+fn branch_ci_dot_class(status: &str) -> &'static str {
+    match status {
+        "succeeded" | "success" => "branch-ci-dot branch-ci-passed",
+        "failed" | "failure" => "branch-ci-dot branch-ci-failed",
+        "running" => "branch-ci-dot branch-ci-running",
+        _ => "branch-ci-dot branch-ci-pending",
+    }
+}
+
+/// Format bytes into human-readable size.
+pub fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * 1024;
+    const GB: u64 = 1024 * 1024 * 1024;
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+/// Render an artifacts section for a job page.
+fn artifacts_section(artifacts: &[CiArtifactInfo]) -> Markup {
+    html! {
+        div.artifacts-section {
+            h3 { "Artifacts" }
+            table.artifacts-table {
+                thead {
+                    tr {
+                        th { "Name" }
+                        th { "Size" }
+                        th { "Type" }
+                        th { "Download" }
+                    }
+                }
+                tbody {
+                    @for artifact in artifacts {
+                        tr.artifact-row {
+                            td { (&artifact.name) }
+                            td.meta { (format_bytes(artifact.size_bytes)) }
+                            td.meta { (&artifact.content_type) }
+                            td {
+                                code.artifact-cli { "aspen-cli ci artifact " (&artifact.blob_hash) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// CI job log viewer with optional artifact section.
+pub fn job_log_viewer_with_artifacts(
+    params: &JobLogParams<'_>,
+    artifacts_resp: Option<&CiListArtifactsResponse>,
+) -> Markup {
+    let log_markup = job_log_viewer(params);
+    // If no artifacts, just return the log viewer
+    let has_artifacts = artifacts_resp.is_some_and(|a| a.is_success && !a.artifacts.is_empty());
+    if !has_artifacts {
+        return log_markup;
+    }
+    // Inject artifacts section before </main> in the rendered page.
+    let mut html = log_markup.into_string();
+    if let Some(resp) = artifacts_resp {
+        let artifacts_html = artifacts_section(&resp.artifacts).into_string();
+        if let Some(pos) = html.rfind("</main>") {
+            html.insert_str(pos, &artifacts_html);
+        }
+    }
+    PreEscaped(html)
+}
+
+/// Max bytes of full output to display (1 MB).
+const MAX_FULL_OUTPUT_BYTES: usize = 1024 * 1024;
+
+/// Parameters for rendering a CI job full output page.
+pub struct JobFullOutputParams<'a> {
+    pub repo_id: &'a str,
+    pub repo_name: &'a str,
+    pub run_id: &'a str,
+    pub job_id: &'a str,
+    pub job_name: &'a str,
+    pub job_status: &'a str,
+    pub job_started_ms: Option<u64>,
+    pub job_ended_ms: Option<u64>,
+    pub output_resp: &'a CiGetJobOutputResponse,
+}
+
+/// CI job full output viewer page.
+pub fn job_full_output_viewer(params: &JobFullOutputParams<'_>) -> Markup {
+    let is_active = params.job_status == "running";
+    let title = format!("{} — {} output", params.repo_name, params.job_name);
+    let chunked_url = format!("/{}/ci/{}/{}", params.repo_id, params.run_id, params.job_id);
+
+    let stdout = params.output_resp.stdout.as_deref().unwrap_or("");
+    let stderr = params.output_resp.stderr.as_deref().unwrap_or("");
+    let total_bytes = stdout.len() + stderr.len();
+    let is_truncated = total_bytes > MAX_FULL_OUTPUT_BYTES;
+
+    // Truncate if needed
+    let stdout_display = if stdout.len() > MAX_FULL_OUTPUT_BYTES {
+        &stdout[..MAX_FULL_OUTPUT_BYTES]
+    } else {
+        stdout
+    };
+    let stderr_budget = MAX_FULL_OUTPUT_BYTES.saturating_sub(stdout_display.len());
+    let stderr_display = if stderr.len() > stderr_budget {
+        &stderr[..stderr_budget]
+    } else {
+        stderr
+    };
+
+    base_layout(&title, html! {
+        (repo_tabs_with_ci(&ForgeRepoInfo { id: params.repo_id.to_string(), name: params.repo_name.to_string(), ..dummy_repo() }, "ci"))
+        @if is_active {
+            meta http-equiv="refresh" content="5";
+        }
+        div.ci-job-header {
+            h1 {
+                (params.job_name)
+                " "
+                span class=(status_badge_class(params.job_status)) { (status_label(params.job_status)) }
+            }
+            div.meta {
+                "Duration: " (format_duration_ms(params.job_started_ms, params.job_ended_ms))
+                " · "
+                a href=(format!("/{}/ci/{}", params.repo_id, params.run_id)) { "← Back to pipeline" }
+                " · "
+                a href=(&chunked_url) { "View chunked logs" }
+            }
+        }
+        @if !stdout_display.is_empty() {
+            h3 { "stdout" }
+            pre.log-viewer.log-stdout {
+                (PreEscaped(ansi_to_html_safe(stdout_display)))
+            }
+        }
+        @if !stderr_display.is_empty() {
+            h3 { "stderr" }
+            pre.log-viewer.log-stderr {
+                (PreEscaped(ansi_to_html_safe(stderr_display)))
+            }
+        }
+        @if stdout_display.is_empty() && stderr_display.is_empty() {
+            p.muted { "No output captured." }
+        }
+        @if is_truncated {
+            div.ci-load-more {
+                "Output truncated at 1 MB. Use "
+                code { "aspen-cli ci output " (params.run_id) " " (params.job_id) }
+                " for full output."
+            }
+        }
+    })
+}
+
+/// Render CI status badges for a commit.
+fn commit_status_badges(repo_id: &str, statuses: &[crate::state::CommitStatusEntry]) -> Markup {
+    html! {
+        div.commit-ci-badges {
+            @for st in statuses {
+                @let badge_class = match st.state.as_str() {
+                    "success" => "badge ci-succeeded",
+                    "failure" => "badge ci-failed",
+                    "error" => "badge ci-failed",
+                    "pending" => "badge ci-running",
+                    _ => "badge ci-pending",
+                };
+                @let label = match st.state.as_str() {
+                    "success" => "passed",
+                    "failure" => "failed",
+                    "error" => "error",
+                    "pending" => "pending",
+                    _ => "unknown",
+                };
+                @if let Some(ref run_id) = st.pipeline_run_id {
+                    a.ci-badge-link href=(format!("/{repo_id}/ci/{run_id}")) {
+                        span class=(badge_class) { (&st.context) ": " (label) }
+                    }
+                } @else {
+                    span class=(badge_class) { (&st.context) ": " (label) }
+                }
+                " "
+            }
+        }
+    }
 }
 
 /// CI status badge for the repo overview page.
@@ -1464,10 +1758,42 @@ table.ci-jobs th{text-align:left;padding:.3rem .6rem;font-size:.8rem;color:#8b94
 table.ci-jobs td{padding:.3rem .6rem;border-bottom:1px solid #21262d}
 table.ci-jobs tr:hover{background:#0d1117}
 .ci-job-header{margin:.75rem 0}
-.log-viewer{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:1rem;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:.8rem;line-height:1.5;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;max-height:80vh;overflow-y:auto}
+.log-viewer{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:0;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:.8rem;line-height:1.5;color:#c9d1d9;max-height:80vh;overflow-y:auto}
+table.log-table{width:100%;border-collapse:collapse}
+table.log-table td{padding:0 .6rem;border:none;vertical-align:top}
+.log-line-number{color:#484f58;text-align:right;user-select:none;width:1px;white-space:nowrap;padding:0 .6rem 0 .8rem;font-size:.8rem}
+.log-line{width:100%;white-space:pre-wrap;word-break:break-all}
+.log-line code{background:transparent;padding:0;font-size:.8rem}
+.log-stdout{border-color:#30363d}
+.log-stderr{background:#1a0d0d;border-color:#da3633}
+.artifacts-section{margin:1rem 0}
+.artifacts-table{width:100%;border-collapse:collapse}
+.artifacts-table th{text-align:left;padding:.4rem .6rem;border-bottom:2px solid #30363d;font-size:.85rem;color:#8b949e}
+.artifacts-table td{padding:.4rem .6rem;border-bottom:1px solid #21262d}
+.artifact-cli{font-size:.75rem;color:#8b949e;user-select:all}
 .ci-load-more{text-align:center;padding:.75rem}
+.ci-error-callout{background:#3d1a1a;border:1px solid #da3633;border-radius:6px;padding:.75rem 1rem;margin:.75rem 0;color:#f85149;font-size:.9rem}
+.ci-job-error{color:#f85149;font-size:.8rem;margin-top:.2rem}
+.ci-actions{display:flex;gap:.5rem;margin:.5rem 0}
+.stage-timeline{display:flex;gap:2px;margin:.75rem 0;border-radius:6px;overflow:hidden;border:1px solid #30363d}
+.stage-segment{flex:1;padding:.5rem .75rem;text-align:center;min-width:0}
+.stage-seg-name{font-weight:600;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage-seg-status{font-size:.75rem;margin-top:.15rem}
+.stage-seg-succeeded{background:#0d2818;color:#aff5b4}
+.stage-seg-failed{background:#2d1115;color:#ffa198}
+.stage-seg-running{background:#2a1f00;color:#e3b341}
+.stage-seg-pending{background:#161b22;color:#8b949e}
+.stage-seg-cancelled{background:#161b22;color:#8b949e}
+.btn-cancel{padding:.4rem .8rem;background:transparent;color:#da3633;border:1px solid #da3633;border-radius:4px;font-size:.85rem;cursor:pointer}
+.btn-cancel:hover{background:#3d1a1a}
 .ci-badge-link{text-decoration:none}
 .ci-badge-link:hover{text-decoration:none}
+.commit-ci-badges{display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0}
+.branch-ci-dot{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle}
+.branch-ci-passed{background:#238636}
+.branch-ci-failed{background:#da3633}
+.branch-ci-running{background:#9e6a03}
+.branch-ci-pending{background:#484f58}
 .cluster-summary{display:flex;gap:1.5rem;margin:1rem 0;flex-wrap:wrap}
 .cluster-stat{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:.75rem 1.25rem;text-align:center;min-width:100px}
 .cluster-stat-value{display:block;font-size:1.5rem;font-weight:700;color:#f0f6fc}

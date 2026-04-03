@@ -350,9 +350,7 @@ async fn test_saga() -> TestResult {
 
     // Verify LIFO order: step-2 compensation before step-1.
     let first_comp_id = match &comp_started[0].event_type {
-        aspen_jobs::event_store::WorkflowEventType::CompensationStarted { compensation_id } => {
-            compensation_id.clone()
-        }
+        aspen_jobs::event_store::WorkflowEventType::CompensationStarted { compensation_id } => compensation_id.clone(),
         other => return Err(format!("expected CompensationStarted, got {other:?}")),
     };
     if first_comp_id != "comp-step-2" {
@@ -360,9 +358,7 @@ async fn test_saga() -> TestResult {
     }
 
     let second_comp_id = match &comp_started[1].event_type {
-        aspen_jobs::event_store::WorkflowEventType::CompensationStarted { compensation_id } => {
-            compensation_id.clone()
-        }
+        aspen_jobs::event_store::WorkflowEventType::CompensationStarted { compensation_id } => compensation_id.clone(),
         other => return Err(format!("expected CompensationStarted, got {other:?}")),
     };
     if second_comp_id != "comp-step-1" {

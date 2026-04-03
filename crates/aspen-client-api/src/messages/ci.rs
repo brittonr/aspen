@@ -256,6 +256,10 @@ pub struct CiRunInfo {
     pub status: String,
     /// Creation time (Unix timestamp in milliseconds).
     pub created_at_ms: u64,
+    /// Completion time (Unix timestamp in milliseconds).
+    /// `None` for running/pending pipelines.
+    #[serde(default)]
+    pub completed_at_ms: Option<u64>,
 }
 
 /// CI list runs response.

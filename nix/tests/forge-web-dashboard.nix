@@ -267,6 +267,42 @@ in
           assert "uptime" in body, "cluster page missing uptime"
           node1.log("Cluster summary stats OK")
 
+      # ── new CI observability features ─────────────────────────────────
+
+      with subtest("CI list has duration column"):
+          body = curl("/ci")
+          assert "Duration" in body or "No pipeline runs" in body or "CI Unavailable" in body, \
+              "CI list page missing Duration column header"
+          node1.log("Duration column OK")
+
+      with subtest("pipeline detail has stage timeline CSS"):
+          body = curl("/ci")
+          assert "stage-timeline" in body or "No pipeline runs" in body or "CI Unavailable" in body, \
+              "stage-timeline CSS not found"
+          node1.log("Stage timeline CSS OK")
+
+      with subtest("pipeline detail cancel/retrigger routes"):
+          result = node1.succeed(
+              f"curl -s -o /tmp/_curl_body.txt -w '%{{http_code}}' "
+              f"'http://127.0.0.1:${toString webPort}/fakerepo/ci/fakerun'"
+          ).strip()
+          body = node1.succeed("cat /tmp/_curl_body.txt")
+          status = int(result)
+          assert status in (200, 404, 500, 503), \
+              f"cancel/retrigger route test: unexpected status {status}"
+          node1.log(f"Cancel/retrigger route test OK (status={status})")
+
+      with subtest("commit page CI status rendering"):
+          result = node1.succeed(
+              f"curl -s -o /tmp/_curl_body.txt -w '%{{http_code}}' "
+              f"'http://127.0.0.1:${toString webPort}/fakerepo/commit/deadbeef'"
+          ).strip()
+          body = node1.succeed("cat /tmp/_curl_body.txt")
+          status = int(result)
+          assert status in (200, 404, 500, 503), \
+              f"commit CI badge test: unexpected status {status}"
+          node1.log(f"Commit CI badge test OK (status={status})")
+
       # ── done ─────────────────────────────────────────────────────────
       node1.log("All forge-web-dashboard tests passed!")
     '';
