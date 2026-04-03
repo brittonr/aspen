@@ -330,33 +330,20 @@ in
 
       # ── verify zero-subprocess path ──────────────────────────────────
 
-      with subtest("verify eval path used"):
-          # Check which eval path succeeded:
-          # 1. "zero subprocesses" = flake-compat path (ideal)
-          # 2. "resolved flake to derivation path" = nix eval subprocess fallback (acceptable)
-          # Both use native bwrap build — the difference is only the eval step.
+      with subtest("verify zero-subprocess eval path"):
+          # Require the zero-subprocess flake-compat eval path.
+          # With lazy eval mode (EvalMode::Lazy) and the patched flake-compat
+          # (or→if?then else for rnix), the flake-compat path must succeed
+          # for trivial flakes — no nix eval subprocess fallback.
           logs = node1.succeed(
               "journalctl -u aspen-node.service --no-pager "
               "| grep -iE 'zero subprocesses|flake-compat eval|resolved flake to derivation|native build succeeded' || true"
           )
           node1.log(f"Eval path log lines:\n{logs}")
 
-          if "zero subprocesses" in logs:
-              node1.log("BEST: flake-compat eval succeeded (zero subprocesses)")
-          elif "native build succeeded" in logs:
-              node1.log("GOOD: native bwrap build succeeded (eval used subprocess fallback)")
-              # Log the flake-compat failure reason for debugging
-              compat_logs = node1.succeed(
-                  "journalctl -u aspen-node.service --no-pager "
-                  "| grep -i 'flake-compat eval failed' || true"
-              )
-              node1.log(f"flake-compat fallback reason:\n{compat_logs}")
-          else:
-              node1.log("WARNING: neither zero-subprocess nor native build detected")
-
-          # The critical assertion: native build must have succeeded
-          assert "native build succeeded" in logs or "zero subprocesses" in logs, \
-              "Expected native build path to succeed (either flake-compat or subprocess eval)"
+          assert "zero subprocesses" in logs, \
+              "Expected zero-subprocess eval path (flake-compat + lazy eval). " \
+              f"Got logs: {logs[:500]}"
 
       # ── cache gateway ────────────────────────────────────────────────
 

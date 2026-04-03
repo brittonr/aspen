@@ -1,6 +1,6 @@
 # snix-eval Flake Evaluation Gap Analysis
 
-## Current State
+## Current State (updated 2026-04-02)
 
 Aspen's CI executor has a three-stage pipeline for building Nix flakes:
 
@@ -8,218 +8,113 @@ Aspen's CI executor has a three-stage pipeline for building Nix flakes:
 2. **Build** — execute the derivation in a sandbox → output path
 3. **Upload** — ingest output into PathInfoService + cache gateway
 
-**Stage 2 (build) is fully native** — uses snix-build's `LocalStoreBuildService`
-with bubblewrap sandboxing. No `nix build` subprocess. Works today, validated
-by 7 passing VM tests.
+**All three stages are now native** for trivial flakes (no nixpkgs dependency).
 
-**Stage 1 (eval) falls back to `nix eval` subprocess.** The in-process path
-(snix-eval) is attempted first via two strategies, both of which fail:
+The eval stage uses `EvalMode::Lazy` with embedded flake-compat to resolve
+flake inputs and extract `.drvPath` without spawning any `nix` subprocess.
+The build stage uses snix-build's `LocalStoreBuildService` with bubblewrap
+sandboxing. Zero subprocess dependency for the full pipeline.
 
 ```
-flake-compat + snix-eval  →  FAIL (deep_force error)
-call-flake.nix + snix-eval  →  FAIL (parse error)
-nix eval --raw .drvPath  →  OK (subprocess fallback)
+flake-compat + snix-eval (lazy)  →  OK (zero subprocesses)
+call-flake.nix + snix-eval       →  fallback (parse limitations)
+nix eval --raw .drvPath          →  last resort (nix-cli-fallback feature)
 ```
 
-Eliminating the `nix eval` subprocess would give us a fully self-contained
-build pipeline — no Nix CLI dependency at all.
+## Root Cause Analysis (historical)
 
-## Root Cause Analysis
+Two issues blocked the zero-subprocess path. Both are now fixed.
 
-### Failure 1: flake-compat + `EvalMode::Strict`
+### Issue 1: `EvalMode::Strict` deep-forcing (FIXED)
 
-**Error**: `flake-compat eval failed: while evaluating this as native code (final_deep_force)`
+All eval callsites used `EvalMode::Strict`, which triggers `final_deep_force`
+on the entire result tree. Even though we only need `.drvPath`, strict mode
+walked every thunk including unimplemented builtins in unrelated parts of
+the flake outputs.
 
-The eval expression is:
+**Fix**: `EvalMode::Lazy` for `evaluate_flake_via_compat`,
+`evaluate_flake_derivation`, and `evaluate_npins_derivation`. The `.drvPath`
+selection in the expression forces only what's needed. `evaluate_pure` and
+`validate_flake` keep `EvalMode::Strict` for exhaustive validation.
 
-```nix
-let
-  compat = import /tmp/aspen-flake-compat-XXX/default.nix {
-    src = { outPath = /path/to/flake; };
-    system = "x86_64-linux";
-  };
-in compat.outputs.packages."x86_64-linux".default.drvPath
-```
+### Issue 2: rnix `or` keyword parse error (FIXED)
 
-**What works**: snix-eval successfully:
+flake-compat's `default.nix` used `node.locked.type or null`, which rnix
+parsed as `TOKEN_OR` instead of the attribute-or-default syntax.
 
-- Parses flake-compat's 367-line `default.nix`
-- Reads and parses `flake.lock` JSON
-- Fetches tarball inputs via `builtins.fetchTarball` (HTTP download, unpack, narHash verify)
-- Resolves `builtins.path` inputs
-- Calls the flake's `outputs` function
-- Navigates to `.packages.x86_64-linux.default.drvPath`
+**Fix**: Patched the bundled flake-compat to replace `x or default` with
+`if x ? attr then x.attr else default` patterns. See
+`flake_compat_bundled.nix` header comment.
 
-**What fails**: `EvalMode::Strict` triggers `final_deep_force` on the entire
-result value. Even though we only need the `.drvPath` string, strict mode
-walks every thunk in the result tree. When it hits a lazy value that depends
-on an unimplemented builtin or triggers an eval error, the whole thing fails.
+### Historical: call-flake.nix parse error (superseded)
 
-The `final_deep_force` function in `snix/eval/src/vm/mod.rs` is a generator
-that deep-forces the top-level value before returning. It recursively forces
-every `Thunk`, every `Attrs` value, every `List` element. For a flake that
-produces `packages.x86_64-linux.default` — which is a derivation attrset
-containing `drvPath`, `outPath`, `type`, `name`, etc — this means forcing
-the entire derivation result, including parts we don't need.
+The alternative call-flake.nix eval path hit rnix parser edge cases with
+complex string interpolation. This path is retained as a fallback but is
+no longer the primary eval strategy.
 
-**The fix is straightforward**: use `EvalMode::Lazy` instead of `EvalMode::Strict`.
-We're selecting `.drvPath` which evaluates to a string — we don't need the
-VM to deep-force anything. The attribute selection in the expression itself
-forces only what's needed.
+## Changes Made
 
-All 5 callsites in `eval.rs` use `EvalMode::Strict`. This was likely a
-conservative choice to catch errors early, but it's counterproductive for
-flake evaluation where the outputs attrset contains many lazy values we
-don't need.
+### 1. `EvalMode::Lazy` for flake eval paths
 
-### Failure 2: call-flake.nix parse error
+`evaluate_flake_via_compat`, `evaluate_flake_derivation`, and
+`evaluate_npins_derivation` use `EvalMode::Lazy`. The Nix expression
+selects `.drvPath` directly — snix-eval forces only the selected attribute.
+`evaluate_pure` and `validate_flake` keep `EvalMode::Strict`.
 
-**Error**: `in-process flake eval failed: failed to parse Nix code:`
+A shared `evaluate_with_store_mode` method takes the `EvalMode` parameter;
+`evaluate_with_store` (strict) and `evaluate_with_store_lazy` (lazy) are
+convenience wrappers.
 
-The call-flake.nix path generates a larger expression that embeds Nix's
-`call-flake.nix` (from `nix/src/libflake/call-flake.nix`) with flake.lock
-JSON and resolved input overrides. This expression uses Nix language
-features that snix-eval's rnix parser doesn't support, specifically:
+### 2. Error chain reporting
 
-- `node.locked.type or null` — the `or` keyword in attribute access
-  (`a.b or default`) is valid Nix but may hit parser edge cases in rnix
-- Complex string interpolation patterns in the embedded expression
+`format_error_chain()` walks `std::error::Error::source()` and joins all
+messages with ` → `. `convert_eval_result` uses this for all eval errors.
+Single-level errors produce identical output to `format!("{e}")`.
 
-This is a secondary path — if flake-compat works (with lazy eval), this
-path isn't needed.
+### 3. Patched flake-compat for rnix
 
-## Proposed Fix: Three Changes
+Bundled `flake_compat_bundled.nix` replaces `or` keyword usage with
+`if ? then else` equivalents. rnix parses `or` as `TOKEN_OR` rather than
+the attribute-or-default operator.
 
-### Change 1: `EvalMode::Lazy` for flake-compat eval (Aspen-side)
+### 4. `Value::Thunk` handling in `extract_drv_path_string`
 
-In `crates/aspen-ci-executor-nix/src/eval.rs`, change `evaluate_flake_via_compat`
-and `evaluate_with_store` to use `EvalMode::Lazy` when the expression
-already selects a specific attribute (like `.drvPath`):
+When lazy eval returns an unforced thunk, the function returns an error
+with a clear message instead of panicking.
 
-```rust
-// Before (all callsites):
-let eval = snix_eval::Evaluation::builder(io)
-    .enable_import()
-    .mode(snix_eval::EvalMode::Strict);
+### 5. Dead code removal
 
-// After (flake eval):
-let eval = snix_eval::Evaluation::builder(io)
-    .enable_import()
-    .mode(snix_eval::EvalMode::Lazy);
-```
-
-This should unblock flake-compat eval immediately — the `.drvPath` selection
-in the expression forces only the derivation path string, not the entire
-outputs tree.
-
-### Change 2: Better error chain reporting (Aspen-side)
-
-The `convert_eval_result` function uses `format!("{e}")` which only shows
-the top-level error kind (`"while evaluating this as native code
-(final_deep_force)"`). The inner error — which tells you *what* failed
-during deep forcing — is lost. Fix:
-
-```rust
-// Before:
-let msg = format!("{e}");
-
-// After:
-let msg = {
-    let mut parts = vec![format!("{e}")];
-    let mut source = std::error::Error::source(e);
-    while let Some(cause) = source {
-        parts.push(format!("  caused by: {cause}"));
-        source = cause.source();
-    }
-    parts.join("\n")
-};
-```
-
-### Change 3: snix-eval fork improvements (if needed)
-
-If `EvalMode::Lazy` alone doesn't fix it (i.e., the error occurs during
-attribute selection, not deep forcing), then snix-eval needs fixes:
-
-**a) `builtins.path` with `filter` argument**: flake-compat uses
-`builtins.path { path = ...; filter = ...; }` for path inputs. If
-snix-eval's `builtins.path` doesn't support the `filter` argument, path
-inputs will fail.
-
-**b) `removeAttrs` on locked node**: call-flake.nix uses
-`removeAttrs node.locked [ "dir" ]` — check if snix-eval implements
-`removeAttrs`.
-
-**c) `builtins.fetchGit`**: Git inputs in flake.lock require `fetchGit`.
-snix-glue has this but it may be incomplete for all git input variants
-(shallow, submodules, allRefs).
-
-**d) String context tracking**: Nix derivation paths carry string contexts
-(store path references). snix-eval tracks these via `NixString` context
-sets. If flake-compat's path manipulation loses context, `derivationStrict`
-may fail.
-
-## Verification Plan
-
-1. Change `EvalMode::Strict` → `EvalMode::Lazy` in `evaluate_flake_via_compat`
-2. Add error chain reporting to `convert_eval_result`
-3. Re-run `snix-flake-native-build-test` VM test
-4. Check logs for "zero subprocesses" (success) or detailed error (next blocker)
-5. If still failing, build snix-eval from source with debug logging to trace
-   the exact builtin/thunk that errors
-
-## snix Fork Scope (if needed)
-
-The snix project (https://git.snix.dev/snix/snix) is Apache-2.0 licensed.
-A fork would focus on:
-
-1. **Flake-compat eval support** — ensure all builtins used by flake-compat
-   work correctly in non-strict mode
-2. **fetchGit completeness** — full support for git flake inputs including
-   shallow clones and rev pinning
-3. **Error reporting** — expose inner error chains through `NativeError`
-4. **EvalMode::Select(path)** — a new eval mode that forces only the
-   selected attribute path, not the entire result (optimization)
-
-The fork would track upstream snix closely — these are targeted fixes,
-not architectural changes.
+`evaluate_with_fallback`, `evaluate_subprocess`, and
+`evaluate_flake_attribute` removed — superseded by the specialized
+`evaluate_flake_via_compat` and `evaluate_flake_derivation` methods.
 
 ## Files Involved
 
 | File | Role |
 |------|------|
-| `crates/aspen-ci-executor-nix/src/eval.rs` | NixEvaluator, all eval callsites |
+| `crates/aspen-ci-executor-nix/src/eval.rs` | NixEvaluator, eval callsites, `format_error_chain` |
 | `crates/aspen-ci-executor-nix/src/flake_compat.rs` | Expression builder for flake-compat |
-| `crates/aspen-ci-executor-nix/src/flake_compat_bundled.nix` | Embedded NixOS/flake-compat |
-| `crates/aspen-ci-executor-nix/src/call_flake.rs` | Alternative call-flake.nix path |
+| `crates/aspen-ci-executor-nix/src/flake_compat_bundled.nix` | Embedded NixOS/flake-compat (patched) |
+| `crates/aspen-ci-executor-nix/src/call_flake.rs` | Alternative call-flake.nix fallback path |
 | `crates/aspen-ci-executor-nix/src/executor.rs` | Orchestrates eval → build → upload |
-| `~/.cargo/git/checkouts/snix-*/snix/eval/src/vm/mod.rs` | `final_deep_force`, `EvalMode` |
-| `~/.cargo/git/checkouts/snix-*/snix/eval/src/value/mod.rs` | `deep_force_` implementation |
-| `~/.cargo/git/checkouts/snix-*/snix/eval/src/errors.rs` | `NativeError` error chain |
 
-## Current Test Evidence
+## Remaining Gaps
 
-From `snix-flake-native-build-test` VM logs:
+- **nixpkgs evaluation** — nixpkgs is too large/complex for snix-eval today.
+  Flakes that depend on nixpkgs still need the `nix eval` subprocess fallback.
+- **IFD (import-from-derivation)** — requires a real build service during eval.
+  Falls back to subprocess.
+- **Complex fetchGit variants** — shallow clones, submodules, allRefs may
+  hit edge cases in snix-glue's fetchGit implementation.
 
-```
-evaluating flake via embedded flake-compat + snix-eval
-  flake_dir=/root/test-flake attribute=packages.x86_64-linux.default
+The `nix-cli-fallback` feature is retained as a safety net for these cases.
 
-fetching tarball via reqwest url=http://127.0.0.1:8888/tarball-input.tar.gz  ← WORKS
-stripped single top-level directory from tarball prefix=source              ← WORKS
-narHash verified hash=sha256-8cyXw/Dn5Q8UQZK+Zy6zHRHZvaRic/UBuXAMQZFQnvs= ← WORKS
+## Test Evidence
 
-flake-compat eval failed: while evaluating this as native code (final_deep_force)  ← FAILS HERE
+Unit tests: 269 tests pass in `aspen-ci-executor-nix` (cargo nextest).
 
-falling back to nix eval subprocess
-resolved flake to derivation path drv_path=/nix/store/...-flake-compat-native-test.drv
+VM tests validate the zero-subprocess path end-to-end:
 
-parsed derivation, starting native build
-starting local-store bwrap build                                           ← NATIVE
-native build completed output_count=1 build_ms=48                          ← 48ms!
-native build succeeded
-uploaded native build output to Aspen store
-```
-
-The eval infrastructure (fetchers, input resolution, flake.lock parsing) all
-works. The failure is specifically in the strict-mode deep forcing of the
-result. `EvalMode::Lazy` is the first thing to try.
+- `snix-flake-native-build-test` — asserts "zero subprocesses" in logs
+- `snix-pure-build-test` — builds without nix CLI in PATH
+- `snix-native-build-test` — native bwrap sandbox build

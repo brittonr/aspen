@@ -292,58 +292,6 @@ impl NixEvaluator {
         }
     }
 
-    /// Evaluate a flake attribute (e.g. `packages.x86_64-linux.default`).
-    ///
-    /// Reads `flake.nix` from `flake_dir`, wraps it in an expression that
-    /// selects the requested attribute, and evaluates with store access.
-    /// The flake.lock is expected to be adjacent to flake.nix.
-    pub async fn evaluate_flake_attribute(&self, flake_dir: &str, attribute: &str) -> NixEvalOutput {
-        let flake_path = format!("{flake_dir}/flake.nix");
-
-        // Verify the flake file exists before constructing the eval expression
-        if let Err(e) = tokio::fs::metadata(&flake_path).await {
-            return NixEvalOutput {
-                value: None,
-                errors: vec![NixEvalError {
-                    message: format!("failed to read {flake_path}: {e}"),
-                    is_ifd: false,
-                }],
-                warnings: vec![],
-            };
-        }
-
-        // Wrap flake expression to select the requested attribute.
-        // Flakes are functions { self, ... }: { outputs }, but for basic
-        // evaluation we call them with empty inputs and select the attr.
-        let eval_code = if attribute.is_empty() {
-            format!("let flake = import {flake_path}; in flake")
-        } else {
-            // Navigate nested attributes: "packages.x86_64-linux.default"
-            // → (import ./flake.nix { }).packages.x86_64-linux.default
-            let attr_path = attribute
-                .split('.')
-                .map(|part| {
-                    // Quote attribute parts that aren't valid identifiers
-                    if part.contains('-') || part.starts_with(|c: char| c.is_ascii_digit()) {
-                        format!("\"{part}\"")
-                    } else {
-                        part.to_string()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(".");
-            format!("let flake = import {flake_path}; in flake.{attr_path}")
-        };
-
-        info!(
-            flake_dir = %flake_dir,
-            attribute = %attribute,
-            "evaluating flake attribute"
-        );
-
-        self.evaluate_with_store(&eval_code, Some(PathBuf::from(&flake_path)))
-    }
-
     /// Evaluate an npins-based project to a `Derivation`, fully in-process.
     ///
     /// Constructs a Nix expression that imports the project's `default.nix`,
@@ -670,79 +618,6 @@ impl NixEvaluator {
         );
         Ok((store_path, drv.clone()))
     }
-
-    /// Evaluate a Nix expression, falling back to `nix eval` subprocess
-    /// if in-process evaluation fails due to IFD or unsupported builtins.
-    ///
-    /// Only falls back when the `nix-cli-fallback` feature is enabled.
-    pub async fn evaluate_with_fallback(&self, code: &str, location: Option<PathBuf>) -> NixEvalOutput {
-        let result = self.evaluate_with_store(code, location.clone());
-
-        // Check if any errors indicate IFD or unsupported features
-        let needs_fallback = result.errors.iter().any(|e| e.is_ifd);
-
-        if needs_fallback && !result.errors.is_empty() {
-            #[cfg(feature = "nix-cli-fallback")]
-            {
-                warn!(
-                    error_count = result.errors.len(),
-                    "in-process evaluation failed, falling back to nix eval subprocess"
-                );
-                return self.evaluate_subprocess(code).await;
-            }
-
-            #[cfg(not(feature = "nix-cli-fallback"))]
-            {
-                debug!("in-process evaluation failed and nix-cli-fallback is disabled");
-            }
-        }
-
-        result
-    }
-
-    /// Fall back to `nix eval` subprocess for expressions that require IFD
-    /// or builtins not yet supported by snix-eval.
-    #[cfg(feature = "nix-cli-fallback")]
-    async fn evaluate_subprocess(&self, code: &str) -> NixEvalOutput {
-        use tokio::process::Command;
-
-        info!("falling back to nix eval subprocess");
-
-        let output = match Command::new(&self.nix_binary).args(["eval", "--expr", code, "--json"]).output().await {
-            Ok(o) => o,
-            Err(e) => {
-                return NixEvalOutput {
-                    value: None,
-                    errors: vec![NixEvalError {
-                        message: format!("failed to spawn nix eval: {e}"),
-                        is_ifd: false,
-                    }],
-                    warnings: vec![],
-                };
-            }
-        };
-
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            // Parse the JSON output back into a string value — the caller
-            // can deserialize further if needed.
-            NixEvalOutput {
-                value: Some(Value::from(snix_eval::NixString::from(stdout.as_ref()))),
-                errors: vec![],
-                warnings: vec!["evaluated via nix subprocess fallback".to_string()],
-            }
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            NixEvalOutput {
-                value: None,
-                errors: vec![NixEvalError {
-                    message: format!("nix eval failed: {stderr}"),
-                    is_ifd: false,
-                }],
-                warnings: vec![],
-            }
-        }
-    }
 }
 
 /// Parse a .drv file (ATerm format) into a `Derivation` and extract build
@@ -998,14 +873,6 @@ mod tests {
         let result = eval.validate_flake("/nonexistent/flake.nix").await;
         assert!(!result.errors.is_empty());
         assert!(result.errors[0].message.contains("failed to read flake file"));
-    }
-
-    #[tokio::test]
-    async fn test_evaluate_flake_attribute_missing_dir() {
-        let eval = test_evaluator();
-        let result = eval.evaluate_flake_attribute("/nonexistent/dir", "packages.x86_64-linux.default").await;
-        assert!(!result.errors.is_empty());
-        assert!(result.errors[0].message.contains("failed to read"));
     }
 
     #[tokio::test]
