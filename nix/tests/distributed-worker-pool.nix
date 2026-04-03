@@ -66,6 +66,7 @@ in
 
     testScript = ''
       import json
+      import re
       import time
 
       # ── helpers ──────────────────────────────────────────────────────
@@ -107,9 +108,22 @@ in
           """Extract full endpoint address (id + addrs) from node journal."""
           output = node.succeed(
               "journalctl -u aspen-node --no-pager 2>/dev/null"
-              " | grep -oP 'endpoint_addr=\\K[^ ]+' | tail -1"
-          ).strip()
-          return output
+              " | grep 'cluster ticket generated'"
+              " | head -1"
+          )
+          eid_match = re.search(r'endpoint_id=([0-9a-f]{64})', output)
+          assert eid_match, f"endpoint_id not found: {output[:300]}"
+          eid = eid_match.group(1)
+
+          addrs = []
+          for addr in re.findall(r'(192\.168\.\d+\.\d+:\d+)', output):
+              addrs.append({"Ip": addr})
+          if not addrs:
+              for addr in re.findall(r'(\d+\.\d+\.\d+\.\d+:\d+)', output):
+                  addrs.append({"Ip": addr})
+
+          assert addrs, f"no direct addrs found: {output[:300]}"
+          return json.dumps({"id": eid, "addrs": addrs})
 
       # ── cluster setup ───────────────────────────────────────────────
 
@@ -135,11 +149,11 @@ in
       node1.log(f"node2 addr: {addr2[:60]}...")
 
       # Add node2 as learner
-      cli_text(node1, f"cluster add-learner 2 --addr '{addr2}'")
+      cli_text(node1, f"cluster add-learner --node-id 2 --addr '{addr2}'")
       time.sleep(2)
 
       # Change membership to include both nodes
-      cli_text(node1, "cluster change-membership 1,2")
+      cli_text(node1, "cluster change-membership 1 2")
       time.sleep(3)
 
       # Verify cluster health
@@ -149,10 +163,12 @@ in
       # ── Test 1: Jobs submit and complete on cluster ──
 
       with subtest("jobs submit and complete on 2-node cluster"):
-          # Submit several jobs
+          # Submit several shell_command jobs
+          import json as _json
           job_ids = []
           for i in range(5):
-              out = cli(node1, f"job submit echo-job --payload 'hello-{i}'", check=False)
+              payload = _json.dumps({"command": f"echo hello-{i}"})
+              out = cli(node1, f"job submit shell_command '{payload}'", check=False)
               if isinstance(out, dict) and "job_id" in out:
                   job_ids.append(out["job_id"])
                   node1.log(f"submitted job {i}: {out['job_id']}")
@@ -162,7 +178,7 @@ in
           assert len(job_ids) >= 3, f"expected at least 3 jobs submitted, got {len(job_ids)}"
 
           # Wait for jobs to be processed
-          time.sleep(5)
+          time.sleep(10)
 
           # Check job statuses
           completed = 0
@@ -172,7 +188,7 @@ in
                   status = out.get("status", "unknown")
                   worker = out.get("worker_id", "none")
                   node1.log(f"  job {jid[:12]}: status={status}, worker={worker}")
-                  if status in ["completed", "Completed"]:
+                  if status.lower() in ["completed", "success"]:
                       completed += 1
 
           node1.log(f"completed: {completed}/{len(job_ids)}")

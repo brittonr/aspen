@@ -971,13 +971,15 @@
         ciVmTestBin = {
           name,
           features ? [],
+          package ? null,
         }:
           craneLib.buildPackage (
             ciCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
               cargoExtraArgs =
-                "--bin ${name}"
+                lib.optionalString (package != null) "-p ${package} "
+                + "--bin ${name}"
                 + lib.optionalString (features != []) " --features ${lib.concatStringsSep "," features}";
               doCheck = false;
             }
@@ -2431,10 +2433,12 @@
               # Durable workflow test binary (uses DeterministicKeyValueStore, no cluster needed)
               durable-workflow-test = ciVmTestBin {
                 name = "aspen-durable-workflow-test";
+                package = "aspen-durable-workflow-test";
               };
               # Job primitives test binary (uses DeterministicKeyValueStore, no cluster needed)
               job-primitives-test = ciVmTestBin {
                 name = "aspen-job-primitives-test";
+                package = "aspen-job-primitives-test";
               };
               full-git-remote-aspen = fullBin {
                 name = "git-remote-aspen";
