@@ -1964,6 +1964,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-job-primitives-test"
+version = "0.1.0"
+dependencies = [
+ "aspen-core",
+ "aspen-jobs",
+ "aspen-kv-types",
+ "aspen-testing",
+ "aspen-traits",
+ "chrono",
+ "clap",
+ "iroh",
+ "rand 0.9.2",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "aspen-jobs"
 version = "0.1.0"
 dependencies = [

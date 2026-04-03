@@ -2432,6 +2432,10 @@
               durable-workflow-test = ciVmTestBin {
                 name = "aspen-durable-workflow-test";
               };
+              # Job primitives test binary (uses DeterministicKeyValueStore, no cluster needed)
+              job-primitives-test = ciVmTestBin {
+                name = "aspen-job-primitives-test";
+              };
               full-git-remote-aspen = fullBin {
                 name = "git-remote-aspen";
                 features = ["git-bridge"];
@@ -2994,6 +2998,23 @@
               durable-workflow-failover-test = import ./nix/tests/durable-workflow-failover.nix {
                 inherit pkgs;
                 durableWorkflowTestBin = bins.durable-workflow-test;
+              };
+
+              # Job orchestration primitives: dependency DAGs, scheduling, DLQ,
+              # saga executor, workflow engine, affinity, replay.
+              # Build: nix build .#checks.x86_64-linux.job-primitives-test
+              job-primitives-test = import ./nix/tests/job-primitives.nix {
+                inherit pkgs;
+                jobPrimitivesTestBin = bins.job-primitives-test;
+              };
+
+              # Distributed worker pool: 2-node cluster, job submission,
+              # worker health across nodes.
+              # Build: nix build .#checks.x86_64-linux.distributed-worker-pool-test --impure --option sandbox false
+              distributed-worker-pool-test = import ./nix/tests/distributed-worker-pool.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.full-aspen-node;
+                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # Multi-node KV test: write/read replication, CAS across nodes,

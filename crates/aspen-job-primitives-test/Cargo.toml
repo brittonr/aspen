@@ -1,0 +1,26 @@
+[package]
+name = "aspen-job-primitives-test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "aspen-job-primitives-test"
+path = "src/main.rs"
+
+[dependencies]
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-testing = { path = "../aspen-testing" }
+aspen-core = { path = "../aspen-core" }
+aspen-traits = { path = "../aspen-traits" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+
+iroh = "0.97.0"
+rand = "0.9"
+tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "time", "sync"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
