@@ -297,6 +297,7 @@ mod tests {
             checkout_dir: None,
             flake_attr: None,
             run_id: None,
+            cached_execution: false,
         };
         assert!(payload.validate().is_ok());
 

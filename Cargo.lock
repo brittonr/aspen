@@ -1631,6 +1631,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-durable-workflow-test"
+version = "0.1.0"
+dependencies = [
+ "aspen-core",
+ "aspen-jobs",
+ "aspen-kv-types",
+ "aspen-testing",
+ "aspen-traits",
+ "clap",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "aspen-exec-cache"
 version = "0.1.0"
 dependencies = [

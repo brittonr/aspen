@@ -684,6 +684,7 @@ mod tests {
             validate_only: None,
             force_cold_boot: false,
             speculative_count: None,
+            cached_execution: false,
         };
         let err = job.validate().unwrap_err();
         assert!(err.to_string().contains("requires artifact_from"), "got: {err}");
@@ -720,6 +721,7 @@ mod tests {
             validate_only: None,
             force_cold_boot: false,
             speculative_count: None,
+            cached_execution: false,
         };
         assert!(job.validate().is_ok());
     }
@@ -754,6 +756,7 @@ mod tests {
             validate_only: None,
             force_cold_boot: false,
             speculative_count: None,
+            cached_execution: false,
         }
     }
 
@@ -787,6 +790,7 @@ mod tests {
             validate_only: None,
             force_cold_boot: false,
             speculative_count: None,
+            cached_execution: false,
         }
     }
 

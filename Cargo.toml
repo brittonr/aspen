@@ -127,6 +127,7 @@ members = [
     "crates/aspen-cli",
     "crates/aspen-tui",
     "crates/aspen-dogfood",
+    "crates/aspen-durable-workflow-test",
     "crates/aspen-cluster-bridges",
     "crates/aspen-plugin-api",
     "crates/aspen-fuse",

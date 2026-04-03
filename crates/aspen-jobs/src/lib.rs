@@ -54,9 +54,13 @@ mod blob_storage;
 mod dependency_tracker;
 mod distributed_pool;
 mod dlq_inspector;
-mod durable_timer;
+/// Durable workflow execution engine.
+pub mod durable_executor;
+/// Durable timer implementation for workflows.
+pub mod durable_timer;
 mod error;
-mod event_store;
+/// Event sourcing layer for durable workflow execution.
+pub mod event_store;
 mod job;
 mod manager;
 mod monitoring;
@@ -113,6 +117,10 @@ pub use dlq_inspector::DLQExportEntry;
 pub use dlq_inspector::DLQInspector;
 pub use dlq_inspector::DLQRecommendation;
 pub use dlq_inspector::RecommendationSeverity;
+// Durable workflow executor
+pub use durable_executor::DurableWorkflowExecutor;
+pub use durable_executor::DurableWorkflowStatus;
+pub use durable_executor::WorkflowHandle;
 // Durable timers
 pub use durable_timer::DurableTimer;
 pub use durable_timer::DurableTimerManager;

@@ -2428,6 +2428,10 @@
               full-aspen-cli-e2e = fullCliBin ["ci" "forge"];
               full-aspen-cli-secrets = fullCliBin ["secrets" "ci"];
               full-aspen-cli-proxy = fullCliBin ["proxy"];
+              # Durable workflow test binary (uses DeterministicKeyValueStore, no cluster needed)
+              durable-workflow-test = ciVmTestBin {
+                name = "aspen-durable-workflow-test";
+              };
               full-git-remote-aspen = fullBin {
                 name = "git-remote-aspen";
                 features = ["git-bridge"];
@@ -2982,6 +2986,14 @@
                 inherit pkgs;
                 aspenNodePackage = bins.full-aspen-node;
                 aspenCliPackage = bins.full-aspen-cli;
+              };
+
+              # Durable workflow execution: event sourcing, activity memoization,
+              # saga compensation, crash recovery, concurrent workflows.
+              # Build: nix build .#checks.x86_64-linux.durable-workflow-failover-test
+              durable-workflow-failover-test = import ./nix/tests/durable-workflow-failover.nix {
+                inherit pkgs;
+                durableWorkflowTestBin = bins.durable-workflow-test;
               };
 
               # Multi-node KV test: write/read replication, CAS across nodes,

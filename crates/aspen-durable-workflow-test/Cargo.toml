@@ -1,0 +1,22 @@
+[package]
+name = "aspen-durable-workflow-test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "aspen-durable-workflow-test"
+path = "src/main.rs"
+
+[dependencies]
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-testing = { path = "../aspen-testing" }
+aspen-core = { path = "../aspen-core" }
+aspen-traits = { path = "../aspen-traits" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+
+tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "time", "sync"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }

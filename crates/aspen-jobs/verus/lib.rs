@@ -83,6 +83,13 @@
 //! 16. **TIMING-1: Monotonicity**: aggregate result >= previous totals
 //! 17. **TIMING-2: Saturation**: aggregate result <= u64::MAX (no overflow)
 //!
+//! ## Durable Workflow Recovery
+//!
+//! 18. **REC-1: Terminal Idempotence**: is_terminal checked twice gives the same result
+//! 19. **REC-2: Terminal No Recovery**: Terminal workflows never need recovery
+//! 20. **REC-3: Terminal No Resume**: Terminal workflows cannot resume
+//! 21. **REC-4: Running No Recovery**: Already-running workflows don't need recovery
+//!
 //! # Trusted Axioms
 //!
 //! The specifications assume:
@@ -104,9 +111,13 @@ verus! {
 
     // Re-export timing specifications
     pub use timing_spec::*;
+
+    // Re-export recovery specifications
+    pub use recovery_spec::*;
 }
 
 mod pressure_spec;
 mod priority_spec;
+mod recovery_spec;
 mod saga_spec;
 mod timing_spec;

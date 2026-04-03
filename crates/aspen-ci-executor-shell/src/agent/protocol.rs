@@ -200,6 +200,9 @@ mod tests {
             stderr: String::new(),
             duration_ms: 1500,
             error: None,
+            cache_hits: 0,
+            cache_misses: 0,
+            cache_time_saved_ms: 0,
         };
         let complete = LogMessage::Complete(result);
         let json = serde_json::to_string(&complete).unwrap();
@@ -231,6 +234,9 @@ mod tests {
             stderr: String::new(),
             duration_ms: 100,
             error: None,
+            cache_hits: 0,
+            cache_misses: 0,
+            cache_time_saved_ms: 0,
         };
         let msg = AgentMessage::Complete { result: result.clone() };
         let json = serde_json::to_string(&msg).unwrap();
@@ -306,6 +312,9 @@ mod tests {
             stderr: "command failed".to_string(),
             duration_ms: 500,
             error: Some("process killed by signal".to_string()),
+            cache_hits: 0,
+            cache_misses: 0,
+            cache_time_saved_ms: 0,
         };
 
         let json = serde_json::to_string(&result).unwrap();

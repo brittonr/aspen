@@ -14,6 +14,7 @@
 
 mod dependency;
 pub mod pressure;
+pub mod recovery;
 mod retry;
 mod saga;
 mod schedule;
@@ -22,6 +23,7 @@ mod workflow;
 
 pub use dependency::*;
 pub use pressure::*;
+pub use recovery::*;
 pub use retry::*;
 pub use saga::*;
 pub use schedule::*;
