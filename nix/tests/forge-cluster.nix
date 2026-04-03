@@ -11,6 +11,7 @@
 #   - Issue tracking (create, list, show, comment, close, reopen)
 #   - Patch workflow (create, list, show, update, approve, merge, close)
 #   - Clone (full working-directory checkout via CLI)
+#   - Diff (commit-to-commit, ref-to-ref, rename detection, unified output)
 #   - Native git push/clone/fetch via git-remote-aspen (real git interop)
 #   - Federation (federate, list-federated)
 #
@@ -344,6 +345,107 @@ in
                 f"patch merge -r {repo_id} {patch_id} "
                 f"--merge-commit {commit3_hash}"
             )
+
+        # ── diff ──────────────────────────────────────────────────────────
+        with subtest("diff commits (json)"):
+            # Diff between initial commit and second commit
+            # commit_hash tree has README.md="Hello, Forge!"
+            # commit2_hash tree has README.md="Updated content"
+            diff_out = cli(f"git diff {repo_id} {commit_hash} {commit2_hash}")
+            entries = diff_out.get("entries", [])
+            assert len(entries) >= 1, f"expected at least 1 diff entry, got: {entries}"
+            readme_entry = [e for e in entries if e["path"] == "README.md"]
+            assert len(readme_entry) == 1, f"expected README.md in diff: {entries}"
+            assert readme_entry[0]["kind"] == "modified", \
+                f"expected modified, got: {readme_entry[0]['kind']}"
+            node1.log(f"diff commits OK: {len(entries)} entries")
+
+        with subtest("diff with unified output"):
+            # Use --context to get unified diff text
+            diff_out2 = cli(
+                f"git diff {repo_id} {commit_hash} {commit2_hash} --context 3"
+            )
+            udiff = diff_out2.get("unified_diff", "")
+            assert udiff, f"expected unified_diff in response, got: {diff_out2}"
+            assert "README.md" in udiff, f"README.md not in unified diff: {udiff[:200]}"
+            node1.log(f"unified diff length: {len(udiff)} chars")
+
+        with subtest("diff name-only"):
+            ticket = get_ticket()
+            name_only = node1.succeed(
+                f"aspen-cli --ticket '{ticket}' git diff {repo_id} "
+                f"{commit_hash} {commit2_hash} --name-only 2>/dev/null"
+            ).strip()
+            assert "README.md" in name_only, \
+                f"README.md not in name-only output: {name_only!r}"
+            node1.log(f"name-only output: {name_only}")
+
+        with subtest("diff stat"):
+            ticket = get_ticket()
+            stat_out = node1.succeed(
+                f"aspen-cli --ticket '{ticket}' git diff {repo_id} "
+                f"{commit_hash} {commit2_hash} --stat 2>/dev/null"
+            ).strip()
+            assert "README.md" in stat_out, \
+                f"README.md not in stat output: {stat_out!r}"
+            node1.log(f"stat output: {stat_out}")
+
+        with subtest("diff with rename detection"):
+            # Create two commits where a file is renamed (same content, different name)
+            rename_blob = cli(f"git store-blob -r {repo_id} /tmp/test-blob.txt")
+            rename_blob_hash = rename_blob.get("hash", "")
+
+            # Old tree: has file.txt
+            old_tree = cli(
+                f"git create-tree -r {repo_id} -e '100644:file.txt:{rename_blob_hash}'"
+            )
+            old_tree_hash = old_tree.get("hash", "")
+            old_commit = cli(
+                f"git commit -r {repo_id} --tree {old_tree_hash} -m 'Before rename'"
+            )
+            old_commit_hash = old_commit.get("hash", "")
+
+            # New tree: has renamed.txt (same blob)
+            new_tree = cli(
+                f"git create-tree -r {repo_id} -e '100644:renamed.txt:{rename_blob_hash}'"
+            )
+            new_tree_hash = new_tree.get("hash", "")
+            new_commit = cli(
+                f"git commit -r {repo_id} --tree {new_tree_hash} "
+                f"--parent {old_commit_hash} -m 'After rename'"
+            )
+            new_commit_hash = new_commit.get("hash", "")
+
+            # Diff should detect the rename
+            rename_diff = cli(
+                f"git diff {repo_id} {old_commit_hash} {new_commit_hash}"
+            )
+            rename_entries = rename_diff.get("entries", [])
+            renamed = [e for e in rename_entries if e["kind"] == "renamed"]
+            assert len(renamed) == 1, \
+                f"expected 1 renamed entry, got: {rename_entries}"
+            assert renamed[0]["path"] == "renamed.txt", \
+                f"expected renamed.txt, got: {renamed[0]['path']}"
+            assert renamed[0].get("old_path") == "file.txt", \
+                f"expected old_path=file.txt, got: {renamed[0]}"
+            node1.log("rename detection OK")
+
+        with subtest("diff added file"):
+            # Diff an empty tree commit against one with files
+            empty_tree = cli(f"git create-tree -r {repo_id}")
+            empty_tree_hash = empty_tree.get("hash", "")
+            empty_commit = cli(
+                f"git commit -r {repo_id} --tree {empty_tree_hash} -m 'Empty'"
+            )
+            empty_commit_hash = empty_commit.get("hash", "")
+
+            add_diff = cli(
+                f"git diff {repo_id} {empty_commit_hash} {commit_hash}"
+            )
+            add_entries = add_diff.get("entries", [])
+            added = [e for e in add_entries if e["kind"] == "added"]
+            assert len(added) >= 1, f"expected added entries, got: {add_entries}"
+            node1.log(f"added file diff OK: {len(added)} added entries")
 
         # ── clone (CLI) ────────────────────────────────────────────────────
         with subtest("clone"):

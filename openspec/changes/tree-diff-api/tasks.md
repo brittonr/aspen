@@ -31,7 +31,7 @@
 - [x] 4.2 Add `handle_diff_refs` method — resolve refs to commit hashes via existing `handle_get_ref` path, delegate to `handle_diff_commits`
 - [x] 4.3 Wire both variants in the `execute` match arm
 - [x] 4.4 Add operation names to `HANDLES` array, update handle count test
-- [ ] 4.5 Add integration test: create repo, store blobs, create trees, commit, diff via RPC (deferred — requires running cluster)
+- [x] 4.5 Add integration test: NixOS VM test subtests in forge-cluster.nix — diff commits (JSON), unified output, name-only, stat, rename detection, added file
 
 ## 5. CLI command
 
