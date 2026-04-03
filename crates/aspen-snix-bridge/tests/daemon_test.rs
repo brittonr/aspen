@@ -55,6 +55,73 @@ fn build_test_services() -> (
     (blob_svc, dir_svc, pathinfo_svc)
 }
 
+// =========================================================================
+// Non-ignored tests (no nix CLI required)
+// =========================================================================
+
+/// Test that serve_daemon creates and cleans up the socket on shutdown.
+#[tokio::test]
+async fn test_daemon_socket_lifecycle() {
+    let socket_path = PathBuf::from("/tmp/aspen-daemon-test-lifecycle.sock");
+    let _ = tokio::fs::remove_file(&socket_path).await;
+
+    let (blob_svc, dir_svc, pathinfo_svc) = build_test_services();
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+
+    let daemon_path = socket_path.clone();
+    let daemon_task = tokio::spawn(async move {
+        aspen_snix_bridge::daemon::serve_daemon(&daemon_path, blob_svc, dir_svc, pathinfo_svc, shutdown_rx).await
+    });
+
+    // Give the daemon time to bind
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Socket should exist now
+    assert!(socket_path.exists(), "socket should be created after startup");
+
+    // Signal shutdown
+    let _ = shutdown_tx.send(true);
+    let result = tokio::time::timeout(Duration::from_secs(2), daemon_task).await;
+    assert!(result.is_ok(), "daemon should shut down within 2s");
+    let inner = result.unwrap();
+    assert!(inner.is_ok(), "daemon task should not panic");
+    assert!(inner.unwrap().is_ok(), "daemon should exit cleanly");
+
+    // Socket should be cleaned up
+    assert!(!socket_path.exists(), "socket should be removed after shutdown");
+}
+
+/// Test that serve_daemon removes a stale socket before binding.
+#[tokio::test]
+async fn test_daemon_removes_stale_socket() {
+    let socket_path = PathBuf::from("/tmp/aspen-daemon-test-stale.sock");
+
+    // Create a stale socket file
+    tokio::fs::write(&socket_path, b"stale").await.unwrap();
+    assert!(socket_path.exists());
+
+    let (blob_svc, dir_svc, pathinfo_svc) = build_test_services();
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+
+    let daemon_path = socket_path.clone();
+    let daemon_task = tokio::spawn(async move {
+        aspen_snix_bridge::daemon::serve_daemon(&daemon_path, blob_svc, dir_svc, pathinfo_svc, shutdown_rx).await
+    });
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Should have replaced the stale file with a real socket
+    assert!(socket_path.exists(), "socket should exist after removing stale file");
+
+    let _ = shutdown_tx.send(true);
+    let _ = tokio::time::timeout(Duration::from_secs(2), daemon_task).await;
+    let _ = tokio::fs::remove_file(&socket_path).await;
+}
+
+// =========================================================================
+// Ignored tests (require nix CLI on PATH)
+// =========================================================================
+
 /// 6.10: Test `nix path-info --store unix:///tmp/aspen-daemon.sock` against Aspen store.
 ///
 /// With an empty store, querying any path should report "not valid".

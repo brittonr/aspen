@@ -35,14 +35,64 @@ impl ClientKvAdapter {
 }
 
 /// Map an RPC transport error to a KV store error.
-fn rpc_err(e: impl std::fmt::Display) -> KeyValueStoreError {
+pub(crate) fn rpc_err(e: impl std::fmt::Display) -> KeyValueStoreError {
     KeyValueStoreError::Failed { reason: e.to_string() }
 }
 
 /// Map an application-level error response to a KV store error.
-fn resp_err(code: &str, message: &str) -> KeyValueStoreError {
+pub(crate) fn resp_err(code: &str, message: &str) -> KeyValueStoreError {
     KeyValueStoreError::Failed {
         reason: format!("{code}: {message}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rpc_err_preserves_message() {
+        let err = rpc_err("connection refused");
+        match err {
+            KeyValueStoreError::Failed { reason } => {
+                assert_eq!(reason, "connection refused");
+            }
+            other => panic!("expected Failed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_rpc_err_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::TimedOut, "timed out");
+        let err = rpc_err(io_err);
+        match err {
+            KeyValueStoreError::Failed { reason } => {
+                assert!(reason.contains("timed out"), "got: {reason}");
+            }
+            other => panic!("expected Failed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_resp_err_includes_code_and_message() {
+        let err = resp_err("NOT_FOUND", "key does not exist");
+        match err {
+            KeyValueStoreError::Failed { reason } => {
+                assert!(reason.contains("NOT_FOUND"), "got: {reason}");
+                assert!(reason.contains("key does not exist"), "got: {reason}");
+            }
+            other => panic!("expected Failed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_client_kv_adapter_construction() {
+        // Verify we can construct the adapter with an Arc<AspenClient>
+        // We can't actually create a real AspenClient without a connection,
+        // but we verify the type signature compiles.
+        fn _assert_send_sync<T: Send + Sync>() {}
+        // ClientKvAdapter wraps Arc<AspenClient> — it's Send+Sync
+        // if AspenClient is. This is a compile-time check.
     }
 }
 

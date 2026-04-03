@@ -9,6 +9,11 @@
 
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
+use aspen_coordination::DistributedLock;
+use aspen_coordination::EnqueueOptions;
+use aspen_coordination::LockConfig;
+use aspen_coordination::QueueConfig;
+use aspen_coordination::QueueManager;
 use aspen_coordination::SequenceConfig;
 use aspen_coordination::SequenceGenerator;
 use aspen_coordination::SignedAtomicCounter;
@@ -403,6 +408,371 @@ proptest! {
                         }
                     }
                 }
+            }
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lock model
+// ---------------------------------------------------------------------------
+
+/// Reference model for DistributedLock: tracks holder, fencing token, and expiry.
+#[derive(Debug, Clone)]
+struct LockModel {
+    /// Which holder has the lock (None = free)
+    holder: Option<String>,
+    /// Current fencing token (monotonically increasing)
+    fencing_token: u64,
+}
+
+impl LockModel {
+    fn new() -> Self {
+        Self {
+            holder: None,
+            fencing_token: 0,
+        }
+    }
+
+    /// Returns Some(fencing_token) if lock was acquired.
+    fn try_acquire(&mut self, holder: &str) -> Option<u64> {
+        if self.holder.is_some() {
+            return None;
+        }
+        self.fencing_token += 1;
+        self.holder = Some(holder.to_string());
+        Some(self.fencing_token)
+    }
+
+    fn release(&mut self, holder: &str) -> bool {
+        if self.holder.as_deref() == Some(holder) {
+            self.holder = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn is_held(&self) -> bool {
+        self.holder.is_some()
+    }
+}
+
+#[derive(Debug, Clone)]
+enum LockOp {
+    TryAcquireA,
+    TryAcquireB,
+    ReleaseA,
+    ReleaseB,
+}
+
+fn lock_op_strategy() -> impl Strategy<Value = LockOp> {
+    prop_oneof![
+        3 => Just(LockOp::TryAcquireA),
+        3 => Just(LockOp::TryAcquireB),
+        2 => Just(LockOp::ReleaseA),
+        2 => Just(LockOp::ReleaseB),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    /// Lock: fencing tokens are monotonic and mutual exclusion holds.
+    #[test]
+    fn test_lock_model_equivalence(
+        ops in prop::collection::vec(lock_op_strategy(), 1..40)
+    ) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let store = DeterministicKeyValueStore::new();
+            let config = LockConfig {
+                ttl_ms: 60_000, // Long TTL so locks don't expire during test
+                acquire_timeout_ms: 100,
+                initial_backoff_ms: 5,
+                max_backoff_ms: 50,
+            };
+
+            let lock_a = DistributedLock::new(
+                store.clone(), "test-lock", "holder-a", config.clone(),
+            );
+            let lock_b = DistributedLock::new(
+                store.clone(), "test-lock", "holder-b", config,
+            );
+
+            let mut model = LockModel::new();
+            let mut guard_a: Option<aspen_coordination::LockGuard<DeterministicKeyValueStore>> = None;
+            let mut guard_b: Option<aspen_coordination::LockGuard<DeterministicKeyValueStore>> = None;
+            let mut all_tokens: Vec<u64> = Vec::new();
+
+            for op in &ops {
+                match op {
+                    LockOp::TryAcquireA => {
+                        if guard_a.is_some() {
+                            continue; // Already holding
+                        }
+                        let real = lock_a.try_acquire().await;
+                        let model_result = model.try_acquire("holder-a");
+
+                        match (real.is_ok(), model_result) {
+                            (true, Some(expected_token)) => {
+                                let g = real.unwrap();
+                                let token = g.fencing_token().0;
+                                assert_eq!(token, expected_token, "token mismatch for A");
+                                all_tokens.push(token);
+                                guard_a = Some(g);
+                            }
+                            (false, None) => {
+                                // Both agree lock is held
+                            }
+                            (real_ok, model_ok) => {
+                                panic!("A acquire mismatch: real_ok={real_ok}, model={model_ok:?}");
+                            }
+                        }
+                    }
+                    LockOp::TryAcquireB => {
+                        if guard_b.is_some() {
+                            continue;
+                        }
+                        let real = lock_b.try_acquire().await;
+                        let model_result = model.try_acquire("holder-b");
+
+                        match (real.is_ok(), model_result) {
+                            (true, Some(expected_token)) => {
+                                let g = real.unwrap();
+                                let token = g.fencing_token().0;
+                                assert_eq!(token, expected_token, "token mismatch for B");
+                                all_tokens.push(token);
+                                guard_b = Some(g);
+                            }
+                            (false, None) => {}
+                            (real_ok, model_ok) => {
+                                panic!("B acquire mismatch: real_ok={real_ok}, model={model_ok:?}");
+                            }
+                        }
+                    }
+                    LockOp::ReleaseA => {
+                        if let Some(g) = guard_a.take() {
+                            let _ = g.release().await;
+                            model.release("holder-a");
+                        }
+                    }
+                    LockOp::ReleaseB => {
+                        if let Some(g) = guard_b.take() {
+                            let _ = g.release().await;
+                            model.release("holder-b");
+                        }
+                    }
+                }
+            }
+
+            // Invariant: fencing tokens are strictly monotonic
+            for window in all_tokens.windows(2) {
+                assert!(
+                    window[0] < window[1],
+                    "Non-monotonic fencing tokens: {} >= {}",
+                    window[0], window[1]
+                );
+            }
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Queue model
+// ---------------------------------------------------------------------------
+
+/// Reference model for DistributedQueue: tracks enqueued items in FIFO order.
+#[derive(Debug, Clone)]
+struct QueueModel {
+    items: Vec<Vec<u8>>,
+    enqueue_ids: Vec<u64>,
+}
+
+impl QueueModel {
+    fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            enqueue_ids: Vec::new(),
+        }
+    }
+
+    fn enqueue(&mut self, payload: Vec<u8>, id: u64) {
+        self.items.push(payload);
+        self.enqueue_ids.push(id);
+    }
+
+    fn dequeue(&mut self) -> Option<Vec<u8>> {
+        if self.items.is_empty() {
+            None
+        } else {
+            Some(self.items.remove(0))
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.items.len()
+    }
+}
+
+#[derive(Debug, Clone)]
+enum QueueOp {
+    Enqueue(Vec<u8>),
+    Dequeue,
+}
+
+fn queue_op_strategy() -> impl Strategy<Value = QueueOp> {
+    prop_oneof![
+        3 => prop::collection::vec(any::<u8>(), 1..32).prop_map(QueueOp::Enqueue),
+        2 => Just(QueueOp::Dequeue),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    /// Queue: enqueue/dequeue/ack sequences produce FIFO ordering matching model.
+    #[test]
+    fn test_queue_model_fifo_ordering(
+        ops in prop::collection::vec(queue_op_strategy(), 1..40)
+    ) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let store = DeterministicKeyValueStore::new();
+            let qm = QueueManager::new(store);
+            let queue_name = "test-queue";
+
+            // Create the queue
+            qm.create(queue_name, QueueConfig::default()).await.unwrap();
+
+            let mut model = QueueModel::new();
+
+            for op in &ops {
+                match op {
+                    QueueOp::Enqueue(payload) => {
+                        let real_id = qm.enqueue(
+                            queue_name,
+                            payload.clone(),
+                            EnqueueOptions::default(),
+                        ).await.unwrap();
+                        model.enqueue(payload.clone(), real_id);
+                    }
+                    QueueOp::Dequeue => {
+                        let real = qm.dequeue(queue_name, "consumer-1", 1, 60_000).await.unwrap();
+                        let model_item = model.dequeue();
+
+                        match (real.first(), &model_item) {
+                            (Some(dequeued), Some(expected_payload)) => {
+                                assert_eq!(
+                                    &dequeued.payload, expected_payload,
+                                    "dequeued payload mismatch"
+                                );
+                                // Acknowledge to remove from queue
+                                qm.ack(queue_name, &dequeued.receipt_handle).await.unwrap();
+                            }
+                            (None, None) => {
+                                // Both agree queue is empty
+                            }
+                            (real_item, model_val) => {
+                                panic!(
+                                    "dequeue mismatch: real has item={}, model has item={}",
+                                    real_item.is_some(),
+                                    model_val.is_some()
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Final: queue depth should match model
+            let status = qm.status(queue_name).await.unwrap();
+            assert_eq!(
+                status.visible_count as usize,
+                model.len(),
+                "final queue depth mismatch"
+            );
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Election model
+// ---------------------------------------------------------------------------
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+
+    /// Election: at most one leader per try_acquire_leadership call sequence,
+    /// with monotonically increasing fencing tokens.
+    #[test]
+    fn test_election_single_leader_per_attempt(
+        attempt_count in 2u32..10,
+    ) {
+        use aspen_coordination::ElectionConfig;
+        use aspen_coordination::LeaderElection;
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        rt.block_on(async {
+            let store = DeterministicKeyValueStore::new();
+            let config = ElectionConfig {
+                lease_ttl_ms: 60_000,
+                renew_interval_ms: 30_000,
+                retry_delay_ms: 100,
+                election_timeout_ms: 500,
+            };
+
+            let election_a = LeaderElection::new(
+                store.clone(), "test-election", "candidate-a", config.clone(),
+            );
+            let election_b = LeaderElection::new(
+                store.clone(), "test-election", "candidate-b", config,
+            );
+
+            let mut tokens: Vec<u64> = Vec::new();
+
+            for _ in 0..attempt_count {
+                let result_a = election_a.try_acquire_leadership().await.unwrap();
+                let result_b = election_b.try_acquire_leadership().await.unwrap();
+
+                // At most one should win
+                let winners = [result_a.is_some(), result_b.is_some()]
+                    .iter()
+                    .filter(|&&w| w)
+                    .count();
+                assert!(
+                    winners <= 1,
+                    "mutual exclusion violated: {} winners",
+                    winners
+                );
+
+                if let Some(token) = result_a {
+                    tokens.push(token.0);
+                }
+                if let Some(token) = result_b {
+                    tokens.push(token.0);
+                }
+            }
+
+            // Fencing tokens should be monotonically increasing
+            for window in tokens.windows(2) {
+                assert!(
+                    window[0] < window[1],
+                    "Non-monotonic election tokens: {} >= {}",
+                    window[0], window[1]
+                );
             }
         });
     }

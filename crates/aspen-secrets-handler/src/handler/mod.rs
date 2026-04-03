@@ -302,4 +302,715 @@ mod tests {
             other => panic!("expected SecretsPkiCertificateResult, got {:?}", other),
         }
     }
+
+    // =========================================================================
+    // PKI Revoke / CRL / List Tests
+    // =========================================================================
+
+    /// Helper: set up a PKI mount with root CA, role, and issued cert.
+    /// Returns the serial of the issued certificate.
+    async fn setup_pki_with_cert() -> (crate::SecretsServiceExecutor, String) {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Generate root CA
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsPkiGenerateRoot {
+                mount: "pki".to_string(),
+                common_name: "Test CA".to_string(),
+                ttl_days: Some(365),
+            })
+            .await
+            .unwrap();
+
+        // Create role
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsPkiCreateRole {
+                mount: "pki".to_string(),
+                name: "servers".to_string(),
+                allowed_domains: vec!["example.com".to_string()],
+                max_ttl_days: 90,
+                allow_bare_domains: true,
+                allow_wildcards: false,
+                allow_subdomains: false,
+            })
+            .await
+            .unwrap();
+
+        // Issue cert
+        let resp = executor
+            .execute(ClientRpcRequest::SecretsPkiIssue {
+                mount: "pki".to_string(),
+                role: "servers".to_string(),
+                common_name: "example.com".to_string(),
+                alt_names: vec![],
+                ttl_days: Some(30),
+            })
+            .await
+            .unwrap();
+
+        let serial = match resp {
+            ClientRpcResponse::SecretsPkiCertificateResult(r) => {
+                assert!(r.is_success);
+                r.serial.expect("issued cert must have serial")
+            }
+            other => panic!("expected SecretsPkiCertificateResult, got {:?}", other),
+        };
+
+        (executor, serial)
+    }
+
+    #[tokio::test]
+    async fn test_pki_revoke_cert() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, serial) = setup_pki_with_cert().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiRevoke {
+                mount: "pki".to_string(),
+                serial: serial.clone(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiRevokeResult(resp) => {
+                assert!(resp.is_success);
+                assert_eq!(resp.serial, Some(serial));
+            }
+            other => panic!("expected SecretsPkiRevokeResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_revoke_nonexistent_cert() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, _serial) = setup_pki_with_cert().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiRevoke {
+                mount: "pki".to_string(),
+                serial: "nonexistent-serial".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiRevokeResult(resp) => {
+                assert!(!resp.is_success);
+                assert!(resp.error.is_some());
+            }
+            other => panic!("expected SecretsPkiRevokeResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_get_crl() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, _serial) = setup_pki_with_cert().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiGetCrl {
+                mount: "pki".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiCrlResult(resp) => {
+                assert!(resp.is_success);
+                assert!(resp.crl.is_some());
+            }
+            other => panic!("expected SecretsPkiCrlResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_list_certs() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, serial) = setup_pki_with_cert().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiListCerts {
+                mount: "pki".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiListResult(resp) => {
+                assert!(resp.is_success);
+                // Should contain at least the issued cert
+                assert!(!resp.items.is_empty(), "expected at least 1 cert in list, got 0");
+                assert!(resp.items.contains(&serial), "issued cert serial not in list");
+            }
+            other => panic!("expected SecretsPkiListResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_get_role() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, _serial) = setup_pki_with_cert().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiGetRole {
+                mount: "pki".to_string(),
+                name: "servers".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiRoleResult(resp) => {
+                assert!(resp.is_success);
+                let role = resp.role.expect("should have role");
+                assert_eq!(role.name, "servers");
+                assert_eq!(role.allowed_domains, vec!["example.com".to_string()]);
+                assert!(role.allow_bare_domains);
+            }
+            other => panic!("expected SecretsPkiRoleResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_get_role_not_found() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, _serial) = setup_pki_with_cert().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiGetRole {
+                mount: "pki".to_string(),
+                name: "nonexistent-role".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiRoleResult(resp) => {
+                assert!(!resp.is_success);
+                assert!(resp.role.is_none());
+                assert!(resp.error.is_some());
+            }
+            other => panic!("expected SecretsPkiRoleResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_list_roles() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, _serial) = setup_pki_with_cert().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiListRoles {
+                mount: "pki".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiListResult(resp) => {
+                assert!(resp.is_success);
+                assert!(resp.items.contains(&"servers".to_string()));
+            }
+            other => panic!("expected SecretsPkiListResult, got {:?}", other),
+        }
+    }
+
+    // =========================================================================
+    // PKI Error Path Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_pki_issue_without_ca_init() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Create role without generating root CA first
+        let _result = executor
+            .execute(ClientRpcRequest::SecretsPkiCreateRole {
+                mount: "pki".to_string(),
+                name: "servers".to_string(),
+                allowed_domains: vec!["example.com".to_string()],
+                max_ttl_days: 90,
+                allow_bare_domains: true,
+                allow_wildcards: false,
+                allow_subdomains: false,
+            })
+            .await
+            .unwrap();
+
+        // Role creation may succeed even without CA, but issue should fail
+        // Try issuing without CA
+        let issue_result = executor
+            .execute(ClientRpcRequest::SecretsPkiIssue {
+                mount: "pki".to_string(),
+                role: "servers".to_string(),
+                common_name: "example.com".to_string(),
+                alt_names: vec![],
+                ttl_days: Some(30),
+            })
+            .await
+            .unwrap();
+
+        match issue_result {
+            ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
+                assert!(!resp.is_success, "issue should fail without CA");
+                assert!(resp.error.is_some());
+            }
+            other => panic!("expected SecretsPkiCertificateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_issue_with_disallowed_cn() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let (executor, _serial) = setup_pki_with_cert().await;
+
+        // Try issuing cert for a domain not in allowed_domains
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiIssue {
+                mount: "pki".to_string(),
+                role: "servers".to_string(),
+                common_name: "evil.com".to_string(),
+                alt_names: vec![],
+                ttl_days: Some(30),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
+                assert!(!resp.is_success, "issue should fail for disallowed CN");
+                assert!(resp.error.is_some());
+            }
+            other => panic!("expected SecretsPkiCertificateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_issue_for_nonexistent_role() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Generate root CA
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsPkiGenerateRoot {
+                mount: "pki".to_string(),
+                common_name: "Test CA".to_string(),
+                ttl_days: Some(365),
+            })
+            .await
+            .unwrap();
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiIssue {
+                mount: "pki".to_string(),
+                role: "does-not-exist".to_string(),
+                common_name: "example.com".to_string(),
+                alt_names: vec![],
+                ttl_days: Some(30),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
+                assert!(!resp.is_success);
+                assert!(resp.error.is_some());
+            }
+            other => panic!("expected SecretsPkiCertificateResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pki_duplicate_root_ca() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // First root CA generation
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsPkiGenerateRoot {
+                mount: "pki".to_string(),
+                common_name: "Test CA".to_string(),
+                ttl_days: Some(365),
+            })
+            .await
+            .unwrap();
+
+        // Second root CA generation on same mount should fail
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiGenerateRoot {
+                mount: "pki".to_string(),
+                common_name: "Another CA".to_string(),
+                ttl_days: Some(365),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiCertificateResult(resp) => {
+                assert!(!resp.is_success, "duplicate root CA should fail");
+                assert!(resp.error.is_some());
+            }
+            other => panic!("expected SecretsPkiCertificateResult, got {:?}", other),
+        }
+    }
+
+    // =========================================================================
+    // Nix Cache Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_nix_cache_create_key() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheCreateKey {
+                mount: "transit".to_string(),
+                cache_name: "my-cache".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsNixCacheKeyResult(resp) => {
+                assert!(resp.is_success, "create key failed: {:?}", resp.error);
+                assert!(resp.public_key.is_some());
+                let pk = resp.public_key.unwrap();
+                assert!(pk.starts_with("my-cache:"), "public key should be prefixed with cache name, got: {pk}");
+            }
+            other => panic!("expected SecretsNixCacheKeyResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nix_cache_get_public_key() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Create key first
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsNixCacheCreateKey {
+                mount: "transit".to_string(),
+                cache_name: "test-cache".to_string(),
+            })
+            .await
+            .unwrap();
+
+        // Get public key
+        let result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheGetPublicKey {
+                mount: "transit".to_string(),
+                cache_name: "test-cache".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsNixCacheKeyResult(resp) => {
+                assert!(resp.is_success, "get key failed: {:?}", resp.error);
+                assert!(resp.public_key.is_some());
+            }
+            other => panic!("expected SecretsNixCacheKeyResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nix_cache_get_nonexistent_key() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheGetPublicKey {
+                mount: "transit".to_string(),
+                cache_name: "no-such-cache".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsNixCacheKeyResult(resp) => {
+                assert!(!resp.is_success);
+                assert!(resp.error.is_some());
+            }
+            other => panic!("expected SecretsNixCacheKeyResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nix_cache_list_keys() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Create two keys
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsNixCacheCreateKey {
+                mount: "transit".to_string(),
+                cache_name: "cache-a".to_string(),
+            })
+            .await
+            .unwrap();
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsNixCacheCreateKey {
+                mount: "transit".to_string(),
+                cache_name: "cache-b".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheListKeys {
+                mount: "transit".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsNixCacheListResult(resp) => {
+                assert!(resp.is_success, "list keys failed: {:?}", resp.error);
+                let names = resp.cache_names.expect("should have cache names");
+                assert!(names.contains(&"cache-a".to_string()));
+                assert!(names.contains(&"cache-b".to_string()));
+            }
+            other => panic!("expected SecretsNixCacheListResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nix_cache_delete_key() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Create key
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsNixCacheCreateKey {
+                mount: "transit".to_string(),
+                cache_name: "to-delete".to_string(),
+            })
+            .await
+            .unwrap();
+
+        // Delete key
+        let result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheDeleteKey {
+                mount: "transit".to_string(),
+                cache_name: "to-delete".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsNixCacheDeleteResult(resp) => {
+                assert!(resp.is_success, "delete key failed: {:?}", resp.error);
+            }
+            other => panic!("expected SecretsNixCacheDeleteResult, got {:?}", other),
+        }
+
+        // Verify it's gone
+        let get_result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheGetPublicKey {
+                mount: "transit".to_string(),
+                cache_name: "to-delete".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match get_result {
+            ClientRpcResponse::SecretsNixCacheKeyResult(resp) => {
+                assert!(!resp.is_success, "deleted key should not be retrievable");
+            }
+            other => panic!("expected SecretsNixCacheKeyResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nix_cache_rotate_key() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Create key
+        let create_result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheCreateKey {
+                mount: "transit".to_string(),
+                cache_name: "rotatable".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let original_pk = match &create_result {
+            ClientRpcResponse::SecretsNixCacheKeyResult(r) => r.public_key.clone().unwrap(),
+            other => panic!("expected SecretsNixCacheKeyResult, got {:?}", other),
+        };
+
+        // Rotate key
+        let rotate_result = executor
+            .execute(ClientRpcRequest::SecretsNixCacheRotateKey {
+                mount: "transit".to_string(),
+                cache_name: "rotatable".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match rotate_result {
+            ClientRpcResponse::SecretsNixCacheKeyResult(resp) => {
+                assert!(resp.is_success, "rotate key failed: {:?}", resp.error);
+                let rotated_pk = resp.public_key.unwrap();
+                // After rotation, the public key should change
+                assert_ne!(original_pk, rotated_pk, "rotated key should differ from original");
+            }
+            other => panic!("expected SecretsNixCacheKeyResult, got {:?}", other),
+        }
+    }
+
+    // =========================================================================
+    // Error Sanitization Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sanitize_ca_not_initialized() {
+        let msg = sanitize_secrets_error(&aspen_secrets::SecretsError::CaNotInitialized);
+        assert!(msg.contains("not initialized"), "got: {msg}");
+        assert!(msg.contains("generate-root"), "should suggest fix, got: {msg}");
+    }
+
+    #[test]
+    fn test_sanitize_role_not_found() {
+        let msg = sanitize_secrets_error(&aspen_secrets::SecretsError::RoleNotFound {
+            name: "web".to_string(),
+        });
+        assert!(msg.contains("web"), "should include role name, got: {msg}");
+    }
+
+    #[test]
+    fn test_sanitize_common_name_not_allowed() {
+        let msg = sanitize_secrets_error(&aspen_secrets::SecretsError::CommonNameNotAllowed {
+            cn: "evil.com".to_string(),
+            role: "servers".to_string(),
+        });
+        assert!(msg.contains("evil.com"), "got: {msg}");
+        assert!(msg.contains("servers"), "got: {msg}");
+    }
+
+    #[test]
+    fn test_sanitize_ttl_exceeds_max() {
+        let msg = sanitize_secrets_error(&aspen_secrets::SecretsError::TtlExceedsMax {
+            role: "servers".to_string(),
+            requested_secs: 99999,
+            max_secs: 7776000,
+        });
+        assert!(msg.contains("99999"), "got: {msg}");
+        assert!(msg.contains("7776000"), "got: {msg}");
+    }
+
+    #[test]
+    fn test_sanitize_mount_not_found() {
+        let msg = sanitize_secrets_error(&aspen_secrets::SecretsError::MountNotFound {
+            name: "missing".to_string(),
+        });
+        assert!(msg.contains("missing"), "got: {msg}");
+    }
+
+    #[test]
+    fn test_sanitize_internal_error_is_generic() {
+        let msg = sanitize_secrets_error(&aspen_secrets::SecretsError::Internal {
+            reason: "super secret stack trace".to_string(),
+        });
+        // Internal errors should NOT leak details
+        assert!(!msg.contains("super secret"), "internal details should be hidden, got: {msg}");
+        assert_eq!(msg, "Internal secrets error");
+    }
+
+    // =========================================================================
+    // Factory Tests
+    // =========================================================================
+
+    #[test]
+    fn test_factory_name_and_priority() {
+        use aspen_rpc_core::HandlerFactory;
+
+        let factory = super::super::SecretsHandlerFactory::new();
+        assert_eq!(factory.name(), "SecretsHandler");
+        assert_eq!(factory.priority(), 580);
+        assert_eq!(factory.app_id(), Some("secrets"));
+    }
+
+    // =========================================================================
+    // Mount Isolation Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_pki_separate_mounts_are_isolated() {
+        use aspen_rpc_core::ServiceExecutor;
+
+        let executor = setup_test_executor().await;
+
+        // Generate root CA on mount "pki-a"
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsPkiGenerateRoot {
+                mount: "pki-a".to_string(),
+                common_name: "CA-A".to_string(),
+                ttl_days: Some(365),
+            })
+            .await
+            .unwrap();
+
+        // Generate root CA on mount "pki-b"
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsPkiGenerateRoot {
+                mount: "pki-b".to_string(),
+                common_name: "CA-B".to_string(),
+                ttl_days: Some(365),
+            })
+            .await
+            .unwrap();
+
+        // Roles on pki-a should not be visible on pki-b
+        let _ = executor
+            .execute(ClientRpcRequest::SecretsPkiCreateRole {
+                mount: "pki-a".to_string(),
+                name: "role-only-on-a".to_string(),
+                allowed_domains: vec!["a.com".to_string()],
+                max_ttl_days: 30,
+                allow_bare_domains: true,
+                allow_wildcards: false,
+                allow_subdomains: false,
+            })
+            .await
+            .unwrap();
+
+        let result = executor
+            .execute(ClientRpcRequest::SecretsPkiGetRole {
+                mount: "pki-b".to_string(),
+                name: "role-only-on-a".to_string(),
+            })
+            .await
+            .unwrap();
+
+        match result {
+            ClientRpcResponse::SecretsPkiRoleResult(resp) => {
+                assert!(!resp.is_success, "role from mount pki-a should not exist on pki-b");
+            }
+            other => panic!("expected SecretsPkiRoleResult, got {:?}", other),
+        }
+    }
 }
