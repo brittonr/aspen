@@ -1201,6 +1201,16 @@ impl NixBuildWorker {
         // is often read-only (/). We parse output paths from --print-out-paths.
         cmd.arg("build").arg(flake_ref).arg("--no-link").arg("--print-out-paths");
 
+        // Log the working directory and command for diagnosis
+        info!(
+            nix_binary = %self.config.nix_binary,
+            flake_ref = %flake_ref,
+            working_dir = ?payload.working_dir,
+            sandbox = payload.sandbox,
+            timeout_secs = payload.timeout_secs,
+            "Spawning nix build subprocess"
+        );
+
         if payload.sandbox {
             cmd.arg("--sandbox");
         } else {
@@ -1235,6 +1245,20 @@ impl NixBuildWorker {
 
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
+
+        // Log the resolved working directory for debugging Forge checkout issues
+        if let Some(ref dir) = payload.working_dir {
+            let has_flake = dir.join("flake.nix").exists();
+            let has_lock = dir.join("flake.lock").exists();
+            let has_git = dir.join(".git").exists();
+            info!(
+                working_dir = %dir.display(),
+                has_flake_nix = has_flake,
+                has_flake_lock = has_lock,
+                has_dot_git = has_git,
+                "CI working directory state before nix build"
+            );
+        }
 
         cmd.spawn().map_err(|e| CiCoreError::NixBuildFailed {
             flake: flake_ref.to_string(),

@@ -208,6 +208,10 @@ async fn poll_pipeline(client: &AspenClient, run_id: &str, ticket: &str, timeout
 }
 
 /// Fetch logs from failed jobs for error reporting.
+///
+/// Tries `CiGetJobLogs` first (streamed build output). If no log chunks
+/// are available, falls back to the job's `error` field from `CiGetStatus`
+/// which contains the `JobResult::failure` message.
 async fn fetch_failure_logs(
     client: &AspenClient,
     run_id: &str,
@@ -218,29 +222,55 @@ async fn fetch_failure_logs(
     for stage in &status.stages {
         for job in &stage.jobs {
             if job.status == "failed" {
-                if let Ok(resp) = send(
-                    client,
-                    ClientRpcRequest::CiGetJobLogs {
-                        run_id: run_id.to_string(),
-                        job_id: job.id.clone(),
-                        start_index: 0,
-                        limit: Some(50),
-                    },
-                    "CiGetJobLogs",
-                    ticket,
-                )
-                .await
-                {
-                    if let ClientRpcResponse::CiGetJobLogsResult(logs) = resp {
-                        let text: String = logs.chunks.iter().map(|c| c.content.as_str()).collect::<Vec<_>>().join("");
-                        return format!("job '{}' failed:\n{text}", job.name);
-                    }
+                // Try to fetch streamed logs from KV store
+                let log_text = fetch_job_log_chunks(client, run_id, &job.id, ticket).await;
+
+                if !log_text.is_empty() {
+                    return format!("--- Failed job: {} (stage: {}) ---\n{}", job.name, stage.name, log_text);
                 }
+
+                // Fall back to job error message from CiGetStatus
+                if let Some(ref error) = job.error {
+                    return format!("--- Failed job: {} (stage: {}) ---\n{}", job.name, stage.name, error);
+                }
+
+                // Last resort: just the job name
+                return format!(
+                    "--- Failed job: {} (stage: {}) ---\nNo error details available. \
+                     The job may have failed before any output was produced.",
+                    job.name, stage.name
+                );
             }
         }
     }
 
-    "no job logs available".to_string()
+    "no failed jobs found in pipeline status".to_string()
+}
+
+/// Fetch log chunks for a specific job from the KV log store.
+async fn fetch_job_log_chunks(client: &AspenClient, run_id: &str, job_id: &str, ticket: &str) -> String {
+    let Ok(resp) = send(
+        client,
+        ClientRpcRequest::CiGetJobLogs {
+            run_id: run_id.to_string(),
+            job_id: job_id.to_string(),
+            start_index: 0,
+            limit: Some(200),
+        },
+        "CiGetJobLogs",
+        ticket,
+    )
+    .await
+    else {
+        return String::new();
+    };
+
+    if let ClientRpcResponse::CiGetJobLogsResult(logs) = resp {
+        let text: String = logs.chunks.iter().map(|c| c.content.as_str()).collect::<Vec<_>>().join("");
+        return text;
+    }
+
+    String::new()
 }
 
 /// Print a compact summary of pipeline stages and jobs.
@@ -257,7 +287,11 @@ fn print_pipeline_summary(status: &aspen_client_api::CiGetStatusResponse) {
     for stage in &status.stages {
         info!("  {} {}", icon(&stage.status), stage.name);
         for job in &stage.jobs {
-            info!("      {} {}", icon(&job.status), job.name);
+            if let Some(ref error) = job.error {
+                info!("      {} {} — {}", icon(&job.status), job.name, error);
+            } else {
+                info!("      {} {}", icon(&job.status), job.name);
+            }
         }
     }
 }
