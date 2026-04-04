@@ -478,6 +478,189 @@ mod tests {
         let result = compute_election_interval_with_jitter(1000, 0.2, 0.5);
         assert!(result >= 1000 && result <= 1200);
     }
+
+    // ========================================================================
+    // State Predicate Tests (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_is_leader_exec() {
+        assert!(is_leader_exec(&LeadershipState::Leader {
+            fencing_token: FencingToken::new(1),
+        }));
+        assert!(!is_leader_exec(&LeadershipState::Follower));
+        assert!(!is_leader_exec(&LeadershipState::Transitioning));
+    }
+
+    #[test]
+    fn test_is_follower_exec() {
+        assert!(is_follower_exec(&LeadershipState::Follower));
+        assert!(!is_follower_exec(&LeadershipState::Transitioning));
+        assert!(!is_follower_exec(&LeadershipState::Leader {
+            fencing_token: FencingToken::new(1),
+        }));
+    }
+
+    #[test]
+    fn test_is_transitioning_exec() {
+        assert!(is_transitioning_exec(&LeadershipState::Transitioning));
+        assert!(!is_transitioning_exec(&LeadershipState::Follower));
+        assert!(!is_transitioning_exec(&LeadershipState::Leader {
+            fencing_token: FencingToken::new(1),
+        }));
+    }
+
+    // ========================================================================
+    // State Transition Validation Tests (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_valid_state_transitions() {
+        let t = LeadershipState::Transitioning;
+        let f = LeadershipState::Follower;
+        let l1 = LeadershipState::Leader {
+            fencing_token: FencingToken::new(5),
+        };
+        let l2 = LeadershipState::Leader {
+            fencing_token: FencingToken::new(5),
+        };
+        let l3 = LeadershipState::Leader {
+            fencing_token: FencingToken::new(6),
+        };
+
+        // Valid transitions
+        assert!(is_valid_state_transition(&f, &t)); // Follower -> Transitioning
+        assert!(is_valid_state_transition(&t, &l1)); // Transitioning -> Leader
+        assert!(is_valid_state_transition(&t, &f)); // Transitioning -> Follower
+        assert!(is_valid_state_transition(&l1, &f)); // Leader -> Follower
+        assert!(is_valid_state_transition(&f, &f)); // Follower -> Follower
+        assert!(is_valid_state_transition(&t, &t)); // Transitioning -> Transitioning
+        assert!(is_valid_state_transition(&l1, &l2)); // Leader -> Leader (same token)
+
+        // Invalid transitions
+        assert!(!is_valid_state_transition(&f, &l1)); // Follower -> Leader (skip transitioning)
+        assert!(!is_valid_state_transition(&l1, &t)); // Leader -> Transitioning
+        assert!(!is_valid_state_transition(&l1, &l3)); // Leader -> Leader (different token)
+    }
+
+    // ========================================================================
+    // Election Precondition Tests (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_can_start_election() {
+        assert!(can_start_election(&LeadershipState::Follower, true));
+        assert!(!can_start_election(&LeadershipState::Follower, false));
+        assert!(!can_start_election(&LeadershipState::Transitioning, true));
+        assert!(!can_start_election(
+            &LeadershipState::Leader {
+                fencing_token: FencingToken::new(1)
+            },
+            true
+        ));
+    }
+
+    #[test]
+    fn test_can_win_election() {
+        // Can win: transitioning + token room + valid new token
+        assert!(can_win_election(&LeadershipState::Transitioning, 5, 6));
+        // Can't win: not transitioning
+        assert!(!can_win_election(&LeadershipState::Follower, 5, 6));
+        // Can't win: new token not greater
+        assert!(!can_win_election(&LeadershipState::Transitioning, 5, 5));
+        assert!(!can_win_election(&LeadershipState::Transitioning, 5, 4));
+        // Can't win: no token room
+        assert!(!can_win_election(&LeadershipState::Transitioning, u64::MAX, u64::MAX));
+    }
+
+    #[test]
+    fn test_can_lose_election() {
+        assert!(can_lose_election(&LeadershipState::Transitioning));
+        assert!(!can_lose_election(&LeadershipState::Follower));
+    }
+
+    #[test]
+    fn test_can_stepdown() {
+        assert!(can_stepdown(&LeadershipState::Leader {
+            fencing_token: FencingToken::new(1)
+        }));
+        assert!(!can_stepdown(&LeadershipState::Follower));
+        assert!(!can_stepdown(&LeadershipState::Transitioning));
+    }
+
+    #[test]
+    fn test_can_lose_leadership() {
+        assert!(can_lose_leadership(&LeadershipState::Leader {
+            fencing_token: FencingToken::new(1)
+        }));
+        assert!(!can_lose_leadership(&LeadershipState::Follower));
+    }
+
+    // ========================================================================
+    // Token Computation Tests (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_compute_next_election_token() {
+        assert_eq!(compute_next_election_token(0), 1);
+        assert_eq!(compute_next_election_token(5), 6);
+        assert_eq!(compute_next_election_token(u64::MAX), u64::MAX); // saturating
+    }
+
+    #[test]
+    fn test_compute_max_token_after_win() {
+        assert_eq!(compute_max_token_after_win(7), 7);
+        assert_eq!(compute_max_token_after_win(0), 0);
+    }
+
+    // ========================================================================
+    // Election Timing Tests (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_calculate_election_timeout() {
+        // Zero jitter range
+        assert_eq!(calculate_election_timeout(1000, 42, 0), 1000);
+        // Normal jitter
+        assert_eq!(calculate_election_timeout(1000, 7, 10), 1007);
+        // Jitter modulo
+        assert_eq!(calculate_election_timeout(1000, 15, 10), 1005);
+    }
+
+    #[test]
+    fn test_should_start_election() {
+        // Time elapsed >= timeout, follower, running
+        assert!(should_start_election(&LeadershipState::Follower, true, 0, 5000, 5000));
+        // Not running
+        assert!(!should_start_election(&LeadershipState::Follower, false, 0, 5000, 5000));
+        // Not follower
+        assert!(!should_start_election(&LeadershipState::Transitioning, true, 0, 5000, 5000));
+        // Time not elapsed
+        assert!(!should_start_election(&LeadershipState::Follower, true, 0, 4999, 5000));
+    }
+
+    #[test]
+    fn test_should_step_down_exec() {
+        // Is leader, past deadline
+        assert!(should_step_down_exec(true, 1000, 1001));
+        // Is leader, at deadline
+        assert!(!should_step_down_exec(true, 1000, 1000));
+        // Not leader
+        assert!(!should_step_down_exec(false, 1000, 2000));
+    }
+
+    #[test]
+    fn test_is_leader_state_wellformed() {
+        // Not a leader: always well-formed
+        assert!(is_leader_state_wellformed(false, 0, 0));
+        // Leader with valid token
+        assert!(is_leader_state_wellformed(true, 5, 10));
+        assert!(is_leader_state_wellformed(true, 10, 10));
+        // Leader with token = 0: not well-formed
+        assert!(!is_leader_state_wellformed(true, 0, 10));
+        // Leader with token > max: not well-formed
+        assert!(!is_leader_state_wellformed(true, 11, 10));
+    }
 }
 
 #[cfg(all(test, feature = "bolero"))]

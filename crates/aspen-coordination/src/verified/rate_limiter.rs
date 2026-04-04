@@ -518,3 +518,169 @@ mod property_tests {
         });
     }
 }
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    // ========================================================================
+    // Token Availability (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_token_availability_is_available() {
+        assert!((TokenAvailability::Available { remaining: 5.0 }).is_available());
+        assert!(
+            !(TokenAvailability::Exhausted {
+                requested: 10,
+                available: 5,
+                retry_after_ms: 100,
+            })
+            .is_available()
+        );
+    }
+
+    #[test]
+    fn test_check_token_availability() {
+        // Enough tokens
+        assert!(check_token_availability(10.0, 5, 1.0).is_available());
+        // Exact amount
+        assert!(check_token_availability(5.0, 5, 1.0).is_available());
+        // Not enough, but refill soon
+        let result = check_token_availability(3.0, 5, 2.0);
+        assert!(!result.is_available());
+    }
+
+    #[test]
+    fn test_has_tokens_available() {
+        assert!(has_tokens_available(10, 5));
+        assert!(has_tokens_available(5, 5));
+        assert!(!has_tokens_available(4, 5));
+        assert!(!has_tokens_available(0, 1));
+    }
+
+    #[test]
+    fn test_consume_tokens() {
+        assert_eq!(consume_tokens(10, 3), 7);
+        assert_eq!(consume_tokens(5, 5), 0);
+        assert_eq!(consume_tokens(3, 5), 0); // saturating
+    }
+
+    #[test]
+    fn test_refill_tokens() {
+        assert_eq!(refill_tokens(5, 3, 10), 8);
+        assert_eq!(refill_tokens(8, 5, 10), 10); // capped at capacity
+        assert_eq!(refill_tokens(10, 5, 10), 10); // already at capacity
+        assert_eq!(refill_tokens(0, 0, 10), 0);
+    }
+
+    // ========================================================================
+    // Interval and Refill Calculations (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_calculate_intervals_elapsed() {
+        // Normal case
+        assert_eq!(calculate_intervals_elapsed(1000, 3000, 1000), 2);
+        // No time passed
+        assert_eq!(calculate_intervals_elapsed(1000, 1000, 1000), 0);
+        // Less than one interval
+        assert_eq!(calculate_intervals_elapsed(1000, 1500, 1000), 0);
+        // Zero interval (edge case)
+        assert_eq!(calculate_intervals_elapsed(1000, 2000, 0), 0);
+    }
+
+    #[test]
+    fn test_compute_tokens_to_add() {
+        assert_eq!(compute_tokens_to_add(2, 5, 100), 10);
+        assert_eq!(compute_tokens_to_add(0, 5, 100), 0);
+        // Capped at capacity
+        assert_eq!(compute_tokens_to_add(100, 5, 10), 10);
+    }
+
+    #[test]
+    fn test_calculate_new_last_refill() {
+        assert_eq!(calculate_new_last_refill(1000, 3, 500), 2500);
+        assert_eq!(calculate_new_last_refill(1000, 0, 500), 1000);
+    }
+
+    // ========================================================================
+    // Validation Functions (targeted: mutation testing survivors)
+    // ========================================================================
+
+    #[test]
+    fn test_is_acquire_valid() {
+        assert!(is_acquire_valid(5, 10, 7));
+        assert!(!is_acquire_valid(0, 10, 7));
+        assert!(!is_acquire_valid(11, 10, 7)); // amount > capacity
+        assert!(!is_acquire_valid(5, 10, 3)); // amount > tokens
+    }
+
+    #[test]
+    fn test_is_refill_time_valid() {
+        assert!(is_refill_time_valid(1000, 500));
+        assert!(is_refill_time_valid(1000, 1000));
+        assert!(!is_refill_time_valid(500, 1000));
+    }
+
+    #[test]
+    fn test_can_handle_burst_exec() {
+        assert!(can_handle_burst_exec(10, 5));
+        assert!(can_handle_burst_exec(5, 5));
+        assert!(!can_handle_burst_exec(4, 5));
+    }
+
+    #[test]
+    fn test_compute_rate_per_second() {
+        assert_eq!(compute_rate_per_second(10, 1000), 10); // 10 tokens/s
+        assert_eq!(compute_rate_per_second(5, 500), 10); // 5 per 500ms = 10/s
+        assert_eq!(compute_rate_per_second(10, 0), 0); // zero interval
+    }
+
+    #[test]
+    fn test_calculate_load_factor() {
+        assert!((calculate_load_factor(5, 10) - 0.5).abs() < 0.001);
+        assert!((calculate_load_factor(0, 10) - 0.0).abs() < 0.001);
+        assert_eq!(calculate_load_factor(5, 0), 0.0); // zero capacity
+    }
+
+    #[test]
+    fn test_is_refill_needed() {
+        assert!(is_refill_needed(1000, 2500, 1000)); // 1500ms > 1000ms interval
+        assert!(is_refill_needed(1000, 2000, 1000)); // exactly one interval
+        assert!(!is_refill_needed(1000, 1500, 1000)); // less than one interval
+        assert!(!is_refill_needed(0, 0, 1000)); // no time passed
+    }
+
+    #[test]
+    fn test_is_refill_possible() {
+        assert!(is_refill_possible(5, 10)); // below capacity
+        assert!(!is_refill_possible(10, 10)); // at capacity
+        assert!(!is_refill_possible(11, 10)); // above capacity (shouldn't happen)
+    }
+
+    #[test]
+    fn test_compute_refill_intervals() {
+        assert_eq!(compute_refill_intervals(3000, 1000, 500), 4);
+        assert_eq!(compute_refill_intervals(1000, 1000, 500), 0);
+        assert_eq!(compute_refill_intervals(3000, 1000, 0), 0); // zero interval
+        assert_eq!(compute_refill_intervals(500, 1000, 500), 0); // time before last refill
+    }
+
+    #[test]
+    fn test_compute_new_last_refill_fn() {
+        assert_eq!(compute_new_last_refill(1000, 2, 500), 2000);
+    }
+
+    #[test]
+    fn test_compute_tokens_after_acquire() {
+        assert_eq!(compute_tokens_after_acquire(10, 3), 7);
+        assert_eq!(compute_tokens_after_acquire(3, 5), 0); // saturating
+    }
+
+    #[test]
+    fn test_compute_tokens_after_refill() {
+        assert_eq!(compute_tokens_after_refill(5, 3, 10), 8);
+        assert_eq!(compute_tokens_after_refill(8, 5, 10), 10); // capped
+    }
+}

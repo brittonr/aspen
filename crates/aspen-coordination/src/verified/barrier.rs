@@ -456,6 +456,62 @@ mod tests {
         assert!(!is_barrier_overdue(1000, 1050, 100)); // 1050 <= 1100
         assert!(!is_barrier_overdue(1000, 1100, 100)); // Exactly at deadline
     }
+
+    // ========================================================================
+    // Targeted Tests for Mutation Testing Survivors
+    // ========================================================================
+
+    #[test]
+    fn test_valid_phase_transition_leaving_to_leaving() {
+        // Leaving -> Leaving is valid (stay in leaving)
+        assert!(is_valid_phase_transition(BarrierPhase::Leaving, BarrierPhase::Leaving));
+    }
+
+    #[test]
+    fn test_detect_stalled_boundary() {
+        // Exactly at stall timeout boundary
+        let participants = vec![ParticipantActivity {
+            participant_id: "p1".to_string(),
+            last_activity_ms: 800,
+        }];
+        // now - last = 200, timeout = 200, should NOT be stalled (> not >=)
+        let stalled = detect_stalled_participants(&participants, 1000, 200);
+        assert!(stalled.is_empty(), "exactly at timeout is not stalled");
+        // now - last = 201, should be stalled
+        let stalled = detect_stalled_participants(&participants, 1001, 200);
+        assert_eq!(stalled.len(), 1);
+    }
+
+    #[test]
+    fn test_is_barrier_ready_exec() {
+        assert!(is_barrier_ready_exec(3, 3));
+        assert!(is_barrier_ready_exec(5, 3));
+        assert!(!is_barrier_ready_exec(2, 3));
+        assert!(!is_barrier_ready_exec(0, 1));
+    }
+
+    #[test]
+    fn test_time_until_expiration() {
+        assert_eq!(time_until_expiration(2000, 1000), 1000);
+        assert_eq!(time_until_expiration(1000, 1000), 0);
+        assert_eq!(time_until_expiration(500, 1000), 0); // already expired, saturating
+    }
+
+    #[test]
+    fn test_check_barrier_deadlock_leaving_phase_stalled() {
+        let participants = vec![ParticipantActivity {
+            participant_id: "p1".to_string(),
+            last_activity_ms: 100, // very old
+        }];
+        let result = check_barrier_deadlock(BarrierPhase::Leaving, 1, 1, &participants, 1000, 200);
+        assert!(matches!(result, DeadlockCheckResult::PotentialDeadlock { .. }));
+    }
+
+    #[test]
+    fn test_check_barrier_deadlock_ready_phase_healthy() {
+        let result = check_barrier_deadlock(BarrierPhase::Ready, 3, 3, &[], 1000, 200);
+        assert_eq!(result, DeadlockCheckResult::Healthy);
+    }
 }
 
 #[cfg(all(test, feature = "bolero"))]

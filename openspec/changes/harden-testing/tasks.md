@@ -5,10 +5,10 @@
 
 ## 2. Mutation Testing Infrastructure
 
-- [ ] 2.1 Add `cargo-mutants` to the nix devshell and document usage in AGENTS.md
-- [ ] 2.2 Run initial `cargo mutants -p aspen-coordination --timeout 60` and record baseline mutation score
-- [ ] 2.3 Run initial `cargo mutants -p aspen-core --timeout 60` and record baseline mutation score
-- [ ] 2.4 Write tests to kill surviving mutants in `aspen-coordination/src/verified/` functions
+- [x] 2.1 Add `cargo-mutants` to the nix devshell and document usage in AGENTS.md
+- [x] 2.2 Run initial `cargo mutants -p aspen-coordination --timeout 60` and record baseline mutation score
+- [x] 2.3 Run initial `cargo mutants -p aspen-core --timeout 60` and record baseline mutation score
+- [x] 2.4 Write tests to kill surviving mutants in `aspen-coordination/src/verified/` functions
 - [ ] 2.5 Write tests to kill surviving mutants in `aspen-core/src/verified/` functions
 - [ ] 2.6 Add a `mutants` nextest profile and nix app (`nix run .#mutants`) for running mutation tests
 - [ ] 2.7 Add nightly CI job configuration for scheduled mutation testing runs
