@@ -1,0 +1,5 @@
+---
+source: crates/aspen-coordination/tests/error_snapshots.rs
+expression: err.to_string()
+---
+lock lost: held by 'worker-2', not 'worker-1'

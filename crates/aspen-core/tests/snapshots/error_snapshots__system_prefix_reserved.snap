@@ -1,0 +1,5 @@
+---
+source: crates/aspen-core/tests/error_snapshots.rs
+expression: err.to_string()
+---
+key prefix '_system:' is reserved for internal use

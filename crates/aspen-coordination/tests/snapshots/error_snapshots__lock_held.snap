@@ -1,0 +1,5 @@
+---
+source: crates/aspen-coordination/tests/error_snapshots.rs
+expression: err.to_string()
+---
+lock held by 'worker-42' until 1700000000000ms
