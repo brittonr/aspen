@@ -34,7 +34,7 @@
 - [x] 4.3 Create a `TrustInitialized` Raft log entry type containing each node's encrypted share and all digests
 - [x] 4.4 In the state machine apply handler: each node extracts its own share from the log entry and stores it
 - [x] 4.5 Add `--trust` and `--trust-threshold` flags to `aspen-cli cluster init`
-- [ ] 4.6 Integration test: init a 3-node cluster with trust, verify each node has a share, reconstruct the secret from 2 nodes
+- [x] 4.6 Integration test: init a 3-node cluster with trust, verify each node has a share, reconstruct the secret from 2 nodes
 
 ## 5. Feature Flag and Documentation
 
