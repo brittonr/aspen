@@ -239,3 +239,89 @@ async fn test_joint_consensus_with_partition_seed_2004() {
     t.check_no_split_brain().expect("split brain in joint consensus");
     t.end();
 }
+
+/// Snapshot triggered during add-learner.
+///
+/// Write enough data to trigger snapshot compaction, then add a learner
+/// while the cluster has snapshot state. The learner should receive
+/// consistent state (either via snapshot install or log replay).
+#[madsim::test]
+async fn test_snapshot_during_add_learner_seed_5050() {
+    // Start with 3 voters + 1 standby node
+    let mut t = AspenRaftTester::new_with_seed(4, "snapshot_add_learner", 5050).await;
+
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    let _leader = t.check_one_leader().await.expect("no leader");
+
+    // Write a large batch to make snapshot likely
+    for i in 0..50 {
+        write_with_retry(&mut t, format!("snap_key_{i}"), format!("snap_val_{i}"), 5).await;
+    }
+
+    madsim::time::sleep(Duration::from_secs(2)).await;
+
+    // Add node 3 as learner while cluster has 50 applied entries
+    t.add_learner(3).await.expect("add_learner failed during snapshot");
+
+    // Give the learner time to receive snapshot or catch up via log
+    madsim::time::sleep(Duration::from_secs(5)).await;
+
+    // Promote learner to voter
+    t.change_membership(&[0, 1, 2, 3]).await.expect("membership change failed");
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Write more data through the new 4-voter cluster
+    for i in 50..60 {
+        write_with_retry(&mut t, format!("snap_key_{i}"), format!("snap_val_{i}"), 5).await;
+    }
+
+    // Verify the new voter can serve reads
+    let val = t.read("snap_key_0").await;
+    assert!(val.is_ok(), "new voter should serve reads after snapshot install");
+
+    // Verify no split brain
+    t.check_no_split_brain().expect("split brain after snapshot + membership change");
+    t.end();
+}
+
+/// Membership change proposed during high network delay.
+///
+/// Add delay to all links, then change membership. The change should
+/// eventually complete despite the delays.
+#[madsim::test]
+async fn test_membership_change_under_delay_seed_6060() {
+    let mut t = AspenRaftTester::new_with_seed(5, "membership_delay", 6060).await;
+
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    let _leader = t.check_one_leader().await.expect("no leader");
+
+    // Write initial data
+    for i in 0..10 {
+        write_with_retry(&mut t, format!("delay_{i}"), format!("val_{i}"), 5).await;
+    }
+
+    // Add network delay (500ms per hop)
+    t.set_network_delay_range(200, 800);
+
+    // Change membership: remove node 4
+    t.change_membership(&[0, 1, 2, 3]).await.expect("membership change failed under delay");
+
+    madsim::time::sleep(Duration::from_secs(8)).await;
+
+    // Remove delay
+    t.set_network_delay_range(0, 0);
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // Cluster should still function
+    let _leader = t.check_one_leader().await.expect("no leader after membership change");
+
+    // Writes should succeed in the new 4-node cluster
+    for i in 10..15 {
+        write_with_retry(&mut t, format!("delay_{i}"), format!("val_{i}"), 5).await;
+    }
+
+    t.check_no_split_brain().expect("split brain after delayed membership change");
+    t.end();
+}

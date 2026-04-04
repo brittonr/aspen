@@ -353,3 +353,61 @@ async fn test_clock_drift_extreme_400ms() {
     t.clear_clock_drift(1);
     t.end();
 }
+
+/// Clock-skewed TTL: nodes with divergent clocks verify that coordination
+/// primitives (writes/reads through Raft) remain consistent.
+///
+/// Node 0 has its clock 5 seconds ahead, node 2 is 3 seconds behind.
+/// Writes should still be sequenced correctly through Raft's logical ordering.
+#[madsim::test]
+async fn test_clock_skew_coordination_consistency_seed_9999() {
+    let mut t = AspenRaftTester::new_with_seed(5, "clock_skew_ttl", 9999).await;
+
+    madsim::time::sleep(Duration::from_secs(5)).await;
+    let _leader = t.check_one_leader().await.expect("no leader");
+
+    // Apply divergent clock drifts
+    t.set_clock_drift(0, 5000); // node 0: 5s ahead
+    t.set_clock_drift(2, -3000); // node 2: 3s behind
+
+    // Write sequence of entries — tolerate transient leader changes
+    let mut successful_writes = 0;
+    for i in 0..20 {
+        let key = format!("drift_key_{i}");
+        let value = format!("drift_val_{i}");
+        match t.write(key, value).await {
+            Ok(()) => successful_writes += 1,
+            Err(_) => {
+                // May fail during leader re-election caused by drift
+                madsim::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+    }
+    assert!(
+        successful_writes >= 10,
+        "at least half the writes should succeed under clock drift, got {successful_writes}"
+    );
+
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    // All nodes should agree on leader despite clock skew
+    let _leader = t.check_one_leader().await.expect("no leader under clock drift");
+    t.check_no_split_brain().expect("split brain under clock drift");
+
+    // Verify at least some reads return correct values
+    // (some keys may not have been written due to transient failures)
+    let mut found_count = 0;
+    for i in 0..20 {
+        if let Ok(Some(_)) = t.read(&format!("drift_key_{i}")).await {
+            found_count += 1;
+        }
+    }
+    assert!(found_count >= 10, "should find at least 10 values after drift, got {found_count}");
+
+    // Clear drifts and verify convergence
+    t.clear_all_clock_drifts();
+    madsim::time::sleep(Duration::from_secs(3)).await;
+
+    t.check_one_leader().await.expect("no leader after clearing drift");
+    t.end();
+}

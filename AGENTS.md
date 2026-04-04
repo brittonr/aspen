@@ -178,6 +178,15 @@ cargo nextest run -E 'test(/raft/)'      # Tests for specific module
 cargo nextest run <test_name>            # Single test
 cargo nextest run -P network --run-ignored all  # Tests requiring real network
 
+# Mutation testing (verify tests catch real bugs)
+cargo mutants -p aspen-coordination --timeout 60  # Baseline: coordination
+cargo mutants -p aspen-core --timeout 60           # Baseline: core
+
+# Serialization snapshot tests
+cargo insta test                                   # Run snapshot tests
+cargo insta review                                 # Review changed snapshots
+INSTA_UPDATE=always cargo test                     # Auto-accept new snapshots
+
 # Linting and formatting
 cargo clippy --all-targets -- --deny warnings
 nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)

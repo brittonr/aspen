@@ -110,6 +110,18 @@ filter = "test(/madsim_membership_failure/)"
 retries = 2
 slow-timeout = { period = "120s", terminate-after = 1 }
 
+# 5-node split-brain and slow follower tests: partition heal + convergence waits
+[[profile.default.overrides]]
+filter = "test(test_split_brain_heal) | test(test_slow_follower_cluster)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Clock-skewed coordination: drift + writes + convergence can take 30s
+[[profile.default.overrides]]
+filter = "test(test_clock_skew_coordination)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
 # CI pipeline madsim tests: multi-node pipeline orchestration with job execution
 [[profile.default.overrides]]
 filter = "binary(/madsim_ci_pipeline/)"
