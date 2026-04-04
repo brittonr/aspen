@@ -662,4 +662,37 @@ mod tests {
         sorted.dedup();
         assert_eq!(sorted.len(), EXPECTED_HANDLES.len(), "duplicate entries in handles list");
     }
+
+    #[test]
+    fn handles_document_crud_ops() {
+        assert!(EXPECTED_HANDLES.contains(&"DocsSet"));
+        assert!(EXPECTED_HANDLES.contains(&"DocsGet"));
+        assert!(EXPECTED_HANDLES.contains(&"DocsDelete"));
+        assert!(EXPECTED_HANDLES.contains(&"DocsList"));
+        assert!(EXPECTED_HANDLES.contains(&"DocsStatus"));
+    }
+
+    #[test]
+    fn handles_peer_cluster_ops() {
+        assert!(EXPECTED_HANDLES.contains(&"AddPeerCluster"));
+        assert!(EXPECTED_HANDLES.contains(&"RemovePeerCluster"));
+        assert!(EXPECTED_HANDLES.contains(&"ListPeerClusters"));
+        assert!(EXPECTED_HANDLES.contains(&"GetPeerClusterStatus"));
+        assert!(EXPECTED_HANDLES.contains(&"UpdatePeerClusterFilter"));
+        assert!(EXPECTED_HANDLES.contains(&"UpdatePeerClusterPriority"));
+        assert!(EXPECTED_HANDLES.contains(&"SetPeerClusterEnabled"));
+    }
+
+    #[test]
+    fn handles_origin_tracking() {
+        assert!(EXPECTED_HANDLES.contains(&"GetKeyOrigin"));
+    }
+
+    #[test]
+    fn does_not_handle_kv_ops() {
+        // Docs handler should not intercept raw KV operations
+        assert!(!EXPECTED_HANDLES.contains(&"WriteKey"));
+        assert!(!EXPECTED_HANDLES.contains(&"ReadKey"));
+        assert!(!EXPECTED_HANDLES.contains(&"DeleteKey"));
+    }
 }

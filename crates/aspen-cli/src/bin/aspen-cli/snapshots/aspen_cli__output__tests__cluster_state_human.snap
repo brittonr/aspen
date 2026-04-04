@@ -1,0 +1,12 @@
+---
+source: crates/aspen-cli/src/bin/aspen-cli/output.rs
+expression: output.to_human()
+---
+Cluster State
+=============
+
+Node ID  | Leader | Voter | Endpoint ID
+---------+--------+-------+------------------------------------------
+       1 | *      | Y     | abc123def456
+       2 |        | Y     | 789012345678
+       3 |        | N     | fedcba987654

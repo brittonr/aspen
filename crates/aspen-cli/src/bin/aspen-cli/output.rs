@@ -2012,6 +2012,116 @@ mod tests {
         assert_eq!(json["nodes"][0]["node_id"], 1);
         assert_eq!(json["nodes"][0]["status"], "healthy");
     }
+
+    // =========================================================================
+    // Insta Snapshot Tests - Human-Readable CLI Output
+    // =========================================================================
+
+    #[test]
+    fn snapshot_health_output_human() {
+        let output = HealthOutput {
+            status: "healthy".to_string(),
+            node_id: 1,
+            raft_node_id: Some(42),
+            uptime_seconds: 3600,
+            iroh_node_id: None,
+        };
+        insta::assert_snapshot!("health_human", output.to_human());
+    }
+
+    #[test]
+    fn snapshot_cluster_state_human() {
+        let output = ClusterStateOutput {
+            nodes: vec![
+                NodeInfo {
+                    node_id: 1,
+                    endpoint_id: "abc123def456".to_string(),
+                    is_leader: true,
+                    is_voter: true,
+                },
+                NodeInfo {
+                    node_id: 2,
+                    endpoint_id: "789012345678".to_string(),
+                    is_leader: false,
+                    is_voter: true,
+                },
+                NodeInfo {
+                    node_id: 3,
+                    endpoint_id: "fedcba987654".to_string(),
+                    is_leader: false,
+                    is_voter: false,
+                },
+            ],
+        };
+        insta::assert_snapshot!("cluster_state_human", output.to_human());
+    }
+
+    #[test]
+    fn snapshot_kv_read_found_human() {
+        let output = KvReadOutput {
+            key: "app:config:timeout".to_string(),
+            value: Some(b"30000".to_vec()),
+            does_exist: true,
+        };
+        insta::assert_snapshot!("kv_read_found_human", output.to_human());
+    }
+
+    #[test]
+    fn snapshot_kv_read_not_found_human() {
+        let output = KvReadOutput {
+            key: "missing-key".to_string(),
+            value: None,
+            does_exist: false,
+        };
+        insta::assert_snapshot!("kv_read_not_found_human", output.to_human());
+    }
+
+    #[test]
+    fn snapshot_kv_scan_human() {
+        let output = KvScanOutput {
+            entries: vec![
+                ("app:user:1".to_string(), b"Alice".to_vec()),
+                ("app:user:2".to_string(), b"Bob".to_vec()),
+                ("app:user:3".to_string(), b"Charlie".to_vec()),
+            ],
+            continuation_token: Some("nextpage123".to_string()),
+        };
+        insta::assert_snapshot!("kv_scan_human", output.to_human());
+    }
+
+    #[test]
+    fn snapshot_kv_scan_empty_human() {
+        let output = KvScanOutput {
+            entries: vec![],
+            continuation_token: None,
+        };
+        insta::assert_snapshot!("kv_scan_empty_human", output.to_human());
+    }
+
+    #[test]
+    fn snapshot_health_json() {
+        let output = HealthOutput {
+            status: "healthy".to_string(),
+            node_id: 1,
+            raft_node_id: Some(42),
+            uptime_seconds: 3600,
+            iroh_node_id: None,
+        };
+        insta::assert_json_snapshot!("health_json", output.to_json());
+    }
+
+    #[test]
+    fn snapshot_raft_metrics_human() {
+        let output = RaftMetricsOutput {
+            state: "Leader".to_string(),
+            current_leader: Some(1),
+            current_term: 15,
+            last_log_index: 2847,
+            last_applied: 2845,
+            snapshot_index: 2000,
+        };
+        insta::assert_snapshot!("raft_metrics_human", output.to_human());
+    }
 }
 
 /// Health status output.

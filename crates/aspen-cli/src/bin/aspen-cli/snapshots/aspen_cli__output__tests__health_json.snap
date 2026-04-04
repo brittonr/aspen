@@ -1,0 +1,11 @@
+---
+source: crates/aspen-cli/src/bin/aspen-cli/output.rs
+expression: output.to_json()
+---
+{
+  "iroh_node_id": null,
+  "node_id": 1,
+  "raft_node_id": 42,
+  "status": "healthy",
+  "uptime_seconds": 3600
+}

@@ -1,0 +1,5 @@
+---
+source: crates/aspen-cli/src/bin/aspen-cli/output.rs
+expression: output.to_human()
+---
+30000

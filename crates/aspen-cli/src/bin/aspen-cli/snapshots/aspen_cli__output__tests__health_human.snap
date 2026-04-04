@@ -1,0 +1,11 @@
+---
+source: crates/aspen-cli/src/bin/aspen-cli/output.rs
+expression: output.to_human()
+---
+Health Status
+=============
+Status:         healthy
+Node ID:        1
+Raft Node ID:   42
+Iroh Node ID:   N/A
+Uptime:         3600s

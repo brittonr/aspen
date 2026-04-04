@@ -9,9 +9,9 @@
 - [x] 2.2 Run initial `cargo mutants -p aspen-coordination --timeout 60` and record baseline mutation score
 - [x] 2.3 Run initial `cargo mutants -p aspen-core --timeout 60` and record baseline mutation score
 - [x] 2.4 Write tests to kill surviving mutants in `aspen-coordination/src/verified/` functions
-- [ ] 2.5 Write tests to kill surviving mutants in `aspen-core/src/verified/` functions
-- [ ] 2.6 Add a `mutants` nextest profile and nix app (`nix run .#mutants`) for running mutation tests
-- [ ] 2.7 Add nightly CI job configuration for scheduled mutation testing runs
+- [x] 2.5 Write tests to kill surviving mutants in `aspen-core/src/verified/` functions
+- [x] 2.6 Add a `mutants` nextest profile and nix app (`nix run .#mutants`) for running mutation tests
+- [x] 2.7 Add nightly CI job configuration for scheduled mutation testing runs
 
 ## 3. Proptest Model-Based Tests (Coordination)
 
@@ -42,18 +42,18 @@
 
 - [x] 6.1 Add `insta` as a dev-dependency to `aspen-client-api`, `aspen-cli`, and `aspen-core`
 - [x] 6.2 Write insta snapshot tests for all RPC request/response message serialization in `aspen-client-api`
-- [ ] 6.3 Write insta snapshot tests for CLI output formatting (`cluster status`, `kv get`, `kv scan`) in `aspen-cli`
+- [x] 6.3 Write insta snapshot tests for CLI output formatting (`cluster status`, `kv get`, `kv scan`) in `aspen-cli`
 - [x] 6.4 Write insta snapshot tests for snafu error chain Display output in `aspen-core` and `aspen-raft`
 - [x] 6.5 Add insta redaction rules for timestamps, node IDs, and UUIDs in snapshot tests
 
 ## 7. Under-Tested Handler Crates
 
-- [ ] 7.1 Add integration tests for `aspen-forge-handler` using patchbay harness: test repo create, push, clone, ref listing RPCs
-- [ ] 7.2 Add integration tests for `aspen-ci-handler` using patchbay harness: test pipeline trigger, status query, log retrieval RPCs
-- [ ] 7.3 Add integration tests for `aspen-docs-handler`: test document create, sync, and merge RPCs
+- [x] 7.1 Add integration tests for `aspen-forge-handler` using patchbay harness: test repo create, push, clone, ref listing RPCs
+- [x] 7.2 Add integration tests for `aspen-ci-handler` using patchbay harness: test pipeline trigger, status query, log retrieval RPCs
+- [x] 7.3 Add integration tests for `aspen-docs-handler`: test document create, sync, and merge RPCs
 
 ## 8. CI and Nextest Configuration
 
 - [x] 8.1 Add new madsim tests to appropriate nextest profile overrides with extended timeouts
-- [ ] 8.2 Add `cargo insta test` step to the standard CI pipeline
+- [x] 8.2 Add `cargo insta test` step to the standard CI pipeline
 - [x] 8.3 Document the mutation testing workflow and `cargo insta review` in AGENTS.md

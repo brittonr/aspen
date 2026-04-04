@@ -1,0 +1,12 @@
+---
+source: crates/aspen-cli/src/bin/aspen-cli/output.rs
+expression: output.to_human()
+---
+Raft Metrics
+============
+State:          Leader
+Current Leader: 1
+Current Term:   15
+Last Log Index: 2847
+Last Applied:   2845
+Snapshot Index: 2000

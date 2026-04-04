@@ -140,4 +140,67 @@ mod tests {
         let factory = CiHandlerFactory;
         assert_eq!(factory.priority(), 600);
     }
+
+    #[test]
+    fn test_factory_app_id() {
+        let factory = CiHandlerFactory;
+        assert_eq!(factory.app_id(), Some("ci"));
+    }
+
+    /// Expected CI handles (must stay in sync with executor.rs).
+    const CI_HANDLES: &[&str] = &[
+        "CiTriggerPipeline",
+        "CiGetStatus",
+        "CiGetRefStatus",
+        "CiListRuns",
+        "CiCancelRun",
+        "CiWatchRepo",
+        "CiUnwatchRepo",
+        "CiListArtifacts",
+        "CiGetArtifact",
+        "CiGetJobLogs",
+        "CiSubscribeLogs",
+        "CiGetJobOutput",
+    ];
+
+    #[test]
+    fn test_handles_count() {
+        assert_eq!(CI_HANDLES.len(), 12, "CI handler should handle 12 operations");
+    }
+
+    #[test]
+    fn test_no_duplicate_handles() {
+        let mut sorted: Vec<_> = CI_HANDLES.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), CI_HANDLES.len(), "no duplicate CI handles");
+    }
+
+    #[test]
+    fn test_handles_pipeline_ops() {
+        assert!(CI_HANDLES.contains(&"CiTriggerPipeline"));
+        assert!(CI_HANDLES.contains(&"CiGetStatus"));
+        assert!(CI_HANDLES.contains(&"CiGetRefStatus"));
+        assert!(CI_HANDLES.contains(&"CiListRuns"));
+        assert!(CI_HANDLES.contains(&"CiCancelRun"));
+    }
+
+    #[test]
+    fn test_handles_watch_ops() {
+        assert!(CI_HANDLES.contains(&"CiWatchRepo"));
+        assert!(CI_HANDLES.contains(&"CiUnwatchRepo"));
+    }
+
+    #[test]
+    fn test_handles_artifact_ops() {
+        assert!(CI_HANDLES.contains(&"CiListArtifacts"));
+        assert!(CI_HANDLES.contains(&"CiGetArtifact"));
+    }
+
+    #[test]
+    fn test_handles_log_ops() {
+        assert!(CI_HANDLES.contains(&"CiGetJobLogs"));
+        assert!(CI_HANDLES.contains(&"CiSubscribeLogs"));
+        assert!(CI_HANDLES.contains(&"CiGetJobOutput"));
+    }
 }

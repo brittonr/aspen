@@ -1,0 +1,11 @@
+---
+source: crates/aspen-cli/src/bin/aspen-cli/output.rs
+expression: output.to_human()
+---
+Found 3 key(s)
+
+app:user:1: Alice
+app:user:2: Bob
+app:user:3: Charlie
+
+More results available. Use --token nextpage123

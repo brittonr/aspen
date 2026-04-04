@@ -267,6 +267,26 @@ retries = 0
 slow-timeout = { period = "180s", terminate-after = 1 }
 
 # ============================================================================
+# Mutation Testing Profile
+# ============================================================================
+# Usage: cargo mutants -p <crate> --timeout 120 -- --lib
+# Or with nextest: cargo mutants -p <crate> --test-tool nextest -- --profile mutants
+#
+# Optimized for mutation testing: short timeouts (mutants should fail fast),
+# single thread (cargo-mutants manages parallelism), fail-fast enabled.
+
+[profile.mutants]
+retries = 0
+fail-fast = true
+test-threads = 1
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[profile.mutants.junit]
+path = "junit-mutants.xml"
+store-success-output = false
+store-failure-output = true
+
+# ============================================================================
 # Specification Tests Profile
 # ============================================================================
 # Usage: cargo nextest run -P spec -p aspen-raft -E 'test(/spec::/)'

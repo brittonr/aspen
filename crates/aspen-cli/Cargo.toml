@@ -83,6 +83,9 @@ dirs = "5.0"
 # Git/Pijul operations
 flate2 = { version = "1.0", optional = true }  # for git-bridge
 
+[dev-dependencies]
+insta = { version = "1.42", features = ["json"] }
+
 [features]
 default = []
 blob = ["dep:aspen-blob"]

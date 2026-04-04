@@ -338,6 +338,9 @@ mod tests {
             expected_binary: None,
             stateful: None,
             validate_only: None,
+            cached_execution: false,
+            force_cold_boot: false,
+            speculative_count: None,
         }
     }
 }

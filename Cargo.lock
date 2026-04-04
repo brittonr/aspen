@@ -1116,6 +1116,7 @@ dependencies = [
  "hex",
  "human-panic",
  "indicatif 0.17.11",
+ "insta",
  "iroh",
  "iroh-base",
  "nostr",
