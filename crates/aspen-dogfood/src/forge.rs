@@ -37,11 +37,11 @@ pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<
 
     if already_exists {
         // Extract existing repo ID
-        if let ClientRpcResponse::ForgeRepoListResult(list) = &resp {
-            if let Some(repo) = list.repos.iter().find(|r| r.name == repo_name) {
-                info!("  repo '{repo_name}' already exists (id: {})", &repo.id[..16]);
-                return Ok(repo.id.clone());
-            }
+        if let ClientRpcResponse::ForgeRepoListResult(list) = &resp
+            && let Some(repo) = list.repos.iter().find(|r| r.name == repo_name)
+        {
+            info!("  repo '{repo_name}' already exists (id: {})", &repo.id[..16]);
+            return Ok(repo.id.clone());
         }
         // Shouldn't happen, but fall through to create
     }

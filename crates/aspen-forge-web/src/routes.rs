@@ -193,10 +193,10 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
     // Fetch per-branch CI status (best-effort, cap at 20 branches)
     let mut branch_ci: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for branch in branches.iter().take(20) {
-        if let Some(ref_status) = st.get_ref_status(repo_id, &branch.name).await {
-            if let Some(ref status) = ref_status.status {
-                branch_ci.insert(branch.name.clone(), status.clone());
-            }
+        if let Some(ref_status) = st.get_ref_status(repo_id, &branch.name).await
+            && let Some(ref status) = ref_status.status
+        {
+            branch_ci.insert(branch.name.clone(), status.clone());
         }
     }
 

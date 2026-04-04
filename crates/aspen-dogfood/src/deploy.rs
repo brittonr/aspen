@@ -204,10 +204,10 @@ fn find_build_node_job_id(status: &aspen_client_api::CiGetStatusResponse) -> Opt
     }
     // Fallback: first job in the build stage
     for stage in &status.stages {
-        if stage.name == "build" {
-            if let Some(job) = stage.jobs.first() {
-                return Some(job.id.clone());
-            }
+        if stage.name == "build"
+            && let Some(job) = stage.jobs.first()
+        {
+            return Some(job.id.clone());
         }
     }
     None
@@ -221,10 +221,10 @@ fn extract_store_path(value: &str) -> DogfoodResult<String> {
     })?;
 
     // Try output_paths first
-    if let Some(paths) = job.pointer("/result/Success/data/output_paths").and_then(|v| v.as_array()) {
-        if let Some(path) = paths.first().and_then(|v| v.as_str()) {
-            return Ok(path.to_string());
-        }
+    if let Some(paths) = job.pointer("/result/Success/data/output_paths").and_then(|v| v.as_array())
+        && let Some(path) = paths.first().and_then(|v| v.as_str())
+    {
+        return Ok(path.to_string());
     }
 
     // Fallback: uploaded_store_paths

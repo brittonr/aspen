@@ -97,12 +97,10 @@ async fn find_recent_run(client: &AspenClient, repo_id: &str, ticket: &str, time
             ticket,
         )
         .await
+            && let ClientRpcResponse::CiListRunsResult(list) = resp
+            && let Some(run) = list.runs.first()
         {
-            if let ClientRpcResponse::CiListRunsResult(list) = resp {
-                if let Some(run) = list.runs.first() {
-                    return Some(run.run_id.clone());
-                }
-            }
+            return Some(run.run_id.clone());
         }
 
         if start.elapsed() > timeout {
@@ -166,29 +164,29 @@ async fn poll_pipeline(client: &AspenClient, run_id: &str, ticket: &str, timeout
         )
         .await?;
 
-        if let ClientRpcResponse::CiGetStatusResult(status) = &resp {
-            if let Some(pipeline_status) = &status.status {
-                match pipeline_status.as_str() {
-                    "succeeded" | "success" => {
-                        print_pipeline_summary(status);
-                        return Ok(());
-                    }
-                    "failed" | "cancelled" => {
-                        print_pipeline_summary(status);
+        if let ClientRpcResponse::CiGetStatusResult(status) = &resp
+            && let Some(pipeline_status) = &status.status
+        {
+            match pipeline_status.as_str() {
+                "succeeded" | "success" => {
+                    print_pipeline_summary(status);
+                    return Ok(());
+                }
+                "failed" | "cancelled" => {
+                    print_pipeline_summary(status);
 
-                        // Fetch last logs on failure
-                        let log_detail = fetch_failure_logs(client, run_id, status, ticket).await;
+                    // Fetch last logs on failure
+                    let log_detail = fetch_failure_logs(client, run_id, status, ticket).await;
 
-                        return CiPipelineSnafu {
-                            run_id,
-                            status: pipeline_status,
-                            detail: log_detail,
-                        }
-                        .fail();
+                    return CiPipelineSnafu {
+                        run_id,
+                        status: pipeline_status,
+                        detail: log_detail,
                     }
-                    _ => {
-                        // Still running
-                    }
+                    .fail();
+                }
+                _ => {
+                    // Still running
                 }
             }
         }
