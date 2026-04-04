@@ -27,6 +27,10 @@ pub enum BuggifyFault {
     NetworkPartition,
     /// Trigger snapshot operations.
     SnapshotTrigger,
+    /// Simulate slow storage I/O (delays writes and reads).
+    SlowStorage,
+    /// Simulate connection reset during snapshot transfer.
+    SnapshotTransferReset,
 }
 
 /// BUGGIFY configuration for systematic fault injection.
@@ -61,6 +65,8 @@ impl BuggifyConfig {
         default_probs.insert(BuggifyFault::ElectionTimeout, 0.02); // 2%
         default_probs.insert(BuggifyFault::NetworkPartition, 0.005); // 0.5%
         default_probs.insert(BuggifyFault::SnapshotTrigger, 0.02); // 2%
+        default_probs.insert(BuggifyFault::SlowStorage, 0.03); // 3%
+        default_probs.insert(BuggifyFault::SnapshotTransferReset, 0.02); // 2%
 
         Self {
             enabled: Arc::new(AtomicBool::new(false)),

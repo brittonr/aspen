@@ -31,12 +31,12 @@
 
 ## 5. Fault Injection Points
 
-- [ ] 5.1 Add buggify fault injection point in redb Raft log append path (simulate I/O error on write)
-- [ ] 5.2 Add buggify fault injection point in redb snapshot persist path (simulate partial fsync)
-- [ ] 5.3 Add buggify fault injection point in Iroh connection establishment (simulate timeout on connect)
-- [ ] 5.4 Add buggify fault injection point in Iroh stream creation (simulate stream reset during snapshot transfer)
-- [ ] 5.5 Add buggify fault injection point in blob download path (simulate truncated read, hash mismatch)
-- [ ] 5.6 Write madsim tests exercising each new fault injection point to verify graceful error handling
+- [x] 5.1 Add buggify fault injection point in redb Raft log append path (simulate I/O error on write)
+- [x] 5.2 Add buggify fault injection point in redb snapshot persist path (simulate partial fsync)
+- [x] 5.3 Add buggify fault injection point in Iroh connection establishment (simulate timeout on connect)
+- [x] 5.4 Add buggify fault injection point in Iroh stream creation (simulate stream reset during snapshot transfer)
+- [x] 5.5 Add buggify fault injection point in blob download path (simulate truncated read, hash mismatch)
+- [x] 5.6 Write madsim tests exercising each new fault injection point to verify graceful error handling
 
 ## 6. Serialization Snapshot Tests
 

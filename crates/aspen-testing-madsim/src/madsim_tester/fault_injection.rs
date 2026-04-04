@@ -38,6 +38,8 @@ impl AspenRaftTester {
         self.apply_buggify_election_timeout().await;
         self.apply_buggify_network_partition().await;
         self.apply_buggify_snapshot_trigger().await;
+        self.apply_buggify_slow_storage().await;
+        self.apply_buggify_snapshot_transfer_reset().await;
     }
 
     fn apply_buggify_network_delay(&mut self) {
@@ -206,6 +208,81 @@ impl AspenRaftTester {
                 self.add_event("buggify: triggered snapshot on leader");
             }
             self.metrics.buggify_triggers += 1;
+        }
+    }
+
+    /// Simulate slow storage by injecting high latency on all network links.
+    ///
+    /// This models disk I/O delays by adding 500-2000ms delay to all inter-node
+    /// communication, since in madsim the storage is simulated through network.
+    async fn apply_buggify_slow_storage(&mut self) {
+        if !self.buggify.should_trigger(BuggifyFault::SlowStorage) {
+            return;
+        }
+        let delay_ms = 500 + (self.seed % 1500); // 500-2000ms
+
+        for i in 0..self.nodes.len() {
+            for j in 0..self.nodes.len() {
+                if i != j {
+                    self.injector.set_network_delay(NodeId::from(i as u64 + 1), NodeId::from(j as u64 + 1), delay_ms);
+                }
+            }
+        }
+
+        self.add_event(format!("buggify: injected {}ms slow storage delay", delay_ms));
+        self.metrics.buggify_triggers += 1;
+
+        // Hold delay for a period then clear
+        madsim::time::sleep(Duration::from_secs(3)).await;
+
+        for i in 0..self.nodes.len() {
+            for j in 0..self.nodes.len() {
+                if i != j {
+                    self.injector.set_network_delay(NodeId::from(i as u64 + 1), NodeId::from(j as u64 + 1), 0);
+                }
+            }
+        }
+
+        self.add_event("buggify: cleared slow storage delay");
+    }
+
+    /// Simulate snapshot transfer interruption by crashing and restarting a
+    /// follower node while triggering a snapshot on the leader.
+    async fn apply_buggify_snapshot_transfer_reset(&mut self) {
+        if !self.buggify.should_trigger(BuggifyFault::SnapshotTransferReset) {
+            return;
+        }
+
+        let connected_nodes: Vec<usize> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.connected().load(Ordering::Relaxed))
+            .map(|(i, _)| i)
+            .collect();
+
+        // Need at least 3 connected nodes (leader + majority after crash)
+        if connected_nodes.len() < 3 {
+            return;
+        }
+
+        // Find leader and pick a follower victim
+        if let Some(leader_idx) = self.check_one_leader().await {
+            let victim = connected_nodes.iter().find(|&&i| i != leader_idx).copied().unwrap_or(0);
+
+            // Trigger snapshot on leader
+            let raft = self.nodes[leader_idx].raft();
+            let _ = raft.trigger().snapshot().await;
+
+            // Crash the follower mid-transfer
+            self.crash_node(victim).await;
+            self.add_event(format!("buggify: crashed node {} during snapshot transfer", victim));
+            self.metrics.buggify_triggers += 1;
+
+            // Restart after brief delay
+            madsim::time::sleep(Duration::from_secs(2)).await;
+            self.restart_node(victim).await;
+            self.add_event(format!("buggify: restarted node {} after snapshot interrupt", victim));
         }
     }
 
