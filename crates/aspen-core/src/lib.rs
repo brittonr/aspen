@@ -27,6 +27,7 @@ pub mod kv;
 #[cfg(feature = "layer")]
 pub mod layer;
 pub mod prelude;
+pub mod protocol;
 pub mod simulation;
 pub mod spec;
 #[cfg(feature = "sql")]
@@ -155,6 +156,11 @@ pub use layer::SubspaceError;
 pub use layer::Tuple;
 #[cfg(feature = "layer")]
 pub use layer::TupleError;
+// Protocol types (sans-IO infrastructure)
+pub use protocol::Alarm;
+pub use protocol::Envelope;
+pub use protocol::ProtocolCtx;
+pub use protocol::TestCtx;
 // Simulation types
 pub use simulation::SimulationArtifact;
 pub use simulation::SimulationArtifactBuilder;
