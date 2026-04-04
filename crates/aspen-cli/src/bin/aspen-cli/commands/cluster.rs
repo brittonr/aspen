@@ -28,7 +28,7 @@ use crate::output::print_success;
 #[derive(Subcommand)]
 pub enum ClusterCommand {
     /// Initialize a new cluster.
-    Init,
+    Init(InitArgs),
 
     /// Show cluster status and node information.
     Status,
@@ -150,7 +150,7 @@ impl ClusterCommand {
     /// Execute the cluster command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
         match self {
-            ClusterCommand::Init => init_cluster(client, json).await,
+            ClusterCommand::Init(args) => init_cluster(client, json, &args).await,
             ClusterCommand::Status => cluster_status(client, json).await,
             ClusterCommand::Health => health_check(client, json).await,
             ClusterCommand::Metrics => raft_metrics(client, json).await,
@@ -170,8 +170,28 @@ impl ClusterCommand {
     }
 }
 
-async fn init_cluster(client: &AspenClient, json: bool) -> Result<()> {
-    let response = client.send(ClientRpcRequest::InitCluster).await?;
+/// Arguments for `cluster init`.
+#[derive(Args, Debug, Default)]
+pub struct InitArgs {
+    /// Enable trust (Shamir cluster secret sharing).
+    #[arg(long)]
+    pub trust: bool,
+
+    /// Trust reconstruction threshold (default: majority).
+    /// Only used when --trust is set.
+    #[arg(long)]
+    pub trust_threshold: Option<u8>,
+}
+
+async fn init_cluster(client: &AspenClient, json: bool, args: &InitArgs) -> Result<()> {
+    let request = if args.trust {
+        ClientRpcRequest::InitClusterWithTrust {
+            threshold: args.trust_threshold,
+        }
+    } else {
+        ClientRpcRequest::InitCluster
+    };
+    let response = client.send(request).await?;
 
     match response {
         ClientRpcResponse::InitResult(result) => {

@@ -46,6 +46,20 @@ pub const SM_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("sm
 pub const SM_INDEX_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("sm_index");
 
 // ====================================================================================
+// Trust Tables (feature-gated)
+// ====================================================================================
+
+/// Trust shares table: key = epoch (u64), value = serialized Share (33 bytes).
+/// Each node stores its own share for the cluster secret at the given epoch.
+#[cfg(feature = "trust")]
+pub const TRUST_SHARES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("trust_shares");
+
+/// Trust digests table: key = (epoch, node_id) packed as "epoch:node_id",
+/// value = SHA3-256 digest (32 bytes). Stores the digest of every node's share.
+#[cfg(feature = "trust")]
+pub const TRUST_DIGESTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trust_digests");
+
+// ====================================================================================
 // Storage Types
 // ====================================================================================
 

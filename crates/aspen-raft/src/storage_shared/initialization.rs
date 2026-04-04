@@ -106,6 +106,13 @@ impl SharedRedbStorage {
 
             // Secondary index table
             write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
+
+            // Trust tables (only created when trust feature is enabled)
+            #[cfg(feature = "trust")]
+            {
+                write_txn.open_table(super::TRUST_SHARES_TABLE).context(OpenTableSnafu)?;
+                write_txn.open_table(super::TRUST_DIGESTS_TABLE).context(OpenTableSnafu)?;
+            }
         }
         write_txn.commit().context(CommitSnafu)?;
 

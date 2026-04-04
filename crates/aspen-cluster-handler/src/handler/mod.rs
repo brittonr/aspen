@@ -36,6 +36,7 @@ impl RequestHandler for ClusterHandler {
         matches!(
             request,
             ClientRpcRequest::InitCluster
+                | ClientRpcRequest::InitClusterWithTrust { .. }
                 | ClientRpcRequest::AddLearner { .. }
                 | ClientRpcRequest::ChangeMembership { .. }
                 | ClientRpcRequest::PromoteLearner { .. }
@@ -61,7 +62,10 @@ impl RequestHandler for ClusterHandler {
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
         match request {
-            ClientRpcRequest::InitCluster => init::handle_init_cluster(ctx).await,
+            ClientRpcRequest::InitCluster => init::handle_init_cluster(ctx, false, None).await,
+            ClientRpcRequest::InitClusterWithTrust { threshold } => {
+                init::handle_init_cluster(ctx, true, threshold).await
+            }
 
             ClientRpcRequest::AddLearner { node_id, addr } => membership::handle_add_learner(ctx, node_id, addr).await,
 

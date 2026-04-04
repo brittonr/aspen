@@ -68,6 +68,14 @@ impl ClusterController for RaftNode {
         self.initialized_ref().store(true, Ordering::Release);
         info!("initialized flag set to true");
 
+        // Initialize trust (Shamir secret sharing) if enabled
+        #[cfg(feature = "trust")]
+        if request.trust.enabled {
+            self.initialize_trust(&request).map_err(|e| ControlPlaneError::Failed {
+                reason: format!("trust initialization failed: {e}"),
+            })?;
+        }
+
         Ok(self.build_cluster_state())
     }
 

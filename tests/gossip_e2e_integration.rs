@@ -115,7 +115,12 @@ async fn test_cluster_formation_with_gossip_config() -> Result<()> {
         ClusterNode::with_iroh_addr(node3.node_id().0, node3.endpoint_addr()),
     ];
 
-    controller1.init(InitRequest { initial_members }).await?;
+    controller1
+        .init(InitRequest {
+            initial_members,
+            trust: Default::default(),
+        })
+        .await?;
     info!("Raft cluster initialized");
 
     // Wait for stable leader election using polling
@@ -215,7 +220,12 @@ async fn test_multi_node_cluster_manual_config() -> Result<()> {
         .map(|node| ClusterNode::with_iroh_addr(node.node_id().0, node.endpoint_addr()))
         .collect();
 
-    controller1.init(InitRequest { initial_members }).await?;
+    controller1
+        .init(InitRequest {
+            initial_members,
+            trust: Default::default(),
+        })
+        .await?;
     info!("Cluster initialized with {} nodes", num_nodes);
 
     // Wait for stable leader election using polling

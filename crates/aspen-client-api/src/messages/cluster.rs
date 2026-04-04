@@ -21,6 +21,11 @@ pub enum ClusterRequest {
     GetClusterTicket,
     /// Initialize the cluster.
     InitCluster,
+    /// Initialize the cluster with trust (Shamir secret sharing).
+    InitClusterWithTrust {
+        /// Reconstruction threshold. If `None`, defaults to majority.
+        threshold: Option<u8>,
+    },
     /// Trigger a snapshot.
     TriggerSnapshot,
     /// Add a learner node to the cluster.
@@ -85,6 +90,7 @@ impl ClusterRequest {
         use aspen_auth::Operation;
         match self {
             Self::InitCluster
+            | Self::InitClusterWithTrust { .. }
             | Self::AddLearner { .. }
             | Self::ChangeMembership { .. }
             | Self::TriggerSnapshot

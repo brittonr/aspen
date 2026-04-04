@@ -245,6 +245,7 @@ async fn run_command_loop(
             NodeCommand::InitCluster { members, reply } => {
                 let request = InitRequest {
                     initial_members: members,
+                    trust: Default::default(),
                 };
                 let result =
                     raft_node.init(request).await.map(|_| ()).map_err(|e| anyhow::anyhow!("init failed: {}", e));

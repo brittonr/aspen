@@ -63,6 +63,7 @@ pub use cluster::ChangeMembershipRequest;
 pub use cluster::ClusterNode;
 pub use cluster::ClusterState;
 pub use cluster::InitRequest;
+pub use cluster::TrustConfig;
 pub use constants::api::*;
 pub use constants::ci::*;
 pub use constants::coordination::*;

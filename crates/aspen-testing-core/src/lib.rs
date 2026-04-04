@@ -96,6 +96,7 @@ struct VersionedValue {
 /// let controller = DeterministicClusterController::new();
 /// controller.init(InitRequest {
 ///     initial_members: vec![ClusterNode::new(1, "node1", None)],
+///     trust: Default::default(),
 /// }).await?;
 /// ```
 #[derive(Clone, Default)]
@@ -864,6 +865,7 @@ mod tests {
         let result = controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await;
 
@@ -879,6 +881,7 @@ mod tests {
         let result = controller
             .init(InitRequest {
                 initial_members: vec![],
+                trust: Default::default(),
             })
             .await;
 
@@ -897,6 +900,7 @@ mod tests {
         controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();
@@ -919,6 +923,7 @@ mod tests {
         controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();
@@ -936,6 +941,7 @@ mod tests {
         controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();
@@ -957,6 +963,7 @@ mod tests {
         controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();

@@ -556,6 +556,12 @@ pub enum ClientRpcRequest {
     /// Initialize the cluster.
     InitCluster,
 
+    /// Initialize the cluster with trust (Shamir secret sharing) enabled.
+    InitClusterWithTrust {
+        /// Reconstruction threshold. If `None`, defaults to majority.
+        threshold: Option<u8>,
+    },
+
     /// Read a key from the key-value store.
     ReadKey {
         /// Key to read.
@@ -4077,6 +4083,7 @@ impl ClientRpcRequest {
             Self::HookList => "HookList",
             Self::HookTrigger { .. } => "HookTrigger",
             Self::InitCluster => "InitCluster",
+            Self::InitClusterWithTrust { .. } => "InitClusterWithTrust",
             Self::JobCancel { .. } => "JobCancel",
             Self::JobGet { .. } => "JobGet",
             Self::JobList { .. } => "JobList",
@@ -4246,6 +4253,7 @@ impl ClientRpcRequest {
             | Self::GetNodeInfo
             | Self::GetClusterTicket
             | Self::InitCluster
+            | Self::InitClusterWithTrust { .. }
             | Self::ReadKey { .. }
             | Self::WriteKey { .. }
             | Self::CompareAndSwapKey { .. }

@@ -27,6 +27,7 @@ aspen-storage-types = { workspace = true }
 aspen-client-api = { workspace = true }
 aspen-coordination = { workspace = true, optional = true }
 aspen-sql = { workspace = true, optional = true }
+aspen-trust = { workspace = true, optional = true }
 
 # OpenRaft consensus
 openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
@@ -94,6 +95,7 @@ metrics-exporter-prometheus = { workspace = true }
 default = []
 sql = ["dep:datafusion", "dep:arrow", "dep:aspen-sql"]
 coordination = ["dep:aspen-coordination"]
+trust = ["dep:aspen-trust"]
 sharding = []
 testing = ["dep:madsim", "dep:ractor"]
 bolero = []  # Bolero is in dev-dependencies for testing

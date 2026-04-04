@@ -117,6 +117,7 @@ members = [
     "crates/aspen-docs",
     "crates/aspen-hooks",
     "crates/aspen-crypto",
+    "crates/aspen-trust",
     "crates/aspen-secrets",
     "crates/aspen-automerge",
     "crates/aspen-federation",
@@ -301,6 +302,7 @@ aspen-jobs-worker-sql = { path = "crates/aspen-jobs-worker-sql" }
 aspen-jobs-worker-maintenance = { path = "crates/aspen-jobs-worker-maintenance" }
 aspen-jobs-worker-shell = { path = "crates/aspen-jobs-worker-shell" }
 aspen-crypto = { path = "crates/aspen-crypto" }
+aspen-trust = { path = "crates/aspen-trust" }
 aspen-secrets = { path = "crates/aspen-secrets" }
 aspen-automerge = { path = "crates/aspen-automerge" }
 aspen-nickel = { path = "crates/aspen-nickel" }
@@ -491,7 +493,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp", "trust"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -535,6 +537,7 @@ snix-daemon = ["snix", "dep:nix-daemon"]
 snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-serde", "aspen-ci?/nix-executor-snix-eval"]
 snix-build = ["snix-eval", "dep:snix-build", "aspen-ci?/nix-executor-snix-build"]
 nix-cli-fallback = ["ci", "aspen-ci?/nix-cli-fallback"]
+trust = ["aspen-raft/trust"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]

@@ -41,6 +41,7 @@ mod tests {
         let result = arc_controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await;
 
@@ -57,6 +58,7 @@ mod tests {
         arc_controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();
@@ -79,6 +81,7 @@ mod tests {
         arc_controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();
@@ -97,6 +100,7 @@ mod tests {
         arc_controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();
@@ -150,6 +154,7 @@ mod tests {
         arc_controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await
             .unwrap();
@@ -230,6 +235,7 @@ mod tests {
         let result = controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node", None)],
+                trust: Default::default(),
             })
             .await;
 
@@ -373,6 +379,7 @@ mod tests {
         let result = controller
             .init(InitRequest {
                 initial_members: vec![ClusterNode::new(1, "node1", None)],
+                trust: Default::default(),
             })
             .await;
         assert!(result.is_ok());

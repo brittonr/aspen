@@ -1,0 +1,19 @@
+[package]
+name = "aspen-trust"
+version = "0.1.0"
+edition = "2024"
+description = "Shamir secret sharing and cluster trust primitives for Aspen"
+publish = false
+
+[dependencies]
+hkdf = "0.12"
+rand = "0.9"
+secrecy = { version = "0.10", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+sha3 = "0.10"
+snafu = "0.8"
+subtle = "2.6"
+zeroize = { version = "1.8", features = ["derive"] }
+
+[dev-dependencies]
+proptest = "1.6"

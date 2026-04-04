@@ -130,6 +130,7 @@ async fn test_init_empty_members_fails() {
     let node = create_test_node(1).await;
     let request = InitRequest {
         initial_members: vec![],
+        trust: Default::default(),
     };
 
     let result = ClusterController::init(&node, request).await;
@@ -148,6 +149,7 @@ async fn test_init_missing_iroh_addr_fails() {
     let node = create_test_node(1).await;
     let request = InitRequest {
         initial_members: vec![ClusterNode::new(1, "test-node-1", None)], // No node_addr
+        trust: Default::default(),
     };
 
     let result = ClusterController::init(&node, request).await;
@@ -700,6 +702,7 @@ async fn test_transfer_leader_accepted_on_initialized_leader() {
 
     ClusterController::init(&node, InitRequest {
         initial_members: vec![cn],
+        trust: Default::default(),
     })
     .await
     .expect("init cluster");

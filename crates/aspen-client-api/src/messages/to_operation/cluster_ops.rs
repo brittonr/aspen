@@ -9,6 +9,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
     match request {
         // Cluster admin operations
         ClientRpcRequest::InitCluster
+        | ClientRpcRequest::InitClusterWithTrust { .. }
         | ClientRpcRequest::AddLearner { .. }
         | ClientRpcRequest::ChangeMembership { .. }
         | ClientRpcRequest::TriggerSnapshot

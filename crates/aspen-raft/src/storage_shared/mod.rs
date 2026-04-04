@@ -73,6 +73,8 @@ mod meta;
 mod sm_trait;
 mod snapshot;
 mod state_machine;
+#[cfg(feature = "trust")]
+mod trust;
 mod types;
 
 use std::collections::BTreeMap;

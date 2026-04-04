@@ -30,6 +30,8 @@ mod cluster_controller;
 mod conversions;
 mod health;
 mod kv_store;
+#[cfg(feature = "trust")]
+mod trust;
 pub use kv_store::read_index_retry_count;
 pub use kv_store::read_index_retry_success_count;
 mod membership_refresh;

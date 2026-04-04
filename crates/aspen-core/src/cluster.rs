@@ -11,3 +11,4 @@ pub use aspen_cluster_types::ChangeMembershipRequest;
 pub use aspen_cluster_types::ClusterNode;
 pub use aspen_cluster_types::ClusterState;
 pub use aspen_cluster_types::InitRequest;
+pub use aspen_cluster_types::TrustConfig;

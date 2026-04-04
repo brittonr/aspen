@@ -27,6 +27,9 @@ pub struct ClusterState {
 pub struct InitRequest {
     /// The founding voting members of the cluster.
     pub initial_members: Vec<ClusterNode>,
+    /// Trust (Shamir secret sharing) configuration.
+    #[serde(default)]
+    pub trust: super::TrustConfig,
 }
 
 impl InitRequest {

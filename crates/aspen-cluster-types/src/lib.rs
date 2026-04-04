@@ -358,6 +358,40 @@ pub struct ClusterState {
 pub struct InitRequest {
     /// The founding voting members of the cluster.
     pub initial_members: Vec<ClusterNode>,
+    /// Trust (Shamir secret sharing) configuration. When enabled, a cluster
+    /// root secret is generated and split into shares during initialization.
+    #[serde(default)]
+    pub trust: TrustConfig,
+}
+
+/// Configuration for cluster trust (Shamir secret sharing).
+///
+/// When enabled, the cluster generates a root secret during initialization
+/// and distributes K-of-N Shamir shares to cluster members.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustConfig {
+    /// Whether trust (Shamir secret sharing) is enabled.
+    pub enabled: bool,
+    /// Reconstruction threshold. If `None`, defaults to `(N/2) + 1` (majority).
+    pub threshold: Option<u8>,
+}
+
+impl TrustConfig {
+    /// Create a TrustConfig with trust enabled and default threshold.
+    pub fn enabled() -> Self {
+        TrustConfig {
+            enabled: true,
+            threshold: None,
+        }
+    }
+
+    /// Create a TrustConfig with trust enabled and explicit threshold.
+    pub fn with_threshold(threshold: u8) -> Self {
+        TrustConfig {
+            enabled: true,
+            threshold: Some(threshold),
+        }
+    }
 }
 
 impl InitRequest {
@@ -1077,6 +1111,7 @@ mod tests {
     fn init_request_validate_empty_members_fails() {
         let request = InitRequest {
             initial_members: vec![],
+            trust: Default::default(),
         };
         let result = request.validate();
         assert!(result.is_err());
@@ -1092,6 +1127,7 @@ mod tests {
     fn init_request_validate_node_id_zero_fails() {
         let request = InitRequest {
             initial_members: vec![ClusterNode::new(0, "zero-node", None)],
+            trust: Default::default(),
         };
         let result = request.validate();
         assert!(result.is_err());
@@ -1111,6 +1147,7 @@ mod tests {
                 ClusterNode::new(0, "zero-node", None),
                 ClusterNode::new(2, "node2", None),
             ],
+            trust: Default::default(),
         };
         let result = request.validate();
         assert!(result.is_err());
@@ -1130,6 +1167,7 @@ mod tests {
                 ClusterNode::new(2, "node2", None),
                 ClusterNode::new(1, "node1-dup", None), // Duplicate ID
             ],
+            trust: Default::default(),
         };
         let result = request.validate();
         assert!(result.is_err());
@@ -1145,6 +1183,7 @@ mod tests {
     fn init_request_validate_single_valid_node_succeeds() {
         let request = InitRequest {
             initial_members: vec![ClusterNode::new(1, "single-node", None)],
+            trust: Default::default(),
         };
         assert!(request.validate().is_ok());
     }
@@ -1157,6 +1196,7 @@ mod tests {
                 ClusterNode::new(2, "node2", None),
                 ClusterNode::new(3, "node3", None),
             ],
+            trust: Default::default(),
         };
         assert!(request.validate().is_ok());
     }
@@ -1168,6 +1208,7 @@ mod tests {
                 ClusterNode::new(u64::MAX, "max-id", None),
                 ClusterNode::new(u64::MAX - 1, "almost-max", None),
             ],
+            trust: Default::default(),
         };
         assert!(request.validate().is_ok());
     }
@@ -1179,6 +1220,7 @@ mod tests {
                 ClusterNode::new(1, "node1", Some("raft1".to_string())),
                 ClusterNode::new(2, "node2", None),
             ],
+            trust: Default::default(),
         };
         let json = serde_json::to_string(&request).expect("serialize");
         let deserialized: InitRequest = serde_json::from_str(&json).expect("deserialize");
