@@ -79,8 +79,10 @@ async fn main() {
     }
 }
 
+type TestFn = fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = TestResult> + Send>>;
+
 async fn run_all() -> TestResult {
-    let tests: &[(&str, fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = TestResult> + Send>>)] = &[
+    let tests: &[(&str, TestFn)] = &[
         ("dependency", || Box::pin(tests_dependency::run())),
         ("scheduler", || Box::pin(tests_scheduler::run())),
         ("dlq", || Box::pin(tests_dlq::run())),

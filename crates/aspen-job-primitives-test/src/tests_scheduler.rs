@@ -111,7 +111,7 @@ async fn test_cron_job_scheduling() -> TestResult {
 
     // Next execution should be within 10 seconds from now
     let diff = (scheduled.next_execution - Utc::now()).num_seconds();
-    if diff < 0 || diff > 10 {
+    if !(0..=10).contains(&diff) {
         return Err(format!("cron next_execution should be within 10s, got {diff}s away"));
     }
 
