@@ -13,6 +13,7 @@ use aspen_client_api::CiTriggerPipelineResponse;
 use aspen_client_api::ClientRpcResponse;
 use tracing::debug;
 use tracing::info;
+#[cfg(all(feature = "forge", feature = "blob"))]
 use tracing::warn;
 
 use super::helpers::pipeline_status_to_string;
