@@ -1,0 +1,10 @@
+---
+source: crates/aspen-client-api/tests/snapshot_redaction.rs
+expression: resp
+---
+{
+  "WriteResult": {
+    "is_success": true,
+    "error": null
+  }
+}

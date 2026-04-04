@@ -44,7 +44,7 @@
 - [x] 6.2 Write insta snapshot tests for all RPC request/response message serialization in `aspen-client-api`
 - [ ] 6.3 Write insta snapshot tests for CLI output formatting (`cluster status`, `kv get`, `kv scan`) in `aspen-cli`
 - [x] 6.4 Write insta snapshot tests for snafu error chain Display output in `aspen-core` and `aspen-raft`
-- [ ] 6.5 Add insta redaction rules for timestamps, node IDs, and UUIDs in snapshot tests
+- [x] 6.5 Add insta redaction rules for timestamps, node IDs, and UUIDs in snapshot tests
 
 ## 7. Under-Tested Handler Crates
 

@@ -23,7 +23,7 @@ aspen-jobs-protocol = { path = "../aspen-jobs-protocol" }
 thiserror = "2.0"
 
 [dev-dependencies]
-insta = { version = "1.42", features = ["json", "redactions"] }
+insta = { version = "1.42", features = ["json", "redactions", "filters"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["macros", "rt"] }
 
