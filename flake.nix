@@ -5223,6 +5223,7 @@
                 cargo-watch
                 cargo-nextest
                 cargo-llvm-cov # Code coverage tool
+                cargo-mutants # Mutation testing
                 git
                 jq
                 ripgrep
