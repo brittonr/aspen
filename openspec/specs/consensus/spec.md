@@ -1,100 +1,71 @@
-# Consensus Specification
+## ADDED Requirements
 
-## Purpose
+### Requirement: Split-brain heal madsim scenario
 
-Raft-based distributed consensus providing linearizable operations, leader election, log replication, and state machine management. Built on vendored openraft v0.10.0 with redb storage.
+The system SHALL include a madsim test that partitions a cluster into two groups, allows both sides to elect leaders, then heals the partition and verifies the cluster converges to a single leader with no data loss.
 
-## Requirements
+#### Scenario: Partition and heal with writes on both sides
 
-### Requirement: Raft Leader Election
+- **WHEN** a 5-node cluster is partitioned into {1,2} and {3,4,5}
+- **AND** writes are attempted on both sides
+- **THEN** only the majority side {3,4,5} SHALL accept writes
+- **AND** when the partition heals, nodes 1 and 2 SHALL catch up to the majority's log
+- **AND** all committed writes SHALL be readable from any node
 
-The system SHALL elect a single leader among cluster members using the Raft protocol. Only the leader SHALL accept write operations.
+#### Scenario: Minority side rejects writes
 
-#### Scenario: Leader election on startup
+- **WHEN** a client submits writes to a node in the minority partition
+- **THEN** those writes SHALL fail (no leader in minority)
+- **AND** after partition heal, the minority nodes SHALL rejoin as followers
 
-- GIVEN a cluster of 3 nodes with no current leader
-- WHEN election timeout expires on one node
-- THEN that node SHALL request votes from peers
-- AND if it receives a majority, it SHALL become leader
+### Requirement: Slow follower madsim scenario
 
-#### Scenario: Leader failure triggers re-election
+The system SHALL include a madsim test where one follower processes AppendEntries at 100x slower rate than other followers, verifying the cluster continues operating and the slow follower eventually catches up.
 
-- GIVEN a 3-node cluster with node 1 as leader
-- WHEN node 1 becomes unreachable
-- THEN the remaining nodes SHALL elect a new leader within the election timeout
-- AND the new leader SHALL serve all pending and new requests
+#### Scenario: Cluster remains available with slow follower
 
-#### Scenario: Forwarding writes to leader
+- **WHEN** node 3 in a 5-node cluster has 100x latency on AppendEntries processing
+- **THEN** the cluster SHALL continue accepting writes (nodes 1,2,4,5 form majority)
+- **AND** node 3 SHALL eventually catch up when the slowdown is removed
 
-- GIVEN a client connects to a follower node
-- WHEN the client submits a write operation
-- THEN the follower SHALL forward the request to the current leader
+#### Scenario: Slow follower does not block commits
 
-### Requirement: Log Replication
+- **WHEN** 100 writes are submitted while node 3 is slow
+- **THEN** all 100 writes SHALL be committed without waiting for node 3
+- **AND** the commit latency SHALL not be affected by node 3's slowness
 
-The system SHALL replicate Raft log entries from the leader to all followers. A write is committed once a majority of nodes have persisted it.
+### Requirement: Snapshot during membership change madsim scenario
 
-#### Scenario: Majority commit
+The system SHALL include a madsim test that triggers a snapshot while a learner is being added to the cluster, verifying the snapshot completes and the learner receives consistent state.
 
-- GIVEN a 5-node cluster with a leader
-- WHEN the leader receives a write request
-- THEN the write SHALL be committed after 3 nodes (majority) acknowledge
-- AND the committed entry SHALL be applied to the state machine
+#### Scenario: Learner added during snapshot
 
-#### Scenario: Follower catches up
+- **WHEN** a snapshot is in progress on the leader
+- **AND** a new learner is added to the cluster
+- **THEN** the learner SHALL receive either the in-progress snapshot or a new one
+- **AND** the learner's state SHALL be consistent with the leader's committed state
 
-- GIVEN a follower that was temporarily disconnected
-- WHEN the follower reconnects
-- THEN the leader SHALL replicate all missed entries to the follower
-- AND the follower's state SHALL converge with the leader's
+#### Scenario: Membership change during snapshot transfer
 
-### Requirement: Unified Storage (redb)
+- **WHEN** a snapshot is being transferred to a follower
+- **AND** a membership change is proposed
+- **THEN** the snapshot transfer SHALL complete
+- **AND** the membership change SHALL be applied after the snapshot is installed
 
-The system SHALL store both the Raft log and the state machine in a single redb database, using single-fsync writes for durability with ~2-3ms write latency.
+### Requirement: Clock-skewed TTL madsim scenario
 
-#### Scenario: Durable write
+The system SHALL include a madsim test where nodes have divergent clocks and verify that TTL-based operations (lock expiry, lease renewal) behave correctly despite clock skew.
 
-- GIVEN a write operation is committed by Raft
-- WHEN the node crashes immediately after the fsync
-- THEN on recovery, the committed write SHALL be present in the database
+#### Scenario: Lock expiry with clock skew
 
-#### Scenario: Snapshot and compaction
+- **WHEN** node A acquires a lock with TTL 10 seconds
+- **AND** node B's clock is 5 seconds ahead of node A's clock
+- **THEN** the lock expiry SHALL be determined by the leader's clock
+- **AND** the lock SHALL NOT be considered expired on node B before the leader considers it expired
 
-- GIVEN the Raft log exceeds the compaction threshold
-- WHEN a snapshot is triggered
-- THEN the state machine snapshot SHALL be persisted to redb
-- AND old log entries SHALL be compactable
+#### Scenario: Lease renewal under clock skew
 
-### Requirement: Batched Writes
-
-The system SHALL batch multiple concurrent write requests into a single Raft proposal to improve throughput under load.
-
-#### Scenario: Batch coalescing
-
-- GIVEN 50 concurrent write requests arrive within the batch window
-- WHEN the batch is submitted to Raft
-- THEN all 50 writes SHALL be proposed as a single log entry
-- AND each caller SHALL receive their individual result
-
-#### Scenario: Batch size limit
-
-- GIVEN incoming writes that would exceed `MAX_BATCH_SIZE` (1,000)
-- WHEN the batch limit is reached
-- THEN the current batch SHALL be submitted immediately
-- AND subsequent writes SHALL start a new batch
-
-### Requirement: Key Expiration (TTL)
-
-The system SHALL support time-to-live (TTL) on key-value entries. Expired keys SHALL be treated as deleted on read and cleaned up by background compaction.
-
-#### Scenario: Key expires after TTL
-
-- GIVEN a key written with a TTL of 5 seconds
-- WHEN 5 seconds have elapsed
-- THEN a read of that key SHALL return `None`
-
-#### Scenario: TTL refresh on update
-
-- GIVEN a key with TTL of 10 seconds, 7 seconds have elapsed
-- WHEN the key is updated with a new TTL of 10 seconds
-- THEN the expiration deadline SHALL reset to 10 seconds from now
+- **WHEN** a lease is renewed with a new TTL
+- **AND** the renewing node's clock is behind the leader's clock
+- **THEN** the leader SHALL compute the new deadline using its own clock
+- **AND** the lease SHALL remain valid for the full TTL from the leader's perspective

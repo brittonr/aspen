@@ -24,31 +24,55 @@ The system SHALL provide distributed locks with fencing tokens, configurable TTL
 - THEN the lock SHALL be considered expired
 - AND client B SHALL be able to acquire it
 
+#### Scenario: Proptest model-based lock verification
+
+- GIVEN a proptest model tracking lock state (holder, fencing token, expiry)
+- WHEN arbitrary sequences of acquire, release, renew, and expire operations are generated
+- THEN the model and the real implementation SHALL agree on lock holder identity, fencing token value, and expiry status after every operation
+
 ## ADDED Requirements
 
-### Requirement: Durable timers as workflow primitives
+### Requirement: Proptest model-based queue verification
 
-The `DurableTimerManager` SHALL be usable as a first-class coordination primitive by the `DurableWorkflowExecutor`. Timers scheduled through the executor SHALL be persisted in the KV store, recoverable after node restarts, and integrated with the workflow event recording lifecycle.
+The system SHALL include proptest model-based tests for distributed queues that verify enqueue, dequeue, and acknowledge operations against an in-memory model.
 
-#### Scenario: Timer survives leader failover
+#### Scenario: Queue ordering preserved under random operations
 
-- GIVEN a `DurableTimer` scheduled via `DurableTimerManager` with fire_at_ms in 10 seconds
-- WHEN the leader node is killed before the timer fires
-- AND a new leader is elected
-- THEN the `TimerService` on the new leader SHALL detect the timer via its KV scan
-- AND the timer SHALL fire within the poll interval (100ms) of becoming ready
+- **WHEN** proptest generates a sequence of enqueue and dequeue operations
+- **THEN** dequeued items SHALL appear in FIFO order matching the model
+- **AND** acknowledged items SHALL not be re-delivered
 
-#### Scenario: Timer cancellation removes KV entry
+#### Scenario: Queue state consistent after crash replay
 
-- GIVEN a `DurableTimer` that has been scheduled and persisted in KV
-- WHEN the timer is cancelled via `cancel_timer()`
-- THEN the KV entry SHALL be deleted
-- AND the timer SHALL NOT fire
+- **WHEN** proptest generates a sequence of operations with simulated crashes at random points
+- **THEN** replaying the committed operations SHALL produce a queue state matching the model
 
-#### Scenario: Workflow timer integrated with event recording
+### Requirement: Proptest model-based barrier verification
 
-- GIVEN a durable workflow that calls `sleep(duration)`
-- WHEN the executor processes the sleep
-- THEN it SHALL call `DurableTimerManager::schedule_timer()` to persist the timer
-- AND it SHALL record a `TimerScheduled` event in the workflow's event store
-- AND when the timer fires, it SHALL record a `TimerFired` event
+The system SHALL include proptest model-based tests for distributed barriers that verify participant join, wait, and release semantics.
+
+#### Scenario: Barrier releases all participants at threshold
+
+- **WHEN** proptest generates N participants joining a barrier with threshold N
+- **THEN** all N participants SHALL be released simultaneously
+- **AND** no participant SHALL be released before the threshold is met
+
+### Requirement: Proptest model-based election verification
+
+The system SHALL include proptest model-based tests for leader elections that verify candidacy, term advancement, and leader uniqueness.
+
+#### Scenario: At most one leader per term
+
+- **WHEN** proptest generates concurrent election attempts across multiple candidates
+- **THEN** at most one candidate SHALL win per term
+- **AND** term numbers SHALL be monotonically increasing
+
+### Requirement: Proptest model-based rate limiter verification
+
+The system SHALL include proptest model-based tests for distributed rate limiters that verify token consumption and refill against a model.
+
+#### Scenario: Rate limiter respects configured limits
+
+- **WHEN** proptest generates request sequences with varying timestamps
+- **THEN** the number of allowed requests in any window SHALL not exceed the configured limit
+- **AND** the implementation SHALL match the model's allow/deny decisions
