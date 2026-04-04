@@ -28,11 +28,6 @@ use crate::trust::verify_content_hash;
 use crate::trust::verify_delegate_signature;
 use crate::types::FederatedId;
 
-/// Connect to a federated cluster and perform handshake.
-///
-/// If `credential` is provided, it is sent in the handshake request so the
-/// remote handler can authorize subsequent sync operations based on the
-/// token's capabilities (e.g., `FederationPull`, `FederationPush`).
 /// Result of a federation handshake, including the peer's advertised capabilities.
 pub struct ConnectResult {
     /// The QUIC connection to the peer.
@@ -50,12 +45,21 @@ impl ConnectResult {
     }
 }
 
+/// Connect to a federated cluster and perform handshake.
+///
+/// Returns a [`ConnectResult`] with the QUIC connection, the peer's verified
+/// identity, and the capabilities the peer advertised in the handshake
+/// response.
+///
+/// If `credential` is provided, it is sent in the handshake request so the
+/// remote handler can authorize subsequent sync operations based on the
+/// token's capabilities (e.g., `FederationPull`, `FederationPush`).
 pub async fn connect_to_cluster(
     endpoint: &Endpoint,
     our_identity: &ClusterIdentity,
     peer_addr: impl Into<iroh::EndpointAddr>,
     credential: Option<aspen_auth::Credential>,
-) -> Result<(Connection, SignedClusterIdentity)> {
+) -> Result<ConnectResult> {
     // Connect to peer
     let connection = endpoint
         .connect(peer_addr, FEDERATION_ALPN)
@@ -98,38 +102,17 @@ pub async fn connect_to_cluster(
                 "federation handshake complete"
             );
 
-            Ok((connection, identity))
+            Ok(ConnectResult {
+                connection,
+                identity,
+                capabilities,
+            })
         }
         FederationResponse::Error { code, message } => {
             anyhow::bail!("Handshake failed: {} - {}", code, message)
         }
         _ => anyhow::bail!("Unexpected handshake response"),
     }
-}
-
-/// Connect to a federated cluster with full result including peer capabilities.
-///
-/// Like `connect_to_cluster` but returns a `ConnectResult` that includes
-/// the peer's advertised capabilities (e.g., `"streaming-sync"`).
-pub async fn connect_to_cluster_full(
-    endpoint: &Endpoint,
-    our_identity: &ClusterIdentity,
-    peer_addr: impl Into<iroh::EndpointAddr>,
-    credential: Option<aspen_auth::Credential>,
-) -> Result<ConnectResult> {
-    let (connection, identity) = connect_to_cluster(endpoint, our_identity, peer_addr, credential).await?;
-    // Capabilities are logged during connect_to_cluster. For now we re-derive
-    // from the identity (old servers don't return them). A proper implementation
-    // would thread the capabilities from the handshake response.
-    // TODO: thread capabilities from handshake response once connect_to_cluster
-    // is refactored. For now, assume peers built with the same code support
-    // streaming-sync.
-    let capabilities = vec!["forge".to_string(), "streaming-sync".to_string()];
-    Ok(ConnectResult {
-        connection,
-        identity,
-        capabilities,
-    })
 }
 
 /// List resources available on a federated cluster.

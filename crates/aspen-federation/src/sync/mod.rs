@@ -39,7 +39,6 @@ pub use client::PushResult;
 pub use client::SyncSession;
 // Client
 pub use client::connect_to_cluster;
-pub use client::connect_to_cluster_full;
 pub use client::get_remote_resource_state;
 pub use client::list_remote_resources;
 pub use client::push_to_cluster;
@@ -940,5 +939,94 @@ mod tests {
         let identity = test_identity();
         let debug_str = format!("{:?}", identity);
         assert!(!debug_str.is_empty());
+    }
+
+    // =========================================================================
+    // Capability Check Tests
+    // =========================================================================
+
+    /// Helper: test has_capability logic without needing a real QUIC Connection.
+    fn check_capability(capabilities: &[&str], needle: &str) -> bool {
+        capabilities.iter().any(|c| *c == needle)
+    }
+
+    #[test]
+    fn test_has_capability_found() {
+        let caps = &["forge", "streaming-sync"];
+        assert!(check_capability(caps, "forge"));
+        assert!(check_capability(caps, "streaming-sync"));
+    }
+
+    #[test]
+    fn test_has_capability_not_found() {
+        let caps = &["forge"];
+        assert!(!check_capability(caps, "streaming-sync"));
+        assert!(!check_capability(caps, "ci"));
+        assert!(!check_capability(caps, ""));
+    }
+
+    #[test]
+    fn test_has_capability_empty() {
+        let caps: &[&str] = &[];
+        assert!(!check_capability(caps, "forge"));
+        assert!(!check_capability(caps, "streaming-sync"));
+    }
+
+    #[test]
+    fn test_has_capability_unknown_preserved() {
+        let caps = &["forge", "new-feature"];
+        assert!(check_capability(caps, "new-feature"));
+    }
+
+    #[test]
+    fn test_handshake_response_capabilities_preserved_through_serde() {
+        // Verify that capabilities survive serialization round-trip
+        // (the exact path they take from handler → wire → client)
+        let identity = test_identity();
+        let response = FederationResponse::Handshake {
+            identity: identity.to_signed(),
+            protocol_version: FEDERATION_PROTOCOL_VERSION,
+            capabilities: vec![
+                "forge".to_string(),
+                "streaming-sync".to_string(),
+                "unknown-v2".to_string(),
+            ],
+            trusted: true,
+        };
+
+        let bytes = postcard::to_allocvec(&response).unwrap();
+        let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
+
+        match parsed {
+            FederationResponse::Handshake { capabilities, .. } => {
+                assert_eq!(capabilities.len(), 3);
+                assert!(capabilities.contains(&"forge".to_string()));
+                assert!(capabilities.contains(&"streaming-sync".to_string()));
+                assert!(capabilities.contains(&"unknown-v2".to_string()));
+            }
+            _ => panic!("expected Handshake"),
+        }
+    }
+
+    #[test]
+    fn test_handshake_response_empty_capabilities_serde() {
+        // Old peers may send empty capabilities
+        let identity = test_identity();
+        let response = FederationResponse::Handshake {
+            identity: identity.to_signed(),
+            protocol_version: FEDERATION_PROTOCOL_VERSION,
+            capabilities: vec![],
+            trusted: false,
+        };
+
+        let bytes = postcard::to_allocvec(&response).unwrap();
+        let parsed: FederationResponse = postcard::from_bytes(&bytes).unwrap();
+
+        match parsed {
+            FederationResponse::Handshake { capabilities, .. } => {
+                assert!(capabilities.is_empty());
+            }
+            _ => panic!("expected Handshake"),
+        }
     }
 }

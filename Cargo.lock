@@ -1760,6 +1760,7 @@ name = "aspen-forge-handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-auth",
  "aspen-blob",
  "aspen-client-api",
  "aspen-cluster",

@@ -15,6 +15,7 @@ aspen-core = { path = "../aspen-core" }
 aspen-blob = { path = "../aspen-blob" }
 aspen-forge = { path = "../aspen-forge" }
 aspen-cluster = { path = "../aspen-cluster", features = ["federation"] }
+aspen-auth = { path = "../aspen-auth" }
 
 # Hook system for push event emission
 aspen-hooks = { path = "../aspen-hooks", optional = true }

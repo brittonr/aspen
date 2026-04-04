@@ -561,21 +561,32 @@ pub(crate) async fn handle_federation_sync_peer(
         iroh::EndpointAddr::from(peer_key)
     };
 
+    // Load stored credential for this peer (if any)
+    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
+
     // Connect and perform handshake
-    let (connection, remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
-            Ok(result) => result,
-            Err(e) => {
-                return Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
-                    is_success: false,
-                    remote_cluster_name: None,
-                    remote_cluster_key: None,
-                    trusted: None,
-                    resources: Vec::new(),
-                    error: Some(format!("connection failed: {e}")),
-                }));
-            }
-        };
+    let connect_result = match aspen_cluster::federation::sync::connect_to_cluster(
+        endpoint,
+        identity,
+        endpoint_addr,
+        credential,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            return Ok(ClientRpcResponse::FederationSyncPeerResult(FederationSyncPeerResponse {
+                is_success: false,
+                remote_cluster_name: None,
+                remote_cluster_key: None,
+                trusted: None,
+                resources: Vec::new(),
+                error: Some(format!("connection failed: {e}")),
+            }));
+        }
+    };
+    let connection = connect_result.connection;
+    let remote_identity = connect_result.identity;
 
     // List resources on the remote cluster
     let resources =
@@ -708,20 +719,30 @@ pub(crate) async fn handle_federation_fetch_refs(
 
     let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
 
+    // Load stored credential for this peer (if any)
+    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
+
     // Connect and handshake
-    let (connection, _remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
-            Ok(result) => result,
-            Err(e) => {
-                return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                    is_success: false,
-                    fetched: 0,
-                    already_present: 0,
-                    errors: Vec::new(),
-                    error: Some(format!("connection failed: {e}")),
-                }));
-            }
-        };
+    let connect_result = match aspen_cluster::federation::sync::connect_to_cluster(
+        endpoint,
+        identity,
+        endpoint_addr,
+        credential,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: 0,
+                already_present: 0,
+                errors: Vec::new(),
+                error: Some(format!("connection failed: {e}")),
+            }));
+        }
+    };
+    let connection = connect_result.connection;
 
     // =========================================================================
     // Phase 1: Fetch refs
@@ -1907,15 +1928,24 @@ pub(crate) async fn handle_federation_pull_remote(
 
     let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
 
+    // Load stored credential for this peer (if any)
+    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
+
     // Connect and handshake to get the remote cluster's identity key
-    let (_connection, remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
-            Ok(result) => result,
-            Err(e) => return err_response(format!("connection failed: {e}")),
-        };
+    let connect_result = match aspen_cluster::federation::sync::connect_to_cluster(
+        endpoint,
+        identity,
+        endpoint_addr,
+        credential,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => return err_response(format!("connection failed: {e}")),
+    };
 
     // Construct FederatedId from remote cluster identity + repo_id
-    let remote_cluster_key = remote_identity.public_key();
+    let remote_cluster_key = connect_result.identity.public_key();
     let fed_id = aspen_cluster::federation::FederatedId::new(remote_cluster_key, repo_id_bytes);
     let fed_id_str = fed_id.to_string();
 
@@ -1997,19 +2027,30 @@ pub(crate) async fn handle_federation_bidi_sync(
 
     let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
 
-    // Step 1: Connect and handshake
-    let (connection, remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
-            Ok(result) => result,
-            Err(e) => return err_response(format!("connection failed: {e}")),
-        };
+    // Load stored credential for this peer (if any)
+    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
 
-    let remote_cluster_key = remote_identity.public_key();
+    // Step 1: Connect and handshake
+    let connect_result = match aspen_cluster::federation::sync::connect_to_cluster(
+        endpoint,
+        identity,
+        endpoint_addr,
+        credential,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => return err_response(format!("connection failed: {e}")),
+    };
+
+    let remote_cluster_key = connect_result.identity.public_key();
 
     // Step 2: Get remote ref state
     let remote_fed_id = FederatedId::new(remote_cluster_key, repo_id_bytes);
     let (remote_found, remote_heads, _) =
-        match aspen_cluster::federation::sync::get_remote_resource_state(&connection, &remote_fed_id).await {
+        match aspen_cluster::federation::sync::get_remote_resource_state(&connect_result.connection, &remote_fed_id)
+            .await
+        {
             Ok(result) => result,
             Err(e) => return err_response(format!("failed to get remote state: {e}")),
         };
@@ -2053,7 +2094,7 @@ pub(crate) async fn handle_federation_bidi_sync(
         // Fetch git objects from remote
         #[allow(deprecated)] // Single-shot pull; SyncSession not needed
         let (objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
-            &connection,
+            &connect_result.connection,
             &remote_fed_id,
             vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
             have_hashes,
@@ -2150,8 +2191,13 @@ pub(crate) async fn handle_federation_bidi_sync(
             }
         }
 
-        match aspen_cluster::federation::sync::push_to_cluster(&connection, &local_fed_id, git_objects, ref_updates)
-            .await
+        match aspen_cluster::federation::sync::push_to_cluster(
+            &connect_result.connection,
+            &local_fed_id,
+            git_objects,
+            ref_updates,
+        )
+        .await
         {
             Ok(result) => {
                 pushed = result.imported;
@@ -2285,18 +2331,33 @@ pub(crate) async fn handle_federation_push(
 
     let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
 
-    // Connect and push
-    let (connection, _remote_identity) =
-        match aspen_cluster::federation::sync::connect_to_cluster(endpoint, identity, endpoint_addr, None).await {
-            Ok(result) => result,
-            Err(e) => return err_response(format!("failed to connect to peer: {}", e)),
-        };
+    // Load stored credential for this peer (if any)
+    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
 
-    let push_result =
-        match aspen_cluster::federation::sync::push_to_cluster(&connection, &fed_id, git_objects, ref_updates).await {
-            Ok(r) => r,
-            Err(e) => return err_response(format!("push failed: {}", e)),
-        };
+    // Connect and push
+    let connect_result = match aspen_cluster::federation::sync::connect_to_cluster(
+        endpoint,
+        identity,
+        endpoint_addr,
+        credential,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => return err_response(format!("failed to connect to peer: {}", e)),
+    };
+
+    let push_result = match aspen_cluster::federation::sync::push_to_cluster(
+        &connect_result.connection,
+        &fed_id,
+        git_objects,
+        ref_updates,
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return err_response(format!("push failed: {}", e)),
+    };
 
     Ok(ClientRpcResponse::FederationPushResult(FederationPushResponse {
         is_success: push_result.accepted,

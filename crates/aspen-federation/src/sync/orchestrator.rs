@@ -82,6 +82,11 @@ pub struct SyncRequest<'a> {
     pub limit: u32,
     /// Delegate keys for signature verification (None to skip).
     pub delegates: Option<&'a [PublicKey]>,
+    /// Pre-loaded credential for authenticating with seeders.
+    /// If `Some`, sent in the handshake request so the remote peer can
+    /// authorize operations via `FederationPull`/`FederationPush` capabilities.
+    /// Callers should populate this via `token_store::load_credential_for_peer`.
+    pub credential: Option<aspen_auth::Credential>,
 }
 
 impl std::fmt::Debug for SyncRequest<'_> {
@@ -158,9 +163,15 @@ pub async fn orchestrated_sync(req: &SyncRequest<'_>) -> Result<OrchestratedSync
     info!(fed_id = %req.fed_id.short(), seeder_count, "starting orchestrated sync");
 
     // Step 1: Query seeders for resource state
-    let reports =
-        query_seeders(req.endpoint, req.fed_id, req.our_identity, &req.seeders[..seeder_count], req.trust_manager)
-            .await;
+    let reports = query_seeders(
+        req.endpoint,
+        req.fed_id,
+        req.our_identity,
+        &req.seeders[..seeder_count],
+        req.trust_manager,
+        req.credential.clone(),
+    )
+    .await;
 
     if reports.is_empty() {
         return Err(OrchestratedSyncError::NoSeedersResponded {
@@ -209,6 +220,7 @@ async fn query_seeders(
     our_identity: &ClusterIdentity,
     seeders: &[SeederEndpoint],
     trust_manager: &TrustManager,
+    credential: Option<aspen_auth::Credential>,
 ) -> Vec<SeederReport> {
     let mut tasks = Vec::with_capacity(seeders.len());
 
@@ -217,11 +229,12 @@ async fn query_seeders(
         let fid = *fed_id;
         let ident = our_identity.clone();
         let cluster_key = seeder.cluster_key;
+        let cred = credential.clone();
 
         tasks.push(tokio::spawn(async move {
             let result = tokio::time::timeout(
                 std::time::Duration::from_secs(SEEDER_QUERY_TIMEOUT_SECS),
-                query_single_seeder(&ep, &fid, &ident, cluster_key),
+                query_single_seeder(&ep, &fid, &ident, cluster_key, cred),
             )
             .await;
 
@@ -265,12 +278,12 @@ async fn query_single_seeder(
     fed_id: &FederatedId,
     our_identity: &ClusterIdentity,
     peer_key: PublicKey,
+    credential: Option<aspen_auth::Credential>,
 ) -> Result<HashMap<String, [u8; 32]>> {
-    let (conn, _peer_id) =
-        connect_to_cluster(endpoint, our_identity, peer_key, None).await.context("handshake failed")?;
+    let result = connect_to_cluster(endpoint, our_identity, peer_key, credential).await.context("handshake failed")?;
 
     let (was_found, heads, _metadata) =
-        get_remote_resource_state(&conn, fed_id).await.context("get resource state failed")?;
+        get_remote_resource_state(&result.connection, fed_id).await.context("get resource state failed")?;
 
     if !was_found {
         anyhow::bail!("resource not found on seeder");
@@ -354,13 +367,20 @@ async fn sync_from_best(
     req: &SyncRequest<'_>,
     seeder: &SeederEndpoint,
 ) -> Result<(Vec<SyncObject>, bool), OrchestratedSyncError> {
-    let (conn, _peer_id) = connect_to_cluster(req.endpoint, req.our_identity, seeder.cluster_key, None)
+    let result = connect_to_cluster(req.endpoint, req.our_identity, seeder.cluster_key, req.credential.clone())
         .await
         .context("handshake with best seeder failed")?;
 
-    #[allow(deprecated)] // Single-shot sync; SyncSession overhead not needed
+    // Capability gating: when the peer supports streaming-sync, prefer
+    // SyncSession for multi-round sync. Fall back to single-shot for peers
+    // that don't advertise it (older protocol versions).
+    if result.has_capability("streaming-sync") {
+        debug!(seeder = %seeder.cluster_key, "peer supports streaming-sync");
+    }
+
+    #[allow(deprecated)] // Single-shot sync; SyncSession used once streaming path is wired in
     let (objects, has_more) = sync_remote_objects(
-        &conn,
+        &result.connection,
         req.fed_id,
         req.want_types.clone(),
         req.have_hashes.clone(),
