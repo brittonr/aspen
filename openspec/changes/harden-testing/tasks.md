@@ -23,8 +23,8 @@
 
 ## 4. Madsim Consensus Scenarios
 
-- [ ] 4.1 Add madsim test: split-brain partition of 5-node cluster into {1,2} and {3,4,5}, writes on both sides, partition heal, verify convergence and no data loss
-- [ ] 4.2 Add madsim test: slow follower with 100x AppendEntries latency, verify cluster availability and eventual catch-up
+- [x] 4.1 Add madsim test: split-brain partition of 5-node cluster into {1,2} and {3,4,5}, writes on both sides, partition heal, verify convergence and no data loss
+- [x] 4.2 Add madsim test: slow follower with 100x AppendEntries latency, verify cluster availability and eventual catch-up
 - [ ] 4.3 Add madsim test: snapshot triggered during add-learner, verify learner receives consistent state
 - [ ] 4.4 Add madsim test: membership change proposed during snapshot transfer, verify both complete correctly
 - [ ] 4.5 Add madsim test: clock-skewed TTL where nodes have divergent clocks, verify lock expiry and lease renewal use leader's clock

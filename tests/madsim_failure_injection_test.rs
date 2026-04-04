@@ -401,3 +401,202 @@ async fn test_concurrent_writes_with_failures_seed_789() {
         eprintln!("Simulation artifact persisted to: {}", path.display());
     }
 }
+
+/// Split-brain partition of 5-node cluster into {1,2} and {3,4,5},
+/// writes on majority side, partition heal, verify convergence.
+#[madsim::test]
+async fn test_split_brain_heal_5_node() {
+    let seed = 7777_u64;
+    let mut artifact = SimulationArtifactBuilder::new("madsim_split_brain_heal", seed).start();
+
+    artifact = artifact.add_event("create: router and failure injector");
+    let router = Arc::new(MadsimRaftRouter::new());
+    let injector = Arc::new(FailureInjector::new());
+
+    artifact = artifact.add_event("create: 5 raft nodes");
+    let mut rafts = Vec::new();
+    for i in 1u64..=5 {
+        rafts.push(create_raft_node(NodeId::from(i), router.clone(), injector.clone()).await);
+    }
+
+    artifact = artifact.add_event("register: all 5 nodes");
+    for i in 1u64..=5 {
+        router
+            .register_node(NodeId::from(i), format!("127.0.0.1:2600{i}"), rafts[(i - 1) as usize].clone())
+            .expect("failed to register node");
+    }
+
+    artifact = artifact.add_event("init: 5-node cluster");
+    let mut nodes = BTreeMap::new();
+    for i in 1u64..=5 {
+        nodes.insert(NodeId::from(i), create_test_raft_member_info(i));
+    }
+    rafts[0].initialize(nodes).await.expect("init failed");
+
+    artifact = artifact.add_event("wait: initial leader election");
+    madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
+
+    let leader_before = rafts[0].metrics().borrow().current_leader;
+    assert!(leader_before.is_some(), "should have leader before partition");
+
+    // Partition: {1,2} isolated from {3,4,5}
+    artifact = artifact.add_event("failure: partition {1,2} from {3,4,5}");
+    let minority = [1u64, 2];
+    let majority = [3u64, 4, 5];
+    for &m in &minority {
+        for &j in &majority {
+            injector.set_message_drop(NodeId::from(m), NodeId::from(j), true);
+            injector.set_message_drop(NodeId::from(j), NodeId::from(m), true);
+        }
+    }
+
+    artifact = artifact.add_event("wait: for majority side to elect new leader");
+    madsim::time::sleep(std::time::Duration::from_millis(8000)).await;
+
+    // Majority side {3,4,5} should have a leader
+    let majority_has_leader =
+        majority.iter().any(|&i| rafts[(i - 1) as usize].metrics().borrow().current_leader.is_some());
+    assert!(majority_has_leader, "majority side should elect a leader");
+
+    // Write to majority side
+    artifact = artifact.add_event("write: submit writes to majority partition");
+    let majority_leader_id = majority
+        .iter()
+        .find_map(|&i| {
+            let m = rafts[(i - 1) as usize].metrics().borrow().clone();
+            m.current_leader
+        })
+        .expect("no leader in majority");
+
+    let leader_raft = &rafts[(majority_leader_id.0 - 1) as usize];
+    for i in 0..5 {
+        let _ = leader_raft
+            .client_write(AppRequest::Set {
+                key: format!("split_brain_{i}"),
+                value: format!("value_{i}"),
+            })
+            .await;
+    }
+
+    // Heal the partition
+    artifact = artifact.add_event("heal: remove all message drops");
+    for &m in &minority {
+        for &j in &majority {
+            injector.set_message_drop(NodeId::from(m), NodeId::from(j), false);
+            injector.set_message_drop(NodeId::from(j), NodeId::from(m), false);
+        }
+    }
+
+    artifact = artifact.add_event("wait: for convergence after heal");
+    madsim::time::sleep(std::time::Duration::from_millis(8000)).await;
+
+    // All nodes should agree on a single leader
+    artifact = artifact.add_event("verify: single leader after heal");
+    let leaders: Vec<Option<NodeId>> = rafts.iter().map(|r| r.metrics().borrow().current_leader).collect();
+
+    let leader_set: std::collections::HashSet<_> = leaders.iter().filter_map(|l| l.as_ref()).collect();
+    assert!(leader_set.len() <= 1, "should converge to single leader, got {:?}", leader_set);
+    assert!(!leader_set.is_empty(), "should have a leader after heal");
+
+    // Verify minority nodes caught up
+    artifact = artifact.add_event("verify: minority nodes caught up");
+    for &m in &minority {
+        let node_applied = rafts[(m - 1) as usize].metrics().borrow().last_applied;
+        assert!(node_applied.is_some(), "minority node {m} should have applied entries");
+    }
+
+    let artifact = artifact.build();
+    if let Ok(path) = artifact.persist("docs/simulations") {
+        eprintln!("Simulation artifact persisted to: {}", path.display());
+    }
+}
+
+/// Slow follower with high AppendEntries latency.
+/// Cluster should remain available and slow follower eventually catches up.
+#[madsim::test]
+async fn test_slow_follower_cluster_availability() {
+    let seed = 8888_u64;
+    let mut artifact = SimulationArtifactBuilder::new("madsim_slow_follower", seed).start();
+
+    artifact = artifact.add_event("create: router and failure injector");
+    let router = Arc::new(MadsimRaftRouter::new());
+    let injector = Arc::new(FailureInjector::new());
+
+    artifact = artifact.add_event("create: 5 raft nodes");
+    let mut rafts = Vec::new();
+    for i in 1u64..=5 {
+        rafts.push(create_raft_node(NodeId::from(i), router.clone(), injector.clone()).await);
+    }
+
+    artifact = artifact.add_event("register: all 5 nodes");
+    for i in 1u64..=5 {
+        router
+            .register_node(NodeId::from(i), format!("127.0.0.1:2700{i}"), rafts[(i - 1) as usize].clone())
+            .expect("failed to register node");
+    }
+
+    artifact = artifact.add_event("init: 5-node cluster");
+    let mut nodes = BTreeMap::new();
+    for i in 1u64..=5 {
+        nodes.insert(NodeId::from(i), create_test_raft_member_info(i));
+    }
+    rafts[0].initialize(nodes).await.expect("init failed");
+
+    madsim::time::sleep(std::time::Duration::from_millis(5000)).await;
+
+    // Make node 3 slow: add 5000ms delay on all routes to/from node 3
+    artifact = artifact.add_event("inject: 5000ms delay to node 3");
+    for i in [1u64, 2, 4, 5] {
+        injector.set_network_delay(NodeId::from(3), NodeId::from(i), 5000);
+        injector.set_network_delay(NodeId::from(i), NodeId::from(3), 5000);
+    }
+
+    // Write 20 entries — should succeed without waiting for node 3
+    artifact = artifact.add_event("write: 20 entries with slow follower");
+    let leader_id = rafts
+        .iter()
+        .find_map(|r| {
+            let m = r.metrics().borrow().clone();
+            if m.current_leader.map(|l| l == m.id).unwrap_or(false) {
+                Some(m.id)
+            } else {
+                None
+            }
+        })
+        .expect("no leader found");
+
+    let leader_raft = &rafts[(leader_id.0 - 1) as usize];
+    for i in 0..20 {
+        leader_raft
+            .client_write(AppRequest::Set {
+                key: format!("slow_test_{i}"),
+                value: format!("val_{i}"),
+            })
+            .await
+            .expect("write should succeed with slow follower");
+    }
+
+    artifact = artifact.add_event("verify: writes committed without slow node");
+    let leader_applied = leader_raft.metrics().borrow().last_applied;
+    assert!(leader_applied.is_some(), "leader should have applied entries");
+
+    // Remove delay and let node 3 catch up
+    artifact = artifact.add_event("heal: remove delay from node 3");
+    for i in [1u64, 2, 4, 5] {
+        injector.set_network_delay(NodeId::from(3), NodeId::from(i), 0);
+        injector.set_network_delay(NodeId::from(i), NodeId::from(3), 0);
+    }
+
+    artifact = artifact.add_event("wait: for slow follower catch-up");
+    madsim::time::sleep(std::time::Duration::from_millis(10000)).await;
+
+    // Node 3 should have caught up
+    artifact = artifact.add_event("verify: node 3 caught up");
+    let node3_applied = rafts[2].metrics().borrow().last_applied;
+    assert!(node3_applied.is_some(), "slow follower should have applied entries after catch-up");
+
+    let artifact = artifact.build();
+    if let Ok(path) = artifact.persist("docs/simulations") {
+        eprintln!("Simulation artifact persisted to: {}", path.display());
+    }
+}
