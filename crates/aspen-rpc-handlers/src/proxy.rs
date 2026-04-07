@@ -25,6 +25,7 @@
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use std::future::Future;
 
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
 use anyhow::Context;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_client_api::AuthenticatedRequest;

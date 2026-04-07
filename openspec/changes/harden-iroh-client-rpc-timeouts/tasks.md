@@ -27,5 +27,7 @@
 ## 5. Verify the rollout
 
 - [x] 5.1 Run targeted crate tests for the updated client, federation, and proxy modules
-- [ ] 5.2 Run a quick end-to-end command path that exercises CLI or client RPCs against a real node
-- [ ] 5.3 Record any remaining direct `open_bi()` call sites that need follow-up in a separate audit issue if they are out of scope
+- [x] 5.2 Run a quick end-to-end command path that exercises CLI or client RPCs against a real node
+  - Verified `target/debug/aspen-cli --ticket ... cluster health` and `cluster init` against a live local `target/debug/aspen-node`; a follow-up `kv set/get` attempt hit the node's disk-pressure guard rather than any transport timeout path.
+- [x] 5.3 Record any remaining direct `open_bi()` call sites that need follow-up in a separate audit issue if they are out of scope
+  - Created follow-up change: `openspec/changes/audit-remaining-iroh-open-bi-clients`.

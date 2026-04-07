@@ -178,6 +178,9 @@ cargo nextest run -P quick               # Quick tests (~2-5 min, skips proptest
 cargo nextest run -E 'test(/raft/)'      # Tests for specific module
 cargo nextest run <test_name>            # Single test
 cargo nextest run -P network --run-ignored all  # Tests requiring real network
+# Note: `cargo nextest run -P quick --workspace` currently pulls vendored iroh crates
+# (`vendor/iroh-h3-axum`, `vendor/iroh-proxy-utils`) whose tests/examples don't build
+# against the pinned iroh 0.97 API. Exclude those crates when auditing Aspen proper.
 
 # Mutation testing (verify tests catch real bugs)
 cargo mutants -p aspen-coordination --timeout 60  # Baseline: coordination
@@ -191,6 +194,8 @@ INSTA_UPDATE=always cargo test                     # Auto-accept new snapshots
 # Linting and formatting
 cargo clippy --all-targets -- --deny warnings
 nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)
+# Note: the rustfmt hook runs repo-wide `nix run .#rustfmt`, not file-scoped formatting.
+# Stash or restore unrelated unstaged Rust edits before making a focused commit.
 
 # Run binaries
 cargo run --features jobs,docs,blob,hooks,automerge --bin aspen-node -- --node-id 1 --cookie my-cluster

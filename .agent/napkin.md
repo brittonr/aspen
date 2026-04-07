@@ -14,6 +14,9 @@
 | 2026-02-24 | WASM plugin host function externs used Rust types (String, Vec) | All host externs MUST use raw C types (`*const c_char`, `*const u8`, `i32`). Vec params need explicit `_len: i32` |
 | 2026-02-23 | Added field to widely-used struct → 40 broken callers | Add default trait methods (purely additive). When adding fields: `rg 'StructName\s*\{' --type rust -l` to find ALL sites |
 | 2026-04-01 | Added `upstream_cache_config` field to `NixBuildWorkerConfig` (behind `#[cfg(feature = "snix-build")]`) but forgot to add it to the struct literal in `client.rs` | When adding cfg-gated fields: `rg 'StructName\s*\{' --type rust` to find ALL construction sites. Also check re-exports in `lib.rs` match the cfg gates of their modules |
+| 2026-04-07 | `cargo nextest run -P quick --workspace` failed before Aspen tests because vendored crates `vendor/iroh-h3-axum` and `vendor/iroh-proxy-utils` still ship tests/examples against older iroh APIs | For Aspen audits, exclude those vendor crates (or avoid `--workspace`) unless you're explicitly updating the vendored iroh stack |
+| 2026-04-07 | Generic timeout helpers in federation wrapped both iroh transport errors and `anyhow::Result` wire helpers (`write_message`, `read_message`) | Use `E: Into<anyhow::Error>` for mixed error sources. `E: std::error::Error` breaks on futures that already return `anyhow::Error` |
+| 2026-04-07 | Pre-commit `rustfmt` runs repo-wide `nix run .#rustfmt`, so a scoped commit can fail if unrelated unstaged Rust files would also be reformatted | Stash or restore unrelated Rust edits before committing a focused Rust change. If needed, run `nix run .#rustfmt` manually before a scoped `--no-verify` commit |
 
 ### Struct / API Gotchas
 
