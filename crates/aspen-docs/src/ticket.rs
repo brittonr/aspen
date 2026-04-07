@@ -65,10 +65,10 @@ impl Ticket for AspenDocsTicket {
     const KIND: &'static str = TICKET_PREFIX;
 
     fn to_bytes(&self) -> Vec<u8> {
-        // postcard::to_stdvec is infallible for simple structs like AspenDocsTicket.
-        // Use unwrap_or_default for Tiger Style compliance (no panics).
-        // An empty Vec indicates serialization failure, which should never occur.
-        postcard::to_stdvec(self).unwrap_or_default()
+        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
+        // All fields are bounded primitives (String, u8, Vec<EndpointAddr>, bool).
+        // Postcard serialization of these types is infallible.
+        postcard::to_stdvec(self).expect("AspenDocsTicket serialization is infallible for bounded fields")
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
@@ -106,5 +106,15 @@ mod tests {
     fn test_invalid_ticket() {
         assert!(AspenDocsTicket::deserialize("invalid").is_err());
         assert!(AspenDocsTicket::deserialize("aspendocs!!!").is_err());
+    }
+
+    #[test]
+    fn to_bytes_produces_nonempty_payload() {
+        let secret_key = SecretKey::from([1u8; 32]);
+        let endpoint_id: EndpointId = secret_key.public();
+        let addr = EndpointAddr::new(endpoint_id);
+        let ticket = AspenDocsTicket::new("test".to_string(), 0, "ns1".to_string(), vec![addr], false);
+        let bytes = <AspenDocsTicket as Ticket>::to_bytes(&ticket);
+        assert!(!bytes.is_empty(), "to_bytes must not produce empty payload");
     }
 }

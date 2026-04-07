@@ -99,9 +99,10 @@ impl Ticket for AspenClientTicket {
     const KIND: &'static str = CLIENT_TICKET_PREFIX;
 
     fn to_bytes(&self) -> Vec<u8> {
-        // SAFETY: postcard serialization of #[derive(Serialize)] types with only
-        // primitive fields and standard library types is infallible.
-        postcard::to_stdvec(self).unwrap_or_default()
+        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
+        // All fields are bounded primitives (String, Vec<EndpointAddr>, u8, u64, Option<[u8; 32]>).
+        // Postcard serialization of these types is infallible.
+        postcard::to_stdvec(self).expect("AspenClientTicket serialization is infallible for bounded fields")
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
@@ -349,5 +350,28 @@ mod tests {
         let ser1 = ticket.serialize();
         let ser2 = ticket.serialize();
         assert_eq!(ser1, ser2);
+    }
+
+    #[test]
+    fn to_bytes_produces_nonempty_payload() {
+        let addr = test_endpoint_addr();
+        let ticket = AspenClientTicket::new("test-cluster", vec![addr])
+            .with_access(AccessLevel::ReadWrite)
+            .with_auth_token([42u8; 32]);
+        let bytes = <AspenClientTicket as Ticket>::to_bytes(&ticket);
+        assert!(!bytes.is_empty(), "to_bytes must not produce empty payload");
+    }
+
+    #[test]
+    fn roundtrip_via_ticket_trait_bytes() {
+        let addr = test_endpoint_addr();
+        let ticket = AspenClientTicket::new("roundtrip-cluster", vec![addr])
+            .with_access(AccessLevel::ReadWrite)
+            .with_expiry(9999999999)
+            .with_auth_token([7u8; 32])
+            .with_priority(3);
+        let bytes = <AspenClientTicket as Ticket>::to_bytes(&ticket);
+        let restored = <AspenClientTicket as Ticket>::from_bytes(&bytes).unwrap();
+        assert_eq!(ticket, restored);
     }
 }

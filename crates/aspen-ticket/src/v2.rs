@@ -247,16 +247,54 @@ impl Ticket for AspenClusterTicket {
     const KIND: &'static str = "aspen";
 
     fn to_bytes(&self) -> Vec<u8> {
-        // Tiger Style: .expect() required by iroh_tickets::Ticket trait - cannot return Result.
-        // WHY: The Ticket trait defines `fn to_bytes(&self) -> Vec<u8>` with no Result.
-        // WHAT would fail: Only a postcard library bug, memory corruption, or OOM.
-        // WHY safe: All fields are bounded (MAX_BOOTSTRAP_PEERS=16, MAX_DIRECT_ADDRS_PER_PEER=8)
-        //   with deterministic serialization of primitive types (TopicId, Vec<BootstrapPeer>, String).
-        postcard::to_stdvec(&self).unwrap_or_default()
+        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
+        // All fields are bounded (MAX_BOOTSTRAP_PEERS=16, MAX_DIRECT_ADDRS_PER_PEER=8)
+        // with deterministic serialization of primitive types. Postcard serialization is infallible.
+        postcard::to_stdvec(&self).expect("AspenClusterTicket serialization is infallible for bounded fields")
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
         let ticket = postcard::from_bytes(bytes)?;
         Ok(ticket)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_ticket() -> AspenClusterTicket {
+        let key = iroh::SecretKey::from([1u8; 32]);
+        let addr = EndpointAddr::new(key.public());
+        AspenClusterTicket::with_bootstrap_addr(TopicId::from_bytes([42u8; 32]), "test-cluster".to_string(), &addr)
+    }
+
+    #[test]
+    fn to_bytes_produces_nonempty_payload() {
+        let ticket = make_test_ticket();
+        let bytes = <AspenClusterTicket as Ticket>::to_bytes(&ticket);
+        assert!(!bytes.is_empty(), "to_bytes must not produce empty payload");
+    }
+
+    #[test]
+    fn roundtrip_via_ticket_trait() {
+        let ticket = make_test_ticket();
+        let serialized = ticket.serialize();
+        let restored = AspenClusterTicket::deserialize(&serialized).unwrap();
+        assert_eq!(ticket, restored);
+    }
+
+    #[test]
+    fn roundtrip_with_multiple_peers_and_addrs() {
+        let mut ticket = AspenClusterTicket::new(TopicId::from_bytes([7u8; 32]), "multi-peer".to_string());
+        for i in 0..5u8 {
+            let key = iroh::SecretKey::from([i + 10; 32]);
+            let mut addr = EndpointAddr::new(key.public());
+            addr.addrs.insert(TransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7000 + i as u16))));
+            ticket.add_bootstrap_addr(&addr).unwrap();
+        }
+        let serialized = ticket.serialize();
+        let restored = AspenClusterTicket::deserialize(&serialized).unwrap();
+        assert_eq!(ticket, restored);
     }
 }

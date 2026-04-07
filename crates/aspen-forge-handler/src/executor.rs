@@ -2116,16 +2116,23 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 signature_hex,
             } => match self.nostr_auth.verify_challenge(&npub_hex, &challenge_id, &signature_hex).await {
                 Ok(user_ctx) => match self.nostr_auth.issue_token(&user_ctx) {
-                    Ok(token) => {
-                        let token_bytes = postcard::to_stdvec(&token).unwrap_or_default();
-                        let token_b64 = base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &token_bytes);
-                        Ok(ClientRpcResponse::NostrAuthVerifyResult {
-                            is_success: true,
-                            token: Some(token_b64),
-                            ed25519_public_key: Some(user_ctx.public_key.to_string()),
-                            error: None,
-                        })
-                    }
+                    Ok(token) => match postcard::to_stdvec(&token) {
+                        Ok(token_bytes) => {
+                            let token_b64 = base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &token_bytes);
+                            Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                                is_success: true,
+                                token: Some(token_b64),
+                                ed25519_public_key: Some(user_ctx.public_key.to_string()),
+                                error: None,
+                            })
+                        }
+                        Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                            is_success: false,
+                            token: None,
+                            ed25519_public_key: None,
+                            error: Some(format!("token serialization failed: {e}")),
+                        }),
+                    },
                     Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
                         is_success: false,
                         token: None,

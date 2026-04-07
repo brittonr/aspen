@@ -367,18 +367,11 @@ impl Ticket for AspenHookTicket {
     const KIND: &'static str = HOOK_TICKET_PREFIX;
 
     fn to_bytes(&self) -> Vec<u8> {
-        // Tiger Style: Document panic conditions explicitly
-        //
-        // Postcard serialization of AspenHookTicket can only fail if:
-        // 1. Bug in postcard library
-        // 2. Memory corruption
-        // 3. OOM during Vec allocation
-        //
-        // This struct contains only bounded fields with Tiger Style limits,
-        // making serialization deterministic.
-        //
-        // If this panics, it indicates a serious system issue.
-        postcard::to_stdvec(self).unwrap_or_default()
+        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
+        // All fields are bounded by Tiger Style limits (MAX_BOOTSTRAP_PEERS=16,
+        // MAX_CLUSTER_ID_SIZE=128, MAX_EVENT_TYPE_SIZE=64, MAX_PAYLOAD_SIZE=4096).
+        // Postcard serialization of these bounded fields is infallible.
+        postcard::to_stdvec(self).expect("AspenHookTicket serialization is infallible for bounded fields")
     }
 
     fn from_bytes(bytes: &[u8]) -> std::result::Result<Self, iroh_tickets::ParseError> {

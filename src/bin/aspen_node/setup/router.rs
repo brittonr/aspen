@@ -271,7 +271,7 @@ pub fn print_cluster_ticket(
     config: &NodeConfig,
     endpoint_addr: &iroh::EndpointAddr,
     secret_key: &iroh_base::SecretKey,
-) {
+) -> anyhow::Result<()> {
     use std::io::Write;
 
     use aspen::cluster::ticket::AspenClusterTicket;
@@ -327,8 +327,10 @@ pub fn print_cluster_ticket(
         .expect("token building should not fail");
 
     // Bundle endpoint address + capability into a single sync ticket
-    let sync_ticket = aspen_automerge::AutomergeSyncTicket::new(endpoint_addr.clone(), &token);
-    let sync_ticket_str = sync_ticket.serialize();
+    let sync_ticket = aspen_automerge::AutomergeSyncTicket::new(endpoint_addr.clone(), &token)
+        .map_err(|e| anyhow::anyhow!("capability token encoding failed: {e}"))?;
+    let sync_ticket_str =
+        sync_ticket.serialize().map_err(|e| anyhow::anyhow!("sync ticket serialization failed: {e}"))?;
 
     info!(
         sync_ticket = %sync_ticket_str,
@@ -342,4 +344,6 @@ pub fn print_cluster_ticket(
     println!("Automerge sync (one string, includes auth):");
     println!("  irohscii --cluster {}", sync_ticket_str);
     println!();
+
+    Ok(())
 }

@@ -344,7 +344,7 @@ async fn async_main() -> Result<()> {
     }
 
     // Generate and print cluster ticket (V2 with direct addresses)
-    print_cluster_ticket(&config, &endpoint_addr, node_mode.iroh_manager().endpoint().secret_key());
+    print_cluster_ticket(&config, &endpoint_addr, node_mode.iroh_manager().endpoint().secret_key())?;
 
     // Wait for shutdown signal
     shutdown_signal().await;

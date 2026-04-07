@@ -29,18 +29,22 @@ pub struct AutomergeSyncTicket {
 
 impl AutomergeSyncTicket {
     /// Create a new sync ticket.
-    pub fn new(addr: EndpointAddr, token: &CapabilityToken) -> Self {
-        Self {
-            addr,
-            token: token.encode().unwrap_or_default(),
-        }
+    ///
+    /// Returns an error if the capability token cannot be encoded (e.g.,
+    /// exceeds `MAX_TOKEN_SIZE`).
+    pub fn new(addr: EndpointAddr, token: &CapabilityToken) -> Result<Self, TicketError> {
+        let encoded = token.encode().map_err(|e| TicketError::Encode(e.to_string()))?;
+        Ok(Self { addr, token: encoded })
     }
 
     /// Serialize to a shareable string.
-    pub fn serialize(&self) -> String {
+    ///
+    /// Returns an error if postcard serialization fails (should not happen
+    /// for a validly-constructed ticket).
+    pub fn serialize(&self) -> Result<String, TicketError> {
         use base64::Engine;
-        let bytes = postcard::to_stdvec(self).unwrap_or_default();
-        format!("{}{}", TICKET_PREFIX, base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&bytes))
+        let bytes = postcard::to_stdvec(self).map_err(|e| TicketError::Encode(e.to_string()))?;
+        Ok(format!("{}{}", TICKET_PREFIX, base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&bytes)))
     }
 
     /// Deserialize from a string.
@@ -67,6 +71,9 @@ pub enum TicketError {
 
     #[error("decode error: {0}")]
     Decode(String),
+
+    #[error("encode error: {0}")]
+    Encode(String),
 }
 
 #[cfg(test)]
@@ -94,9 +101,9 @@ mod tests {
     fn roundtrip() {
         let addr = make_test_addr();
         let token = make_test_token();
-        let ticket = AutomergeSyncTicket::new(addr.clone(), &token);
+        let ticket = AutomergeSyncTicket::new(addr.clone(), &token).unwrap();
 
-        let s = ticket.serialize();
+        let s = ticket.serialize().unwrap();
         assert!(s.starts_with(TICKET_PREFIX));
 
         let restored = AutomergeSyncTicket::deserialize(&s).unwrap();
@@ -114,5 +121,37 @@ mod tests {
     #[test]
     fn corrupt_data_rejected() {
         assert!(AutomergeSyncTicket::deserialize("amsync1!!!notbase64").is_err());
+    }
+
+    #[test]
+    fn oversized_token_rejected_at_construction() {
+        use std::time::Duration;
+        let key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+        // Build a token with 32 capabilities, each with a very long prefix,
+        // to push the encoded size over MAX_TOKEN_SIZE (8KB).
+        let mut builder = aspen_auth::TokenBuilder::new(key).with_lifetime(Duration::from_secs(3600));
+        for i in 0..32 {
+            builder = builder.with_capability(aspen_auth::Capability::Full {
+                prefix: format!("automerge:{i}:{}", "x".repeat(300)),
+            });
+        }
+        let big_token = builder.build().unwrap();
+
+        let addr = make_test_addr();
+        let result = AutomergeSyncTicket::new(addr, &big_token);
+        assert!(result.is_err(), "oversized token should be rejected");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("encode error"), "error should mention encoding: {err_msg}");
+    }
+
+    #[test]
+    fn serialize_returns_nonempty_payload() {
+        let addr = make_test_addr();
+        let token = make_test_token();
+        let ticket = AutomergeSyncTicket::new(addr, &token).unwrap();
+        let s = ticket.serialize().unwrap();
+        // Strip prefix and verify the base64 payload is not empty.
+        let payload = s.strip_prefix(TICKET_PREFIX).unwrap();
+        assert!(!payload.is_empty(), "serialized ticket payload must not be empty");
     }
 }

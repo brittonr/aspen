@@ -251,13 +251,11 @@ impl Ticket for SignedAspenClusterTicket {
     const KIND: &'static str = "aspensigned";
 
     fn to_bytes(&self) -> Vec<u8> {
-        // Tiger Style: .expect() required by iroh_tickets::Ticket trait - cannot return Result.
-        // WHY: The Ticket trait defines `fn to_bytes(&self) -> Vec<u8>` with no Result.
-        // WHAT would fail: Only a postcard library bug, memory corruption, or OOM.
-        // WHY safe: All fields are fixed-size or bounded (version: u8, Signature: 64 bytes,
-        //   PublicKey: 32 bytes, nonce: 16 bytes, timestamps: u64, inner ticket bounded by
-        //   AspenClusterTicket::MAX_BOOTSTRAP_PEERS=16).
-        postcard::to_stdvec(&self).unwrap_or_default()
+        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
+        // All fields are fixed-size or bounded (version: u8, Signature: 64 bytes,
+        // PublicKey: 32 bytes, nonce: 16 bytes, timestamps: u64, inner ticket bounded by
+        // AspenClusterTicket::MAX_BOOTSTRAP_PEERS=16). Postcard serialization is infallible.
+        postcard::to_stdvec(&self).expect("SignedAspenClusterTicket serialization is infallible for bounded fields")
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
@@ -283,5 +281,47 @@ struct SignedTicketPayload<'a> {
 impl SignedTicketPayload<'_> {
     fn to_bytes(&self) -> Result<Vec<u8>> {
         postcard::to_stdvec(self).context("failed to serialize ticket payload")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use iroh_gossip::proto::TopicId;
+
+    use super::*;
+
+    fn make_signed_ticket() -> SignedAspenClusterTicket {
+        let key = SecretKey::from([1u8; 32]);
+        let inner = AspenClusterTicket::with_bootstrap(
+            TopicId::from_bytes([42u8; 32]),
+            "test-cluster".to_string(),
+            key.public(),
+        );
+        SignedAspenClusterTicket::sign(inner, &key).unwrap()
+    }
+
+    #[test]
+    fn to_bytes_produces_nonempty_payload() {
+        let signed = make_signed_ticket();
+        let bytes = <SignedAspenClusterTicket as Ticket>::to_bytes(&signed);
+        assert!(!bytes.is_empty(), "to_bytes must not produce empty payload");
+    }
+
+    #[test]
+    fn roundtrip_via_ticket_trait() {
+        let signed = make_signed_ticket();
+        let serialized = signed.serialize();
+        let restored = SignedAspenClusterTicket::deserialize(&serialized).unwrap();
+        assert_eq!(restored.version, signed.version);
+        assert_eq!(restored.issuer, signed.issuer);
+        assert_eq!(restored.ticket, signed.ticket);
+    }
+
+    #[test]
+    fn verify_roundtripped_ticket() {
+        let signed = make_signed_ticket();
+        let serialized = signed.serialize();
+        let restored = SignedAspenClusterTicket::deserialize(&serialized).unwrap();
+        assert!(restored.verify().is_some(), "roundtripped ticket must verify");
     }
 }
