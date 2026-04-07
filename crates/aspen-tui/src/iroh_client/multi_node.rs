@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -150,21 +151,42 @@ impl MultiNodeClient {
             "sending TUI RPC request"
         );
 
-        // Connect to the target node
-        let connection =
-            self.endpoint.connect(target.clone(), CLIENT_ALPN).await.context("failed to connect to node")?;
+        // Connect to the target node with timeout
+        let connection = tokio::time::timeout(RPC_TIMEOUT, self.endpoint.connect(target.clone(), CLIENT_ALPN))
+            .await
+            .context("connection timeout")?
+            .context("failed to connect to node")?;
 
-        // Open a bidirectional stream for the RPC
-        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
-
-        // Serialize and send the request
+        // Serialize the request before entering the timed exchange
         let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
-        send.write_all(&request_bytes).await.context("failed to send request")?;
-        send.finish().context("failed to finish send stream")?;
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = Instant::now() + RPC_TIMEOUT;
+
+        // Open a bidirectional stream for the RPC
+        let (mut send, mut recv) = tokio::time::timeout(remaining_timeout(deadline)?, connection.open_bi())
+            .await
+            .context("stream open timeout")?
+            .context("failed to open stream")?;
+
+        // Send the request
+        tokio::time::timeout(remaining_timeout(deadline)?, send.write_all(&request_bytes))
+            .await
+            .context("request write timeout")?
+            .context("failed to send request")?;
+        tokio::time::timeout(remaining_timeout(deadline)?, async {
+            send.finish().context("failed to finish send stream")
+        })
+        .await
+        .context("stream finish timeout")??;
 
         // Read the response
-        let response_bytes = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")?;
+        let response_bytes =
+            tokio::time::timeout(remaining_timeout(deadline)?, recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE))
+                .await
+                .context("response timeout")?
+                .context("failed to read response")?;
 
         // Deserialize the response
         let response: ClientRpcResponse =
@@ -837,5 +859,13 @@ impl MultiNodeClient {
     /// Used by sync trait methods that can't await.
     pub fn try_primary_addr(&self) -> Option<EndpointAddr> {
         self.primary_target.try_read().ok().map(|g| g.clone())
+    }
+}
+
+/// Compute remaining time until a deadline, returning an error if already past.
+fn remaining_timeout(deadline: Instant) -> Result<Duration> {
+    match deadline.checked_duration_since(Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!("deadline exceeded")),
     }
 }

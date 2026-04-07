@@ -22,6 +22,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -241,21 +242,42 @@ impl FuseSyncClient {
         // Try with a pooled connection first, then a fresh one
         let mut connection = self.pool.acquire().await?;
 
-        let (mut send, mut recv) = match connection.open_bi().await {
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = Instant::now() + READ_TIMEOUT;
+
+        let (mut send, mut recv) = match tokio::time::timeout(remaining_timeout(deadline)?, connection.open_bi())
+            .await
+            .context("stream open timeout")?
+        {
             Ok(streams) => streams,
             Err(_) => {
                 // Pooled connection was stale — get a fresh one
                 debug!("pooled connection stale, establishing new connection");
                 connection = self.pool.acquire().await?;
-                connection.open_bi().await.context("failed to open stream")?
+                tokio::time::timeout(remaining_timeout(deadline)?, connection.open_bi())
+                    .await
+                    .context("stream open timeout")?
+                    .context("failed to open stream")?
             }
         };
 
-        send.write_all(&request_bytes).await.context("failed to send request")?;
-        send.finish().context("failed to finish send stream")?;
+        tokio::time::timeout(remaining_timeout(deadline)?, send.write_all(&request_bytes))
+            .await
+            .context("request write timeout")?
+            .context("failed to send request")?;
+        tokio::time::timeout(remaining_timeout(deadline)?, async {
+            send.finish().context("failed to finish send stream")
+        })
+        .await
+        .context("stream finish timeout")??;
 
         // Read the response
-        let response_bytes = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")?;
+        let response_bytes =
+            tokio::time::timeout(remaining_timeout(deadline)?, recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE))
+                .await
+                .context("response timeout")?
+                .context("failed to read response")?;
 
         // Return connection to pool for reuse
         self.pool.release(connection);
@@ -394,3 +416,11 @@ impl FuseSyncClient {
 
 /// Create a thread-safe client wrapper.
 pub type SharedClient = Arc<FuseSyncClient>;
+
+/// Compute remaining time until a deadline, returning an error if already past.
+fn remaining_timeout(deadline: Instant) -> Result<Duration> {
+    match deadline.checked_duration_since(Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!("deadline exceeded")),
+    }
+}

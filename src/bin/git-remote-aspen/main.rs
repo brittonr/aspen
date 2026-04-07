@@ -122,6 +122,14 @@ const MAX_BATCH_OBJECTS: usize = 2000;
 /// The generic MAX_CLIENT_MESSAGE_SIZE (16MB) is too small for large repos.
 const MAX_GIT_FETCH_RESPONSE_SIZE: usize = 256 * 1024 * 1024;
 
+/// Compute remaining time until a deadline, returning an `io::Error` if already past.
+fn remaining_timeout_io(deadline: std::time::Instant) -> io::Result<Duration> {
+    match deadline.checked_duration_since(std::time::Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(io::Error::new(io::ErrorKind::TimedOut, "deadline exceeded")),
+    }
+}
+
 /// Supported options and their current values.
 struct Options {
     /// Verbosity level (0 = quiet, 1 = normal, 2+ = verbose).
@@ -266,6 +274,8 @@ impl RpcClient {
 
     /// Send a single RPC request without retry.
     async fn send_once(&self, request: ClientRpcRequest) -> io::Result<ClientRpcResponse> {
+        use std::time::Instant;
+
         use aspen::client_rpc::AuthenticatedRequest;
         use tokio::time::timeout;
 
@@ -282,9 +292,6 @@ impl RpcClient {
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "connection timeout"))?
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e))?;
 
-        // Open stream
-        let (mut send, mut recv) = connection.open_bi().await.map_err(io::Error::other)?;
-
         // Send request (unauthenticated for now)
         let auth_request = AuthenticatedRequest::unauthenticated(request);
         let request_bytes =
@@ -295,11 +302,28 @@ impl RpcClient {
             request_bytes.len(),
             request_bytes.len() as f64 / (1024.0 * 1024.0)
         );
-        send.write_all(&request_bytes).await.map_err(io::Error::other)?;
-        send.finish().map_err(io::Error::other)?;
+
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = Instant::now() + RPC_TIMEOUT;
+
+        // Open stream with deadline
+        let (mut send, mut recv) = timeout(remaining_timeout_io(deadline)?, connection.open_bi())
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "stream open timeout"))?
+            .map_err(io::Error::other)?;
+
+        // Write request with deadline
+        timeout(remaining_timeout_io(deadline)?, send.write_all(&request_bytes))
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "request write timeout"))?
+            .map_err(io::Error::other)?;
+        timeout(remaining_timeout_io(deadline)?, async { send.finish().map_err(io::Error::other) })
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "stream finish timeout"))??;
 
         // Read response — use larger limit for git fetch which returns all objects inline
-        let response_bytes = timeout(RPC_TIMEOUT, async { recv.read_to_end(MAX_GIT_FETCH_RESPONSE_SIZE).await })
+        let response_bytes = timeout(remaining_timeout_io(deadline)?, recv.read_to_end(MAX_GIT_FETCH_RESPONSE_SIZE))
             .await
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "response timeout"))?
             .map_err(io::Error::other)?;
@@ -1833,5 +1857,19 @@ mod tests {
         assert!(all_sha1s.contains(&"aaa"));
         assert!(all_sha1s.contains(&"bbb"));
         assert!(all_sha1s.contains(&"ccc"));
+    }
+
+    #[test]
+    fn remaining_timeout_io_returns_duration_when_deadline_is_ahead() {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let remaining = remaining_timeout_io(deadline).expect("should return Ok");
+        assert!(remaining.as_secs() > 0);
+    }
+
+    #[test]
+    fn remaining_timeout_io_returns_timed_out_when_deadline_is_past() {
+        let deadline = std::time::Instant::now() - Duration::from_secs(1);
+        let err = remaining_timeout_io(deadline).expect_err("should return Err");
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
     }
 }

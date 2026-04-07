@@ -599,26 +599,37 @@ async fn send_hook_trigger(
     .await
     .context("connection timeout")??;
 
-    // Open bidirectional stream
-    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
-
-    // Build and serialize the request
+    // Build and serialize the request before entering the timed exchange
     let request = ClientRpcRequest::HookTrigger {
         event_type: event_type.to_string(),
         payload_json: payload.to_string(),
     };
     let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
-    // Send request
-    send.write_all(&request_bytes).await.context("failed to send request")?;
-    send.finish().context("failed to finish send stream")?;
+    // Bound the full post-connect exchange with one overall deadline while
+    // preserving stage-specific timeout errors.
+    let deadline = std::time::Instant::now() + rpc_timeout;
 
-    // Read response with timeout
-    let response_bytes = timeout(rpc_timeout, async {
-        recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")
-    })
-    .await
-    .context("response timeout")??;
+    // Open bidirectional stream
+    let (mut send, mut recv) = timeout(remaining_timeout_hooks(deadline)?, connection.open_bi())
+        .await
+        .context("stream open timeout")?
+        .context("failed to open stream")?;
+
+    // Send request
+    timeout(remaining_timeout_hooks(deadline)?, send.write_all(&request_bytes))
+        .await
+        .context("request write timeout")?
+        .context("failed to send request")?;
+    timeout(remaining_timeout_hooks(deadline)?, async { send.finish().context("failed to finish send stream") })
+        .await
+        .context("stream finish timeout")??;
+
+    // Read response with deadline
+    let response_bytes = timeout(remaining_timeout_hooks(deadline)?, recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE))
+        .await
+        .context("response timeout")?
+        .context("failed to read response")?;
 
     // Deserialize response
     let response: ClientRpcResponse =
@@ -637,6 +648,14 @@ async fn send_hook_trigger(
         }),
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+/// Compute remaining time until a deadline, returning an error if already past.
+fn remaining_timeout_hooks(deadline: std::time::Instant) -> anyhow::Result<std::time::Duration> {
+    match deadline.checked_duration_since(std::time::Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!("deadline exceeded")),
     }
 }
 

@@ -463,6 +463,11 @@ impl irpc::rpc::RemoteConnection for IrohConnection {
         &self,
     ) -> n0_future::future::Boxed<Result<(iroh::endpoint::SendStream, iroh::endpoint::RecvStream), irpc::RequestError>>
     {
+        /// Connect timeout for fresh connections inside the IRPC transport layer.
+        /// The IRPC caller owns the overall exchange budget; this just prevents
+        /// `endpoint.connect()` from blocking indefinitely on unreachable peers.
+        const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
         let inner = self.0.clone();
         Box::pin(async move {
             let mut guard = inner.connection.lock().await;
@@ -472,9 +477,15 @@ impl irpc::rpc::RemoteConnection for IrohConnection {
                 }
                 *guard = None;
             }
-            // Connect fresh
-            let conn =
-                inner.endpoint.connect(inner.addr.clone(), &inner.alpn).await.map_err(|e| -> irpc::RequestError {
+            // Connect fresh with bounded timeout
+            let conn = tokio::time::timeout(CONNECT_TIMEOUT, inner.endpoint.connect(inner.addr.clone(), &inner.alpn))
+                .await
+                .map_err(|_| -> irpc::RequestError {
+                    let any: n0_error::AnyError =
+                        io::Error::new(io::ErrorKind::TimedOut, "iroh connect timeout").into();
+                    any.into()
+                })?
+                .map_err(|e| -> irpc::RequestError {
                     let any: n0_error::AnyError = io::Error::other(format!("iroh connect: {e}")).into();
                     any.into()
                 })?;

@@ -107,41 +107,59 @@ impl RpcDirectoryService {
             }
         };
 
-        // Open bidirectional stream
-        trace!("opening bidirectional stream");
-        let (send, recv) = connection.open_bi().await.map_err(|e| {
-            error!(error = %e, "failed to open RPC stream");
-            Error::from(format!("failed to open RPC stream: {e}"))
-        })?;
-
-        // Serialize request
+        // Serialize request before entering the timed exchange
         let request_bytes = postcard::to_allocvec(&request).map_err(|e| {
             error!(error = %e, "failed to serialize request");
             Error::from(format!("failed to serialize request: {e}"))
         })?;
 
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = std::time::Instant::now() + RPC_TIMEOUT;
+
+        // Open bidirectional stream
+        trace!("opening bidirectional stream");
+        let (send, recv) = timeout(remaining_timeout_dir(deadline)?, connection.open_bi())
+            .await
+            .map_err(|_| Error::from("stream open timeout"))?
+            .map_err(|e| {
+                error!(error = %e, "failed to open RPC stream");
+                Error::from(format!("failed to open RPC stream: {e}"))
+            })?;
+
         trace!(request_size = request_bytes.len(), "sending RPC request");
 
         // Send request data (no length prefix - gateway uses read_to_end)
         let mut send = send;
-        send.write_all(&request_bytes).await.map_err(|e| {
-            error!(error = %e, "failed to send request body");
-            Error::from(format!("failed to send request: {e}"))
-        })?;
-        send.finish().map_err(|e| {
-            error!(error = %e, "failed to finish send stream");
-            Error::from(format!("failed to finish send: {e}"))
-        })?;
+        timeout(remaining_timeout_dir(deadline)?, send.write_all(&request_bytes))
+            .await
+            .map_err(|_| Error::from("request write timeout"))?
+            .map_err(|e| {
+                error!(error = %e, "failed to send request body");
+                Error::from(format!("failed to send request: {e}"))
+            })?;
+        timeout(remaining_timeout_dir(deadline)?, async {
+            send.finish().map_err(|e| {
+                error!(error = %e, "failed to finish send stream");
+                Error::from(format!("failed to finish send: {e}"))
+            })
+        })
+        .await
+        .map_err(|_| Error::from("stream finish timeout"))??;
 
         trace!("request sent, waiting for response");
 
         // Read response (no length prefix - gateway sends raw postcard bytes)
-        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024; // Match MAX_CLIENT_MESSAGE_SIZE
+        // Large-response budget: directory listings can be substantial.
+        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024;
         let mut recv = recv;
-        let response_bytes = recv.read_to_end(MAX_RESPONSE_SIZE).await.map_err(|e| {
-            error!(error = %e, "failed to read response");
-            Error::from(format!("failed to read response: {e}"))
-        })?;
+        let response_bytes = timeout(remaining_timeout_dir(deadline)?, recv.read_to_end(MAX_RESPONSE_SIZE))
+            .await
+            .map_err(|_| Error::from("response timeout"))?
+            .map_err(|e| {
+                error!(error = %e, "failed to read response");
+                Error::from(format!("failed to read response: {e}"))
+            })?;
 
         trace!(response_size = response_bytes.len(), "received response");
 
@@ -356,6 +374,14 @@ impl DirectoryPutter for RpcDirectoryPutter {
 
     async fn close(&mut self) -> Result<B3Digest, Error> {
         self.last_digest.take().ok_or_else(|| -> Error { "no directories were put".into() })
+    }
+}
+
+/// Compute remaining time until a deadline, returning a directory service error if already past.
+fn remaining_timeout_dir(deadline: std::time::Instant) -> Result<std::time::Duration, Error> {
+    match deadline.checked_duration_since(std::time::Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(Error::from("deadline exceeded")),
     }
 }
 

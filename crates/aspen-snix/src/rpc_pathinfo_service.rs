@@ -105,39 +105,57 @@ impl RpcPathInfoService {
             }
         };
 
-        // Open bidirectional stream
-        trace!("opening bidirectional stream");
-        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| {
-            error!(error = %e, "failed to open RPC stream");
-            Box::new(std::io::Error::other(format!("failed to open RPC stream: {}", e))) as Error
-        })?;
-
-        // Serialize request
+        // Serialize request before entering the timed exchange
         let request_bytes = postcard::to_allocvec(&request).map_err(|e| {
             error!(error = %e, "failed to serialize request");
             Box::new(std::io::Error::other(format!("failed to serialize request: {}", e))) as Error
         })?;
 
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = std::time::Instant::now() + RPC_TIMEOUT;
+
+        // Open bidirectional stream
+        trace!("opening bidirectional stream");
+        let (mut send, mut recv) = timeout(remaining_timeout_pathinfo(deadline)?, connection.open_bi())
+            .await
+            .map_err(|_| Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "stream open timeout")) as Error)?
+            .map_err(|e| {
+                error!(error = %e, "failed to open RPC stream");
+                Box::new(std::io::Error::other(format!("failed to open RPC stream: {}", e))) as Error
+            })?;
+
         trace!(request_size = request_bytes.len(), "sending RPC request");
 
         // Send request data (no length prefix - gateway uses read_to_end)
-        send.write_all(&request_bytes).await.map_err(|e| {
-            error!(error = %e, "failed to send request body");
-            Box::new(std::io::Error::other(format!("failed to send request: {}", e))) as Error
-        })?;
-        send.finish().map_err(|e| {
-            error!(error = %e, "failed to finish send stream");
-            Box::new(std::io::Error::other(format!("failed to finish send: {}", e))) as Error
-        })?;
+        timeout(remaining_timeout_pathinfo(deadline)?, send.write_all(&request_bytes))
+            .await
+            .map_err(|_| Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "request write timeout")) as Error)?
+            .map_err(|e| {
+                error!(error = %e, "failed to send request body");
+                Box::new(std::io::Error::other(format!("failed to send request: {}", e))) as Error
+            })?;
+        timeout(remaining_timeout_pathinfo(deadline)?, async {
+            send.finish().map_err(|e| {
+                error!(error = %e, "failed to finish send stream");
+                Box::new(std::io::Error::other(format!("failed to finish send: {}", e))) as Error
+            })
+        })
+        .await
+        .map_err(|_| Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "stream finish timeout")) as Error)??;
 
         trace!("request sent, waiting for response");
 
         // Read response (no length prefix - gateway sends raw postcard bytes)
-        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024; // Match MAX_CLIENT_MESSAGE_SIZE
-        let response_bytes = recv.read_to_end(MAX_RESPONSE_SIZE).await.map_err(|e| {
-            error!(error = %e, "failed to read response");
-            Box::new(std::io::Error::other(format!("failed to read response: {}", e))) as Error
-        })?;
+        // Large-response budget: path info responses can include closure data.
+        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024;
+        let response_bytes = timeout(remaining_timeout_pathinfo(deadline)?, recv.read_to_end(MAX_RESPONSE_SIZE))
+            .await
+            .map_err(|_| Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "response timeout")) as Error)?
+            .map_err(|e| {
+                error!(error = %e, "failed to read response");
+                Box::new(std::io::Error::other(format!("failed to read response: {}", e))) as Error
+            })?;
 
         trace!(response_size = response_bytes.len(), "received response");
 
@@ -269,6 +287,14 @@ impl PathInfoService for RpcPathInfoService {
     fn list(&self) -> BoxStream<'static, Result<PathInfo, Error>> {
         warn!("RpcPathInfoService::list() called - not supported for ephemeral workers");
         Box::pin(n0_future::stream::empty())
+    }
+}
+
+/// Compute remaining time until a deadline, returning a pathinfo service error if already past.
+fn remaining_timeout_pathinfo(deadline: std::time::Instant) -> Result<std::time::Duration, Error> {
+    match deadline.checked_duration_since(std::time::Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "deadline exceeded"))),
     }
 }
 

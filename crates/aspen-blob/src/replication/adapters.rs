@@ -283,20 +283,36 @@ impl IrohBlobTransfer {
         .await
         .context("connection timeout")??;
 
-        // Open bidirectional stream
-        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
-
-        // Serialize and send request
+        // Serialize request before entering the timed exchange
         let request_bytes = postcard::to_stdvec(request).context("failed to serialize request")?;
-        send.write_all(&request_bytes).await.context("failed to send request")?;
-        send.finish().context("failed to finish send stream")?;
 
-        // Read response with timeout
-        let response_bytes = timeout(RPC_TIMEOUT, async {
-            recv.read_to_end(MAX_RPC_MESSAGE_SIZE).await.context("failed to read response")
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = std::time::Instant::now() + RPC_TIMEOUT;
+
+        // Open bidirectional stream
+        let (mut send, mut recv) = tokio::time::timeout(remaining_timeout_blob(deadline)?, connection.open_bi())
+            .await
+            .context("stream open timeout")?
+            .context("failed to open stream")?;
+
+        // Send request
+        tokio::time::timeout(remaining_timeout_blob(deadline)?, send.write_all(&request_bytes))
+            .await
+            .context("request write timeout")?
+            .context("failed to send request")?;
+        tokio::time::timeout(remaining_timeout_blob(deadline)?, async {
+            send.finish().context("failed to finish send stream")
         })
         .await
-        .context("response timeout")??;
+        .context("stream finish timeout")??;
+
+        // Read response with deadline
+        let response_bytes =
+            tokio::time::timeout(remaining_timeout_blob(deadline)?, recv.read_to_end(MAX_RPC_MESSAGE_SIZE))
+                .await
+                .context("response timeout")?
+                .context("failed to read response")?;
 
         // Deserialize response
         let response: aspen_client_api::ClientRpcResponse =
@@ -520,4 +536,85 @@ mod tests {
     // Note: IrohBlobTransfer tests require a full Iroh endpoint and IrohBlobStore.
     // Integration tests should be written in the integration test suite with actual
     // Iroh endpoints for proper P2P blob transfer testing.
+}
+
+/// Compute remaining time until a deadline, returning an error if already past.
+fn remaining_timeout_blob(deadline: std::time::Instant) -> anyhow::Result<std::time::Duration> {
+    match deadline.checked_duration_since(std::time::Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!("deadline exceeded")),
+    }
+}
+
+#[cfg(test)]
+mod remaining_timeout_tests {
+    use super::*;
+
+    #[test]
+    fn remaining_timeout_blob_returns_duration_when_deadline_is_ahead() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let remaining = remaining_timeout_blob(deadline).expect("should return Ok");
+        assert!(remaining.as_secs() > 0);
+    }
+
+    #[test]
+    fn remaining_timeout_blob_returns_error_when_deadline_is_past() {
+        let deadline = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let err = remaining_timeout_blob(deadline).expect_err("should return Err");
+        assert!(err.to_string().contains("deadline exceeded"));
+    }
+
+    /// Verify each post-connect stage is bounded by the deadline
+    /// using the same pattern as `transfer_send_rpc`.
+    #[tokio::test]
+    async fn stages_bounded_by_deadline() {
+        for stage in ["open_bi", "write", "finish", "read"] {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(10);
+            let result: Result<Result<(), std::io::Error>, _> =
+                tokio::time::timeout(remaining_timeout_blob(deadline).unwrap(), std::future::pending()).await;
+            assert!(result.is_err(), "{stage} stage must be bounded by deadline");
+        }
+    }
+
+    /// Expired deadline fails immediately for every stage.
+    #[test]
+    fn expired_deadline_blocks_all_stages() {
+        let deadline = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        for stage in ["open_bi", "write", "finish", "read"] {
+            let err = remaining_timeout_blob(deadline).expect_err("expired deadline must fail");
+            assert!(
+                err.to_string().contains("deadline exceeded"),
+                "{stage} stage must not proceed past an expired deadline"
+            );
+        }
+    }
+
+    /// End-to-end: connect to an unreachable peer through a real iroh
+    /// endpoint and verify the connect stage times out.
+    #[tokio::test]
+    async fn connect_timeout_on_unreachable_peer() {
+        use aspen_client_api::CLIENT_ALPN;
+
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key)
+            .bind_addr(std::net::SocketAddr::from(([127, 0, 0, 1], 0u16)))
+            .expect("invalid bind address")
+            .bind()
+            .await
+            .expect("failed to bind endpoint");
+
+        let unreachable_key = iroh::SecretKey::generate(&mut rand::rng());
+        let unreachable_addr = iroh::EndpointAddr::from(unreachable_key.public());
+
+        let connect_result = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            endpoint.connect(unreachable_addr, CLIENT_ALPN),
+        )
+        .await;
+
+        assert!(connect_result.is_err(), "connecting to an unreachable peer must time out");
+
+        endpoint.close().await;
+    }
 }

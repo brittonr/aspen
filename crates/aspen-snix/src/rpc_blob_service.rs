@@ -111,40 +111,58 @@ impl RpcBlobService {
             }
         };
 
-        // Open bidirectional stream
-        trace!("opening bidirectional stream");
-        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| {
-            error!(error = %e, "failed to open RPC stream");
-            io::Error::other(format!("failed to open RPC stream: {}", e))
-        })?;
-
-        // Serialize request
+        // Serialize request before entering the timed exchange
         let request_bytes = postcard::to_allocvec(&request).map_err(|e| {
             error!(error = %e, "failed to serialize request");
             io::Error::other(format!("failed to serialize request: {}", e))
         })?;
 
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = std::time::Instant::now() + RPC_TIMEOUT;
+
+        // Open bidirectional stream
+        trace!("opening bidirectional stream");
+        let (mut send, mut recv) = tokio::time::timeout(remaining_timeout_io(deadline)?, connection.open_bi())
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "stream open timeout"))?
+            .map_err(|e| {
+                error!(error = %e, "failed to open RPC stream");
+                io::Error::other(format!("failed to open RPC stream: {}", e))
+            })?;
+
         trace!(request_size = request_bytes.len(), "sending RPC request");
 
         // Send request data (no length prefix - gateway uses read_to_end)
-        send.write_all(&request_bytes).await.map_err(|e| {
-            error!(error = %e, "failed to send request body");
-            io::Error::other(format!("failed to send request: {}", e))
-        })?;
-        send.finish().map_err(|e| {
-            error!(error = %e, "failed to finish send stream");
-            io::Error::other(format!("failed to finish send: {}", e))
-        })?;
+        tokio::time::timeout(remaining_timeout_io(deadline)?, send.write_all(&request_bytes))
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "request write timeout"))?
+            .map_err(|e| {
+                error!(error = %e, "failed to send request body");
+                io::Error::other(format!("failed to send request: {}", e))
+            })?;
+        tokio::time::timeout(remaining_timeout_io(deadline)?, async {
+            send.finish().map_err(|e| {
+                error!(error = %e, "failed to finish send stream");
+                io::Error::other(format!("failed to finish send: {}", e))
+            })
+        })
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "stream finish timeout"))??;
 
         trace!("request sent, waiting for response");
 
         // Read response (no length prefix - gateway sends raw postcard bytes)
-        // Use same max size as gateway for consistency
-        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024; // Match MAX_CLIENT_MESSAGE_SIZE
-        let response_bytes = recv.read_to_end(MAX_RESPONSE_SIZE).await.map_err(|e| {
-            error!(error = %e, "failed to read response");
-            io::Error::other(format!("failed to read response: {}", e))
-        })?;
+        // Use same max size as gateway for consistency.
+        // Large-response budget: blob payloads can be substantial.
+        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024;
+        let response_bytes = tokio::time::timeout(remaining_timeout_io(deadline)?, recv.read_to_end(MAX_RESPONSE_SIZE))
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "response timeout"))?
+            .map_err(|e| {
+                error!(error = %e, "failed to read response");
+                io::Error::other(format!("failed to read response: {}", e))
+            })?;
 
         trace!(response_size = response_bytes.len(), "received response");
 
@@ -352,8 +370,29 @@ impl BlobWriter for RpcBlobWriter {
     }
 }
 
+/// Compute remaining time until a deadline, returning an `io::Error` if already past.
+fn remaining_timeout_io(deadline: std::time::Instant) -> io::Result<std::time::Duration> {
+    match deadline.checked_duration_since(std::time::Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(io::Error::new(io::ErrorKind::TimedOut, "deadline exceeded")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    // Integration tests require a running cluster node.
-    // See tests/ directory for full integration tests.
+    use super::*;
+
+    #[test]
+    fn remaining_timeout_io_returns_duration_when_deadline_is_ahead() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let remaining = remaining_timeout_io(deadline).expect("should return Ok");
+        assert!(remaining.as_secs() > 0);
+    }
+
+    #[test]
+    fn remaining_timeout_io_returns_timed_out_when_deadline_is_past() {
+        let deadline = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let err = remaining_timeout_io(deadline).expect_err("should return Err");
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+    }
 }

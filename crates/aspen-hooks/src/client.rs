@@ -290,28 +290,39 @@ impl HookClient {
         .map_err(|_| HookClientError::Timeout)?
         .map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
 
-        // Open bidirectional stream
-        let (mut send, mut recv) =
-            connection.open_bi().await.map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
-
-        // Build and serialize the request
+        // Build and serialize the request before entering the timed exchange
         let request = ClientRpcRequest::HookTrigger {
             event_type: self.ticket.event_type.clone(),
             payload_json: payload.to_string(),
         };
         let request_bytes = postcard::to_stdvec(&request).map_err(|e| HookClientError::TriggerFailed(e.to_string()))?;
 
-        // Send request
-        send.write_all(&request_bytes).await.map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
-        send.finish().map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
+        // Bound the full post-connect exchange with one overall deadline while
+        // preserving stage-specific timeout errors.
+        let deadline = std::time::Instant::now() + self.timeout;
 
-        // Read response with timeout
-        let response_bytes = timeout(self.timeout, async {
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")
+        // Open bidirectional stream
+        let (mut send, mut recv) = timeout(remaining_timeout_hook(deadline)?, connection.open_bi())
+            .await
+            .map_err(|_| HookClientError::Timeout)?
+            .map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
+
+        // Send request
+        timeout(remaining_timeout_hook(deadline)?, send.write_all(&request_bytes))
+            .await
+            .map_err(|_| HookClientError::Timeout)?
+            .map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
+        timeout(remaining_timeout_hook(deadline)?, async {
+            send.finish().map_err(|e| HookClientError::ConnectionFailed(e.to_string()))
         })
         .await
-        .map_err(|_| HookClientError::Timeout)?
-        .map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
+        .map_err(|_| HookClientError::Timeout)??;
+
+        // Read response with deadline
+        let response_bytes = timeout(remaining_timeout_hook(deadline)?, recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE))
+            .await
+            .map_err(|_| HookClientError::Timeout)?
+            .map_err(|e| HookClientError::ConnectionFailed(e.to_string()))?;
 
         // Deserialize response
         let response: ClientRpcResponse =
@@ -348,6 +359,14 @@ pub async fn trigger(url: &str, payload: Option<&str>) -> Result<TriggerResult, 
     match payload {
         Some(p) => client.trigger_with_payload(p).await,
         None => client.trigger().await,
+    }
+}
+
+/// Compute remaining time until a deadline, returning a `HookClientError` if already past.
+fn remaining_timeout_hook(deadline: std::time::Instant) -> Result<std::time::Duration, HookClientError> {
+    match deadline.checked_duration_since(std::time::Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(HookClientError::Timeout),
     }
 }
 
