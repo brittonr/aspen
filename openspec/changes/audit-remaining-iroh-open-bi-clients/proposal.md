@@ -4,15 +4,23 @@
 
 The remaining user-facing and bridge-style clients include:
 
-- `src/bin/git-remote-aspen/main.rs`
-- `crates/aspen-tui/src/iroh_client/rpc.rs`
-- `crates/aspen-tui/src/iroh_client/multi_node.rs`
-- `crates/aspen-fuse/src/client.rs`
-- `crates/aspen-hooks/src/client.rs`
-- `crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs`
-- `crates/aspen-snix/src/rpc_{blob,directory,pathinfo}_service.rs`
-- `crates/aspen-blob/src/replication/adapters.rs`
-- `crates/aspen-castore/src/client.rs` (`IrohConnection::open_bi()` cache path)
+- `src/bin/git-remote-aspen/main.rs:286`
+- `crates/aspen-tui/src/iroh_client/rpc.rs:32`
+- `crates/aspen-tui/src/iroh_client/multi_node.rs:158`
+- `crates/aspen-fuse/src/client.rs:244,250`
+- `crates/aspen-hooks/src/client.rs:295`
+- `crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs:603`
+- `crates/aspen-snix/src/rpc_blob_service.rs:116`
+- `crates/aspen-snix/src/rpc_directory_service.rs:112`
+- `crates/aspen-snix/src/rpc_pathinfo_service.rs:110`
+- `crates/aspen-blob/src/replication/adapters.rs:287`
+- `crates/aspen-castore/src/client.rs:470,481` (`IrohConnection::open_bi()` cache path)
+
+Audit evidence came from:
+
+```text
+rg -n '\.open_bi\(\)' crates src -g'*.rs'
+```
 
 Under QUIC flow-control stalls or partially responsive peers, these paths can still block indefinitely in `open_bi()`, request writes, or `finish()` even when connect or final response read is bounded.
 

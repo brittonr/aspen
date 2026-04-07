@@ -27,7 +27,14 @@
 ## 5. Verify the rollout
 
 - [x] 5.1 Run targeted crate tests for the updated client, federation, and proxy modules
+  - `cargo test -p aspen-client deadline_helper_reports_stream_open_timeout -- --nocapture`
+  - `cargo test -p aspen-cli --bin aspen-cli deadline_helper_reports_stream_open_timeout -- --nocapture`
+  - `cargo test -p aspen-cli --bin aspen-cli timed_stage_reports_request_write_timeout -- --nocapture`
+  - `cargo test -p aspen-cli --bin aspen-cli send_to_times_out_when_peer_never_replies -- --nocapture`
+  - `cargo test -p aspen-cli --bin aspen-cli cached_connection_discarded_after_response_timeout -- --nocapture`
+  - `cargo test -p aspen-federation request_timeout_helper_reports_response_timeout -- --nocapture`
+  - `cargo test -p aspen-rpc-handlers proxy_service_ --features forge,global-discovery`
 - [x] 5.2 Run a quick end-to-end command path that exercises CLI or client RPCs against a real node
-  - Verified `target/debug/aspen-cli --ticket ... cluster health` and `cluster init` against a live local `target/debug/aspen-node`; a follow-up `kv set/get` attempt hit the node's disk-pressure guard rather than any transport timeout path.
+  - Captured live run: start `target/debug/aspen-node --node-id 1 --cookie timeout-e2e-cookie-2 --data-dir <tmp> --disable-mdns --relay-mode disabled`, then `target/debug/aspen-cli --ticket "$TICKET" --quiet cluster health` (returned node health) and `target/debug/aspen-cli --ticket "$TICKET" --quiet cluster init` (returned `Cluster initialized successfully`).
 - [x] 5.3 Record any remaining direct `open_bi()` call sites that need follow-up in a separate audit issue if they are out of scope
-  - Created follow-up change: `openspec/changes/audit-remaining-iroh-open-bi-clients`.
+  - Captured fresh audit with `rg -n '\.open_bi\(\)' crates src -g'*.rs'` and created follow-up change `openspec/changes/audit-remaining-iroh-open-bi-clients` with line-cited inventory and exclusions.
