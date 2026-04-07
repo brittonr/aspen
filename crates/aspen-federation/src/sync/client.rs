@@ -4,16 +4,22 @@
 //! protocol operations (handshake, resource listing, state queries, object sync).
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
 use iroh::Endpoint;
 use iroh::endpoint::Connection;
+use tokio::time::Instant;
+use tokio::time::timeout;
 use tracing::info;
 use tracing::warn;
 
 use super::FEDERATION_ALPN;
 use super::FEDERATION_PROTOCOL_VERSION;
+use super::HANDSHAKE_TIMEOUT;
+use super::REQUEST_TIMEOUT;
 use super::types::FederationRequest;
 use super::types::FederationResponse;
 use super::types::RefEntry;
@@ -38,6 +44,43 @@ pub struct ConnectResult {
     pub capabilities: Vec<String>,
 }
 
+fn remaining_timeout(deadline: Instant, timeout_context: &'static str) -> Result<Duration> {
+    match deadline.checked_duration_since(Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!(timeout_context)),
+    }
+}
+
+async fn run_timed_stage<F, T, E>(
+    stage_timeout: Duration,
+    future: F,
+    timeout_context: &'static str,
+    error_context: &'static str,
+) -> Result<T>
+where
+    F: Future<Output = std::result::Result<T, E>>,
+    E: Into<anyhow::Error>,
+{
+    timeout(stage_timeout, future)
+        .await
+        .context(timeout_context)?
+        .map_err(Into::into)
+        .context(error_context)
+}
+
+async fn run_stage_with_deadline<F, T, E>(
+    deadline: Instant,
+    future: F,
+    timeout_context: &'static str,
+    error_context: &'static str,
+) -> Result<T>
+where
+    F: Future<Output = std::result::Result<T, E>>,
+    E: Into<anyhow::Error>,
+{
+    run_timed_stage(remaining_timeout(deadline, timeout_context)?, future, timeout_context, error_context).await
+}
+
 impl ConnectResult {
     /// Check if the peer supports a specific capability.
     pub fn has_capability(&self, cap: &str) -> bool {
@@ -60,27 +103,52 @@ pub async fn connect_to_cluster(
     peer_addr: impl Into<iroh::EndpointAddr>,
     credential: Option<aspen_auth::Credential>,
 ) -> Result<ConnectResult> {
-    // Connect to peer
-    let connection = endpoint
-        .connect(peer_addr, FEDERATION_ALPN)
+    let connection = timeout(HANDSHAKE_TIMEOUT, endpoint.connect(peer_addr, FEDERATION_ALPN))
         .await
+        .context("connection timeout")?
         .context("failed to connect to federated cluster")?;
 
-    // Open a stream for handshake
-    let (mut send, mut recv) = connection.open_bi().await.context("failed to open handshake stream")?;
+    let deadline = Instant::now() + HANDSHAKE_TIMEOUT;
+    let response: FederationResponse = match async {
+        let (mut send, mut recv) = run_stage_with_deadline(
+            deadline,
+            connection.open_bi(),
+            "stream open timeout",
+            "failed to open handshake stream",
+        )
+        .await?;
 
-    // Send handshake request
-    let request = FederationRequest::Handshake {
-        identity: our_identity.to_signed(),
-        protocol_version: FEDERATION_PROTOCOL_VERSION,
-        capabilities: vec!["forge".to_string(), "streaming-sync".to_string()],
-        credential,
+        let request = FederationRequest::Handshake {
+            identity: our_identity.to_signed(),
+            protocol_version: FEDERATION_PROTOCOL_VERSION,
+            capabilities: vec!["forge".to_string(), "streaming-sync".to_string()],
+            credential,
+        };
+        run_stage_with_deadline(
+            deadline,
+            write_message(&mut send, &request),
+            "request write timeout",
+            "failed to send handshake request",
+        )
+        .await?;
+        send.finish().context("failed to finish handshake send stream")?;
+
+        run_stage_with_deadline(
+            deadline,
+            read_message(&mut recv),
+            "response timeout",
+            "failed to read handshake response",
+        )
+        .await
+    }
+    .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            connection.close(iroh::endpoint::VarInt::from_u32(1), b"error");
+            return Err(error);
+        }
     };
-    write_message(&mut send, &request).await?;
-    send.finish().context("failed to finish handshake send stream")?;
-
-    // Read handshake response
-    let response: FederationResponse = read_message(&mut recv).await?;
 
     match response {
         FederationResponse::Handshake {
@@ -89,8 +157,8 @@ pub async fn connect_to_cluster(
             capabilities,
             ..
         } => {
-            // Verify peer's identity
             if !identity.verify() {
+                connection.close(iroh::endpoint::VarInt::from_u32(1), b"error");
                 anyhow::bail!("Peer identity verification failed");
             }
 
@@ -109,9 +177,13 @@ pub async fn connect_to_cluster(
             })
         }
         FederationResponse::Error { code, message } => {
+            connection.close(iroh::endpoint::VarInt::from_u32(1), b"error");
             anyhow::bail!("Handshake failed: {} - {}", code, message)
         }
-        _ => anyhow::bail!("Unexpected handshake response"),
+        _ => {
+            connection.close(iroh::endpoint::VarInt::from_u32(1), b"error");
+            anyhow::bail!("Unexpected handshake response")
+        }
     }
 }
 
@@ -121,17 +193,35 @@ pub async fn list_remote_resources(
     resource_type: Option<&str>,
     limit: u32,
 ) -> Result<Vec<ResourceInfo>> {
-    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
+    let deadline = Instant::now() + REQUEST_TIMEOUT;
+    let response: FederationResponse = async {
+        let (mut send, mut recv) =
+            run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                .await?;
 
-    let request = FederationRequest::ListResources {
-        resource_type: resource_type.map(|s| s.to_string()),
-        cursor: None,
-        limit,
-    };
-    write_message(&mut send, &request).await?;
-    send.finish().context("failed to finish send stream")?;
+        let request = FederationRequest::ListResources {
+            resource_type: resource_type.map(|s| s.to_string()),
+            cursor: None,
+            limit,
+        };
+        run_stage_with_deadline(
+            deadline,
+            write_message(&mut send, &request),
+            "request write timeout",
+            "failed to send list resources request",
+        )
+        .await?;
+        send.finish().context("failed to finish send stream")?;
 
-    let response: FederationResponse = read_message(&mut recv).await?;
+        run_stage_with_deadline(
+            deadline,
+            read_message(&mut recv),
+            "response timeout",
+            "failed to read list resources response",
+        )
+        .await
+    }
+    .await?;
 
     match response {
         FederationResponse::ResourceList { resources, .. } => Ok(resources),
@@ -147,13 +237,31 @@ pub async fn get_remote_resource_state(
     connection: &Connection,
     fed_id: &FederatedId,
 ) -> Result<(bool, HashMap<String, [u8; 32]>, Option<ResourceMetadata>)> {
-    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
+    let deadline = Instant::now() + REQUEST_TIMEOUT;
+    let response: FederationResponse = async {
+        let (mut send, mut recv) =
+            run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                .await?;
 
-    let request = FederationRequest::GetResourceState { fed_id: *fed_id };
-    write_message(&mut send, &request).await?;
-    send.finish().context("failed to finish send stream")?;
+        let request = FederationRequest::GetResourceState { fed_id: *fed_id };
+        run_stage_with_deadline(
+            deadline,
+            write_message(&mut send, &request),
+            "request write timeout",
+            "failed to send get resource state request",
+        )
+        .await?;
+        send.finish().context("failed to finish send stream")?;
 
-    let response: FederationResponse = read_message(&mut recv).await?;
+        run_stage_with_deadline(
+            deadline,
+            read_message(&mut recv),
+            "response timeout",
+            "failed to read get resource state response",
+        )
+        .await
+    }
+    .await?;
 
     match response {
         FederationResponse::ResourceState {
@@ -193,22 +301,40 @@ pub async fn sync_remote_objects(
     limit: u32,
     delegates: Option<&[iroh::PublicKey]>,
 ) -> Result<(Vec<SyncObject>, bool)> {
-    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
+    let deadline = Instant::now() + REQUEST_TIMEOUT;
+    let response: FederationResponse = async {
+        let (mut send, mut recv) =
+            run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                .await?;
 
-    let request = FederationRequest::SyncObjects {
-        fed_id: *fed_id,
-        want_types,
-        have_hashes,
-        limit,
-    };
-    write_message(&mut send, &request).await?;
-    // Finish the send stream so the peer knows we're done writing and QUIC
-    // can reclaim the stream slot. Without this, each round of the multi-round
-    // sync loop leaks a half-open stream, hitting the server's max concurrent
-    // stream limit and killing the connection.
-    send.finish().context("failed to finish send stream")?;
+        let request = FederationRequest::SyncObjects {
+            fed_id: *fed_id,
+            want_types,
+            have_hashes,
+            limit,
+        };
+        run_stage_with_deadline(
+            deadline,
+            write_message(&mut send, &request),
+            "request write timeout",
+            "failed to send sync objects request",
+        )
+        .await?;
+        // Finish the send stream so the peer knows we're done writing and QUIC
+        // can reclaim the stream slot. Without this, each round of the multi-round
+        // sync loop leaks a half-open stream, hitting the server's max concurrent
+        // stream limit and killing the connection.
+        send.finish().context("failed to finish send stream")?;
 
-    let response: FederationResponse = read_message(&mut recv).await?;
+        run_stage_with_deadline(
+            deadline,
+            read_message(&mut recv),
+            "response timeout",
+            "failed to read sync objects response",
+        )
+        .await
+    }
+    .await?;
 
     match response {
         FederationResponse::Objects { objects, has_more } => {
@@ -299,20 +425,37 @@ pub async fn push_to_cluster(
     objects: Vec<SyncObject>,
     ref_updates: Vec<RefEntry>,
 ) -> Result<PushResult> {
-    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream for push")?;
-
     let object_count = objects.len();
     let ref_count = ref_updates.len();
 
-    let request = FederationRequest::PushObjects {
-        fed_id: *fed_id,
-        objects,
-        ref_updates,
-    };
-    write_message(&mut send, &request).await?;
-    send.finish().context("failed to finish send stream")?;
+    let deadline = Instant::now() + REQUEST_TIMEOUT;
+    let response: FederationResponse = async {
+        let (mut send, mut recv) = run_stage_with_deadline(
+            deadline,
+            connection.open_bi(),
+            "stream open timeout",
+            "failed to open stream for push",
+        )
+        .await?;
 
-    let response: FederationResponse = read_message(&mut recv).await?;
+        let request = FederationRequest::PushObjects {
+            fed_id: *fed_id,
+            objects,
+            ref_updates,
+        };
+        run_stage_with_deadline(
+            deadline,
+            write_message(&mut send, &request),
+            "request write timeout",
+            "failed to send push request",
+        )
+        .await?;
+        send.finish().context("failed to finish send stream")?;
+
+        run_stage_with_deadline(deadline, read_message(&mut recv), "response timeout", "failed to read push response")
+            .await
+    }
+    .await?;
 
     match response {
         FederationResponse::PushResult {
@@ -372,7 +515,9 @@ impl SyncSession {
     /// sync. The server loops reading requests on this stream until the
     /// client finishes the send side.
     pub async fn open(connection: &Connection) -> Result<Self> {
-        let (send, recv) = connection.open_bi().await.context("failed to open sync stream")?;
+        let (send, recv) =
+            run_timed_stage(REQUEST_TIMEOUT, connection.open_bi(), "stream open timeout", "failed to open sync stream")
+                .await?;
         Ok(Self { send, recv })
     }
 
@@ -395,9 +540,22 @@ impl SyncSession {
             have_hashes,
             limit,
         };
-        write_message(&mut self.send, &request).await?;
+        let deadline = Instant::now() + REQUEST_TIMEOUT;
+        run_stage_with_deadline(
+            deadline,
+            write_message(&mut self.send, &request),
+            "request write timeout",
+            "failed to send sync objects request",
+        )
+        .await?;
 
-        let response: FederationResponse = read_message(&mut self.recv).await?;
+        let response: FederationResponse = run_stage_with_deadline(
+            deadline,
+            read_message(&mut self.recv),
+            "response timeout",
+            "failed to read sync objects response",
+        )
+        .await?;
 
         match response {
             FederationResponse::Objects { objects, has_more } => {
@@ -459,5 +617,25 @@ impl SyncSession {
     pub async fn finish(mut self) -> Result<()> {
         self.send.finish().context("failed to finish sync stream")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_request_timeout_helper_reports_response_timeout() {
+        let deadline = Instant::now() + Duration::from_millis(10);
+        let result = run_stage_with_deadline(
+            deadline,
+            std::future::pending::<std::result::Result<(), std::io::Error>>(),
+            "response timeout",
+            "failed to read response",
+        )
+        .await;
+
+        let error = result.expect_err("pending future must time out");
+        assert!(error.to_string().contains("response timeout"));
     }
 }

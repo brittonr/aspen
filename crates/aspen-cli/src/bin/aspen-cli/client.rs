@@ -26,6 +26,7 @@
 //! - Fail-fast on permanent errors
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -43,6 +44,7 @@ use iroh::EndpointId;
 use iroh::endpoint::Connection;
 use iroh::endpoint::VarInt;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 use tokio::time::timeout;
 use tracing::debug;
 use tracing::warn;
@@ -62,6 +64,12 @@ const NETWORK_RETRY_DELAY: Duration = Duration::from_millis(500);
 /// Maximum number of cached connections per peer.
 const MAX_CACHED_CONNECTIONS: usize = 8;
 
+/// Maximum response size for CLI blob fetches (256 MiB).
+const MAX_GET_BLOB_RESPONSE_SIZE: usize = 256 * 1024 * 1024;
+
+/// Dedicated read budget for large blob fetch responses.
+const GET_BLOB_READ_TIMEOUT: Duration = Duration::from_secs(300);
+
 /// Aspen client for sending RPC requests to cluster nodes.
 pub struct AspenClient {
     endpoint: Endpoint,
@@ -74,6 +82,43 @@ pub struct AspenClient {
     /// Cached connections per peer for connection reuse.
     /// Using Mutex for interior mutability in async context.
     connections: Mutex<HashMap<EndpointId, Vec<Connection>>>,
+}
+
+fn remaining_timeout(deadline: Instant, timeout_context: &'static str) -> Result<Duration> {
+    match deadline.checked_duration_since(Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!(timeout_context)),
+    }
+}
+
+async fn run_timed_stage<F, T, E>(
+    stage_timeout: Duration,
+    future: F,
+    timeout_context: &'static str,
+    error_context: &'static str,
+) -> Result<T>
+where
+    F: Future<Output = std::result::Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    timeout(stage_timeout, future)
+        .await
+        .context(timeout_context)?
+        .map_err(anyhow::Error::new)
+        .context(error_context)
+}
+
+async fn run_stage_with_deadline<F, T, E>(
+    deadline: Instant,
+    future: F,
+    timeout_context: &'static str,
+    error_context: &'static str,
+) -> Result<T>
+where
+    F: Future<Output = std::result::Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    run_timed_stage(remaining_timeout(deadline, timeout_context)?, future, timeout_context, error_context).await
 }
 
 impl AspenClient {
@@ -334,64 +379,55 @@ impl AspenClient {
     /// Send an RPC request to a specific peer using its full EndpointAddr.
     async fn send_to_peer_addr(&self, addr: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         let peer_id = addr.id;
-        // Get connection (cached or new)
         let connection = self.get_connection_for_addr(addr).await?;
 
-        // Open bidirectional stream for this request
-        let stream_result = connection.open_bi().await;
-        let (mut send, mut recv) = match stream_result {
-            Ok(streams) => streams,
-            Err(e) => {
-                // Connection failed, don't cache it
-                self.discard_connection(peer_id, connection);
-                return Err(anyhow::Error::new(e).context("failed to open stream"));
-            }
-        };
-
-        // Wrap request with authentication if token is present
+        // Wrap request with authentication if token is present.
         let authenticated_request = match self.token.as_ref() {
             Some(token) => AuthenticatedRequest::new(request, token.clone()),
             None => AuthenticatedRequest::unauthenticated(request),
         };
         let request_bytes = postcard::to_stdvec(&authenticated_request).context("failed to serialize request")?;
 
-        // Send request
-        if let Err(e) = send.write_all(&request_bytes).await {
-            self.discard_connection(peer_id, connection);
-            return Err(anyhow::Error::new(e).context("failed to send request"));
+        let deadline = Instant::now() + self.rpc_timeout;
+        let response_bytes = match async {
+            let (mut send, mut recv) =
+                run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                    .await?;
+            run_stage_with_deadline(
+                deadline,
+                send.write_all(&request_bytes),
+                "request write timeout",
+                "failed to send request",
+            )
+            .await?;
+            send.finish().context("failed to finish send stream")?;
+            run_stage_with_deadline(
+                deadline,
+                recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE),
+                "response timeout",
+                "failed to read response",
+            )
+            .await
         }
-
-        if let Err(e) = send.finish() {
-            self.discard_connection(peer_id, connection);
-            return Err(anyhow::Error::new(e).context("failed to finish send stream"));
-        }
-
-        // Read response with timeout
-        let response_result = timeout(self.rpc_timeout, async {
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")
-        })
-        .await;
-
-        match response_result {
-            Ok(Ok(response_bytes)) => {
-                // Deserialize response
-                let response: ClientRpcResponse =
-                    postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
-
-                // Return connection to cache for reuse
-                self.return_connection(peer_id, connection).await;
-
-                Ok(response)
-            }
-            Ok(Err(e)) => {
+        .await
+        {
+            Ok(response_bytes) => response_bytes,
+            Err(error) => {
                 self.discard_connection(peer_id, connection);
-                Err(e)
+                return Err(error);
             }
-            Err(_) => {
+        };
+
+        let response: ClientRpcResponse = match postcard::from_bytes(&response_bytes) {
+            Ok(response) => response,
+            Err(error) => {
                 self.discard_connection(peer_id, connection);
-                Err(anyhow::anyhow!("response timeout"))
+                return Err(anyhow::Error::new(error).context("failed to deserialize response"));
             }
-        }
+        };
+
+        self.return_connection(peer_id, connection).await;
+        Ok(response)
     }
 
     /// Send a GetBlob request with streaming support for large blobs.
@@ -404,40 +440,57 @@ impl AspenClient {
     /// streams blob data (blobs > 4MB), writes the raw bytes directly to the file.
     pub async fn send_get_blob(&self, hash: String, output: Option<&std::path::Path>) -> Result<ClientRpcResponse> {
         let peer_addr = self.bootstrap_addrs.first().context("no peers available")?;
-
         let connection = self.get_connection_for_addr(peer_addr).await?;
-        let (mut send, mut recv) = match connection.open_bi().await {
-            Ok(streams) => streams,
-            Err(e) => {
-                self.discard_connection(peer_addr.id, connection);
-                return Err(anyhow::Error::new(e).context("failed to open stream"));
-            }
-        };
 
         let request = ClientRpcRequest::GetBlob { hash };
         let authenticated_request = match self.token.as_ref() {
             Some(token) => AuthenticatedRequest::new(request, token.clone()),
             None => AuthenticatedRequest::unauthenticated(request),
         };
-        let request_bytes = postcard::to_stdvec(&authenticated_request)?;
+        let request_bytes = postcard::to_stdvec(&authenticated_request).context("failed to serialize request")?;
 
-        send.write_all(&request_bytes).await.context("failed to send request")?;
-        send.finish().context("failed to finish send stream")?;
-
-        // Read the full stream. For streaming responses, the server sends a small
-        // postcard header followed by raw blob bytes. Postcard is self-delimiting,
-        // so take_from_bytes splits at the deserialization boundary.
-        let all_bytes = recv.read_to_end(256 * 1024 * 1024).await.context("failed to read response")?;
-
-        let (response, remaining) = match postcard::take_from_bytes::<ClientRpcResponse>(&all_bytes) {
-            Ok(r) => r,
-            Err(e) => {
+        let deadline = Instant::now() + self.rpc_timeout;
+        let blob_read_timeout = std::cmp::max(self.rpc_timeout, GET_BLOB_READ_TIMEOUT);
+        let all_bytes = match async {
+            let (mut send, mut recv) =
+                run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                    .await?;
+            run_stage_with_deadline(
+                deadline,
+                send.write_all(&request_bytes),
+                "request write timeout",
+                "failed to send request",
+            )
+            .await?;
+            send.finish().context("failed to finish send stream")?;
+            run_timed_stage(
+                blob_read_timeout,
+                recv.read_to_end(MAX_GET_BLOB_RESPONSE_SIZE),
+                "blob response timeout",
+                "failed to read response",
+            )
+            .await
+        }
+        .await
+        {
+            Ok(all_bytes) => all_bytes,
+            Err(error) => {
                 self.discard_connection(peer_addr.id, connection);
-                return Err(anyhow::Error::new(e).context("failed to deserialize response"));
+                return Err(error);
             }
         };
 
-        // If streaming, write the remaining bytes (raw blob data) to file
+        let (response, remaining) = match postcard::take_from_bytes::<ClientRpcResponse>(&all_bytes) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                self.discard_connection(peer_addr.id, connection);
+                return Err(anyhow::Error::new(error).context("failed to deserialize response"));
+            }
+        };
+
+        self.return_connection(peer_addr.id, connection).await;
+
+        // If streaming, write the remaining bytes (raw blob data) to file.
         if let ClientRpcResponse::GetBlobResult(ref result) = response {
             if result.is_streaming {
                 if let Some(output_path) = output {
@@ -447,7 +500,6 @@ impl AspenClient {
             }
         }
 
-        self.return_connection(peer_addr.id, connection).await;
         Ok(response)
     }
 
@@ -496,42 +548,58 @@ impl AspenClient {
     /// multiple nodes directly. This method does NOT use connection
     /// caching since verification is typically one-shot.
     pub async fn send_to(&self, addr: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
-        // Connect to the specific peer
         let connection = timeout(self.rpc_timeout, async {
             self.endpoint.connect(addr.clone(), CLIENT_ALPN).await.context("failed to connect to peer")
         })
         .await
         .context("connection timeout")??;
 
-        // Open bidirectional stream
-        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
-
-        // Wrap request with authentication if token is present
         let authenticated_request = match self.token.as_ref() {
             Some(token) => AuthenticatedRequest::new(request, token.clone()),
             None => AuthenticatedRequest::unauthenticated(request),
         };
         let request_bytes = postcard::to_stdvec(&authenticated_request).context("failed to serialize request")?;
 
-        send.write_all(&request_bytes).await.context("failed to send request")?;
-
-        send.finish().context("failed to finish send stream")?;
-
-        // Read response with timeout
-        let response_bytes = timeout(self.rpc_timeout, async {
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")
-        })
+        let deadline = Instant::now() + self.rpc_timeout;
+        let response_bytes = match async {
+            let (mut send, mut recv) =
+                run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                    .await?;
+            run_stage_with_deadline(
+                deadline,
+                send.write_all(&request_bytes),
+                "request write timeout",
+                "failed to send request",
+            )
+            .await?;
+            send.finish().context("failed to finish send stream")?;
+            run_stage_with_deadline(
+                deadline,
+                recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE),
+                "response timeout",
+                "failed to read response",
+            )
+            .await
+        }
         .await
-        .context("response timeout")??;
+        {
+            Ok(response_bytes) => response_bytes,
+            Err(error) => {
+                connection.close(VarInt::from_u32(1), b"error");
+                return Err(error);
+            }
+        };
 
-        // Deserialize response
-        let response: ClientRpcResponse =
-            postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
+        let response: ClientRpcResponse = match postcard::from_bytes(&response_bytes) {
+            Ok(response) => response,
+            Err(error) => {
+                connection.close(VarInt::from_u32(1), b"error");
+                return Err(anyhow::Error::new(error).context("failed to deserialize response"));
+            }
+        };
 
-        // Close connection gracefully
         connection.close(VarInt::from_u32(0), b"done");
 
-        // Convert CapabilityUnavailable to Error for consistent handler matching
         if let ClientRpcResponse::CapabilityUnavailable(ref cap) = response {
             return Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
                 code: "CAPABILITY_UNAVAILABLE".to_string(),
@@ -560,7 +628,65 @@ pub(crate) fn normalize_capability_unavailable(response: ClientRpcResponse) -> C
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
+
     use super::*;
+
+    fn test_endpoint_addr(endpoint: &Endpoint) -> EndpointAddr {
+        let mut addr = EndpointAddr::new(endpoint.id());
+        for socket_addr in endpoint.bound_sockets() {
+            let fixed = if socket_addr.ip().is_unspecified() {
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), socket_addr.port())
+            } else {
+                socket_addr
+            };
+            addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
+        }
+        addr
+    }
+
+    async fn make_test_endpoint() -> Endpoint {
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key)
+            .alpns(vec![CLIENT_ALPN.to_vec()])
+            .clear_address_lookup()
+            .bind()
+            .await
+            .expect("bind test endpoint")
+    }
+
+    async fn spawn_nonresponsive_server() -> (Endpoint, EndpointAddr, tokio::task::JoinHandle<()>) {
+        let endpoint = make_test_endpoint().await;
+        let addr = test_endpoint_addr(&endpoint);
+        let server_endpoint = endpoint.clone();
+
+        let task = tokio::spawn(async move {
+            let Some(incoming) = server_endpoint.accept().await else {
+                return;
+            };
+            let connection = incoming.await.expect("accept connection");
+            let (_send, mut recv) = connection.accept_bi().await.expect("accept stream");
+            let _ = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.expect("drain request");
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        });
+
+        (endpoint, addr, task)
+    }
+
+    async fn make_test_client(peer_addr: EndpointAddr, rpc_timeout: Duration) -> AspenClient {
+        AspenClient {
+            endpoint: make_test_endpoint().await,
+            bootstrap_addrs: vec![peer_addr],
+            cluster_id: "test-cluster".to_string(),
+            rpc_timeout,
+            token: None,
+            connections: Mutex::new(HashMap::new()),
+        }
+    }
 
     /// CapabilityUnavailable must become a standard Error so every command
     /// handler's `ClientRpcResponse::Error(e)` arm catches it without
@@ -705,5 +831,67 @@ mod tests {
             ClientRpcResponse::Error(e) => assert_eq!(e.code, "NOT_FOUND"),
             other => panic!("expected Error, got: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_deadline_helper_reports_stream_open_timeout() {
+        let deadline = Instant::now() + Duration::from_millis(10);
+        let result = run_stage_with_deadline(
+            deadline,
+            std::future::pending::<std::result::Result<(), std::io::Error>>(),
+            "stream open timeout",
+            "failed to open stream",
+        )
+        .await;
+
+        let error = result.expect_err("pending future must time out");
+        assert!(error.to_string().contains("stream open timeout"));
+    }
+
+    #[tokio::test]
+    async fn test_timed_stage_reports_request_write_timeout() {
+        let result = run_timed_stage(
+            Duration::from_millis(10),
+            std::future::pending::<std::result::Result<(), std::io::Error>>(),
+            "request write timeout",
+            "failed to send request",
+        )
+        .await;
+
+        let error = result.expect_err("pending future must time out");
+        assert!(error.to_string().contains("request write timeout"));
+    }
+
+    #[tokio::test]
+    async fn test_send_to_times_out_when_peer_never_replies() {
+        let (server_endpoint, server_addr, server_task) = spawn_nonresponsive_server().await;
+        let client = make_test_client(server_addr.clone(), Duration::from_millis(50)).await;
+
+        let result = client.send_to(&server_addr, ClientRpcRequest::Ping).await;
+        let error = result.expect_err("peer should not reply");
+        assert!(error.to_string().contains("response timeout"));
+
+        client.endpoint.close().await;
+        server_endpoint.close().await;
+        server_task.abort();
+    }
+
+    #[tokio::test]
+    async fn test_cached_connection_discarded_after_response_timeout() {
+        let (server_endpoint, server_addr, server_task) = spawn_nonresponsive_server().await;
+        let client = make_test_client(server_addr.clone(), Duration::from_millis(50)).await;
+
+        let result = client.send_to_peer_addr(&server_addr, ClientRpcRequest::Ping).await;
+        let error = result.expect_err("peer should not reply");
+        assert!(error.to_string().contains("response timeout"));
+
+        let connections = client.connections.lock().await;
+        let cached_count = connections.get(&server_addr.id).map(Vec::len).unwrap_or(0);
+        assert_eq!(cached_count, 0, "timed-out connection must not be returned to cache");
+        drop(connections);
+
+        client.endpoint.close().await;
+        server_endpoint.close().await;
+        server_task.abort();
     }
 }

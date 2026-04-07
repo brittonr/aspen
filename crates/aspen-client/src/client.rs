@@ -2,6 +2,7 @@
 //!
 //! Handles Iroh P2P connections and RPC communication with Aspen nodes.
 
+use std::future::Future;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -18,6 +19,7 @@ use iroh::RelayMode;
 use iroh::endpoint::VarInt;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::Instant;
 use tokio::time::timeout;
 use tracing::debug;
 use tracing::warn;
@@ -90,6 +92,30 @@ pub struct AspenClient {
     ticket: AspenClusterTicket,
     rpc_timeout: Duration,
     token: Option<AuthToken>,
+}
+
+fn remaining_timeout(deadline: Instant, timeout_context: &'static str) -> Result<Duration> {
+    match deadline.checked_duration_since(Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!(timeout_context)),
+    }
+}
+
+async fn run_stage_with_deadline<F, T, E>(
+    deadline: Instant,
+    future: F,
+    timeout_context: &'static str,
+    error_context: &'static str,
+) -> Result<T>
+where
+    F: Future<Output = std::result::Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    timeout(remaining_timeout(deadline, timeout_context)?, future)
+        .await
+        .context(timeout_context)?
+        .map_err(anyhow::Error::new)
+        .context(error_context)
 }
 
 impl AspenClient {
@@ -246,15 +272,12 @@ impl AspenClient {
 
     /// Internal method to send to a specific address.
     async fn send_to_addr(&self, addr: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
-        // Connect to the peer
+        // Connect to the peer (connect timeout)
         let connection = timeout(self.rpc_timeout, async {
             self.endpoint.connect(addr.clone(), CLIENT_ALPN).await.context("failed to connect to peer")
         })
         .await
         .context("connection timeout")??;
-
-        // Open bidirectional stream
-        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
         // Wrap request with authentication if token is present
         let authenticated_request = match self.token.as_ref().and_then(|t| t.to_capability_token()) {
@@ -262,19 +285,30 @@ impl AspenClient {
             None => AuthenticatedRequest::unauthenticated(request),
         };
 
-        // Serialize and send request
+        // Serialize request before entering the timed exchange
         let request_bytes = postcard::to_stdvec(&authenticated_request).context("failed to serialize request")?;
 
-        send.write_all(&request_bytes).await.context("failed to send request")?;
-
+        // Bound the full post-connect exchange with one overall budget while
+        // preserving stage-specific timeout errors.
+        let deadline = Instant::now() + self.rpc_timeout;
+        let (mut send, mut recv) =
+            run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                .await?;
+        run_stage_with_deadline(
+            deadline,
+            send.write_all(&request_bytes),
+            "request write timeout",
+            "failed to send request",
+        )
+        .await?;
         send.finish().context("failed to finish send stream")?;
-
-        // Read response with timeout
-        let response_bytes = timeout(self.rpc_timeout, async {
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read response")
-        })
-        .await
-        .context("response timeout")??;
+        let response_bytes = run_stage_with_deadline(
+            deadline,
+            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE),
+            "response timeout",
+            "failed to read response",
+        )
+        .await?;
 
         // Deserialize response
         let response: ClientRpcResponse =
@@ -309,5 +343,25 @@ impl AspenClient {
     /// Shutdown the client and close the endpoint.
     pub async fn shutdown(self) {
         self.endpoint.close().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_deadline_helper_reports_stream_open_timeout() {
+        let deadline = Instant::now() + Duration::from_millis(10);
+        let result = run_stage_with_deadline(
+            deadline,
+            std::future::pending::<std::result::Result<(), std::io::Error>>(),
+            "stream open timeout",
+            "failed to open stream",
+        )
+        .await;
+
+        let error = result.expect_err("pending future must time out");
+        assert!(error.to_string().contains("stream open timeout"));
     }
 }

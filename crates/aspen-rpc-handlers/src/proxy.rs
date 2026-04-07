@@ -23,6 +23,10 @@
 //! - Loop detection: hop count prevents A→B→A cycles
 
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
+use std::future::Future;
+
+use anyhow::Context;
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_client_api::AuthenticatedRequest;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_client_api::CLIENT_ALPN;
@@ -33,6 +37,10 @@ use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::ProxyConfig;
 use iroh::Endpoint;
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+use tokio::time::Instant;
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+use tokio::time::timeout;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use tracing::info;
 use tracing::warn;
@@ -47,6 +55,32 @@ pub struct ProxyService {
     endpoint: Endpoint,
     /// Proxy configuration (hop limits, timeout, max targets).
     config: ProxyConfig,
+}
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+fn remaining_timeout(deadline: Instant, timeout_context: &'static str) -> anyhow::Result<std::time::Duration> {
+    match deadline.checked_duration_since(Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => Ok(remaining),
+        _ => Err(anyhow::anyhow!(timeout_context)),
+    }
+}
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+async fn run_stage_with_deadline<F, T, E>(
+    deadline: Instant,
+    future: F,
+    timeout_context: &'static str,
+    error_context: &'static str,
+) -> anyhow::Result<T>
+where
+    F: Future<Output = std::result::Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    timeout(remaining_timeout(deadline, timeout_context)?, future)
+        .await
+        .map_err(|_| anyhow::anyhow!(timeout_context))?
+        .map_err(anyhow::Error::new)
+        .map_err(|error| error.context(error_context))
 }
 
 impl ProxyService {
@@ -185,8 +219,6 @@ impl ProxyService {
         request: ClientRpcRequest,
         proxy_hops: u8,
     ) -> anyhow::Result<ClientRpcResponse> {
-        use tokio::time::timeout;
-
         // Use the first known node key from the discovered cluster as the
         // connection target. The discovery service populates node_keys from
         // the cluster's gossip announcements.
@@ -195,7 +227,6 @@ impl ProxyService {
 
         let target_addr = iroh::EndpointAddr::new(*node_id);
 
-        // Connect to the remote cluster with timeout
         let connection = timeout(self.config.timeout, async {
             self.endpoint
                 .connect(target_addr.clone(), CLIENT_ALPN)
@@ -205,32 +236,48 @@ impl ProxyService {
         .await
         .map_err(|_| anyhow::anyhow!("connection timeout"))??;
 
-        // Open bidirectional stream
-        let (mut send, mut recv) = connection.open_bi().await?;
-
-        // Create authenticated request with incremented proxy_hops
         let authenticated_request = AuthenticatedRequest::with_proxy_hops(request, None, proxy_hops + 1);
-
-        // Serialize and send request
         let request_bytes = postcard::to_stdvec(&authenticated_request)?;
-        send.write_all(&request_bytes).await?;
-        send.finish()?;
 
-        // Read response with timeout
-        let response_bytes = timeout(self.config.timeout, async {
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE)
-                .await
-                .map_err(|e| anyhow::anyhow!("failed to read response: {}", e))
-        })
+        let deadline = Instant::now() + self.config.timeout;
+        let response_bytes = match async {
+            let (mut send, mut recv) =
+                run_stage_with_deadline(deadline, connection.open_bi(), "stream open timeout", "failed to open stream")
+                    .await?;
+            run_stage_with_deadline(
+                deadline,
+                send.write_all(&request_bytes),
+                "request write timeout",
+                "failed to send request",
+            )
+            .await?;
+            send.finish().map_err(anyhow::Error::new).context("failed to finish send stream")?;
+            run_stage_with_deadline(
+                deadline,
+                recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE),
+                "response timeout",
+                "failed to read response",
+            )
+            .await
+        }
         .await
-        .map_err(|_| anyhow::anyhow!("response timeout"))??;
+        {
+            Ok(response_bytes) => response_bytes,
+            Err(error) => {
+                connection.close(iroh::endpoint::VarInt::from_u32(1), b"error");
+                return Err(error);
+            }
+        };
 
-        // Deserialize response
-        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes)?;
+        let response: ClientRpcResponse = match postcard::from_bytes(&response_bytes) {
+            Ok(response) => response,
+            Err(error) => {
+                connection.close(iroh::endpoint::VarInt::from_u32(1), b"error");
+                return Err(anyhow::Error::new(error).context("failed to deserialize response"));
+            }
+        };
 
-        // Close connection gracefully
         connection.close(iroh::endpoint::VarInt::from_u32(0), b"done");
-
         Ok(response)
     }
 }
