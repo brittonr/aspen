@@ -19,6 +19,7 @@ use super::RangeSnafu;
 use super::SharedRedbStorage;
 use super::SharedStorageError;
 use super::TRUST_DIGESTS_TABLE;
+use super::TRUST_EXPUNGED_TABLE;
 use super::TRUST_SHARES_TABLE;
 
 impl SharedRedbStorage {
@@ -74,6 +75,80 @@ impl SharedRedbStorage {
             }
         }
         write_txn.commit().context(CommitSnafu)?;
+        Ok(())
+    }
+
+    /// Check if this node has been expunged.
+    pub fn is_expunged(&self) -> Result<bool, SharedStorageError> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(TRUST_EXPUNGED_TABLE).context(OpenTableSnafu)?;
+        let entry = table.get(0u64).context(GetSnafu)?;
+        Ok(entry.is_some())
+    }
+
+    /// Load the expungement metadata, if this node has been expunged.
+    pub fn load_expunged(&self) -> Result<Option<aspen_cluster_types::ExpungedMetadata>, SharedStorageError> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(TRUST_EXPUNGED_TABLE).context(OpenTableSnafu)?;
+        let entry = table.get(0u64).context(GetSnafu)?;
+
+        match entry {
+            Some(value) => {
+                let bytes = value.value();
+                let metadata: aspen_cluster_types::ExpungedMetadata =
+                    serde_json::from_slice(bytes).map_err(|e| SharedStorageError::Internal {
+                        reason: format!("failed to deserialize ExpungedMetadata: {e}"),
+                    })?;
+                Ok(Some(metadata))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Mark this node as permanently expunged.
+    ///
+    /// This also zeroizes all trust shares to prevent secret reconstruction.
+    pub fn mark_expunged(
+        &self,
+        metadata: aspen_cluster_types::ExpungedMetadata,
+    ) -> Result<(), SharedStorageError> {
+        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        {
+            // Write the expungement marker
+            let mut expunged_table = write_txn.open_table(TRUST_EXPUNGED_TABLE).context(OpenTableSnafu)?;
+            let bytes = serde_json::to_vec(&metadata).map_err(|e| SharedStorageError::Internal {
+                reason: format!("failed to serialize ExpungedMetadata: {e}"),
+            })?;
+            expunged_table.insert(0u64, bytes.as_slice()).context(super::InsertSnafu)?;
+
+            // Zeroize all shares: overwrite with zeros then remove
+            let mut shares_table = write_txn.open_table(TRUST_SHARES_TABLE).context(OpenTableSnafu)?;
+            let zero_share = [0u8; SECRET_SIZE + 1];
+            let epochs: Vec<u64> = {
+                use redb::ReadableTable;
+                let iter = shares_table.iter().context(RangeSnafu)?;
+                iter.filter_map(|e| {
+                    e.ok().map(|(k, _v): (redb::AccessGuard<'_, u64>, redb::AccessGuard<'_, &[u8]>)| k.value())
+                })
+                .collect()
+            };
+            for epoch in &epochs {
+                // Overwrite with zeros
+                shares_table.insert(*epoch, zero_share.as_slice()).context(super::InsertSnafu)?;
+            }
+            // Then delete
+            for epoch in &epochs {
+                shares_table.remove(*epoch).context(super::RemoveSnafu)?;
+            }
+        }
+        write_txn.commit().context(CommitSnafu)?;
+
+        tracing::warn!(
+            epoch = metadata.epoch,
+            removed_by = metadata.removed_by,
+            "Node has been permanently expunged from cluster"
+        );
+
         Ok(())
     }
 

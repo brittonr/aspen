@@ -126,6 +126,13 @@ pub enum SharedStorageError {
         /// Maximum allowed batch size.
         max: u32,
     },
+
+    /// Generic internal storage error.
+    #[snafu(display("{reason}"))]
+    Internal {
+        /// Description of the error.
+        reason: String,
+    },
 }
 
 impl From<SharedStorageError> for io::Error {

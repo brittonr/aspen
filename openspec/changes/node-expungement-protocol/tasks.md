@@ -1,9 +1,9 @@
 ## 1. Core Types and Persistent State
 
-- [ ] 1.1 Add `ExpungedMetadata { epoch: u64, removed_by: u64 }` to `aspen-core` types (serializable, stored in redb)
-- [ ] 1.2 Add `trust_expunged` redb table: `TableDefinition<(), &[u8]>` (singleton — either empty or contains serialized `ExpungedMetadata`)
-- [ ] 1.3 Implement `is_expunged() -> bool` and `load_expunged() -> Option<ExpungedMetadata>` on `RedbStorage`
-- [ ] 1.4 Implement `mark_expunged(metadata: ExpungedMetadata)` on `RedbStorage` — writes metadata and zeroizes all `trust_shares` entries
+- [x] 1.1 Add `ExpungedMetadata { epoch: u64, removed_by: u64 }` to `aspen-core` types (serializable, stored in redb)
+- [x] 1.2 Add `trust_expunged` redb table: `TableDefinition<(), &[u8]>` (singleton — either empty or contains serialized `ExpungedMetadata`)
+- [x] 1.3 Implement `is_expunged() -> bool` and `load_expunged() -> Option<ExpungedMetadata>` on `RedbStorage`
+- [x] 1.4 Implement `mark_expunged(metadata: ExpungedMetadata)` on `RedbStorage` — writes metadata and zeroizes all `trust_shares` entries
 
 ## 2. Trust Protocol Messages
 

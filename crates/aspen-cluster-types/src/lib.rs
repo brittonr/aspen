@@ -394,6 +394,20 @@ impl TrustConfig {
     }
 }
 
+/// Persistent record that a node has been permanently expelled from the cluster.
+///
+/// Once this marker is set, the node refuses all trust protocol messages,
+/// rejects Raft RPCs, and requires a factory reset to rejoin.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ExpungedMetadata {
+    /// The epoch at which the node was removed.
+    pub epoch: u64,
+    /// The node ID that initiated the expungement.
+    pub removed_by: u64,
+    /// Unix timestamp (milliseconds) when the expungement was recorded.
+    pub timestamp_ms: u64,
+}
+
 impl InitRequest {
     /// Validate the initialization request.
     ///

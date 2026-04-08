@@ -59,6 +59,11 @@ pub const TRUST_SHARES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new
 #[cfg(feature = "trust")]
 pub const TRUST_DIGESTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trust_digests");
 
+/// Trust expungement table: singleton (key = 0), value = serialized ExpungedMetadata.
+/// Once set, the node is permanently expelled and refuses all trust/Raft operations.
+#[cfg(feature = "trust")]
+pub const TRUST_EXPUNGED_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("trust_expunged");
+
 // ====================================================================================
 // Storage Types
 // ====================================================================================
