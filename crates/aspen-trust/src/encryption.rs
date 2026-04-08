@@ -62,11 +62,18 @@ impl SecretsEncryption {
 
     /// Decrypt a stored value.
     ///
-    /// Deserializes the bytes and decrypts with the current key.
-    /// For multi-epoch support, callers should check the epoch field
-    /// and use the appropriate `SecretsEncryption` instance.
+    /// Deserializes the bytes, checks the epoch matches the current key,
+    /// and decrypts. Returns `EpochMismatch` if the value was encrypted
+    /// at a different epoch — the caller must use `decrypt_with_key`
+    /// with the old epoch's key instead.
     pub fn unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, EnvelopeError> {
         let encrypted = EncryptedValue::from_bytes(stored)?;
+        if encrypted.epoch != self.epoch {
+            return Err(EnvelopeError::EpochMismatch {
+                stored: encrypted.epoch,
+                current: self.epoch,
+            });
+        }
         envelope::decrypt_value(&self.key, &encrypted)
     }
 
@@ -117,9 +124,15 @@ impl std::fmt::Debug for SecretsEncryption {
     }
 }
 
-/// Check if stored bytes look like an encrypted envelope (version prefix check).
+/// Check if stored bytes look like an encrypted envelope.
+///
+/// Requires both the version byte prefix AND minimum envelope length
+/// (1 + 8 + 12 + 16 = 37 bytes) to avoid false positives on plaintext
+/// values that happen to start with byte 0x01.
+const MIN_ENVELOPE_LEN: usize = 1 + 8 + 12 + 16;
+
 pub fn is_encrypted(stored: &[u8]) -> bool {
-    !stored.is_empty() && stored[0] == 1 // ENVELOPE_VERSION
+    stored.len() >= MIN_ENVELOPE_LEN && stored[0] == 1 // ENVELOPE_VERSION
 }
 
 /// Errors when the secrets encryption layer is unavailable.
@@ -221,6 +234,9 @@ mod tests {
         assert!(is_encrypted(&stored));
         assert!(!is_encrypted(b"plaintext-data"));
         assert!(!is_encrypted(b""));
+        // Plaintext starting with byte 0x01 must NOT be misclassified
+        assert!(!is_encrypted(&[0x01, 0x02, 0x03]));
+        assert!(!is_encrypted(&[0x01]));
     }
 
     #[test]

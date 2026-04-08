@@ -11,39 +11,39 @@
 
 ## 2. Nonce Management
 
-- [x] 2.1 Add `trust_nonce_counter` table to redb: `TableDefinition<u64, u64>` (node_id → counter)
+- [ ] 2.1 Add `trust_nonce_counter` table to redb: `TableDefinition<u64, u64>` (node_id → counter)
 - [x] 2.2 Implement `NonceGenerator` struct: loads counter from redb, increments on each `next_nonce()`, constructs 12-byte nonce as `[node_id: 4 bytes][counter: 8 bytes]`
-- [x] 2.3 Persist counter to redb on each increment (or batch persist for performance)
+- [ ] 2.3 Persist counter to redb on each increment (or batch persist for performance)
 - [x] 2.4 Test: sequential nonces are unique; nonces from different node_ids are unique
 
 ## 3. Secrets Engine Integration
 
 - [x] 3.1 Add `SecretsEncryption` struct holding the cached derived key, nonce generator, and epoch
 - [x] 3.2 Implement `wrap_write(&self, plaintext: &[u8]) -> Vec<u8>` that encrypts and serializes
-- [x] 3.3 Implement `unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, SecretsError>` that deserializes and decrypts, handling multi-epoch values by looking up the correct key
-- [x] 3.4 Integrate `wrap_write`/`unwrap_read` into KV secrets engine write/read paths
-- [x] 3.5 Integrate into Transit secrets engine (encrypt key material before storage)
-- [x] 3.6 Integrate into PKI secrets engine (encrypt private keys before storage)
+- [x] 3.3 Implement `unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, SecretsError>` that deserializes and decrypts with epoch check (returns EpochMismatch for old-epoch values)
+- [x] 3.4 Integrate `wrap_write`/`unwrap_read` into KV secrets engine write/read paths (via AspenSecretsBackend put/get/put_cas/get_with_version)
+- [ ] 3.5 Integrate into Transit secrets engine (encrypt key material before storage)
+- [ ] 3.6 Integrate into PKI secrets engine (encrypt private keys before storage)
 - [x] 3.7 Gate all encryption behind `trust` feature flag — without feature, secrets are stored plaintext (current behavior)
 
 ## 4. Key Lifecycle
 
-- [x] 4.1 Implement lazy key reconstruction: on first secrets access, trigger cluster secret reconstruction via share collection, derive the at-rest key, cache it
-- [x] 4.2 Return `SecretsUnavailable` error if reconstruction fails (cluster below quorum)
-- [x] 4.3 On epoch change notification: derive new key, swap into `SecretsEncryption`, start re-encryption task
-- [x] 4.4 Drop old key from memory after re-encryption completes (zeroize)
+- [ ] 4.1 Implement lazy key reconstruction: on first secrets access, trigger cluster secret reconstruction via share collection, derive the at-rest key, cache it
+- [x] 4.2 Return `SecretsUnavailable` error if reconstruction fails (cluster below quorum) — type defined in encryption.rs
+- [ ] 4.3 On epoch change notification: derive new key, swap into `SecretsEncryption`, start re-encryption task
+- [x] 4.4 Drop old key from memory after re-encryption completes (zeroize) — SecretsEncryption implements ZeroizeOnDrop; rotate() returns old key for caller to zeroize
 
 ## 5. Re-encryption on Epoch Change
 
-- [x] 5.1 Implement background re-encryption task: scan all secrets tables, decrypt with old key, re-encrypt with new key, write back
-- [x] 5.2 Track re-encryption progress in a `trust_reencryption_progress` redb table (last processed key per table)
-- [x] 5.3 Handle reads during re-encryption: check epoch prefix to determine which key to use
-- [x] 5.4 Test: epoch change triggers re-encryption; all values end up at new epoch
-- [x] 5.5 Test: crash during re-encryption resumes from last checkpoint on restart
+- [ ] 5.1 Implement background re-encryption task: scan all secrets tables, decrypt with old key, re-encrypt with new key, write back
+- [ ] 5.2 Track re-encryption progress in a `trust_reencryption_progress` redb table (last processed key per table)
+- [ ] 5.3 Handle reads during re-encryption: check epoch prefix to determine which key to use
+- [ ] 5.4 Test: epoch change triggers re-encryption; all values end up at new epoch
+- [ ] 5.5 Test: crash during re-encryption resumes from last checkpoint on restart
 
 ## 6. Testing and Documentation
 
-- [x] 6.1 Integration test: write secrets, verify redb contains only ciphertext, read back plaintext matches
-- [x] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
-- [x] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
-- [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations
+- [ ] 6.1 Integration test: write secrets, verify redb contains only ciphertext, read back plaintext matches
+- [ ] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
+- [ ] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
+- [ ] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations

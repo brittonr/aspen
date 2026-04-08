@@ -22,6 +22,28 @@ use crate::shamir;
 use crate::shamir::Share;
 use crate::shamir::ShareDigest;
 
+/// Context trait for reconfiguration I/O.
+///
+/// The coordinator calls these methods to interact with the outside world.
+/// Production implementations use Iroh+Raft; test implementations record
+/// actions for inspection.
+pub trait ReconfigCtx {
+    /// Send a GetShare request to a node.
+    fn send_get_share(&mut self, target_node: u64, epoch: u64);
+
+    /// Propose a new trust configuration via Raft.
+    fn propose_new_config(
+        &mut self,
+        new_shares: BTreeMap<u64, Share>,
+        new_digests: BTreeMap<u64, ShareDigest>,
+        encrypted_chain: EncryptedSecretChain,
+        new_epoch: u64,
+    );
+
+    /// Query which old-config members are currently connected.
+    fn connected_members(&self) -> BTreeSet<u64>;
+}
+
 /// Reconfiguration coordinator states.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReconfigState {
@@ -247,6 +269,54 @@ impl ReconfigCoordinator {
     }
 }
 
+/// Test implementation of `ReconfigCtx` that records all actions for inspection.
+#[cfg(test)]
+pub struct TestReconfigCtx {
+    /// GetShare requests sent.
+    pub get_share_requests: Vec<(u64, u64)>,
+    /// Proposals submitted.
+    pub proposals: Vec<(
+        BTreeMap<u64, Share>,
+        BTreeMap<u64, ShareDigest>,
+        EncryptedSecretChain,
+        u64,
+    )>,
+    /// Simulated connected members.
+    pub connected: BTreeSet<u64>,
+}
+
+#[cfg(test)]
+impl TestReconfigCtx {
+    pub fn new(connected: BTreeSet<u64>) -> Self {
+        Self {
+            get_share_requests: Vec::new(),
+            proposals: Vec::new(),
+            connected,
+        }
+    }
+}
+
+#[cfg(test)]
+impl ReconfigCtx for TestReconfigCtx {
+    fn send_get_share(&mut self, target_node: u64, epoch: u64) {
+        self.get_share_requests.push((target_node, epoch));
+    }
+
+    fn propose_new_config(
+        &mut self,
+        new_shares: BTreeMap<u64, Share>,
+        new_digests: BTreeMap<u64, ShareDigest>,
+        encrypted_chain: EncryptedSecretChain,
+        new_epoch: u64,
+    ) {
+        self.proposals.push((new_shares, new_digests, encrypted_chain, new_epoch));
+    }
+
+    fn connected_members(&self) -> BTreeSet<u64> {
+        self.connected.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,5 +451,18 @@ mod tests {
         // Send again from node 1 → ignored
         let actions = coordinator.on_share_received(1, shares[0].clone()).unwrap();
         assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn test_reconfig_ctx_records_actions() {
+        let connected: BTreeSet<u64> = [1, 2, 3].into();
+        let mut ctx = TestReconfigCtx::new(connected.clone());
+
+        ctx.send_get_share(1, 5);
+        ctx.send_get_share(2, 5);
+        assert_eq!(ctx.get_share_requests.len(), 2);
+        assert_eq!(ctx.get_share_requests[0], (1, 5));
+        assert_eq!(ctx.connected_members(), connected);
+        assert!(ctx.proposals.is_empty());
     }
 }

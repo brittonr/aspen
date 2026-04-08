@@ -1,7 +1,7 @@
 ## 1. Reconfiguration State Machine
 
 - [x] 1.1 Define `ReconfigCoordinator` sans-IO state machine in `aspen-trust/src/reconfig.rs` with states: `CollectingOldShares`, `Preparing`, `Committed`
-- [x] 1.2 Define `ReconfigCtx` trait with `send_get_share()`, `propose_new_config()`, `persistent_state()`, `connected_members()`
+- [x] 1.2 Define `ReconfigCtx` trait with `send_get_share()`, `propose_new_config()`, `connected_members()`
 - [x] 1.3 Implement `CollectingOldShares` state: track received shares per node, validate digests, transition to `Preparing` when K valid shares collected
 - [x] 1.4 Implement `Preparing` state: reconstruct old secret, generate new secret, split into new shares, build encrypted chain, produce Raft proposal
 - [x] 1.5 Implement timeout handling: `on_timeout()` method returns error if share collection stalls
@@ -9,7 +9,7 @@
 
 ## 2. Encrypted Secret Chain
 
-- [x] 2.1 Define `EncryptedSecretChain` type in `aspen-trust/src/chain.rs`: `salt: [u8; 32]`, `data: Box<[u8]>`, epoch metadata
+- [x] 2.1 Define `EncryptedSecretChain` type in `aspen-trust/src/chain.rs`: `salt: [u8; 32]`, `data: Vec<u8>`, epoch metadata
 - [x] 2.2 Implement `encrypt_chain(prior_secrets: BTreeMap<u64, Secret>, new_secret: &Secret, cluster_id, epoch) -> EncryptedSecretChain` using ChaCha20Poly1305 with HKDF-derived key
 - [x] 2.3 Implement `decrypt_chain(chain: &EncryptedSecretChain, secret: &Secret, cluster_id, epoch) -> BTreeMap<u64, Secret>`
 - [x] 2.4 Test: encrypt then decrypt roundtrip recovers all prior secrets

@@ -1,6 +1,6 @@
 ## 1. Infrastructure
 
-- [x] 1.1 Add TLA+ tooling to Nix flake: package `tla2tools.jar` (TLC model checker) as a Nix derivation with JRE
+- [ ] 1.1 Add TLA+ tooling to Nix flake: package `tla2tools.jar` (TLC model checker) as a Nix derivation with JRE
 - [ ] 1.2 Create `nix run .#check-tla` app that runs TLC on all `.tla` specs in `tla/`
 - [ ] 1.3 Add TLA+ model checking to `nix flake check` outputs
 - [x] 1.4 Create `tla/` directory at repo root with `.gitignore` for TLC output files (states/, *.dump)

@@ -55,6 +55,10 @@ pub enum EnvelopeError {
     /// Unsupported envelope version.
     #[snafu(display("unsupported envelope version: {version}"))]
     UnsupportedVersion { version: u8 },
+
+    /// Value was encrypted at a different epoch than the current key.
+    #[snafu(display("epoch mismatch: value encrypted at epoch {stored}, current key is epoch {current}"))]
+    EpochMismatch { stored: u64, current: u64 },
 }
 
 /// Encrypt plaintext under the given key and epoch.
