@@ -60,6 +60,7 @@ proptest = "1.0"
 rstest = "0.25"
 rstest_reuse = "0.7"
 tempfile = "3.10"
+rand = { version = "0.9", features = ["std_rng"] }
 
 # Madsim for deterministic simulation testing
 madsim = { version = "0.2.34", features = ["macros"] }

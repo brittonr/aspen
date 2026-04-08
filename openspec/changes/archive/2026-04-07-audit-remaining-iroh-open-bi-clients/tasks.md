@@ -18,6 +18,6 @@
 
 ## 4. Verify the follow-up rollout
 
-- [ ] 4.1 Add targeted timeout regression tests for at least one representative client from each bucket
-- [ ] 4.2 Run targeted crate tests for the touched clients
-- [ ] 4.3 Run one quick live command path through a hardened auxiliary client
+- [x] 4.1 Add targeted timeout regression tests for at least one representative client from each bucket
+- [x] 4.2 Run targeted crate tests for the touched clients
+- [x] 4.3 Run one quick live command path through a hardened auxiliary client

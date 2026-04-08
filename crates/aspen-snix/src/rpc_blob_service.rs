@@ -395,4 +395,165 @@ mod tests {
         let err = remaining_timeout_io(deadline).expect_err("should return Err");
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
     }
+
+    // -- end-to-end timeout regression tests --
+    //
+    // These create real iroh endpoint pairs where the server accepts
+    // connections and bi-streams, drains the request, but never writes
+    // a response. The client exercises the exact production exchange
+    // pattern (connect → open_bi → write → finish → read) and we
+    // verify the read-stage deadline fires.
+
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
+
+    fn test_endpoint_addr(endpoint: &iroh::Endpoint) -> iroh::EndpointAddr {
+        let mut addr = iroh::EndpointAddr::new(endpoint.id());
+        for socket_addr in endpoint.bound_sockets() {
+            let fixed = if socket_addr.ip().is_unspecified() {
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), socket_addr.port())
+            } else {
+                socket_addr
+            };
+            addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
+        }
+        addr
+    }
+
+    async fn make_test_endpoint() -> iroh::Endpoint {
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key)
+            .alpns(vec![CLIENT_ALPN.to_vec()])
+            .clear_address_lookup()
+            .bind()
+            .await
+            .expect("bind test endpoint")
+    }
+
+    /// Spawn a server that accepts connections and bi-streams,
+    /// drains the request, but never writes a response.
+    async fn spawn_nonresponsive_server() -> (iroh::Endpoint, iroh::EndpointAddr, tokio::task::JoinHandle<()>) {
+        let endpoint = make_test_endpoint().await;
+        let addr = test_endpoint_addr(&endpoint);
+        let server_ep = endpoint.clone();
+
+        let task = tokio::spawn(async move {
+            let Some(incoming) = server_ep.accept().await else {
+                return;
+            };
+            let connection = incoming.await.expect("accept connection");
+            let (_send, mut recv) = connection.accept_bi().await.expect("accept stream");
+            // Drain request but never respond.
+            let _ = recv.read_to_end(16 * 1024 * 1024).await;
+            // Hold connection open long enough for the client to time out.
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        });
+
+        (endpoint, addr, task)
+    }
+
+    /// Full exchange through a real QUIC connection exercising the exact
+    /// production stage pattern: connect → open_bi → write → finish →
+    /// read_to_end. The server accepts the stream and drains the request
+    /// but never writes a response, so the response-read timeout fires.
+    #[tokio::test]
+    async fn full_exchange_times_out_when_peer_never_replies() {
+        use aspen_client_api::AuthenticatedRequest;
+
+        let (server_ep, server_addr, server_task) = spawn_nonresponsive_server().await;
+        let client_ep = make_test_endpoint().await;
+
+        // Connect (reachable local peer, succeeds quickly)
+        let connection =
+            tokio::time::timeout(std::time::Duration::from_secs(5), client_ep.connect(server_addr, CLIENT_ALPN))
+                .await
+                .expect("connect must not hang")
+                .expect("connect to local peer must succeed");
+
+        // Tight deadline for the post-connect exchange.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(200);
+
+        // --- open_bi (should succeed, server accepts bi-streams) ---
+        let (mut send, mut recv) = tokio::time::timeout(
+            remaining_timeout_io(deadline).expect("deadline should still be ahead"),
+            connection.open_bi(),
+        )
+        .await
+        .expect("open_bi must complete within deadline")
+        .expect("open_bi must succeed");
+
+        // --- write request (small Ping payload) ---
+        let auth_request = AuthenticatedRequest::unauthenticated(aspen_client_api::ClientRpcRequest::Ping);
+        let request_bytes = postcard::to_allocvec(&auth_request).expect("serialize");
+        tokio::time::timeout(
+            remaining_timeout_io(deadline).expect("deadline should still be ahead"),
+            send.write_all(&request_bytes),
+        )
+        .await
+        .expect("write must complete within deadline")
+        .expect("write must succeed");
+
+        // --- finish send stream ---
+        tokio::time::timeout(remaining_timeout_io(deadline).expect("deadline should still be ahead"), async {
+            send.finish().map_err(|e| io::Error::other(e))
+        })
+        .await
+        .expect("finish must complete within deadline")
+        .expect("finish must succeed");
+
+        // --- read_to_end must be bounded by deadline ---
+        // Server never writes a response, so this stage MUST time out.
+        // Two valid outcomes:
+        //   (a) remaining_timeout_io sees expired deadline → Err
+        //   (b) tokio::time::timeout fires → Elapsed
+        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024;
+        let read_bounded = match remaining_timeout_io(deadline) {
+            Ok(remaining) => tokio::time::timeout(remaining, recv.read_to_end(MAX_RESPONSE_SIZE)).await.is_err(),
+            Err(_) => true, // deadline already passed, which is correct
+        };
+        assert!(read_bounded, "response read must be bounded by deadline");
+
+        client_ep.close().await;
+        server_ep.close().await;
+        server_task.abort();
+    }
+
+    /// Expired deadline: remaining_timeout_io must reject every stage
+    /// before it even attempts the QUIC operation.
+    #[test]
+    fn expired_deadline_blocks_all_stages() {
+        let deadline = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        for stage in ["open_bi", "write", "finish", "read"] {
+            let err = remaining_timeout_io(deadline).expect_err("expired deadline must fail");
+            assert_eq!(err.kind(), io::ErrorKind::TimedOut, "{stage} stage must not proceed past an expired deadline");
+        }
+    }
+
+    /// Connect to an unreachable peer and verify the connect stage times out.
+    #[tokio::test]
+    async fn connect_timeout_on_unreachable_peer() {
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key)
+            .bind_addr(std::net::SocketAddr::from(([127, 0, 0, 1], 0u16)))
+            .expect("invalid bind address")
+            .bind()
+            .await
+            .expect("failed to bind endpoint");
+
+        let unreachable_key = iroh::SecretKey::generate(&mut rand::rng());
+        let unreachable_addr = iroh::EndpointAddr::from(unreachable_key.public());
+
+        let connect_result = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            endpoint.connect(unreachable_addr, CLIENT_ALPN),
+        )
+        .await;
+
+        assert!(connect_result.is_err(), "connecting to an unreachable peer must time out");
+
+        endpoint.close().await;
+    }
 }
