@@ -166,36 +166,63 @@ impl std::fmt::Debug for SecretsEncryption {
     }
 }
 
-/// Try to parse stored bytes as an encrypted envelope.
-///
-/// Returns `Ok(plaintext)` if decryption succeeds, or `None` if the
-/// bytes don't look like a valid envelope (wrong magic, too short, etc.).
-/// This is the correct migration pattern: try decrypt, fall back to
-/// treating as plaintext. No heuristic — parse failure is unambiguous.
+/// Result of trying to decrypt stored bytes.
+#[derive(Debug)]
+pub enum DecryptOutcome {
+    /// Successfully decrypted an encrypted envelope.
+    Decrypted(Vec<u8>),
+    /// Bytes are not an encrypted envelope (legacy plaintext).
+    /// Safe to return the raw bytes to the caller.
+    NotAnEnvelope,
+    /// Bytes are a structurally valid envelope but decryption failed.
+    /// This means the ciphertext was tampered with, the key is wrong,
+    /// or the epoch is unknown. This is an error — do NOT fall back
+    /// to plaintext.
+    AuthenticationFailed(envelope::EnvelopeError),
+}
+
 /// Try to parse and decrypt stored bytes as an encrypted envelope.
 ///
-/// Returns:
-/// - `Ok(Some(plaintext))` if the bytes are a valid envelope and decryption succeeds
-/// - `Ok(None)` if the bytes are not a valid envelope (legacy plaintext)
+/// Two-phase detection:
+/// 1. **Parse**: Try `EncryptedValue::from_bytes()`. If this fails
+///    (wrong magic, too short, bad version), the bytes are NOT an
+///    envelope → `NotAnEnvelope`.
+/// 2. **Decrypt**: If parsing succeeds, the bytes ARE an envelope.
+///    Try to decrypt. If decryption fails (tampered, wrong key,
+///    unknown epoch), that's an authentication error →
+///    `AuthenticationFailed`.
 ///
-/// The function never returns `Err`. Any failure during parsing or
-/// decryption is treated as "not an envelope" because legacy plaintext
-/// can accidentally have bytes that partially resemble an envelope
-/// header. Only a successful authenticated decryption (Poly1305 tag
-/// verified) produces `Some`.
+/// This preserves both properties:
+/// - Legacy plaintext is never misclassified (parse fails → fallback)
+/// - Tampered encrypted values are detected (parse succeeds, decrypt
+///   fails → error)
 pub fn try_decrypt(
     enc: &SecretsEncryption,
     stored: &[u8],
-) -> Option<Vec<u8>> {
-    // Quick check: does it start with the envelope magic?
-    if stored.len() < 4 || stored[0..4] != envelope::ENVELOPE_MAGIC {
-        return None;
+) -> DecryptOutcome {
+    // Phase 1: try to parse as an envelope
+    let encrypted = match envelope::EncryptedValue::from_bytes(stored) {
+        Ok(ev) => ev,
+        Err(_) => return DecryptOutcome::NotAnEnvelope,
+    };
+
+    // Phase 2: we have a structurally valid envelope — decrypt it
+    let key = match enc.keys.get(&encrypted.epoch) {
+        Some(k) => k,
+        None => {
+            return DecryptOutcome::AuthenticationFailed(
+                envelope::EnvelopeError::EpochMismatch {
+                    stored: encrypted.epoch,
+                    current: enc.epoch,
+                },
+            );
+        }
+    };
+
+    match envelope::decrypt_value(key, &encrypted) {
+        Ok(plaintext) => DecryptOutcome::Decrypted(plaintext),
+        Err(e) => DecryptOutcome::AuthenticationFailed(e),
     }
-    // Try to parse and decrypt. ANY failure means "not our envelope":
-    // - TooShort / UnsupportedVersion: bytes don't form a valid envelope
-    // - EpochMismatch: epoch in bytes doesn't match any known key
-    // - DecryptFailed: Poly1305 tag mismatch (plaintext, not real ciphertext)
-    enc.unwrap_read(stored).ok()
 }
 
 /// Errors when the secrets encryption layer is unavailable.
@@ -334,64 +361,76 @@ mod tests {
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
         let (stored, _) = enc.wrap_write(b"secret-data").unwrap();
-        let result = try_decrypt(&enc, &stored);
-        assert_eq!(result, Some(b"secret-data".to_vec()));
+        match try_decrypt(&enc, &stored) {
+            DecryptOutcome::Decrypted(pt) => assert_eq!(pt, b"secret-data"),
+            other => panic!("expected Decrypted, got {:?}", other),
+        }
     }
 
     #[test]
-    fn test_try_decrypt_returns_none_for_plaintext() {
+    fn test_try_decrypt_not_envelope_for_plaintext() {
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
         // Short plaintext
-        assert_eq!(try_decrypt(&enc, b"plaintext-data"), None);
-        assert_eq!(try_decrypt(&enc, b""), None);
-        assert_eq!(try_decrypt(&enc, &[0x01, 0x02, 0x03]), None);
+        assert!(matches!(try_decrypt(&enc, b"plaintext-data"), DecryptOutcome::NotAnEnvelope));
+        assert!(matches!(try_decrypt(&enc, b""), DecryptOutcome::NotAnEnvelope));
+        assert!(matches!(try_decrypt(&enc, &[0x01, 0x02, 0x03]), DecryptOutcome::NotAnEnvelope));
 
         // Long plaintext
-        assert_eq!(try_decrypt(&enc, &vec![0x01u8; 100]), None);
+        assert!(matches!(try_decrypt(&enc, &vec![0x01u8; 100]), DecryptOutcome::NotAnEnvelope));
     }
 
     #[test]
-    fn test_try_decrypt_returns_none_for_plaintext_with_magic_and_bad_version() {
+    fn test_try_decrypt_not_envelope_for_bad_version() {
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
-        // AENC magic + unsupported version byte → UnsupportedVersion → None
+        // AENC magic + unsupported version byte → parse failure → NotAnEnvelope
         let mut fake = vec![0u8; 100];
         fake[0..4].copy_from_slice(&envelope::ENVELOPE_MAGIC);
         fake[4] = 99;
-        assert_eq!(try_decrypt(&enc, &fake), None);
+        assert!(matches!(try_decrypt(&enc, &fake), DecryptOutcome::NotAnEnvelope));
     }
 
     #[test]
-    fn test_try_decrypt_returns_none_for_plaintext_with_magic_and_valid_version() {
-        // Plaintext that starts with AENC + valid version (1) + enough
-        // bytes to parse as an envelope. Decryption will fail because
-        // the Poly1305 tag won't authenticate. try_decrypt returns None.
+    fn test_try_decrypt_auth_failure_for_tampered_envelope() {
+        // Bytes with AENC + valid version (1) + enough structure to
+        // parse as an envelope. Poly1305 tag won't verify →
+        // AuthenticationFailed (not NotAnEnvelope).
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
         let mut fake = vec![0xAAu8; 100];
         fake[0..4].copy_from_slice(&envelope::ENVELOPE_MAGIC);
         fake[4] = 1; // valid version
-        // bytes 5..13 = epoch, 13..25 = nonce, 25.. = "ciphertext"
-        // All garbage — Poly1305 won't verify → DecryptFailed → None
-        assert_eq!(try_decrypt(&enc, &fake), None);
+        assert!(matches!(try_decrypt(&enc, &fake), DecryptOutcome::AuthenticationFailed(_)));
     }
 
     #[test]
-    fn test_try_decrypt_returns_none_for_unknown_epoch() {
-        // Valid magic + version, but epoch doesn't match any known key
+    fn test_try_decrypt_auth_failure_for_real_tampered_value() {
+        // Encrypt a real value, then flip a ciphertext byte.
+        // Must return AuthenticationFailed, not NotAnEnvelope.
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
-        // Encrypt something at epoch 1, then create a new context
-        // that only knows epoch 5
+        let (mut stored, _) = enc.wrap_write(b"real-secret").unwrap();
+        // Flip a byte in the ciphertext area (after magic+version+epoch+nonce = 25 bytes)
+        if stored.len() > 26 {
+            stored[26] ^= 0xFF;
+        }
+        assert!(matches!(try_decrypt(&enc, &stored), DecryptOutcome::AuthenticationFailed(_)));
+    }
+
+    #[test]
+    fn test_try_decrypt_auth_failure_for_unknown_epoch() {
+        // Valid envelope but the epoch doesn't match any known key
+        let secret = test_secret();
+        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+
         let (stored, _) = enc.wrap_write(b"data").unwrap();
         let enc2 = SecretsEncryption::new(&secret, b"other-cluster", 5, 1, 0);
-        // Epoch 1 is unknown to enc2 → EpochMismatch → None
-        assert_eq!(try_decrypt(&enc2, &stored), None);
+        assert!(matches!(try_decrypt(&enc2, &stored), DecryptOutcome::AuthenticationFailed(_)));
     }
 
     #[test]

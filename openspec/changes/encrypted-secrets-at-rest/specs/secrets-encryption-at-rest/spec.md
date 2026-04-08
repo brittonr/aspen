@@ -20,8 +20,8 @@ Each encrypted value MUST use ChaCha20Poly1305 with a unique nonce, providing bo
 
 #### Scenario: Tampered ciphertext detected
 
-- **WHEN** a byte in an encrypted secrets value is flipped in redb
-- **THEN** decryption fails with an authentication error rather than returning corrupted plaintext
+- **WHEN** a byte in a structurally valid encrypted envelope (AENC magic, valid version, parseable) is flipped in redb
+- **THEN** decryption fails with an authentication error rather than returning corrupted plaintext or falling back to treating it as legacy plaintext
 
 #### Scenario: Nonce uniqueness
 
@@ -64,10 +64,11 @@ When the trust epoch changes, all secrets MUST be re-encrypted with the new epoc
 
 Encrypted values MUST be stored as `[magic: 4 bytes (0x41 0x45 0x4E 0x43 / "AENC")][version: u8][epoch: u64][nonce: 12 bytes][ciphertext+tag]` to allow unambiguous detection, future format evolution, and multi-epoch decryption.
 
-#### Scenario: Format detection on read
+#### Scenario: Format detection on read (legacy plaintext)
 
-- **WHEN** a value is read that does not start with the AENC magic, or fails to parse/decrypt
+- **WHEN** a value is read that does not start with the AENC magic, or whose header fails structural parsing (wrong version, too short)
 - **THEN** the value is treated as legacy plaintext and returned as-is
+- **NOTE** This applies only to parse failures. Values that parse as valid envelopes but fail authenticated decryption (Poly1305 tag mismatch, unknown epoch) produce an error, not a plaintext fallback.
 
 #### Scenario: Format version check
 

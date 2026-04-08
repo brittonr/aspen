@@ -30,7 +30,7 @@ With `shamir-cluster-secret` providing a root secret and `secret-rotation-on-mem
 
 **Re-encryption on epoch change.** When `secret-rotation-on-membership-change` commits a new epoch, a background task re-encrypts all secrets with the new derived key. During re-encryption, reads use the old key for not-yet-migrated values and the new key for migrated ones. A version byte prefix on each encrypted value indicates which epoch's key was used.
 
-**Prefix format:** `[magic: 4 bytes (AENC)][version: u8][epoch: u64][nonce: 12 bytes][ciphertext+tag]`. The 4-byte magic header enables unambiguous detection of encrypted values during migration from plaintext storage. The version byte allows future format changes. The epoch identifies which derived key to use for decryption. Legacy plaintext values are detected by try-decrypt-then-fallback: any parse or decryption failure means the value is plaintext.
+**Prefix format:** `[magic: 4 bytes (AENC)][version: u8][epoch: u64][nonce: 12 bytes][ciphertext+tag]`. The 4-byte magic header enables unambiguous detection of encrypted values during migration from plaintext storage. The version byte allows future format changes. The epoch identifies which derived key to use for decryption. Detection is two-phase: (1) try to parse as an envelope — if parsing fails (wrong magic, bad version, too short), treat as legacy plaintext; (2) if parsing succeeds, decrypt — if decryption fails (Poly1305 tag mismatch, unknown epoch), raise an authentication error. This preserves tamper detection for real envelopes while allowing legacy plaintext to pass through.
 
 ## Risks / Trade-offs
 
