@@ -68,9 +68,11 @@ regex = { version = "1", optional = true }
 subtle = { version = "2.6", optional = true }
 hmac = { version = "0.12", optional = true }
 sha2 = { version = "0.10", optional = true }
+aspen-trust = { path = "../aspen-trust", optional = true }
 
 [features]
 default = []
+trust = ["dep:aspen-trust"]
 sops = [
     "dep:aspen-client",
     "dep:aspen-client-api",
@@ -83,7 +85,7 @@ sops = [
     "dep:hmac",
     "dep:sha2",
 ]
-full = ["sops"]
+full = ["sops", "trust"]
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time"] }

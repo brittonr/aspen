@@ -21,8 +21,11 @@
 //! Memory safety: all secret material implements `Zeroize` and `ZeroizeOnDrop`.
 //! Comparisons use `subtle::ConstantTimeEq` to prevent timing side channels.
 
+pub mod encryption;
+pub mod envelope;
 pub mod gf256;
 pub mod kdf;
+pub mod nonce;
 pub mod secret;
 pub mod shamir;
 pub mod verified;

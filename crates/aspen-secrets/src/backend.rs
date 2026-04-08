@@ -65,6 +65,9 @@ pub struct AspenSecretsBackend {
     kv: Arc<dyn aspen_core::KeyValueStore>,
     /// Prefix for all secrets storage paths.
     prefix: String,
+    /// Optional at-rest encryption (enabled with `trust` feature).
+    #[cfg(feature = "trust")]
+    encryption: Option<Arc<aspen_trust::encryption::SecretsEncryption>>,
 }
 
 impl AspenSecretsBackend {
@@ -73,12 +76,71 @@ impl AspenSecretsBackend {
         Self {
             kv,
             prefix: format!("{}{}/", crate::constants::SECRETS_SYSTEM_PREFIX, mount),
+            #[cfg(feature = "trust")]
+            encryption: None,
         }
+    }
+
+    /// Create a new secrets backend with at-rest encryption enabled.
+    #[cfg(feature = "trust")]
+    pub fn with_encryption(
+        kv: Arc<dyn aspen_core::KeyValueStore>,
+        mount: &str,
+        encryption: Arc<aspen_trust::encryption::SecretsEncryption>,
+    ) -> Self {
+        Self {
+            kv,
+            prefix: format!("{}{}/", crate::constants::SECRETS_SYSTEM_PREFIX, mount),
+            encryption: Some(encryption),
+        }
+    }
+
+    /// Set or replace the encryption context (e.g., after epoch rotation).
+    #[cfg(feature = "trust")]
+    pub fn set_encryption(&mut self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
+        self.encryption = Some(encryption);
     }
 
     /// Get the full path for a relative secrets path.
     fn full_path(&self, path: &str) -> String {
         format!("{}{}", self.prefix, path)
+    }
+
+    /// Encrypt bytes if encryption is enabled.
+    #[cfg(feature = "trust")]
+    fn encrypt_bytes(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        match &self.encryption {
+            Some(enc) => {
+                let (ciphertext, _counter) = enc.wrap_write(plaintext).map_err(|e| {
+                    SecretsError::Internal {
+                        reason: format!("at-rest encryption failed: {e}"),
+                    }
+                })?;
+                Ok(ciphertext)
+            }
+            None => Ok(plaintext.to_vec()),
+        }
+    }
+
+    /// Decrypt bytes if encryption is enabled.
+    #[cfg(feature = "trust")]
+    fn decrypt_bytes(&self, stored: &[u8]) -> Result<Vec<u8>> {
+        match &self.encryption {
+            Some(enc) => {
+                // Check if the value is actually encrypted (version prefix)
+                if aspen_trust::encryption::is_encrypted(stored) {
+                    enc.unwrap_read(stored).map_err(|e| {
+                        SecretsError::Internal {
+                            reason: format!("at-rest decryption failed: {e}"),
+                        }
+                    })
+                } else {
+                    // Plaintext value (pre-encryption era), return as-is
+                    Ok(stored.to_vec())
+                }
+            }
+            None => Ok(stored.to_vec()),
+        }
     }
 }
 
@@ -90,7 +152,14 @@ impl SecretsBackend for AspenSecretsBackend {
         use base64::Engine;
 
         let full_path = self.full_path(path);
-        let encoded = base64::engine::general_purpose::STANDARD.encode(value);
+
+        // Encrypt if trust feature is enabled and encryption context is set
+        #[cfg(feature = "trust")]
+        let bytes_to_store = self.encrypt_bytes(value)?;
+        #[cfg(not(feature = "trust"))]
+        let bytes_to_store = value;
+
+        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes_to_store);
 
         let request = WriteRequest {
             command: WriteCommand::Set {
@@ -120,7 +189,14 @@ impl SecretsBackend for AspenSecretsBackend {
                             reason: format!("corrupted secrets storage: {e}"),
                         }
                     })?;
-                    Ok(Some(decoded))
+
+                    // Decrypt if trust feature is enabled and encryption context is set
+                    #[cfg(feature = "trust")]
+                    let plaintext = self.decrypt_bytes(&decoded)?;
+                    #[cfg(not(feature = "trust"))]
+                    let plaintext = decoded;
+
+                    Ok(Some(plaintext))
                 } else {
                     Ok(None)
                 }
@@ -182,7 +258,13 @@ impl SecretsBackend for AspenSecretsBackend {
         use base64::Engine;
 
         let full_path = self.full_path(path);
-        let encoded = base64::engine::general_purpose::STANDARD.encode(value);
+
+        #[cfg(feature = "trust")]
+        let bytes_to_store = self.encrypt_bytes(value)?;
+        #[cfg(not(feature = "trust"))]
+        let bytes_to_store = value;
+
+        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes_to_store);
 
         let request = WriteRequest {
             command: WriteCommand::CompareAndSwap {
@@ -213,7 +295,13 @@ impl SecretsBackend for AspenSecretsBackend {
                             reason: format!("corrupted secrets storage: {e}"),
                         }
                     })?;
-                    Ok(Some((decoded, entry.mod_revision)))
+
+                    #[cfg(feature = "trust")]
+                    let plaintext = self.decrypt_bytes(&decoded)?;
+                    #[cfg(not(feature = "trust"))]
+                    let plaintext = decoded;
+
+                    Ok(Some((plaintext, entry.mod_revision)))
                 } else {
                     Ok(None)
                 }
