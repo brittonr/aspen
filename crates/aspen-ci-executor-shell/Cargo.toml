@@ -83,3 +83,4 @@ nix-cache-proxy = [
 tempfile = "3.4.0"
 tokio-test = "0.4"
 proptest = "1.0"
+aspen-testing = { path = "../aspen-testing" }

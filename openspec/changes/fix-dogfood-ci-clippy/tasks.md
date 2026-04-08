@@ -15,7 +15,7 @@
 
 - [x] 3.1 In `NixBuildWorker::execute_build`, after subprocess exits with non-zero code, drain remaining stderr lines with a 1-second timeout before dropping the log sender
 - [x] 3.2 Include the last 50 lines of stderr in the `JobResult::failure` message as a fallback when log streaming may have missed output
-- [ ] 3.3 Write a test that verifies stderr from a fast-failing nix build is captured in the KV log store (deferred — needs running cluster)
+- [x] 3.3 Write a test that verifies stderr from a fast-failing nix build is captured in the KV log store
 
 ## 4. Improve dogfood failure reporting
 
@@ -25,6 +25,6 @@
 
 ## 5. End-to-end verification
 
-- [ ] 5.1 Run `nix run .#dogfood-local -- full` and verify the clippy job passes
-- [ ] 5.2 Introduce a deliberate clippy warning and verify the dogfood pipeline reports the actual warning text in its failure output
-- [ ] 5.3 Remove the deliberate warning and verify the full pipeline completes (clippy → build → test → deploy → verify)
+- [x] 5.1 Run `nix run .#dogfood-local -- full` and verify the clippy job passes
+- [x] 5.2 Introduce a deliberate clippy warning and verify the dogfood pipeline reports the actual warning text in its failure output
+- [x] 5.3 Remove the deliberate warning and verify the full pipeline completes (clippy → build → test → deploy → verify)
