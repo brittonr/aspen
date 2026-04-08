@@ -197,10 +197,24 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
         )
     }
 
+    /// Append optional predicates into a correct `WHERE a AND b AND ...` clause.
+    /// Returns an empty string when `predicates` is empty.
+    fn build_where_clause(predicates: &[String]) -> String {
+        if predicates.is_empty() {
+            return String::new();
+        }
+        format!(" WHERE {}", predicates.join(" AND "))
+    }
+
     /// Build SQL for average duration query.
     fn build_sql_average_duration(&self, job_type: Option<&String>, status: Option<&JobStatus>) -> String {
-        let type_filter = job_type.map(|t| format!(" WHERE job_type = '{}'", t)).unwrap_or_default();
-        let status_filter = status.map(|s| format!(" AND status = '{:?}'", s)).unwrap_or_default();
+        let mut predicates = Vec::new();
+        if let Some(t) = job_type {
+            predicates.push(format!("job_type = '{}'", t));
+        }
+        if let Some(s) = status {
+            predicates.push(format!("status = '{:?}'", s));
+        }
 
         format!(
             "SELECT
@@ -208,8 +222,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
                 MIN(duration_ms) as min_duration,
                 MAX(duration_ms) as max_duration,
                 COUNT(*) as job_count
-             FROM jobs{}{}",
-            type_filter, status_filter
+             FROM jobs{}",
+            Self::build_where_clause(&predicates)
         )
     }
 
@@ -229,16 +243,19 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
 
     /// Build SQL for queue depth query.
     fn build_sql_queue_depth(&self, priority: Option<&crate::types::Priority>) -> String {
-        let priority_filter = priority.map(|p| format!(" WHERE priority = '{:?}'", p)).unwrap_or_default();
+        let mut predicates = vec!["status = 'Queued'".to_string()];
+        if let Some(p) = priority {
+            predicates.push(format!("priority = '{:?}'", p));
+        }
 
         format!(
             "SELECT
                 COUNT(*) as queued_jobs,
                 priority
              FROM jobs
-             WHERE status = 'Queued'{}
+             {}
              GROUP BY priority",
-            priority_filter
+            Self::build_where_clause(&predicates)
         )
     }
 
@@ -602,6 +619,110 @@ mod tests {
         };
         let sql = analytics.build_sql(&query).unwrap();
         assert_eq!(sql, "SELECT * FROM jobs LIMIT 10");
+    }
+
+    /// Helper to count occurrences of a substring.
+    fn count_occurrences(haystack: &str, needle: &str) -> usize {
+        haystack.matches(needle).count()
+    }
+
+    #[test]
+    fn test_average_duration_status_only() {
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
+        };
+
+        // Bug case: status present, job_type absent → was "FROM jobs AND status = ..."
+        let query = AnalyticsQuery::AverageDuration {
+            job_type: None,
+            status: Some(JobStatus::Completed),
+        };
+        let sql = analytics.build_sql(&query).unwrap();
+        assert!(sql.contains("WHERE"), "missing WHERE: {}", sql);
+        assert!(!sql.contains("FROM jobs AND"), "bare AND without WHERE: {}", sql);
+        assert_eq!(count_occurrences(&sql, "WHERE"), 1, "multiple WHEREs: {}", sql);
+    }
+
+    #[test]
+    fn test_average_duration_job_type_only() {
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
+        };
+
+        let query = AnalyticsQuery::AverageDuration {
+            job_type: Some("build".to_string()),
+            status: None,
+        };
+        let sql = analytics.build_sql(&query).unwrap();
+        assert!(sql.contains("WHERE job_type = 'build'"), "missing type filter: {}", sql);
+        assert_eq!(count_occurrences(&sql, "WHERE"), 1, "multiple WHEREs: {}", sql);
+    }
+
+    #[test]
+    fn test_average_duration_both_filters() {
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
+        };
+
+        let query = AnalyticsQuery::AverageDuration {
+            job_type: Some("test".to_string()),
+            status: Some(JobStatus::Failed),
+        };
+        let sql = analytics.build_sql(&query).unwrap();
+        assert!(sql.contains("job_type = 'test'"), "missing type: {}", sql);
+        assert!(sql.contains("status = "), "missing status: {}", sql);
+        assert_eq!(count_occurrences(&sql, "WHERE"), 1, "multiple WHEREs: {}", sql);
+        assert!(sql.contains(" AND "), "missing AND between predicates: {}", sql);
+    }
+
+    #[test]
+    fn test_average_duration_no_filters() {
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
+        };
+
+        let query = AnalyticsQuery::AverageDuration {
+            job_type: None,
+            status: None,
+        };
+        let sql = analytics.build_sql(&query).unwrap();
+        assert!(!sql.contains("WHERE"), "spurious WHERE with no filters: {}", sql);
+    }
+
+    #[test]
+    fn test_queue_depth_with_priority() {
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
+        };
+
+        // Bug case: was "WHERE status = 'Queued' WHERE priority = ..."
+        let query = AnalyticsQuery::QueueDepth {
+            priority: Some(crate::types::Priority::High),
+        };
+        let sql = analytics.build_sql(&query).unwrap();
+        assert_eq!(count_occurrences(&sql, "WHERE"), 1, "double WHERE: {}", sql);
+        assert!(sql.contains("status = 'Queued'"), "missing status filter: {}", sql);
+        assert!(sql.contains("priority = "), "missing priority filter: {}", sql);
+        assert!(sql.contains(" AND "), "missing AND between predicates: {}", sql);
+    }
+
+    #[test]
+    fn test_queue_depth_no_priority() {
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
+        };
+
+        let query = AnalyticsQuery::QueueDepth { priority: None };
+        let sql = analytics.build_sql(&query).unwrap();
+        assert_eq!(count_occurrences(&sql, "WHERE"), 1, "expected exactly one WHERE: {}", sql);
+        assert!(sql.contains("status = 'Queued'"), "missing status filter: {}", sql);
+        assert!(!sql.contains("priority ="), "spurious priority filter: {}", sql);
     }
 
     #[test]
