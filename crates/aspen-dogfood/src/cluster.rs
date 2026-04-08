@@ -20,16 +20,37 @@ use crate::node::wait_for_ticket;
 /// Send `GetHealth` and extract the response.
 pub async fn check_health(ticket: &str) -> DogfoodResult<HealthResponse> {
     let client = connect(ticket).await?;
-    let resp = send(&client, ClientRpcRequest::GetHealth, "GetHealth", ticket).await?;
+    check_health_with_client(client, ticket).await
+}
 
-    match resp {
-        ClientRpcResponse::Health(h) => Ok(h),
-        other => HealthCheckSnafu {
+trait HealthRpcClient {
+    async fn send_get_health(&self, ticket: &str) -> DogfoodResult<ClientRpcResponse>;
+    async fn shutdown(self);
+}
+
+impl HealthRpcClient for AspenClient {
+    async fn send_get_health(&self, ticket: &str) -> DogfoodResult<ClientRpcResponse> {
+        send(self, ClientRpcRequest::GetHealth, "GetHealth", ticket).await
+    }
+
+    async fn shutdown(self) {
+        AspenClient::shutdown(self).await;
+    }
+}
+
+async fn check_health_with_client<C>(client: C, ticket: &str) -> DogfoodResult<HealthResponse>
+where C: HealthRpcClient {
+    let result = match client.send_get_health(ticket).await {
+        Ok(ClientRpcResponse::Health(health)) => Ok(health),
+        Ok(other) => HealthCheckSnafu {
             target: ticket_preview(ticket),
             reason: format!("unexpected response: {other:?}"),
         }
         .fail(),
-    }
+        Err(error) => Err(error),
+    };
+    client.shutdown().await;
+    result
 }
 
 /// Send `InitCluster` RPC.
@@ -110,6 +131,7 @@ pub async fn start_single_node(manager: &mut NodeManager, config: &RunConfig) ->
     let client = connect(&ticket).await?;
     // InitCluster may fail if already initialized — that's fine
     let _ = init_cluster(&client, &ticket).await;
+    client.shutdown().await;
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     let health = check_health(&ticket).await?;
@@ -174,15 +196,27 @@ pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> 
 
     // Initialize both clusters
     let alice_client = connect(&alice_ticket).await?;
+    let bob_client = match connect(&bob_ticket).await {
+        Ok(client) => client,
+        Err(error) => {
+            alice_client.shutdown().await;
+            return Err(error);
+        }
+    };
     let _ = init_cluster(&alice_client, &alice_ticket).await;
-    let bob_client = connect(&bob_ticket).await?;
     let _ = init_cluster(&bob_client, &bob_ticket).await;
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Establish federation trust
     info!("  establishing federation trust...");
-    add_peer_cluster(&alice_client, &bob_ticket, &alice_ticket).await?;
-    add_peer_cluster(&bob_client, &alice_ticket, &bob_ticket).await?;
+    let trust_result = async {
+        add_peer_cluster(&alice_client, &bob_ticket, &alice_ticket).await?;
+        add_peer_cluster(&bob_client, &alice_ticket, &bob_ticket).await
+    }
+    .await;
+    alice_client.shutdown().await;
+    bob_client.shutdown().await;
+    trust_result?;
 
     let alice_health = check_health(&alice_ticket).await?;
     let bob_health = check_health(&bob_ticket).await?;
@@ -301,7 +335,51 @@ pub(crate) fn federation_env<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
     use super::*;
+
+    struct FakeHealthClient {
+        response: Mutex<Option<DogfoodResult<ClientRpcResponse>>>,
+        shutdown_called: Arc<AtomicBool>,
+    }
+
+    impl FakeHealthClient {
+        fn rpc_error(shutdown_called: Arc<AtomicBool>) -> Self {
+            Self {
+                response: Mutex::new(Some(Err(crate::error::DogfoodError::ClientRpc {
+                    operation: "GetHealth".to_string(),
+                    target: ticket_preview("aspen-test-ticket"),
+                    source: anyhow::anyhow!("simulated rpc failure"),
+                }))),
+                shutdown_called,
+            }
+        }
+    }
+
+    impl HealthRpcClient for FakeHealthClient {
+        async fn send_get_health(&self, _ticket: &str) -> DogfoodResult<ClientRpcResponse> {
+            self.response.lock().unwrap().take().unwrap()
+        }
+
+        async fn shutdown(self) {
+            self.shutdown_called.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn check_health_with_client_shutdowns_on_rpc_error() {
+        let shutdown_called = Arc::new(AtomicBool::new(false));
+        let client = FakeHealthClient::rpc_error(Arc::clone(&shutdown_called));
+
+        let result = check_health_with_client(client, "aspen-test-ticket").await;
+
+        assert!(result.is_err());
+        assert!(shutdown_called.load(Ordering::SeqCst));
+    }
 
     #[test]
     fn federation_env_alice_has_required_vars() {

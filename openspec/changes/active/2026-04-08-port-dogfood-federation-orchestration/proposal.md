@@ -1,6 +1,6 @@
 ## Why
 
-The `aspen-dogfood` parity fix restored federation state, cookies, env wiring, and CI watch registration, but it intentionally did **not** port the deprecated federation pipeline's mid-stream orchestration. The old `scripts/deprecated/dogfood-federation.sh` still contains behavior the Rust binary does not perform yet: explicit federation setup steps, mirror/repo propagation work, and the end-to-end federation build handoff.
+The `aspen-dogfood` parity fix restored federation state, cookies, env wiring, and CI watch registration, and the current `dogfood-federation` path now proves the runtime start/status/stop flow for alice + bob. What it still does **not** port is the deprecated federation pipeline's mid-stream orchestration. The old `scripts/deprecated/dogfood-federation.sh` still contains behavior the Rust binary does not perform yet: explicit federation setup steps, mirror/repo propagation work, and the end-to-end federation build handoff.
 
 Without a dedicated follow-up, the parity fix change has to carry an open checkbox for work that is out of scope for that change.
 

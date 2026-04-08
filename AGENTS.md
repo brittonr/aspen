@@ -260,6 +260,7 @@ nix build .#checks.x86_64-linux.kv-operations-test
 Key dogfood tests:
 
 - `dogfood-binary-smoke-test`: Directly exercises `aspen-dogfood start/status/push/stop` in a VM. Uses `bins.ci-aspen-node-snix-build` so Forge + `CiWatchRepo` are available, and lives in the unconditional `system == "x86_64-linux"` checks block so it evaluates without `--impure` sibling repos.
+- Manual federation smoke: `nix run .#dogfood-federation -- --cluster-dir /tmp/aspen-dogfood-federation-proof start`, then `status`, inspect `dogfood-state.json`, then `stop`. Useful for proving the alice/bob federation path without running the full build pipeline. In this environment `nix run` may print `unit2nix` evaluation warnings and iroh may log relay/DNS/IPv6 warnings before the final status lines; record those warnings instead of trimming them away.
 - `ci-dogfood-test`: Push flake to Forge → CI auto-trigger → nix build → run result
 - `ci-dogfood-self-build`: Push Aspen workspace to Forge → CI builds Aspen itself
 - `ci-nix-build-test`: Single nix build job end-to-end

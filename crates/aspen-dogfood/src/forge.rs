@@ -16,68 +16,72 @@ use crate::error::GitPushSnafu;
 /// Returns the hex-encoded repo ID (needed for the aspen:// URL).
 pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<String> {
     let client = connect(ticket).await?;
+    let result = async {
+        // Check if repo already exists by listing repos
+        let resp = client
+            .send(ClientRpcRequest::ForgeListRepos {
+                limit: Some(100),
+                offset: None,
+            })
+            .await
+            .map_err(|e| crate::error::DogfoodError::ClientRpc {
+                operation: "ForgeListRepos".to_string(),
+                target: crate::cluster::ticket_preview(ticket),
+                source: e,
+            })?;
 
-    // Check if repo already exists by listing repos
-    let resp = client
-        .send(ClientRpcRequest::ForgeListRepos {
-            limit: Some(100),
-            offset: None,
-        })
-        .await
-        .map_err(|e| crate::error::DogfoodError::ClientRpc {
-            operation: "ForgeListRepos".to_string(),
-            target: crate::cluster::ticket_preview(ticket),
-            source: e,
-        })?;
+        let already_exists = match &resp {
+            ClientRpcResponse::ForgeRepoListResult(list) => list.repos.iter().any(|r| r.name == repo_name),
+            _ => false,
+        };
 
-    let already_exists = match &resp {
-        ClientRpcResponse::ForgeRepoListResult(list) => list.repos.iter().any(|r| r.name == repo_name),
-        _ => false,
-    };
-
-    if already_exists {
-        // Extract existing repo ID
-        if let ClientRpcResponse::ForgeRepoListResult(list) = &resp
-            && let Some(repo) = list.repos.iter().find(|r| r.name == repo_name)
-        {
-            info!("  repo '{repo_name}' already exists (id: {})", &repo.id[..16]);
-            return Ok(repo.id.clone());
+        if already_exists {
+            // Extract existing repo ID
+            if let ClientRpcResponse::ForgeRepoListResult(list) = &resp
+                && let Some(repo) = list.repos.iter().find(|r| r.name == repo_name)
+            {
+                info!("  repo '{repo_name}' already exists (id: {})", &repo.id[..16]);
+                return Ok(repo.id.clone());
+            }
+            // Shouldn't happen, but fall through to create
         }
-        // Shouldn't happen, but fall through to create
+
+        // Create the repo
+        info!("  creating repo '{repo_name}'...");
+        let create_resp = client
+            .send(ClientRpcRequest::ForgeCreateRepo {
+                name: repo_name.to_string(),
+                description: Some("Aspen self-hosted source".to_string()),
+                default_branch: Some("main".to_string()),
+            })
+            .await
+            .map_err(|e| crate::error::DogfoodError::ClientRpc {
+                operation: "ForgeCreateRepo".to_string(),
+                target: crate::cluster::ticket_preview(ticket),
+                source: e,
+            })?;
+
+        match &create_resp {
+            ClientRpcResponse::ForgeRepoResult(r) if r.is_success => {
+                let repo_id = r.repo.as_ref().map(|r| r.id.clone()).unwrap_or_default();
+                info!("  repo created (id: {})", &repo_id[..repo_id.len().min(16)]);
+                Ok(repo_id)
+            }
+            ClientRpcResponse::ForgeRepoResult(r) => ForgeSnafu {
+                operation: "create repo",
+                reason: r.error.clone().unwrap_or_else(|| "unknown error".to_string()),
+            }
+            .fail(),
+            other => ForgeSnafu {
+                operation: "create repo",
+                reason: format!("unexpected response: {other:?}"),
+            }
+            .fail(),
+        }
     }
-
-    // Create the repo
-    info!("  creating repo '{repo_name}'...");
-    let create_resp = client
-        .send(ClientRpcRequest::ForgeCreateRepo {
-            name: repo_name.to_string(),
-            description: Some("Aspen self-hosted source".to_string()),
-            default_branch: Some("main".to_string()),
-        })
-        .await
-        .map_err(|e| crate::error::DogfoodError::ClientRpc {
-            operation: "ForgeCreateRepo".to_string(),
-            target: crate::cluster::ticket_preview(ticket),
-            source: e,
-        })?;
-
-    match &create_resp {
-        ClientRpcResponse::ForgeRepoResult(r) if r.is_success => {
-            let repo_id = r.repo.as_ref().map(|r| r.id.clone()).unwrap_or_default();
-            info!("  repo created (id: {})", &repo_id[..repo_id.len().min(16)]);
-            Ok(repo_id)
-        }
-        ClientRpcResponse::ForgeRepoResult(r) => ForgeSnafu {
-            operation: "create repo",
-            reason: r.error.clone().unwrap_or_else(|| "unknown error".to_string()),
-        }
-        .fail(),
-        other => ForgeSnafu {
-            operation: "create repo",
-            reason: format!("unexpected response: {other:?}"),
-        }
-        .fail(),
-    }
+    .await;
+    client.shutdown().await;
+    result
 }
 
 /// Register `CiWatchRepo` so auto-triggered CI fires on push.
@@ -88,35 +92,39 @@ pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<
 /// a 120s wait.
 pub async fn watch_repo(ticket: &str, repo_id: &str) -> DogfoodResult<()> {
     let client = connect(ticket).await?;
+    let result = async {
+        let resp = client
+            .send(ClientRpcRequest::CiWatchRepo {
+                repo_id: repo_id.to_string(),
+            })
+            .await
+            .map_err(|e| crate::error::DogfoodError::ClientRpc {
+                operation: "CiWatchRepo".to_string(),
+                target: crate::cluster::ticket_preview(ticket),
+                source: e,
+            })?;
 
-    let resp = client
-        .send(ClientRpcRequest::CiWatchRepo {
-            repo_id: repo_id.to_string(),
-        })
-        .await
-        .map_err(|e| crate::error::DogfoodError::ClientRpc {
-            operation: "CiWatchRepo".to_string(),
-            target: crate::cluster::ticket_preview(ticket),
-            source: e,
-        })?;
+        match resp {
+            ClientRpcResponse::CiWatchRepoResult(r) if r.is_success => {
+                info!("  CI watch registered for repo {}", &repo_id[..repo_id.len().min(16)]);
+            }
+            ClientRpcResponse::CiWatchRepoResult(r) => {
+                // Non-fatal: watch may already be active, or CI may not be enabled.
+                tracing::warn!(
+                    "  CI watch returned error (continuing): {}",
+                    r.error.unwrap_or_else(|| "unknown".to_string())
+                );
+            }
+            _ => {
+                tracing::warn!("  unexpected CiWatchRepo response (continuing)");
+            }
+        }
 
-    match resp {
-        ClientRpcResponse::CiWatchRepoResult(r) if r.is_success => {
-            info!("  CI watch registered for repo {}", &repo_id[..repo_id.len().min(16)]);
-        }
-        ClientRpcResponse::CiWatchRepoResult(r) => {
-            // Non-fatal: watch may already be active, or CI may not be enabled.
-            tracing::warn!(
-                "  CI watch returned error (continuing): {}",
-                r.error.unwrap_or_else(|| "unknown".to_string())
-            );
-        }
-        _ => {
-            tracing::warn!("  unexpected CiWatchRepo response (continuing)");
-        }
+        Ok(())
     }
-
-    Ok(())
+    .await;
+    client.shutdown().await;
+    result
 }
 
 /// Push workspace source to the Forge repo via `git push` with git-remote-aspen.

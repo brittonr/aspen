@@ -21,30 +21,34 @@ use crate::error::TimeoutSnafu;
 /// Returns the run_id on success.
 pub async fn wait_for_pipeline(ticket: &str, repo_name: &str, timeout_secs: u64) -> DogfoodResult<String> {
     let client = connect(ticket).await?;
+    let result = async {
+        // We need the repo_id. The repo_name is what we used to create it,
+        // but CiTriggerPipeline takes repo_id. Try to resolve via ForgeListRepos.
+        let repo_id = resolve_repo_id(&client, repo_name, ticket).await?;
 
-    // We need the repo_id. The repo_name is what we used to create it,
-    // but CiTriggerPipeline takes repo_id. Try to resolve via ForgeListRepos.
-    let repo_id = resolve_repo_id(&client, repo_name, ticket).await?;
+        // Phase 1: look for an auto-triggered pipeline (push-triggered)
+        info!("  looking for auto-triggered pipeline...");
+        let run_id = match find_recent_run(&client, &repo_id, ticket, Duration::from_secs(120)).await {
+            Some(id) => {
+                info!("  found pipeline: {id}");
+                id
+            }
+            None => {
+                // Phase 2: manually trigger
+                warn!("  no auto-triggered pipeline, triggering manually...");
+                trigger_pipeline(&client, &repo_id, ticket).await?
+            }
+        };
 
-    // Phase 1: look for an auto-triggered pipeline (push-triggered)
-    info!("  looking for auto-triggered pipeline...");
-    let run_id = match find_recent_run(&client, &repo_id, ticket, Duration::from_secs(120)).await {
-        Some(id) => {
-            info!("  found pipeline: {id}");
-            id
-        }
-        None => {
-            // Phase 2: manually trigger
-            warn!("  no auto-triggered pipeline, triggering manually...");
-            trigger_pipeline(&client, &repo_id, ticket).await?
-        }
-    };
+        // Phase 3: poll until terminal state
+        info!("  waiting for pipeline {run_id}...");
+        poll_pipeline(&client, &run_id, ticket, timeout_secs).await?;
 
-    // Phase 3: poll until terminal state
-    info!("  waiting for pipeline {run_id}...");
-    poll_pipeline(&client, &run_id, ticket, timeout_secs).await?;
-
-    Ok(run_id)
+        Ok(run_id)
+    }
+    .await;
+    client.shutdown().await;
+    result
 }
 
 /// Resolve a repo name to a repo ID via `ForgeListRepos`.

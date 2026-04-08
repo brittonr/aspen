@@ -18,94 +18,102 @@ use crate::error::TimeoutSnafu;
 /// from the build-node job result, and issues `ClusterDeploy`.
 pub async fn trigger_and_wait(ticket: &str) -> DogfoodResult<()> {
     let client = connect(ticket).await?;
+    let result = async {
+        // Find the store path from the latest successful build
+        let store_path = find_build_artifact(&client, ticket).await?;
+        info!("  artifact: {store_path}");
 
-    // Find the store path from the latest successful build
-    let store_path = find_build_artifact(&client, ticket).await?;
-    info!("  artifact: {store_path}");
+        // Trigger deploy
+        info!("  starting rolling deployment...");
+        let resp = send(
+            &client,
+            ClientRpcRequest::ClusterDeploy {
+                artifact: store_path.clone(),
+                strategy: "rolling".to_string(),
+                max_concurrent: 1,
+                health_timeout_secs: 120,
+                expected_binary: None,
+            },
+            "ClusterDeploy",
+            ticket,
+        )
+        .await?;
 
-    // Trigger deploy
-    info!("  starting rolling deployment...");
-    let resp = send(
-        &client,
-        ClientRpcRequest::ClusterDeploy {
-            artifact: store_path.clone(),
-            strategy: "rolling".to_string(),
-            max_concurrent: 1,
-            health_timeout_secs: 120,
-            expected_binary: None,
-        },
-        "ClusterDeploy",
-        ticket,
-    )
-    .await?;
-
-    let deploy_id = match resp {
-        ClientRpcResponse::ClusterDeployResult(r) if r.is_accepted => {
-            let id = r.deploy_id.unwrap_or_else(|| "unknown".to_string());
-            info!("  deploy accepted: {id}");
-            id
-        }
-        ClientRpcResponse::ClusterDeployResult(r) => {
-            return DeployFailedSnafu {
-                reason: r.error.unwrap_or_else(|| "deploy rejected".to_string()),
+        let deploy_id = match resp {
+            ClientRpcResponse::ClusterDeployResult(r) if r.is_accepted => {
+                let id = r.deploy_id.unwrap_or_else(|| "unknown".to_string());
+                info!("  deploy accepted: {id}");
+                id
             }
-            .fail();
-        }
-        other => {
-            return DeployFailedSnafu {
-                reason: format!("unexpected response: {other:?}"),
+            ClientRpcResponse::ClusterDeployResult(r) => {
+                return DeployFailedSnafu {
+                    reason: r.error.unwrap_or_else(|| "deploy rejected".to_string()),
+                }
+                .fail();
             }
-            .fail();
-        }
-    };
+            other => {
+                return DeployFailedSnafu {
+                    reason: format!("unexpected response: {other:?}"),
+                }
+                .fail();
+            }
+        };
 
-    // Poll deploy status until terminal
-    poll_deploy_status(&client, &deploy_id, ticket, 1200).await
+        // Poll deploy status until terminal
+        poll_deploy_status(&client, &deploy_id, ticket, 1200).await
+    }
+    .await;
+    client.shutdown().await;
+    result
 }
 
 /// Verify the deployment by checking cluster health and node metrics.
 pub async fn verify_deployment(ticket: &str) -> DogfoodResult<()> {
     let client = connect(ticket).await?;
+    let result = async {
+        // Check deploy status is "completed"
+        let resp = send(&client, ClientRpcRequest::ClusterDeployStatus, "ClusterDeployStatus", ticket).await?;
 
-    // Check deploy status is "completed"
-    let resp = send(&client, ClientRpcRequest::ClusterDeployStatus, "ClusterDeployStatus", ticket).await?;
-
-    if let ClientRpcResponse::ClusterDeployStatusResult(status) = &resp {
-        match status.status.as_deref() {
-            Some("completed") => {
-                info!("  deploy status: completed");
-                for node in &status.nodes {
-                    info!("    node {}: {}", node.node_id, node.status);
+        if let ClientRpcResponse::ClusterDeployStatusResult(status) = &resp {
+            match status.status.as_deref() {
+                Some("completed") => {
+                    info!("  deploy status: completed");
+                    for node in &status.nodes {
+                        info!("    node {}: {}", node.node_id, node.status);
+                    }
                 }
+                Some(other) => {
+                    warn!("  deploy status: {other}");
+                }
+                None if !status.is_found => {
+                    info!("  no active deployment found (may have already completed)");
+                }
+                None => {}
             }
-            Some(other) => {
-                warn!("  deploy status: {other}");
+        }
+
+        // Health check the cluster
+        info!("  verifying cluster health...");
+        let health_resp = send(&client, ClientRpcRequest::GetHealth, "GetHealth", ticket).await?;
+
+        match health_resp {
+            ClientRpcResponse::Health(h) if h.status == "healthy" => {
+                info!("  node {} healthy, uptime {}s", h.node_id, h.uptime_seconds);
+                Ok(())
             }
-            None if !status.is_found => {
-                info!("  no active deployment found (may have already completed)");
+            ClientRpcResponse::Health(h) => DeployFailedSnafu {
+                reason: format!("node {} reports status '{}'", h.node_id, h.status),
             }
-            None => {}
+            .fail(),
+            other => DeployFailedSnafu {
+                reason: format!("unexpected health response: {other:?}"),
+            }
+            .fail(),
         }
     }
-
-    // Health check the cluster
-    info!("  verifying cluster health...");
-    let health_resp = send(&client, ClientRpcRequest::GetHealth, "GetHealth", ticket).await?;
-
-    match health_resp {
-        ClientRpcResponse::Health(h) if h.status == "healthy" => {
-            info!("  node {} healthy, uptime {}s", h.node_id, h.uptime_seconds);
-            Ok(())
-        }
-        ClientRpcResponse::Health(h) => DeployFailedSnafu {
-            reason: format!("node {} reports status '{}'", h.node_id, h.status),
-        }
-        .fail(),
-        other => DeployFailedSnafu {
-            reason: format!("unexpected health response: {other:?}"),
-        }
-        .fail(),
-    }
+    .await;
+    client.shutdown().await;
+    result
 }
 
 // ── Internals ────────────────────────────────────────────────────────
