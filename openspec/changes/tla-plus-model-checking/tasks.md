@@ -1,20 +1,20 @@
 ## 1. Infrastructure
 
-- [ ] 1.1 Add TLA+ tooling to Nix flake: package `tla2tools.jar` (TLC model checker) as a Nix derivation with JRE
+- [x] 1.1 Add TLA+ tooling to Nix flake: package `tla2tools.jar` (TLC model checker) as a Nix derivation with JRE
 - [ ] 1.2 Create `nix run .#check-tla` app that runs TLC on all `.tla` specs in `tla/`
 - [ ] 1.3 Add TLA+ model checking to `nix flake check` outputs
-- [ ] 1.4 Create `tla/` directory at repo root with `.gitignore` for TLC output files (states/, *.dump)
-- [ ] 1.5 Add a `tla/README.md` documenting conventions: variable naming, module structure, how to run locally
+- [x] 1.4 Create `tla/` directory at repo root with `.gitignore` for TLC output files (states/, *.dump)
+- [x] 1.5 Add a `tla/README.md` documenting conventions: variable naming, module structure, how to run locally
 
 ## 2. Trust Init Spec
 
-- [ ] 2.1 Write `tla/trust_init.tla`: model cluster secret creation with N nodes and threshold K
-- [ ] 2.2 Define state variables: `nodes` (per-node state), `leader` (coordinator), `msgs` (global message set), `shares` (per-node shares)
-- [ ] 2.3 Define actions: `LeaderCreateSecret`, `LeaderDistributeShares`, `NodeReceiveShare`, `NodeAckShare`
-- [ ] 2.4 Define safety invariant `TypeOK` (all variables within expected domains)
-- [ ] 2.5 Define safety invariant `AllNodesHaveSharesAfterInit`: when init completes, every member has exactly one share
-- [ ] 2.6 Write `tla/trust_init.cfg` for TLC: 3 nodes, K=2
-- [ ] 2.7 Verify spec passes TLC with zero errors
+- [x] 2.1 Write `tla/trust_init.tla`: model cluster secret creation with N nodes and threshold K
+- [x] 2.2 Define state variables: `nodes` (per-node state), `leader` (coordinator), `msgs` (global message set), `shares` (per-node shares)
+- [x] 2.3 Define actions: `LeaderCreateSecret`, `LeaderDistributeShares`, `NodeReceiveShare`, `NodeAckShare`
+- [x] 2.4 Define safety invariant `TypeOK` (all variables within expected domains)
+- [x] 2.5 Define safety invariant `AllNodesHaveSharesAfterInit`: when init completes, every member has exactly one share
+- [x] 2.6 Write `tla/trust_init.cfg` for TLC: 3 nodes, K=2
+- [x] 2.7 Verify spec passes TLC with zero errors
 
 ## 3. Reconfiguration Spec
 
