@@ -3,7 +3,7 @@
 - [x] 1.1 Create `aspen-trust/src/envelope.rs` with `EncryptedValue` type: `version: u8`, `epoch: u64`, `nonce: [u8; 12]`, `ciphertext: Vec<u8>` (includes Poly1305 tag)
 - [x] 1.2 Implement `encrypt_value(key: &[u8; 32], epoch: u64, nonce: &[u8; 12], plaintext: &[u8]) -> EncryptedValue`
 - [x] 1.3 Implement `decrypt_value(key: &[u8; 32], value: &EncryptedValue) -> Result<Vec<u8>, DecryptError>`
-- [x] 1.4 Implement `EncryptedValue::serialize() -> Vec<u8>` and `EncryptedValue::deserialize(bytes: &[u8]) -> Result<Self, ParseError>` for the wire format
+- [x] 1.4 Implement `EncryptedValue::to_bytes()/from_bytes()` for the wire format: `magic(4: AENC) + version(1) + epoch(8) + nonce(12) + ciphertext+tag`
 - [x] 1.5 Test: roundtrip encrypt/decrypt recovers plaintext
 - [x] 1.6 Test: tampered ciphertext returns `DecryptError`
 - [x] 1.7 Test: wrong key returns `DecryptError`
@@ -31,7 +31,7 @@
 - [ ] 4.1 Implement lazy key reconstruction: on first secrets access, trigger cluster secret reconstruction via share collection, derive the at-rest key, cache it
 - [x] 4.2 Return `SecretsUnavailable` error if reconstruction fails (cluster below quorum) — type defined in encryption.rs
 - [ ] 4.3 On epoch change notification: derive new key, swap into `SecretsEncryption`, start re-encryption task
-- [x] 4.4 Drop old key from memory after re-encryption completes (zeroize) — SecretsEncryption implements ZeroizeOnDrop; rotate() returns old key for caller to zeroize
+- [x] 4.4 Drop old key from memory after re-encryption completes (zeroize) — manual Drop impl zeroizes all keys; remove_epoch_key() zeroizes and removes specific old-epoch keys (panics on current epoch)
 
 ## 5. Re-encryption on Epoch Change
 

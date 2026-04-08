@@ -119,7 +119,14 @@ impl SecretsEncryption {
     /// Remove a prior epoch's key (after re-encryption completes).
     ///
     /// Zeroizes the key material before removal.
+    /// Panics if `epoch` is the current epoch — removing the active
+    /// write key would break `wrap_write`.
     pub fn remove_epoch_key(&mut self, epoch: u64) {
+        assert!(
+            epoch != self.epoch,
+            "cannot remove the current epoch key (epoch {})",
+            self.epoch
+        );
         if let Some(k) = self.keys.get_mut(&epoch) {
             k.fill(0);
         }
@@ -159,13 +166,27 @@ impl std::fmt::Debug for SecretsEncryption {
     }
 }
 
-/// Check if stored bytes are an encrypted envelope by verifying the
-/// 4-byte magic header `AENC` (0x41 0x45 0x4E 0x43).
+/// Try to parse stored bytes as an encrypted envelope.
 ///
-/// This is unambiguous: the magic bytes cannot appear at the start of
-/// postcard-serialized, JSON, or base64-encoded plaintext values.
-pub fn is_encrypted(stored: &[u8]) -> bool {
-    stored.len() >= 4 && stored[0..4] == envelope::ENVELOPE_MAGIC
+/// Returns `Ok(plaintext)` if decryption succeeds, or `None` if the
+/// bytes don't look like a valid envelope (wrong magic, too short, etc.).
+/// This is the correct migration pattern: try decrypt, fall back to
+/// treating as plaintext. No heuristic — parse failure is unambiguous.
+pub fn try_decrypt(
+    enc: &SecretsEncryption,
+    stored: &[u8],
+) -> Result<Option<Vec<u8>>, envelope::EnvelopeError> {
+    // Quick check: does it start with the envelope magic?
+    if stored.len() < 4 || stored[0..4] != envelope::ENVELOPE_MAGIC {
+        return Ok(None); // Not an envelope → plaintext
+    }
+    // Try to parse and decrypt. Parse failures → plaintext.
+    match enc.unwrap_read(stored) {
+        Ok(plaintext) => Ok(Some(plaintext)),
+        Err(envelope::EnvelopeError::TooShort { .. })
+        | Err(envelope::EnvelopeError::UnsupportedVersion { .. }) => Ok(None),
+        Err(e) => Err(e), // Real decrypt errors (wrong key, tampered) bubble up
+    }
 }
 
 /// Errors when the secrets encryption layer is unavailable.
@@ -299,28 +320,51 @@ mod tests {
     }
 
     #[test]
-    fn test_is_encrypted() {
+    fn test_try_decrypt_on_encrypted_value() {
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
-        let (stored, _) = enc.wrap_write(b"data").unwrap();
-        assert!(is_encrypted(&stored));
-        assert!(!is_encrypted(b"plaintext-data"));
-        assert!(!is_encrypted(b""));
-        // Plaintext starting with byte 0x01 must NOT be misclassified
-        assert!(!is_encrypted(&[0x01, 0x02, 0x03]));
-        assert!(!is_encrypted(&[0x01]));
-        // Long plaintext starting with 0x01 must NOT be misclassified
-        let mut long_plain = vec![0x01u8; 100];
-        assert!(!is_encrypted(&long_plain));
-        // Even if first 4 bytes happen to match magic, the detection works
-        // because AENC (0x41,0x45,0x4E,0x43) is ASCII, not 0x01
-        long_plain[0] = 0x41;
-        long_plain[1] = 0x45;
-        long_plain[2] = 0x4E;
-        long_plain[3] = 0x43;
-        // This DOES look like an envelope (magic matches)
-        assert!(is_encrypted(&long_plain));
+        let (stored, _) = enc.wrap_write(b"secret-data").unwrap();
+        let result = try_decrypt(&enc, &stored).unwrap();
+        assert_eq!(result, Some(b"secret-data".to_vec()));
+    }
+
+    #[test]
+    fn test_try_decrypt_returns_none_for_plaintext() {
+        let secret = test_secret();
+        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+
+        // Short plaintext
+        assert_eq!(try_decrypt(&enc, b"plaintext-data").unwrap(), None);
+        assert_eq!(try_decrypt(&enc, b"").unwrap(), None);
+        assert_eq!(try_decrypt(&enc, &[0x01, 0x02, 0x03]).unwrap(), None);
+
+        // Long plaintext starting with 0x01
+        let long_plain = vec![0x01u8; 100];
+        assert_eq!(try_decrypt(&enc, &long_plain).unwrap(), None);
+    }
+
+    #[test]
+    fn test_try_decrypt_returns_none_for_plaintext_starting_with_magic() {
+        // Plaintext that happens to start with the AENC magic bytes
+        // must NOT be misidentified as encrypted — parse will fail
+        // (bad version / bad structure) and try_decrypt returns None
+        let secret = test_secret();
+        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+
+        let mut fake = vec![0u8; 100];
+        fake[0..4].copy_from_slice(&envelope::ENVELOPE_MAGIC);
+        fake[4] = 99; // bad version byte
+        // try_decrypt sees magic, tries to parse, gets UnsupportedVersion → None
+        assert_eq!(try_decrypt(&enc, &fake).unwrap(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot remove the current epoch key")]
+    fn test_remove_current_epoch_key_panics() {
+        let secret = test_secret();
+        let mut enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+        enc.remove_epoch_key(1); // current epoch → panic
     }
 
     #[test]

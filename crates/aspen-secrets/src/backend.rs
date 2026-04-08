@@ -123,18 +123,20 @@ impl AspenSecretsBackend {
     }
 
     /// Decrypt bytes if encryption is enabled.
+    ///
+    /// Uses try-decrypt-then-fallback: attempts to parse and decrypt as
+    /// an envelope. If the bytes aren't a valid envelope (wrong magic,
+    /// too short), returns them as plaintext. No heuristic.
     #[cfg(feature = "trust")]
     fn decrypt_bytes(&self, stored: &[u8]) -> Result<Vec<u8>> {
         match &self.encryption {
             Some(enc) => {
-                // Check if the value looks like an encrypted envelope
-                if aspen_trust::encryption::is_encrypted(stored) {
-                    enc.unwrap_read(stored).map_err(|e| SecretsError::Internal {
+                match aspen_trust::encryption::try_decrypt(enc, stored) {
+                    Ok(Some(plaintext)) => Ok(plaintext),
+                    Ok(None) => Ok(stored.to_vec()), // Not an envelope → legacy plaintext
+                    Err(e) => Err(SecretsError::Internal {
                         reason: format!("at-rest decryption failed: {e}"),
-                    })
-                } else {
-                    // Plaintext value (pre-encryption era), return as-is
-                    Ok(stored.to_vec())
+                    }),
                 }
             }
             None => Ok(stored.to_vec()),
