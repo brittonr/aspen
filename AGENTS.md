@@ -228,8 +228,8 @@ nix run .#dogfood-local -- start  # Just start the cluster
 Aspen builds itself using its own Forge + CI + Nix pipeline. The `aspen-dogfood` binary (`crates/aspen-dogfood/`) orchestrates the full pipeline using typed `aspen-client` RPCs over Iroh.
 
 ```bash
-# Full pipeline: cluster → forge repo → git push → CI auto-trigger → nix build → verify → stop
-nix run .#dogfood-local -- full
+# Full pipeline: cluster → forge repo → git push → CI auto-trigger → nix build → deploy → verify → stop
+nix run .#dogfood-local -- full      # complete pipeline: start → push → build → deploy → verify → stop
 
 # Step-by-step
 nix run .#dogfood-local -- start      # Start 1-node cluster
@@ -237,7 +237,7 @@ nix run .#dogfood-local -- push       # Push source to Forge
 nix run .#dogfood-local -- build      # Wait for CI pipeline
 nix run .#dogfood-local -- deploy     # Deploy CI-built artifact to cluster
 nix run .#dogfood-local -- verify     # Verify deployed artifact
-nix run .#dogfood-local -- full-loop  # build → deploy → verify
+nix run .#dogfood-local -- full-loop  # build → deploy → verify (cluster already running)
 nix run .#dogfood-local -- stop       # Clean up
 
 # Modes
@@ -246,6 +246,7 @@ nix run .#dogfood-local-vmci          # VM-isolated CI execution
 ```
 
 Binary: `crates/aspen-dogfood/`. Old shell scripts in `scripts/deprecated/`.
+
 
 ### NixOS VM Integration Tests
 
@@ -258,6 +259,7 @@ nix build .#checks.x86_64-linux.kv-operations-test
 
 Key dogfood tests:
 
+- `dogfood-binary-smoke-test`: Directly exercises `aspen-dogfood start/status/push/stop` in a VM. Uses `bins.ci-aspen-node-snix-build` so Forge + `CiWatchRepo` are available, and lives in the unconditional `system == "x86_64-linux"` checks block so it evaluates without `--impure` sibling repos.
 - `ci-dogfood-test`: Push flake to Forge → CI auto-trigger → nix build → run result
 - `ci-dogfood-self-build`: Push Aspen workspace to Forge → CI builds Aspen itself
 - `ci-nix-build-test`: Single nix build job end-to-end

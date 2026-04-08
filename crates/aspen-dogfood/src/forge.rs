@@ -80,6 +80,45 @@ pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<
     }
 }
 
+/// Register `CiWatchRepo` so auto-triggered CI fires on push.
+///
+/// The old dogfood-local.sh did this (`cli ci watch $repo_id`) before
+/// every `git push`. Without it, the push-triggered CI path is not
+/// exercised and the orchestrator falls back to manual trigger after
+/// a 120s wait.
+pub async fn watch_repo(ticket: &str, repo_id: &str) -> DogfoodResult<()> {
+    let client = connect(ticket).await?;
+
+    let resp = client
+        .send(ClientRpcRequest::CiWatchRepo {
+            repo_id: repo_id.to_string(),
+        })
+        .await
+        .map_err(|e| crate::error::DogfoodError::ClientRpc {
+            operation: "CiWatchRepo".to_string(),
+            target: crate::cluster::ticket_preview(ticket),
+            source: e,
+        })?;
+
+    match resp {
+        ClientRpcResponse::CiWatchRepoResult(r) if r.is_success => {
+            info!("  CI watch registered for repo {}", &repo_id[..repo_id.len().min(16)]);
+        }
+        ClientRpcResponse::CiWatchRepoResult(r) => {
+            // Non-fatal: watch may already be active, or CI may not be enabled.
+            tracing::warn!(
+                "  CI watch returned error (continuing): {}",
+                r.error.unwrap_or_else(|| "unknown".to_string())
+            );
+        }
+        _ => {
+            tracing::warn!("  unexpected CiWatchRepo response (continuing)");
+        }
+    }
+
+    Ok(())
+}
+
 /// Push workspace source to the Forge repo via `git push` with git-remote-aspen.
 pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> DogfoodResult<()> {
     let remote_url = format!("aspen://{ticket}/{repo_id}");

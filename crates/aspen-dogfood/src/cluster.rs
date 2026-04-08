@@ -86,6 +86,7 @@ pub async fn start_single_node(manager: &mut NodeManager, config: &RunConfig) ->
     })?;
 
     let iroh_key = format!("{:0>64x}", 2001_u64);
+    let cookie = config.cookie();
 
     let vm_ci_env: Vec<(&str, &str)> = if config.vm_ci {
         vec![("ASPEN_CI_EXECUTOR", "vm")]
@@ -93,7 +94,7 @@ pub async fn start_single_node(manager: &mut NodeManager, config: &RunConfig) ->
         vec![]
     };
 
-    let pid = manager.spawn_node(config, 1, "node1", &data_dir, &iroh_key, &vm_ci_env).await?;
+    let pid = manager.spawn_node(config, 1, "node1", &data_dir, &iroh_key, &cookie, &vm_ci_env).await?;
 
     info!("  waiting for node to start...");
     let ticket = wait_for_ticket(&data_dir, Duration::from_secs(30)).await?;
@@ -122,6 +123,9 @@ pub async fn start_single_node(manager: &mut NodeManager, config: &RunConfig) ->
 }
 
 /// Start a federation: two independent clusters with peer trust.
+///
+/// Each cluster gets a distinct cookie and the federation env vars that
+/// the aspen-node process needs to enable cross-cluster communication.
 pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> DogfoodResult<(NodeInfo, NodeInfo)> {
     // Alice: node-id 1
     let alice_dir = format!("{}/alice", config.cluster_dir);
@@ -131,13 +135,14 @@ pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> 
     })?;
 
     let alice_key = format!("{:0>64x}", 3001_u64);
-    let vm_ci_env: Vec<(&str, &str)> = if config.vm_ci {
-        vec![("ASPEN_CI_EXECUTOR", "vm")]
-    } else {
-        vec![]
-    };
+    let alice_cookie = config.alice_cookie();
 
-    let alice_pid = manager.spawn_node(config, 1, "alice", &alice_dir, &alice_key, &vm_ci_env).await?;
+    // Federation env vars — must match what the deprecated script set.
+    // ASPEN_FEDERATION_CLUSTER_KEY must equal the iroh secret key for the
+    // federation resolver to derive the correct FederatedId.
+    let alice_env = federation_env(&alice_key, "alice-cluster", false, config.vm_ci);
+
+    let alice_pid = manager.spawn_node(config, 1, "alice", &alice_dir, &alice_key, &alice_cookie, &alice_env).await?;
 
     // Bob: node-id 1 (separate cluster)
     let bob_dir = format!("{}/bob", config.cluster_dir);
@@ -147,7 +152,12 @@ pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> 
     })?;
 
     let bob_key = format!("{:0>64x}", 3002_u64);
-    let bob_pid = manager.spawn_node(config, 1, "bob", &bob_dir, &bob_key, &vm_ci_env).await?;
+    let bob_cookie = config.bob_cookie();
+
+    // Bob runs CI — enable federation mirror auto-trigger.
+    let bob_env = federation_env(&bob_key, "bob-cluster", true, config.vm_ci);
+
+    let bob_pid = manager.spawn_node(config, 1, "bob", &bob_dir, &bob_key, &bob_cookie, &bob_env).await?;
 
     // Wait for both tickets
     info!("  waiting for alice...");
@@ -261,4 +271,86 @@ async fn wait_for_healthy(ticket: &str, timeout: Duration) -> DogfoodResult<()> 
 pub(crate) fn ticket_preview(ticket: &str) -> String {
     let len = ticket.len().min(24);
     format!("{}...", &ticket[..len])
+}
+
+/// Build the federation env var list for a cluster node.
+///
+/// Extracted as a pure function so it can be unit-tested without
+/// spawning processes.
+pub(crate) fn federation_env<'a>(
+    iroh_key: &'a str,
+    cluster_name: &'a str,
+    enable_federation_ci: bool,
+    vm_ci: bool,
+) -> Vec<(&'a str, &'a str)> {
+    let mut env = vec![
+        ("ASPEN_FEDERATION_ENABLED", "true"),
+        ("ASPEN_FEDERATION_CLUSTER_KEY", iroh_key),
+        ("ASPEN_FEDERATION_CLUSTER_NAME", cluster_name),
+        ("ASPEN_FEDERATION_ENABLE_DHT_DISCOVERY", "false"),
+        ("ASPEN_FEDERATION_ENABLE_GOSSIP", "false"),
+    ];
+    if enable_federation_ci {
+        env.push(("ASPEN_CI_FEDERATION_CI_ENABLED", "true"));
+    }
+    if vm_ci {
+        env.push(("ASPEN_CI_EXECUTOR", "vm"));
+    }
+    env
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn federation_env_alice_has_required_vars() {
+        let env = federation_env("abc123", "alice-cluster", false, false);
+        let keys: Vec<&str> = env.iter().map(|(k, _)| *k).collect();
+        assert!(keys.contains(&"ASPEN_FEDERATION_ENABLED"));
+        assert!(keys.contains(&"ASPEN_FEDERATION_CLUSTER_KEY"));
+        assert!(keys.contains(&"ASPEN_FEDERATION_CLUSTER_NAME"));
+        assert!(keys.contains(&"ASPEN_FEDERATION_ENABLE_DHT_DISCOVERY"));
+        assert!(keys.contains(&"ASPEN_FEDERATION_ENABLE_GOSSIP"));
+        // Alice does not run federation CI
+        assert!(!keys.contains(&"ASPEN_CI_FEDERATION_CI_ENABLED"));
+        assert!(!keys.contains(&"ASPEN_CI_EXECUTOR"));
+    }
+
+    #[test]
+    fn federation_env_bob_has_ci_enabled() {
+        let env = federation_env("def456", "bob-cluster", true, false);
+        let keys: Vec<&str> = env.iter().map(|(k, _)| *k).collect();
+        assert!(keys.contains(&"ASPEN_CI_FEDERATION_CI_ENABLED"));
+    }
+
+    #[test]
+    fn federation_env_vm_ci_adds_executor() {
+        let env = federation_env("key", "name", false, true);
+        let keys: Vec<&str> = env.iter().map(|(k, _)| *k).collect();
+        assert!(keys.contains(&"ASPEN_CI_EXECUTOR"));
+    }
+
+    #[test]
+    fn federation_env_key_matches_input() {
+        let env = federation_env("my-secret-key", "my-cluster", false, false);
+        let key_val = env.iter().find(|(k, _)| *k == "ASPEN_FEDERATION_CLUSTER_KEY").unwrap();
+        assert_eq!(key_val.1, "my-secret-key");
+        let name_val = env.iter().find(|(k, _)| *k == "ASPEN_FEDERATION_CLUSTER_NAME").unwrap();
+        assert_eq!(name_val.1, "my-cluster");
+    }
+
+    #[test]
+    fn ticket_preview_truncates() {
+        let long = "a".repeat(100);
+        let preview = ticket_preview(&long);
+        assert_eq!(preview.len(), 24 + 3); // 24 chars + "..."
+    }
+
+    #[test]
+    fn ticket_preview_short() {
+        let short = "abc";
+        let preview = ticket_preview(short);
+        assert_eq!(preview, "abc...");
+    }
 }

@@ -36,10 +36,6 @@ struct Cli {
     #[arg(long, global = true, default_value = "/tmp/aspen-dogfood")]
     cluster_dir: String,
 
-    /// Number of nodes per cluster.
-    #[arg(long, global = true, default_value_t = 1)]
-    node_count: u32,
-
     #[command(subcommand)]
     command: Command,
 }
@@ -92,7 +88,6 @@ async fn run(cli: Cli) -> DogfoodResult<()> {
         cluster_dir: cli.cluster_dir.clone(),
         federation: cli.federation,
         vm_ci: cli.vm_ci,
-        node_count: cli.node_count,
         aspen_node_bin: std::env::var("ASPEN_NODE_BIN").unwrap_or_else(|_| "aspen-node".to_string()),
         git_remote_aspen_bin: std::env::var("GIT_REMOTE_ASPEN_BIN").unwrap_or_else(|_| "git-remote-aspen".to_string()),
         project_dir: std::env::var("PROJECT_DIR").unwrap_or_else(|_| ".".to_string()),
@@ -118,7 +113,6 @@ pub struct RunConfig {
     pub cluster_dir: String,
     pub federation: bool,
     pub vm_ci: bool,
-    pub node_count: u32,
     pub aspen_node_bin: String,
     pub git_remote_aspen_bin: String,
     pub project_dir: String,
@@ -131,9 +125,22 @@ impl RunConfig {
         format!("{}/dogfood-state.json", self.cluster_dir)
     }
 
-    fn cookie(&self) -> String {
+    /// Cookie for the primary (or only) cluster.
+    pub fn cookie(&self) -> String {
         let date = chrono::Local::now().format("%Y%m%d");
         format!("dogfood-{date}")
+    }
+
+    /// Cookie for alice's cluster in federation mode.
+    pub fn alice_cookie(&self) -> String {
+        let date = chrono::Local::now().format("%Y%m%d");
+        format!("fed-alice-{date}")
+    }
+
+    /// Cookie for bob's cluster in federation mode.
+    pub fn bob_cookie(&self) -> String {
+        let date = chrono::Local::now().format("%Y%m%d");
+        format!("fed-bob-{date}")
     }
 }
 
@@ -236,6 +243,7 @@ async fn cmd_push(config: &RunConfig) -> DogfoodResult<()> {
     let ticket = state.primary_ticket();
 
     let repo_id = forge::ensure_repo_exists(ticket, "aspen").await?;
+    forge::watch_repo(ticket, &repo_id).await?;
     forge::git_push(config, ticket, &repo_id).await?;
 
     info!("✅ Source pushed to Forge");
@@ -248,7 +256,7 @@ async fn cmd_build(config: &RunConfig) -> DogfoodResult<()> {
     let state = state::read_state(&config.state_file_path())?;
     let ticket = if state.is_federation {
         // In federation mode, build runs on bob
-        state.tickets().get(1).unwrap_or(&state.primary_ticket().to_string()).clone()
+        state.bob_ticket().to_string()
     } else {
         state.primary_ticket().to_string()
     };
@@ -321,4 +329,61 @@ async fn cmd_full(config: &RunConfig) -> DogfoodResult<()> {
     // Return the pipeline error if there was one, otherwise the stop error
     result?;
     stop_result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config(federation: bool) -> RunConfig {
+        RunConfig {
+            cluster_dir: "/tmp/test-dogfood".to_string(),
+            federation,
+            vm_ci: false,
+            aspen_node_bin: "aspen-node".to_string(),
+            git_remote_aspen_bin: "git-remote-aspen".to_string(),
+            project_dir: ".".to_string(),
+            nix_cache_gateway_bin: None,
+            ci_timeout_secs: 60,
+        }
+    }
+
+    #[test]
+    fn cookies_are_distinct_across_modes() {
+        let config = test_config(true);
+        let single = config.cookie();
+        let alice = config.alice_cookie();
+        let bob = config.bob_cookie();
+
+        // All three must be non-empty and mutually distinct.
+        assert!(!single.is_empty());
+        assert!(!alice.is_empty());
+        assert!(!bob.is_empty());
+        assert_ne!(alice, bob, "alice and bob must get different cookies");
+        assert_ne!(single, alice);
+        assert_ne!(single, bob);
+    }
+
+    #[test]
+    fn cookie_contains_date() {
+        let config = test_config(false);
+        let date = chrono::Local::now().format("%Y%m%d").to_string();
+        assert!(config.cookie().contains(&date));
+        assert!(config.alice_cookie().contains(&date));
+        assert!(config.bob_cookie().contains(&date));
+    }
+
+    #[test]
+    fn state_file_path_uses_cluster_dir() {
+        let config = test_config(false);
+        assert_eq!(config.state_file_path(), "/tmp/test-dogfood/dogfood-state.json");
+    }
+
+    #[test]
+    fn node_count_flag_rejected() {
+        // --node-count was removed. clap must reject it as an unknown flag.
+        use clap::Parser;
+        let result = Cli::try_parse_from(["aspen-dogfood", "--node-count", "3", "start"]);
+        assert!(result.is_err(), "--node-count should be rejected as unknown flag");
+    }
 }

@@ -74,7 +74,7 @@ impl DogfoodState {
                     label: "bob".to_string(),
                 },
             ],
-            is_federation: false,
+            is_federation: true,
             vm_ci,
         }
     }
@@ -92,6 +92,16 @@ impl DogfoodState {
     /// Primary cluster ticket (first node / alice).
     pub fn primary_ticket(&self) -> &str {
         &self.nodes[0].ticket
+    }
+
+    /// Bob's ticket (second node in federation mode).
+    /// Returns the primary ticket if not in federation mode or only one node.
+    pub fn bob_ticket(&self) -> &str {
+        if self.is_federation && self.nodes.len() > 1 {
+            &self.nodes[1].ticket
+        } else {
+            self.primary_ticket()
+        }
     }
 }
 
@@ -175,7 +185,33 @@ mod tests {
         assert_eq!(restored.nodes.len(), 2);
         assert_eq!(restored.nodes[0].label, "alice");
         assert_eq!(restored.nodes[1].label, "bob");
+        assert!(restored.is_federation);
         assert!(restored.vm_ci);
+    }
+
+    #[test]
+    fn new_single_is_not_federation() {
+        let state = DogfoodState::new_single(1, "t".into(), "a".into(), false);
+        assert!(!state.is_federation);
+    }
+
+    #[test]
+    fn new_federation_is_federation() {
+        let state = DogfoodState::new_federation(1, "ta".into(), "aa".into(), 2, "tb".into(), "ab".into(), false);
+        assert!(state.is_federation);
+    }
+
+    #[test]
+    fn bob_ticket_federation() {
+        let state = DogfoodState::new_federation(1, "ta".into(), "aa".into(), 2, "tb".into(), "ab".into(), false);
+        assert_eq!(state.bob_ticket(), "tb");
+        assert_eq!(state.primary_ticket(), "ta");
+    }
+
+    #[test]
+    fn bob_ticket_single_falls_back() {
+        let state = DogfoodState::new_single(1, "t".into(), "a".into(), false);
+        assert_eq!(state.bob_ticket(), "t");
     }
 
     #[test]

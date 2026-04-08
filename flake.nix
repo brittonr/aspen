@@ -3554,6 +3554,17 @@
               };
             }
             // lib.optionalAttrs (system == "x86_64-linux") {
+              # Smoke test for aspen-dogfood binary: start → status → push → stop.
+              # Exercises the Rust orchestrator directly instead of reimplementing
+              # its logic with aspen-cli calls.
+              # Build: nix build .#checks.x86_64-linux.dogfood-binary-smoke-test --option sandbox false
+              dogfood-binary-smoke-test = import ./nix/tests/dogfood-binary-smoke.nix {
+                inherit pkgs;
+                aspenNodePackage = bins.ci-aspen-node-snix-build;
+                aspenDogfoodPackage = bins.aspen-dogfood;
+                gitRemoteAspenPackage = bins.ci-git-remote-aspen;
+              };
+
               # Observability metrics test: 3-node cluster, verify GetNetworkMetrics,
               # Prometheus counter output, and snapshot transfer metrics.
               # No WASM plugins required — uses core operations only.

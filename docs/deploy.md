@@ -133,7 +133,10 @@ Use `aspen-cli ci logs --follow <run_id> <deploy_job_id>` to watch in real time.
 The self-hosted build pipeline script supports deployment:
 
 ```bash
-# Full loop: start → push → build → deploy → verify
+# Full pipeline: start → push → build → deploy → verify → stop
+nix run .#dogfood-local -- full
+
+# Build → deploy → verify (cluster already running)
 nix run .#dogfood-local -- full-loop
 
 # Deploy only (after a successful build)

@@ -37,6 +37,11 @@ impl NodeManager {
     ///
     /// The node writes its cluster ticket to `<data_dir>/cluster-ticket.txt`
     /// once it's ready.
+    ///
+    /// `cookie` is the cluster cookie for this specific node. In federation
+    /// mode, alice and bob get distinct cookies to prevent cross-cluster
+    /// confusion (they both use node-id 1 on the same host).
+    #[allow(clippy::too_many_arguments)]
     pub async fn spawn_node(
         &mut self,
         config: &RunConfig,
@@ -44,17 +49,16 @@ impl NodeManager {
         label: &str,
         data_dir: &str,
         iroh_secret_key: &str,
+        cookie: &str,
         extra_env: &[(&str, &str)],
     ) -> DogfoodResult<u32> {
-        let cookie = config.cookie();
-
         let mut cmd = Command::new(&config.aspen_node_bin);
         cmd.arg("--node-id")
             .arg(node_id.to_string())
             .arg("--data-dir")
             .arg(data_dir)
             .arg("--cookie")
-            .arg(&cookie)
+            .arg(cookie)
             .arg("--iroh-secret-key")
             .arg(iroh_secret_key)
             .arg("--disable-mdns")
@@ -89,6 +93,7 @@ impl NodeManager {
             cmd.env("ASPEN_NIX_CACHE_ENABLED", "true");
         }
 
+        // Apply caller-provided env vars (federation env, CI executor, etc.)
         for (k, v) in extra_env {
             cmd.env(k, v);
         }
