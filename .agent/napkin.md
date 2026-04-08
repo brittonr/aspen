@@ -17,6 +17,7 @@
 | 2026-04-07 | `cargo nextest run -P quick --workspace` failed before Aspen tests because vendored crates `vendor/iroh-h3-axum` and `vendor/iroh-proxy-utils` still ship tests/examples against older iroh APIs | For Aspen audits, exclude those vendor crates (or avoid `--workspace`) unless you're explicitly updating the vendored iroh stack |
 | 2026-04-07 | Generic timeout helpers in federation wrapped both iroh transport errors and `anyhow::Result` wire helpers (`write_message`, `read_message`) | Use `E: Into<anyhow::Error>` for mixed error sources. `E: std::error::Error` breaks on futures that already return `anyhow::Error` |
 | 2026-04-07 | Pre-commit `rustfmt` runs repo-wide `nix run .#rustfmt`, so a scoped commit can fail if unrelated unstaged Rust files would also be reformatted | Stash or restore unrelated Rust edits before committing a focused Rust change. If needed, run `nix run .#rustfmt` manually before a scoped `--no-verify` commit |
+| 2026-04-08 | `openspec list --json` reported a fake change named `active` | This repo has `openspec/changes/active/<date>-...`; the CLI treats the parent `active/` directory as a change. Inspect the nested dated directory directly instead of assuming `active` is a real change |
 
 ### Struct / API Gotchas
 

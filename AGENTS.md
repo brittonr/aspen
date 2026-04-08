@@ -658,3 +658,4 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 - Rust 2024 edition
 - Backwards compatibility is not a concern; prioritize clean solutions
 - All legacy `RaftActor` references have been removed; the codebase uses `RaftNode` throughout
+- `openspec list --json` treats `openspec/changes/active/` as a change named `active`; inspect the dated directory inside `openspec/changes/active/` directly instead of assuming `active` is a real change
