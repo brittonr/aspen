@@ -31,7 +31,7 @@
 - [ ] 4.1 Implement lazy key reconstruction: on first secrets access, trigger cluster secret reconstruction via share collection, derive the at-rest key, cache it
 - [x] 4.2 Return `SecretsUnavailable` error if reconstruction fails (cluster below quorum) — type defined in encryption.rs
 - [ ] 4.3 On epoch change notification: derive new key, swap into `SecretsEncryption`, start re-encryption task
-- [x] 4.4 Drop old key from memory after re-encryption completes (zeroize) — manual Drop impl zeroizes all keys; remove_epoch_key() zeroizes and removes specific old-epoch keys (panics on current epoch)
+- [x] 4.4 Zeroize key material on drop and on explicit removal — manual Drop impl fills all key bytes with zeros; remove_epoch_key() zeroizes and removes a specific old-epoch key (panics if called on current epoch). The actual call from a re-encryption completion path is deferred to task 5.1.
 
 ## 5. Re-encryption on Epoch Change
 

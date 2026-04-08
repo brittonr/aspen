@@ -172,21 +172,30 @@ impl std::fmt::Debug for SecretsEncryption {
 /// bytes don't look like a valid envelope (wrong magic, too short, etc.).
 /// This is the correct migration pattern: try decrypt, fall back to
 /// treating as plaintext. No heuristic — parse failure is unambiguous.
+/// Try to parse and decrypt stored bytes as an encrypted envelope.
+///
+/// Returns:
+/// - `Ok(Some(plaintext))` if the bytes are a valid envelope and decryption succeeds
+/// - `Ok(None)` if the bytes are not a valid envelope (legacy plaintext)
+///
+/// The function never returns `Err`. Any failure during parsing or
+/// decryption is treated as "not an envelope" because legacy plaintext
+/// can accidentally have bytes that partially resemble an envelope
+/// header. Only a successful authenticated decryption (Poly1305 tag
+/// verified) produces `Some`.
 pub fn try_decrypt(
     enc: &SecretsEncryption,
     stored: &[u8],
-) -> Result<Option<Vec<u8>>, envelope::EnvelopeError> {
+) -> Option<Vec<u8>> {
     // Quick check: does it start with the envelope magic?
     if stored.len() < 4 || stored[0..4] != envelope::ENVELOPE_MAGIC {
-        return Ok(None); // Not an envelope → plaintext
+        return None;
     }
-    // Try to parse and decrypt. Parse failures → plaintext.
-    match enc.unwrap_read(stored) {
-        Ok(plaintext) => Ok(Some(plaintext)),
-        Err(envelope::EnvelopeError::TooShort { .. })
-        | Err(envelope::EnvelopeError::UnsupportedVersion { .. }) => Ok(None),
-        Err(e) => Err(e), // Real decrypt errors (wrong key, tampered) bubble up
-    }
+    // Try to parse and decrypt. ANY failure means "not our envelope":
+    // - TooShort / UnsupportedVersion: bytes don't form a valid envelope
+    // - EpochMismatch: epoch in bytes doesn't match any known key
+    // - DecryptFailed: Poly1305 tag mismatch (plaintext, not real ciphertext)
+    enc.unwrap_read(stored).ok()
 }
 
 /// Errors when the secrets encryption layer is unavailable.
@@ -325,7 +334,7 @@ mod tests {
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
         let (stored, _) = enc.wrap_write(b"secret-data").unwrap();
-        let result = try_decrypt(&enc, &stored).unwrap();
+        let result = try_decrypt(&enc, &stored);
         assert_eq!(result, Some(b"secret-data".to_vec()));
     }
 
@@ -335,28 +344,54 @@ mod tests {
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
         // Short plaintext
-        assert_eq!(try_decrypt(&enc, b"plaintext-data").unwrap(), None);
-        assert_eq!(try_decrypt(&enc, b"").unwrap(), None);
-        assert_eq!(try_decrypt(&enc, &[0x01, 0x02, 0x03]).unwrap(), None);
+        assert_eq!(try_decrypt(&enc, b"plaintext-data"), None);
+        assert_eq!(try_decrypt(&enc, b""), None);
+        assert_eq!(try_decrypt(&enc, &[0x01, 0x02, 0x03]), None);
 
-        // Long plaintext starting with 0x01
-        let long_plain = vec![0x01u8; 100];
-        assert_eq!(try_decrypt(&enc, &long_plain).unwrap(), None);
+        // Long plaintext
+        assert_eq!(try_decrypt(&enc, &vec![0x01u8; 100]), None);
     }
 
     #[test]
-    fn test_try_decrypt_returns_none_for_plaintext_starting_with_magic() {
-        // Plaintext that happens to start with the AENC magic bytes
-        // must NOT be misidentified as encrypted — parse will fail
-        // (bad version / bad structure) and try_decrypt returns None
+    fn test_try_decrypt_returns_none_for_plaintext_with_magic_and_bad_version() {
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
+        // AENC magic + unsupported version byte → UnsupportedVersion → None
         let mut fake = vec![0u8; 100];
         fake[0..4].copy_from_slice(&envelope::ENVELOPE_MAGIC);
-        fake[4] = 99; // bad version byte
-        // try_decrypt sees magic, tries to parse, gets UnsupportedVersion → None
-        assert_eq!(try_decrypt(&enc, &fake).unwrap(), None);
+        fake[4] = 99;
+        assert_eq!(try_decrypt(&enc, &fake), None);
+    }
+
+    #[test]
+    fn test_try_decrypt_returns_none_for_plaintext_with_magic_and_valid_version() {
+        // Plaintext that starts with AENC + valid version (1) + enough
+        // bytes to parse as an envelope. Decryption will fail because
+        // the Poly1305 tag won't authenticate. try_decrypt returns None.
+        let secret = test_secret();
+        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+
+        let mut fake = vec![0xAAu8; 100];
+        fake[0..4].copy_from_slice(&envelope::ENVELOPE_MAGIC);
+        fake[4] = 1; // valid version
+        // bytes 5..13 = epoch, 13..25 = nonce, 25.. = "ciphertext"
+        // All garbage — Poly1305 won't verify → DecryptFailed → None
+        assert_eq!(try_decrypt(&enc, &fake), None);
+    }
+
+    #[test]
+    fn test_try_decrypt_returns_none_for_unknown_epoch() {
+        // Valid magic + version, but epoch doesn't match any known key
+        let secret = test_secret();
+        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+
+        // Encrypt something at epoch 1, then create a new context
+        // that only knows epoch 5
+        let (stored, _) = enc.wrap_write(b"data").unwrap();
+        let enc2 = SecretsEncryption::new(&secret, b"other-cluster", 5, 1, 0);
+        // Epoch 1 is unknown to enc2 → EpochMismatch → None
+        assert_eq!(try_decrypt(&enc2, &stored), None);
     }
 
     #[test]

@@ -62,9 +62,14 @@ When the trust epoch changes, all secrets MUST be re-encrypted with the new epoc
 
 ### Requirement: Value format
 
-Encrypted values MUST be stored as `[version: u8][epoch: u64][nonce: 12 bytes][ciphertext+tag]` to allow future format evolution and multi-epoch decryption.
+Encrypted values MUST be stored as `[magic: 4 bytes (0x41 0x45 0x4E 0x43 / "AENC")][version: u8][epoch: u64][nonce: 12 bytes][ciphertext+tag]` to allow unambiguous detection, future format evolution, and multi-epoch decryption.
+
+#### Scenario: Format detection on read
+
+- **WHEN** a value is read that does not start with the AENC magic, or fails to parse/decrypt
+- **THEN** the value is treated as legacy plaintext and returned as-is
 
 #### Scenario: Format version check
 
 - **WHEN** an encrypted value with an unknown version byte is read
-- **THEN** decryption returns an error indicating unsupported format version
+- **THEN** the value is treated as legacy plaintext (try-decrypt returns None)
