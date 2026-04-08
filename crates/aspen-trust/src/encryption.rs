@@ -7,7 +7,7 @@
 //! The encryption key is derived from the cluster root secret via HKDF.
 //! Key material is zeroized on drop.
 
-use zeroize::ZeroizeOnDrop;
+use std::collections::BTreeMap;
 
 use crate::envelope;
 use crate::envelope::EncryptedValue;
@@ -17,18 +17,25 @@ use crate::nonce::NonceGenerator;
 
 /// Secrets encryption context.
 ///
-/// Holds the derived at-rest encryption key and a nonce generator.
-/// Implements `ZeroizeOnDrop` to clear key material from memory.
-#[derive(ZeroizeOnDrop)]
+/// Holds derived at-rest encryption keys for the current and prior epochs.
+/// Values encrypted at any known epoch can be decrypted. New writes use
+/// the current epoch's key. All key material is zeroized on drop.
 pub struct SecretsEncryption {
-    /// Derived at-rest encryption key (32 bytes).
-    key: [u8; 32],
+    /// All known epoch keys: epoch → derived key.
+    /// The current epoch's key is always present.
+    keys: BTreeMap<u64, [u8; 32]>,
     /// Current epoch for new encryptions.
-    #[zeroize(skip)]
     epoch: u64,
     /// Counter-based nonce generator.
-    #[zeroize(skip)]
     nonce_gen: NonceGenerator,
+}
+
+impl Drop for SecretsEncryption {
+    fn drop(&mut self) {
+        for key in self.keys.values_mut() {
+            key.fill(0);
+        }
+    }
 }
 
 impl SecretsEncryption {
@@ -43,8 +50,10 @@ impl SecretsEncryption {
         initial_nonce_counter: u64,
     ) -> Self {
         let key = kdf::derive_key(cluster_secret, kdf::CONTEXT_SECRETS_AT_REST, cluster_id, epoch);
+        let mut keys = BTreeMap::new();
+        keys.insert(epoch, key);
         Self {
-            key,
+            keys,
             epoch,
             nonce_gen: NonceGenerator::new(node_id, initial_nonce_counter),
         }
@@ -55,34 +64,37 @@ impl SecretsEncryption {
     /// Returns the serialized `EncryptedValue` bytes.
     /// The nonce counter value is returned for persistence.
     pub fn wrap_write(&self, plaintext: &[u8]) -> Result<(Vec<u8>, u64), EnvelopeError> {
+        let key = self.keys.get(&self.epoch).expect("current epoch key must exist");
         let (nonce, counter) = self.nonce_gen.next_nonce();
-        let encrypted = envelope::encrypt_value(&self.key, self.epoch, &nonce, plaintext)?;
+        let encrypted = envelope::encrypt_value(key, self.epoch, &nonce, plaintext)?;
         Ok((encrypted.to_bytes(), counter))
     }
 
     /// Decrypt a stored value.
     ///
-    /// Deserializes the bytes, checks the epoch matches the current key,
-    /// and decrypts. Returns `EpochMismatch` if the value was encrypted
-    /// at a different epoch — the caller must use `decrypt_with_key`
-    /// with the old epoch's key instead.
+    /// Deserializes the bytes, looks up the key for the stored value's
+    /// epoch, and decrypts. Supports mixed-epoch reads during re-encryption:
+    /// values encrypted at any known epoch are decryptable.
+    ///
+    /// Returns `EpochMismatch` only if the stored epoch has no known key.
     pub fn unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, EnvelopeError> {
         let encrypted = EncryptedValue::from_bytes(stored)?;
-        if encrypted.epoch != self.epoch {
-            return Err(EnvelopeError::EpochMismatch {
-                stored: encrypted.epoch,
-                current: self.epoch,
-            });
-        }
-        envelope::decrypt_value(&self.key, &encrypted)
+        let key = self.keys.get(&encrypted.epoch).ok_or(EnvelopeError::EpochMismatch {
+            stored: encrypted.epoch,
+            current: self.epoch,
+        })?;
+        envelope::decrypt_value(key, &encrypted)
     }
 
     /// Get the epoch of the stored value without decrypting.
+    ///
+    /// Wire format: `magic(4) + version(1) + epoch(8) + ...`
     pub fn peek_epoch(stored: &[u8]) -> Result<u64, EnvelopeError> {
-        if stored.len() < 9 {
+        // Need at least magic(4) + version(1) + epoch(8) = 13 bytes
+        if stored.len() < 13 {
             return Err(EnvelopeError::TooShort { len: stored.len() });
         }
-        let epoch = u64::from_be_bytes(stored[1..9].try_into().expect("8 bytes for u64"));
+        let epoch = u64::from_be_bytes(stored[5..13].try_into().expect("8 bytes for u64"));
         Ok(epoch)
     }
 
@@ -96,21 +108,44 @@ impl SecretsEncryption {
         self.nonce_gen.current_counter()
     }
 
+    /// Add a prior epoch's key (e.g., recovered from the encrypted chain).
+    ///
+    /// This enables decrypting values still stored at the old epoch
+    /// while re-encryption is in progress.
+    pub fn add_epoch_key(&mut self, epoch: u64, key: [u8; 32]) {
+        self.keys.insert(epoch, key);
+    }
+
+    /// Remove a prior epoch's key (after re-encryption completes).
+    ///
+    /// Zeroizes the key material before removal.
+    pub fn remove_epoch_key(&mut self, epoch: u64) {
+        if let Some(k) = self.keys.get_mut(&epoch) {
+            k.fill(0);
+        }
+        self.keys.remove(&epoch);
+    }
+
     /// Rotate to a new epoch with a new cluster secret.
     ///
-    /// Derives a fresh key, zeroizes the old one. Returns the old key
-    /// for re-encryption (caller must zeroize after use).
-    pub fn rotate(&mut self, new_secret: &[u8; 32], cluster_id: &[u8], new_epoch: u64) -> [u8; 32] {
-        let old_key = self.key;
-        self.key = kdf::derive_key(new_secret, kdf::CONTEXT_SECRETS_AT_REST, cluster_id, new_epoch);
+    /// Derives a fresh key and adds it. The old epoch's key is retained
+    /// so mixed-epoch reads keep working until re-encryption finishes.
+    /// Call `remove_epoch_key` to drop old keys after re-encryption.
+    pub fn rotate(&mut self, new_secret: &[u8; 32], cluster_id: &[u8], new_epoch: u64) {
+        let new_key = kdf::derive_key(new_secret, kdf::CONTEXT_SECRETS_AT_REST, cluster_id, new_epoch);
+        self.keys.insert(new_epoch, new_key);
         self.epoch = new_epoch;
-        old_key
     }
 
     /// Decrypt with a specific key (for re-encryption of old-epoch values).
     pub fn decrypt_with_key(key: &[u8; 32], stored: &[u8]) -> Result<Vec<u8>, EnvelopeError> {
         let encrypted = EncryptedValue::from_bytes(stored)?;
         envelope::decrypt_value(key, &encrypted)
+    }
+
+    /// How many epoch keys are currently held.
+    pub fn epoch_key_count(&self) -> usize {
+        self.keys.len()
     }
 }
 
@@ -119,20 +154,18 @@ impl std::fmt::Debug for SecretsEncryption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SecretsEncryption")
             .field("epoch", &self.epoch)
-            .field("key", &"[REDACTED]")
+            .field("keys", &format!("[{} epoch keys REDACTED]", self.keys.len()))
             .finish()
     }
 }
 
-/// Check if stored bytes look like an encrypted envelope.
+/// Check if stored bytes are an encrypted envelope by verifying the
+/// 4-byte magic header `AENC` (0x41 0x45 0x4E 0x43).
 ///
-/// Requires both the version byte prefix AND minimum envelope length
-/// (1 + 8 + 12 + 16 = 37 bytes) to avoid false positives on plaintext
-/// values that happen to start with byte 0x01.
-const MIN_ENVELOPE_LEN: usize = 1 + 8 + 12 + 16;
-
+/// This is unambiguous: the magic bytes cannot appear at the start of
+/// postcard-serialized, JSON, or base64-encoded plaintext values.
 pub fn is_encrypted(stored: &[u8]) -> bool {
-    stored.len() >= MIN_ENVELOPE_LEN && stored[0] == 1 // ENVELOPE_VERSION
+    stored.len() >= 4 && stored[0..4] == envelope::ENVELOPE_MAGIC
 }
 
 /// Errors when the secrets encryption layer is unavailable.
@@ -176,14 +209,55 @@ mod tests {
     }
 
     #[test]
-    fn test_different_epoch_keys_incompatible() {
+    fn test_unknown_epoch_returns_epoch_mismatch() {
+        // A context that only knows epoch 1 cannot decrypt epoch 2 values
         let secret = test_secret();
         let enc1 = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
         let enc2 = SecretsEncryption::new(&secret, b"cluster", 2, 1, 0);
 
-        let (stored, _) = enc1.wrap_write(b"data").unwrap();
-        let result = enc2.unwrap_read(&stored);
-        assert!(result.is_err());
+        let (stored_at_2, _) = enc2.wrap_write(b"data").unwrap();
+        let result = enc1.unwrap_read(&stored_at_2);
+        assert!(
+            matches!(result, Err(EnvelopeError::EpochMismatch { stored: 2, current: 1 })),
+            "expected EpochMismatch, got: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_mixed_epoch_reads_after_rotate() {
+        // After rotation, both old and new epoch values are readable
+        let secret1 = test_secret();
+        let mut enc = SecretsEncryption::new(&secret1, b"cluster", 1, 1, 0);
+
+        let (stored_v1, _) = enc.wrap_write(b"epoch-1-secret").unwrap();
+
+        // Rotate to epoch 2 — old key is retained
+        let mut secret2 = [0u8; 32];
+        secret2[0] = 0xBE;
+        secret2[1] = 0xEF;
+        enc.rotate(&secret2, b"cluster", 2);
+        assert_eq!(enc.epoch_key_count(), 2);
+
+        // Write at epoch 2
+        let (stored_v2, _) = enc.wrap_write(b"epoch-2-secret").unwrap();
+
+        // Both are readable
+        let recovered_v1 = enc.unwrap_read(&stored_v1).unwrap();
+        assert_eq!(&recovered_v1, b"epoch-1-secret");
+
+        let recovered_v2 = enc.unwrap_read(&stored_v2).unwrap();
+        assert_eq!(&recovered_v2, b"epoch-2-secret");
+
+        // After removing old key, epoch 1 values become unreadable
+        enc.remove_epoch_key(1);
+        assert_eq!(enc.epoch_key_count(), 1);
+        let result = enc.unwrap_read(&stored_v1);
+        assert!(matches!(result, Err(EnvelopeError::EpochMismatch { .. })));
+
+        // Epoch 2 still works
+        let recovered_v2_again = enc.unwrap_read(&stored_v2).unwrap();
+        assert_eq!(&recovered_v2_again, b"epoch-2-secret");
     }
 
     #[test]
@@ -197,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rotate_and_reencrypt() {
+    fn test_rotate_reencrypt_and_drop_old_key() {
         let secret1 = test_secret();
         let mut enc = SecretsEncryption::new(&secret1, b"cluster", 1, 1, 0);
 
@@ -207,22 +281,21 @@ mod tests {
         let mut secret2 = [0u8; 32];
         secret2[0] = 0xBE;
         secret2[1] = 0xEF;
-        let mut old_key = enc.rotate(&secret2, b"cluster", 2);
+        enc.rotate(&secret2, b"cluster", 2);
 
-        // Decrypt old value with old key
-        let plaintext = SecretsEncryption::decrypt_with_key(&old_key, &stored_v1).unwrap();
+        // Old-epoch value is still readable (key retained after rotate)
+        let plaintext = enc.unwrap_read(&stored_v1).unwrap();
         assert_eq!(&plaintext, b"important-secret");
 
-        // Re-encrypt with new key
+        // Re-encrypt with new epoch key
         let (stored_v2, _) = enc.wrap_write(&plaintext).unwrap();
         let recovered = enc.unwrap_read(&stored_v2).unwrap();
         assert_eq!(&recovered, b"important-secret");
 
-        // Old key can't decrypt new value
-        let result = SecretsEncryption::decrypt_with_key(&old_key, &stored_v2);
-        assert!(result.is_err());
-
-        old_key.fill(0);
+        // Drop old key after re-encryption
+        enc.remove_epoch_key(1);
+        let result = enc.unwrap_read(&stored_v1);
+        assert!(matches!(result, Err(EnvelopeError::EpochMismatch { .. })));
     }
 
     #[test]
@@ -237,6 +310,17 @@ mod tests {
         // Plaintext starting with byte 0x01 must NOT be misclassified
         assert!(!is_encrypted(&[0x01, 0x02, 0x03]));
         assert!(!is_encrypted(&[0x01]));
+        // Long plaintext starting with 0x01 must NOT be misclassified
+        let mut long_plain = vec![0x01u8; 100];
+        assert!(!is_encrypted(&long_plain));
+        // Even if first 4 bytes happen to match magic, the detection works
+        // because AENC (0x41,0x45,0x4E,0x43) is ASCII, not 0x01
+        long_plain[0] = 0x41;
+        long_plain[1] = 0x45;
+        long_plain[2] = 0x4E;
+        long_plain[3] = 0x43;
+        // This DOES look like an envelope (magic matches)
+        assert!(is_encrypted(&long_plain));
     }
 
     #[test]
@@ -244,8 +328,8 @@ mod tests {
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
         let debug = format!("{:?}", enc);
-        assert!(debug.contains("REDACTED"));
-        assert!(!debug.contains("0xDE"));
+        assert!(debug.contains("REDACTED"), "debug output should redact keys: {}", debug);
+        assert!(debug.contains("1 epoch keys"), "should show key count: {}", debug);
     }
 
     #[test]

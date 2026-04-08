@@ -20,7 +20,7 @@
 
 - [x] 3.1 Add `SecretsEncryption` struct holding the cached derived key, nonce generator, and epoch
 - [x] 3.2 Implement `wrap_write(&self, plaintext: &[u8]) -> Vec<u8>` that encrypts and serializes
-- [x] 3.3 Implement `unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, SecretsError>` that deserializes and decrypts with epoch check (returns EpochMismatch for old-epoch values)
+- [x] 3.3 Implement `unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, SecretsError>` that deserializes and decrypts with the appropriate epoch's derived key (multi-epoch key map; EpochMismatch only for unknown epochs)
 - [x] 3.4 Integrate `wrap_write`/`unwrap_read` into KV secrets engine write/read paths (via AspenSecretsBackend put/get/put_cas/get_with_version)
 - [ ] 3.5 Integrate into Transit secrets engine (encrypt key material before storage)
 - [ ] 3.6 Integrate into PKI secrets engine (encrypt private keys before storage)

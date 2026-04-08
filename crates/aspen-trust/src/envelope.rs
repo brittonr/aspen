@@ -16,11 +16,15 @@ use snafu::Snafu;
 /// Current wire format version.
 const ENVELOPE_VERSION: u8 = 1;
 
+/// Magic bytes identifying an encrypted envelope.
+/// ASCII "AENC" — chosen to be unlikely in postcard/JSON/base64 plaintext.
+pub const ENVELOPE_MAGIC: [u8; 4] = [0x41, 0x45, 0x4E, 0x43];
+
 /// Poly1305 authentication tag length.
 const TAG_LEN: usize = 16;
 
-/// Minimum serialized size: version(1) + epoch(8) + nonce(12) + tag(16).
-const MIN_SERIALIZED_LEN: usize = 1 + 8 + 12 + TAG_LEN;
+/// Minimum serialized size: magic(4) + version(1) + epoch(8) + nonce(12) + tag(16).
+const MIN_SERIALIZED_LEN: usize = 4 + 1 + 8 + 12 + TAG_LEN;
 
 /// An encrypted value envelope.
 ///
@@ -99,9 +103,10 @@ pub fn decrypt_value(key: &[u8; 32], value: &EncryptedValue) -> Result<Vec<u8>, 
 impl EncryptedValue {
     /// Serialize to compact binary wire format.
     ///
-    /// Layout: `version(1) || epoch_be(8) || nonce(12) || ciphertext+tag(N)`
+    /// Layout: `magic(4) || version(1) || epoch_be(8) || nonce(12) || ciphertext+tag(N)`
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(1 + 8 + 12 + self.ciphertext.len());
+        let mut buf = Vec::with_capacity(4 + 1 + 8 + 12 + self.ciphertext.len());
+        buf.extend_from_slice(&ENVELOPE_MAGIC);
         buf.push(self.version);
         buf.extend_from_slice(&self.epoch.to_be_bytes());
         buf.extend_from_slice(&self.nonce);
@@ -115,15 +120,20 @@ impl EncryptedValue {
             return Err(EnvelopeError::TooShort { len: bytes.len() });
         }
 
-        let version = bytes[0];
+        // Check magic header
+        if bytes[0..4] != ENVELOPE_MAGIC {
+            return Err(EnvelopeError::UnsupportedVersion { version: bytes[0] });
+        }
+
+        let version = bytes[4];
         if version != ENVELOPE_VERSION {
             return Err(EnvelopeError::UnsupportedVersion { version });
         }
 
-        let epoch = u64::from_be_bytes(bytes[1..9].try_into().expect("8 bytes for u64"));
+        let epoch = u64::from_be_bytes(bytes[5..13].try_into().expect("8 bytes for u64"));
         let mut nonce = [0u8; 12];
-        nonce.copy_from_slice(&bytes[9..21]);
-        let ciphertext = bytes[21..].to_vec();
+        nonce.copy_from_slice(&bytes[13..25]);
+        let ciphertext = bytes[25..].to_vec();
 
         Ok(Self {
             version,
@@ -234,11 +244,21 @@ mod tests {
     }
 
     #[test]
+    fn test_from_bytes_bad_magic() {
+        let mut bytes = vec![0u8; MIN_SERIALIZED_LEN + 1];
+        bytes[0] = 42; // bad magic
+        let result = EncryptedValue::from_bytes(&bytes);
+        assert!(matches!(result, Err(EnvelopeError::UnsupportedVersion { .. })));
+    }
+
+    #[test]
     fn test_from_bytes_bad_version() {
         let mut bytes = vec![0u8; MIN_SERIALIZED_LEN + 1];
-        bytes[0] = 42; // bad version
+        // Correct magic, bad version
+        bytes[0..4].copy_from_slice(&ENVELOPE_MAGIC);
+        bytes[4] = 99; // bad version
         let result = EncryptedValue::from_bytes(&bytes);
-        assert!(matches!(result, Err(EnvelopeError::UnsupportedVersion { version: 42 })));
+        assert!(matches!(result, Err(EnvelopeError::UnsupportedVersion { version: 99 })));
     }
 
     #[test]

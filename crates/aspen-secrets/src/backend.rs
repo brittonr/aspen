@@ -129,18 +129,8 @@ impl AspenSecretsBackend {
             Some(enc) => {
                 // Check if the value looks like an encrypted envelope
                 if aspen_trust::encryption::is_encrypted(stored) {
-                    enc.unwrap_read(stored).map_err(|e| match &e {
-                        aspen_trust::envelope::EnvelopeError::EpochMismatch { stored: s, current: c } => {
-                            SecretsError::Internal {
-                                reason: format!(
-                                    "secret encrypted at epoch {s}, current key is epoch {c}; \
-                                     re-encryption required"
-                                ),
-                            }
-                        }
-                        _ => SecretsError::Internal {
-                            reason: format!("at-rest decryption failed: {e}"),
-                        },
+                    enc.unwrap_read(stored).map_err(|e| SecretsError::Internal {
+                        reason: format!("at-rest decryption failed: {e}"),
                     })
                 } else {
                     // Plaintext value (pre-encryption era), return as-is
