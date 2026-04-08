@@ -91,3 +91,4 @@ full = ["sops", "trust"]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time"] }
 tempfile = "3.10"
 proptest = "1.0"
+aspen-testing = { path = "../aspen-testing" }

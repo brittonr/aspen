@@ -468,4 +468,91 @@ mod tests {
         let result = backend.get("test").await.unwrap();
         assert_eq!(result, Some(b"v2".to_vec()));
     }
+
+    #[cfg(feature = "trust")]
+    mod trust_tests {
+        use std::sync::Arc;
+
+        use super::*;
+
+        fn make_encryption() -> Arc<aspen_trust::encryption::SecretsEncryption> {
+            let mut secret = [0u8; 32];
+            secret[0] = 0xDE;
+            secret[1] = 0xAD;
+            Arc::new(aspen_trust::encryption::SecretsEncryption::new(
+                &secret, b"test-cluster", 1, 1, 0,
+            ))
+        }
+
+        #[tokio::test]
+        async fn test_encrypted_roundtrip_through_backend() {
+            let kv = aspen_testing::DeterministicKeyValueStore::new();
+            let enc = make_encryption();
+            let backend = AspenSecretsBackend::with_encryption(kv, "test", enc);
+
+            backend.put("secret/key", b"my-secret-value").await.unwrap();
+            let result = backend.get("secret/key").await.unwrap();
+            assert_eq!(result, Some(b"my-secret-value".to_vec()));
+        }
+
+        #[tokio::test]
+        async fn test_legacy_plaintext_readable_with_encryption_enabled() {
+            let kv = aspen_testing::DeterministicKeyValueStore::new();
+
+            // Write without encryption (legacy)
+            let backend_plain = AspenSecretsBackend::new(kv.clone(), "test");
+            backend_plain.put("legacy/key", b"old-value").await.unwrap();
+
+            // Read with encryption enabled — should fall back to plaintext
+            let enc = make_encryption();
+            let backend_enc = AspenSecretsBackend::with_encryption(kv, "test", enc);
+            let result = backend_enc.get("legacy/key").await.unwrap();
+            assert_eq!(result, Some(b"old-value".to_vec()));
+        }
+
+        #[tokio::test]
+        async fn test_tampered_envelope_returns_error_not_plaintext() {
+            use aspen_core::KeyValueStore;
+            use aspen_core::ReadRequest;
+            use aspen_core::WriteCommand;
+            use aspen_core::WriteRequest;
+            use base64::Engine;
+
+            let kv = aspen_testing::DeterministicKeyValueStore::new();
+            let enc = make_encryption();
+            let backend = AspenSecretsBackend::with_encryption(kv.clone(), "test", enc);
+
+            // Write an encrypted value
+            backend.put("tamper/key", b"sensitive").await.unwrap();
+
+            // Tamper with the stored value in the KV store directly.
+            let full_key = format!("{}test/tamper/key", crate::constants::SECRETS_SYSTEM_PREFIX);
+            let stored = kv.read(ReadRequest::new(&full_key)).await.unwrap();
+            let entry = stored.kv.unwrap();
+            let mut decoded = base64::engine::general_purpose::STANDARD
+                .decode(&entry.value)
+                .unwrap();
+            // Flip a byte in the ciphertext area (after magic+version+epoch+nonce = 25 bytes)
+            if decoded.len() > 26 {
+                decoded[26] ^= 0xFF;
+            }
+            let tampered_b64 = base64::engine::general_purpose::STANDARD.encode(&decoded);
+            kv.write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: full_key,
+                    value: tampered_b64,
+                },
+            })
+            .await
+            .expect("tamper write should succeed");
+
+            // Read the tampered value — must return an error, not plaintext
+            let result = backend.get("tamper/key").await;
+            assert!(
+                result.is_err(),
+                "tampered envelope should produce an error, got: {:?}",
+                result
+            );
+        }
+    }
 }

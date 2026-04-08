@@ -72,5 +72,5 @@ Encrypted values MUST be stored as `[magic: 4 bytes (0x41 0x45 0x4E 0x43 / "AENC
 
 #### Scenario: Format version check
 
-- **WHEN** an encrypted value with an unknown version byte is read
-- **THEN** the value is treated as legacy plaintext (try-decrypt returns None)
+- **WHEN** a stored value has the AENC magic but an unknown version byte
+- **THEN** structural parsing fails and the value is treated as legacy plaintext (try_decrypt returns NotAnEnvelope)

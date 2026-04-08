@@ -2540,6 +2540,7 @@ dependencies = [
  "aspen-client-api",
  "aspen-core",
  "aspen-crypto",
+ "aspen-testing",
  "aspen-transport",
  "aspen-trust",
  "async-trait",
