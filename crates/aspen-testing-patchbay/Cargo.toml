@@ -20,6 +20,7 @@ aspen-redb-storage = { path = "../aspen-redb-storage" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-cluster-types = { path = "../aspen-cluster-types" }
 aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-testing-core = { path = "../aspen-testing-core" }
 aspen-traits = { path = "../aspen-traits" }
 aspen-transport = { path = "../aspen-transport" }
 aspen-sharding = { path = "../aspen-sharding" }

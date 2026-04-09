@@ -13,6 +13,8 @@ use anyhow::bail;
 use aspen_cluster_types::ClusterNode;
 use aspen_cluster_types::NodeAddress;
 use aspen_raft::types::NodeId;
+use aspen_testing_core::WaitError;
+use aspen_testing_core::wait_until;
 use iroh::EndpointAddr;
 use patchbay::Device;
 use patchbay::Lab;
@@ -259,5 +261,83 @@ impl Drop for PatchbayHarness {
     fn drop(&mut self) {
         // Nodes will be cleaned up when the Lab is dropped (namespace cleanup).
         // The command loops will terminate when channels are dropped.
+    }
+}
+
+#[async_trait::async_trait]
+impl aspen_testing_core::TestCluster for PatchbayHarness {
+    async fn wait_for_leader(&self, timeout: Duration) -> Result<u64, WaitError> {
+        let handles = self.handles().to_vec();
+
+        wait_until("patchbay leader consensus", timeout, LEADER_POLL_INTERVAL, move || {
+            let hs = handles.clone();
+            async move {
+                let mut leaders: Vec<Option<NodeId>> = Vec::new();
+                for h in &hs {
+                    match h.get_leader().await {
+                        Ok(l) => leaders.push(l),
+                        Err(_) => return Ok(false),
+                    }
+                }
+                let first = match leaders.first().and_then(|l| l.as_ref()) {
+                    Some(f) => *f,
+                    None => return Ok(false),
+                };
+                if leaders.iter().all(|l| l.as_ref() == Some(&first)) {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+        })
+        .await?;
+
+        // Re-query to get the actual leader
+        match self.check_leader_consensus().await {
+            Some(id) => Ok(id.0),
+            None => Err(WaitError::ClusterError("leader lost after wait".into())),
+        }
+    }
+
+    async fn wait_for_replication(&self, timeout: Duration) -> Result<(), WaitError> {
+        // Patchbay nodes don't directly expose applied index — use a write-then-read
+        // round trip as a proxy for replication convergence.
+        let key = format!("__harness_repl_check_{}", rand::random::<u32>());
+        PatchbayHarness::write_kv(self, &key, "1")
+            .await
+            .map_err(|e| WaitError::ClusterError(format!("{e}")))?;
+
+        let handles = self.handles().to_vec();
+        let key_clone = key.clone();
+        wait_until("patchbay replication converged", timeout, Duration::from_millis(200), move || {
+            let hs = handles.clone();
+            let k = key_clone.clone();
+            async move {
+                for (i, h) in hs.iter().enumerate() {
+                    match h.read_kv(&k).await {
+                        Ok(Some(_)) => {}
+                        Ok(None) => return Ok(false),
+                        Err(e) => return Err(format!("node {i}: {e}")),
+                    }
+                }
+                Ok(true)
+            }
+        })
+        .await
+    }
+
+    async fn write_kv(&self, key: &str, value: &str) -> Result<(), WaitError> {
+        PatchbayHarness::write_kv(self, key, value)
+            .await
+            .map_err(|e| WaitError::ClusterError(format!("{e}")))
+    }
+
+    async fn read_kv(&self, key: &str) -> Result<Option<String>, WaitError> {
+        // Read from node 0
+        PatchbayHarness::read_kv(self, 0, key).await.map_err(|e| WaitError::ClusterError(format!("{e}")))
+    }
+
+    fn node_count(&self) -> u32 {
+        self.handles.len() as u32
     }
 }

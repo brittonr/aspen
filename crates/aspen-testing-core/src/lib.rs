@@ -212,7 +212,18 @@ impl ClusterController for DeterministicClusterController {
 /// store.write(WriteRequest::set("key", "value")).await?;
 /// ```
 pub mod failing_store;
+pub mod harness;
+pub mod wait_helpers;
 pub use failing_store::FailingKeyValueStore;
+pub use harness::TestCluster;
+pub use harness::WaitError;
+pub use harness::WaitOutcome;
+pub use harness::wait_until;
+pub use wait_helpers::wait_for_cluster_health;
+pub use wait_helpers::wait_for_job_completion;
+pub use wait_helpers::wait_for_key_present;
+pub use wait_helpers::wait_for_leader;
+pub use wait_helpers::wait_for_replication;
 
 pub struct DeterministicKeyValueStore {
     inner: Arc<Mutex<HashMap<String, VersionedValue>>>,

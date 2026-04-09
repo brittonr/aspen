@@ -108,10 +108,7 @@ impl SharedRedbStorage {
     /// Mark this node as permanently expunged.
     ///
     /// This also zeroizes all trust shares to prevent secret reconstruction.
-    pub fn mark_expunged(
-        &self,
-        metadata: aspen_cluster_types::ExpungedMetadata,
-    ) -> Result<(), SharedStorageError> {
+    pub fn mark_expunged(&self, metadata: aspen_cluster_types::ExpungedMetadata) -> Result<(), SharedStorageError> {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
             // Write the expungement marker

@@ -111,10 +111,8 @@ impl AspenSecretsBackend {
     fn encrypt_bytes(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         match &self.encryption {
             Some(enc) => {
-                let (ciphertext, _counter) = enc.wrap_write(plaintext).map_err(|e| {
-                    SecretsError::Internal {
-                        reason: format!("at-rest encryption failed: {e}"),
-                    }
+                let (ciphertext, _counter) = enc.wrap_write(plaintext).map_err(|e| SecretsError::Internal {
+                    reason: format!("at-rest encryption failed: {e}"),
                 })?;
                 Ok(ciphertext)
             }
@@ -130,17 +128,13 @@ impl AspenSecretsBackend {
     #[cfg(feature = "trust")]
     fn decrypt_bytes(&self, stored: &[u8]) -> Result<Vec<u8>> {
         match &self.encryption {
-            Some(enc) => {
-                match aspen_trust::encryption::try_decrypt(enc, stored) {
-                    aspen_trust::encryption::DecryptOutcome::Decrypted(plaintext) => Ok(plaintext),
-                    aspen_trust::encryption::DecryptOutcome::NotAnEnvelope => Ok(stored.to_vec()),
-                    aspen_trust::encryption::DecryptOutcome::AuthenticationFailed(e) => {
-                        Err(SecretsError::Internal {
-                            reason: format!("at-rest decryption failed: {e}"),
-                        })
-                    }
-                }
-            }
+            Some(enc) => match aspen_trust::encryption::try_decrypt(enc, stored) {
+                aspen_trust::encryption::DecryptOutcome::Decrypted(plaintext) => Ok(plaintext),
+                aspen_trust::encryption::DecryptOutcome::NotAnEnvelope => Ok(stored.to_vec()),
+                aspen_trust::encryption::DecryptOutcome::AuthenticationFailed(e) => Err(SecretsError::Internal {
+                    reason: format!("at-rest decryption failed: {e}"),
+                }),
+            },
             None => Ok(stored.to_vec()),
         }
     }
@@ -479,9 +473,7 @@ mod tests {
             let mut secret = [0u8; 32];
             secret[0] = 0xDE;
             secret[1] = 0xAD;
-            Arc::new(aspen_trust::encryption::SecretsEncryption::new(
-                &secret, b"test-cluster", 1, 1, 0,
-            ))
+            Arc::new(aspen_trust::encryption::SecretsEncryption::new(&secret, b"test-cluster", 1, 1, 0))
         }
 
         #[tokio::test]
@@ -529,9 +521,7 @@ mod tests {
             let full_key = format!("{}test/tamper/key", crate::constants::SECRETS_SYSTEM_PREFIX);
             let stored = kv.read(ReadRequest::new(&full_key)).await.unwrap();
             let entry = stored.kv.unwrap();
-            let mut decoded = base64::engine::general_purpose::STANDARD
-                .decode(&entry.value)
-                .unwrap();
+            let mut decoded = base64::engine::general_purpose::STANDARD.decode(&entry.value).unwrap();
             // Flip a byte in the ciphertext area (after magic+version+epoch+nonce = 25 bytes)
             if decoded.len() > 26 {
                 decoded[26] ^= 0xFF;
@@ -548,11 +538,7 @@ mod tests {
 
             // Read the tampered value — must return an error, not plaintext
             let result = backend.get("tamper/key").await;
-            assert!(
-                result.is_err(),
-                "tampered envelope should produce an error, got: {:?}",
-                result
-            );
+            assert!(result.is_err(), "tampered envelope should produce an error, got: {:?}", result);
         }
     }
 }

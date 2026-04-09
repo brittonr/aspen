@@ -11,8 +11,10 @@
 use std::collections::BTreeMap;
 
 use aspen_trust::kdf;
-use aspen_trust::secret::{ClusterSecret, Threshold};
-use aspen_trust::shamir::{self, ShareDigest};
+use aspen_trust::secret::ClusterSecret;
+use aspen_trust::secret::Threshold;
+use aspen_trust::shamir::ShareDigest;
+use aspen_trust::shamir::{self};
 
 #[test]
 fn test_three_node_trust_init_and_reconstruct() {
@@ -25,8 +27,7 @@ fn test_three_node_trust_init_and_reconstruct() {
 
     // 2. Split into shares
     let mut rng = rand::rng();
-    let shares =
-        shamir::split_secret(secret.as_bytes(), threshold.value(), n as u8, &mut rng).unwrap();
+    let shares = shamir::split_secret(secret.as_bytes(), threshold.value(), n as u8, &mut rng).unwrap();
     assert_eq!(shares.len(), 3);
 
     // 3. Compute digests (simulating what the leader stores)
@@ -45,18 +46,15 @@ fn test_three_node_trust_init_and_reconstruct() {
 
     // 5. Reconstruct from any 2-of-3
     // Pair (0, 1)
-    let reconstructed_01 =
-        shamir::reconstruct_secret(&[shares[0].clone(), shares[1].clone()]).unwrap();
+    let reconstructed_01 = shamir::reconstruct_secret(&[shares[0].clone(), shares[1].clone()]).unwrap();
     assert_eq!(&reconstructed_01, secret.as_bytes());
 
     // Pair (0, 2)
-    let reconstructed_02 =
-        shamir::reconstruct_secret(&[shares[0].clone(), shares[2].clone()]).unwrap();
+    let reconstructed_02 = shamir::reconstruct_secret(&[shares[0].clone(), shares[2].clone()]).unwrap();
     assert_eq!(&reconstructed_02, secret.as_bytes());
 
     // Pair (1, 2)
-    let reconstructed_12 =
-        shamir::reconstruct_secret(&[shares[1].clone(), shares[2].clone()]).unwrap();
+    let reconstructed_12 = shamir::reconstruct_secret(&[shares[1].clone(), shares[2].clone()]).unwrap();
     assert_eq!(&reconstructed_12, secret.as_bytes());
 
     // All three
@@ -76,8 +74,7 @@ fn test_three_node_trust_init_and_reconstruct() {
     assert_eq!(key1, key2, "keys derived from different share subsets should match");
 
     // Different context produces different key
-    let transit_key =
-        kdf::derive_key(&reconstructed_01, kdf::CONTEXT_TRANSIT_KEYS, cluster_id, epoch);
+    let transit_key = kdf::derive_key(&reconstructed_01, kdf::CONTEXT_TRANSIT_KEYS, cluster_id, epoch);
     assert_ne!(key1, transit_key);
 }
 
@@ -89,8 +86,7 @@ fn test_five_node_trust_any_three_reconstruct() {
 
     let secret = ClusterSecret::generate();
     let mut rng = rand::rng();
-    let shares =
-        shamir::split_secret(secret.as_bytes(), threshold.value(), n as u8, &mut rng).unwrap();
+    let shares = shamir::split_secret(secret.as_bytes(), threshold.value(), n as u8, &mut rng).unwrap();
 
     // Try all C(5,3) = 10 subsets
     let mut success_count = 0u32;
@@ -131,15 +127,16 @@ fn test_custom_threshold() {
     let shares = shamir::split_secret(secret.as_bytes(), 4, 5, &mut rng).unwrap();
 
     // 3 shares should NOT reconstruct
-    let wrong =
-        shamir::reconstruct_secret(&[shares[0].clone(), shares[1].clone(), shares[2].clone()])
-            .unwrap();
+    let wrong = shamir::reconstruct_secret(&[shares[0].clone(), shares[1].clone(), shares[2].clone()]).unwrap();
     assert_ne!(&wrong, secret.as_bytes());
 
     // 4 shares should reconstruct
-    let correct = shamir::reconstruct_secret(
-        &[shares[0].clone(), shares[1].clone(), shares[2].clone(), shares[3].clone()],
-    )
+    let correct = shamir::reconstruct_secret(&[
+        shares[0].clone(),
+        shares[1].clone(),
+        shares[2].clone(),
+        shares[3].clone(),
+    ])
     .unwrap();
     assert_eq!(&correct, secret.as_bytes());
 }

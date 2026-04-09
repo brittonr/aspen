@@ -5,10 +5,10 @@
 //!
 //! Formally verified — see `verus/envelope_spec.rs` for proofs (future).
 
-use chacha20poly1305::aead::Aead;
-use chacha20poly1305::aead::KeyInit;
 use chacha20poly1305::ChaCha20Poly1305;
 use chacha20poly1305::Nonce;
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::aead::KeyInit;
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::Snafu;

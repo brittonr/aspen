@@ -122,11 +122,7 @@ impl SecretsEncryption {
     /// Panics if `epoch` is the current epoch — removing the active
     /// write key would break `wrap_write`.
     pub fn remove_epoch_key(&mut self, epoch: u64) {
-        assert!(
-            epoch != self.epoch,
-            "cannot remove the current epoch key (epoch {})",
-            self.epoch
-        );
+        assert!(epoch != self.epoch, "cannot remove the current epoch key (epoch {})", self.epoch);
         if let Some(k) = self.keys.get_mut(&epoch) {
             k.fill(0);
         }
@@ -184,22 +180,16 @@ pub enum DecryptOutcome {
 /// Try to parse and decrypt stored bytes as an encrypted envelope.
 ///
 /// Two-phase detection:
-/// 1. **Parse**: Try `EncryptedValue::from_bytes()`. If this fails
-///    (wrong magic, too short, bad version), the bytes are NOT an
-///    envelope → `NotAnEnvelope`.
-/// 2. **Decrypt**: If parsing succeeds, the bytes ARE an envelope.
-///    Try to decrypt. If decryption fails (tampered, wrong key,
-///    unknown epoch), that's an authentication error →
+/// 1. **Parse**: Try `EncryptedValue::from_bytes()`. If this fails (wrong magic, too short, bad
+///    version), the bytes are NOT an envelope → `NotAnEnvelope`.
+/// 2. **Decrypt**: If parsing succeeds, the bytes ARE an envelope. Try to decrypt. If decryption
+///    fails (tampered, wrong key, unknown epoch), that's an authentication error →
 ///    `AuthenticationFailed`.
 ///
 /// This preserves both properties:
 /// - Legacy plaintext is never misclassified (parse fails → fallback)
-/// - Tampered encrypted values are detected (parse succeeds, decrypt
-///   fails → error)
-pub fn try_decrypt(
-    enc: &SecretsEncryption,
-    stored: &[u8],
-) -> DecryptOutcome {
+/// - Tampered encrypted values are detected (parse succeeds, decrypt fails → error)
+pub fn try_decrypt(enc: &SecretsEncryption, stored: &[u8]) -> DecryptOutcome {
     // Phase 1: try to parse as an envelope
     let encrypted = match envelope::EncryptedValue::from_bytes(stored) {
         Ok(ev) => ev,
@@ -210,12 +200,10 @@ pub fn try_decrypt(
     let key = match enc.keys.get(&encrypted.epoch) {
         Some(k) => k,
         None => {
-            return DecryptOutcome::AuthenticationFailed(
-                envelope::EnvelopeError::EpochMismatch {
-                    stored: encrypted.epoch,
-                    current: enc.epoch,
-                },
-            );
+            return DecryptOutcome::AuthenticationFailed(envelope::EnvelopeError::EpochMismatch {
+                stored: encrypted.epoch,
+                current: enc.epoch,
+            });
         }
     };
 

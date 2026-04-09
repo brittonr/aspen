@@ -32,6 +32,9 @@ use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::JobDetails;
 use aspen_client_api::JobQueueStatsResultResponse;
+use aspen_testing::TestCluster;
+use aspen_testing::WaitError;
+use aspen_testing::wait_until;
 use iroh_gossip::proto::TopicId;
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -149,6 +152,7 @@ impl RealClusterTester {
         let node1 = &nodes[0];
         let init_request = InitRequest {
             initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+            trust: Default::default(),
         };
 
         timeout(CLUSTER_FORMATION_TIMEOUT, node1.raft_node().init(init_request))
@@ -156,11 +160,23 @@ impl RealClusterTester {
             .context("cluster init timeout")?
             .context("cluster init failed")?;
 
-        // Wait for leader election
-        sleep(LEADER_ELECTION_WAIT).await;
-
-        // Wait for gossip discovery
-        sleep(GOSSIP_DISCOVERY_WAIT).await;
+        // Wait for leader election (poll instead of fixed sleep)
+        {
+            let raft = node1.raft_node().clone();
+            wait_until("leader elected on node 1", CLUSTER_FORMATION_TIMEOUT, Duration::from_millis(200), move || {
+                let r = raft.clone();
+                async move {
+                    match r.get_leader().await {
+                        Ok(Some(_)) => Ok(true),
+                        Ok(None) => Ok(false),
+                        Err(e) => Err(format!("{e}")),
+                    }
+                }
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))
+            .context("waiting for leader election")?;
+        }
 
         // Add other nodes as learners if more than 1 node
         if config.node_count > 1 {
@@ -177,8 +193,25 @@ impl RealClusterTester {
                 sleep(Duration::from_millis(500)).await;
             }
 
-            // Wait for learners to catch up
-            sleep(Duration::from_secs(2)).await;
+            // Wait for learners to catch up (poll applied index)
+            {
+                let raft = node1.raft_node().clone();
+                wait_until("learners caught up", CLUSTER_FORMATION_TIMEOUT, Duration::from_millis(200), move || {
+                    let r = raft.clone();
+                    async move {
+                        match r.get_metrics().await {
+                            Ok(m) => {
+                                // Learners have caught up if there's a committed index
+                                Ok(m.last_applied_index.unwrap_or(0) > 0)
+                            }
+                            Err(e) => Err(format!("{e}")),
+                        }
+                    }
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+                .context("waiting for learners to catch up")?;
+            }
 
             // Promote all nodes to voters
             let members: Vec<u64> = (1..=config.node_count as u64).collect();
@@ -485,5 +518,93 @@ impl RealClusterTester {
             ClientRpcResponse::Error(e) => anyhow::bail!("CI unwatch error: {}: {}", e.code, e.message),
             _ => anyhow::bail!("unexpected response type"),
         }
+    }
+}
+
+// =============================================================================
+// TestCluster facade implementation
+// =============================================================================
+
+#[async_trait::async_trait]
+impl TestCluster for RealClusterTester {
+    async fn wait_for_leader(&self, timeout_duration: Duration) -> Result<u64, WaitError> {
+        let node = self.nodes.first().ok_or_else(|| WaitError::ClusterError("no nodes".into()))?;
+        let raft = node.raft_node().clone();
+        wait_until("leader elected", timeout_duration, Duration::from_millis(200), move || {
+            let r = raft.clone();
+            async move {
+                match r.get_leader().await {
+                    Ok(Some(_id)) => Ok(true),
+                    Ok(None) => Ok(false),
+                    Err(e) => Err(format!("{e}")),
+                }
+            }
+        })
+        .await?;
+
+        // Return the leader ID
+        let raft = self.nodes[0].raft_node().clone();
+        match raft.get_leader().await {
+            Ok(Some(id)) => Ok(id),
+            Ok(None) => Err(WaitError::ClusterError("leader lost after wait".into())),
+            Err(e) => Err(WaitError::ClusterError(format!("{e}"))),
+        }
+    }
+
+    async fn wait_for_replication(&self, timeout_duration: Duration) -> Result<(), WaitError> {
+        let nodes: Vec<_> = self.nodes.iter().map(|n| n.raft_node().clone()).collect();
+        wait_until("all nodes replicated to same index", timeout_duration, Duration::from_millis(200), move || {
+            let rafts = nodes.clone();
+            async move {
+                let mut indices = Vec::new();
+                for r in &rafts {
+                    match r.get_metrics().await {
+                        Ok(m) => {
+                            if let Some(applied) = m.last_applied_index {
+                                indices.push(applied);
+                            }
+                        }
+                        Err(e) => return Err(format!("{e}")),
+                    }
+                }
+                if indices.is_empty() {
+                    return Ok(false);
+                }
+                Ok(indices.iter().all(|&i| i == indices[0]))
+            }
+        })
+        .await
+    }
+
+    async fn write_kv(&self, key: &str, value: &str) -> Result<(), WaitError> {
+        let client = self.client.as_ref().ok_or_else(|| WaitError::ClusterError("no client".into()))?;
+        let request = ClientRpcRequest::WriteKey {
+            key: key.to_string(),
+            value: value.as_bytes().to_vec(),
+        };
+        match client.send(request).await {
+            Ok(ClientRpcResponse::WriteResult(r)) if r.is_success => Ok(()),
+            Ok(ClientRpcResponse::WriteResult(r)) => {
+                Err(WaitError::ClusterError(r.error.unwrap_or_else(|| "write failed".into())))
+            }
+            Ok(ClientRpcResponse::Error(e)) => Err(WaitError::ClusterError(format!("{}: {}", e.code, e.message))),
+            Ok(_) => Err(WaitError::ClusterError("unexpected response".into())),
+            Err(e) => Err(WaitError::ClusterError(format!("{e}"))),
+        }
+    }
+
+    async fn read_kv(&self, key: &str) -> Result<Option<String>, WaitError> {
+        let client = self.client.as_ref().ok_or_else(|| WaitError::ClusterError("no client".into()))?;
+        let request = ClientRpcRequest::ReadKey { key: key.to_string() };
+        match client.send(request).await {
+            Ok(ClientRpcResponse::ReadResult(r)) => Ok(r.value.map(|v| String::from_utf8_lossy(&v).into_owned())),
+            Ok(ClientRpcResponse::Error(_)) => Ok(None),
+            Ok(_) => Err(WaitError::ClusterError("unexpected response".into())),
+            Err(e) => Err(WaitError::ClusterError(format!("{e}"))),
+        }
+    }
+
+    fn node_count(&self) -> u32 {
+        self.nodes.len() as u32
     }
 }

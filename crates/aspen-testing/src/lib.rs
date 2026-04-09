@@ -76,6 +76,17 @@ pub use aspen_testing_core as deterministic;
 pub use aspen_testing_core::DeterministicClusterController;
 pub use aspen_testing_core::DeterministicKeyValueStore;
 pub use aspen_testing_core::FailingKeyValueStore;
+// Shared harness facade
+pub use aspen_testing_core::TestCluster;
+pub use aspen_testing_core::WaitError;
+pub use aspen_testing_core::WaitOutcome;
+// Named wait helpers
+pub use aspen_testing_core::wait_for_cluster_health;
+pub use aspen_testing_core::wait_for_job_completion;
+pub use aspen_testing_core::wait_for_key_present;
+pub use aspen_testing_core::wait_for_leader;
+pub use aspen_testing_core::wait_for_replication;
+pub use aspen_testing_core::wait_until;
 // Re-export fixtures from aspen-testing-fixtures
 pub use aspen_testing_fixtures as fixtures;
 pub use aspen_testing_fixtures::ClusterBuilder;
@@ -83,6 +94,7 @@ pub use aspen_testing_fixtures::CoordinationTestHelper;
 pub use aspen_testing_fixtures::KvStoreBuilder;
 pub use aspen_testing_fixtures::MockEndpointProvider;
 
+pub mod run_report;
 pub mod suite_inventory;
 
 // In-memory Raft router (requires router feature - pulls aspen-raft)

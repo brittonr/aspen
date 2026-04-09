@@ -47,10 +47,7 @@ async fn test_stderr_captured_in_kv_log_store() {
     let stored = &kv_entry.value;
     // The chunk should contain the stderr content
     for line in &lines {
-        assert!(
-            stored.contains(line.trim()),
-            "KV log chunk missing stderr line: {line}"
-        );
+        assert!(stored.contains(line.trim()), "KV log chunk missing stderr line: {line}");
     }
 
     // Verify: completion marker was written
@@ -59,8 +56,7 @@ async fn test_stderr_captured_in_kv_log_store() {
     assert!(marker_result.is_ok(), "completion marker should exist in KV");
 
     let marker_value = marker_result.unwrap().kv.expect("marker should have a value");
-    let marker_json: serde_json::Value =
-        serde_json::from_str(&marker_value.value).unwrap();
+    let marker_json: serde_json::Value = serde_json::from_str(&marker_value.value).unwrap();
     assert_eq!(marker_json["status"], "done");
     assert!(marker_json["total_chunks"].as_u64().unwrap() >= 1);
 }

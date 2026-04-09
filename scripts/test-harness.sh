@@ -16,6 +16,8 @@ Usage:
   scripts/test-harness.sh check
   scripts/test-harness.sh list [--suite ID] [--layer LAYER] [--owner OWNER] [--runtime-class CLASS] [--tag TAG] [--format ids|json|commands]
   scripts/test-harness.sh run  [--suite ID] [--layer LAYER] [--owner OWNER] [--runtime-class CLASS] [--tag TAG]
+  scripts/test-harness.sh report [--junit-xml PATH] [--output PATH]
+  scripts/test-harness.sh coverage
 EOF
 }
 
@@ -192,6 +194,23 @@ case "$subcommand" in
       echo "+ [$suite_id] $resolved_command"
       eval "$resolved_command"
     done < <(jq -c '.[]' <<<"$selected")
+    ;;
+  report)
+    junit_xml="target/nextest/default/junit.xml"
+    output_arg=""
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --junit-xml) junit_xml=${2:?missing junit xml path}; shift 2 ;;
+        --output) output_arg="--output ${2:?missing output path}"; shift 2 ;;
+        *) usage >&2; exit 1 ;;
+      esac
+    done
+    # shellcheck disable=SC2086
+    run_inventory_tool report --junit-xml "$junit_xml" $output_arg
+    ;;
+  coverage)
+    run_inventory_tool coverage
     ;;
   *)
     usage >&2

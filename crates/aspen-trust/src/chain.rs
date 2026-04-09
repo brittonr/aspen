@@ -10,10 +10,10 @@
 
 use std::collections::BTreeMap;
 
-use chacha20poly1305::aead::Aead;
-use chacha20poly1305::aead::KeyInit;
 use chacha20poly1305::ChaCha20Poly1305;
 use chacha20poly1305::Nonce;
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::aead::KeyInit;
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::Snafu;
@@ -85,8 +85,7 @@ pub fn encrypt_chain(
     let chain_key = kdf::derive_key(new_secret, &info, &[], 0);
 
     // Serialize the prior secrets map
-    let plaintext =
-        serde_json::to_vec(prior_secrets).map_err(|e| ChainError::Serialize { reason: e.to_string() })?;
+    let plaintext = serde_json::to_vec(prior_secrets).map_err(|e| ChainError::Serialize { reason: e.to_string() })?;
 
     // Encrypt with ChaCha20-Poly1305
     let cipher = ChaCha20Poly1305::new((&chain_key).into());
