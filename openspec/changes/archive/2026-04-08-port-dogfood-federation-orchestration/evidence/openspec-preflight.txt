@@ -1,0 +1,5 @@
+$ scripts/openspec-preflight.sh openspec/changes/archive/2026-04-08-port-dogfood-federation-orchestration
+OK: openspec/changes/archive/2026-04-08-port-dogfood-federation-orchestration
+  tasks: 7 total / 7 checked
+  changed files listed: 17
+  verification artifacts: 6

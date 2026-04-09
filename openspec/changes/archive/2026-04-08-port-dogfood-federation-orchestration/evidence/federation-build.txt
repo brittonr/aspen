@@ -1,0 +1,24 @@
+Preconditions used for the successful build transcript below:
+- `nix run .#dogfood-federation -- --cluster-dir /tmp/aspen-dogfood-fed-inspect start`
+- `nix run .#dogfood-federation -- --cluster-dir /tmp/aspen-dogfood-fed-inspect push`
+
+$ nix run .#dogfood-federation -- --cluster-dir /tmp/aspen-dogfood-fed-inspect build
+2026-04-08T23:53:32.459726Z  INFO aspen_dogfood: 🔨 Waiting for CI build...
+2026-04-08T23:53:35.908232Z  INFO aspen_dogfood::forge:   creating repo 'aspen-mirror'...
+2026-04-08T23:53:35.911595Z  INFO aspen_dogfood::forge:   repo created (id: 185d44b140b7e2f2)
+2026-04-08T23:53:42.496014Z  INFO aspen_dogfood::federation:   federation sync discovered 1 resources from alice-cluster
+2026-04-08T23:53:45.579634Z  INFO aspen_dogfood::forge:   CI watch registered for repo 185d44b140b7e2f2
+2026-04-08T23:57:01.027532Z  INFO aspen_dogfood::ci:   looking for auto-triggered pipeline...
+2026-04-08T23:57:01.030318Z  INFO aspen_dogfood::ci:   found pipeline: 828060d4-363f-4c95-8103-fccdc0e40d9c
+2026-04-08T23:57:01.030338Z  INFO aspen_dogfood::ci:   waiting for pipeline 828060d4-363f-4c95-8103-fccdc0e40d9c...
+2026-04-09T00:05:06.373865Z  INFO aspen_dogfood::ci:   ✅ check
+2026-04-09T00:05:06.373896Z  INFO aspen_dogfood::ci:       ✅ clippy
+2026-04-09T00:05:06.373897Z  INFO aspen_dogfood::ci:       ✅ format-check
+2026-04-09T00:05:06.373898Z  INFO aspen_dogfood::ci:   ✅ build
+2026-04-09T00:05:06.373899Z  INFO aspen_dogfood::ci:       ✅ build-cli
+2026-04-09T00:05:06.373900Z  INFO aspen_dogfood::ci:       ✅ build-node
+2026-04-09T00:05:06.373901Z  INFO aspen_dogfood::ci:   ✅ test
+2026-04-09T00:05:06.373901Z  INFO aspen_dogfood::ci:       ✅ nextest-quick
+2026-04-09T00:05:06.373902Z  INFO aspen_dogfood::ci:   ⏳ deploy
+2026-04-09T00:05:06.373903Z  INFO aspen_dogfood::ci:       ⏳ deploy-node
+2026-04-09T00:05:09.447950Z  INFO aspen_dogfood: ✅ CI build completed (run_id: 828060d4-363f-4c95-8103-fccdc0e40d9c)

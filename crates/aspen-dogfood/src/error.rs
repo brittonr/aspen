@@ -63,6 +63,10 @@ pub enum DogfoodError {
     #[snafu(display("forge {operation}: {reason}"))]
     Forge { operation: String, reason: String },
 
+    /// Federation orchestration failed.
+    #[snafu(display("federation {operation}: {reason}"))]
+    Federation { operation: String, reason: String },
+
     /// Git push subprocess failed.
     #[snafu(display("git push failed (exit {exit_code}): {stderr}"))]
     GitPush { exit_code: i32, stderr: String },

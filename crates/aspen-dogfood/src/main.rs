@@ -8,6 +8,7 @@ mod ci;
 mod cluster;
 mod deploy;
 mod error;
+mod federation;
 mod forge;
 mod node;
 mod state;
@@ -254,14 +255,14 @@ async fn cmd_build(config: &RunConfig) -> DogfoodResult<()> {
     info!("🔨 Waiting for CI build...");
 
     let state = state::read_state(&config.state_file_path())?;
-    let ticket = if state.is_federation {
-        // In federation mode, build runs on bob
-        state.bob_ticket().to_string()
+    let (ticket, repo_name) = if state.is_federation {
+        let repo_name = federation::prepare_build(config, &state).await?;
+        (state.bob_ticket().to_string(), repo_name)
     } else {
-        state.primary_ticket().to_string()
+        (state.primary_ticket().to_string(), "aspen".to_string())
     };
 
-    let run_id = ci::wait_for_pipeline(&ticket, "aspen", config.ci_timeout_secs).await?;
+    let run_id = ci::wait_for_pipeline(&ticket, &repo_name, config.ci_timeout_secs).await?;
 
     info!("✅ CI build completed (run_id: {run_id})");
     Ok(())

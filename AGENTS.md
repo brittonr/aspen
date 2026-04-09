@@ -653,6 +653,17 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 - Concise messages focusing on "why" not "what"
 - Conventional commit style when appropriate
 
+## OpenSpec Completion Guardrails
+
+- Do not check a box in `tasks.md` unless the repo contains durable evidence for it.
+- Add `verification.md` to the change directory once any task is checked. Use `openspec/templates/verification.md` as the template.
+- Put saved command transcripts under `openspec/changes/.../evidence/`; do not rely on chat-only summaries or `/tmp` paths.
+- Save a diff artifact in `evidence/` when checked tasks depend on source-file implementation claims.
+- Every checked task in `tasks.md` must appear verbatim in `verification.md` with repo-relative evidence paths.
+- If you cite `bash -n` or `scripts/openspec-preflight.sh` in your completion summary, save those transcripts as evidence too.
+- Before `request_done_review` or claiming an OpenSpec task is complete, run `scripts/openspec-preflight.sh <change-dir-or-name>`.
+- Stage newly created source files before `nix build` / `nix run`; untracked files can be excluded by the flake source filter and create false verification results.
+
 ## Important Notes
 
 - Rust 2024 edition

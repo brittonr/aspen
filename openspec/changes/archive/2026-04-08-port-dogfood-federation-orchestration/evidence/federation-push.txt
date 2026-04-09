@@ -1,0 +1,7 @@
+$ nix run .#dogfood-federation -- --cluster-dir /tmp/aspen-dogfood-fed-inspect push
+2026-04-08T23:51:38.266596Z DEBUG aspen_client::client: Aspen client connected endpoint_id=16bcd7b7ecd0c30fd5d1fe606751aca20e9ab0d4c4de902841e5a5336f0ee5fb bootstrap_peers=1
+2026-04-08T23:51:38.266609Z DEBUG connect{me=16bcd7b7ec alpn=aspen-client remote=d1f154bb19}: iroh::endpoint: connecting relay_url=None ip_addresses=[10.10.10.3:52119, 100.110.43.11:52119, 172.30.0.1:52119, 192.168.1.252:52119]
+2026-04-08T23:51:38.267609Z DEBUG iroh::_events::conn::connected: conn_id=94871375897664 side=Client remote_id=d1f154bb19 alpn=aspen-client
+2026-04-08T23:51:38.268628Z  INFO aspen_dogfood::forge:   CI watch registered for repo a449a6487ccebf97
+2026-04-08T23:51:41.345662Z  INFO aspen_dogfood::forge:   git push aspen-dogfood main...
+2026-04-08T23:53:17.926292Z  INFO aspen_dogfood: ✅ Source pushed to Forge

@@ -53,33 +53,11 @@ pub async fn wait_for_pipeline(ticket: &str, repo_name: &str, timeout_secs: u64)
 
 /// Resolve a repo name to a repo ID via `ForgeListRepos`.
 async fn resolve_repo_id(client: &AspenClient, repo_name: &str, ticket: &str) -> DogfoodResult<String> {
-    let resp = send(
-        client,
-        ClientRpcRequest::ForgeListRepos {
-            limit: Some(100),
-            offset: None,
-        },
-        "ForgeListRepos",
-        ticket,
-    )
-    .await?;
-
-    match resp {
-        ClientRpcResponse::ForgeRepoListResult(list) => {
-            for repo in &list.repos {
-                if repo.name == repo_name {
-                    return Ok(repo.id.clone());
-                }
-            }
-            crate::error::ForgeSnafu {
-                operation: "resolve repo id",
-                reason: format!("repo '{repo_name}' not found"),
-            }
-            .fail()
-        }
-        other => crate::error::ForgeSnafu {
+    match crate::forge::lookup_repo_id_with_client(client, repo_name, ticket).await? {
+        Some(repo_id) => Ok(repo_id),
+        None => crate::error::ForgeSnafu {
             operation: "resolve repo id",
-            reason: format!("unexpected response: {other:?}"),
+            reason: format!("repo '{repo_name}' not found"),
         }
         .fail(),
     }

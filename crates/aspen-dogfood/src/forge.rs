@@ -12,41 +12,54 @@ use crate::error::DogfoodResult;
 use crate::error::ForgeSnafu;
 use crate::error::GitPushSnafu;
 
+/// Find a Forge repo by name.
+pub async fn lookup_repo_id(ticket: &str, repo_name: &str) -> DogfoodResult<Option<String>> {
+    let client = connect(ticket).await?;
+    let result = lookup_repo_id_with_client(&client, repo_name, ticket).await;
+    client.shutdown().await;
+    result
+}
+
+/// Find a Forge repo by name using an existing client.
+pub(crate) async fn lookup_repo_id_with_client(
+    client: &AspenClient,
+    repo_name: &str,
+    ticket: &str,
+) -> DogfoodResult<Option<String>> {
+    let resp = client
+        .send(ClientRpcRequest::ForgeListRepos {
+            limit: Some(100),
+            offset: None,
+        })
+        .await
+        .map_err(|e| crate::error::DogfoodError::ClientRpc {
+            operation: "ForgeListRepos".to_string(),
+            target: crate::cluster::ticket_preview(ticket),
+            source: e,
+        })?;
+
+    match resp {
+        ClientRpcResponse::ForgeRepoListResult(list) => {
+            Ok(list.repos.iter().find(|repo| repo.name == repo_name).map(|repo| repo.id.clone()))
+        }
+        other => ForgeSnafu {
+            operation: "list repos",
+            reason: format!("unexpected response: {other:?}"),
+        }
+        .fail(),
+    }
+}
+
 /// Ensure a Forge repository exists, creating it if needed.
 /// Returns the hex-encoded repo ID (needed for the aspen:// URL).
 pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<String> {
     let client = connect(ticket).await?;
     let result = async {
-        // Check if repo already exists by listing repos
-        let resp = client
-            .send(ClientRpcRequest::ForgeListRepos {
-                limit: Some(100),
-                offset: None,
-            })
-            .await
-            .map_err(|e| crate::error::DogfoodError::ClientRpc {
-                operation: "ForgeListRepos".to_string(),
-                target: crate::cluster::ticket_preview(ticket),
-                source: e,
-            })?;
-
-        let already_exists = match &resp {
-            ClientRpcResponse::ForgeRepoListResult(list) => list.repos.iter().any(|r| r.name == repo_name),
-            _ => false,
-        };
-
-        if already_exists {
-            // Extract existing repo ID
-            if let ClientRpcResponse::ForgeRepoListResult(list) = &resp
-                && let Some(repo) = list.repos.iter().find(|r| r.name == repo_name)
-            {
-                info!("  repo '{repo_name}' already exists (id: {})", &repo.id[..16]);
-                return Ok(repo.id.clone());
-            }
-            // Shouldn't happen, but fall through to create
+        if let Some(repo_id) = lookup_repo_id_with_client(&client, repo_name, ticket).await? {
+            info!("  repo '{repo_name}' already exists (id: {})", &repo_id[..repo_id.len().min(16)]);
+            return Ok(repo_id);
         }
 
-        // Create the repo
         info!("  creating repo '{repo_name}'...");
         let create_resp = client
             .send(ClientRpcRequest::ForgeCreateRepo {
@@ -194,7 +207,7 @@ async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
 }
 
 /// Build a PATH that includes the directory containing git-remote-aspen.
-fn augmented_path(git_remote_bin: &str) -> String {
+pub(crate) fn augmented_path(git_remote_bin: &str) -> String {
     let base = std::env::var("PATH").unwrap_or_default();
     if let Some(parent) = std::path::Path::new(git_remote_bin).parent() {
         format!("{}:{base}", parent.display())

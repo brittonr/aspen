@@ -1,0 +1,604 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index b044f7c3a..64609f5cf 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1626,7 +1626,9 @@ dependencies = [
+  "aspen-core",
+  "chrono",
+  "clap",
++ "iroh",
+  "libc",
++ "rand 0.9.2",
+  "serde",
+  "serde_json",
+  "snafu",
+diff --git a/crates/aspen-dogfood/Cargo.toml b/crates/aspen-dogfood/Cargo.toml
+index 2466317cf..cc030184a 100644
+--- a/crates/aspen-dogfood/Cargo.toml
++++ b/crates/aspen-dogfood/Cargo.toml
+@@ -42,6 +42,8 @@ libc = "0.2"
+ # Misc
+ chrono = "0.4"
+ anyhow = "1.0"
++iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+
+ [dev-dependencies]
+ tempfile = "3.10"
++rand = { workspace = true }
+diff --git a/crates/aspen-dogfood/src/ci.rs b/crates/aspen-dogfood/src/ci.rs
+index e0c383e1a..3e13ffa84 100644
+--- a/crates/aspen-dogfood/src/ci.rs
++++ b/crates/aspen-dogfood/src/ci.rs
+@@ -53,33 +53,11 @@ pub async fn wait_for_pipeline(ticket: &str, repo_name: &str, timeout_secs: u64)
+
+ /// Resolve a repo name to a repo ID via `ForgeListRepos`.
+ async fn resolve_repo_id(client: &AspenClient, repo_name: &str, ticket: &str) -> DogfoodResult<String> {
+-    let resp = send(
+-        client,
+-        ClientRpcRequest::ForgeListRepos {
+-            limit: Some(100),
+-            offset: None,
+-        },
+-        "ForgeListRepos",
+-        ticket,
+-    )
+-    .await?;
+-
+-    match resp {
+-        ClientRpcResponse::ForgeRepoListResult(list) => {
+-            for repo in &list.repos {
+-                if repo.name == repo_name {
+-                    return Ok(repo.id.clone());
+-                }
+-            }
+-            crate::error::ForgeSnafu {
+-                operation: "resolve repo id",
+-                reason: format!("repo '{repo_name}' not found"),
+-            }
+-            .fail()
+-        }
+-        other => crate::error::ForgeSnafu {
++    match crate::forge::lookup_repo_id_with_client(client, repo_name, ticket).await? {
++        Some(repo_id) => Ok(repo_id),
++        None => crate::error::ForgeSnafu {
+             operation: "resolve repo id",
+-            reason: format!("unexpected response: {other:?}"),
++            reason: format!("repo '{repo_name}' not found"),
+         }
+         .fail(),
+     }
+diff --git a/crates/aspen-dogfood/src/error.rs b/crates/aspen-dogfood/src/error.rs
+index b2a570163..cf5941777 100644
+--- a/crates/aspen-dogfood/src/error.rs
++++ b/crates/aspen-dogfood/src/error.rs
+@@ -63,6 +63,10 @@ pub enum DogfoodError {
+     #[snafu(display("forge {operation}: {reason}"))]
+     Forge { operation: String, reason: String },
+
++    /// Federation orchestration failed.
++    #[snafu(display("federation {operation}: {reason}"))]
++    Federation { operation: String, reason: String },
++
+     /// Git push subprocess failed.
+     #[snafu(display("git push failed (exit {exit_code}): {stderr}"))]
+     GitPush { exit_code: i32, stderr: String },
+diff --git a/crates/aspen-dogfood/src/federation.rs b/crates/aspen-dogfood/src/federation.rs
+new file mode 100644
+index 000000000..3c2524b9a
+--- /dev/null
++++ b/crates/aspen-dogfood/src/federation.rs
+@@ -0,0 +1,386 @@
++//! Federation orchestration for dogfood build parity.
++
++use std::path::Path;
++use std::path::PathBuf;
++use std::time::Duration;
++
++use aspen_client::AspenClient;
++use aspen_client_api::ClientRpcRequest;
++use aspen_client_api::ClientRpcResponse;
++use aspen_cluster::ticket::parse_ticket_to_addrs;
++use iroh::EndpointAddr;
++use iroh::TransportAddr;
++use tracing::info;
++
++use crate::RunConfig;
++use crate::error::DogfoodResult;
++use crate::error::FederationSnafu;
++use crate::state::DogfoodState;
++
++const SOURCE_REPO_NAME: &str = "aspen";
++const FEDERATION_MODE_PUBLIC: &str = "public";
++
++#[derive(Debug, Clone, PartialEq, Eq)]
++struct FederationPeer {
++    node_id: String,
++    addr_hint: String,
++}
++
++pub async fn prepare_build(config: &RunConfig, state: &DogfoodState) -> DogfoodResult<String> {
++    let alice_ticket = state.primary_ticket();
++    let bob_ticket = state.bob_ticket();
++    let alice_repo_id = crate::forge::lookup_repo_id(alice_ticket, SOURCE_REPO_NAME).await?.ok_or_else(|| {
++        crate::error::DogfoodError::Federation {
++            operation: "find source repo".to_string(),
++            reason: format!("repo '{SOURCE_REPO_NAME}' not found on alice; run `push` first"),
++        }
++    })?;
++    let peer = peer_from_ticket(alice_ticket)?;
++    let mirror_name = mirror_repo_name(SOURCE_REPO_NAME);
++    let bob_repo_id = crate::forge::ensure_repo_exists(bob_ticket, &mirror_name).await?;
++    let clone_dir = clone_dir(config);
++
++    federate_repo(alice_ticket, &alice_repo_id).await?;
++    sync_repo(bob_ticket, &peer).await?;
++    crate::forge::watch_repo(bob_ticket, &bob_repo_id).await?;
++
++    remove_clone_dir(&clone_dir).await;
++    let result = async {
++        clone_repo(config, &clone_dir, bob_ticket, &peer, &alice_repo_id).await?;
++        push_clone(config, &clone_dir, bob_ticket, &bob_repo_id).await
++    }
++    .await;
++    remove_clone_dir(&clone_dir).await;
++    result?;
++
++    Ok(mirror_name)
++}
++
++async fn federate_repo(ticket: &str, repo_id: &str) -> DogfoodResult<()> {
++    let client = connect(ticket).await?;
++    let result = async {
++        let response = send(
++            &client,
++            ClientRpcRequest::FederateRepository {
++                repo_id: repo_id.to_string(),
++                mode: FEDERATION_MODE_PUBLIC.to_string(),
++            },
++            "FederateRepository",
++            ticket,
++        )
++        .await?;
++
++        match response {
++            ClientRpcResponse::FederateRepositoryResult(result) if result.is_success => Ok(()),
++            ClientRpcResponse::FederateRepositoryResult(result) => FederationSnafu {
++                operation: "federate repo",
++                reason: result.error.unwrap_or_else(|| "unknown error".to_string()),
++            }
++            .fail(),
++            ClientRpcResponse::Error(error) => FederationSnafu {
++                operation: "federate repo",
++                reason: format!("{}: {}", error.code, error.message),
++            }
++            .fail(),
++            other => FederationSnafu {
++                operation: "federate repo",
++                reason: format!("unexpected response: {other:?}"),
++            }
++            .fail(),
++        }
++    }
++    .await;
++    client.shutdown().await;
++    result
++}
++
++async fn sync_repo(ticket: &str, peer: &FederationPeer) -> DogfoodResult<()> {
++    let client = connect(ticket).await?;
++    let result = async {
++        let response = send(
++            &client,
++            ClientRpcRequest::FederationSyncPeer {
++                peer_node_id: peer.node_id.clone(),
++                peer_addr: Some(peer.addr_hint.clone()),
++            },
++            "FederationSyncPeer",
++            ticket,
++        )
++        .await?;
++
++        match response {
++            ClientRpcResponse::FederationSyncPeerResult(result) if result.is_success => {
++                info!(
++                    "  federation sync discovered {} resources from {}",
++                    result.resources.len(),
++                    result.remote_cluster_name.as_deref().unwrap_or("alice")
++                );
++                Ok(())
++            }
++            ClientRpcResponse::FederationSyncPeerResult(result) => FederationSnafu {
++                operation: "sync peer",
++                reason: result.error.unwrap_or_else(|| "unknown error".to_string()),
++            }
++            .fail(),
++            ClientRpcResponse::Error(error) => FederationSnafu {
++                operation: "sync peer",
++                reason: format!("{}: {}", error.code, error.message),
++            }
++            .fail(),
++            other => FederationSnafu {
++                operation: "sync peer",
++                reason: format!("unexpected response: {other:?}"),
++            }
++            .fail(),
++        }
++    }
++    .await;
++    client.shutdown().await;
++    result
++}
++
++fn peer_from_ticket(ticket: &str) -> DogfoodResult<FederationPeer> {
++    let (_topic_id, _cluster_id, addrs) =
++        parse_ticket_to_addrs(ticket).map_err(|source| crate::error::DogfoodError::Federation {
++            operation: "parse alice ticket".to_string(),
++            reason: source.to_string(),
++        })?;
++    let peer_addr = addrs.first().ok_or_else(|| crate::error::DogfoodError::Federation {
++        operation: "parse alice ticket".to_string(),
++        reason: "ticket contains no bootstrap peers".to_string(),
++    })?;
++    let addr_hint = select_addr_hint(peer_addr).ok_or_else(|| crate::error::DogfoodError::Federation {
++        operation: "parse alice ticket".to_string(),
++        reason: "ticket contains no direct socket addresses".to_string(),
++    })?;
++
++    Ok(FederationPeer {
++        node_id: peer_addr.id.to_string(),
++        addr_hint,
++    })
++}
++
++fn select_addr_hint(endpoint_addr: &EndpointAddr) -> Option<String> {
++    let mut ipv6_hint = None;
++
++    for transport_addr in &endpoint_addr.addrs {
++        if let TransportAddr::Ip(socket_addr) = transport_addr {
++            if socket_addr.is_ipv4() {
++                return Some(socket_addr.to_string());
++            }
++            if ipv6_hint.is_none() {
++                ipv6_hint = Some(socket_addr.to_string());
++            }
++        }
++    }
++
++    ipv6_hint
++}
++
++fn mirror_repo_name(source_repo_name: &str) -> String {
++    format!("{source_repo_name}-mirror")
++}
++
++fn federated_clone_url(local_ticket: &str, peer_node_id: &str, repo_id: &str) -> String {
++    format!("aspen://{local_ticket}/fed:{peer_node_id}:{repo_id}")
++}
++
++fn clone_dir(config: &RunConfig) -> PathBuf {
++    PathBuf::from(&config.cluster_dir).join("federated-clone")
++}
++
++async fn clone_repo(
++    config: &RunConfig,
++    clone_dir: &Path,
++    bob_ticket: &str,
++    peer: &FederationPeer,
++    alice_repo_id: &str,
++) -> DogfoodResult<()> {
++    let clone_url = federated_clone_url(bob_ticket, &peer.node_id, alice_repo_id);
++    let clone_dir_str = clone_dir.to_string_lossy().to_string();
++    let path_env = crate::forge::augmented_path(&config.git_remote_aspen_bin);
++
++    for attempt in 1..=2 {
++        let output = tokio::process::Command::new("git")
++            .args(["clone", clone_url.as_str(), clone_dir_str.as_str()])
++            .current_dir(&config.project_dir)
++            .env("ASPEN_ORIGIN_ADDR", &peer.addr_hint)
++            .env("PATH", &path_env)
++            .output()
++            .await
++            .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
++                binary: "git clone".to_string(),
++                source: e,
++            })?;
++
++        if output.status.success() {
++            ensure_clone_has_head(clone_dir).await?;
++            return Ok(());
++        }
++
++        if attempt == 2 {
++            return FederationSnafu {
++                operation: "git clone federated repo",
++                reason: git_output_detail(&output),
++            }
++            .fail();
++        }
++
++        remove_clone_dir(clone_dir).await;
++        tokio::time::sleep(Duration::from_secs(5)).await;
++    }
++
++    FederationSnafu {
++        operation: "git clone federated repo",
++        reason: "clone retry loop exhausted".to_string(),
++    }
++    .fail()
++}
++
++async fn ensure_clone_has_head(clone_dir: &Path) -> DogfoodResult<()> {
++    let output = tokio::process::Command::new("git")
++        .args(["rev-parse", "HEAD"])
++        .current_dir(clone_dir)
++        .output()
++        .await
++        .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
++            binary: "git rev-parse".to_string(),
++            source: e,
++        })?;
++
++    if output.status.success() {
++        return Ok(());
++    }
++
++    FederationSnafu {
++        operation: "verify federated clone",
++        reason: "clone completed but repository has no HEAD".to_string(),
++    }
++    .fail()
++}
++
++async fn push_clone(config: &RunConfig, clone_dir: &Path, bob_ticket: &str, bob_repo_id: &str) -> DogfoodResult<()> {
++    let remote_url = format!("aspen://{bob_ticket}/{bob_repo_id}");
++    let path_env = crate::forge::augmented_path(&config.git_remote_aspen_bin);
++
++    let _ = tokio::process::Command::new("git")
++        .args(["remote", "remove", "bob-forge"])
++        .current_dir(clone_dir)
++        .output()
++        .await;
++
++    let add_output = tokio::process::Command::new("git")
++        .args(["remote", "add", "bob-forge", remote_url.as_str()])
++        .current_dir(clone_dir)
++        .output()
++        .await
++        .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
++            binary: "git remote add bob-forge".to_string(),
++            source: e,
++        })?;
++    if !add_output.status.success() {
++        let _ = tokio::process::Command::new("git")
++            .args(["remote", "set-url", "bob-forge", remote_url.as_str()])
++            .current_dir(clone_dir)
++            .output()
++            .await;
++    }
++
++    let push_output = tokio::process::Command::new("git")
++        .args(["push", "bob-forge", "HEAD:refs/heads/main", "--force"])
++        .current_dir(clone_dir)
++        .env("PATH", path_env)
++        .output()
++        .await
++        .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
++            binary: "git push bob-forge".to_string(),
++            source: e,
++        })?;
++
++    if push_output.status.success() {
++        return Ok(());
++    }
++
++    FederationSnafu {
++        operation: "push federated clone to bob",
++        reason: git_output_detail(&push_output),
++    }
++    .fail()
++}
++
++fn git_output_detail(output: &std::process::Output) -> String {
++    let stdout = String::from_utf8_lossy(&output.stdout);
++    let stderr = String::from_utf8_lossy(&output.stderr);
++    let combined = format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string();
++
++    if combined.is_empty() {
++        format!("git exited with status {}", output.status)
++    } else {
++        combined
++    }
++}
++
++async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
++    AspenClient::connect(ticket, Duration::from_secs(30), None).await.map_err(|e| {
++        crate::error::DogfoodError::ClientRpc {
++            operation: "connect".to_string(),
++            target: crate::cluster::ticket_preview(ticket),
++            source: e,
++        }
++    })
++}
++
++async fn send(
++    client: &AspenClient,
++    request: ClientRpcRequest,
++    operation: &str,
++    ticket: &str,
++) -> DogfoodResult<ClientRpcResponse> {
++    client.send(request).await.map_err(|e| crate::error::DogfoodError::ClientRpc {
++        operation: operation.to_string(),
++        target: crate::cluster::ticket_preview(ticket),
++        source: e,
++    })
++}
++
++async fn remove_clone_dir(clone_dir: &Path) {
++    if let Err(error) = tokio::fs::remove_dir_all(clone_dir).await
++        && error.kind() != std::io::ErrorKind::NotFound
++    {
++        tracing::warn!(path = %clone_dir.display(), %error, "failed to clean up clone dir");
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use std::net::Ipv4Addr;
++    use std::net::Ipv6Addr;
++    use std::net::SocketAddr;
++
++    use iroh::SecretKey;
++
++    use super::*;
++
++    #[test]
++    fn mirror_repo_name_adds_suffix() {
++        assert_eq!(mirror_repo_name("aspen"), "aspen-mirror");
++    }
++
++    #[test]
++    fn federated_clone_url_uses_bob_ticket_and_origin() {
++        let url = federated_clone_url("aspenv2ticket", "alice-node", "repo-123");
++        assert_eq!(url, "aspen://aspenv2ticket/fed:alice-node:repo-123");
++    }
++
++    #[test]
++    fn select_addr_hint_prefers_ipv4() {
++        let secret_key = SecretKey::generate(&mut rand::rng());
++        let endpoint_id = secret_key.public();
++        let endpoint_addr = EndpointAddr::from_parts(endpoint_id, [
++            TransportAddr::Ip(SocketAddr::from((Ipv6Addr::LOCALHOST, 7000))),
++            TransportAddr::Ip(SocketAddr::from((Ipv4Addr::LOCALHOST, 7001))),
++        ]);
++
++        assert_eq!(select_addr_hint(&endpoint_addr).as_deref(), Some("127.0.0.1:7001"));
++    }
++}
+diff --git a/crates/aspen-dogfood/src/forge.rs b/crates/aspen-dogfood/src/forge.rs
+index a754458d7..2cdc3ae94 100644
+--- a/crates/aspen-dogfood/src/forge.rs
++++ b/crates/aspen-dogfood/src/forge.rs
+@@ -12,41 +12,54 @@ use crate::error::DogfoodResult;
+ use crate::error::ForgeSnafu;
+ use crate::error::GitPushSnafu;
+
++/// Find a Forge repo by name.
++pub async fn lookup_repo_id(ticket: &str, repo_name: &str) -> DogfoodResult<Option<String>> {
++    let client = connect(ticket).await?;
++    let result = lookup_repo_id_with_client(&client, repo_name, ticket).await;
++    client.shutdown().await;
++    result
++}
++
++/// Find a Forge repo by name using an existing client.
++pub(crate) async fn lookup_repo_id_with_client(
++    client: &AspenClient,
++    repo_name: &str,
++    ticket: &str,
++) -> DogfoodResult<Option<String>> {
++    let resp = client
++        .send(ClientRpcRequest::ForgeListRepos {
++            limit: Some(100),
++            offset: None,
++        })
++        .await
++        .map_err(|e| crate::error::DogfoodError::ClientRpc {
++            operation: "ForgeListRepos".to_string(),
++            target: crate::cluster::ticket_preview(ticket),
++            source: e,
++        })?;
++
++    match resp {
++        ClientRpcResponse::ForgeRepoListResult(list) => {
++            Ok(list.repos.iter().find(|repo| repo.name == repo_name).map(|repo| repo.id.clone()))
++        }
++        other => ForgeSnafu {
++            operation: "list repos",
++            reason: format!("unexpected response: {other:?}"),
++        }
++        .fail(),
++    }
++}
++
+ /// Ensure a Forge repository exists, creating it if needed.
+ /// Returns the hex-encoded repo ID (needed for the aspen:// URL).
+ pub async fn ensure_repo_exists(ticket: &str, repo_name: &str) -> DogfoodResult<String> {
+     let client = connect(ticket).await?;
+     let result = async {
+-        // Check if repo already exists by listing repos
+-        let resp = client
+-            .send(ClientRpcRequest::ForgeListRepos {
+-                limit: Some(100),
+-                offset: None,
+-            })
+-            .await
+-            .map_err(|e| crate::error::DogfoodError::ClientRpc {
+-                operation: "ForgeListRepos".to_string(),
+-                target: crate::cluster::ticket_preview(ticket),
+-                source: e,
+-            })?;
+-
+-        let already_exists = match &resp {
+-            ClientRpcResponse::ForgeRepoListResult(list) => list.repos.iter().any(|r| r.name == repo_name),
+-            _ => false,
+-        };
+-
+-        if already_exists {
+-            // Extract existing repo ID
+-            if let ClientRpcResponse::ForgeRepoListResult(list) = &resp
+-                && let Some(repo) = list.repos.iter().find(|r| r.name == repo_name)
+-            {
+-                info!("  repo '{repo_name}' already exists (id: {})", &repo.id[..16]);
+-                return Ok(repo.id.clone());
+-            }
+-            // Shouldn't happen, but fall through to create
++        if let Some(repo_id) = lookup_repo_id_with_client(&client, repo_name, ticket).await? {
++            info!("  repo '{repo_name}' already exists (id: {})", &repo_id[..repo_id.len().min(16)]);
++            return Ok(repo_id);
+         }
+
+-        // Create the repo
+         info!("  creating repo '{repo_name}'...");
+         let create_resp = client
+             .send(ClientRpcRequest::ForgeCreateRepo {
+@@ -194,7 +207,7 @@ async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
+ }
+
+ /// Build a PATH that includes the directory containing git-remote-aspen.
+-fn augmented_path(git_remote_bin: &str) -> String {
++pub(crate) fn augmented_path(git_remote_bin: &str) -> String {
+     let base = std::env::var("PATH").unwrap_or_default();
+     if let Some(parent) = std::path::Path::new(git_remote_bin).parent() {
+         format!("{}:{base}", parent.display())
+diff --git a/crates/aspen-dogfood/src/main.rs b/crates/aspen-dogfood/src/main.rs
+index df5f1f572..2d1fd9b51 100644
+--- a/crates/aspen-dogfood/src/main.rs
++++ b/crates/aspen-dogfood/src/main.rs
+@@ -8,6 +8,7 @@ mod ci;
+ mod cluster;
+ mod deploy;
+ mod error;
++mod federation;
+ mod forge;
+ mod node;
+ mod state;
+@@ -254,14 +255,14 @@ async fn cmd_build(config: &RunConfig) -> DogfoodResult<()> {
+     info!("🔨 Waiting for CI build...");
+
+     let state = state::read_state(&config.state_file_path())?;
+-    let ticket = if state.is_federation {
+-        // In federation mode, build runs on bob
+-        state.bob_ticket().to_string()
++    let (ticket, repo_name) = if state.is_federation {
++        let repo_name = federation::prepare_build(config, &state).await?;
++        (state.bob_ticket().to_string(), repo_name)
+     } else {
+-        state.primary_ticket().to_string()
++        (state.primary_ticket().to_string(), "aspen".to_string())
+     };
+
+-    let run_id = ci::wait_for_pipeline(&ticket, "aspen", config.ci_timeout_secs).await?;
++    let run_id = ci::wait_for_pipeline(&ticket, &repo_name, config.ci_timeout_secs).await?;
+
+     info!("✅ CI build completed (run_id: {run_id})");
+     Ok(())

@@ -18,6 +18,9 @@
 | 2026-04-07 | Generic timeout helpers in federation wrapped both iroh transport errors and `anyhow::Result` wire helpers (`write_message`, `read_message`) | Use `E: Into<anyhow::Error>` for mixed error sources. `E: std::error::Error` breaks on futures that already return `anyhow::Error` |
 | 2026-04-07 | Pre-commit `rustfmt` runs repo-wide `nix run .#rustfmt`, so a scoped commit can fail if unrelated unstaged Rust files would also be reformatted | Stash or restore unrelated Rust edits before committing a focused Rust change. If needed, run `nix run .#rustfmt` manually before a scoped `--no-verify` commit |
 | 2026-04-08 | `openspec list --json` reported a fake change named `active` | This repo has `openspec/changes/active/<date>-...`; the CLI treats the parent `active/` directory as a change. Inspect the nested dated directory directly instead of assuming `active` is a real change |
+| 2026-04-08 | Added `iroh = { workspace = true }` to `crates/aspen-dogfood`, but the workspace root does not expose `iroh` through `[workspace.dependencies]` | Before using `workspace = true`, verify the crate is actually listed under root `[workspace.dependencies]`. Aspen’s top-level package has direct `iroh` deps, but that does not make them inheritable by workspace members |
+| 2026-04-08 | Checked OpenSpec tasks and requested done review without durable repo-backed evidence for each checked box | Before claiming a change is done, add `verification.md` + `evidence/` under the change dir and run `scripts/openspec-preflight.sh <change>` so checked tasks, changed files, and saved transcripts line up |
+| 2026-04-08 | Claimed validation steps (`bash -n`, preflight) in the summary without saving durable artifacts, and the first preflight only checked paths named in `verification.md` | If a validation step is worth mentioning, capture it under `evidence/`. Preflight should also scan git directly for untracked files, not just trust `verification.md` |
 
 ### Struct / API Gotchas
 
@@ -70,7 +73,7 @@
 | 2026-03-08 | crane `buildDepsOnly` content-addresses from Cargo.toml/Cargo.lock — ciSrc script changes don't change deps drv | Add explicit `cargoLock = ciSrc + "/aspen/Cargo.lock"` |
 | 2026-03-06 | Nix sandbox tmpfs disk full kills redb tests | `ci-nix` nextest profile excludes `test(/test_redb/)`. `writableStoreUseTmpfs = false` + large `diskSize` for builds |
 | 2026-03-06 | `build-plan.json` stale after adding workspace members | Always `nix run .#generate-build-plan` after changes. Now using auto mode (IFD) |
-| general | New .nix files not visible to nix eval | Always `git add` new files before `nix eval`/`nix build` |
+| general | New files can be invisible to nix eval/build when the flake source filter only includes git-tracked paths | Always `git add` newly created source files before `nix eval`/`nix build`/`nix run`, not just new `.nix` files |
 | general | `nix-collect-garbage -d` freed only 3.8GB — `.direnv/` GC roots | `find ~ -name '.direnv' -type d -exec rm -rf {} +` first, then GC |
 | general | Nix SQLite cache corrupts when disk fills | `rm -f ~/.cache/nix/fetcher-cache-v4*` to recover |
 
@@ -224,6 +227,11 @@
 - Handlers check `is_not_leader_error()` → top-level `Error("NOT_LEADER")`
 - Client detects NOT_LEADER → rotates to next bootstrap peer → retries
 - Multi-peer tickets required for automatic failover (up to 16 peers)
+
+**Dogfood federation parity:**
+
+- `crates/aspen-dogfood` federation mode currently starts alice+bob and establishes trust, but `cmd_build()` still just waits for CI on bob. The deprecated shell flow also did `FederateRepository` on alice, `FederationSyncPeer` on bob, created a bob-side mirror repo, then pushed federated clone content into bob before waiting for CI.
+- The active follow-up is `openspec/changes/active/2026-04-08-port-dogfood-federation-orchestration`; use that as the source of truth instead of assuming `--federation build` already matches `scripts/deprecated/dogfood-federation.sh`.
 
 **Git Bridge:**
 
