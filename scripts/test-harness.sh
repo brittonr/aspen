@@ -26,11 +26,8 @@ run_inventory_tool() {
   cargo run -q -p aspen-testing --bin aspen-test-harness -- "$@"
 }
 
-ensure_inventory_exists() {
-  if [[ ! -f "$inventory_path" ]]; then
-    echo "missing $inventory_path; run 'scripts/test-harness.sh export'" >&2
-    exit 1
-  fi
+ensure_inventory_is_current() {
+  run_inventory_tool check >/dev/null
 }
 
 jq_selection() {
@@ -119,7 +116,7 @@ case "$subcommand" in
     ;;
   list|run)
     cd "$repo_root"
-    ensure_inventory_exists
+    ensure_inventory_is_current
 
     suite_id=""
     layer=""

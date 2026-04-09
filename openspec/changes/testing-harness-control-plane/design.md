@@ -7,6 +7,7 @@ That duplication makes focused validation expensive and brittle. Adding or recla
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Make Nickel metadata the source of truth for suite identity, layer, ownership, runtime class, prerequisites, tags, and execution targets.
 - Generate Rust- and Nix-consumable inventory outputs from that metadata so test grouping and registration stop drifting.
 - Consolidate shared harness APIs under `crates/aspen-testing*` and retire the parallel real-cluster bootstrap path in `tests/support/`.
@@ -14,6 +15,7 @@ That duplication makes focused validation expensive and brittle. Adding or recla
 - Emit machine-readable reports that expose retries, skips, runtime hotspots, and coverage-by-layer gaps.
 
 **Non-Goals:**
+
 - Rewriting every existing test in one change.
 - Replacing nextest, NixOS VM tests, patchbay, or madsim with a new runner.
 - Adding line-coverage tooling or changing production behavior.

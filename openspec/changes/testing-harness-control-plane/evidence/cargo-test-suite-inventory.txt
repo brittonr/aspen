@@ -7,15 +7,16 @@ workspace: /home/brittonr/git/aspen/Cargo.toml
     Blocking waiting for file lock on package cache
     Blocking waiting for file lock on package cache
     Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on artifact directory
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
-     Running unittests src/lib.rs (target/debug/deps/aspen_testing-11e6f90d1cfb8e69)
+     Running unittests src/lib.rs (target/debug/deps/aspen_testing-511648f33699f81f)
 
-running 4 tests
+running 6 tests
 test suite_inventory::tests::schema_rejects_unsupported_layer_values ... ok
 test suite_inventory::tests::nix_targets_require_known_package_presets ... ok
 test suite_inventory::tests::duplicate_suite_ids_fail_validation ... ok
+test suite_inventory::tests::duplicate_check_attrs_fail_validation ... ok
+test suite_inventory::tests::stale_inventory_is_rejected ... ok
 test suite_inventory::tests::load_inventory_normalizes_and_sorts_records ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
 

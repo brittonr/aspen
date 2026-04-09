@@ -13,6 +13,8 @@ use nickel_lang::Error as NickelError;
 use nickel_lang::ErrorFormat;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
 use walkdir::WalkDir;
 
 const SCHEMA_VERSION: u32 = 1;
@@ -41,7 +43,15 @@ impl Default for InventoryPaths {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SuiteInventory {
     pub schema_version: u32,
+    pub metadata: SuiteInventoryMetadata,
     pub suites: Vec<SuiteInventoryRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SuiteInventoryMetadata {
+    pub schema_path: String,
+    pub manifest_paths: Vec<String>,
+    pub inputs_sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -158,8 +168,11 @@ pub fn load_inventory(paths: &InventoryPaths) -> Result<SuiteInventory> {
         .with_context(|| format!("failed to read schema {}", paths.schema_path.display()))?;
     let manifest_paths = discover_manifest_paths(&paths.manifest_root)?;
     ensure!(!manifest_paths.is_empty(), "no suite manifests found under {}", paths.manifest_root.display());
+    let metadata = build_inventory_metadata(paths, &manifest_paths)?;
 
     let mut seen_ids = BTreeSet::new();
+    let mut seen_check_attrs = BTreeMap::new();
+    let mut seen_flake_attrs = BTreeMap::new();
     let mut suites = Vec::with_capacity(manifest_paths.len());
     for manifest_path in manifest_paths {
         let manifest = load_manifest(&manifest_path, &schema_source)?;
@@ -170,14 +183,56 @@ pub fn load_inventory(paths: &InventoryPaths) -> Result<SuiteInventory> {
             manifest_path.display()
         );
         validate_manifest(&manifest, &manifest_path, &paths.repo_root)?;
-        suites.push(to_inventory_record(manifest, &manifest_path, &paths.repo_root)?);
+        let record = to_inventory_record(manifest, &manifest_path, &paths.repo_root)?;
+        validate_generated_registration_keys(&record, &mut seen_check_attrs, &mut seen_flake_attrs)?;
+        suites.push(record);
     }
     suites.sort_by(|left, right| left.id.cmp(&right.id));
 
     Ok(SuiteInventory {
         schema_version: SCHEMA_VERSION,
+        metadata,
         suites,
     })
+}
+
+fn build_inventory_metadata(paths: &InventoryPaths, manifest_paths: &[PathBuf]) -> Result<SuiteInventoryMetadata> {
+    let schema_path = repo_relative_path(&paths.schema_path, &paths.repo_root)?;
+    let manifest_paths = manifest_paths
+        .iter()
+        .map(|path| repo_relative_path(path, &paths.repo_root))
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut input_lines = Vec::with_capacity(manifest_paths.len() + 1);
+    input_lines.push(format!("{schema_path}:{}", compute_file_sha256(&paths.schema_path)?));
+    let mut manifest_entries = discover_manifest_hashes(paths, &manifest_paths)?;
+    input_lines.append(&mut manifest_entries);
+
+    let mut hasher = Sha256::new();
+    hasher.update(input_lines.join("\n").as_bytes());
+
+    Ok(SuiteInventoryMetadata {
+        schema_path,
+        manifest_paths,
+        inputs_sha256: hex::encode(hasher.finalize()),
+    })
+}
+
+fn discover_manifest_hashes(paths: &InventoryPaths, manifest_paths: &[String]) -> Result<Vec<String>> {
+    manifest_paths
+        .iter()
+        .map(|relative_path| {
+            let path = paths.repo_root.join(relative_path);
+            Ok(format!("{relative_path}:{}", compute_file_sha256(&path)?))
+        })
+        .collect()
+}
+
+fn compute_file_sha256(path: &Path) -> Result<String> {
+    let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Ok(hex::encode(hasher.finalize()))
 }
 
 pub fn render_inventory_json(inventory: &SuiteInventory) -> Result<String> {
@@ -328,6 +383,40 @@ fn validate_package_presets(package_presets: &BTreeMap<String, String>, manifest
             _ => bail!("{} uses unsupported target.package_presets key `{}`", manifest_path.display(), name),
         }
     }
+    Ok(())
+}
+
+fn validate_generated_registration_keys(
+    record: &SuiteInventoryRecord,
+    seen_check_attrs: &mut BTreeMap<String, String>,
+    seen_flake_attrs: &mut BTreeMap<String, String>,
+) -> Result<()> {
+    if !record.target.register_flake_check {
+        return Ok(());
+    }
+
+    if let Some(check_attr) = record.target.check_attr.as_ref()
+        && let Some(previous_suite_id) = seen_check_attrs.insert(check_attr.clone(), record.id.clone())
+    {
+        bail!(
+            "duplicate target.check_attr `{}` for suites `{}` and `{}`",
+            check_attr,
+            previous_suite_id,
+            record.id
+        );
+    }
+
+    if let Some(flake_attr) = record.target.flake_attr.as_ref()
+        && let Some(previous_suite_id) = seen_flake_attrs.insert(flake_attr.clone(), record.id.clone())
+    {
+        bail!(
+            "duplicate target.flake_attr `{}` for suites `{}` and `{}`",
+            flake_attr,
+            previous_suite_id,
+            record.id
+        );
+    }
+
     Ok(())
 }
 
@@ -527,6 +616,12 @@ mod tests {
 
         let inventory = load_inventory(&repo.paths()).expect("inventory should load");
         assert_eq!(inventory.schema_version, SCHEMA_VERSION);
+        assert_eq!(inventory.metadata.schema_path, "test-harness/schema.ncl");
+        assert_eq!(inventory.metadata.manifest_paths, vec![
+            "test-harness/suites/patchbay/patchbay-fault.ncl".to_string(),
+            "test-harness/suites/vm/multi-node-kv.ncl".to_string(),
+        ]);
+        assert_eq!(inventory.metadata.inputs_sha256.len(), 64);
         assert_eq!(inventory.suites.len(), 2);
         assert_eq!(inventory.suites[0].id, "multi-node-kv-vm");
         assert_eq!(inventory.suites[0].tags, vec!["kv".to_string(), "replication".to_string(), "vm".to_string()]);
@@ -638,6 +733,115 @@ mod tests {
 
         let err = load_inventory(&repo.paths()).expect_err("invalid package preset must fail");
         assert!(err.to_string().contains("unsupported aspenCliPackage preset `unsupported-cli`"));
+    }
+
+    #[test]
+    fn duplicate_check_attrs_fail_validation() {
+        let repo = TestRepo::new();
+        repo.write_nix_file("nix/tests/multi-node-kv.nix");
+        repo.write_nix_file("nix/tests/multi-node-blob.nix");
+        repo.write_manifest(
+            "vm/multi-node-kv.ncl",
+            r#"
+            {
+              id = "multi-node-kv-vm",
+              layer = "vm",
+              owner = "kv",
+              runtime_class = "nixos-vm",
+              prerequisites = ["nix-command"],
+              tags = ["kv"],
+              target = {
+                kind = "nix-build",
+                flake_attr = "checks.x86_64-linux.alpha-shared-vm-check",
+                check_attr = "shared-vm-check",
+                nix_file = "nix/tests/multi-node-kv.nix",
+                package_presets = {
+                  aspenNodePackage = "full-aspen-node",
+                  aspenCliPackage = "full-aspen-cli",
+                },
+                register_flake_check = true,
+              },
+            }
+            "#,
+        );
+        repo.write_manifest(
+            "vm/multi-node-blob.ncl",
+            r#"
+            {
+              id = "multi-node-blob-vm",
+              layer = "vm",
+              owner = "blob",
+              runtime_class = "nixos-vm",
+              prerequisites = ["nix-command"],
+              tags = ["blob"],
+              target = {
+                kind = "nix-build",
+                flake_attr = "checks.x86_64-linux.beta-shared-vm-check",
+                check_attr = "shared-vm-check",
+                nix_file = "nix/tests/multi-node-blob.nix",
+                package_presets = {
+                  aspenNodePackage = "full-aspen-node",
+                  aspenCliPackage = "full-aspen-cli",
+                },
+                register_flake_check = true,
+              },
+            }
+            "#,
+        );
+
+        let err = load_inventory(&repo.paths()).expect_err("duplicate check attrs must fail");
+        let message = err.to_string();
+        assert!(message.contains("duplicate target.check_attr `shared-vm-check`"));
+    }
+
+    #[test]
+    fn stale_inventory_is_rejected() {
+        let repo = TestRepo::new();
+        repo.write_manifest(
+            "rust/job-integration.ncl",
+            r#"
+            {
+              id = "job-integration",
+              layer = "rust-integration",
+              owner = "jobs",
+              runtime_class = "real-network",
+              prerequisites = ["network-access"],
+              tags = ["jobs"],
+              target = {
+                kind = "cargo-nextest",
+                package = "aspen",
+                test = "job_integration_test",
+              },
+            }
+            "#,
+        );
+
+        let original_inventory = load_inventory(&repo.paths()).expect("original inventory should load");
+        write_inventory(&original_inventory, &repo.paths().output_path).expect("inventory should write");
+
+        repo.write_manifest(
+            "rust/job-integration.ncl",
+            r#"
+            {
+              id = "job-integration",
+              layer = "rust-integration",
+              owner = "jobs",
+              runtime_class = "real-network",
+              prerequisites = ["network-access"],
+              tags = ["jobs", "updated"],
+              target = {
+                kind = "cargo-nextest",
+                package = "aspen",
+                test = "job_integration_test",
+              },
+            }
+            "#,
+        );
+
+        let current_inventory = load_inventory(&repo.paths()).expect("updated inventory should load");
+        let err = ensure_inventory_is_current(&current_inventory, &repo.paths().output_path)
+            .expect_err("stale inventory must fail the freshness check");
+        assert!(err.to_string().contains(GENERATED_STALE_MESSAGE));
     }
 
     struct TestRepo {

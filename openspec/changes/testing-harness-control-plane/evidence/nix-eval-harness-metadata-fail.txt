@@ -1,0 +1,9 @@
+error:
+       … while calling the 'throw' builtin
+         at /home/brittonr/git/aspen/nix/tests/lib/test-harness-metadata.nix:51:9:
+           50|       else if metadata.inputs_sha256 != current.inputs_sha256 then
+           51|         throw staleMessage
+             |         ^
+           52|       else
+
+       error: test harness inventory is stale; run `scripts/test-harness.sh export`

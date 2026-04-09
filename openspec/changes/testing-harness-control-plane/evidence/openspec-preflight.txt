@@ -1,4 +1,4 @@
 OK: openspec/changes/testing-harness-control-plane
   tasks: 19 total / 8 checked
-  changed files listed: 19
-  verification artifacts: 7
+  changed files listed: 22
+  verification artifacts: 13

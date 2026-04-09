@@ -2493,8 +2493,10 @@
 
           # Set of checks that are run: `nix flake check`
           checks = let
-            testHarnessInventory =
-              builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json);
+            testHarnessMetadata = import ./nix/tests/lib/test-harness-metadata.nix {inherit lib;};
+            testHarnessInventory = testHarnessMetadata.ensureInventoryFresh ./. (
+              builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json)
+            );
             generatedHarnessChecks = import ./nix/tests/lib/generated-harness-checks.nix {
               inherit lib system pkgs bins;
               inventory = testHarnessInventory;

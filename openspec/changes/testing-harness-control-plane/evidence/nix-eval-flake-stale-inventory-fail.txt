@@ -1,0 +1,34 @@
+Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+error:
+       … while evaluating the attribute 'optionalValue.value'
+         at «github:NixOS/nixpkgs/35bdbbce4d6e84baa7df6544d6127db8dd7fbaef?narHash=sha256-OLdIz38tsFp1aXt8GsJ40s0/jxSkhlqftuDE7LvuhK4%3D»/lib/modules.nix:1256:5:
+         1255|
+         1256|     optionalValue = if isDefined then { value = mergedValue; } else { };
+             |     ^
+         1257|   };
+
+       … while evaluating a branch condition
+         at «github:NixOS/nixpkgs/35bdbbce4d6e84baa7df6544d6127db8dd7fbaef?narHash=sha256-OLdIz38tsFp1aXt8GsJ40s0/jxSkhlqftuDE7LvuhK4%3D»/lib/modules.nix:1256:21:
+         1255|
+         1256|     optionalValue = if isDefined then { value = mergedValue; } else { };
+             |                     ^
+         1257|   };
+
+       … while evaluating definitions from `/nix/store/2a9ylipb88x2sp2xn6cg58p5xm6qamai-source/modules/transposition.nix':
+
+       … while evaluating the option `perSystem.x86_64-linux.checks':
+
+       … while evaluating definitions from `/nix/store/asv813ajadhlisk81viy1a7csp3pxm3m-source/flake.nix, via option perSystem':
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: test harness inventory is stale; run `scripts/test-harness.sh export`

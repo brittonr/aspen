@@ -217,7 +217,8 @@ cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
 
 - Suite manifests live under `test-harness/suites/` with the Nickel schema at `test-harness/schema.ncl`.
 - `scripts/test-harness.sh export` regenerates `test-harness/generated/inventory.json`; `scripts/test-harness.sh check` fails on stale or invalid metadata.
-- `scripts/test-harness.sh list ...` resolves focused suite selections from the generated inventory for cargo-nextest and `nix build` entry points.
+- `scripts/test-harness.sh list ...` and `scripts/test-harness.sh run ...` now call the freshness check before reading the generated inventory.
+- `flake.nix` rejects stale `test-harness/generated/inventory.json` during eval by comparing the committed metadata hash and manifest path list against the current Nickel inputs.
 
 ### Nix Apps (without entering shell)
 

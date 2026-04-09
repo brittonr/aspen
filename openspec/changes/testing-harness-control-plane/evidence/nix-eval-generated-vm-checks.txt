@@ -1,3 +1,4 @@
+multi-node-kv-test:
 Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
@@ -8,10 +9,8 @@ Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-set
 Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
-building '/nix/store/wfiba6nslk8p5ay6l9z2545rbcn8h8wl-aspen-u2n-src.drv'...
-building '/nix/store/5smb4w1mzgnisdzv72msf54496k39h25-aspen-u2n-test-src.drv'...
-building '/nix/store/5kfwk67bs1mgrc34md7r5ycn0qdpjasx-unit2nix-build-plan.drv'...
 vm-test-run-multi-node-kv
+multi-node-blob-test:
 Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.

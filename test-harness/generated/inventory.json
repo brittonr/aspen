@@ -1,5 +1,17 @@
 {
   "schema_version": 1,
+  "metadata": {
+    "schema_path": "test-harness/schema.ncl",
+    "manifest_paths": [
+      "test-harness/suites/patchbay/patchbay-fault.ncl",
+      "test-harness/suites/patchbay/patchbay-nat.ncl",
+      "test-harness/suites/rust/blob-replication.ncl",
+      "test-harness/suites/rust/job-integration.ncl",
+      "test-harness/suites/vm/multi-node-blob.ncl",
+      "test-harness/suites/vm/multi-node-kv.ncl"
+    ],
+    "inputs_sha256": "674fda5c16b6579623ee79cc2db78463810bef1b2a61aae315ac3ca0caecc1c6"
+  },
   "suites": [
     {
       "id": "blob-replication",

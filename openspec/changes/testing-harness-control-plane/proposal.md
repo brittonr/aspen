@@ -13,11 +13,13 @@ Aspen has broad test coverage, but the harness is managed through duplicated fil
 ## Capabilities
 
 ### New Capabilities
+
 - `test-suite-metadata`: Nickel manifests define suite metadata and drive generated selection, grouping, and registration outputs.
 - `test-harness-runtime`: Shared harness APIs cover cluster lifecycle, wait conditions, and layer-specific helpers for real-cluster, madsim, patchbay, and VM-backed tests.
 - `test-harness-reporting`: Test runs emit machine-readable reporting for retries, runtime hotspots, skipped suites, and coverage-by-layer summaries.
 
 ### Modified Capabilities
+
 - `patchbay-harness`: Patchbay tests participate in the shared metadata and harness control plane instead of being configured as a standalone special case.
 
 ## Impact
