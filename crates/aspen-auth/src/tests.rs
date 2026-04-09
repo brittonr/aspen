@@ -145,6 +145,80 @@ fn test_capability_contains() {
     assert!(!Capability::ClusterAdmin.contains(&Capability::Delegate));
 }
 
+#[test]
+fn test_shell_execute_authorization_respects_pattern_and_working_dir() {
+    let cap = Capability::ShellExecute {
+        command_pattern: "pg_*".into(),
+        working_dir: Some("/srv/db".into()),
+    };
+
+    assert!(cap.authorizes_shell_command("pg_dump", Some("/srv/db/backups")));
+    assert!(!cap.authorizes_shell_command("pg_dump", Some("/tmp")));
+    assert!(!cap.authorizes_shell_command("sqlite3", Some("/srv/db/backups")));
+    assert!(!cap.authorizes_shell_command("pg_dump", None));
+}
+
+#[test]
+fn test_shell_execute_contains_requires_narrower_pattern_and_working_dir() {
+    let parent = Capability::ShellExecute {
+        command_pattern: "pg_*".into(),
+        working_dir: Some("/srv/db".into()),
+    };
+    let child = Capability::ShellExecute {
+        command_pattern: "pg_dump".into(),
+        working_dir: Some("/srv/db/backups".into()),
+    };
+    let wider = Capability::ShellExecute {
+        command_pattern: "*".into(),
+        working_dir: Some("/srv".into()),
+    };
+
+    assert!(parent.contains(&child));
+    assert!(!parent.contains(&wider));
+}
+
+#[test]
+fn test_secrets_admin_authorizes_transit_and_pki_operations() {
+    let admin = Capability::SecretsAdmin;
+
+    assert!(admin.authorizes(&Operation::TransitEncrypt {
+        key_name: "app-db".into(),
+    }));
+    assert!(admin.authorizes(&Operation::PkiManage));
+    assert!(admin.contains(&Capability::TransitKeyManage {
+        key_prefix: "app-".into(),
+    }));
+    assert!(admin.contains(&Capability::PkiIssue {
+        role_prefix: "web-".into(),
+    }));
+}
+
+#[test]
+fn test_pki_manage_and_secrets_full_preserve_scope_rules() {
+    let pki_manage = Capability::PkiManage;
+    assert!(pki_manage.authorizes(&Operation::PkiIssue {
+        role: "web-server".into(),
+    }));
+    assert!(pki_manage.contains(&Capability::PkiReadCa));
+
+    let secrets_full = Capability::SecretsFull {
+        mount: "secret/".into(),
+        prefix: "apps/".into(),
+    };
+    assert!(secrets_full.authorizes(&Operation::SecretsDelete {
+        mount: "secret/".into(),
+        path: "apps/web".into(),
+    }));
+    assert!(!secrets_full.authorizes(&Operation::SecretsDelete {
+        mount: "other/".into(),
+        path: "apps/web".into(),
+    }));
+    assert!(secrets_full.contains(&Capability::SecretsRead {
+        mount: "secret/".into(),
+        prefix: "apps/web".into(),
+    }));
+}
+
 // ============================================================================
 // Token Builder Tests
 // ============================================================================

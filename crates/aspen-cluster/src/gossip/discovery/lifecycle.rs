@@ -532,10 +532,7 @@ impl GossipPeerDiscovery {
                         }
 
                         // Calculate backoff duration using existing pure function
-                        let backoff = calculate_backoff_duration(
-                            (consecutive_errors as usize).saturating_sub(1),
-                            &backoff_durations
-                        );
+                        let backoff = calculate_backoff_duration(consecutive_errors.saturating_sub(1), &backoff_durations);
 
                         tracing::warn!(
                             "gossip receiver error (retry {}/{}), backing off for {:?}: {}",

@@ -244,192 +244,187 @@ pub enum Capability {
     },
 }
 
+fn matches_prefix_scope(prefix: &str, value: &str) -> bool {
+    value.starts_with(prefix)
+}
+
+fn matches_mount_scope(cap_mount: &str, op_mount: &str, cap_prefix: &str, path: &str) -> bool {
+    cap_mount == op_mount && matches_prefix_scope(cap_prefix, path)
+}
+
+fn shell_command_matches(pattern: &str, command: &str) -> bool {
+    match pattern {
+        "*" => true,
+        pattern if pattern.contains('*') => glob_match(pattern, command),
+        exact => exact == command,
+    }
+}
+
+fn shell_working_dir_matches(capability_dir: &Option<String>, requested_dir: &Option<String>) -> bool {
+    match (capability_dir, requested_dir) {
+        (None, _) => true,
+        (Some(parent), Some(child)) => child.starts_with(parent),
+        (Some(_), None) => false,
+    }
+}
+
+fn shell_pattern_contains(parent_pattern: &str, child_pattern: &str) -> bool {
+    if parent_pattern == "*" {
+        return true;
+    }
+    if child_pattern == "*" {
+        return false;
+    }
+    if parent_pattern.ends_with('*') && child_pattern.ends_with('*') {
+        return child_pattern.starts_with(parent_pattern.trim_end_matches('*'));
+    }
+    if parent_pattern.ends_with('*') {
+        return child_pattern.starts_with(parent_pattern.trim_end_matches('*'));
+    }
+    parent_pattern == child_pattern
+}
+
 impl Capability {
     /// Check if this capability authorizes the given operation.
     ///
     /// Returns true if this capability grants permission for the operation.
     pub fn authorizes(&self, op: &Operation) -> bool {
+        self.authorizes_data(op)
+            .or_else(|| self.authorizes_shell(op))
+            .or_else(|| self.authorizes_secrets(op))
+            .or_else(|| self.authorizes_transit(op))
+            .or_else(|| self.authorizes_pki(op))
+            .or_else(|| self.authorizes_net(op))
+            .or_else(|| self.authorizes_federation(op))
+            .unwrap_or(false)
+    }
+
+    fn authorizes_data(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
-            // Full authorizes all data operations for matching prefix
-            (Capability::Full { prefix }, Operation::Read { key }) => key.starts_with(prefix),
-            (Capability::Full { prefix }, Operation::Write { key, .. }) => key.starts_with(prefix),
-            (Capability::Full { prefix }, Operation::Delete { key }) => key.starts_with(prefix),
-            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => key_prefix.starts_with(prefix),
-            // Specific capabilities
-            (Capability::Read { prefix }, Operation::Read { key }) => key.starts_with(prefix),
-            (Capability::Write { prefix }, Operation::Write { key, .. }) => key.starts_with(prefix),
-            (Capability::Delete { prefix }, Operation::Delete { key }) => key.starts_with(prefix),
-            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => key_prefix.starts_with(prefix),
-            // ClusterAdmin operations
-            (Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => true,
-            // ShellExecute operations
+            (Capability::Full { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(prefix, key)),
+            (Capability::Full { prefix }, Operation::Write { key, .. }) => Some(matches_prefix_scope(prefix, key)),
+            (Capability::Full { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(prefix, key)),
+            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => {
+                Some(matches_prefix_scope(prefix, key_prefix))
+            }
+            (Capability::Read { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(prefix, key)),
+            (Capability::Write { prefix }, Operation::Write { key, .. }) => Some(matches_prefix_scope(prefix, key)),
+            (Capability::Delete { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(prefix, key)),
+            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => {
+                Some(matches_prefix_scope(prefix, key_prefix))
+            }
+            (Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => Some(true),
+            _ => None,
+        }
+    }
+
+    fn authorizes_shell(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
             (
                 Capability::ShellExecute {
                     command_pattern,
-                    working_dir: cap_wd,
+                    working_dir,
                 },
                 Operation::ShellExecute {
                     command,
-                    working_dir: op_wd,
+                    working_dir: requested_dir,
                 },
-            ) => {
-                // Check command pattern match
-                let cmd_match = match command_pattern.as_str() {
-                    "*" => true,
-                    pattern if pattern.contains('*') => glob_match(pattern, command),
-                    exact => exact == command,
-                };
-                // Check working directory constraint
-                let wd_match = match (cap_wd, op_wd) {
-                    (None, _) => true, // No constraint
-                    (Some(cap_dir), Some(req_dir)) => req_dir.starts_with(cap_dir),
-                    (Some(_), None) => false, // Capability requires wd, none provided
-                };
-                cmd_match && wd_match
-            }
+            ) => Some(
+                shell_command_matches(command_pattern, command)
+                    && shell_working_dir_matches(working_dir, requested_dir),
+            ),
+            _ => None,
+        }
+    }
 
-            // ==========================================================================
-            // Secrets Engine authorization
-            // ==========================================================================
-
-            // SecretsAdmin authorizes all secrets operations
-            (Capability::SecretsAdmin, Operation::SecretsRead { .. }) => true,
-            (Capability::SecretsAdmin, Operation::SecretsWrite { .. }) => true,
-            (Capability::SecretsAdmin, Operation::SecretsDelete { .. }) => true,
-            (Capability::SecretsAdmin, Operation::SecretsList { .. }) => true,
-            (Capability::SecretsAdmin, Operation::TransitEncrypt { .. }) => true,
-            (Capability::SecretsAdmin, Operation::TransitDecrypt { .. }) => true,
-            (Capability::SecretsAdmin, Operation::TransitSign { .. }) => true,
-            (Capability::SecretsAdmin, Operation::TransitVerify { .. }) => true,
-            (Capability::SecretsAdmin, Operation::TransitKeyManage { .. }) => true,
-            (Capability::SecretsAdmin, Operation::PkiIssue { .. }) => true,
-            (Capability::SecretsAdmin, Operation::PkiRevoke) => true,
-            (Capability::SecretsAdmin, Operation::PkiReadCa) => true,
-            (Capability::SecretsAdmin, Operation::PkiManage) => true,
-            (Capability::SecretsAdmin, Operation::SecretsAdmin { .. }) => true,
-
-            // SecretsFull authorizes all secrets KV operations for matching mount/prefix
+    fn authorizes_secrets(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::SecretsAdmin, Operation::SecretsRead { .. })
+            | (Capability::SecretsAdmin, Operation::SecretsWrite { .. })
+            | (Capability::SecretsAdmin, Operation::SecretsDelete { .. })
+            | (Capability::SecretsAdmin, Operation::SecretsList { .. })
+            | (Capability::SecretsAdmin, Operation::SecretsAdmin { .. }) => Some(true),
             (
-                Capability::SecretsFull {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
+                Capability::SecretsFull { mount, prefix } | Capability::SecretsRead { mount, prefix },
                 Operation::SecretsRead { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
             (
-                Capability::SecretsFull {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
+                Capability::SecretsFull { mount, prefix } | Capability::SecretsWrite { mount, prefix },
                 Operation::SecretsWrite { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
             (
-                Capability::SecretsFull {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
+                Capability::SecretsFull { mount, prefix } | Capability::SecretsDelete { mount, prefix },
                 Operation::SecretsDelete { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
             (
-                Capability::SecretsFull {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
+                Capability::SecretsFull { mount, prefix } | Capability::SecretsList { mount, prefix },
                 Operation::SecretsList { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+            _ => None,
+        }
+    }
 
-            // Specific secrets capabilities
-            (
-                Capability::SecretsRead {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
-                Operation::SecretsRead { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
-            (
-                Capability::SecretsWrite {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
-                Operation::SecretsWrite { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
-            (
-                Capability::SecretsDelete {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
-                Operation::SecretsDelete { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
-            (
-                Capability::SecretsList {
-                    mount: cap_mount,
-                    prefix: cap_prefix,
-                },
-                Operation::SecretsList { mount: op_mount, path },
-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+    fn authorizes_transit(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::SecretsAdmin, Operation::TransitEncrypt { .. })
+            | (Capability::SecretsAdmin, Operation::TransitDecrypt { .. })
+            | (Capability::SecretsAdmin, Operation::TransitSign { .. })
+            | (Capability::SecretsAdmin, Operation::TransitVerify { .. })
+            | (Capability::SecretsAdmin, Operation::TransitKeyManage { .. }) => Some(true),
+            (Capability::TransitEncrypt { key_prefix }, Operation::TransitEncrypt { key_name })
+            | (Capability::TransitDecrypt { key_prefix }, Operation::TransitDecrypt { key_name })
+            | (Capability::TransitSign { key_prefix }, Operation::TransitSign { key_name })
+            | (Capability::TransitVerify { key_prefix }, Operation::TransitVerify { key_name })
+            | (Capability::TransitKeyManage { key_prefix }, Operation::TransitKeyManage { key_name }) => {
+                Some(matches_prefix_scope(key_prefix, key_name))
+            }
+            _ => None,
+        }
+    }
 
-            // ==========================================================================
-            // Transit Engine authorization
-            // ==========================================================================
-            (Capability::TransitEncrypt { key_prefix }, Operation::TransitEncrypt { key_name }) => {
-                key_name.starts_with(key_prefix)
+    fn authorizes_pki(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::SecretsAdmin, Operation::PkiIssue { .. })
+            | (Capability::SecretsAdmin, Operation::PkiRevoke)
+            | (Capability::SecretsAdmin, Operation::PkiReadCa)
+            | (Capability::SecretsAdmin, Operation::PkiManage) => Some(true),
+            (Capability::PkiIssue { role_prefix }, Operation::PkiIssue { role }) => {
+                Some(matches_prefix_scope(role_prefix, role))
             }
-            (Capability::TransitDecrypt { key_prefix }, Operation::TransitDecrypt { key_name }) => {
-                key_name.starts_with(key_prefix)
-            }
-            (Capability::TransitSign { key_prefix }, Operation::TransitSign { key_name }) => {
-                key_name.starts_with(key_prefix)
-            }
-            (Capability::TransitVerify { key_prefix }, Operation::TransitVerify { key_name }) => {
-                key_name.starts_with(key_prefix)
-            }
-            (Capability::TransitKeyManage { key_prefix }, Operation::TransitKeyManage { key_name }) => {
-                key_name.starts_with(key_prefix)
-            }
+            (Capability::PkiRevoke, Operation::PkiRevoke)
+            | (Capability::PkiReadCa, Operation::PkiReadCa)
+            | (Capability::PkiManage, Operation::PkiManage)
+            | (Capability::PkiManage, Operation::PkiRevoke)
+            | (Capability::PkiManage, Operation::PkiReadCa)
+            | (Capability::PkiManage, Operation::PkiIssue { .. }) => Some(true),
+            _ => None,
+        }
+    }
 
-            // ==========================================================================
-            // PKI Engine authorization
-            // ==========================================================================
-            (Capability::PkiIssue { role_prefix }, Operation::PkiIssue { role }) => role.starts_with(role_prefix),
-            (Capability::PkiRevoke, Operation::PkiRevoke) => true,
-            (Capability::PkiReadCa, Operation::PkiReadCa) => true,
-            (Capability::PkiManage, Operation::PkiManage) => true,
-            // PkiManage also authorizes all other PKI operations
-            (Capability::PkiManage, Operation::PkiIssue { .. }) => true,
-            (Capability::PkiManage, Operation::PkiRevoke) => true,
-            (Capability::PkiManage, Operation::PkiReadCa) => true,
-
-            // ==========================================================================
-            // Net Service Mesh authorization
-            // ==========================================================================
-            (Capability::NetAdmin, Operation::NetConnect { .. }) => true,
-            (Capability::NetAdmin, Operation::NetPublish { .. }) => true,
-            (Capability::NetAdmin, Operation::NetUnpublish { .. }) => true,
-            (Capability::NetAdmin, Operation::NetAdmin { .. }) => true,
-
+    fn authorizes_net(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::NetAdmin, Operation::NetConnect { .. })
+            | (Capability::NetAdmin, Operation::NetPublish { .. })
+            | (Capability::NetAdmin, Operation::NetUnpublish { .. })
+            | (Capability::NetAdmin, Operation::NetAdmin { .. }) => Some(true),
             (Capability::NetConnect { service_prefix }, Operation::NetConnect { service, .. }) => {
-                service.starts_with(service_prefix)
+                Some(matches_prefix_scope(service_prefix, service))
             }
+            (Capability::NetPublish { service_prefix }, Operation::NetPublish { service })
+            | (Capability::NetPublish { service_prefix }, Operation::NetUnpublish { service }) => {
+                Some(matches_prefix_scope(service_prefix, service))
+            }
+            _ => None,
+        }
+    }
 
-            (Capability::NetPublish { service_prefix }, Operation::NetPublish { service }) => {
-                service.starts_with(service_prefix)
+    fn authorizes_federation(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
+            | (Capability::FederationPush { repo_prefix }, Operation::FederationPush { fed_id }) => {
+                Some(matches_prefix_scope(repo_prefix, fed_id))
             }
-            (Capability::NetPublish { service_prefix }, Operation::NetUnpublish { service }) => {
-                service.starts_with(service_prefix)
-            }
-
-            // ==========================================================================
-            // Federation Sync authorization
-            // ==========================================================================
-            (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id }) => {
-                fed_id.starts_with(repo_prefix)
-            }
-            (Capability::FederationPush { repo_prefix }, Operation::FederationPush { fed_id }) => {
-                fed_id.starts_with(repo_prefix)
-            }
-
-            // No match
-            _ => false,
+            _ => None,
         }
     }
 
@@ -450,167 +445,209 @@ impl Capability {
     ///
     /// Returns true if `self` contains `other`.
     pub fn contains(&self, other: &Capability) -> bool {
+        self.contains_data(other)
+            .or_else(|| self.contains_shell(other))
+            .or_else(|| self.contains_secrets(other))
+            .or_else(|| self.contains_transit(other))
+            .or_else(|| self.contains_pki(other))
+            .or_else(|| self.contains_net(other))
+            .or_else(|| self.contains_federation(other))
+            .unwrap_or(false)
+    }
+
+    fn contains_data(&self, other: &Capability) -> Option<bool> {
         match (self, other) {
-            // Full contains Read, Write, Delete, Watch for same or narrower prefix
-            (Capability::Full { prefix: p1 }, Capability::Read { prefix: p2 }) => p2.starts_with(p1),
-            (Capability::Full { prefix: p1 }, Capability::Write { prefix: p2 }) => p2.starts_with(p1),
-            (Capability::Full { prefix: p1 }, Capability::Delete { prefix: p2 }) => p2.starts_with(p1),
-            (Capability::Full { prefix: p1 }, Capability::Watch { prefix: p2 }) => p2.starts_with(p1),
-            (Capability::Full { prefix: p1 }, Capability::Full { prefix: p2 }) => p2.starts_with(p1),
-            // Same type with narrower prefix
-            (Capability::Read { prefix: p1 }, Capability::Read { prefix: p2 }) => p2.starts_with(p1),
-            (Capability::Write { prefix: p1 }, Capability::Write { prefix: p2 }) => p2.starts_with(p1),
-            (Capability::Delete { prefix: p1 }, Capability::Delete { prefix: p2 }) => p2.starts_with(p1),
-            (Capability::Watch { prefix: p1 }, Capability::Watch { prefix: p2 }) => p2.starts_with(p1),
-            // ClusterAdmin only contains itself
-            (Capability::ClusterAdmin, Capability::ClusterAdmin) => true,
-            // Delegate only contains itself
-            (Capability::Delegate, Capability::Delegate) => true,
-            // ShellExecute: child pattern must be subset of parent pattern
+            (Capability::Full { prefix: parent }, Capability::Read { prefix: child })
+            | (Capability::Full { prefix: parent }, Capability::Write { prefix: child })
+            | (Capability::Full { prefix: parent }, Capability::Delete { prefix: child })
+            | (Capability::Full { prefix: parent }, Capability::Watch { prefix: child })
+            | (Capability::Full { prefix: parent }, Capability::Full { prefix: child })
+            | (Capability::Read { prefix: parent }, Capability::Read { prefix: child })
+            | (Capability::Write { prefix: parent }, Capability::Write { prefix: child })
+            | (Capability::Delete { prefix: parent }, Capability::Delete { prefix: child })
+            | (Capability::Watch { prefix: parent }, Capability::Watch { prefix: child }) => {
+                Some(matches_prefix_scope(parent, child))
+            }
+            (Capability::ClusterAdmin, Capability::ClusterAdmin) | (Capability::Delegate, Capability::Delegate) => {
+                Some(true)
+            }
+            _ => None,
+        }
+    }
+
+    fn contains_shell(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
             (
                 Capability::ShellExecute {
-                    command_pattern: p1,
-                    working_dir: wd1,
+                    command_pattern: parent_pattern,
+                    working_dir: parent_dir,
                 },
                 Capability::ShellExecute {
-                    command_pattern: p2,
-                    working_dir: wd2,
+                    command_pattern: child_pattern,
+                    working_dir: child_dir,
                 },
-            ) => {
-                // Child pattern must be more specific than parent
-                let pattern_ok = if p1 == "*" {
-                    true // Parent allows everything
-                } else if p2 == "*" {
-                    false // Child wants everything but parent doesn't allow it
-                } else if p1.ends_with('*') && p2.ends_with('*') {
-                    // Both are prefix patterns, child must be more specific
-                    p2.starts_with(p1.trim_end_matches('*'))
-                } else if p1.ends_with('*') {
-                    // Parent is prefix pattern, child is exact
-                    p2.starts_with(p1.trim_end_matches('*'))
-                } else {
-                    // Parent is exact, child must be same
-                    p1 == p2
-                };
+            ) => Some(
+                shell_pattern_contains(parent_pattern, child_pattern)
+                    && shell_working_dir_matches(parent_dir, child_dir),
+            ),
+            _ => None,
+        }
+    }
 
-                // Child working_dir must be within parent's constraint
-                let wd_ok = match (wd1, wd2) {
-                    (None, _) => true,        // Parent has no constraint
-                    (Some(_), None) => false, // Parent has constraint, child doesn't
-                    (Some(parent_wd), Some(child_wd)) => child_wd.starts_with(parent_wd),
-                };
+    fn contains_secrets(&self, other: &Capability) -> Option<bool> {
+        self.contains_secrets_admin(other)
+            .or_else(|| self.contains_secrets_full(other))
+            .or_else(|| self.contains_secrets_scoped(other))
+    }
 
-                pattern_ok && wd_ok
-            }
+    fn contains_secrets_admin(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (Capability::SecretsAdmin, Capability::SecretsAdmin)
+            | (Capability::SecretsAdmin, Capability::SecretsFull { .. })
+            | (Capability::SecretsAdmin, Capability::SecretsRead { .. })
+            | (Capability::SecretsAdmin, Capability::SecretsWrite { .. })
+            | (Capability::SecretsAdmin, Capability::SecretsDelete { .. })
+            | (Capability::SecretsAdmin, Capability::SecretsList { .. }) => Some(true),
+            _ => None,
+        }
+    }
 
-            // ==========================================================================
-            // Secrets Engine capability containment
-            // ==========================================================================
-
-            // SecretsAdmin contains all secrets-related capabilities
-            (Capability::SecretsAdmin, Capability::SecretsAdmin) => true,
-            (Capability::SecretsAdmin, Capability::SecretsFull { .. }) => true,
-            (Capability::SecretsAdmin, Capability::SecretsRead { .. }) => true,
-            (Capability::SecretsAdmin, Capability::SecretsWrite { .. }) => true,
-            (Capability::SecretsAdmin, Capability::SecretsDelete { .. }) => true,
-            (Capability::SecretsAdmin, Capability::SecretsList { .. }) => true,
-            (Capability::SecretsAdmin, Capability::TransitEncrypt { .. }) => true,
-            (Capability::SecretsAdmin, Capability::TransitDecrypt { .. }) => true,
-            (Capability::SecretsAdmin, Capability::TransitSign { .. }) => true,
-            (Capability::SecretsAdmin, Capability::TransitVerify { .. }) => true,
-            (Capability::SecretsAdmin, Capability::TransitKeyManage { .. }) => true,
-            (Capability::SecretsAdmin, Capability::PkiIssue { .. }) => true,
-            (Capability::SecretsAdmin, Capability::PkiRevoke) => true,
-            (Capability::SecretsAdmin, Capability::PkiReadCa) => true,
-            (Capability::SecretsAdmin, Capability::PkiManage) => true,
-
-            // SecretsFull contains all secrets KV capabilities for same or narrower scope
-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsFull { mount: m2, prefix: p2 }) => {
-                m1 == m2 && p2.starts_with(p1)
-            }
-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsRead { mount: m2, prefix: p2 }) => {
-                m1 == m2 && p2.starts_with(p1)
-            }
-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsWrite { mount: m2, prefix: p2 }) => {
-                m1 == m2 && p2.starts_with(p1)
-            }
+    fn contains_secrets_full(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
             (
-                Capability::SecretsFull { mount: m1, prefix: p1 },
-                Capability::SecretsDelete { mount: m2, prefix: p2 },
-            ) => m1 == m2 && p2.starts_with(p1),
-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsList { mount: m2, prefix: p2 }) => {
-                m1 == m2 && p2.starts_with(p1)
-            }
+                Capability::SecretsFull {
+                    mount: parent_mount,
+                    prefix: parent_prefix,
+                },
+                Capability::SecretsFull {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                }
+                | Capability::SecretsRead {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                }
+                | Capability::SecretsWrite {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                }
+                | Capability::SecretsDelete {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                }
+                | Capability::SecretsList {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                },
+            ) => Some(matches_mount_scope(parent_mount, child_mount, parent_prefix, child_prefix)),
+            _ => None,
+        }
+    }
 
-            // Same type with narrower scope
-            (Capability::SecretsRead { mount: m1, prefix: p1 }, Capability::SecretsRead { mount: m2, prefix: p2 }) => {
-                m1 == m2 && p2.starts_with(p1)
-            }
+    fn contains_secrets_scoped(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
             (
-                Capability::SecretsWrite { mount: m1, prefix: p1 },
-                Capability::SecretsWrite { mount: m2, prefix: p2 },
-            ) => m1 == m2 && p2.starts_with(p1),
-            (
-                Capability::SecretsDelete { mount: m1, prefix: p1 },
-                Capability::SecretsDelete { mount: m2, prefix: p2 },
-            ) => m1 == m2 && p2.starts_with(p1),
-            (Capability::SecretsList { mount: m1, prefix: p1 }, Capability::SecretsList { mount: m2, prefix: p2 }) => {
-                m1 == m2 && p2.starts_with(p1)
-            }
+                Capability::SecretsRead {
+                    mount: parent_mount,
+                    prefix: parent_prefix,
+                },
+                Capability::SecretsRead {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                },
+            )
+            | (
+                Capability::SecretsWrite {
+                    mount: parent_mount,
+                    prefix: parent_prefix,
+                },
+                Capability::SecretsWrite {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                },
+            )
+            | (
+                Capability::SecretsDelete {
+                    mount: parent_mount,
+                    prefix: parent_prefix,
+                },
+                Capability::SecretsDelete {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                },
+            )
+            | (
+                Capability::SecretsList {
+                    mount: parent_mount,
+                    prefix: parent_prefix,
+                },
+                Capability::SecretsList {
+                    mount: child_mount,
+                    prefix: child_prefix,
+                },
+            ) => Some(matches_mount_scope(parent_mount, child_mount, parent_prefix, child_prefix)),
+            _ => None,
+        }
+    }
 
-            // Transit capabilities with prefix containment
-            (Capability::TransitEncrypt { key_prefix: p1 }, Capability::TransitEncrypt { key_prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::TransitDecrypt { key_prefix: p1 }, Capability::TransitDecrypt { key_prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::TransitSign { key_prefix: p1 }, Capability::TransitSign { key_prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::TransitVerify { key_prefix: p1 }, Capability::TransitVerify { key_prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-            (Capability::TransitKeyManage { key_prefix: p1 }, Capability::TransitKeyManage { key_prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
+    fn contains_transit(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (Capability::SecretsAdmin, Capability::TransitEncrypt { .. })
+            | (Capability::SecretsAdmin, Capability::TransitDecrypt { .. })
+            | (Capability::SecretsAdmin, Capability::TransitSign { .. })
+            | (Capability::SecretsAdmin, Capability::TransitVerify { .. })
+            | (Capability::SecretsAdmin, Capability::TransitKeyManage { .. }) => Some(true),
+            (Capability::TransitEncrypt { key_prefix: parent }, Capability::TransitEncrypt { key_prefix: child })
+            | (Capability::TransitDecrypt { key_prefix: parent }, Capability::TransitDecrypt { key_prefix: child })
+            | (Capability::TransitSign { key_prefix: parent }, Capability::TransitSign { key_prefix: child })
+            | (Capability::TransitVerify { key_prefix: parent }, Capability::TransitVerify { key_prefix: child })
+            | (
+                Capability::TransitKeyManage { key_prefix: parent },
+                Capability::TransitKeyManage { key_prefix: child },
+            ) => Some(matches_prefix_scope(parent, child)),
+            _ => None,
+        }
+    }
 
-            // PKI capabilities
-            (Capability::PkiManage, Capability::PkiManage) => true,
-            (Capability::PkiManage, Capability::PkiIssue { .. }) => true,
-            (Capability::PkiManage, Capability::PkiRevoke) => true,
-            (Capability::PkiManage, Capability::PkiReadCa) => true,
-            (Capability::PkiIssue { role_prefix: p1 }, Capability::PkiIssue { role_prefix: p2 }) => p2.starts_with(p1),
-            (Capability::PkiRevoke, Capability::PkiRevoke) => true,
-            (Capability::PkiReadCa, Capability::PkiReadCa) => true,
-
-            // ==========================================================================
-            // Net Service Mesh capability containment
-            // ==========================================================================
-            (Capability::NetAdmin, Capability::NetAdmin) => true,
-            (Capability::NetAdmin, Capability::NetConnect { .. }) => true,
-            (Capability::NetAdmin, Capability::NetPublish { .. }) => true,
-
-            (Capability::NetConnect { service_prefix: p1 }, Capability::NetConnect { service_prefix: p2 }) => {
-                p2.starts_with(p1)
+    fn contains_pki(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (Capability::SecretsAdmin, Capability::PkiIssue { .. })
+            | (Capability::SecretsAdmin, Capability::PkiRevoke)
+            | (Capability::SecretsAdmin, Capability::PkiReadCa)
+            | (Capability::SecretsAdmin, Capability::PkiManage) => Some(true),
+            (Capability::PkiManage, Capability::PkiManage)
+            | (Capability::PkiManage, Capability::PkiIssue { .. })
+            | (Capability::PkiManage, Capability::PkiRevoke)
+            | (Capability::PkiManage, Capability::PkiReadCa)
+            | (Capability::PkiRevoke, Capability::PkiRevoke)
+            | (Capability::PkiReadCa, Capability::PkiReadCa) => Some(true),
+            (Capability::PkiIssue { role_prefix: parent }, Capability::PkiIssue { role_prefix: child }) => {
+                Some(matches_prefix_scope(parent, child))
             }
+            _ => None,
+        }
+    }
 
-            (Capability::NetPublish { service_prefix: p1 }, Capability::NetPublish { service_prefix: p2 }) => {
-                p2.starts_with(p1)
+    fn contains_net(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (Capability::NetAdmin, Capability::NetAdmin)
+            | (Capability::NetAdmin, Capability::NetConnect { .. })
+            | (Capability::NetAdmin, Capability::NetPublish { .. }) => Some(true),
+            (Capability::NetConnect { service_prefix: parent }, Capability::NetConnect { service_prefix: child })
+            | (Capability::NetPublish { service_prefix: parent }, Capability::NetPublish { service_prefix: child }) => {
+                Some(matches_prefix_scope(parent, child))
             }
+            _ => None,
+        }
+    }
 
-            // ==========================================================================
-            // Federation Sync capability containment
-            // ==========================================================================
-            (Capability::FederationPull { repo_prefix: p1 }, Capability::FederationPull { repo_prefix: p2 }) => {
-                p2.starts_with(p1)
+    fn contains_federation(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
+            | (Capability::FederationPush { repo_prefix: parent }, Capability::FederationPush { repo_prefix: child }) => {
+                Some(matches_prefix_scope(parent, child))
             }
-
-            (Capability::FederationPush { repo_prefix: p1 }, Capability::FederationPush { repo_prefix: p2 }) => {
-                p2.starts_with(p1)
-            }
-
-            _ => false,
+            _ => None,
         }
     }
 }

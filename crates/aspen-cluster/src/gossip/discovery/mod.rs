@@ -79,7 +79,7 @@ mod tests {
         // Index 10 exceeds array length, should clamp to last element
         assert_eq!(calculate_backoff_duration(10, &durations), Duration::from_secs(4));
         assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(4));
-        assert_eq!(calculate_backoff_duration(usize::MAX, &durations), Duration::from_secs(4));
+        assert_eq!(calculate_backoff_duration(u32::MAX, &durations), Duration::from_secs(4));
     }
 
     #[test]

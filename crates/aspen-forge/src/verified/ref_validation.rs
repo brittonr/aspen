@@ -15,7 +15,7 @@ pub enum RefNameError {
     /// Ref name is empty.
     Empty,
     /// Ref name exceeds maximum length.
-    TooLong { length: usize, max: usize },
+    TooLong { length: u32, max: u32 },
     /// Ref name starts with a dot.
     StartsWithDot,
     /// Ref name ends with a dot.
@@ -33,9 +33,9 @@ pub enum RefNameError {
     /// Ref name contains consecutive slashes.
     ConsecutiveSlashes,
     /// Ref name contains invalid character.
-    InvalidChar { char: char, position: usize },
+    InvalidChar { char: char, position: u32 },
     /// Ref name contains a control character.
-    ControlChar { position: usize },
+    ControlChar { position: u32 },
     /// Ref name contains `@{`.
     ContainsAtBrace,
     /// Component starts with a dot.
@@ -73,16 +73,21 @@ pub enum RefNameError {
 /// assert_eq!(validate_ref_name(".hidden", 200), Err(RefNameError::StartsWithDot));
 /// assert_eq!(validate_ref_name("refs/heads/main.lock", 200), Err(RefNameError::EndsWithLock));
 /// ```
-pub fn validate_ref_name(ref_name: &str, max_length: usize) -> Result<(), RefNameError> {
+pub fn validate_ref_name(ref_name: &str, max_length: u32) -> Result<(), RefNameError> {
+    fn saturating_u32(value: usize) -> u32 {
+        u32::try_from(value).unwrap_or(u32::MAX)
+    }
+
     // Empty check
     if ref_name.is_empty() {
         return Err(RefNameError::Empty);
     }
 
     // Length check
-    if ref_name.len() > max_length {
+    let ref_name_length = saturating_u32(ref_name.len());
+    if ref_name_length > max_length {
         return Err(RefNameError::TooLong {
-            length: ref_name.len(),
+            length: ref_name_length,
             max: max_length,
         });
     }
@@ -129,14 +134,16 @@ pub fn validate_ref_name(ref_name: &str, max_length: usize) -> Result<(), RefNam
 
     // Check each character
     for (i, c) in ref_name.chars().enumerate() {
+        let position = saturating_u32(i);
+
         // Control characters
         if c.is_control() {
-            return Err(RefNameError::ControlChar { position: i });
+            return Err(RefNameError::ControlChar { position });
         }
 
         // Invalid characters
         if matches!(c, ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\') {
-            return Err(RefNameError::InvalidChar { char: c, position: i });
+            return Err(RefNameError::InvalidChar { char: c, position });
         }
     }
 

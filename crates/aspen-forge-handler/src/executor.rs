@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use anyhow::anyhow;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 #[cfg(not(feature = "git-bridge"))]
@@ -112,6 +113,24 @@ pub struct ForgeServiceExecutor {
     node_id: u64,
     /// Nostr authentication service (created lazily from ForgeNode's key).
     nostr_auth: Arc<aspen_forge::identity::nostr_auth::NostrAuthService<dyn aspen_core::KeyValueStore>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ForgeRequestGroup {
+    Repo,
+    Blob,
+    Tree,
+    Commit,
+    Ref,
+    Issue,
+    Patch,
+    Discussion,
+    Fork,
+    Mirror,
+    Federation,
+    GitBridge,
+    Nostr,
+    Diff,
 }
 
 impl ForgeServiceExecutor {
@@ -240,6 +259,88 @@ impl ForgeServiceExecutor {
 }
 
 impl ForgeServiceExecutor {
+    fn request_group(request: &ClientRpcRequest) -> Result<ForgeRequestGroup> {
+        match request {
+            ClientRpcRequest::ForgeCreateRepo { .. }
+            | ClientRpcRequest::ForgeListRepos { .. }
+            | ClientRpcRequest::ForgeGetRepo { .. } => Ok(ForgeRequestGroup::Repo),
+            ClientRpcRequest::ForgeStoreBlob { .. } | ClientRpcRequest::ForgeGetBlob { .. } => {
+                Ok(ForgeRequestGroup::Blob)
+            }
+            ClientRpcRequest::ForgeCreateTree { .. } | ClientRpcRequest::ForgeGetTree { .. } => {
+                Ok(ForgeRequestGroup::Tree)
+            }
+            ClientRpcRequest::ForgeCommit { .. }
+            | ClientRpcRequest::ForgeGetCommit { .. }
+            | ClientRpcRequest::ForgeLog { .. } => Ok(ForgeRequestGroup::Commit),
+            ClientRpcRequest::ForgeGetRef { .. }
+            | ClientRpcRequest::ForgeSetRef { .. }
+            | ClientRpcRequest::ForgeDeleteRef { .. }
+            | ClientRpcRequest::ForgeCasRef { .. }
+            | ClientRpcRequest::ForgeListBranches { .. }
+            | ClientRpcRequest::ForgeListTags { .. } => Ok(ForgeRequestGroup::Ref),
+            ClientRpcRequest::ForgeCreateIssue { .. }
+            | ClientRpcRequest::ForgeListIssues { .. }
+            | ClientRpcRequest::ForgeGetIssue { .. }
+            | ClientRpcRequest::ForgeCommentIssue { .. }
+            | ClientRpcRequest::ForgeCloseIssue { .. }
+            | ClientRpcRequest::ForgeReopenIssue { .. } => Ok(ForgeRequestGroup::Issue),
+            ClientRpcRequest::ForgeCreatePatch { .. }
+            | ClientRpcRequest::ForgeListPatches { .. }
+            | ClientRpcRequest::ForgeGetPatch { .. }
+            | ClientRpcRequest::ForgeUpdatePatch { .. }
+            | ClientRpcRequest::ForgeApprovePatch { .. }
+            | ClientRpcRequest::ForgeMergePatch { .. }
+            | ClientRpcRequest::ForgeCheckMerge { .. }
+            | ClientRpcRequest::ForgeClosePatch { .. } => Ok(ForgeRequestGroup::Patch),
+            ClientRpcRequest::ForgeCreateDiscussion { .. }
+            | ClientRpcRequest::ForgeListDiscussions { .. }
+            | ClientRpcRequest::ForgeGetDiscussion { .. }
+            | ClientRpcRequest::ForgeReplyDiscussion { .. }
+            | ClientRpcRequest::ForgeLockDiscussion { .. }
+            | ClientRpcRequest::ForgeUnlockDiscussion { .. }
+            | ClientRpcRequest::ForgeCloseDiscussion { .. }
+            | ClientRpcRequest::ForgeReopenDiscussion { .. } => Ok(ForgeRequestGroup::Discussion),
+            ClientRpcRequest::ForgeForkRepo { .. } => Ok(ForgeRequestGroup::Fork),
+            ClientRpcRequest::ForgeSetMirror { .. }
+            | ClientRpcRequest::ForgeDisableMirror { .. }
+            | ClientRpcRequest::ForgeGetMirrorStatus { .. } => Ok(ForgeRequestGroup::Mirror),
+            ClientRpcRequest::ForgeGetDelegateKey { .. }
+            | ClientRpcRequest::GetFederationStatus
+            | ClientRpcRequest::ListDiscoveredClusters
+            | ClientRpcRequest::GetDiscoveredCluster { .. }
+            | ClientRpcRequest::TrustCluster { .. }
+            | ClientRpcRequest::UntrustCluster { .. }
+            | ClientRpcRequest::FederateRepository { .. }
+            | ClientRpcRequest::ListFederatedRepositories
+            | ClientRpcRequest::FederationSyncPeer { .. }
+            | ClientRpcRequest::FederationFetchRefs { .. }
+            | ClientRpcRequest::FederationGitListRefs { .. }
+            | ClientRpcRequest::FederationGitFetch { .. }
+            | ClientRpcRequest::FederationPull { .. }
+            | ClientRpcRequest::FederationPush { .. }
+            | ClientRpcRequest::FederationBidiSync { .. }
+            | ClientRpcRequest::ForgeFetchFederated { .. } => Ok(ForgeRequestGroup::Federation),
+            ClientRpcRequest::GitBridgeListRefs { .. }
+            | ClientRpcRequest::GitBridgeFetch { .. }
+            | ClientRpcRequest::GitBridgeFetchStart { .. }
+            | ClientRpcRequest::GitBridgeFetchChunk { .. }
+            | ClientRpcRequest::GitBridgeFetchComplete { .. }
+            | ClientRpcRequest::GitBridgePush { .. }
+            | ClientRpcRequest::GitBridgePushStart { .. }
+            | ClientRpcRequest::GitBridgePushChunk { .. }
+            | ClientRpcRequest::GitBridgePushComplete { .. }
+            | ClientRpcRequest::GitBridgeProbeObjects { .. } => Ok(ForgeRequestGroup::GitBridge),
+            ClientRpcRequest::NostrAuthChallenge { .. }
+            | ClientRpcRequest::NostrAuthVerify { .. }
+            | ClientRpcRequest::NostrGetProfile { .. } => Ok(ForgeRequestGroup::Nostr),
+            ClientRpcRequest::ForgeDiffCommits { .. } | ClientRpcRequest::ForgeDiffRefs { .. } => {
+                Ok(ForgeRequestGroup::Diff)
+            }
+            _ => Err(anyhow!("ForgeServiceExecutor received unhandled request")),
+        }
+    }
+
     // ========================================================================
     // Helper Methods for Git Operations
     // ========================================================================
@@ -1537,10 +1638,28 @@ impl ServiceExecutor for ForgeServiceExecutor {
     }
 
     async fn execute(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
-        use crate::handler::handlers::federation::*;
+        match Self::request_group(&request)? {
+            ForgeRequestGroup::Repo => self.execute_repo_request(request).await,
+            ForgeRequestGroup::Blob => self.execute_blob_request(request).await,
+            ForgeRequestGroup::Tree => self.execute_tree_request(request).await,
+            ForgeRequestGroup::Commit => self.execute_commit_request(request).await,
+            ForgeRequestGroup::Ref => self.execute_ref_request(request).await,
+            ForgeRequestGroup::Issue => self.execute_issue_request(request).await,
+            ForgeRequestGroup::Patch => self.execute_patch_request(request).await,
+            ForgeRequestGroup::Discussion => self.execute_discussion_request(request).await,
+            ForgeRequestGroup::Fork => self.execute_fork_request(request).await,
+            ForgeRequestGroup::Mirror => self.execute_mirror_request(request).await,
+            ForgeRequestGroup::Federation => self.execute_federation_request(request).await,
+            ForgeRequestGroup::GitBridge => self.execute_git_bridge_request(request).await,
+            ForgeRequestGroup::Nostr => self.execute_nostr_request(request).await,
+            ForgeRequestGroup::Diff => self.execute_diff_request(request).await,
+        }
+    }
+}
 
+impl ForgeServiceExecutor {
+    async fn execute_repo_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         match request {
-            // Repository operations (previously WASM-only, now native for self-hosting)
             ClientRpcRequest::ForgeCreateRepo {
                 name,
                 description,
@@ -1549,7 +1668,6 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 use aspen_client_api::ForgeRepoInfo;
                 use aspen_client_api::ForgeRepoResultResponse;
 
-                // Use the node's own public key as the default delegate
                 let delegates = vec![self.forge_node.public_key()];
                 match self.forge_node.create_repo(&name, delegates, 1).await {
                     Ok(identity) => {
@@ -1568,10 +1686,10 @@ impl ServiceExecutor for ForgeServiceExecutor {
                             error: None,
                         }))
                     }
-                    Err(e) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                    Err(error) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                         is_success: false,
                         repo: None,
-                        error: Some(format!("{}", e)),
+                        error: Some(error.to_string()),
                     })),
                 }
             }
@@ -1584,7 +1702,7 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 match self.forge_node.list_repos().await {
                     Ok(repos) => {
                         let count = repos.len() as u32;
-                        let repos: Vec<ForgeRepoInfo> = repos
+                        let repos = repos
                             .into_iter()
                             .skip(offset)
                             .take(limit)
@@ -1605,28 +1723,40 @@ impl ServiceExecutor for ForgeServiceExecutor {
                             error: None,
                         }))
                     }
-                    Err(e) => Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+                    Err(error) => Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
                         is_success: false,
                         repos: vec![],
                         count: 0,
-                        error: Some(format!("{}", e)),
+                        error: Some(error.to_string()),
                     })),
                 }
             }
             ClientRpcRequest::ForgeGetRepo { repo_id } => self.handle_get_repo(repo_id).await,
+            _ => unreachable!("unexpected repo request"),
+        }
+    }
 
-            // Blob operations
+    async fn execute_blob_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeStoreBlob { repo_id, content } => self.handle_store_blob(repo_id, content).await,
             ClientRpcRequest::ForgeGetBlob { hash } => self.handle_get_blob(hash).await,
+            _ => unreachable!("unexpected blob request"),
+        }
+    }
 
-            // Tree operations
+    async fn execute_tree_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeCreateTree {
                 repo_id: _,
                 entries_json,
             } => self.handle_create_tree(entries_json).await,
             ClientRpcRequest::ForgeGetTree { hash } => self.handle_get_tree(hash).await,
+            _ => unreachable!("unexpected tree request"),
+        }
+    }
 
-            // Commit operations
+    async fn execute_commit_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeCommit {
                 repo_id,
                 tree,
@@ -1639,8 +1769,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 ref_name,
                 limit,
             } => self.handle_log(repo_id, ref_name, limit).await,
+            _ => unreachable!("unexpected commit request"),
+        }
+    }
 
-            // Ref operations
+    async fn execute_ref_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => self.handle_get_ref(repo_id, ref_name).await,
             ClientRpcRequest::ForgeSetRef {
                 repo_id,
@@ -1662,8 +1796,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
             } => self.handle_cas_ref(repo_id, ref_name, expected, new_hash).await,
             ClientRpcRequest::ForgeListBranches { repo_id } => self.handle_list_branches(repo_id).await,
             ClientRpcRequest::ForgeListTags { repo_id } => self.handle_list_tags(repo_id).await,
+            _ => unreachable!("unexpected ref request"),
+        }
+    }
 
-            // Issue operations
+    async fn execute_issue_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeCreateIssue {
                 repo_id,
                 title,
@@ -1689,8 +1827,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
             ClientRpcRequest::ForgeReopenIssue { repo_id, issue_id } => {
                 self.handle_reopen_issue(repo_id, issue_id).await
             }
+            _ => unreachable!("unexpected issue request"),
+        }
+    }
 
-            // Patch operations
+    async fn execute_patch_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeCreatePatch {
                 repo_id,
                 title,
@@ -1728,8 +1870,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 patch_id,
                 reason,
             } => self.handle_close_patch(repo_id, patch_id, reason).await,
+            _ => unreachable!("unexpected patch request"),
+        }
+    }
 
-            // Discussion operations
+    async fn execute_discussion_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeCreateDiscussion {
                 repo_id,
                 title,
@@ -1764,15 +1910,23 @@ impl ServiceExecutor for ForgeServiceExecutor {
             ClientRpcRequest::ForgeReopenDiscussion { repo_id, discussion_id } => {
                 self.handle_reopen_discussion(repo_id, discussion_id).await
             }
+            _ => unreachable!("unexpected discussion request"),
+        }
+    }
 
-            // Fork operations
+    async fn execute_fork_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeForkRepo {
                 upstream_repo_id,
                 name,
                 description,
             } => self.handle_fork_repo(upstream_repo_id, name, description).await,
+            _ => unreachable!("unexpected fork request"),
+        }
+    }
 
-            // Mirror operations
+    async fn execute_mirror_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeSetMirror {
                 repo_id,
                 upstream_repo_id,
@@ -1780,8 +1934,14 @@ impl ServiceExecutor for ForgeServiceExecutor {
             } => self.handle_set_mirror(repo_id, upstream_repo_id, interval_secs).await,
             ClientRpcRequest::ForgeDisableMirror { repo_id } => self.handle_disable_mirror(repo_id).await,
             ClientRpcRequest::ForgeGetMirrorStatus { repo_id } => self.handle_get_mirror_status(repo_id).await,
+            _ => unreachable!("unexpected mirror request"),
+        }
+    }
 
-            // Federation operations
+    async fn execute_federation_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        use crate::handler::handlers::federation::*;
+
+        match request {
             ClientRpcRequest::ForgeGetDelegateKey { repo_id } => {
                 handle_get_delegate_key(&self.forge_node, repo_id).await
             }
@@ -1894,7 +2054,7 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 .await
             }
             #[cfg(not(feature = "git-bridge"))]
-            ClientRpcRequest::FederationPush { .. } => Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+            ClientRpcRequest::FederationPush { .. } => Ok(ClientRpcResponse::Error(ErrorResponse {
                 code: "UNSUPPORTED".to_string(),
                 message: "federation push requires git-bridge feature".to_string(),
             })),
@@ -1917,12 +2077,10 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 .await
             }
             #[cfg(not(feature = "git-bridge"))]
-            ClientRpcRequest::FederationBidiSync { .. } => {
-                Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
-                    code: "UNSUPPORTED".to_string(),
-                    message: "federation bidi sync requires git-bridge feature".to_string(),
-                }))
-            }
+            ClientRpcRequest::FederationBidiSync { .. } => Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "UNSUPPORTED".to_string(),
+                message: "federation bidi sync requires git-bridge feature".to_string(),
+            })),
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::FederationGitListRefs {
                 origin_key,
@@ -1970,8 +2128,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 federated_id,
                 remote_cluster,
             } => handle_fetch_federated(&self.forge_node, federated_id, remote_cluster).await,
+            _ => unreachable!("unexpected federation request"),
+        }
+    }
 
-            // Git Bridge operations
+    async fn execute_git_bridge_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgeListRefs { repo_id } => {
                 crate::handler::handlers::git_bridge::handle_git_bridge_list_refs(&self.forge_node, repo_id).await
@@ -1983,21 +2145,20 @@ impl ServiceExecutor for ForgeServiceExecutor {
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgePush { repo_id, objects, refs } => {
-                let resp = crate::handler::handlers::git_bridge::handle_git_bridge_push(
+                let response = crate::handler::handlers::git_bridge::handle_git_bridge_push(
                     &self.forge_node,
                     repo_id.clone(),
                     objects,
                     refs,
                 )
                 .await?;
-                // Emit hook events for successful pushes
                 #[cfg(feature = "hooks")]
-                if let ClientRpcResponse::GitBridgePush(ref push_resp) = resp
-                    && push_resp.is_success
+                if let ClientRpcResponse::GitBridgePush(ref push_response) = response
+                    && push_response.is_success
                 {
-                    self.emit_push_hook(&repo_id, &push_resp.ref_results);
+                    self.emit_push_hook(&repo_id, &push_response.ref_results);
                 }
-                Ok(resp)
+                Ok(response)
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgePushStart {
@@ -2040,22 +2201,20 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 session_id,
                 content_hash,
             } => {
-                let resp = crate::handler::handlers::git_bridge::handle_git_bridge_push_complete(
+                let response = crate::handler::handlers::git_bridge::handle_git_bridge_push_complete(
                     &self.forge_node,
                     session_id,
                     content_hash,
                 )
                 .await?;
-                // Emit hook events for successful chunked pushes
                 #[cfg(feature = "hooks")]
-                if let ClientRpcResponse::GitBridgePushComplete(ref push_resp) = resp
-                    && push_resp.is_success
+                if let ClientRpcResponse::GitBridgePushComplete(ref push_response) = response
+                    && push_response.is_success
                 {
-                    self.emit_push_hook("", &push_resp.ref_results);
+                    self.emit_push_hook("", &push_response.ref_results);
                 }
-                Ok(resp)
+                Ok(response)
             }
-
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgeProbeObjects { repo_id, sha1s } => {
                 crate::handler::handlers::git_bridge::handle_git_bridge_probe_objects(&self.forge_node, repo_id, sha1s)
@@ -2084,7 +2243,6 @@ impl ServiceExecutor for ForgeServiceExecutor {
             ClientRpcRequest::GitBridgeFetchComplete { session_id } => {
                 crate::handler::handlers::git_bridge::handle_git_bridge_fetch_complete(session_id).await
             }
-
             #[cfg(not(feature = "git-bridge"))]
             ClientRpcRequest::GitBridgeListRefs { .. }
             | ClientRpcRequest::GitBridgeFetch { .. }
@@ -2099,15 +2257,19 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 "GIT_BRIDGE_UNAVAILABLE",
                 "Git bridge feature not enabled. Rebuild with --features git-bridge",
             )),
+            _ => unreachable!("unexpected git bridge request"),
+        }
+    }
 
-            // Nostr identity authentication
+    async fn execute_nostr_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::NostrAuthChallenge { npub_hex } => {
                 match self.nostr_auth.create_challenge(&npub_hex).await {
                     Ok((challenge_id, challenge_bytes)) => Ok(ClientRpcResponse::NostrAuthChallengeResult {
                         challenge_id,
                         challenge_hex: hex::encode(challenge_bytes),
                     }),
-                    Err(e) => Ok(ClientRpcResponse::error("AUTH_CHALLENGE_FAILED", format!("{e}"))),
+                    Err(error) => Ok(ClientRpcResponse::error("AUTH_CHALLENGE_FAILED", format!("{error}"))),
                 }
             }
             ClientRpcRequest::NostrAuthVerify {
@@ -2126,31 +2288,29 @@ impl ServiceExecutor for ForgeServiceExecutor {
                                 error: None,
                             })
                         }
-                        Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                        Err(error) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
                             is_success: false,
                             token: None,
                             ed25519_public_key: None,
-                            error: Some(format!("token serialization failed: {e}")),
+                            error: Some(format!("token serialization failed: {error}")),
                         }),
                     },
-                    Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                    Err(error) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
                         is_success: false,
                         token: None,
                         ed25519_public_key: None,
-                        error: Some(format!("{e}")),
+                        error: Some(error.to_string()),
                     }),
                 },
-                Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                Err(error) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
                     is_success: false,
                     token: None,
                     ed25519_public_key: None,
-                    error: Some(format!("{e}")),
+                    error: Some(error.to_string()),
                 }),
             },
-
             #[allow(clippy::collapsible_if)]
             ClientRpcRequest::NostrGetProfile { npub_hex } => {
-                // Query KV for kind 0 events by this author
                 let prefix = format!("nostr:au:{}:", npub_hex);
                 let scan = self
                     .forge_node
@@ -2164,10 +2324,8 @@ impl ServiceExecutor for ForgeServiceExecutor {
 
                 let mut display_name = None;
                 let mut nip05 = None;
-
                 if let Ok(results) = scan {
                     for kv in &results.entries {
-                        // Fetch the event by ID (last segment of the key)
                         let event_id = kv.key.rsplit(':').next().unwrap_or("");
                         let event_key = format!("nostr:ev:{event_id}");
                         if let Ok(ev_result) = self
@@ -2178,38 +2336,32 @@ impl ServiceExecutor for ForgeServiceExecutor {
                                 consistency: aspen_core::ReadConsistency::Linearizable,
                             })
                             .await
+                            && let Some(ev_kv) = ev_result.kv
+                            && let Ok(event) = serde_json::from_str::<serde_json::Value>(&ev_kv.value)
+                            && event.get("kind").and_then(|k| k.as_u64()).unwrap_or(0) == 0
                         {
-                            if let Some(ev_kv) = ev_result.kv {
-                                // Parse the stored event JSON
-                                if let Ok(event) = serde_json::from_str::<serde_json::Value>(&ev_kv.value) {
-                                    let kind = event.get("kind").and_then(|k| k.as_u64()).unwrap_or(0);
-                                    if kind == 0 {
-                                        // Kind 0 = profile metadata, content is JSON
-                                        if let Some(content_str) = event.get("content").and_then(|c| c.as_str()) {
-                                            if let Ok(profile) = serde_json::from_str::<serde_json::Value>(content_str)
-                                            {
-                                                display_name = profile
-                                                    .get("display_name")
-                                                    .or_else(|| profile.get("name"))
-                                                    .and_then(|v| v.as_str())
-                                                    .map(|s| s.to_string());
-                                                nip05 = profile
-                                                    .get("nip05")
-                                                    .and_then(|v| v.as_str())
-                                                    .map(|s| s.to_string());
-                                            }
-                                        }
-                                        break;
-                                    }
-                                }
+                            if let Some(content_str) = event.get("content").and_then(|c| c.as_str())
+                                && let Ok(profile) = serde_json::from_str::<serde_json::Value>(content_str)
+                            {
+                                display_name = profile
+                                    .get("display_name")
+                                    .or_else(|| profile.get("name"))
+                                    .and_then(|value| value.as_str())
+                                    .map(ToString::to_string);
+                                nip05 = profile.get("nip05").and_then(|value| value.as_str()).map(ToString::to_string);
                             }
+                            break;
                         }
                     }
                 }
-
                 Ok(ClientRpcResponse::NostrGetProfileResult { display_name, nip05 })
             }
+            _ => unreachable!("unexpected nostr request"),
+        }
+    }
 
+    async fn execute_diff_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
             ClientRpcRequest::ForgeDiffCommits {
                 repo_id,
                 old_commit,
@@ -2224,8 +2376,195 @@ impl ServiceExecutor for ForgeServiceExecutor {
                 include_content,
                 context_lines,
             } => self.handle_diff_refs(repo_id, old_ref, new_ref, include_content, context_lines).await,
-
-            _ => unreachable!("ForgeServiceExecutor received unhandled request"),
+            _ => unreachable!("unexpected diff request"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::net::SocketAddrV4;
+    use std::sync::Arc;
+
+    use aspen_blob::IrohBlobStore;
+    use aspen_core::EndpointProvider;
+    use aspen_rpc_core::ServiceExecutor;
+    use aspen_testing_core::DeterministicKeyValueStore;
+
+    use super::*;
+
+    async fn make_test_executor() -> ForgeServiceExecutor {
+        let endpoint_secret = iroh::SecretKey::generate(&mut rand::rng());
+        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(endpoint_secret)
+            .bind_addr("127.0.0.1:0".parse::<SocketAddrV4>().expect("loopback bind address should parse"))
+            .expect("loopback bind address should be valid")
+            .bind()
+            .await
+            .expect("test endpoint should bind");
+        let blob_dir = std::env::temp_dir().join(format!("aspen-forge-handler-executor-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&blob_dir).expect("blob directory should be created");
+        let blob_store =
+            Arc::new(IrohBlobStore::new(&blob_dir, endpoint.clone()).await.expect("blob store should initialize"));
+        let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
+        let forge_secret = iroh::SecretKey::generate(&mut rand::rng());
+        let forge_node = Arc::new(aspen_forge::ForgeNode::new(blob_store, kv, forge_secret));
+        ForgeServiceExecutor::new(
+            forge_node,
+            #[cfg(feature = "global-discovery")]
+            None,
+            #[cfg(feature = "global-discovery")]
+            None,
+            None,
+            None,
+            None,
+            Some(Arc::new(endpoint)),
+            #[cfg(all(feature = "hooks", feature = "git-bridge"))]
+            None,
+            7,
+        )
+    }
+
+    #[test]
+    fn test_request_group_routes_repo_and_git_bridge_requests() {
+        assert_eq!(
+            ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeCreateRepo {
+                name: "repo".into(),
+                description: None,
+                default_branch: None,
+            })
+            .expect("repo request should route"),
+            ForgeRequestGroup::Repo
+        );
+        assert_eq!(
+            ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeGetRef {
+                repo_id: "abcd".into(),
+                ref_name: "main".into(),
+            })
+            .expect("ref request should route"),
+            ForgeRequestGroup::Ref
+        );
+        assert_eq!(
+            ForgeServiceExecutor::request_group(&ClientRpcRequest::GitBridgeFetch {
+                repo_id: "abcd".into(),
+                want: vec![],
+                have: vec![],
+            })
+            .expect("git bridge request should route"),
+            ForgeRequestGroup::GitBridge
+        );
+    }
+
+    #[test]
+    fn test_request_group_routes_federation_nostr_and_diff_requests() {
+        assert_eq!(
+            ForgeServiceExecutor::request_group(&ClientRpcRequest::FederationPull {
+                mirror_repo_id: None,
+                peer_node_id: None,
+                peer_addr: None,
+                repo_id: Some("repo".into()),
+            })
+            .expect("federation request should route"),
+            ForgeRequestGroup::Federation
+        );
+        assert_eq!(
+            ForgeServiceExecutor::request_group(&ClientRpcRequest::NostrAuthChallenge {
+                npub_hex: "npub".into(),
+            })
+            .expect("nostr request should route"),
+            ForgeRequestGroup::Nostr
+        );
+        assert_eq!(
+            ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeDiffRefs {
+                repo_id: "repo".into(),
+                old_ref: "main".into(),
+                new_ref: "feature".into(),
+                include_content: false,
+                context_lines: None,
+            })
+            .expect("diff request should route"),
+            ForgeRequestGroup::Diff
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_create_repo_then_list_repos() {
+        let executor = make_test_executor().await;
+        let create_result = executor
+            .execute(ClientRpcRequest::ForgeCreateRepo {
+                name: "repo".into(),
+                description: Some("demo".into()),
+                default_branch: None,
+            })
+            .await
+            .expect("create repo should succeed");
+        match create_result {
+            ClientRpcResponse::ForgeRepoResult(response) => {
+                assert!(response.is_success);
+                let repo = response.repo.expect("repo result should include created repo");
+                assert_eq!(repo.name, "repo");
+                assert_eq!(repo.default_branch, "main");
+            }
+            other => panic!("expected ForgeRepoResult, got {other:?}"),
+        }
+
+        let list_result = executor
+            .execute(ClientRpcRequest::ForgeListRepos {
+                limit: Some(10),
+                offset: Some(0),
+            })
+            .await
+            .expect("list repos should succeed");
+        match list_result {
+            ClientRpcResponse::ForgeRepoListResult(response) => {
+                assert!(response.is_success);
+                assert_eq!(response.count, 1);
+                assert_eq!(response.repos.len(), 1);
+                assert_eq!(response.repos[0].name, "repo");
+            }
+            other => panic!("expected ForgeRepoListResult, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_routes_nostr_requests() {
+        let executor = make_test_executor().await;
+        let response = executor
+            .execute(ClientRpcRequest::NostrAuthChallenge {
+                npub_hex: "npub-test".into(),
+            })
+            .await
+            .expect("nostr auth challenge should succeed");
+        match response {
+            ClientRpcResponse::NostrAuthChallengeResult {
+                challenge_id,
+                challenge_hex,
+            } => {
+                assert_eq!(challenge_id.len(), 32);
+                assert_eq!(challenge_hex.len(), 64);
+            }
+            other => panic!("expected NostrAuthChallengeResult, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_rejects_unhandled_requests_with_error() {
+        let executor = make_test_executor().await;
+        let error = executor
+            .execute(ClientRpcRequest::Ping)
+            .await
+            .expect_err("unhandled request should return an error");
+        assert!(error.to_string().contains("ForgeServiceExecutor received unhandled request"));
+    }
+
+    #[test]
+    fn test_execute_dispatch_metadata_is_stable() {
+        assert_eq!(ForgeServiceExecutor::SERVICE_NAME, "forge");
+        assert_eq!(ForgeServiceExecutor::PRIORITY, 540);
+        assert_eq!(ForgeServiceExecutor::APP_ID, Some("forge"));
+        assert!(ForgeServiceExecutor::HANDLES.contains(&"ForgeCreateRepo"));
+        assert!(ForgeServiceExecutor::HANDLES.contains(&"GitBridgePush"));
+        assert!(ForgeServiceExecutor::HANDLES.contains(&"NostrAuthVerify"));
     }
 }
