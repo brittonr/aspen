@@ -1,597 +1,94 @@
 diff --git a/.agent/napkin.md b/.agent/napkin.md
-index 2b5b9e4c1..fbca38a1c 100644
+index fbca38a1c..f7e9f0c73 100644
 --- a/.agent/napkin.md
 +++ b/.agent/napkin.md
-@@ -103,6 +103,7 @@
+@@ -103,7 +103,7 @@
  | 2026-03-27 | `git-remote-aspen` federated clone path (`fed:` URL) silently returns empty repo | Fixed: `federation_import_objects` now uses `import_objects()` (plural) with topological sort instead of sequential `import_object()`. Objects arriving in non-dependency order (commit before tree) no longer fail silently. |
  | 2026-04-09 | Shell-parity audit said dogfood federation should tolerate an already-federated repo, but the code only relied on the current handler being idempotent | When an audit names idempotency/parity behavior, codify it in the caller with a unit-tested helper instead of assuming server semantics stay unchanged |
  | 2026-04-09 | `repo_root=$(cd ... && pwd)` captured the path twice because `CDPATH` made `cd` print to stdout inside a command substitution | In repo scripts, use `CDPATH=` when deriving paths with `cd ... && pwd` so `repo_root` stays single-line |
-+| 2026-04-09 | Harness metadata freshness was only checked on `export`/`check`, so `list`/`run` and flake eval could consume stale `test-harness/generated/inventory.json` | Generated metadata needs consumer-side freshness gates too: shell entry points should run `scripts/test-harness.sh check`, and `flake.nix` should reject stale inventory during eval |
+-| 2026-04-09 | Harness metadata freshness was only checked on `export`/`check`, so `list`/`run` and flake eval could consume stale `test-harness/generated/inventory.json` | Generated metadata needs consumer-side freshness gates too: shell entry points should run `scripts/test-harness.sh check`, and `flake.nix` should reject stale inventory during eval |
++| 2026-04-09 | Harness metadata freshness was only checked on `export`/`check`, so `list`/`run` and flake eval could consume stale `test-harness/generated/inventory.json` | Generated metadata needs consumer-side freshness gates too: shell entry points should run `scripts/test-harness.sh check`, `flake.nix` should reject stale inventory during eval, and saved evidence should exercise those consumer boundaries instead of only the helper function |
  
  ### Deploy / Dogfood
  
 diff --git a/AGENTS.md b/AGENTS.md
-index cf384f6fd..c1d51e861 100644
+index c1d51e861..3f69270fe 100644
 --- a/AGENTS.md
 +++ b/AGENTS.md
-@@ -217,7 +217,8 @@ cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
- 
- - Suite manifests live under `test-harness/suites/` with the Nickel schema at `test-harness/schema.ncl`.
+@@ -219,6 +219,7 @@ cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
  - `scripts/test-harness.sh export` regenerates `test-harness/generated/inventory.json`; `scripts/test-harness.sh check` fails on stale or invalid metadata.
--- `scripts/test-harness.sh list ...` resolves focused suite selections from the generated inventory for cargo-nextest and `nix build` entry points.
-+- `scripts/test-harness.sh list ...` and `scripts/test-harness.sh run ...` now call the freshness check before reading the generated inventory.
-+- `flake.nix` rejects stale `test-harness/generated/inventory.json` during eval by comparing the committed metadata hash and manifest path list against the current Nickel inputs.
+ - `scripts/test-harness.sh list ...` and `scripts/test-harness.sh run ...` now call the freshness check before reading the generated inventory.
+ - `flake.nix` rejects stale `test-harness/generated/inventory.json` during eval by comparing the committed metadata hash and manifest path list against the current Nickel inputs.
++- When proving freshness enforcement, capture end-to-end failures at the consumer boundary: temporarily corrupt `test-harness/generated/inventory.json`, show `scripts/test-harness.sh list ...` fails, then restore the file before continuing.
  
  ### Nix Apps (without entering shell)
  
-diff --git a/Cargo.lock b/Cargo.lock
-index dd8745c78..76c8d6ab9 100644
---- a/Cargo.lock
-+++ b/Cargo.lock
-@@ -2781,6 +2781,7 @@ dependencies = [
-  "reqwest 0.12.28",
-  "serde",
-  "serde_json",
-+ "sha2 0.10.9",
-  "snafu",
-  "tempfile",
-  "thiserror 2.0.18",
-diff --git a/crates/aspen-testing/Cargo.toml b/crates/aspen-testing/Cargo.toml
-index f39e65ea8..3a8ecc70b 100644
---- a/crates/aspen-testing/Cargo.toml
-+++ b/crates/aspen-testing/Cargo.toml
-@@ -68,6 +68,7 @@ serde_json = "1.0"
- # CLI + Nickel metadata export
- clap = { workspace = true, features = ["derive"] }
- nickel-lang = { workspace = true }
-+sha2 = "0.10"
- walkdir = "2"
- 
- # Utilities
-diff --git a/crates/aspen-testing/src/suite_inventory.rs b/crates/aspen-testing/src/suite_inventory.rs
-index fea53bedb..edceac36f 100644
---- a/crates/aspen-testing/src/suite_inventory.rs
-+++ b/crates/aspen-testing/src/suite_inventory.rs
-@@ -13,6 +13,8 @@ use nickel_lang::Error as NickelError;
- use nickel_lang::ErrorFormat;
- use serde::Deserialize;
- use serde::Serialize;
-+use sha2::Digest;
-+use sha2::Sha256;
- use walkdir::WalkDir;
- 
- const SCHEMA_VERSION: u32 = 1;
-@@ -41,9 +43,17 @@ impl Default for InventoryPaths {
- #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
- pub struct SuiteInventory {
-     pub schema_version: u32,
-+    pub metadata: SuiteInventoryMetadata,
-     pub suites: Vec<SuiteInventoryRecord>,
- }
- 
-+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-+pub struct SuiteInventoryMetadata {
-+    pub schema_path: String,
-+    pub manifest_paths: Vec<String>,
-+    pub inputs_sha256: String,
-+}
-+
- #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
- pub struct SuiteInventoryRecord {
-     pub id: String,
-@@ -158,8 +168,11 @@ pub fn load_inventory(paths: &InventoryPaths) -> Result<SuiteInventory> {
-         .with_context(|| format!("failed to read schema {}", paths.schema_path.display()))?;
-     let manifest_paths = discover_manifest_paths(&paths.manifest_root)?;
-     ensure!(!manifest_paths.is_empty(), "no suite manifests found under {}", paths.manifest_root.display());
-+    let metadata = build_inventory_metadata(paths, &manifest_paths)?;
- 
-     let mut seen_ids = BTreeSet::new();
-+    let mut seen_check_attrs = BTreeMap::new();
-+    let mut seen_flake_attrs = BTreeMap::new();
-     let mut suites = Vec::with_capacity(manifest_paths.len());
-     for manifest_path in manifest_paths {
-         let manifest = load_manifest(&manifest_path, &schema_source)?;
-@@ -170,16 +183,58 @@ pub fn load_inventory(paths: &InventoryPaths) -> Result<SuiteInventory> {
-             manifest_path.display()
-         );
-         validate_manifest(&manifest, &manifest_path, &paths.repo_root)?;
--        suites.push(to_inventory_record(manifest, &manifest_path, &paths.repo_root)?);
-+        let record = to_inventory_record(manifest, &manifest_path, &paths.repo_root)?;
-+        validate_generated_registration_keys(&record, &mut seen_check_attrs, &mut seen_flake_attrs)?;
-+        suites.push(record);
-     }
-     suites.sort_by(|left, right| left.id.cmp(&right.id));
- 
-     Ok(SuiteInventory {
-         schema_version: SCHEMA_VERSION,
-+        metadata,
-         suites,
-     })
- }
- 
-+fn build_inventory_metadata(paths: &InventoryPaths, manifest_paths: &[PathBuf]) -> Result<SuiteInventoryMetadata> {
-+    let schema_path = repo_relative_path(&paths.schema_path, &paths.repo_root)?;
-+    let manifest_paths = manifest_paths
-+        .iter()
-+        .map(|path| repo_relative_path(path, &paths.repo_root))
-+        .collect::<Result<Vec<_>>>()?;
-+
-+    let mut input_lines = Vec::with_capacity(manifest_paths.len() + 1);
-+    input_lines.push(format!("{schema_path}:{}", compute_file_sha256(&paths.schema_path)?));
-+    let mut manifest_entries = discover_manifest_hashes(paths, &manifest_paths)?;
-+    input_lines.append(&mut manifest_entries);
-+
-+    let mut hasher = Sha256::new();
-+    hasher.update(input_lines.join("\n").as_bytes());
-+
-+    Ok(SuiteInventoryMetadata {
-+        schema_path,
-+        manifest_paths,
-+        inputs_sha256: hex::encode(hasher.finalize()),
-+    })
-+}
-+
-+fn discover_manifest_hashes(paths: &InventoryPaths, manifest_paths: &[String]) -> Result<Vec<String>> {
-+    manifest_paths
-+        .iter()
-+        .map(|relative_path| {
-+            let path = paths.repo_root.join(relative_path);
-+            Ok(format!("{relative_path}:{}", compute_file_sha256(&path)?))
-+        })
-+        .collect()
-+}
-+
-+fn compute_file_sha256(path: &Path) -> Result<String> {
-+    let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
-+    let mut hasher = Sha256::new();
-+    hasher.update(&bytes);
-+    Ok(hex::encode(hasher.finalize()))
-+}
-+
- pub fn render_inventory_json(inventory: &SuiteInventory) -> Result<String> {
-     let mut json = serde_json::to_string_pretty(inventory).context("failed to serialize suite inventory")?;
-     json.push('\n');
-@@ -331,6 +386,40 @@ fn validate_package_presets(package_presets: &BTreeMap<String, String>, manifest
-     Ok(())
- }
- 
-+fn validate_generated_registration_keys(
-+    record: &SuiteInventoryRecord,
-+    seen_check_attrs: &mut BTreeMap<String, String>,
-+    seen_flake_attrs: &mut BTreeMap<String, String>,
-+) -> Result<()> {
-+    if !record.target.register_flake_check {
-+        return Ok(());
-+    }
-+
-+    if let Some(check_attr) = record.target.check_attr.as_ref()
-+        && let Some(previous_suite_id) = seen_check_attrs.insert(check_attr.clone(), record.id.clone())
-+    {
-+        bail!(
-+            "duplicate target.check_attr `{}` for suites `{}` and `{}`",
-+            check_attr,
-+            previous_suite_id,
-+            record.id
-+        );
-+    }
-+
-+    if let Some(flake_attr) = record.target.flake_attr.as_ref()
-+        && let Some(previous_suite_id) = seen_flake_attrs.insert(flake_attr.clone(), record.id.clone())
-+    {
-+        bail!(
-+            "duplicate target.flake_attr `{}` for suites `{}` and `{}`",
-+            flake_attr,
-+            previous_suite_id,
-+            record.id
-+        );
-+    }
-+
-+    Ok(())
-+}
-+
- fn to_inventory_record(
-     manifest: SuiteManifest,
-     manifest_path: &Path,
-@@ -527,6 +616,12 @@ mod tests {
- 
-         let inventory = load_inventory(&repo.paths()).expect("inventory should load");
-         assert_eq!(inventory.schema_version, SCHEMA_VERSION);
-+        assert_eq!(inventory.metadata.schema_path, "test-harness/schema.ncl");
-+        assert_eq!(inventory.metadata.manifest_paths, vec![
-+            "test-harness/suites/patchbay/patchbay-fault.ncl".to_string(),
-+            "test-harness/suites/vm/multi-node-kv.ncl".to_string(),
-+        ]);
-+        assert_eq!(inventory.metadata.inputs_sha256.len(), 64);
-         assert_eq!(inventory.suites.len(), 2);
-         assert_eq!(inventory.suites[0].id, "multi-node-kv-vm");
-         assert_eq!(inventory.suites[0].tags, vec!["kv".to_string(), "replication".to_string(), "vm".to_string()]);
-@@ -640,6 +735,115 @@ mod tests {
-         assert!(err.to_string().contains("unsupported aspenCliPackage preset `unsupported-cli`"));
-     }
- 
-+    #[test]
-+    fn duplicate_check_attrs_fail_validation() {
-+        let repo = TestRepo::new();
-+        repo.write_nix_file("nix/tests/multi-node-kv.nix");
-+        repo.write_nix_file("nix/tests/multi-node-blob.nix");
-+        repo.write_manifest(
-+            "vm/multi-node-kv.ncl",
-+            r#"
-+            {
-+              id = "multi-node-kv-vm",
-+              layer = "vm",
-+              owner = "kv",
-+              runtime_class = "nixos-vm",
-+              prerequisites = ["nix-command"],
-+              tags = ["kv"],
-+              target = {
-+                kind = "nix-build",
-+                flake_attr = "checks.x86_64-linux.alpha-shared-vm-check",
-+                check_attr = "shared-vm-check",
-+                nix_file = "nix/tests/multi-node-kv.nix",
-+                package_presets = {
-+                  aspenNodePackage = "full-aspen-node",
-+                  aspenCliPackage = "full-aspen-cli",
-+                },
-+                register_flake_check = true,
-+              },
-+            }
-+            "#,
-+        );
-+        repo.write_manifest(
-+            "vm/multi-node-blob.ncl",
-+            r#"
-+            {
-+              id = "multi-node-blob-vm",
-+              layer = "vm",
-+              owner = "blob",
-+              runtime_class = "nixos-vm",
-+              prerequisites = ["nix-command"],
-+              tags = ["blob"],
-+              target = {
-+                kind = "nix-build",
-+                flake_attr = "checks.x86_64-linux.beta-shared-vm-check",
-+                check_attr = "shared-vm-check",
-+                nix_file = "nix/tests/multi-node-blob.nix",
-+                package_presets = {
-+                  aspenNodePackage = "full-aspen-node",
-+                  aspenCliPackage = "full-aspen-cli",
-+                },
-+                register_flake_check = true,
-+              },
-+            }
-+            "#,
-+        );
-+
-+        let err = load_inventory(&repo.paths()).expect_err("duplicate check attrs must fail");
-+        let message = err.to_string();
-+        assert!(message.contains("duplicate target.check_attr `shared-vm-check`"));
-+    }
-+
-+    #[test]
-+    fn stale_inventory_is_rejected() {
-+        let repo = TestRepo::new();
-+        repo.write_manifest(
-+            "rust/job-integration.ncl",
-+            r#"
-+            {
-+              id = "job-integration",
-+              layer = "rust-integration",
-+              owner = "jobs",
-+              runtime_class = "real-network",
-+              prerequisites = ["network-access"],
-+              tags = ["jobs"],
-+              target = {
-+                kind = "cargo-nextest",
-+                package = "aspen",
-+                test = "job_integration_test",
-+              },
-+            }
-+            "#,
-+        );
-+
-+        let original_inventory = load_inventory(&repo.paths()).expect("original inventory should load");
-+        write_inventory(&original_inventory, &repo.paths().output_path).expect("inventory should write");
-+
-+        repo.write_manifest(
-+            "rust/job-integration.ncl",
-+            r#"
-+            {
-+              id = "job-integration",
-+              layer = "rust-integration",
-+              owner = "jobs",
-+              runtime_class = "real-network",
-+              prerequisites = ["network-access"],
-+              tags = ["jobs", "updated"],
-+              target = {
-+                kind = "cargo-nextest",
-+                package = "aspen",
-+                test = "job_integration_test",
-+              },
-+            }
-+            "#,
-+        );
-+
-+        let current_inventory = load_inventory(&repo.paths()).expect("updated inventory should load");
-+        let err = ensure_inventory_is_current(&current_inventory, &repo.paths().output_path)
-+            .expect_err("stale inventory must fail the freshness check");
-+        assert!(err.to_string().contains(GENERATED_STALE_MESSAGE));
-+    }
-+
-     struct TestRepo {
-         temp_dir: TempDir,
-     }
-diff --git a/flake.nix b/flake.nix
-index 4a1f6c07d..5a24988d2 100644
---- a/flake.nix
-+++ b/flake.nix
-@@ -2493,8 +2493,10 @@
- 
-           # Set of checks that are run: `nix flake check`
-           checks = let
--            testHarnessInventory =
--              builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json);
-+            testHarnessMetadata = import ./nix/tests/lib/test-harness-metadata.nix {inherit lib;};
-+            testHarnessInventory = testHarnessMetadata.ensureInventoryFresh ./. (
-+              builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json)
-+            );
-             generatedHarnessChecks = import ./nix/tests/lib/generated-harness-checks.nix {
-               inherit lib system pkgs bins;
-               inventory = testHarnessInventory;
-diff --git a/nix/tests/lib/test-harness-metadata.nix b/nix/tests/lib/test-harness-metadata.nix
-new file mode 100644
-index 000000000..23f43cd2e
---- /dev/null
-+++ b/nix/tests/lib/test-harness-metadata.nix
-@@ -0,0 +1,51 @@
-+{lib}: let
-+  staleMessage = "test harness inventory is stale; run `scripts/test-harness.sh export`";
-+
-+  readManifestEntries = dir: prefix: let
-+    entries = builtins.readDir dir;
-+  in
-+    lib.concatMap
-+    (name: let
-+      kind = entries.${name};
-+      relative =
-+        if prefix == ""
-+        then name
-+        else "${prefix}/${name}";
-+      path = dir + "/${name}";
-+    in
-+      if kind == "directory"
-+      then readManifestEntries path relative
-+      else if kind == "regular" && lib.hasSuffix ".ncl" name
-+      then [
-+        {
-+          inherit path relative;
-+        }
-+      ]
-+      else [])
-+    (builtins.attrNames entries);
-+
-+  currentMetadataImpl = repoRoot: let
-+    manifestEntries = readManifestEntries (repoRoot + "/test-harness/suites") "test-harness/suites";
-+    manifestPaths = map (entry: entry.relative) manifestEntries;
-+    inputLines =
-+      [
-+        "test-harness/schema.ncl:${builtins.hashFile "sha256" (repoRoot + "/test-harness/schema.ncl")}"
-+      ]
-+      ++ map (entry: "${entry.relative}:${builtins.hashFile "sha256" entry.path}") manifestEntries;
-+  in {
-+    manifest_paths = manifestPaths;
-+    inputs_sha256 = builtins.hashString "sha256" (lib.concatStringsSep "\n" inputLines);
-+  };
-+in {
-+  currentMetadata = currentMetadataImpl;
-+
-+  ensureInventoryFresh = repoRoot: inventory: let
-+    metadata = inventory.metadata or (throw "test harness inventory is missing metadata");
-+    current = currentMetadataImpl repoRoot;
-+  in
-+    if metadata.manifest_paths != current.manifest_paths
-+    then throw staleMessage
-+    else if metadata.inputs_sha256 != current.inputs_sha256
-+    then throw staleMessage
-+    else inventory;
-+}
-diff --git a/openspec/changes/testing-harness-control-plane/design.md b/openspec/changes/testing-harness-control-plane/design.md
-index 7f5a0c393..ead1c56a8 100644
---- a/openspec/changes/testing-harness-control-plane/design.md
-+++ b/openspec/changes/testing-harness-control-plane/design.md
-@@ -7,6 +7,7 @@ That duplication makes focused validation expensive and brittle. Adding or recla
- ## Goals / Non-Goals
- 
- **Goals:**
-+
- - Make Nickel metadata the source of truth for suite identity, layer, ownership, runtime class, prerequisites, tags, and execution targets.
- - Generate Rust- and Nix-consumable inventory outputs from that metadata so test grouping and registration stop drifting.
- - Consolidate shared harness APIs under `crates/aspen-testing*` and retire the parallel real-cluster bootstrap path in `tests/support/`.
-@@ -14,6 +15,7 @@ That duplication makes focused validation expensive and brittle. Adding or recla
- - Emit machine-readable reports that expose retries, skips, runtime hotspots, and coverage-by-layer gaps.
- 
- **Non-Goals:**
-+
- - Rewriting every existing test in one change.
- - Replacing nextest, NixOS VM tests, patchbay, or madsim with a new runner.
- - Adding line-coverage tooling or changing production behavior.
-diff --git a/openspec/changes/testing-harness-control-plane/proposal.md b/openspec/changes/testing-harness-control-plane/proposal.md
-index be38e61ca..917514605 100644
---- a/openspec/changes/testing-harness-control-plane/proposal.md
-+++ b/openspec/changes/testing-harness-control-plane/proposal.md
-@@ -13,11 +13,13 @@ Aspen has broad test coverage, but the harness is managed through duplicated fil
- ## Capabilities
- 
- ### New Capabilities
-+
- - `test-suite-metadata`: Nickel manifests define suite metadata and drive generated selection, grouping, and registration outputs.
- - `test-harness-runtime`: Shared harness APIs cover cluster lifecycle, wait conditions, and layer-specific helpers for real-cluster, madsim, patchbay, and VM-backed tests.
- - `test-harness-reporting`: Test runs emit machine-readable reporting for retries, runtime hotspots, skipped suites, and coverage-by-layer summaries.
- 
- ### Modified Capabilities
-+
- - `patchbay-harness`: Patchbay tests participate in the shared metadata and harness control plane instead of being configured as a standalone special case.
- 
- ## Impact
+diff --git a/openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt b/openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt
+index e69de29bb..32d0e5f17 100644
+--- a/openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt
++++ b/openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt
+@@ -0,0 +1,2 @@
++$ markdownlint AGENTS.md openspec/changes/testing-harness-control-plane/proposal.md openspec/changes/testing-harness-control-plane/design.md openspec/changes/testing-harness-control-plane/specs/patchbay-harness/spec.md openspec/changes/testing-harness-control-plane/specs/test-harness-reporting/spec.md openspec/changes/testing-harness-control-plane/specs/test-harness-runtime/spec.md openspec/changes/testing-harness-control-plane/specs/test-suite-metadata/spec.md openspec/changes/testing-harness-control-plane/tasks.md openspec/changes/testing-harness-control-plane/verification.md
++PASS: markdownlint harness docs
+diff --git a/openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt b/openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt
+index 76d41ef48..5c52d8c8f 100644
+--- a/openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt
++++ b/openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt
+@@ -1,4 +1,4 @@
+ OK: openspec/changes/testing-harness-control-plane
+   tasks: 19 total / 8 checked
+-  changed files listed: 22
++  changed files listed: 7
+   verification artifacts: 13
+diff --git a/openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt b/openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt
+index e69de29bb..f5809defe 100644
+--- a/openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt
++++ b/openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt
+@@ -0,0 +1,2 @@
++$ shellcheck scripts/test-harness.sh
++PASS: shellcheck scripts/test-harness.sh
 diff --git a/openspec/changes/testing-harness-control-plane/verification.md b/openspec/changes/testing-harness-control-plane/verification.md
-index 308850275..6ca07880c 100644
+index 6ca07880c..ab0f8528a 100644
 --- a/openspec/changes/testing-harness-control-plane/verification.md
 +++ b/openspec/changes/testing-harness-control-plane/verification.md
-@@ -2,25 +2,28 @@
+@@ -4,26 +4,11 @@
  
- ## Implementation Evidence
- 
--- Changed file: `AGENTS.md`
  - Changed file: `.agent/napkin.md`
-+- Changed file: `AGENTS.md`
-+- Changed file: `Cargo.lock`
- - Changed file: `crates/aspen-testing/Cargo.toml`
--- Changed file: `crates/aspen-testing/src/lib.rs`
- - Changed file: `crates/aspen-testing/src/suite_inventory.rs`
--- Changed file: `crates/aspen-testing/src/bin/aspen-test-harness.rs`
--- Changed file: `scripts/test-harness.sh`
--- Changed file: `test-harness/schema.ncl`
--- Changed file: `test-harness/suites/rust/job-integration.ncl`
--- Changed file: `test-harness/suites/rust/blob-replication.ncl`
--- Changed file: `test-harness/suites/patchbay/patchbay-nat.ncl`
--- Changed file: `test-harness/suites/patchbay/patchbay-fault.ncl`
--- Changed file: `test-harness/suites/vm/multi-node-kv.ncl`
--- Changed file: `test-harness/suites/vm/multi-node-blob.ncl`
--- Changed file: `test-harness/generated/inventory.json`
--- Changed file: `nix/tests/lib/generated-harness-checks.nix`
- - Changed file: `flake.nix`
--- Changed file: `openspec/changes/testing-harness-control-plane/tasks.md`
-+- Changed file: `nix/tests/lib/test-harness-metadata.nix`
-+- Changed file: `openspec/changes/testing-harness-control-plane/design.md`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/cargo-test-suite-inventory.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-flake-stale-inventory-fail.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-fail.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-pass.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-stale-inventory.txt`
-+- Changed file: `openspec/changes/testing-harness-control-plane/proposal.md`
+ - Changed file: `AGENTS.md`
+-- Changed file: `Cargo.lock`
+-- Changed file: `crates/aspen-testing/Cargo.toml`
+-- Changed file: `crates/aspen-testing/src/suite_inventory.rs`
+-- Changed file: `flake.nix`
+-- Changed file: `nix/tests/lib/test-harness-metadata.nix`
+-- Changed file: `openspec/changes/testing-harness-control-plane/design.md`
+-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/cargo-test-suite-inventory.txt`
+ - Changed file: `openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt`
+ - Changed file: `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
+-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-flake-stale-inventory-fail.txt`
+-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`
+-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-fail.txt`
+-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-pass.txt`
+ - Changed file: `openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt`
+ - Changed file: `openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt`
+-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-stale-inventory.txt`
+-- Changed file: `openspec/changes/testing-harness-control-plane/proposal.md`
  - Changed file: `openspec/changes/testing-harness-control-plane/verification.md`
-+- Changed file: `scripts/test-harness.sh`
-+- Changed file: `test-harness/generated/inventory.json`
+-- Changed file: `scripts/test-harness.sh`
+-- Changed file: `test-harness/generated/inventory.json`
  
  ## Task Coverage
  
-@@ -31,16 +34,16 @@
-   - Evidence: `test-harness/suites/rust/job-integration.ncl`, `test-harness/suites/rust/blob-replication.ncl`, `test-harness/suites/patchbay/patchbay-nat.ncl`, `test-harness/suites/patchbay/patchbay-fault.ncl`, `test-harness/suites/vm/multi-node-kv.ncl`, `test-harness/suites/vm/multi-node-blob.ncl`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
- 
- - [x] 1.3 Add a validation/export command that fails on invalid or stale suite metadata.
--  - Evidence: `crates/aspen-testing/src/suite_inventory.rs`, `crates/aspen-testing/src/bin/aspen-test-harness.rs`, `scripts/test-harness.sh`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-export.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-check.txt`, `openspec/changes/testing-harness-control-plane/evidence/cargo-test-suite-inventory.txt`
-+  - Evidence: `crates/aspen-testing/src/suite_inventory.rs`, `crates/aspen-testing/src/bin/aspen-test-harness.rs`, `scripts/test-harness.sh`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-export.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-check.txt`, `openspec/changes/testing-harness-control-plane/evidence/cargo-test-suite-inventory.txt`, `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-fail.txt`
- 
- - [x] 2.1 Generate a normalized machine-consumable inventory from the Nickel manifests for Rust and Nix consumers.
-   - Evidence: `crates/aspen-testing/src/suite_inventory.rs`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-export.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
- 
- - [x] 2.2 Wire `flake.nix` VM or long-running suite registration to generated inventory data instead of a hand-maintained per-suite block.
--  - Evidence: `nix/tests/lib/generated-harness-checks.nix`, `flake.nix`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
-+  - Evidence: `nix/tests/lib/generated-harness-checks.nix`, `nix/tests/lib/test-harness-metadata.nix`, `flake.nix`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`, `openspec/changes/testing-harness-control-plane/evidence/nix-eval-flake-stale-inventory-fail.txt`, `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-pass.txt`, `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-fail.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
- 
- - [x] 2.3 Update focused test selection entry points (`nextest` helpers, test scripts, or equivalent commands) to resolve grouping from generated inventory data.
--  - Evidence: `scripts/test-harness.sh`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-patchbay.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-vm-commands.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
-+  - Evidence: `scripts/test-harness.sh`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-check.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-patchbay.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-vm-commands.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-stale-inventory.txt`, `openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
- 
- - [x] 2.4 Register patchbay suites in the shared metadata and generated inventory path.
-   - Evidence: `test-harness/suites/patchbay/patchbay-nat.ncl`, `test-harness/suites/patchbay/patchbay-fault.ncl`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-patchbay.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
-@@ -50,7 +53,7 @@
+@@ -53,7 +38,7 @@
  
  ## Review Scope Snapshot
  
--### `git diff HEAD -- AGENTS.md .agent/napkin.md crates/aspen-testing/Cargo.toml crates/aspen-testing/src/lib.rs crates/aspen-testing/src/suite_inventory.rs crates/aspen-testing/src/bin/aspen-test-harness.rs scripts/test-harness.sh test-harness/schema.ncl test-harness/suites test-harness/generated/inventory.json nix/tests/lib/generated-harness-checks.nix flake.nix openspec/changes/testing-harness-control-plane/tasks.md openspec/changes/testing-harness-control-plane/verification.md`
-+### `git diff HEAD -- .agent/napkin.md AGENTS.md Cargo.lock crates/aspen-testing/Cargo.toml crates/aspen-testing/src/suite_inventory.rs flake.nix nix/tests/lib/test-harness-metadata.nix openspec/changes/testing-harness-control-plane/design.md openspec/changes/testing-harness-control-plane/proposal.md openspec/changes/testing-harness-control-plane/verification.md scripts/test-harness.sh test-harness/generated/inventory.json`
+-### `git diff HEAD -- .agent/napkin.md AGENTS.md Cargo.lock crates/aspen-testing/Cargo.toml crates/aspen-testing/src/suite_inventory.rs flake.nix nix/tests/lib/test-harness-metadata.nix openspec/changes/testing-harness-control-plane/design.md openspec/changes/testing-harness-control-plane/proposal.md openspec/changes/testing-harness-control-plane/verification.md scripts/test-harness.sh test-harness/generated/inventory.json`
++### `git diff HEAD -- .agent/napkin.md AGENTS.md openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt openspec/changes/testing-harness-control-plane/verification.md`
  
  - Status: captured
  - Artifact: `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
-@@ -87,6 +90,36 @@
- - Status: pass
- - Artifact: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`
+@@ -128,3 +113,4 @@
+ ## Notes
  
-+### `python - <<'PY' ...; nix eval --raw .#checks.x86_64-linux.multi-node-kv-test.name`
-+
-+- Status: fail as expected after temporarily corrupting `test-harness/generated/inventory.json`, then restoring it
-+- Artifact: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-flake-stale-inventory-fail.txt`
-+
-+### `nix eval --impure --raw --expr 'let lib = (import <nixpkgs> {}).lib; helper = import ./nix/tests/lib/test-harness-metadata.nix { inherit lib; }; inventory = builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json); in (helper.ensureInventoryFresh ./. inventory).metadata.inputs_sha256'`
-+
-+- Status: pass
-+- Artifact: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-pass.txt`
-+
-+### `nix eval --impure --expr 'let lib = (import <nixpkgs> {}).lib; helper = import ./nix/tests/lib/test-harness-metadata.nix { inherit lib; }; inventory = builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json); broken = inventory // { metadata = inventory.metadata // { inputs_sha256 = "broken"; }; }; in helper.ensureInventoryFresh ./. broken'`
-+
-+- Status: fail as expected
-+- Artifact: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-fail.txt`
-+
-+### `python - <<'PY' ...; scripts/test-harness.sh list --layer vm --format ids`
-+
-+- Status: fail as expected after temporarily corrupting `test-harness/generated/inventory.json`, then restoring it
-+- Artifact: `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-stale-inventory.txt`
-+
-+### `shellcheck scripts/test-harness.sh`
-+
-+- Status: pass
-+- Artifact: `openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt`
-+
-+### `markdownlint AGENTS.md openspec/changes/testing-harness-control-plane/*.md openspec/changes/testing-harness-control-plane/specs/**/*.md`
-+
-+- Status: pass
-+- Artifact: `openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt`
-+
- ### `scripts/openspec-preflight.sh openspec/changes/testing-harness-control-plane`
- 
- - Status: pass
-diff --git a/scripts/test-harness.sh b/scripts/test-harness.sh
-index ad5eb71f3..4e6093fdd 100755
---- a/scripts/test-harness.sh
-+++ b/scripts/test-harness.sh
-@@ -26,11 +26,8 @@ run_inventory_tool() {
-   cargo run -q -p aspen-testing --bin aspen-test-harness -- "$@"
- }
- 
--ensure_inventory_exists() {
--  if [[ ! -f "$inventory_path" ]]; then
--    echo "missing $inventory_path; run 'scripts/test-harness.sh export'" >&2
--    exit 1
--  fi
-+ensure_inventory_is_current() {
-+  run_inventory_tool check >/dev/null
- }
- 
- jq_selection() {
-@@ -119,7 +116,7 @@ case "$subcommand" in
-     ;;
-   list|run)
-     cd "$repo_root"
--    ensure_inventory_exists
-+    ensure_inventory_is_current
- 
-     suite_id=""
-     layer=""
-diff --git a/test-harness/generated/inventory.json b/test-harness/generated/inventory.json
-index 4a30fb417..13837e520 100644
---- a/test-harness/generated/inventory.json
-+++ b/test-harness/generated/inventory.json
-@@ -1,5 +1,17 @@
- {
-   "schema_version": 1,
-+  "metadata": {
-+    "schema_path": "test-harness/schema.ncl",
-+    "manifest_paths": [
-+      "test-harness/suites/patchbay/patchbay-fault.ncl",
-+      "test-harness/suites/patchbay/patchbay-nat.ncl",
-+      "test-harness/suites/rust/blob-replication.ncl",
-+      "test-harness/suites/rust/job-integration.ncl",
-+      "test-harness/suites/vm/multi-node-blob.ncl",
-+      "test-harness/suites/vm/multi-node-kv.ncl"
-+    ],
-+    "inputs_sha256": "674fda5c16b6579623ee79cc2db78463810bef1b2a61aae315ac3ca0caecc1c6"
-+  },
-   "suites": [
-     {
-       "id": "blob-replication",
+ - This verification covers the metadata/inventory/control-plane slice only. Shared harness facade, wait helpers, and reporting tasks remain open.
++- This follow-up narrows the changed-files snapshot to the review-evidence fixes plus the `AGENTS.md` and `.agent/napkin.md` harness notes; the cited code artifacts above remain unchanged from the earlier metadata implementation commits.

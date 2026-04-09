@@ -219,6 +219,7 @@ cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
 - `scripts/test-harness.sh export` regenerates `test-harness/generated/inventory.json`; `scripts/test-harness.sh check` fails on stale or invalid metadata.
 - `scripts/test-harness.sh list ...` and `scripts/test-harness.sh run ...` now call the freshness check before reading the generated inventory.
 - `flake.nix` rejects stale `test-harness/generated/inventory.json` during eval by comparing the committed metadata hash and manifest path list against the current Nickel inputs.
+- When proving freshness enforcement, capture end-to-end failures at the consumer boundary: temporarily corrupt `test-harness/generated/inventory.json`, show `scripts/test-harness.sh list ...` fails, then restore the file before continuing.
 
 ### Nix Apps (without entering shell)
 

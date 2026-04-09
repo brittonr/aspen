@@ -103,7 +103,7 @@
 | 2026-03-27 | `git-remote-aspen` federated clone path (`fed:` URL) silently returns empty repo | Fixed: `federation_import_objects` now uses `import_objects()` (plural) with topological sort instead of sequential `import_object()`. Objects arriving in non-dependency order (commit before tree) no longer fail silently. |
 | 2026-04-09 | Shell-parity audit said dogfood federation should tolerate an already-federated repo, but the code only relied on the current handler being idempotent | When an audit names idempotency/parity behavior, codify it in the caller with a unit-tested helper instead of assuming server semantics stay unchanged |
 | 2026-04-09 | `repo_root=$(cd ... && pwd)` captured the path twice because `CDPATH` made `cd` print to stdout inside a command substitution | In repo scripts, use `CDPATH=` when deriving paths with `cd ... && pwd` so `repo_root` stays single-line |
-| 2026-04-09 | Harness metadata freshness was only checked on `export`/`check`, so `list`/`run` and flake eval could consume stale `test-harness/generated/inventory.json` | Generated metadata needs consumer-side freshness gates too: shell entry points should run `scripts/test-harness.sh check`, and `flake.nix` should reject stale inventory during eval |
+| 2026-04-09 | Harness metadata freshness was only checked on `export`/`check`, so `list`/`run` and flake eval could consume stale `test-harness/generated/inventory.json` | Generated metadata needs consumer-side freshness gates too: shell entry points should run `scripts/test-harness.sh check`, `flake.nix` should reject stale inventory during eval, and saved evidence should exercise those consumer boundaries instead of only the helper function |
 
 ### Deploy / Dogfood
 

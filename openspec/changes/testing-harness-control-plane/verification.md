@@ -4,26 +4,11 @@
 
 - Changed file: `.agent/napkin.md`
 - Changed file: `AGENTS.md`
-- Changed file: `Cargo.lock`
-- Changed file: `crates/aspen-testing/Cargo.toml`
-- Changed file: `crates/aspen-testing/src/suite_inventory.rs`
-- Changed file: `flake.nix`
-- Changed file: `nix/tests/lib/test-harness-metadata.nix`
-- Changed file: `openspec/changes/testing-harness-control-plane/design.md`
-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/cargo-test-suite-inventory.txt`
 - Changed file: `openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt`
 - Changed file: `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-flake-stale-inventory-fail.txt`
-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`
-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-fail.txt`
-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-harness-metadata-pass.txt`
 - Changed file: `openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt`
 - Changed file: `openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt`
-- Changed file: `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-stale-inventory.txt`
-- Changed file: `openspec/changes/testing-harness-control-plane/proposal.md`
 - Changed file: `openspec/changes/testing-harness-control-plane/verification.md`
-- Changed file: `scripts/test-harness.sh`
-- Changed file: `test-harness/generated/inventory.json`
 
 ## Task Coverage
 
@@ -53,7 +38,7 @@
 
 ## Review Scope Snapshot
 
-### `git diff HEAD -- .agent/napkin.md AGENTS.md Cargo.lock crates/aspen-testing/Cargo.toml crates/aspen-testing/src/suite_inventory.rs flake.nix nix/tests/lib/test-harness-metadata.nix openspec/changes/testing-harness-control-plane/design.md openspec/changes/testing-harness-control-plane/proposal.md openspec/changes/testing-harness-control-plane/verification.md scripts/test-harness.sh test-harness/generated/inventory.json`
+### `git diff HEAD -- .agent/napkin.md AGENTS.md openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt openspec/changes/testing-harness-control-plane/verification.md`
 
 - Status: captured
 - Artifact: `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
@@ -128,3 +113,4 @@
 ## Notes
 
 - This verification covers the metadata/inventory/control-plane slice only. Shared harness facade, wait helpers, and reporting tasks remain open.
+- This follow-up narrows the changed-files snapshot to the review-evidence fixes plus the `AGENTS.md` and `.agent/napkin.md` harness notes; the cited code artifacts above remain unchanged from the earlier metadata implementation commits.
