@@ -1,0 +1,19 @@
+=== test-harness.sh check ===
+suite inventory is current
+
+=== test-harness.sh list --layer patchbay --format commands ===
+cargo nextest run -P patchbay -p aspen-testing-patchbay --test patchbay_fault_tests
+cargo nextest run -P patchbay -p aspen-testing-patchbay --test patchbay_nat_tests
+
+=== test-harness.sh list --layer vm --format commands ===
+nix build .#checks.x86_64-linux.multi-node-blob-test
+nix build .#checks.x86_64-linux.multi-node-kv-test
+
+=== cargo test -p aspen-testing-core --lib ===
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+=== cargo test -p aspen-testing --lib ===
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+=== shellcheck scripts/test-harness.sh ===
+PASS

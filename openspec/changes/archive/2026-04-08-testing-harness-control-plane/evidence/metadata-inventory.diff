@@ -8,9 +8,9 @@ index fbca38a1c..f7e9f0c73 100644
  | 2026-04-09 | `repo_root=$(cd ... && pwd)` captured the path twice because `CDPATH` made `cd` print to stdout inside a command substitution | In repo scripts, use `CDPATH=` when deriving paths with `cd ... && pwd` so `repo_root` stays single-line |
 -| 2026-04-09 | Harness metadata freshness was only checked on `export`/`check`, so `list`/`run` and flake eval could consume stale `test-harness/generated/inventory.json` | Generated metadata needs consumer-side freshness gates too: shell entry points should run `scripts/test-harness.sh check`, and `flake.nix` should reject stale inventory during eval |
 +| 2026-04-09 | Harness metadata freshness was only checked on `export`/`check`, so `list`/`run` and flake eval could consume stale `test-harness/generated/inventory.json` | Generated metadata needs consumer-side freshness gates too: shell entry points should run `scripts/test-harness.sh check`, `flake.nix` should reject stale inventory during eval, and saved evidence should exercise those consumer boundaries instead of only the helper function |
- 
+
  ### Deploy / Dogfood
- 
+
 diff --git a/AGENTS.md b/AGENTS.md
 index c1d51e861..3f69270fe 100644
 --- a/AGENTS.md
@@ -20,9 +20,9 @@ index c1d51e861..3f69270fe 100644
  - `scripts/test-harness.sh list ...` and `scripts/test-harness.sh run ...` now call the freshness check before reading the generated inventory.
  - `flake.nix` rejects stale `test-harness/generated/inventory.json` during eval by comparing the committed metadata hash and manifest path list against the current Nickel inputs.
 +- When proving freshness enforcement, capture end-to-end failures at the consumer boundary: temporarily corrupt `test-harness/generated/inventory.json`, show `scripts/test-harness.sh list ...` fails, then restore the file before continuing.
- 
+
  ### Nix Apps (without entering shell)
- 
+
 diff --git a/openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt b/openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt
 index e69de29bb..32d0e5f17 100644
 --- a/openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt
@@ -52,7 +52,7 @@ index 6ca07880c..ab0f8528a 100644
 --- a/openspec/changes/testing-harness-control-plane/verification.md
 +++ b/openspec/changes/testing-harness-control-plane/verification.md
 @@ -4,26 +4,11 @@
- 
+
  - Changed file: `.agent/napkin.md`
  - Changed file: `AGENTS.md`
 -- Changed file: `Cargo.lock`
@@ -75,20 +75,20 @@ index 6ca07880c..ab0f8528a 100644
  - Changed file: `openspec/changes/testing-harness-control-plane/verification.md`
 -- Changed file: `scripts/test-harness.sh`
 -- Changed file: `test-harness/generated/inventory.json`
- 
+
  ## Task Coverage
- 
+
 @@ -53,7 +38,7 @@
- 
+
  ## Review Scope Snapshot
- 
+
 -### `git diff HEAD -- .agent/napkin.md AGENTS.md Cargo.lock crates/aspen-testing/Cargo.toml crates/aspen-testing/src/suite_inventory.rs flake.nix nix/tests/lib/test-harness-metadata.nix openspec/changes/testing-harness-control-plane/design.md openspec/changes/testing-harness-control-plane/proposal.md openspec/changes/testing-harness-control-plane/verification.md scripts/test-harness.sh test-harness/generated/inventory.json`
 +### `git diff HEAD -- .agent/napkin.md AGENTS.md openspec/changes/testing-harness-control-plane/evidence/markdownlint-harness-docs.txt openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt openspec/changes/testing-harness-control-plane/evidence/shellcheck-test-harness.txt openspec/changes/testing-harness-control-plane/verification.md`
- 
+
  - Status: captured
  - Artifact: `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
 @@ -128,3 +113,4 @@
  ## Notes
- 
+
  - This verification covers the metadata/inventory/control-plane slice only. Shared harness facade, wait helpers, and reporting tasks remain open.
 +- This follow-up narrows the changed-files snapshot to the review-evidence fixes plus the `AGENTS.md` and `.agent/napkin.md` harness notes; the cited code artifacts above remain unchanged from the earlier metadata implementation commits.

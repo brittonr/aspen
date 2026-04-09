@@ -19,4 +19,3 @@ test suite_inventory::tests::stale_inventory_is_rejected ... ok
 test suite_inventory::tests::load_inventory_normalizes_and_sorts_records ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
-
