@@ -1,0 +1,1739 @@
+diff --git a/.agent/napkin.md b/.agent/napkin.md
+index 166609bb2..2b5b9e4c1 100644
+--- a/.agent/napkin.md
++++ b/.agent/napkin.md
+@@ -102,6 +102,7 @@
+ | 2026-03-27 | Federation cluster key ≠ iroh secret key → `FederatedId` mismatch → FEDERATION_DISABLED | Federation cluster key MUST match iroh secret key (NixOS tests already do this) |
+ | 2026-03-27 | `git-remote-aspen` federated clone path (`fed:` URL) silently returns empty repo | Fixed: `federation_import_objects` now uses `import_objects()` (plural) with topological sort instead of sequential `import_object()`. Objects arriving in non-dependency order (commit before tree) no longer fail silently. |
+ | 2026-04-09 | Shell-parity audit said dogfood federation should tolerate an already-federated repo, but the code only relied on the current handler being idempotent | When an audit names idempotency/parity behavior, codify it in the caller with a unit-tested helper instead of assuming server semantics stay unchanged |
++| 2026-04-09 | `repo_root=$(cd ... && pwd)` captured the path twice because `CDPATH` made `cd` print to stdout inside a command substitution | In repo scripts, use `CDPATH=` when deriving paths with `cd ... && pwd` so `repo_root` stays single-line |
+ 
+ ### Deploy / Dogfood
+ 
+@@ -253,6 +254,10 @@
+ - `AlertEvaluate` takes explicit `now_us` (FCIS). Periodic evaluator on leader only.
+ - Metric TTL: default 24h, max 7d
+ 
++**Testing harness:**
++
++- `aspen-testing` is the intended shared harness layer, but root integration tests still carry a parallel `tests/support/real_cluster.rs` cluster bootstrapper. When improving test infrastructure, audit both paths instead of assuming all real-cluster helpers live under `crates/aspen-testing*`.
++
+ **unit2nix Coverage:**
+ 
+ - 68/80 crates. 12 excluded (stubs, sandbox-incompatible, CARGO_BIN_EXE, vendored)
+diff --git a/AGENTS.md b/AGENTS.md
+index 49b2c6305..cf384f6fd 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -210,8 +210,15 @@ cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
+ - **quick**: Skips slow tests (proptest, chaos, madsim_multi, crash recovery)
+ - **ci**: Extended 120s timeouts, fail-fast disabled
+ - **network**: For tests requiring real network access
++- **patchbay**: Namespace-backed patchbay suites (use `scripts/test-harness.sh list --layer patchbay --format commands` to resolve the generated commands)
+ - **snix**: All snix/nix-build tests (use `scripts/test-snix.sh`)
+ 
++### Harness Metadata
++
++- Suite manifests live under `test-harness/suites/` with the Nickel schema at `test-harness/schema.ncl`.
++- `scripts/test-harness.sh export` regenerates `test-harness/generated/inventory.json`; `scripts/test-harness.sh check` fails on stale or invalid metadata.
++- `scripts/test-harness.sh list ...` resolves focused suite selections from the generated inventory for cargo-nextest and `nix build` entry points.
++
+ ### Nix Apps (without entering shell)
+ 
+ ```bash
+diff --git a/Cargo.lock b/Cargo.lock
+index 64609f5cf..dd8745c78 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2766,11 +2766,13 @@ dependencies = [
+  "async-trait",
+  "base64 0.22.1",
+  "blake3",
++ "clap",
+  "hex",
+  "iroh",
+  "iroh-base",
+  "mad-turmoil",
+  "madsim",
++ "nickel-lang",
+  "nix 0.29.0",
+  "openraft",
+  "parking_lot",
+@@ -2784,6 +2786,7 @@ dependencies = [
+  "thiserror 2.0.18",
+  "tokio",
+  "tracing",
++ "walkdir",
+ ]
+ 
+ [[package]]
+diff --git a/crates/aspen-testing/Cargo.toml b/crates/aspen-testing/Cargo.toml
+index 2a9fe2a0c..f39e65ea8 100644
+--- a/crates/aspen-testing/Cargo.toml
++++ b/crates/aspen-testing/Cargo.toml
+@@ -65,6 +65,11 @@ thiserror = "2.0"
+ serde = { version = "1.0", features = ["derive"] }
+ serde_json = "1.0"
+ 
++# CLI + Nickel metadata export
++clap = { workspace = true, features = ["derive"] }
++nickel-lang = { workspace = true }
++walkdir = "2"
++
+ # Utilities
+ rand = "0.9"
+ tracing = "0.1"
+diff --git a/crates/aspen-testing/src/bin/aspen-test-harness.rs b/crates/aspen-testing/src/bin/aspen-test-harness.rs
+new file mode 100644
+index 000000000..ee6b25bf8
+--- /dev/null
++++ b/crates/aspen-testing/src/bin/aspen-test-harness.rs
+@@ -0,0 +1,42 @@
++use anyhow::Result;
++use aspen_testing::suite_inventory::InventoryPaths;
++use aspen_testing::suite_inventory::ensure_inventory_is_current;
++use aspen_testing::suite_inventory::load_inventory;
++use aspen_testing::suite_inventory::write_inventory;
++use clap::Parser;
++use clap::Subcommand;
++
++#[derive(Debug, Parser)]
++#[command(name = "aspen-test-harness")]
++#[command(about = "Validate and export shared test harness suite inventory")]
++struct Cli {
++    #[command(subcommand)]
++    command: Command,
++}
++
++#[derive(Debug, Subcommand)]
++enum Command {
++    /// Regenerate the committed suite inventory from Nickel manifests.
++    Export,
++    /// Fail if the committed suite inventory is stale or invalid.
++    Check,
++}
++
++fn main() -> Result<()> {
++    let cli = Cli::parse();
++    let paths = InventoryPaths::default();
++    let inventory = load_inventory(&paths)?;
++
++    match cli.command {
++        Command::Export => {
++            write_inventory(&inventory, &paths.output_path)?;
++            println!("wrote {}", paths.output_path.display());
++            Ok(())
++        }
++        Command::Check => {
++            ensure_inventory_is_current(&inventory, &paths.output_path)?;
++            println!("suite inventory is current");
++            Ok(())
++        }
++    }
++}
+diff --git a/crates/aspen-testing/src/lib.rs b/crates/aspen-testing/src/lib.rs
+index 9da5a363a..c32392c72 100644
+--- a/crates/aspen-testing/src/lib.rs
++++ b/crates/aspen-testing/src/lib.rs
+@@ -83,6 +83,8 @@ pub use aspen_testing_fixtures::CoordinationTestHelper;
+ pub use aspen_testing_fixtures::KvStoreBuilder;
+ pub use aspen_testing_fixtures::MockEndpointProvider;
+ 
++pub mod suite_inventory;
++
+ // In-memory Raft router (requires router feature - pulls aspen-raft)
+ #[cfg(feature = "router")]
+ pub mod router;
+diff --git a/crates/aspen-testing/src/suite_inventory.rs b/crates/aspen-testing/src/suite_inventory.rs
+new file mode 100644
+index 000000000..fea53bedb
+--- /dev/null
++++ b/crates/aspen-testing/src/suite_inventory.rs
+@@ -0,0 +1,683 @@
++use std::collections::BTreeMap;
++use std::collections::BTreeSet;
++use std::fs;
++use std::path::Path;
++use std::path::PathBuf;
++
++use anyhow::Context as _;
++use anyhow::Result;
++use anyhow::bail;
++use anyhow::ensure;
++use nickel_lang::Context as NickelContext;
++use nickel_lang::Error as NickelError;
++use nickel_lang::ErrorFormat;
++use serde::Deserialize;
++use serde::Serialize;
++use walkdir::WalkDir;
++
++const SCHEMA_VERSION: u32 = 1;
++const GENERATED_STALE_MESSAGE: &str = "suite inventory is stale; run `scripts/test-harness.sh export`";
++
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct InventoryPaths {
++    pub repo_root: PathBuf,
++    pub schema_path: PathBuf,
++    pub manifest_root: PathBuf,
++    pub output_path: PathBuf,
++}
++
++impl Default for InventoryPaths {
++    fn default() -> Self {
++        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
++        Self {
++            schema_path: repo_root.join("test-harness/schema.ncl"),
++            manifest_root: repo_root.join("test-harness/suites"),
++            output_path: repo_root.join("test-harness/generated/inventory.json"),
++            repo_root,
++        }
++    }
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
++pub struct SuiteInventory {
++    pub schema_version: u32,
++    pub suites: Vec<SuiteInventoryRecord>,
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
++pub struct SuiteInventoryRecord {
++    pub id: String,
++    pub display_name: Option<String>,
++    pub description: Option<String>,
++    pub layer: SuiteLayer,
++    pub owner: String,
++    pub runtime_class: RuntimeClass,
++    pub prerequisites: Vec<Prerequisite>,
++    pub tags: Vec<String>,
++    pub manifest_path: String,
++    pub target: SuiteTarget,
++}
++
++#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
++#[serde(rename_all = "kebab-case")]
++pub enum SuiteLayer {
++    RustIntegration,
++    Patchbay,
++    Vm,
++}
++
++#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
++#[serde(rename_all = "kebab-case")]
++pub enum RuntimeClass {
++    RealNetwork,
++    LinuxNamespaces,
++    NixosVm,
++}
++
++#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
++#[serde(rename_all = "kebab-case")]
++pub enum Prerequisite {
++    LinuxUserns,
++    NetworkAccess,
++    Nftables,
++    NixCommand,
++    TrafficControl,
++}
++
++#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
++pub struct SuiteTarget {
++    pub kind: SuiteTargetKind,
++    pub package: Option<String>,
++    pub test: Option<String>,
++    pub profile: Option<String>,
++    pub features: Vec<String>,
++    pub run_ignored: Option<RunIgnoredMode>,
++    pub flake_attr: Option<String>,
++    pub check_attr: Option<String>,
++    pub nix_file: Option<String>,
++    pub package_presets: BTreeMap<String, String>,
++    pub register_flake_check: bool,
++}
++
++#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
++#[serde(rename_all = "kebab-case")]
++pub enum SuiteTargetKind {
++    CargoNextest,
++    NixBuild,
++}
++
++#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
++#[serde(rename_all = "kebab-case")]
++pub enum RunIgnoredMode {
++    Default,
++    All,
++    IgnoredOnly,
++}
++
++#[derive(Debug, Clone, Deserialize)]
++struct SuiteManifest {
++    id: String,
++    #[serde(default)]
++    display_name: Option<String>,
++    #[serde(default)]
++    description: Option<String>,
++    layer: String,
++    owner: String,
++    runtime_class: String,
++    #[serde(default)]
++    prerequisites: Vec<String>,
++    #[serde(default)]
++    tags: Vec<String>,
++    target: RawSuiteTarget,
++}
++
++#[derive(Debug, Clone, Deserialize)]
++struct RawSuiteTarget {
++    kind: String,
++    package: Option<String>,
++    test: Option<String>,
++    profile: Option<String>,
++    #[serde(default)]
++    features: Vec<String>,
++    #[serde(default)]
++    run_ignored: Option<String>,
++    #[serde(default)]
++    flake_attr: Option<String>,
++    #[serde(default)]
++    check_attr: Option<String>,
++    #[serde(default)]
++    nix_file: Option<String>,
++    #[serde(default)]
++    package_presets: BTreeMap<String, String>,
++    #[serde(default)]
++    register_flake_check: bool,
++}
++
++pub fn load_inventory(paths: &InventoryPaths) -> Result<SuiteInventory> {
++    let schema_source = fs::read_to_string(&paths.schema_path)
++        .with_context(|| format!("failed to read schema {}", paths.schema_path.display()))?;
++    let manifest_paths = discover_manifest_paths(&paths.manifest_root)?;
++    ensure!(!manifest_paths.is_empty(), "no suite manifests found under {}", paths.manifest_root.display());
++
++    let mut seen_ids = BTreeSet::new();
++    let mut suites = Vec::with_capacity(manifest_paths.len());
++    for manifest_path in manifest_paths {
++        let manifest = load_manifest(&manifest_path, &schema_source)?;
++        ensure!(
++            seen_ids.insert(manifest.id.clone()),
++            "duplicate suite id `{}` in {}",
++            manifest.id,
++            manifest_path.display()
++        );
++        validate_manifest(&manifest, &manifest_path, &paths.repo_root)?;
++        suites.push(to_inventory_record(manifest, &manifest_path, &paths.repo_root)?);
++    }
++    suites.sort_by(|left, right| left.id.cmp(&right.id));
++
++    Ok(SuiteInventory {
++        schema_version: SCHEMA_VERSION,
++        suites,
++    })
++}
++
++pub fn render_inventory_json(inventory: &SuiteInventory) -> Result<String> {
++    let mut json = serde_json::to_string_pretty(inventory).context("failed to serialize suite inventory")?;
++    json.push('\n');
++    Ok(json)
++}
++
++pub fn write_inventory(inventory: &SuiteInventory, output_path: &Path) -> Result<()> {
++    let json = render_inventory_json(inventory)?;
++    if let Some(parent) = output_path.parent() {
++        fs::create_dir_all(parent).with_context(|| format!("failed to create {}", parent.display()))?;
++    }
++    fs::write(output_path, json).with_context(|| format!("failed to write {}", output_path.display()))
++}
++
++pub fn ensure_inventory_is_current(inventory: &SuiteInventory, output_path: &Path) -> Result<()> {
++    let expected = render_inventory_json(inventory)?;
++    let actual = fs::read_to_string(output_path)
++        .with_context(|| format!("failed to read generated inventory {}", output_path.display()))?;
++    ensure!(actual == expected, "{GENERATED_STALE_MESSAGE}");
++    Ok(())
++}
++
++fn discover_manifest_paths(manifest_root: &Path) -> Result<Vec<PathBuf>> {
++    let mut manifest_paths = Vec::new();
++    for entry in WalkDir::new(manifest_root) {
++        let entry = entry.with_context(|| format!("failed to walk {}", manifest_root.display()))?;
++        if entry.file_type().is_file() && entry.path().extension().and_then(|ext| ext.to_str()) == Some("ncl") {
++            manifest_paths.push(entry.into_path());
++        }
++    }
++    manifest_paths.sort();
++    Ok(manifest_paths)
++}
++
++fn load_manifest(manifest_path: &Path, schema_source: &str) -> Result<SuiteManifest> {
++    let content = fs::read_to_string(manifest_path)
++        .with_context(|| format!("failed to read manifest {}", manifest_path.display()))?;
++    let wrapped = format!(
++        r#"
++let schema = {schema_source} in
++({content}) | schema.SuiteManifest
++"#
++    );
++    let mut ctx = NickelContext::new().with_source_name(manifest_path.display().to_string());
++    let expr = ctx
++        .eval_deep(&wrapped)
++        .map_err(|err| anyhow::anyhow!(format_nickel_error(err)))
++        .with_context(|| format!("failed to evaluate manifest {}", manifest_path.display()))?;
++    expr.to_serde::<SuiteManifest>()
++        .map_err(|err| anyhow::anyhow!(err))
++        .with_context(|| format!("failed to deserialize manifest {}", manifest_path.display()))
++}
++
++fn validate_manifest(manifest: &SuiteManifest, manifest_path: &Path, repo_root: &Path) -> Result<()> {
++    validate_suite_id(&manifest.id, manifest_path)?;
++    let layer = parse_layer(&manifest.layer, manifest_path)?;
++    let target_kind = parse_target_kind(&manifest.target.kind, manifest_path)?;
++
++    match layer {
++        SuiteLayer::RustIntegration | SuiteLayer::Patchbay => {
++            ensure!(
++                target_kind == SuiteTargetKind::CargoNextest,
++                "{} must use target.kind = cargo-nextest for {} suites",
++                manifest_path.display(),
++                manifest.layer
++            );
++        }
++        SuiteLayer::Vm => {
++            ensure!(
++                target_kind == SuiteTargetKind::NixBuild,
++                "{} must use target.kind = nix-build for vm suites",
++                manifest_path.display()
++            );
++        }
++    }
++    match target_kind {
++        SuiteTargetKind::CargoNextest => validate_cargo_target(&manifest.target, manifest_path),
++        SuiteTargetKind::NixBuild => validate_nix_target(&manifest.target, manifest_path, repo_root),
++    }
++}
++
++fn validate_suite_id(id: &str, manifest_path: &Path) -> Result<()> {
++    ensure!(!id.is_empty(), "{} has an empty suite id", manifest_path.display());
++    ensure!(
++        id.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '.'),
++        "{} has invalid suite id `{}`; use lowercase ASCII, digits, `-`, or `.`",
++        manifest_path.display(),
++        id
++    );
++    Ok(())
++}
++
++fn validate_cargo_target(target: &RawSuiteTarget, manifest_path: &Path) -> Result<()> {
++    ensure!(target.package.is_some(), "{} is missing target.package", manifest_path.display());
++    ensure!(target.test.is_some(), "{} is missing target.test", manifest_path.display());
++    ensure!(
++        !target.register_flake_check,
++        "{} cannot enable register_flake_check for cargo-nextest targets",
++        manifest_path.display()
++    );
++    Ok(())
++}
++
++fn validate_nix_target(target: &RawSuiteTarget, manifest_path: &Path, repo_root: &Path) -> Result<()> {
++    let flake_attr = target
++        .flake_attr
++        .as_deref()
++        .ok_or_else(|| anyhow::anyhow!("{} is missing target.flake_attr", manifest_path.display()))?;
++    let check_attr = target
++        .check_attr
++        .as_deref()
++        .ok_or_else(|| anyhow::anyhow!("{} is missing target.check_attr", manifest_path.display()))?;
++    let nix_file = target
++        .nix_file
++        .as_deref()
++        .ok_or_else(|| anyhow::anyhow!("{} is missing target.nix_file", manifest_path.display()))?;
++
++    ensure!(
++        flake_attr.ends_with(check_attr),
++        "{} has mismatched flake/check attrs: `{}` vs `{}`",
++        manifest_path.display(),
++        flake_attr,
++        check_attr
++    );
++
++    let nix_path = repo_root.join(nix_file);
++    ensure!(nix_path.exists(), "{} references missing nix file {}", manifest_path.display(), nix_path.display());
++    validate_package_presets(&target.package_presets, manifest_path)
++}
++
++fn validate_package_presets(package_presets: &BTreeMap<String, String>, manifest_path: &Path) -> Result<()> {
++    for (name, value) in package_presets {
++        match name.as_str() {
++            "aspenNodePackage" => ensure!(
++                matches!(value.as_str(), "full-aspen-node" | "ci-aspen-node"),
++                "{} has unsupported aspenNodePackage preset `{}`",
++                manifest_path.display(),
++                value
++            ),
++            "aspenCliPackage" => ensure!(
++                matches!(value.as_str(), "full-aspen-cli" | "ci-aspen-cli"),
++                "{} has unsupported aspenCliPackage preset `{}`",
++                manifest_path.display(),
++                value
++            ),
++            _ => bail!("{} uses unsupported target.package_presets key `{}`", manifest_path.display(), name),
++        }
++    }
++    Ok(())
++}
++
++fn to_inventory_record(
++    manifest: SuiteManifest,
++    manifest_path: &Path,
++    repo_root: &Path,
++) -> Result<SuiteInventoryRecord> {
++    let SuiteManifest {
++        id,
++        display_name,
++        description,
++        layer,
++        owner,
++        runtime_class,
++        prerequisites,
++        mut tags,
++        target,
++    } = manifest;
++    let RawSuiteTarget {
++        kind,
++        package,
++        test,
++        profile,
++        mut features,
++        run_ignored,
++        flake_attr,
++        check_attr,
++        nix_file,
++        package_presets,
++        register_flake_check,
++    } = target;
++
++    let layer = parse_layer(&layer, manifest_path)?;
++    let runtime_class = parse_runtime_class(&runtime_class, manifest_path)?;
++    let mut prerequisites = parse_prerequisites(&prerequisites, manifest_path)?;
++    let kind = parse_target_kind(&kind, manifest_path)?;
++    let run_ignored = run_ignored.as_deref().map(|value| parse_run_ignored(value, manifest_path)).transpose()?;
++
++    sort_dedup_strings(&mut tags);
++    prerequisites.sort();
++    prerequisites.dedup();
++    sort_dedup_strings(&mut features);
++
++    let manifest_path = repo_relative_path(manifest_path, repo_root)?;
++
++    Ok(SuiteInventoryRecord {
++        id,
++        display_name,
++        description,
++        layer,
++        owner,
++        runtime_class,
++        prerequisites,
++        tags,
++        manifest_path,
++        target: SuiteTarget {
++            kind,
++            package,
++            test,
++            profile,
++            features,
++            run_ignored,
++            flake_attr,
++            check_attr,
++            nix_file,
++            package_presets,
++            register_flake_check,
++        },
++    })
++}
++
++fn parse_layer(value: &str, manifest_path: &Path) -> Result<SuiteLayer> {
++    match value {
++        "rust-integration" => Ok(SuiteLayer::RustIntegration),
++        "patchbay" => Ok(SuiteLayer::Patchbay),
++        "vm" => Ok(SuiteLayer::Vm),
++        _ => bail!("{} has unsupported layer `{}`", manifest_path.display(), value),
++    }
++}
++
++fn parse_runtime_class(value: &str, manifest_path: &Path) -> Result<RuntimeClass> {
++    match value {
++        "real-network" => Ok(RuntimeClass::RealNetwork),
++        "linux-namespaces" => Ok(RuntimeClass::LinuxNamespaces),
++        "nixos-vm" => Ok(RuntimeClass::NixosVm),
++        _ => bail!("{} has unsupported runtime_class `{}`", manifest_path.display(), value),
++    }
++}
++
++fn parse_prerequisites(values: &[String], manifest_path: &Path) -> Result<Vec<Prerequisite>> {
++    values
++        .iter()
++        .map(|value| match value.as_str() {
++            "linux-userns" => Ok(Prerequisite::LinuxUserns),
++            "network-access" => Ok(Prerequisite::NetworkAccess),
++            "nftables" => Ok(Prerequisite::Nftables),
++            "nix-command" => Ok(Prerequisite::NixCommand),
++            "traffic-control" => Ok(Prerequisite::TrafficControl),
++            _ => bail!("{} has unsupported prerequisite `{}`", manifest_path.display(), value),
++        })
++        .collect()
++}
++
++fn parse_target_kind(value: &str, manifest_path: &Path) -> Result<SuiteTargetKind> {
++    match value {
++        "cargo-nextest" => Ok(SuiteTargetKind::CargoNextest),
++        "nix-build" => Ok(SuiteTargetKind::NixBuild),
++        _ => bail!("{} has unsupported target.kind `{}`", manifest_path.display(), value),
++    }
++}
++
++fn parse_run_ignored(value: &str, manifest_path: &Path) -> Result<RunIgnoredMode> {
++    match value {
++        "default" => Ok(RunIgnoredMode::Default),
++        "all" => Ok(RunIgnoredMode::All),
++        "ignored-only" => Ok(RunIgnoredMode::IgnoredOnly),
++        _ => bail!("{} has unsupported target.run_ignored `{}`", manifest_path.display(), value),
++    }
++}
++
++fn repo_relative_path(path: &Path, repo_root: &Path) -> Result<String> {
++    let relative = path
++        .strip_prefix(repo_root)
++        .with_context(|| format!("{} is not under repo root {}", path.display(), repo_root.display()))?;
++    Ok(relative.to_string_lossy().replace('\\', "/"))
++}
++
++fn sort_dedup_strings(values: &mut Vec<String>) {
++    values.sort();
++    values.dedup();
++}
++
++fn format_nickel_error(err: NickelError) -> String {
++    let mut output = Vec::new();
++    if err.format(&mut output, ErrorFormat::Text).is_ok() {
++        return String::from_utf8_lossy(&output).into_owned();
++    }
++    format!("{err:?}")
++}
++
++#[cfg(test)]
++mod tests {
++    use tempfile::TempDir;
++
++    use super::*;
++
++    const TEST_SCHEMA: &str = include_str!("../../../test-harness/schema.ncl");
++
++    #[test]
++    fn load_inventory_normalizes_and_sorts_records() {
++        let repo = TestRepo::new();
++        repo.write_nix_file("nix/tests/multi-node-kv.nix");
++        repo.write_manifest(
++            "patchbay/patchbay-fault.ncl",
++            r#"
++            {
++              id = "patchbay-fault",
++              layer = "patchbay",
++              owner = "networking",
++              runtime_class = "linux-namespaces",
++              prerequisites = ["traffic-control", "linux-userns", "nftables", "linux-userns"],
++              tags = ["recovery", "patchbay", "recovery"],
++              target = {
++                kind = "cargo-nextest",
++                package = "aspen-testing-patchbay",
++                test = "patchbay_fault_tests",
++                profile = "patchbay",
++              },
++            }
++            "#,
++        );
++        repo.write_manifest(
++            "vm/multi-node-kv.ncl",
++            r#"
++            {
++              id = "multi-node-kv-vm",
++              layer = "vm",
++              owner = "kv",
++              runtime_class = "nixos-vm",
++              prerequisites = ["nix-command"],
++              tags = ["vm", "kv", "replication", "kv"],
++              target = {
++                kind = "nix-build",
++                flake_attr = "checks.x86_64-linux.multi-node-kv-test",
++                check_attr = "multi-node-kv-test",
++                nix_file = "nix/tests/multi-node-kv.nix",
++                package_presets = {
++                  aspenNodePackage = "full-aspen-node",
++                  aspenCliPackage = "full-aspen-cli",
++                },
++                register_flake_check = true,
++              },
++            }
++            "#,
++        );
++
++        let inventory = load_inventory(&repo.paths()).expect("inventory should load");
++        assert_eq!(inventory.schema_version, SCHEMA_VERSION);
++        assert_eq!(inventory.suites.len(), 2);
++        assert_eq!(inventory.suites[0].id, "multi-node-kv-vm");
++        assert_eq!(inventory.suites[0].tags, vec!["kv".to_string(), "replication".to_string(), "vm".to_string()]);
++        assert_eq!(inventory.suites[1].prerequisites, vec![
++            Prerequisite::LinuxUserns,
++            Prerequisite::Nftables,
++            Prerequisite::TrafficControl,
++        ]);
++    }
++
++    #[test]
++    fn duplicate_suite_ids_fail_validation() {
++        let repo = TestRepo::new();
++        repo.write_manifest(
++            "rust/one.ncl",
++            r#"
++            {
++              id = "duplicate-suite",
++              layer = "rust-integration",
++              owner = "jobs",
++              runtime_class = "real-network",
++              prerequisites = ["network-access"],
++              tags = ["jobs"],
++              target = {
++                kind = "cargo-nextest",
++                package = "aspen",
++                test = "job_integration_test",
++              },
++            }
++            "#,
++        );
++        repo.write_manifest(
++            "rust/two.ncl",
++            r#"
++            {
++              id = "duplicate-suite",
++              layer = "rust-integration",
++              owner = "blob",
++              runtime_class = "real-network",
++              prerequisites = ["network-access"],
++              tags = ["blob"],
++              target = {
++                kind = "cargo-nextest",
++                package = "aspen",
++                test = "blob_replication_integration_test",
++              },
++            }
++            "#,
++        );
++
++        let err = load_inventory(&repo.paths()).expect_err("duplicate ids must fail");
++        assert!(err.to_string().contains("duplicate suite id `duplicate-suite`"));
++    }
++
++    #[test]
++    fn schema_rejects_unsupported_layer_values() {
++        let repo = TestRepo::new();
++        repo.write_manifest(
++            "rust/invalid-layer.ncl",
++            r#"
++            {
++              id = "invalid-layer",
++              layer = "madsim",
++              owner = "jobs",
++              runtime_class = "real-network",
++              prerequisites = ["network-access"],
++              tags = ["jobs"],
++              target = {
++                kind = "cargo-nextest",
++                package = "aspen",
++                test = "job_integration_test",
++              },
++            }
++            "#,
++        );
++
++        let err = load_inventory(&repo.paths()).expect_err("invalid layer must fail");
++        assert!(err.to_string().contains("failed to evaluate manifest"));
++    }
++
++    #[test]
++    fn nix_targets_require_known_package_presets() {
++        let repo = TestRepo::new();
++        repo.write_nix_file("nix/tests/multi-node-kv.nix");
++        repo.write_manifest(
++            "vm/multi-node-kv.ncl",
++            r#"
++            {
++              id = "multi-node-kv-vm",
++              layer = "vm",
++              owner = "kv",
++              runtime_class = "nixos-vm",
++              prerequisites = ["nix-command"],
++              tags = ["kv"],
++              target = {
++                kind = "nix-build",
++                flake_attr = "checks.x86_64-linux.multi-node-kv-test",
++                check_attr = "multi-node-kv-test",
++                nix_file = "nix/tests/multi-node-kv.nix",
++                package_presets = {
++                  aspenNodePackage = "full-aspen-node",
++                  aspenCliPackage = "unsupported-cli",
++                },
++                register_flake_check = true,
++              },
++            }
++            "#,
++        );
++
++        let err = load_inventory(&repo.paths()).expect_err("invalid package preset must fail");
++        assert!(err.to_string().contains("unsupported aspenCliPackage preset `unsupported-cli`"));
++    }
++
++    struct TestRepo {
++        temp_dir: TempDir,
++    }
++
++    impl TestRepo {
++        fn new() -> Self {
++            let temp_dir = TempDir::new().expect("temp dir should exist");
++            let repo_root = temp_dir.path();
++            fs::create_dir_all(repo_root.join("test-harness/suites")).expect("manifest dir should exist");
++            fs::write(repo_root.join("test-harness/schema.ncl"), TEST_SCHEMA).expect("schema should write");
++            Self { temp_dir }
++        }
++
++        fn paths(&self) -> InventoryPaths {
++            let repo_root = self.temp_dir.path().to_path_buf();
++            InventoryPaths {
++                schema_path: repo_root.join("test-harness/schema.ncl"),
++                manifest_root: repo_root.join("test-harness/suites"),
++                output_path: repo_root.join("test-harness/generated/inventory.json"),
++                repo_root,
++            }
++        }
++
++        fn write_manifest(&self, relative_path: &str, content: &str) {
++            let path = self.temp_dir.path().join("test-harness/suites").join(relative_path);
++            if let Some(parent) = path.parent() {
++                fs::create_dir_all(parent).expect("manifest parent should exist");
++            }
++            fs::write(path, content).expect("manifest should write");
++        }
++
++        fn write_nix_file(&self, relative_path: &str) {
++            let path = self.temp_dir.path().join(relative_path);
++            if let Some(parent) = path.parent() {
++                fs::create_dir_all(parent).expect("nix parent should exist");
++            }
++            fs::write(path, "{ pkgs, ... }: pkgs.runCommand \"stub\" {} \"touch $out\"")
++                .expect("nix file should write");
++        }
++    }
++}
+diff --git a/flake.nix b/flake.nix
+index a869a623d..4a1f6c07d 100644
+--- a/flake.nix
++++ b/flake.nix
+@@ -2492,7 +2492,14 @@
+           formatter = pkgs.alejandra;
+ 
+           # Set of checks that are run: `nix flake check`
+-          checks =
++          checks = let
++            testHarnessInventory =
++              builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json);
++            generatedHarnessChecks = import ./nix/tests/lib/generated-harness-checks.nix {
++              inherit lib system pkgs bins;
++              inventory = testHarnessInventory;
++            };
++          in
+             {
+               # Verify ciSrc doesn't contain crates with unvendored git deps.
+               # These would fail in the nix sandbox (no network access).
+@@ -3021,16 +3028,6 @@
+                 aspenCliPackage = bins.full-aspen-cli;
+               };
+ 
+-              # Multi-node KV test: write/read replication, CAS across nodes,
+-              # batch write replication, scan consistency, NOT_LEADER routing,
+-              # delete propagation, large value replication, failover survival.
+-              # Build: nix build .#checks.x86_64-linux.multi-node-kv-test
+-              multi-node-kv-test = import ./nix/tests/multi-node-kv.nix {
+-                inherit pkgs;
+-                aspenNodePackage = bins.full-aspen-node;
+-                aspenCliPackage = bins.full-aspen-cli;
+-              };
+-
+               # Multi-node coordination test: distributed lock exclusion,
+               # counter linearizability, semaphore capacity, RW lock guarantees,
+               # queue cross-node ops, failover survival.
+@@ -3042,16 +3039,6 @@
+                 aspenCliPlugins = bins.full-aspen-cli-plugins;
+               };
+ 
+-              # Multi-node blob test: cross-node blob retrieval, blobs from
+-              # different nodes, replication status, large blob replication,
+-              # protection across nodes, repair cycle, failover survival.
+-              # Build: nix build .#checks.x86_64-linux.multi-node-blob-test
+-              multi-node-blob-test = import ./nix/tests/multi-node-blob.nix {
+-                inherit pkgs;
+-                aspenNodePackage = bins.full-aspen-node;
+-                aspenCliPackage = bins.full-aspen-cli;
+-              };
+-
+               # KV operations test: CRUD, CAS/CAD, scan/pagination, batch ops,
+               # binary data, large values, special characters.
+               # Build: nix build .#checks.x86_64-linux.kv-operations-test
+@@ -3812,7 +3799,8 @@
+                   ciInitrd = ciVmConfig.config.system.build.initialRamdisk;
+                   ciToplevel = ciVmConfig.config.system.build.toplevel;
+                 };
+-            };
++            }
++            // generatedHarnessChecks;
+ 
+           # Base apps available on all systems
+           apps = {
+diff --git a/nix/tests/lib/generated-harness-checks.nix b/nix/tests/lib/generated-harness-checks.nix
+new file mode 100644
+index 000000000..adafca104
+--- /dev/null
++++ b/nix/tests/lib/generated-harness-checks.nix
+@@ -0,0 +1,48 @@
++{
++  lib,
++  system,
++  pkgs,
++  bins,
++  inventory,
++}: let
++  repoRoot = ../../..;
++
++  packagePreset = name: value:
++    if name == "aspenNodePackage"
++    then
++      if value == "full-aspen-node"
++      then bins.full-aspen-node
++      else if value == "ci-aspen-node"
++      then bins.ci-aspen-node
++      else throw "unsupported generated aspenNodePackage preset: ${value}"
++    else if name == "aspenCliPackage"
++    then
++      if value == "full-aspen-cli"
++      then bins.full-aspen-cli
++      else if value == "ci-aspen-cli"
++      then bins.ci-aspen-cli
++      else throw "unsupported generated aspenCliPackage preset: ${value}"
++    else throw "unsupported generated package preset key: ${name}";
++
++  suiteImportArgs = suite: let
++    mappedPresets = lib.mapAttrs packagePreset suite.target.package_presets;
++  in
++    {inherit pkgs;} // mappedPresets;
++
++  generatedVmSuites =
++    builtins.filter (
++      suite:
++        system
++        == "x86_64-linux"
++        && suite.layer == "vm"
++        && suite.target.kind == "nix-build"
++        && suite.target.register_flake_check
++    )
++    inventory.suites;
++in
++  builtins.listToAttrs (map
++    (suite: {
++      name = suite.target.check_attr;
++      value = import (repoRoot + "/${suite.target.nix_file}") (suiteImportArgs suite);
++    })
++    generatedVmSuites)
+diff --git a/openspec/changes/testing-harness-control-plane/tasks.md b/openspec/changes/testing-harness-control-plane/tasks.md
+new file mode 100644
+index 000000000..d4757621a
+--- /dev/null
++++ b/openspec/changes/testing-harness-control-plane/tasks.md
+@@ -0,0 +1,36 @@
++## 1. Nickel Suite Metadata
++
++- [x] 1.1 Define a Nickel schema for test suite manifests, including suite ID, layer, owner, runtime class, prerequisites, tags, and execution target fields.
++- [x] 1.2 Add a manifest directory and author initial Nickel manifests for representative Rust integration, patchbay, and NixOS VM suites.
++- [x] 1.3 Add a validation/export command that fails on invalid or stale suite metadata.
++
++## 2. Generated Inventory and Selection
++
++- [x] 2.1 Generate a normalized machine-consumable inventory from the Nickel manifests for Rust and Nix consumers.
++- [x] 2.2 Wire `flake.nix` VM or long-running suite registration to generated inventory data instead of a hand-maintained per-suite block.
++- [x] 2.3 Update focused test selection entry points (`nextest` helpers, test scripts, or equivalent commands) to resolve grouping from generated inventory data.
++- [x] 2.4 Register patchbay suites in the shared metadata and generated inventory path.
++
++## 3. Shared Harness Facade
++
++- [ ] 3.1 Add shared façade types or traits under `crates/aspen-testing*` for cluster bootstrap, client access, readiness waits, and layer-specific adapters.
++- [ ] 3.2 Migrate the real-cluster bootstrap logic from `tests/support/real_cluster.rs` into the shared testing crates or reduce it to a compatibility wrapper.
++- [ ] 3.3 Update the affected Rust integration suites to use the shared harness facade.
++
++## 4. Wait-Driven Test Flows
++
++- [ ] 4.1 Add bounded Rust wait helpers for leader election, replication, cluster health, and job completion conditions.
++- [ ] 4.2 Add shared NixOS VM readiness helpers under `nix/tests/lib/` for service, socket, cluster, and job waits.
++- [ ] 4.3 Replace fixed-sleep readiness checks in the highest-value Rust and VM suites with the new wait helpers.
++
++## 5. Harness Reporting
++
++- [ ] 5.1 Capture retry counts, retry-only passes, skips, timeout counts, and duration data into a machine-readable run report.
++- [ ] 5.2 Generate a coverage-by-layer summary from suite metadata and run outputs.
++- [ ] 5.3 Expose harness reports through local validation commands and at least one CI-oriented path.
++
++## 6. Verification and Rollout
++
++- [ ] 6.1 Add regression coverage for metadata validation, generated inventory consumers, shared harness APIs, and reporting output.
++- [ ] 6.2 Run focused validation for the migrated harness layers and record the expected commands in repo documentation.
++- [x] 6.3 Update `AGENTS.md` and `.agent/napkin.md` with any non-obvious harness workflow changes discovered during implementation.
+diff --git a/openspec/changes/testing-harness-control-plane/verification.md b/openspec/changes/testing-harness-control-plane/verification.md
+new file mode 100644
+index 000000000..308850275
+--- /dev/null
++++ b/openspec/changes/testing-harness-control-plane/verification.md
+@@ -0,0 +1,97 @@
++# Verification Evidence
++
++## Implementation Evidence
++
++- Changed file: `AGENTS.md`
++- Changed file: `.agent/napkin.md`
++- Changed file: `crates/aspen-testing/Cargo.toml`
++- Changed file: `crates/aspen-testing/src/lib.rs`
++- Changed file: `crates/aspen-testing/src/suite_inventory.rs`
++- Changed file: `crates/aspen-testing/src/bin/aspen-test-harness.rs`
++- Changed file: `scripts/test-harness.sh`
++- Changed file: `test-harness/schema.ncl`
++- Changed file: `test-harness/suites/rust/job-integration.ncl`
++- Changed file: `test-harness/suites/rust/blob-replication.ncl`
++- Changed file: `test-harness/suites/patchbay/patchbay-nat.ncl`
++- Changed file: `test-harness/suites/patchbay/patchbay-fault.ncl`
++- Changed file: `test-harness/suites/vm/multi-node-kv.ncl`
++- Changed file: `test-harness/suites/vm/multi-node-blob.ncl`
++- Changed file: `test-harness/generated/inventory.json`
++- Changed file: `nix/tests/lib/generated-harness-checks.nix`
++- Changed file: `flake.nix`
++- Changed file: `openspec/changes/testing-harness-control-plane/tasks.md`
++- Changed file: `openspec/changes/testing-harness-control-plane/verification.md`
++
++## Task Coverage
++
++- [x] 1.1 Define a Nickel schema for test suite manifests, including suite ID, layer, owner, runtime class, prerequisites, tags, and execution target fields.
++  - Evidence: `test-harness/schema.ncl`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-check.txt`
++
++- [x] 1.2 Add a manifest directory and author initial Nickel manifests for representative Rust integration, patchbay, and NixOS VM suites.
++  - Evidence: `test-harness/suites/rust/job-integration.ncl`, `test-harness/suites/rust/blob-replication.ncl`, `test-harness/suites/patchbay/patchbay-nat.ncl`, `test-harness/suites/patchbay/patchbay-fault.ncl`, `test-harness/suites/vm/multi-node-kv.ncl`, `test-harness/suites/vm/multi-node-blob.ncl`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
++
++- [x] 1.3 Add a validation/export command that fails on invalid or stale suite metadata.
++  - Evidence: `crates/aspen-testing/src/suite_inventory.rs`, `crates/aspen-testing/src/bin/aspen-test-harness.rs`, `scripts/test-harness.sh`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-export.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-check.txt`, `openspec/changes/testing-harness-control-plane/evidence/cargo-test-suite-inventory.txt`
++
++- [x] 2.1 Generate a normalized machine-consumable inventory from the Nickel manifests for Rust and Nix consumers.
++  - Evidence: `crates/aspen-testing/src/suite_inventory.rs`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-export.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
++
++- [x] 2.2 Wire `flake.nix` VM or long-running suite registration to generated inventory data instead of a hand-maintained per-suite block.
++  - Evidence: `nix/tests/lib/generated-harness-checks.nix`, `flake.nix`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
++
++- [x] 2.3 Update focused test selection entry points (`nextest` helpers, test scripts, or equivalent commands) to resolve grouping from generated inventory data.
++  - Evidence: `scripts/test-harness.sh`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-patchbay.txt`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-vm-commands.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
++
++- [x] 2.4 Register patchbay suites in the shared metadata and generated inventory path.
++  - Evidence: `test-harness/suites/patchbay/patchbay-nat.ncl`, `test-harness/suites/patchbay/patchbay-fault.ncl`, `test-harness/generated/inventory.json`, `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-patchbay.txt`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
++
++- [x] 6.3 Update `AGENTS.md` and `.agent/napkin.md` with any non-obvious harness workflow changes discovered during implementation.
++  - Evidence: `AGENTS.md`, `.agent/napkin.md`, `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
++
++## Review Scope Snapshot
++
++### `git diff HEAD -- AGENTS.md .agent/napkin.md crates/aspen-testing/Cargo.toml crates/aspen-testing/src/lib.rs crates/aspen-testing/src/suite_inventory.rs crates/aspen-testing/src/bin/aspen-test-harness.rs scripts/test-harness.sh test-harness/schema.ncl test-harness/suites test-harness/generated/inventory.json nix/tests/lib/generated-harness-checks.nix flake.nix openspec/changes/testing-harness-control-plane/tasks.md openspec/changes/testing-harness-control-plane/verification.md`
++
++- Status: captured
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/metadata-inventory.diff`
++
++## Verification Commands
++
++### `cargo test -p aspen-testing suite_inventory --lib`
++
++- Status: pass
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/cargo-test-suite-inventory.txt`
++
++### `scripts/test-harness.sh export`
++
++- Status: pass
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/test-harness-export.txt`
++
++### `scripts/test-harness.sh check`
++
++- Status: pass
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/test-harness-check.txt`
++
++### `scripts/test-harness.sh list --layer patchbay --format ids`
++
++- Status: pass
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-patchbay.txt`
++
++### `scripts/test-harness.sh list --layer vm --format commands`
++
++- Status: pass
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/test-harness-list-vm-commands.txt`
++
++### `nix eval --raw .#checks.x86_64-linux.multi-node-kv-test.name && nix eval --raw .#checks.x86_64-linux.multi-node-blob-test.name`
++
++- Status: pass
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/nix-eval-generated-vm-checks.txt`
++
++### `scripts/openspec-preflight.sh openspec/changes/testing-harness-control-plane`
++
++- Status: pass
++- Artifact: `openspec/changes/testing-harness-control-plane/evidence/openspec-preflight.txt`
++
++## Notes
++
++- This verification covers the metadata/inventory/control-plane slice only. Shared harness facade, wait helpers, and reporting tasks remain open.
+diff --git a/scripts/test-harness.sh b/scripts/test-harness.sh
+new file mode 100755
+index 000000000..ad5eb71f3
+--- /dev/null
++++ b/scripts/test-harness.sh
+@@ -0,0 +1,203 @@
++#!/usr/bin/env bash
++# Validate/export shared test harness metadata and resolve focused suite selection.
++#
++# Usage:
++#   scripts/test-harness.sh export
++#   scripts/test-harness.sh check
++#   scripts/test-harness.sh list --layer patchbay
++#   scripts/test-harness.sh run --suite multi-node-kv-vm
++
++set -euo pipefail
++
++usage() {
++  cat <<'EOF'
++Usage:
++  scripts/test-harness.sh export
++  scripts/test-harness.sh check
++  scripts/test-harness.sh list [--suite ID] [--layer LAYER] [--owner OWNER] [--runtime-class CLASS] [--tag TAG] [--format ids|json|commands]
++  scripts/test-harness.sh run  [--suite ID] [--layer LAYER] [--owner OWNER] [--runtime-class CLASS] [--tag TAG]
++EOF
++}
++
++repo_root=$(unset CDPATH; cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
++inventory_path="$repo_root/test-harness/generated/inventory.json"
++
++run_inventory_tool() {
++  cargo run -q -p aspen-testing --bin aspen-test-harness -- "$@"
++}
++
++ensure_inventory_exists() {
++  if [[ ! -f "$inventory_path" ]]; then
++    echo "missing $inventory_path; run 'scripts/test-harness.sh export'" >&2
++    exit 1
++  fi
++}
++
++jq_selection() {
++  local suite_id=$1
++  local layer=$2
++  local owner=$3
++  local runtime_class=$4
++  local tag=$5
++
++  jq \
++    --arg suite_id "$suite_id" \
++    --arg layer "$layer" \
++    --arg owner "$owner" \
++    --arg runtime_class "$runtime_class" \
++    --arg tag "$tag" \
++    '
++      .suites
++      | map(
++          select(
++            ($suite_id == "" or .id == $suite_id)
++            and ($layer == "" or .layer == $layer)
++            and ($owner == "" or .owner == $owner)
++            and ($runtime_class == "" or .runtime_class == $runtime_class)
++            and ($tag == "" or (.tags | index($tag) != null))
++          )
++        )
++    ' "$inventory_path"
++}
++
++command_from_suite() {
++  local suite_json=$1
++  local kind
++  kind=$(jq -r '.target.kind' <<<"$suite_json")
++
++  case "$kind" in
++    cargo-nextest)
++      local -a cmd=(cargo nextest run)
++      local profile package test_name feature_csv run_ignored
++      profile=$(jq -r '.target.profile // empty' <<<"$suite_json")
++      package=$(jq -r '.target.package // empty' <<<"$suite_json")
++      test_name=$(jq -r '.target.test // empty' <<<"$suite_json")
++      feature_csv=$(jq -r '.target.features | join(",")' <<<"$suite_json")
++      run_ignored=$(jq -r '.target.run_ignored // "default"' <<<"$suite_json")
++
++      if [[ -n "$profile" ]]; then
++        cmd+=(-P "$profile")
++      fi
++      if [[ -n "$package" ]]; then
++        cmd+=(-p "$package")
++      fi
++      if [[ -n "$test_name" ]]; then
++        cmd+=(--test "$test_name")
++      fi
++      if [[ -n "$feature_csv" ]]; then
++        cmd+=(--features "$feature_csv")
++      fi
++      if [[ "$run_ignored" != "default" ]]; then
++        cmd+=(--run-ignored "$run_ignored")
++      fi
++      printf '%q ' "${cmd[@]}"
++      printf '\n'
++      ;;
++    nix-build)
++      local flake_attr
++      flake_attr=$(jq -r '.target.flake_attr' <<<"$suite_json")
++      printf 'nix build .#%q\n' "$flake_attr"
++      ;;
++    *)
++      echo "unsupported suite target kind: $kind" >&2
++      exit 1
++      ;;
++  esac
++}
++
++subcommand=${1:-}
++if [[ -z "$subcommand" ]]; then
++  usage >&2
++  exit 1
++fi
++shift
++
++case "$subcommand" in
++  export|check)
++    cd "$repo_root"
++    run_inventory_tool "$subcommand"
++    ;;
++  list|run)
++    cd "$repo_root"
++    ensure_inventory_exists
++
++    suite_id=""
++    layer=""
++    owner=""
++    runtime_class=""
++    tag=""
++    format="ids"
++
++    while [[ $# -gt 0 ]]; do
++      case "$1" in
++        --suite)
++          suite_id=${2:?missing suite id}
++          shift 2
++          ;;
++        --layer)
++          layer=${2:?missing layer}
++          shift 2
++          ;;
++        --owner)
++          owner=${2:?missing owner}
++          shift 2
++          ;;
++        --runtime-class)
++          runtime_class=${2:?missing runtime class}
++          shift 2
++          ;;
++        --tag)
++          tag=${2:?missing tag}
++          shift 2
++          ;;
++        --format)
++          format=${2:?missing format}
++          shift 2
++          ;;
++        *)
++          usage >&2
++          exit 1
++          ;;
++      esac
++    done
++
++    selected=$(jq_selection "$suite_id" "$layer" "$owner" "$runtime_class" "$tag")
++    count=$(jq 'length' <<<"$selected")
++    if [[ "$count" -eq 0 ]]; then
++      echo "no suites matched the requested filters" >&2
++      exit 1
++    fi
++
++    if [[ "$subcommand" == "list" ]]; then
++      case "$format" in
++        json)
++          jq . <<<"$selected"
++          ;;
++        commands)
++          while IFS= read -r suite_json; do
++            command_from_suite "$suite_json"
++          done < <(jq -c '.[]' <<<"$selected")
++          ;;
++        ids)
++          jq -r '.[].id' <<<"$selected"
++          ;;
++        *)
++          echo "unsupported format: $format" >&2
++          exit 1
++          ;;
++      esac
++      exit 0
++    fi
++
++    while IFS= read -r suite_json; do
++      suite_id=$(jq -r '.id' <<<"$suite_json")
++      resolved_command=$(command_from_suite "$suite_json")
++      echo "+ [$suite_id] $resolved_command"
++      eval "$resolved_command"
++    done < <(jq -c '.[]' <<<"$selected")
++    ;;
++  *)
++    usage >&2
++    exit 1
++    ;;
++esac
+diff --git a/test-harness/generated/inventory.json b/test-harness/generated/inventory.json
+new file mode 100644
+index 000000000..4a30fb417
+--- /dev/null
++++ b/test-harness/generated/inventory.json
+@@ -0,0 +1,199 @@
++{
++  "schema_version": 1,
++  "suites": [
++    {
++      "id": "blob-replication",
++      "display_name": "Blob replication integration tests",
++      "description": "Real-network blob replication coverage for root integration tests.",
++      "layer": "rust-integration",
++      "owner": "blob",
++      "runtime_class": "real-network",
++      "prerequisites": [
++        "network-access"
++      ],
++      "tags": [
++        "blob",
++        "real-cluster",
++        "replication"
++      ],
++      "manifest_path": "test-harness/suites/rust/blob-replication.ncl",
++      "target": {
++        "kind": "cargo-nextest",
++        "package": "aspen",
++        "test": "blob_replication_integration_test",
++        "profile": "network",
++        "features": [
++          "blob"
++        ],
++        "run_ignored": "all",
++        "flake_attr": null,
++        "check_attr": null,
++        "nix_file": null,
++        "package_presets": {},
++        "register_flake_check": false
++      }
++    },
++    {
++      "id": "job-integration",
++      "display_name": "Job integration tests",
++      "description": "Real-cluster job queue and worker execution coverage through root integration tests.",
++      "layer": "rust-integration",
++      "owner": "jobs",
++      "runtime_class": "real-network",
++      "prerequisites": [
++        "network-access"
++      ],
++      "tags": [
++        "jobs",
++        "real-cluster",
++        "rpc"
++      ],
++      "manifest_path": "test-harness/suites/rust/job-integration.ncl",
++      "target": {
++        "kind": "cargo-nextest",
++        "package": "aspen",
++        "test": "job_integration_test",
++        "profile": "network",
++        "features": [
++          "jobs"
++        ],
++        "run_ignored": "all",
++        "flake_attr": null,
++        "check_attr": null,
++        "nix_file": null,
++        "package_presets": {},
++        "register_flake_check": false
++      }
++    },
++    {
++      "id": "multi-node-blob-vm",
++      "display_name": "Multi-node blob VM test",
++      "description": "Three-node NixOS VM coverage for blob replication and failover survival.",
++      "layer": "vm",
++      "owner": "blob",
++      "runtime_class": "nixos-vm",
++      "prerequisites": [
++        "nix-command"
++      ],
++      "tags": [
++        "blob",
++        "replication",
++        "vm"
++      ],
++      "manifest_path": "test-harness/suites/vm/multi-node-blob.ncl",
++      "target": {
++        "kind": "nix-build",
++        "package": null,
++        "test": null,
++        "profile": null,
++        "features": [],
++        "run_ignored": null,
++        "flake_attr": "checks.x86_64-linux.multi-node-blob-test",
++        "check_attr": "multi-node-blob-test",
++        "nix_file": "nix/tests/multi-node-blob.nix",
++        "package_presets": {
++          "aspenCliPackage": "full-aspen-cli",
++          "aspenNodePackage": "full-aspen-node"
++        },
++        "register_flake_check": true
++      }
++    },
++    {
++      "id": "multi-node-kv-vm",
++      "display_name": "Multi-node KV VM test",
++      "description": "Three-node NixOS VM coverage for KV replication and follower forwarding.",
++      "layer": "vm",
++      "owner": "kv",
++      "runtime_class": "nixos-vm",
++      "prerequisites": [
++        "nix-command"
++      ],
++      "tags": [
++        "kv",
++        "replication",
++        "vm"
++      ],
++      "manifest_path": "test-harness/suites/vm/multi-node-kv.ncl",
++      "target": {
++        "kind": "nix-build",
++        "package": null,
++        "test": null,
++        "profile": null,
++        "features": [],
++        "run_ignored": null,
++        "flake_attr": "checks.x86_64-linux.multi-node-kv-test",
++        "check_attr": "multi-node-kv-test",
++        "nix_file": "nix/tests/multi-node-kv.nix",
++        "package_presets": {
++          "aspenCliPackage": "full-aspen-cli",
++          "aspenNodePackage": "full-aspen-node"
++        },
++        "register_flake_check": true
++      }
++    },
++    {
++      "id": "patchbay-fault",
++      "display_name": "Patchbay fault injection tests",
++      "description": "Namespace-backed patchbay coverage for partitions, packet loss, and recovery.",
++      "layer": "patchbay",
++      "owner": "networking",
++      "runtime_class": "linux-namespaces",
++      "prerequisites": [
++        "linux-userns",
++        "nftables",
++        "traffic-control"
++      ],
++      "tags": [
++        "fault-injection",
++        "patchbay",
++        "recovery"
++      ],
++      "manifest_path": "test-harness/suites/patchbay/patchbay-fault.ncl",
++      "target": {
++        "kind": "cargo-nextest",
++        "package": "aspen-testing-patchbay",
++        "test": "patchbay_fault_tests",
++        "profile": "patchbay",
++        "features": [],
++        "run_ignored": null,
++        "flake_attr": null,
++        "check_attr": null,
++        "nix_file": null,
++        "package_presets": {},
++        "register_flake_check": false
++      }
++    },
++    {
++      "id": "patchbay-nat",
++      "display_name": "Patchbay NAT topology tests",
++      "description": "Namespace-backed patchbay coverage for NAT and leader election scenarios.",
++      "layer": "patchbay",
++      "owner": "networking",
++      "runtime_class": "linux-namespaces",
++      "prerequisites": [
++        "linux-userns",
++        "nftables",
++        "traffic-control"
++      ],
++      "tags": [
++        "leader-election",
++        "nat",
++        "patchbay"
++      ],
++      "manifest_path": "test-harness/suites/patchbay/patchbay-nat.ncl",
++      "target": {
++        "kind": "cargo-nextest",
++        "package": "aspen-testing-patchbay",
++        "test": "patchbay_nat_tests",
++        "profile": "patchbay",
++        "features": [],
++        "run_ignored": null,
++        "flake_attr": null,
++        "check_attr": null,
++        "nix_file": null,
++        "package_presets": {},
++        "register_flake_check": false
++      }
++    }
++  ]
++}
+diff --git a/test-harness/schema.ncl b/test-harness/schema.ncl
+new file mode 100644
+index 000000000..85da8705b
+--- /dev/null
++++ b/test-harness/schema.ncl
+@@ -0,0 +1,75 @@
++# Test harness suite metadata schema.
++#
++# Authoritative schema for per-suite Nickel manifests. Exporters validate each
++# manifest against `SuiteManifest`, then normalize the results into committed
++# machine-consumable inventory data.
++
++let contains = fun values value =>
++  std.array.fold_left (fun found item => found || item == value) false values in
++
++let enum_string = fun field allowed =>
++  std.contract.from_validator (fun value =>
++    if std.is_string value && contains allowed value then
++      'Ok
++    else
++      'Error {
++        message = "%{field} must be one of %{std.serialize 'Json allowed}",
++      }
++  ) in
++
++let layer_contract = enum_string "layer" [
++  "rust-integration",
++  "patchbay",
++  "vm",
++] in
++
++let runtime_class_contract = enum_string "runtime_class" [
++  "real-network",
++  "linux-namespaces",
++  "nixos-vm",
++] in
++
++let prerequisite_contract = enum_string "prerequisite" [
++  "network-access",
++  "linux-userns",
++  "nftables",
++  "traffic-control",
++  "nix-command",
++] in
++
++let target_kind_contract = enum_string "target.kind" [
++  "cargo-nextest",
++  "nix-build",
++] in
++
++let run_ignored_contract = enum_string "target.run_ignored" [
++  "default",
++  "all",
++  "ignored-only",
++] in
++
++{
++  SuiteManifest = {
++    id | String,
++    display_name | String | optional,
++    description | String | optional,
++    layer | layer_contract,
++    owner | String,
++    runtime_class | runtime_class_contract,
++    prerequisites | Array prerequisite_contract | default = [],
++    tags | Array String | default = [],
++    target | {
++      kind | target_kind_contract,
++      package | String | optional,
++      test | String | optional,
++      profile | String | optional,
++      features | Array String | default = [],
++      run_ignored | run_ignored_contract | optional,
++      flake_attr | String | optional,
++      check_attr | String | optional,
++      nix_file | String | optional,
++      package_presets | {_ : String} | default = {},
++      register_flake_check | Bool | default = false,
++    },
++  },
++}
+diff --git a/test-harness/suites/patchbay/patchbay-fault.ncl b/test-harness/suites/patchbay/patchbay-fault.ncl
+new file mode 100644
+index 000000000..1d861ebea
+--- /dev/null
++++ b/test-harness/suites/patchbay/patchbay-fault.ncl
+@@ -0,0 +1,16 @@
++{
++  id = "patchbay-fault",
++  display_name = "Patchbay fault injection tests",
++  description = "Namespace-backed patchbay coverage for partitions, packet loss, and recovery.",
++  layer = "patchbay",
++  owner = "networking",
++  runtime_class = "linux-namespaces",
++  prerequisites = ["linux-userns", "nftables", "traffic-control"],
++  tags = ["patchbay", "fault-injection", "recovery"],
++  target = {
++    kind = "cargo-nextest",
++    package = "aspen-testing-patchbay",
++    test = "patchbay_fault_tests",
++    profile = "patchbay",
++  },
++}
+diff --git a/test-harness/suites/patchbay/patchbay-nat.ncl b/test-harness/suites/patchbay/patchbay-nat.ncl
+new file mode 100644
+index 000000000..7a16914d8
+--- /dev/null
++++ b/test-harness/suites/patchbay/patchbay-nat.ncl
+@@ -0,0 +1,16 @@
++{
++  id = "patchbay-nat",
++  display_name = "Patchbay NAT topology tests",
++  description = "Namespace-backed patchbay coverage for NAT and leader election scenarios.",
++  layer = "patchbay",
++  owner = "networking",
++  runtime_class = "linux-namespaces",
++  prerequisites = ["linux-userns", "nftables", "traffic-control"],
++  tags = ["patchbay", "nat", "leader-election"],
++  target = {
++    kind = "cargo-nextest",
++    package = "aspen-testing-patchbay",
++    test = "patchbay_nat_tests",
++    profile = "patchbay",
++  },
++}
+diff --git a/test-harness/suites/rust/blob-replication.ncl b/test-harness/suites/rust/blob-replication.ncl
+new file mode 100644
+index 000000000..7bc5b5fba
+--- /dev/null
++++ b/test-harness/suites/rust/blob-replication.ncl
+@@ -0,0 +1,18 @@
++{
++  id = "blob-replication",
++  display_name = "Blob replication integration tests",
++  description = "Real-network blob replication coverage for root integration tests.",
++  layer = "rust-integration",
++  owner = "blob",
++  runtime_class = "real-network",
++  prerequisites = ["network-access"],
++  tags = ["blob", "replication", "real-cluster"],
++  target = {
++    kind = "cargo-nextest",
++    package = "aspen",
++    test = "blob_replication_integration_test",
++    profile = "network",
++    features = ["blob"],
++    run_ignored = "all",
++  },
++}
+diff --git a/test-harness/suites/rust/job-integration.ncl b/test-harness/suites/rust/job-integration.ncl
+new file mode 100644
+index 000000000..caee5ceaf
+--- /dev/null
++++ b/test-harness/suites/rust/job-integration.ncl
+@@ -0,0 +1,18 @@
++{
++  id = "job-integration",
++  display_name = "Job integration tests",
++  description = "Real-cluster job queue and worker execution coverage through root integration tests.",
++  layer = "rust-integration",
++  owner = "jobs",
++  runtime_class = "real-network",
++  prerequisites = ["network-access"],
++  tags = ["jobs", "rpc", "real-cluster"],
++  target = {
++    kind = "cargo-nextest",
++    package = "aspen",
++    test = "job_integration_test",
++    profile = "network",
++    features = ["jobs"],
++    run_ignored = "all",
++  },
++}
+diff --git a/test-harness/suites/vm/multi-node-blob.ncl b/test-harness/suites/vm/multi-node-blob.ncl
+new file mode 100644
+index 000000000..a9fdb7967
+--- /dev/null
++++ b/test-harness/suites/vm/multi-node-blob.ncl
+@@ -0,0 +1,21 @@
++{
++  id = "multi-node-blob-vm",
++  display_name = "Multi-node blob VM test",
++  description = "Three-node NixOS VM coverage for blob replication and failover survival.",
++  layer = "vm",
++  owner = "blob",
++  runtime_class = "nixos-vm",
++  prerequisites = ["nix-command"],
++  tags = ["blob", "replication", "vm"],
++  target = {
++    kind = "nix-build",
++    flake_attr = "checks.x86_64-linux.multi-node-blob-test",
++    check_attr = "multi-node-blob-test",
++    nix_file = "nix/tests/multi-node-blob.nix",
++    package_presets = {
++      aspenNodePackage = "full-aspen-node",
++      aspenCliPackage = "full-aspen-cli",
++    },
++    register_flake_check = true,
++  },
++}
+diff --git a/test-harness/suites/vm/multi-node-kv.ncl b/test-harness/suites/vm/multi-node-kv.ncl
+new file mode 100644
+index 000000000..f6f9ed95b
+--- /dev/null
++++ b/test-harness/suites/vm/multi-node-kv.ncl
+@@ -0,0 +1,21 @@
++{
++  id = "multi-node-kv-vm",
++  display_name = "Multi-node KV VM test",
++  description = "Three-node NixOS VM coverage for KV replication and follower forwarding.",
++  layer = "vm",
++  owner = "kv",
++  runtime_class = "nixos-vm",
++  prerequisites = ["nix-command"],
++  tags = ["kv", "replication", "vm"],
++  target = {
++    kind = "nix-build",
++    flake_attr = "checks.x86_64-linux.multi-node-kv-test",
++    check_attr = "multi-node-kv-test",
++    nix_file = "nix/tests/multi-node-kv.nix",
++    package_presets = {
++      aspenNodePackage = "full-aspen-node",
++      aspenCliPackage = "full-aspen-cli",
++    },
++    register_flake_check = true,
++  },
++}

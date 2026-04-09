@@ -2766,11 +2766,13 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "blake3",
+ "clap",
  "hex",
  "iroh",
  "iroh-base",
  "mad-turmoil",
  "madsim",
+ "nickel-lang",
  "nix 0.29.0",
  "openraft",
  "parking_lot",
@@ -2784,6 +2786,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "walkdir",
 ]
 
 [[package]]

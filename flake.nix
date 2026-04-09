@@ -2492,7 +2492,14 @@
           formatter = pkgs.alejandra;
 
           # Set of checks that are run: `nix flake check`
-          checks =
+          checks = let
+            testHarnessInventory =
+              builtins.fromJSON (builtins.readFile ./test-harness/generated/inventory.json);
+            generatedHarnessChecks = import ./nix/tests/lib/generated-harness-checks.nix {
+              inherit lib system pkgs bins;
+              inventory = testHarnessInventory;
+            };
+          in
             {
               # Verify ciSrc doesn't contain crates with unvendored git deps.
               # These would fail in the nix sandbox (no network access).
@@ -3021,16 +3028,6 @@
                 aspenCliPackage = bins.full-aspen-cli;
               };
 
-              # Multi-node KV test: write/read replication, CAS across nodes,
-              # batch write replication, scan consistency, NOT_LEADER routing,
-              # delete propagation, large value replication, failover survival.
-              # Build: nix build .#checks.x86_64-linux.multi-node-kv-test
-              multi-node-kv-test = import ./nix/tests/multi-node-kv.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.full-aspen-node;
-                aspenCliPackage = bins.full-aspen-cli;
-              };
-
               # Multi-node coordination test: distributed lock exclusion,
               # counter linearizability, semaphore capacity, RW lock guarantees,
               # queue cross-node ops, failover survival.
@@ -3040,16 +3037,6 @@
                 aspenNodePackage = bins.full-aspen-node-plugins;
                 aspenCliPackage = bins.full-aspen-cli;
                 aspenCliPlugins = bins.full-aspen-cli-plugins;
-              };
-
-              # Multi-node blob test: cross-node blob retrieval, blobs from
-              # different nodes, replication status, large blob replication,
-              # protection across nodes, repair cycle, failover survival.
-              # Build: nix build .#checks.x86_64-linux.multi-node-blob-test
-              multi-node-blob-test = import ./nix/tests/multi-node-blob.nix {
-                inherit pkgs;
-                aspenNodePackage = bins.full-aspen-node;
-                aspenCliPackage = bins.full-aspen-cli;
               };
 
               # KV operations test: CRUD, CAS/CAD, scan/pagination, batch ops,
@@ -3812,7 +3799,8 @@
                   ciInitrd = ciVmConfig.config.system.build.initialRamdisk;
                   ciToplevel = ciVmConfig.config.system.build.toplevel;
                 };
-            };
+            }
+            // generatedHarnessChecks;
 
           # Base apps available on all systems
           apps = {

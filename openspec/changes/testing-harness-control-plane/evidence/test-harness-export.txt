@@ -1,0 +1,1 @@
+wrote /home/brittonr/git/aspen/crates/aspen-testing/../../test-harness/generated/inventory.json

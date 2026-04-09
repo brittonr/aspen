@@ -1,0 +1,2 @@
+nix build .#checks.x86_64-linux.multi-node-blob-test
+nix build .#checks.x86_64-linux.multi-node-kv-test

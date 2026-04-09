@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "suites": [
+    {
+      "id": "blob-replication",
+      "display_name": "Blob replication integration tests",
+      "description": "Real-network blob replication coverage for root integration tests.",
+      "layer": "rust-integration",
+      "owner": "blob",
+      "runtime_class": "real-network",
+      "prerequisites": [
+        "network-access"
+      ],
+      "tags": [
+        "blob",
+        "real-cluster",
+        "replication"
+      ],
+      "manifest_path": "test-harness/suites/rust/blob-replication.ncl",
+      "target": {
+        "kind": "cargo-nextest",
+        "package": "aspen",
+        "test": "blob_replication_integration_test",
+        "profile": "network",
+        "features": [
+          "blob"
+        ],
+        "run_ignored": "all",
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
+      "id": "job-integration",
+      "display_name": "Job integration tests",
+      "description": "Real-cluster job queue and worker execution coverage through root integration tests.",
+      "layer": "rust-integration",
+      "owner": "jobs",
+      "runtime_class": "real-network",
+      "prerequisites": [
+        "network-access"
+      ],
+      "tags": [
+        "jobs",
+        "real-cluster",
+        "rpc"
+      ],
+      "manifest_path": "test-harness/suites/rust/job-integration.ncl",
+      "target": {
+        "kind": "cargo-nextest",
+        "package": "aspen",
+        "test": "job_integration_test",
+        "profile": "network",
+        "features": [
+          "jobs"
+        ],
+        "run_ignored": "all",
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
+      "id": "multi-node-blob-vm",
+      "display_name": "Multi-node blob VM test",
+      "description": "Three-node NixOS VM coverage for blob replication and failover survival.",
+      "layer": "vm",
+      "owner": "blob",
+      "runtime_class": "nixos-vm",
+      "prerequisites": [
+        "nix-command"
+      ],
+      "tags": [
+        "blob",
+        "replication",
+        "vm"
+      ],
+      "manifest_path": "test-harness/suites/vm/multi-node-blob.ncl",
+      "target": {
+        "kind": "nix-build",
+        "package": null,
+        "test": null,
+        "profile": null,
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": "checks.x86_64-linux.multi-node-blob-test",
+        "check_attr": "multi-node-blob-test",
+        "nix_file": "nix/tests/multi-node-blob.nix",
+        "package_presets": {
+          "aspenCliPackage": "full-aspen-cli",
+          "aspenNodePackage": "full-aspen-node"
+        },
+        "register_flake_check": true
+      }
+    },
+    {
+      "id": "multi-node-kv-vm",
+      "display_name": "Multi-node KV VM test",
+      "description": "Three-node NixOS VM coverage for KV replication and follower forwarding.",
+      "layer": "vm",
+      "owner": "kv",
+      "runtime_class": "nixos-vm",
+      "prerequisites": [
+        "nix-command"
+      ],
+      "tags": [
+        "kv",
+        "replication",
+        "vm"
+      ],
+      "manifest_path": "test-harness/suites/vm/multi-node-kv.ncl",
+      "target": {
+        "kind": "nix-build",
+        "package": null,
+        "test": null,
+        "profile": null,
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": "checks.x86_64-linux.multi-node-kv-test",
+        "check_attr": "multi-node-kv-test",
+        "nix_file": "nix/tests/multi-node-kv.nix",
+        "package_presets": {
+          "aspenCliPackage": "full-aspen-cli",
+          "aspenNodePackage": "full-aspen-node"
+        },
+        "register_flake_check": true
+      }
+    },
+    {
+      "id": "patchbay-fault",
+      "display_name": "Patchbay fault injection tests",
+      "description": "Namespace-backed patchbay coverage for partitions, packet loss, and recovery.",
+      "layer": "patchbay",
+      "owner": "networking",
+      "runtime_class": "linux-namespaces",
+      "prerequisites": [
+        "linux-userns",
+        "nftables",
+        "traffic-control"
+      ],
+      "tags": [
+        "fault-injection",
+        "patchbay",
+        "recovery"
+      ],
+      "manifest_path": "test-harness/suites/patchbay/patchbay-fault.ncl",
+      "target": {
+        "kind": "cargo-nextest",
+        "package": "aspen-testing-patchbay",
+        "test": "patchbay_fault_tests",
+        "profile": "patchbay",
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
+      "id": "patchbay-nat",
+      "display_name": "Patchbay NAT topology tests",
+      "description": "Namespace-backed patchbay coverage for NAT and leader election scenarios.",
+      "layer": "patchbay",
+      "owner": "networking",
+      "runtime_class": "linux-namespaces",
+      "prerequisites": [
+        "linux-userns",
+        "nftables",
+        "traffic-control"
+      ],
+      "tags": [
+        "leader-election",
+        "nat",
+        "patchbay"
+      ],
+      "manifest_path": "test-harness/suites/patchbay/patchbay-nat.ncl",
+      "target": {
+        "kind": "cargo-nextest",
+        "package": "aspen-testing-patchbay",
+        "test": "patchbay_nat_tests",
+        "profile": "patchbay",
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    }
+  ]
+}

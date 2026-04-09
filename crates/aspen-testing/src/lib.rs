@@ -83,6 +83,8 @@ pub use aspen_testing_fixtures::CoordinationTestHelper;
 pub use aspen_testing_fixtures::KvStoreBuilder;
 pub use aspen_testing_fixtures::MockEndpointProvider;
 
+pub mod suite_inventory;
+
 // In-memory Raft router (requires router feature - pulls aspen-raft)
 #[cfg(feature = "router")]
 pub mod router;

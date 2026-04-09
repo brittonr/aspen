@@ -210,7 +210,14 @@ cargo run -p aspen-cli --bin aspen-cli -- kv get mykey
 - **quick**: Skips slow tests (proptest, chaos, madsim_multi, crash recovery)
 - **ci**: Extended 120s timeouts, fail-fast disabled
 - **network**: For tests requiring real network access
+- **patchbay**: Namespace-backed patchbay suites (use `scripts/test-harness.sh list --layer patchbay --format commands` to resolve the generated commands)
 - **snix**: All snix/nix-build tests (use `scripts/test-snix.sh`)
+
+### Harness Metadata
+
+- Suite manifests live under `test-harness/suites/` with the Nickel schema at `test-harness/schema.ncl`.
+- `scripts/test-harness.sh export` regenerates `test-harness/generated/inventory.json`; `scripts/test-harness.sh check` fails on stale or invalid metadata.
+- `scripts/test-harness.sh list ...` resolves focused suite selections from the generated inventory for cargo-nextest and `nix build` entry points.
 
 ### Nix Apps (without entering shell)
 

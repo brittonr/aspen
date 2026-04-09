@@ -102,6 +102,7 @@
 | 2026-03-27 | Federation cluster key ≠ iroh secret key → `FederatedId` mismatch → FEDERATION_DISABLED | Federation cluster key MUST match iroh secret key (NixOS tests already do this) |
 | 2026-03-27 | `git-remote-aspen` federated clone path (`fed:` URL) silently returns empty repo | Fixed: `federation_import_objects` now uses `import_objects()` (plural) with topological sort instead of sequential `import_object()`. Objects arriving in non-dependency order (commit before tree) no longer fail silently. |
 | 2026-04-09 | Shell-parity audit said dogfood federation should tolerate an already-federated repo, but the code only relied on the current handler being idempotent | When an audit names idempotency/parity behavior, codify it in the caller with a unit-tested helper instead of assuming server semantics stay unchanged |
+| 2026-04-09 | `repo_root=$(cd ... && pwd)` captured the path twice because `CDPATH` made `cd` print to stdout inside a command substitution | In repo scripts, use `CDPATH=` when deriving paths with `cd ... && pwd` so `repo_root` stays single-line |
 
 ### Deploy / Dogfood
 
@@ -252,6 +253,10 @@
 - Metrics: `_sys:metrics:{name}:{ts:020}`. Alert state: Ok → Pending → Firing → Ok
 - `AlertEvaluate` takes explicit `now_us` (FCIS). Periodic evaluator on leader only.
 - Metric TTL: default 24h, max 7d
+
+**Testing harness:**
+
+- `aspen-testing` is the intended shared harness layer, but root integration tests still carry a parallel `tests/support/real_cluster.rs` cluster bootstrapper. When improving test infrastructure, audit both paths instead of assuming all real-cluster helpers live under `crates/aspen-testing*`.
 
 **unit2nix Coverage:**
 
