@@ -58,14 +58,14 @@
   - Evidence: `crates/aspen-raft/src/node/trust.rs`, `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-raft-trust-tests.txt`, `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/implementation.diff`
 
 - [x] 3.3 Run targeted trust-enabled tests for `aspen-raft` and `aspen-trust`.
-  - Evidence: `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-raft-types-tests.txt`, `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-raft-trust-tests.txt`, `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-raft-no-feature-build.txt`
+  - Evidence: `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-raft-trust-tests.txt`, `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-trust-tests.txt`
 
 - [x] 3.4 Add a multi-node cluster-init integration test that proves follower share persistence after the committed trust-init request is applied.
   - Evidence: `crates/aspen-raft/src/node/tests.rs`, `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-raft-trust-multinode-test.txt`, `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/implementation.diff`
 
 ## Review Scope Snapshot
 
-### `git diff -- crates/aspen-raft-types/src/lib.rs crates/aspen-raft-types/src/request.rs crates/aspen-raft/src/node/cluster_controller.rs crates/aspen-raft/src/node/tests.rs crates/aspen-raft/src/node/trust.rs crates/aspen-raft/src/storage/in_memory/state_machine.rs crates/aspen-raft/src/storage_shared/initialization.rs crates/aspen-raft/src/storage_shared/log_storage.rs crates/aspen-raft/src/storage_shared/mod.rs crates/aspen-raft/src/storage_shared/state_machine/dispatch.rs crates/aspen-raft/src/storage_shared/trust.rs crates/aspen-raft/src/types.rs crates/aspen-transport/src/log_subscriber/kv_operation.rs tests/consumer_group_integration_test.rs tests/forge_real_cluster_integration_test.rs tests/fuse_raft_cluster_test.rs tests/inmemory_api_test.rs tests/multi_node_cluster_test.rs tests/pubsub_integration_test.rs tests/raft_node_direct_api_test.rs tests/relay_status_test.rs tests/support/bolero_generators.rs tests/types_proptest.rs tests/verify_integration_test.rs tests/write_batching_integration.rs openspec/specs/cluster-secret-lifecycle/spec.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/proposal.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/design.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/tasks.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/specs/cluster-secret-lifecycle/spec.md`
+### `git show 995a1c652^..995a1c652 -- crates/aspen-raft-types/src/lib.rs crates/aspen-raft-types/src/request.rs crates/aspen-raft/src/node/cluster_controller.rs crates/aspen-raft/src/node/tests.rs crates/aspen-raft/src/node/trust.rs crates/aspen-raft/src/storage/in_memory/state_machine.rs crates/aspen-raft/src/storage_shared/initialization.rs crates/aspen-raft/src/storage_shared/log_storage.rs crates/aspen-raft/src/storage_shared/mod.rs crates/aspen-raft/src/storage_shared/state_machine/dispatch.rs crates/aspen-raft/src/storage_shared/trust.rs crates/aspen-raft/src/types.rs crates/aspen-transport/src/log_subscriber/kv_operation.rs tests/consumer_group_integration_test.rs tests/forge_real_cluster_integration_test.rs tests/fuse_raft_cluster_test.rs tests/inmemory_api_test.rs tests/multi_node_cluster_test.rs tests/pubsub_integration_test.rs tests/raft_node_direct_api_test.rs tests/relay_status_test.rs tests/support/bolero_generators.rs tests/types_proptest.rs tests/verify_integration_test.rs tests/write_batching_integration.rs openspec/specs/cluster-secret-lifecycle/spec.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/proposal.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/design.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/tasks.md openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/specs/cluster-secret-lifecycle/spec.md`
 
 - Status: captured
 - Artifact: `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/implementation.diff`
@@ -92,6 +92,16 @@
 - Status: pass
 - Artifact: `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-raft-no-feature-build.txt`
 
+### `cargo test -p aspen-trust -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/aspen-trust-tests.txt`
+
+### `find openspec/changes -path '*finish-shamir-cluster-secret-raft-distribution*' | sort`
+
+- Status: pass
+- Artifact: `openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/evidence/archive-layout.txt`
+
 ### `scripts/openspec-preflight.sh openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution`
 
 - Status: pass
@@ -102,3 +112,5 @@
 - `crates/aspen-raft/src/node/tests.rs` is compiled only with `feature = "testing"`, so the multi-node follower-persistence regression test is verified with `--features trust,testing`.
 - `openspec archive` could not merge the delta spec automatically because the existing main spec still used delta-style sections, so `openspec/specs/cluster-secret-lifecycle/spec.md` was updated manually before archive.
 - The root integration and property tests needed mechanical updates for the new `InitRequest.trust` field and `AppRequest::TrustInitialize` variant so workspace clippy stayed green.
+- `evidence/implementation.diff` was regenerated from commit `995a1c652` so the archived diff artifact includes the actual Raft trust-init implementation files, not just the downstream caller updates.
+- `evidence/archive-layout.txt` shows the change now exists only under `openspec/changes/archive/...`; there is no active duplicate change directory remaining.

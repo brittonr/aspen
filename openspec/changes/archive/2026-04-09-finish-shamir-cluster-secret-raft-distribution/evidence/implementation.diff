@@ -1,3 +1,984 @@
+commit 995a1c652736a18a52c810dd85d15372daf0d00f
+Author: brittonr <b@robitzs.ch>
+Date:   Thu Apr 9 00:30:41 2026 -0400
+
+    openspec: complete finish-shamir-cluster-secret-raft-distribution — sync specs + archive
+
+diff --git a/crates/aspen-raft-types/src/lib.rs b/crates/aspen-raft-types/src/lib.rs
+index ac25f748e..e1d3f412a 100644
+--- a/crates/aspen-raft-types/src/lib.rs
++++ b/crates/aspen-raft-types/src/lib.rs
+@@ -62,6 +62,7 @@ pub use network::FailureType;
+ pub use network::StreamPriority;
+ pub use request::AppRequest;
+ pub use request::AppResponse;
++pub use request::TrustInitializePayload;
+
+ // Note: AppTypeConfig is NOT defined here due to Rust's orphan rules.
+ // The type configuration must be declared in the crate where openraft traits
+diff --git a/crates/aspen-raft-types/src/request.rs b/crates/aspen-raft-types/src/request.rs
+index 877e4ed6b..42ebe5969 100644
+--- a/crates/aspen-raft-types/src/request.rs
++++ b/crates/aspen-raft-types/src/request.rs
+@@ -16,6 +16,17 @@ use aspen_core::TxnOpResult;
+ use serde::Deserialize;
+ use serde::Serialize;
+
++/// Payload for committed trust initialization.
++#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
++pub struct TrustInitializePayload {
++    /// Trust epoch being initialized.
++    pub epoch: u64,
++    /// Serialized 33-byte shares keyed by node ID.
++    pub shares: Vec<(u64, Vec<u8>)>,
++    /// SHA3-256 digests for all shares in this epoch.
++    pub digests: Vec<(u64, [u8; 32])>,
++}
++
+ /// Application-level requests replicated through Raft.
+ ///
+ /// All write operations go through Raft consensus to ensure linearizability.
+@@ -29,6 +40,7 @@ use serde::Serialize;
+ ///   LeaseKeepalive
+ /// - **Atomic operations**: CompareAndSwap, CompareAndDelete, Batch, ConditionalBatch
+ /// - **Transactions**: Transaction (etcd-style If/Then/Else semantics)
++/// - **Trust bootstrapping**: TrustInitialize
+ ///
+ /// # Tiger Style
+ ///
+@@ -205,6 +217,8 @@ pub enum AppRequest {
+         /// Serialized ShardTopology (bincode).
+         topology_data: Vec<u8>,
+     },
++    /// Initialize trust shares for a newly created cluster epoch.
++    TrustInitialize(TrustInitializePayload),
+ }
+
+ impl fmt::Display for AppRequest {
+@@ -313,6 +327,15 @@ impl fmt::Display for AppRequest {
+             AppRequest::TopologyUpdate { topology_data } => {
+                 write!(f, "TopologyUpdate {{ size: {} }}", topology_data.len())
+             }
++            AppRequest::TrustInitialize(payload) => {
++                write!(
++                    f,
++                    "TrustInitialize {{ epoch: {}, shares: {}, digests: {} }}",
++                    payload.epoch,
++                    payload.shares.len(),
++                    payload.digests.len()
++                )
++            }
+         }
+     }
+ }
+@@ -519,6 +542,28 @@ mod tests {
+         assert!(matches!(deserialized, AppRequest::DeleteMulti { keys } if keys.len() == 2));
+     }
+
++    #[test]
++    fn test_app_request_trust_initialize_display() {
++        let req = AppRequest::TrustInitialize(TrustInitializePayload {
++            epoch: 1,
++            shares: vec![(1, vec![1; 33]), (2, vec![2; 33])],
++            digests: vec![(1, [7; 32]), (2, [8; 32])],
++        });
++        assert_eq!(format!("{}", req), "TrustInitialize { epoch: 1, shares: 2, digests: 2 }");
++    }
++
++    #[test]
++    fn test_app_request_serde_trust_initialize() {
++        let original = AppRequest::TrustInitialize(TrustInitializePayload {
++            epoch: 9,
++            shares: vec![(1, vec![1; 33]), (5, vec![5; 33])],
++            digests: vec![(1, [3; 32]), (5, [4; 32])],
++        });
++        let json = serde_json::to_string(&original).expect("serialize");
++        let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
++        assert_eq!(format!("{}", deserialized), "TrustInitialize { epoch: 9, shares: 2, digests: 2 }");
++    }
++
+     // =========================================================================
+     // AppResponse Tests
+     // =========================================================================
+diff --git a/crates/aspen-raft/src/node/cluster_controller.rs b/crates/aspen-raft/src/node/cluster_controller.rs
+index 514576262..1dd249aca 100644
+--- a/crates/aspen-raft/src/node/cluster_controller.rs
++++ b/crates/aspen-raft/src/node/cluster_controller.rs
+@@ -71,7 +71,7 @@ impl ClusterController for RaftNode {
+         // Initialize trust (Shamir secret sharing) if enabled
+         #[cfg(feature = "trust")]
+         if request.trust.enabled {
+-            self.initialize_trust(&request).map_err(|e| ControlPlaneError::Failed {
++            self.initialize_trust(&request).await.map_err(|e| ControlPlaneError::Failed {
+                 reason: format!("trust initialization failed: {e}"),
+             })?;
+         }
+diff --git a/crates/aspen-raft/src/node/tests.rs b/crates/aspen-raft/src/node/tests.rs
+index fc1cb864f..2e8aa44ca 100644
+--- a/crates/aspen-raft/src/node/tests.rs
++++ b/crates/aspen-raft/src/node/tests.rs
+@@ -18,6 +18,7 @@ use aspen_traits::ClusterController;
+ use aspen_traits::CoordinationBackend;
+ use aspen_traits::KeyValueStore;
+ use openraft::Config;
++use tempfile::TempDir;
+
+ use super::RaftNode;
+ use super::arc_wrapper::ArcRaftNode;
+@@ -32,6 +33,7 @@ const MAX_CONCURRENT_OPS: usize = 1000;
+ use crate::StateMachineVariant;
+ use crate::storage::InMemoryLogStore;
+ use crate::storage::InMemoryStateMachine;
++use crate::storage_shared::SharedRedbStorage;
+ use crate::types::AppTypeConfig;
+ use crate::types::NodeId;
+
+@@ -64,6 +66,46 @@ async fn create_test_node(node_id: u64) -> RaftNode {
+     RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::InMemory(state_machine))
+ }
+
++struct RedbTestNode {
++    node: RaftNode,
++    storage: Arc<SharedRedbStorage>,
++    _temp_dir: TempDir,
++}
++
++async fn create_test_redb_node(
++    node_id: u64,
++    router: Arc<MadsimRaftRouter>,
++    failure_injector: Arc<FailureInjector>,
++    cluster_name: &str,
++) -> RedbTestNode {
++    let temp_dir = TempDir::new().expect("temp dir");
++    let db_path = temp_dir.path().join(format!("node-{node_id}.redb"));
++    let storage = SharedRedbStorage::new(&db_path, &node_id.to_string()).expect("create redb storage");
++    let network_factory = MadsimNetworkFactory::new(NodeId(node_id), router.clone(), failure_injector);
++    let config = Arc::new(Config {
++        cluster_name: cluster_name.to_string(),
++        ..Default::default()
++    });
++
++    let raft: openraft::Raft<AppTypeConfig> =
++        openraft::Raft::new(NodeId(node_id), config, network_factory, storage.clone(), storage.clone())
++            .await
++            .expect("Failed to create redb raft instance");
++
++    router
++        .register_node(NodeId(node_id), format!("127.0.0.1:{}", 27000 + node_id), raft.clone())
++        .expect("Failed to register redb node with router");
++
++    let storage = Arc::new(storage);
++    let node = RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::Redb(storage.clone()));
++
++    RedbTestNode {
++        node,
++        storage,
++        _temp_dir: temp_dir,
++    }
++}
++
+ /// Helper to set the initialized flag for testing.
+ fn set_initialized(node: &RaftNode, value: bool) {
+     node.set_initialized_for_test(value);
+@@ -162,6 +204,72 @@ async fn test_init_missing_iroh_addr_fails() {
+     }
+ }
+
++#[cfg(feature = "trust")]
++#[tokio::test]
++async fn test_multi_node_trust_init_persists_follower_shares() {
++    let router = Arc::new(MadsimRaftRouter::new());
++    let failure_injector = Arc::new(FailureInjector::new());
++    let cluster_name = "trust-init-redb-test";
++
++    let node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
++    let node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
++    let node3 = create_test_redb_node(3, router.clone(), failure_injector, cluster_name).await;
++
++    let members: Vec<ClusterNode> = (1u64..=3)
++        .map(|id| {
++            let secret = iroh::SecretKey::generate(&mut rand::rng());
++            let mut node = ClusterNode::new(id, format!("node-{id}"), None);
++            node.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
++                secret.public(),
++                std::iter::empty(),
++            )));
++            node
++        })
++        .collect();
++
++    ClusterController::init(&node1.node, InitRequest {
++        initial_members: members,
++        trust: aspen_cluster_types::TrustConfig::enabled(),
++    })
++    .await
++    .expect("init 3-node trust cluster");
++
++    tokio::time::timeout(std::time::Duration::from_secs(5), async {
++        loop {
++            let ready = [node1.storage.as_ref(), node2.storage.as_ref(), node3.storage.as_ref()]
++                .iter()
++                .all(|storage| storage.load_share(1).unwrap().is_some() && storage.load_digests(1).unwrap().len() == 3);
++            if ready {
++                break;
++            }
++            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
++        }
++    })
++    .await
++    .expect("followers should persist trust shares after committed init");
++
++    let share1 = node1.storage.load_share(1).unwrap().unwrap();
++    let share2 = node2.storage.load_share(1).unwrap().unwrap();
++    let share3 = node3.storage.load_share(1).unwrap().unwrap();
++
++    assert_ne!(share1, share2);
++    assert_ne!(share1, share3);
++    assert_ne!(share2, share3);
++
++    let secret_12 = aspen_trust::shamir::reconstruct_secret(&[share1.clone(), share2.clone()]).unwrap();
++    let secret_13 = aspen_trust::shamir::reconstruct_secret(&[share1.clone(), share3.clone()]).unwrap();
++    let secret_23 = aspen_trust::shamir::reconstruct_secret(&[share2, share3]).unwrap();
++    assert_eq!(secret_12, secret_13);
++    assert_eq!(secret_12, secret_23);
++
++    let digests1 = node1.storage.load_digests(1).unwrap();
++    let digests2 = node2.storage.load_digests(1).unwrap();
++    let digests3 = node3.storage.load_digests(1).unwrap();
++    assert_eq!(digests1.len(), 3);
++    assert_eq!(digests1, digests2);
++    assert_eq!(digests1, digests3);
++}
++
+ /// Test ensure_initialized returns error before init.
+ #[tokio::test]
+ async fn test_ensure_initialized_before_init() {
+diff --git a/crates/aspen-raft/src/node/trust.rs b/crates/aspen-raft/src/node/trust.rs
+index f0c7ea367..11a9163a7 100644
+--- a/crates/aspen-raft/src/node/trust.rs
++++ b/crates/aspen-raft/src/node/trust.rs
+@@ -4,13 +4,8 @@
+ //! 1. Generates a 32-byte cluster root secret
+ //! 2. Splits it into K-of-N Shamir shares
+ //! 3. Computes SHA3-256 digests for each share
+-//! 4. Stores each node's share in the trust_shares table
+-//! 5. Stores all digests in the trust_digests table
+-//!
+-//! For single-node init, the leader stores its own share directly.
+-//! For multi-node init, shares are distributed via Raft-committed entries.
+-
+-use std::collections::BTreeMap;
++//! 4. Commits a `TrustInitialize` Raft request carrying per-node share bytes
++//! 5. Lets each node persist its own share when the request is applied locally
+
+ use aspen_cluster_types::InitRequest;
+ use aspen_trust::secret::ClusterSecret;
+@@ -20,71 +15,152 @@ use rand::rngs::ThreadRng;
+ use tracing::info;
+
+ use super::RaftNode;
++use crate::StateMachineVariant;
++use crate::types::AppRequest;
++use crate::types::TrustInitializePayload;
+
+-impl RaftNode {
+-    /// Initialize trust (Shamir secret sharing) during cluster bootstrap.
+-    ///
+-    /// Called by the leader after successful Raft initialization.
+-    pub(crate) fn initialize_trust(&self, request: &InitRequest) -> Result<(), String> {
+-        let n = request.initial_members.len();
+-        let threshold = match request.trust.threshold {
+-            Some(t) => Threshold::new(t).ok_or_else(|| "threshold must be >= 1".to_string())?,
+-            None => Threshold::default_for_cluster_size(n as u32),
+-        };
+-
+-        // Validate threshold against cluster size
+-        if threshold.value() as usize > n {
+-            return Err(format!("threshold {} exceeds cluster size {n}", threshold.value()));
+-        }
++pub(crate) fn build_trust_initialize_payload(request: &InitRequest) -> Result<TrustInitializePayload, String> {
++    let total_members = request.initial_members.len();
++    let threshold = match request.trust.threshold {
++        Some(value) => Threshold::new(value).ok_or_else(|| "threshold must be >= 1".to_string())?,
++        None => Threshold::default_for_cluster_size(total_members as u32),
++    };
+
+-        info!(threshold = threshold.value(), total = n, "generating cluster secret and splitting into shares");
++    if threshold.value() as usize > total_members {
++        return Err(format!("threshold {} exceeds cluster size {total_members}", threshold.value()));
++    }
+
+-        // Generate the root secret
+-        let secret = ClusterSecret::generate();
++    info!(
++        threshold = threshold.value(),
++        total = total_members,
++        "generating cluster secret and splitting into shares"
++    );
+
+-        // Split into shares
+-        let mut rng: ThreadRng = rand::rng();
+-        let shares = shamir::split_secret(secret.as_bytes(), threshold.value(), n as u8, &mut rng)
+-            .map_err(|e| format!("failed to split secret: {e}"))?;
++    let secret = ClusterSecret::generate();
++    let mut rng: ThreadRng = rand::rng();
++    let shares = shamir::split_secret(secret.as_bytes(), threshold.value(), total_members as u8, &mut rng)
++        .map_err(|e| format!("failed to split secret: {e}"))?;
+
+-        // Compute digests for all shares
+-        let epoch: u64 = 1; // First epoch
+-        let mut digests: BTreeMap<u64, shamir::ShareDigest> = BTreeMap::new();
+-        for (i, share) in shares.iter().enumerate() {
+-            let node_id = request.initial_members[i].id;
+-            digests.insert(node_id, shamir::share_digest(share));
+-        }
++    let shares: Vec<(u64, Vec<u8>)> = request
++        .initial_members
++        .iter()
++        .zip(shares.iter())
++        .map(|(member, share)| (member.id, share.to_bytes().to_vec()))
++        .collect();
+
+-        // Store this node's share and all digests
+-        let self_node_id: u64 = self.node_id().into();
+-        let self_share_idx = request
+-            .initial_members
+-            .iter()
+-            .position(|m| m.id == self_node_id)
+-            .ok_or_else(|| "this node not found in initial_members".to_string())?;
++    let digests: Vec<(u64, shamir::ShareDigest)> = request
++        .initial_members
++        .iter()
++        .zip(shares_from_payload(&shares)?.iter())
++        .map(|(member, share)| (member.id, shamir::share_digest(share)))
++        .collect();
+
++    Ok(TrustInitializePayload {
++        epoch: 1,
++        shares,
++        digests,
++    })
++}
++
++fn shares_from_payload(shares: &[(u64, Vec<u8>)]) -> Result<Vec<shamir::Share>, String> {
++    let mut decoded = Vec::with_capacity(shares.len());
++    for (_node_id, share_bytes) in shares {
++        if share_bytes.len() != shamir::SECRET_SIZE + 1 {
++            return Err(format!("invalid share length {}, expected {}", share_bytes.len(), shamir::SECRET_SIZE + 1));
++        }
++        let mut array = [0u8; shamir::SECRET_SIZE + 1];
++        array.copy_from_slice(share_bytes);
++        let share = shamir::Share::from_bytes(&array).map_err(|e| format!("failed to decode share bytes: {e}"))?;
++        decoded.push(share);
++    }
++    Ok(decoded)
++}
++
++impl RaftNode {
++    /// Initialize trust (Shamir secret sharing) during cluster bootstrap.
++    ///
++    /// Called by the leader after successful Raft initialization.
++    pub(crate) async fn initialize_trust(&self, request: &InitRequest) -> Result<(), String> {
+         match self.state_machine() {
+-            crate::StateMachineVariant::Redb(storage) => {
+-                storage
+-                    .store_share(epoch, &shares[self_share_idx])
+-                    .map_err(|e| format!("failed to store share: {e}"))?;
+-                storage.store_digests(epoch, &digests).map_err(|e| format!("failed to store digests: {e}"))?;
+-            }
+-            crate::StateMachineVariant::InMemory(_) => {
+-                // In-memory state machine doesn't support trust storage.
+-                // Trust is only available with redb storage.
++            StateMachineVariant::Redb(_) => {}
++            StateMachineVariant::InMemory(_) => {
+                 return Err("trust requires redb storage (not in-memory)".to_string());
+             }
+         }
+
++        let payload = build_trust_initialize_payload(request)?;
++        let local_node_id: u64 = self.node_id().into();
++        let share_x = payload
++            .shares
++            .iter()
++            .find_map(|(node_id, share_bytes)| {
++                if *node_id == local_node_id {
++                    share_bytes.first().copied()
++                } else {
++                    None
++                }
++            })
++            .ok_or_else(|| format!("this node {local_node_id} not found in initial_members"))?;
++
++        self.raft()
++            .client_write(AppRequest::TrustInitialize(payload.clone()))
++            .await
++            .map_err(|e| format!("failed to commit trust initialization: {e}"))?;
++
+         info!(
+-            epoch = epoch,
+-            node_id = self_node_id,
+-            share_x = shares[self_share_idx].x,
+-            "trust initialized: share stored, {} digests recorded",
+-            digests.len()
++            epoch = payload.epoch,
++            node_id = local_node_id,
++            share_x,
++            digests = payload.digests.len(),
++            "trust initialized through committed raft request"
+         );
+
+         Ok(())
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use aspen_cluster_types::ClusterNode;
++
++    use super::*;
++
++    fn request_with_ids(ids: &[u64], threshold: Option<u8>) -> InitRequest {
++        InitRequest {
++            initial_members: ids.iter().map(|id| ClusterNode::new(*id, format!("node-{id}"), None)).collect(),
++            trust: match threshold {
++                Some(value) => aspen_cluster_types::TrustConfig::with_threshold(value),
++                None => aspen_cluster_types::TrustConfig::enabled(),
++            },
++        }
++    }
++
++    #[test]
++    fn test_build_trust_initialize_payload_assigns_every_member() {
++        let request = request_with_ids(&[1, 2, 3], None);
++        let payload = build_trust_initialize_payload(&request).unwrap();
++
++        assert_eq!(payload.epoch, 1);
++        assert_eq!(payload.shares.len(), 3);
++        assert_eq!(payload.digests.len(), 3);
++
++        let decoded = shares_from_payload(&payload.shares).unwrap();
++        assert_eq!(decoded.len(), 3);
++        assert_eq!(shamir::reconstruct_secret(&decoded[..2]).unwrap().len(), shamir::SECRET_SIZE);
++
++        for ((node_id, share_bytes), (_, digest)) in payload.shares.iter().zip(payload.digests.iter()) {
++            let mut share_array = [0u8; shamir::SECRET_SIZE + 1];
++            share_array.copy_from_slice(share_bytes);
++            let share = shamir::Share::from_bytes(&share_array).unwrap();
++            assert_eq!(shamir::share_digest(&share), *digest);
++            assert!([1u64, 2, 3].contains(node_id));
++        }
++    }
++
++    #[test]
++    fn test_build_trust_initialize_payload_rejects_invalid_threshold() {
++        let request = request_with_ids(&[1, 2, 3], Some(4));
++        let err = build_trust_initialize_payload(&request).unwrap_err();
++        assert!(err.contains("exceeds cluster size 3"));
++    }
++}
+diff --git a/crates/aspen-raft/src/storage/in_memory/state_machine.rs b/crates/aspen-raft/src/storage/in_memory/state_machine.rs
+index 56efd8fe9..d0ceb0424 100644
+--- a/crates/aspen-raft/src/storage/in_memory/state_machine.rs
++++ b/crates/aspen-raft/src/storage/in_memory/state_machine.rs
+@@ -595,6 +595,7 @@ fn apply_app_request(data: &mut BTreeMap<String, String>, req: &AppRequest) -> A
+         } => apply_transaction(data, compare, success, failure),
+         // OptimisticTransaction: in-memory doesn't track versions
+         AppRequest::OptimisticTransaction { write_set, .. } => apply_optimistic_transaction(data, write_set),
++        AppRequest::TrustInitialize(_) => AppResponse::default(),
+         // Shard topology operations: no-op for in-memory (testing only)
+         AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
+             AppResponse::default()
+diff --git a/crates/aspen-raft/src/storage_shared/initialization.rs b/crates/aspen-raft/src/storage_shared/initialization.rs
+index 54c48df4d..dd1010052 100644
+--- a/crates/aspen-raft/src/storage_shared/initialization.rs
++++ b/crates/aspen-raft/src/storage_shared/initialization.rs
+@@ -118,6 +118,8 @@ impl SharedRedbStorage {
+
+         let db = Arc::new(db);
+
++        let local_node_id = node_id.parse::<u64>().ok();
++
+         // Load chain tip from database
+         let chain_tip = Self::load_chain_tip(&db)?;
+
+@@ -131,6 +133,7 @@ impl SharedRedbStorage {
+         Ok(Self {
+             db,
+             path,
++            local_node_id,
+             chain_tip: Arc::new(StdRwLock::new(chain_tip)),
+             log_broadcast,
+             snapshot_broadcast,
+diff --git a/crates/aspen-raft/src/storage_shared/log_storage.rs b/crates/aspen-raft/src/storage_shared/log_storage.rs
+index 1ec747e8b..95df6b26d 100644
+--- a/crates/aspen-raft/src/storage_shared/log_storage.rs
++++ b/crates/aspen-raft/src/storage_shared/log_storage.rs
+@@ -361,6 +361,10 @@ impl SharedRedbStorage {
+         let mut index_table = write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
+         let mut leases_table = write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
+         let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
++        #[cfg(feature = "trust")]
++        let mut trust_shares_table = write_txn.open_table(TRUST_SHARES_TABLE).context(OpenTableSnafu)?;
++        #[cfg(feature = "trust")]
++        let mut trust_digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).context(OpenTableSnafu)?;
+
+         let mut new_tip_hash = prev_hash;
+         let mut new_tip_index: u64 = 0;
+@@ -379,6 +383,10 @@ impl SharedRedbStorage {
+                 &mut index_table,
+                 &mut leases_table,
+                 &mut sm_meta_table,
++                #[cfg(feature = "trust")]
++                &mut trust_shares_table,
++                #[cfg(feature = "trust")]
++                &mut trust_digests_table,
+                 &mut pending_response_batch,
+             )?;
+
+@@ -409,6 +417,8 @@ impl SharedRedbStorage {
+         index_table: &mut redb::Table<&[u8], &[u8]>,
+         leases_table: &mut redb::Table<u64, &[u8]>,
+         sm_meta_table: &mut redb::Table<&str, &[u8]>,
++        #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
++        #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
+         pending_response_batch: &mut Vec<(u64, AppResponse)>,
+     ) -> Result<([u8; 32], u64), io::Error> {
+         let log_id = entry.log_id();
+@@ -427,8 +437,19 @@ impl SharedRedbStorage {
+         log_table.insert(index, data.as_slice()).context(InsertSnafu)?;
+         hash_table.insert(index, entry_hash.as_slice()).context(InsertSnafu)?;
+
+-        let response =
+-            self.append_apply_entry_payload(entry, log_id, index, kv_table, index_table, leases_table, sm_meta_table)?;
++        let response = self.append_apply_entry_payload(
++            entry,
++            log_id,
++            index,
++            kv_table,
++            index_table,
++            leases_table,
++            sm_meta_table,
++            #[cfg(feature = "trust")]
++            trust_shares_table,
++            #[cfg(feature = "trust")]
++            trust_digests_table,
++        )?;
+         pending_response_batch.push((index, response));
+
+         let log_id_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
+@@ -448,13 +469,19 @@ impl SharedRedbStorage {
+         index_table: &mut redb::Table<&[u8], &[u8]>,
+         leases_table: &mut redb::Table<u64, &[u8]>,
+         sm_meta_table: &mut redb::Table<&str, &[u8]>,
++        #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
++        #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
+     ) -> Result<AppResponse, io::Error> {
+         match &entry.payload {
+-            EntryPayload::Normal(request) => Ok(Self::apply_request_in_txn(
++            EntryPayload::Normal(request) => Ok(self.apply_request_in_txn(
+                 kv_table,
+                 index_table,
+                 &self.index_registry,
+                 leases_table,
++                #[cfg(feature = "trust")]
++                trust_shares_table,
++                #[cfg(feature = "trust")]
++                trust_digests_table,
+                 request,
+                 index,
+             )?),
+diff --git a/crates/aspen-raft/src/storage_shared/mod.rs b/crates/aspen-raft/src/storage_shared/mod.rs
+index 082361053..c58637767 100644
+--- a/crates/aspen-raft/src/storage_shared/mod.rs
++++ b/crates/aspen-raft/src/storage_shared/mod.rs
+@@ -159,6 +159,9 @@ pub struct SharedRedbStorage {
+     db: Arc<Database>,
+     /// Path to the database file.
+     path: PathBuf,
++    /// Parsed local Raft node ID, used by state-machine paths that must select
++    /// node-local state from committed entries.
++    local_node_id: Option<u64>,
+     /// Cached chain tip state for efficient appends.
+     chain_tip: Arc<StdRwLock<ChainTipState>>,
+     /// Optional broadcast sender for log entry notifications.
+@@ -186,6 +189,7 @@ impl std::fmt::Debug for SharedRedbStorage {
+     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+         f.debug_struct("SharedRedbStorage")
+             .field("path", &self.path)
++            .field("local_node_id", &self.local_node_id)
+             .field("chain_tip", &self.chain_tip)
+             .finish_non_exhaustive()
+     }
+diff --git a/crates/aspen-raft/src/storage_shared/state_machine/dispatch.rs b/crates/aspen-raft/src/storage_shared/state_machine/dispatch.rs
+index ace657fc4..671447f9c 100644
+--- a/crates/aspen-raft/src/storage_shared/state_machine/dispatch.rs
++++ b/crates/aspen-raft/src/storage_shared/state_machine/dispatch.rs
+@@ -4,11 +4,15 @@ use super::super::*;
+
+ impl SharedRedbStorage {
+     /// Apply a single AppRequest to the state machine tables within a transaction.
++    #[allow(clippy::too_many_arguments)]
+     pub(in crate::storage_shared) fn apply_request_in_txn(
++        &self,
+         kv_table: &mut redb::Table<&[u8], &[u8]>,
+         index_table: &mut redb::Table<&[u8], &[u8]>,
+         index_registry: &IndexRegistry,
+         leases_table: &mut redb::Table<u64, &[u8]>,
++        #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
++        #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
+         request: &AppRequest,
+         log_index: u64,
+     ) -> Result<AppResponse, SharedStorageError> {
+@@ -148,6 +152,12 @@ impl SharedRedbStorage {
+                 write_set,
+                 log_index,
+             ),
++            #[cfg(feature = "trust")]
++            AppRequest::TrustInitialize(payload) => {
++                self.apply_trust_initialize_in_txn(trust_shares_table, trust_digests_table, payload)
++            }
++            #[cfg(not(feature = "trust"))]
++            AppRequest::TrustInitialize(_) => Ok(AppResponse::default()),
+             // Shard operations - pass through without state changes
+             AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
+                 Ok(AppResponse::default())
+diff --git a/crates/aspen-raft/src/storage_shared/trust.rs b/crates/aspen-raft/src/storage_shared/trust.rs
+index d374839f9..003c44e01 100644
+--- a/crates/aspen-raft/src/storage_shared/trust.rs
++++ b/crates/aspen-raft/src/storage_shared/trust.rs
+@@ -5,11 +5,13 @@
+
+ use std::collections::BTreeMap;
+
++use aspen_raft_types::TrustInitializePayload;
+ use aspen_trust::shamir::SECRET_SIZE;
+ use aspen_trust::shamir::Share;
+ use aspen_trust::shamir::ShareDigest;
+ use snafu::ResultExt;
+
++use super::AppResponse;
+ use super::BeginReadSnafu;
+ use super::BeginWriteSnafu;
+ use super::CommitSnafu;
+@@ -149,6 +151,47 @@ impl SharedRedbStorage {
+         Ok(())
+     }
+
++    /// Apply a committed trust initialization request to the local storage tables.
++    pub(crate) fn apply_trust_initialize_in_txn(
++        &self,
++        shares_table: &mut redb::Table<u64, &[u8]>,
++        digests_table: &mut redb::Table<&str, &[u8]>,
++        payload: &TrustInitializePayload,
++    ) -> Result<AppResponse, SharedStorageError> {
++        let local_node_id = self.local_node_id.ok_or_else(|| SharedStorageError::Internal {
++            reason: "trust initialization requires a numeric local node id".to_string(),
++        })?;
++
++        let share_bytes = payload
++            .shares
++            .iter()
++            .find_map(|(node_id, bytes)| if *node_id == local_node_id { Some(bytes) } else { None })
++            .ok_or_else(|| SharedStorageError::Internal {
++                reason: format!("no trust share assigned for local node {local_node_id}"),
++            })?;
++
++        if share_bytes.len() != SECRET_SIZE + 1 {
++            return Err(SharedStorageError::Internal {
++                reason: format!("invalid trust share length {}, expected {}", share_bytes.len(), SECRET_SIZE + 1),
++            });
++        }
++
++        let mut share_array = [0u8; SECRET_SIZE + 1];
++        share_array.copy_from_slice(share_bytes);
++        let share = Share::from_bytes(&share_array).map_err(|e| SharedStorageError::Internal {
++            reason: format!("failed to decode trust share: {e}"),
++        })?;
++
++        shares_table.insert(payload.epoch, share.to_bytes().as_slice()).context(super::InsertSnafu)?;
++
++        for (node_id, digest) in &payload.digests {
++            let key = format!("{}:{}", payload.epoch, node_id);
++            digests_table.insert(key.as_str(), digest.as_slice()).context(super::InsertSnafu)?;
++        }
++
++        Ok(AppResponse::default())
++    }
++
+     /// Load all digests for the given epoch.
+     ///
+     /// Returns a map from node_id to SHA3-256 digest.
+@@ -180,3 +223,51 @@ impl SharedRedbStorage {
+         Ok(digests)
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use std::collections::BTreeMap;
++
++    use tempfile::TempDir;
++
++    use super::*;
++
++    #[test]
++    fn test_apply_trust_initialize_stores_only_local_share() {
++        let temp_dir = TempDir::new().unwrap();
++        let db_path = temp_dir.path().join("trust-init.redb");
++        let storage = SharedRedbStorage::new(&db_path, "2").unwrap();
++
++        let secret = [9u8; SECRET_SIZE];
++        let mut rng = rand::rng();
++        let shares = aspen_trust::shamir::split_secret(&secret, 2, 3, &mut rng).unwrap();
++        let payload = TrustInitializePayload {
++            epoch: 1,
++            shares: vec![
++                (1, shares[0].to_bytes().to_vec()),
++                (2, shares[1].to_bytes().to_vec()),
++                (3, shares[2].to_bytes().to_vec()),
++            ],
++            digests: vec![
++                (1, aspen_trust::shamir::share_digest(&shares[0])),
++                (2, aspen_trust::shamir::share_digest(&shares[1])),
++                (3, aspen_trust::shamir::share_digest(&shares[2])),
++            ],
++        };
++
++        let write_txn = storage.db.begin_write().unwrap();
++        {
++            let mut shares_table = write_txn.open_table(TRUST_SHARES_TABLE).unwrap();
++            let mut digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).unwrap();
++            storage.apply_trust_initialize_in_txn(&mut shares_table, &mut digests_table, &payload).unwrap();
++        }
++        write_txn.commit().unwrap();
++
++        let stored_share = storage.load_share(1).unwrap().unwrap();
++        assert_eq!(stored_share, shares[1]);
++
++        let digests = storage.load_digests(1).unwrap();
++        let expected: BTreeMap<u64, ShareDigest> = payload.digests.iter().copied().collect();
++        assert_eq!(digests, expected);
++    }
++}
+diff --git a/crates/aspen-raft/src/types.rs b/crates/aspen-raft/src/types.rs
+index 0c76f23a4..de369a1c5 100644
+--- a/crates/aspen-raft/src/types.rs
++++ b/crates/aspen-raft/src/types.rs
+@@ -29,6 +29,7 @@ pub use aspen_raft_types::AppRequest;
+ pub use aspen_raft_types::AppResponse;
+ pub use aspen_raft_types::NodeId;
+ pub use aspen_raft_types::RaftMemberInfo;
++pub use aspen_raft_types::TrustInitializePayload;
+ use openraft::declare_raft_types;
+
+ // Declare AppTypeConfig here to satisfy orphan rules.
+diff --git a/crates/aspen-transport/src/log_subscriber/kv_operation.rs b/crates/aspen-transport/src/log_subscriber/kv_operation.rs
+index 318845064..f13297c77 100644
+--- a/crates/aspen-transport/src/log_subscriber/kv_operation.rs
++++ b/crates/aspen-transport/src/log_subscriber/kv_operation.rs
+@@ -337,9 +337,10 @@ impl From<aspen_raft_types::AppRequest> for KvOperation {
+             }
+             // Shard topology operations are converted to Noop for log subscribers
+             // (subscribers don't need to track topology changes)
+-            AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
+-                KvOperation::Noop
+-            }
++            AppRequest::ShardSplit { .. }
++            | AppRequest::ShardMerge { .. }
++            | AppRequest::TopologyUpdate { .. }
++            | AppRequest::TrustInitialize(_) => KvOperation::Noop,
+         }
+     }
+ }
+diff --git a/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/design.md b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/design.md
+new file mode 100644
+index 000000000..ec3e7b7ab
+--- /dev/null
++++ b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/design.md
+@@ -0,0 +1,56 @@
++## Context
++
++`crates/aspen-trust` already provides Shamir splitting, reconstruction, digests, key derivation, and follow-on primitives like reconfiguration scaffolding. The remaining gap is in `crates/aspen-raft/src/node/trust.rs`: `initialize_trust()` generates shares and writes only the leader's share directly into local redb storage. That bypasses the Raft application path and leaves follower share persistence unspecified.
++
++The existing `cluster-secret-lifecycle` main spec already expects share distribution through consensus. This change closes the gap without reworking the cryptography layer.
++
++## Goals / Non-Goals
++
++**Goals:**
++
++- Make trust initialization durable through a committed Raft application request.
++- Ensure each node persists only its own share during state-machine apply.
++- Keep the implementation behind the existing `trust` feature gate.
++- Add tests that fail if trust init falls back to leader-local storage in multi-node setups.
++
++**Non-Goals:**
++
++- Membership-change rotation, encrypted secret chains, or expungement.
++- Share collection over Iroh.
++- Changes to the Shamir math or HKDF derivation APIs.
++
++## Decisions
++
++### Add a dedicated `AppRequest::TrustInitialize` payload
++
++A committed trust-init request is the smallest change that fits Aspen's current Raft plumbing. It carries the epoch, a per-node share assignment map encoded as serialized share bytes, and the epoch digests.
++
++Alternative considered: piggyback trust data on membership metadata or snapshots. Rejected because cluster init already has a normal application-request path, and snapshots would make the first durable write harder to reason about.
++
++### Apply only the local node's share in the state machine
++
++The state machine must not persist every node's share on every node. `SharedRedbStorage` will track the local Raft node ID and use it during trust-init apply to select the assigned share for this node before writing `trust_shares`.
++
++Alternative considered: store all shares and rely on access control later. Rejected because it defeats the trust boundary; any node with all shares can reconstruct the secret alone.
++
++### Make `initialize_trust()` async and submit through `client_write`
++
++The cluster controller already runs in async context. Converting the trust init hook to async lets the leader submit the trust-init request through the same committed path as other Raft-backed state changes.
++
++Alternative considered: append raw log entries directly through storage helpers. Rejected because `client_write()` already handles leadership checks and keeps the request in the normal consensus pipeline.
++
++## Risks / Trade-offs
++
++- **State-machine local-node awareness** -> `SharedRedbStorage` needs local node identity for apply-time selection. Mitigation: store an optional parsed node ID from the constructor input and fail clearly if trust init runs without it.
++- **Wire-format expansion** -> adding a new `AppRequest` variant touches serialization tests. Mitigation: keep the payload simple and add targeted request/dispatch tests.
++- **Init path regression** -> changing cluster init from sync local writes to async consensus could surface leadership timing issues. Mitigation: keep the trust-init request small and add a regression test for the leader path.
++
++## Migration Plan
++
++- New clusters use the committed trust-init path immediately.
++- Existing clusters that already initialized trust keep their current stored shares; this change only affects cluster initialization.
++- If trust init fails after Raft initialization, the operation returns an error and the operator can restart the cluster with a clean data dir as today.
++
++## Open Questions
++
++- None for this phase.
+diff --git a/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/proposal.md b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/proposal.md
+new file mode 100644
+index 000000000..4ed01280b
+--- /dev/null
++++ b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/proposal.md
+@@ -0,0 +1,24 @@
++## Why
++
++The archived `shamir-cluster-secret` change landed the cryptography pieces, CLI flags, and local storage helpers, but the cluster-init path still stops at leader-local persistence. In a multi-node cluster, followers do not receive their assigned share through a Raft-committed application entry, so the repo does not yet satisfy the `cluster-secret-lifecycle` requirement that share distribution be part of consensus.
++
++## What Changes
++
++- Replace leader-local trust initialization with a Raft-committed trust-init application request.
++- Persist each node's assigned share when that committed request is applied on the local state machine.
++- Keep share digests replicated through the same committed request so every node sees the same verification metadata.
++- Add regression tests that prove multi-node trust init goes through the apply path instead of direct local storage.
++
++## Capabilities
++
++### New Capabilities
++
++### Modified Capabilities
++
++- `cluster-secret-lifecycle`: Tighten cluster-init behavior so every initial member stores its own share only by applying a committed trust-init request.
++
++## Impact
++
++- `crates/aspen-raft-types/` - new trust-init application request payload.
++- `crates/aspen-raft/` - cluster init flow, state-machine dispatch, redb storage plumbing, tests.
++- `openspec/specs/cluster-secret-lifecycle/spec.md` - clearer requirement for committed trust-init distribution.
+diff --git a/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/specs/cluster-secret-lifecycle/spec.md b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/specs/cluster-secret-lifecycle/spec.md
+new file mode 100644
+index 000000000..cf28609dc
+--- /dev/null
++++ b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/specs/cluster-secret-lifecycle/spec.md
+@@ -0,0 +1,29 @@
++## MODIFIED Requirements
++
++### Requirement: Secret creation at cluster init
++
++A cluster root secret MUST be created during `init_cluster`, and each initial member MUST persist only its assigned share by applying the committed trust-init request for the current epoch.
++
++#### Scenario: Single-node cluster init
++
++- **WHEN** a 1-node cluster is initialized with trust enabled
++- **THEN** a root secret is created, a single share (K=1) is stored locally, and the share digest is recorded in cluster metadata
++
++#### Scenario: Multi-node cluster init
++
++- **WHEN** a 3-node cluster is initialized with trust enabled
++- **THEN** the Raft leader creates a root secret, splits it into 3 shares with K=2, submits one committed trust-init request for epoch 1, and each node stores only its own assigned share when that request is applied locally
++
++### Requirement: Share distribution via Raft
++
++Share distribution MUST happen through Raft-committed application entries, not out-of-band storage writes, so share assignment is part of the consensus log and followers do not depend on leader-local side effects.
++
++#### Scenario: Leader distributes shares
++
++- **WHEN** the Raft leader creates shares during init
++- **THEN** each node's share is included in the committed trust-init request together with the epoch digests
++
++#### Scenario: Follower applies trust-init request
++
++- **WHEN** a follower applies the committed trust-init request for its cluster epoch
++- **THEN** it stores its own share in `trust_shares`, stores the epoch digests, and does not require a direct write from the leader
+diff --git a/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/tasks.md b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/tasks.md
+new file mode 100644
+index 000000000..0e790f49a
+--- /dev/null
++++ b/openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution/tasks.md
+@@ -0,0 +1,17 @@
++## 1. Raft Request Plumbing
++
++- [x] 1.1 Add a `TrustInitialize` application request payload to `crates/aspen-raft-types` for epoch, per-node share bytes, and epoch digests.
++- [x] 1.2 Teach both redb and in-memory state-machine dispatch paths to handle `TrustInitialize` requests.
++- [x] 1.3 Track the local node ID inside `SharedRedbStorage` so trust-init apply can select only the local share.
++
++## 2. Cluster Init Integration
++
++- [x] 2.1 Change `RaftNode::initialize_trust()` to submit the committed `TrustInitialize` request through `raft.client_write()` instead of writing leader-local storage directly.
++- [x] 2.2 Update the cluster-init control-plane flow to await the async trust initialization hook and surface trust-init write failures cleanly.
++
++## 3. Regression Tests
++
++- [x] 3.1 Add a state-machine test proving `TrustInitialize` stores only the local share while persisting shared digests.
++- [x] 3.2 Add a node-level regression test covering multi-node trust init request construction and threshold validation.
++- [x] 3.3 Run targeted trust-enabled tests for `aspen-raft` and `aspen-trust`.
++- [x] 3.4 Add a multi-node cluster-init integration test that proves follower share persistence after the committed trust-init request is applied.
+diff --git a/openspec/specs/cluster-secret-lifecycle/spec.md b/openspec/specs/cluster-secret-lifecycle/spec.md
+index 08088f301..22ff65ee4 100644
+--- a/openspec/specs/cluster-secret-lifecycle/spec.md
++++ b/openspec/specs/cluster-secret-lifecycle/spec.md
+@@ -2,7 +2,7 @@
+
+ ### Requirement: Secret creation at cluster init
+
+-A cluster root secret MUST be created and shares distributed to all initial members during `init_cluster`.
++A cluster root secret MUST be created during `init_cluster`, and each initial member MUST persist only its assigned share by applying the committed trust-init request for the current epoch.
+
+ #### Scenario: Single-node cluster init
+
+@@ -12,7 +12,7 @@ A cluster root secret MUST be created and shares distributed to all initial memb
+ #### Scenario: Multi-node cluster init
+
+ - **WHEN** a 3-node cluster is initialized with trust enabled
+-- **THEN** the Raft leader creates a root secret, splits it into 3 shares with K=2, distributes shares to each member, and commits share digests to Raft state
++- **THEN** the Raft leader creates a root secret, splits it into 3 shares with K=2, submits one committed trust-init request for epoch 1, and each node stores only its own assigned share when that request is applied locally
+
+ ### Requirement: Share persistence
+
+@@ -63,9 +63,14 @@ The cluster secret MUST be reconstructable when at least K nodes are available a
+
+ ### Requirement: Share distribution via Raft
+
+-Share distribution MUST happen through Raft-committed entries, not out-of-band channels, so that share assignment is part of the consensus log.
++Share distribution MUST happen through Raft-committed application entries, not out-of-band storage writes, so share assignment is part of the consensus log and followers do not depend on leader-local side effects.
+
+ #### Scenario: Leader distributes shares
+
+ - **WHEN** the Raft leader creates shares during init
+-- **THEN** each node's share is included in a Raft log entry addressed to that node, and the node stores it upon applying the entry
++- **THEN** each node's share is included in the committed trust-init request together with the epoch digests
++
++#### Scenario: Follower applies trust-init request
++
++- **WHEN** a follower applies the committed trust-init request for its cluster epoch
++- **THEN** it stores its own share in `trust_shares`, stores the epoch digests, and does not require a direct write from the leader
 diff --git a/tests/consumer_group_integration_test.rs b/tests/consumer_group_integration_test.rs
 index 0ccedcb24..2f0cd032c 100644
 --- a/tests/consumer_group_integration_test.rs
