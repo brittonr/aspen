@@ -340,7 +340,8 @@ impl From<aspen_raft_types::AppRequest> for KvOperation {
             AppRequest::ShardSplit { .. }
             | AppRequest::ShardMerge { .. }
             | AppRequest::TopologyUpdate { .. }
-            | AppRequest::TrustInitialize(_) => KvOperation::Noop,
+            | AppRequest::TrustInitialize(_)
+            | AppRequest::TrustReconfiguration(_) => KvOperation::Noop,
         }
     }
 }

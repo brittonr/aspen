@@ -537,7 +537,7 @@ snix-daemon = ["snix", "dep:nix-daemon"]
 snix-eval = ["snix", "dep:snix-eval", "dep:snix-glue", "dep:snix-serde", "aspen-ci?/nix-executor-snix-eval"]
 snix-build = ["snix-eval", "dep:snix-build", "aspen-ci?/nix-executor-snix-build"]
 nix-cli-fallback = ["ci", "aspen-ci?/nix-cli-fallback"]
-trust = ["aspen-raft/trust"]
+trust = ["aspen-raft/trust", "aspen-cluster/trust"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]

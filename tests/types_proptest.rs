@@ -218,6 +218,12 @@ fn test_app_request_display_contains_key() {
                 assert!(displayed.contains(&payload.shares.len().to_string()));
                 assert!(displayed.contains(&payload.digests.len().to_string()));
             }
+            AppRequest::TrustReconfiguration(payload) => {
+                assert!(displayed.contains("TrustReconfiguration"), "Display should contain variant name");
+                assert!(displayed.contains(&payload.epoch.to_string()));
+                assert!(displayed.contains(&payload.shares.len().to_string()));
+                assert!(displayed.contains(&payload.digests.len().to_string()));
+            }
         }
     });
 }

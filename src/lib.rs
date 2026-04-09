@@ -117,6 +117,8 @@ pub use aspen_transport::RAFT_AUTH_ALPN;
 pub use aspen_transport::RAFT_SHARDED_ALPN;
 pub use aspen_transport::RaftProtocolHandler;
 pub use aspen_transport::ShardedRaftProtocolHandler;
+pub use aspen_transport::TRUST_ALPN;
+pub use aspen_transport::TrustProtocolHandler;
 pub use aspen_transport::TrustedPeersRegistry;
 // Re-export federation ALPN at crate root for convenient access
 #[cfg(feature = "federation")]

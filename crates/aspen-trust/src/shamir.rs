@@ -8,6 +8,8 @@
 //! Ported from the approach used in Oxide's `gfss` crate.
 
 use rand::Rng;
+use serde::Deserialize;
+use serde::Serialize;
 use sha3::Digest;
 use sha3::Sha3_256;
 use snafu::Snafu;
@@ -24,7 +26,7 @@ pub const SECRET_SIZE: usize = 32;
 ///
 /// The x-coordinate identifies this share (nonzero, 1-indexed).
 /// The y-values are the polynomial evaluations for each of the 32 secret bytes.
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct Share {
     /// Nonzero x-coordinate in GF(2^8). Range: 1..=255.
     pub x: u8,

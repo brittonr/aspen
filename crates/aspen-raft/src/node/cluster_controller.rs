@@ -133,16 +133,35 @@ impl ClusterController for RaftNode {
         }
 
         let members: std::collections::BTreeSet<NodeId> = request.members.iter().map(|&id| id.into()).collect();
+        #[cfg(feature = "trust")]
+        let old_members: std::collections::BTreeSet<u64> = {
+            let metrics = self.raft().metrics().borrow().clone();
+            metrics.membership_config.membership().voter_ids().map(|id| id.0).collect()
+        };
 
-        // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
-        tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft().change_membership(members, false))
-            .await
-            .map_err(|_| ControlPlaneError::Timeout {
-                duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
-            })?
-            .map_err(|err| ControlPlaneError::Failed {
-                reason: err.to_string(),
-            })?;
+        let membership_response =
+            tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft().change_membership(members, false))
+                .await
+                .map_err(|_| ControlPlaneError::Timeout {
+                    duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+                })?
+                .map_err(|err| ControlPlaneError::Failed {
+                    reason: err.to_string(),
+                })?;
+
+        #[cfg(feature = "trust")]
+        self.rotate_trust_after_membership_change(
+            old_members,
+            request.members.iter().copied().collect(),
+            membership_response.log_id.index(),
+        )
+        .await
+        .map_err(|reason| ControlPlaneError::Failed {
+            reason: format!("trust reconfiguration failed after membership change: {reason}"),
+        })?;
+
+        #[cfg(not(feature = "trust"))]
+        let _ = membership_response;
 
         Ok(self.build_cluster_state())
     }

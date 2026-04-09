@@ -152,6 +152,18 @@ impl RouterBuilder {
         self
     }
 
+    /// Register the trust share-collection protocol handler (optional).
+    ///
+    /// Handles `GetShare` requests during trust epoch rotation.
+    ///
+    /// ALPN: `/aspen/trust/1`
+    pub fn trust<T: iroh::protocol::ProtocolHandler>(mut self, handler: T) -> Self {
+        use aspen_transport::TRUST_ALPN;
+        self.builder = self.builder.accept(TRUST_ALPN, handler);
+        tracing::info!("registered trust protocol handler (ALPN: /aspen/trust/1)");
+        self
+    }
+
     /// Register the DAG sync protocol handler (optional).
     ///
     /// Enables streaming deterministic DAG traversal for efficient

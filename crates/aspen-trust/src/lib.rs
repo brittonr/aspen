@@ -27,6 +27,7 @@ pub mod envelope;
 pub mod gf256;
 pub mod kdf;
 pub mod nonce;
+pub mod protocol;
 pub mod reconfig;
 pub mod secret;
 pub mod shamir;

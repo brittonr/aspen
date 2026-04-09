@@ -13,6 +13,7 @@
 use std::fmt;
 
 use aspen_core::TxnOpResult;
+use aspen_trust::chain::EncryptedSecretChain;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -21,10 +22,31 @@ use serde::Serialize;
 pub struct TrustInitializePayload {
     /// Trust epoch being initialized.
     pub epoch: u64,
+    /// Explicit threshold override for this epoch, if configured.
+    pub threshold_override: Option<u8>,
     /// Serialized 33-byte shares keyed by node ID.
     pub shares: Vec<(u64, Vec<u8>)>,
     /// SHA3-256 digests for all shares in this epoch.
     pub digests: Vec<(u64, [u8; 32])>,
+    /// Epoch membership addresses keyed by node ID.
+    pub members: Vec<(u64, iroh::EndpointAddr)>,
+}
+
+/// Payload for committed trust reconfiguration.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct TrustReconfigurationPayload {
+    /// New trust epoch aligned with the committed membership log index.
+    pub epoch: u64,
+    /// Explicit threshold override for this epoch, if configured.
+    pub threshold_override: Option<u8>,
+    /// Serialized 33-byte shares keyed by node ID in the new membership.
+    pub shares: Vec<(u64, Vec<u8>)>,
+    /// SHA3-256 digests for all shares in the new epoch.
+    pub digests: Vec<(u64, [u8; 32])>,
+    /// Epoch membership addresses keyed by node ID.
+    pub members: Vec<(u64, iroh::EndpointAddr)>,
+    /// Encrypted chain carrying prior epoch secrets under the new epoch's secret.
+    pub encrypted_chain: EncryptedSecretChain,
 }
 
 /// Application-level requests replicated through Raft.
@@ -40,7 +62,7 @@ pub struct TrustInitializePayload {
 ///   LeaseKeepalive
 /// - **Atomic operations**: CompareAndSwap, CompareAndDelete, Batch, ConditionalBatch
 /// - **Transactions**: Transaction (etcd-style If/Then/Else semantics)
-/// - **Trust bootstrapping**: TrustInitialize
+/// - **Trust bootstrapping**: TrustInitialize, TrustReconfiguration
 ///
 /// # Tiger Style
 ///
@@ -219,6 +241,8 @@ pub enum AppRequest {
     },
     /// Initialize trust shares for a newly created cluster epoch.
     TrustInitialize(TrustInitializePayload),
+    /// Rotate trust shares after a membership change.
+    TrustReconfiguration(TrustReconfigurationPayload),
 }
 
 impl fmt::Display for AppRequest {
@@ -334,6 +358,16 @@ impl fmt::Display for AppRequest {
                     payload.epoch,
                     payload.shares.len(),
                     payload.digests.len()
+                )
+            }
+            AppRequest::TrustReconfiguration(payload) => {
+                write!(
+                    f,
+                    "TrustReconfiguration {{ epoch: {}, shares: {}, digests: {}, prior: {} }}",
+                    payload.epoch,
+                    payload.shares.len(),
+                    payload.digests.len(),
+                    payload.encrypted_chain.prior_count
                 )
             }
         }
@@ -546,8 +580,10 @@ mod tests {
     fn test_app_request_trust_initialize_display() {
         let req = AppRequest::TrustInitialize(TrustInitializePayload {
             epoch: 1,
+            threshold_override: Some(2),
             shares: vec![(1, vec![1; 33]), (2, vec![2; 33])],
             digests: vec![(1, [7; 32]), (2, [8; 32])],
+            members: vec![],
         });
         assert_eq!(format!("{}", req), "TrustInitialize { epoch: 1, shares: 2, digests: 2 }");
     }
@@ -556,12 +592,52 @@ mod tests {
     fn test_app_request_serde_trust_initialize() {
         let original = AppRequest::TrustInitialize(TrustInitializePayload {
             epoch: 9,
+            threshold_override: None,
             shares: vec![(1, vec![1; 33]), (5, vec![5; 33])],
             digests: vec![(1, [3; 32]), (5, [4; 32])],
+            members: vec![],
         });
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(format!("{}", deserialized), "TrustInitialize { epoch: 9, shares: 2, digests: 2 }");
+    }
+
+    #[test]
+    fn test_app_request_trust_reconfiguration_display() {
+        let req = AppRequest::TrustReconfiguration(TrustReconfigurationPayload {
+            epoch: 12,
+            threshold_override: Some(3),
+            shares: vec![(1, vec![1; 33]), (2, vec![2; 33]), (4, vec![4; 33])],
+            digests: vec![(1, [7; 32]), (2, [8; 32]), (4, [9; 32])],
+            members: vec![],
+            encrypted_chain: EncryptedSecretChain {
+                salt: [5; 32],
+                data: vec![1, 2, 3],
+                epoch: 12,
+                prior_count: 2,
+            },
+        });
+        assert_eq!(format!("{}", req), "TrustReconfiguration { epoch: 12, shares: 3, digests: 3, prior: 2 }");
+    }
+
+    #[test]
+    fn test_app_request_serde_trust_reconfiguration() {
+        let original = AppRequest::TrustReconfiguration(TrustReconfigurationPayload {
+            epoch: 12,
+            threshold_override: None,
+            shares: vec![(1, vec![1; 33]), (2, vec![2; 33]), (4, vec![4; 33])],
+            digests: vec![(1, [7; 32]), (2, [8; 32]), (4, [9; 32])],
+            members: vec![],
+            encrypted_chain: EncryptedSecretChain {
+                salt: [5; 32],
+                data: vec![1, 2, 3],
+                epoch: 12,
+                prior_count: 2,
+            },
+        });
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(format!("{}", deserialized), "TrustReconfiguration { epoch: 12, shares: 3, digests: 3, prior: 2 }");
     }
 
     // =========================================================================

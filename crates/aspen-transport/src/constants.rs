@@ -70,6 +70,12 @@ pub const FORGE_WEB_ALPN: &[u8] = b"aspen/forge-web/1";
 /// store and subscription registry.
 pub const NOSTR_WS_ALPN: &[u8] = b"/aspen/nostr-ws/1";
 
+/// ALPN protocol identifier for trust share collection.
+///
+/// Used by the trust reconfiguration coordinator to request epoch shares
+/// from current voting members before proposing a rotated configuration.
+pub const TRUST_ALPN: &[u8] = b"/aspen/trust/1";
+
 /// ALPN protocol identifier for DAG sync.
 ///
 /// Used for streaming deterministic DAG traversal between nodes.

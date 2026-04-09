@@ -18,4 +18,5 @@ subtle = "2.6"
 zeroize = { version = "1.8", features = ["derive"] }
 
 [dev-dependencies]
+postcard = { workspace = true }
 proptest = "1.6"

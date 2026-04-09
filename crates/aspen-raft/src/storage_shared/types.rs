@@ -59,6 +59,15 @@ pub const TRUST_SHARES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new
 #[cfg(feature = "trust")]
 pub const TRUST_DIGESTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trust_digests");
 
+/// Trust encrypted-chain table: key = epoch (u64), value = serialized EncryptedSecretChain.
+#[cfg(feature = "trust")]
+pub const TRUST_CHAINS_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("trust_chains");
+
+/// Trust epoch membership table: key = (epoch, node_id) packed as "epoch:node_id",
+/// value = serialized EndpointAddr.
+#[cfg(feature = "trust")]
+pub const TRUST_MEMBERS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("trust_members");
+
 /// Trust expungement table: singleton (key = 0), value = serialized ExpungedMetadata.
 /// Once set, the node is permanently expelled and refuses all trust/Raft operations.
 #[cfg(feature = "trust")]

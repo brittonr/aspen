@@ -13,6 +13,9 @@ impl SharedRedbStorage {
         leases_table: &mut redb::Table<u64, &[u8]>,
         #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
         #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
+        #[cfg(feature = "trust")] trust_chains_table: &mut redb::Table<u64, &[u8]>,
+        #[cfg(feature = "trust")] trust_members_table: &mut redb::Table<&str, &[u8]>,
+        _sm_meta_table: &mut redb::Table<&str, &[u8]>,
         request: &AppRequest,
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
@@ -153,11 +156,26 @@ impl SharedRedbStorage {
                 log_index,
             ),
             #[cfg(feature = "trust")]
-            AppRequest::TrustInitialize(payload) => {
-                self.apply_trust_initialize_in_txn(trust_shares_table, trust_digests_table, payload)
-            }
+            AppRequest::TrustInitialize(payload) => self.apply_trust_initialize_in_txn(
+                trust_shares_table,
+                trust_digests_table,
+                trust_members_table,
+                _sm_meta_table,
+                payload,
+            ),
             #[cfg(not(feature = "trust"))]
             AppRequest::TrustInitialize(_) => Ok(AppResponse::default()),
+            #[cfg(feature = "trust")]
+            AppRequest::TrustReconfiguration(payload) => self.apply_trust_reconfiguration_in_txn(
+                trust_shares_table,
+                trust_digests_table,
+                trust_chains_table,
+                trust_members_table,
+                _sm_meta_table,
+                payload,
+            ),
+            #[cfg(not(feature = "trust"))]
+            AppRequest::TrustReconfiguration(_) => Ok(AppResponse::default()),
             // Shard operations - pass through without state changes
             AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
                 Ok(AppResponse::default())

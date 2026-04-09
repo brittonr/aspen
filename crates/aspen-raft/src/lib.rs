@@ -84,6 +84,12 @@ pub mod storage_shared;
 pub mod storage_validation;
 /// Task supervision with restart logic.
 pub mod supervisor;
+/// Leadership watcher for restarting pending trust reconfiguration.
+#[cfg(feature = "trust")]
+pub mod trust_reconfig_watcher;
+/// Trust share collection client.
+#[cfg(feature = "trust")]
+pub mod trust_share_client;
 /// Background task for cleaning up expired TTL keys.
 pub mod ttl_cleanup;
 /// Type definitions and configurations for OpenRaft.

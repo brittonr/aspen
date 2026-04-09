@@ -587,8 +587,15 @@ fn create_raft_node(
     // forward writes to the leader, preventing job ack failures during elections.
     let endpoint = Arc::new(iroh_manager.endpoint().clone());
     let forwarder: Arc<dyn aspen_raft::write_forwarder::WriteForwarder> =
-        Arc::new(aspen_raft::iroh_write_forwarder::IrohWriteForwarder::new(endpoint));
+        Arc::new(aspen_raft::iroh_write_forwarder::IrohWriteForwarder::new(endpoint.clone()));
     node.set_write_forwarder(Arc::clone(&forwarder));
+
+    #[cfg(feature = "trust")]
+    {
+        let trust_client: Arc<dyn aspen_raft::trust_share_client::TrustShareClient> =
+            Arc::new(aspen_raft::trust_share_client::IrohTrustShareClient::new(endpoint));
+        node.set_trust_share_client(trust_client, config.cookie.as_bytes().to_vec());
+    }
 
     // Also wire forwarder into the batcher so batched writes can be forwarded
     // during leadership transitions (batcher collects writes, leadership
@@ -598,7 +605,14 @@ fn create_raft_node(
     }
     info!(node_id = config.node_id, "write forwarding enabled");
 
-    Arc::new(node)
+    let node = Arc::new(node);
+
+    #[cfg(feature = "trust")]
+    {
+        let _cancel = aspen_raft::trust_reconfig_watcher::spawn_trust_reconfig_watcher(node.clone());
+    }
+
+    node
 }
 
 /// Intermediate result for event broadcast channels.

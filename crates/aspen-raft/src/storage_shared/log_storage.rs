@@ -365,6 +365,10 @@ impl SharedRedbStorage {
         let mut trust_shares_table = write_txn.open_table(TRUST_SHARES_TABLE).context(OpenTableSnafu)?;
         #[cfg(feature = "trust")]
         let mut trust_digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).context(OpenTableSnafu)?;
+        #[cfg(feature = "trust")]
+        let mut trust_chains_table = write_txn.open_table(TRUST_CHAINS_TABLE).context(OpenTableSnafu)?;
+        #[cfg(feature = "trust")]
+        let mut trust_members_table = write_txn.open_table(TRUST_MEMBERS_TABLE).context(OpenTableSnafu)?;
 
         let mut new_tip_hash = prev_hash;
         let mut new_tip_index: u64 = 0;
@@ -387,6 +391,10 @@ impl SharedRedbStorage {
                 &mut trust_shares_table,
                 #[cfg(feature = "trust")]
                 &mut trust_digests_table,
+                #[cfg(feature = "trust")]
+                &mut trust_chains_table,
+                #[cfg(feature = "trust")]
+                &mut trust_members_table,
                 &mut pending_response_batch,
             )?;
 
@@ -419,6 +427,8 @@ impl SharedRedbStorage {
         sm_meta_table: &mut redb::Table<&str, &[u8]>,
         #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
         #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
+        #[cfg(feature = "trust")] trust_chains_table: &mut redb::Table<u64, &[u8]>,
+        #[cfg(feature = "trust")] trust_members_table: &mut redb::Table<&str, &[u8]>,
         pending_response_batch: &mut Vec<(u64, AppResponse)>,
     ) -> Result<([u8; 32], u64), io::Error> {
         let log_id = entry.log_id();
@@ -449,6 +459,10 @@ impl SharedRedbStorage {
             trust_shares_table,
             #[cfg(feature = "trust")]
             trust_digests_table,
+            #[cfg(feature = "trust")]
+            trust_chains_table,
+            #[cfg(feature = "trust")]
+            trust_members_table,
         )?;
         pending_response_batch.push((index, response));
 
@@ -471,6 +485,8 @@ impl SharedRedbStorage {
         sm_meta_table: &mut redb::Table<&str, &[u8]>,
         #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
         #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
+        #[cfg(feature = "trust")] trust_chains_table: &mut redb::Table<u64, &[u8]>,
+        #[cfg(feature = "trust")] trust_members_table: &mut redb::Table<&str, &[u8]>,
     ) -> Result<AppResponse, io::Error> {
         match &entry.payload {
             EntryPayload::Normal(request) => Ok(self.apply_request_in_txn(
@@ -482,6 +498,11 @@ impl SharedRedbStorage {
                 trust_shares_table,
                 #[cfg(feature = "trust")]
                 trust_digests_table,
+                #[cfg(feature = "trust")]
+                trust_chains_table,
+                #[cfg(feature = "trust")]
+                trust_members_table,
+                sm_meta_table,
                 request,
                 index,
             )?),

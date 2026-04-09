@@ -38,6 +38,10 @@ pub fn setup_router(
     use aspen::RAFT_ALPN;
     use aspen::RAFT_SHARDED_ALPN;
     use aspen::RaftProtocolHandler;
+    #[cfg(feature = "trust")]
+    use aspen::TRUST_ALPN;
+    #[cfg(feature = "trust")]
+    use aspen::TrustProtocolHandler;
     use iroh::protocol::Router;
     use iroh_gossip::ALPN as GOSSIP_ALPN;
 
@@ -74,6 +78,22 @@ pub fn setup_router(
                     builder = builder.accept(RAFT_ALPN, legacy_handler);
                 }
                 info!("Legacy RAFT_ALPN routing to shard 0 for backward compatibility");
+            }
+        }
+    }
+
+    #[cfg(feature = "trust")]
+    match &node_mode {
+        NodeMode::Single(handle) => {
+            let provider: Arc<dyn aspen_transport::TrustShareProvider> = handle.storage.raft_node.clone();
+            builder = builder.accept(TRUST_ALPN, TrustProtocolHandler::new(provider));
+            info!("Trust protocol handler registered (ALPN: /aspen/trust/1)");
+        }
+        NodeMode::Sharded(handle) => {
+            if let Some(shard) = handle.primary_shard() {
+                let provider: Arc<dyn aspen_transport::TrustShareProvider> = shard.clone();
+                builder = builder.accept(TRUST_ALPN, TrustProtocolHandler::new(provider));
+                info!("Trust protocol handler registered on primary shard (ALPN: /aspen/trust/1)");
             }
         }
     }

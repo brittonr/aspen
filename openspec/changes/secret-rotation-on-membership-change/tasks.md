@@ -19,20 +19,20 @@
 
 ## 3. Raft Integration
 
-- [ ] 3.1 Add `TrustReconfiguration` variant to Raft log entry types: contains new shares (per-node), encrypted chain, epoch, digests
-- [ ] 3.2 Hook into openraft `change_membership` completion callback to trigger trust reconfiguration
-- [ ] 3.3 In Raft leader: start `ReconfigCoordinator`, send `GetShare` requests via Iroh to old members
-- [ ] 3.4 Handle `GetShare` responses: feed into coordinator state machine, on transition to `Preparing` propose the `TrustReconfiguration` entry
-- [ ] 3.5 In state machine apply handler: each node extracts its new share and stores it, updates epoch, stores encrypted chain
-- [ ] 3.6 Handle leader change during reconfiguration: new leader detects pending reconfiguration flag and restarts
+- [x] 3.1 Add `TrustReconfiguration` variant to Raft log entry types: contains new shares (per-node), encrypted chain, epoch, digests
+- [x] 3.2 Hook into openraft `change_membership` completion callback to trigger trust reconfiguration
+- [x] 3.3 In Raft leader: start `ReconfigCoordinator`, send `GetShare` requests via Iroh to old members
+- [x] 3.4 Handle `GetShare` responses: feed into coordinator state machine, on transition to `Preparing` propose the `TrustReconfiguration` entry
+- [x] 3.5 In state machine apply handler: each node extracts its new share and stores it, updates epoch, stores encrypted chain
+- [x] 3.6 Handle leader change during reconfiguration: new leader detects pending reconfiguration flag and restarts
 
 ## 4. Share Collection via Iroh
 
-- [ ] 4.1 Add `TRUST_ALPN` constant to `aspen-transport` for trust protocol messages
-- [ ] 4.2 Implement `GetShareRequest { epoch: u64 }` and `ShareResponse { epoch: u64, share: Share }` message types
-- [ ] 4.3 Implement request handler: on `GetShareRequest`, load share from redb, validate requester is in current config, respond
-- [ ] 4.4 Implement response handler: validate share digest, feed into `ReconfigCoordinator`
-- [ ] 4.5 Add timeout: if fewer than K shares collected within `TRUST_SHARE_COLLECTION_TIMEOUT_MS` (default: 10_000), abort
+- [x] 4.1 Add `TRUST_ALPN` constant to `aspen-transport` for trust protocol messages
+- [x] 4.2 Implement `GetShareRequest { epoch: u64 }` and `ShareResponse { epoch: u64, share: Share }` message types
+- [x] 4.3 Implement request handler: on `GetShareRequest`, load share from redb, validate requester is in current config, respond
+- [x] 4.4 Implement response handler: validate share digest, feed into `ReconfigCoordinator`
+- [x] 4.5 Add timeout: if fewer than K shares collected within `TRUST_SHARE_COLLECTION_TIMEOUT_MS` (default: 10_000), abort
 
 ## 5. Testing
 

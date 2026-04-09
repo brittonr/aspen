@@ -12,6 +12,7 @@ aspen-raft-types = { path = "../aspen-raft-types" }
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-sharding = { path = "../aspen-sharding" }
+aspen-trust = { workspace = true }
 
 # P2P networking for Iroh connections
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }

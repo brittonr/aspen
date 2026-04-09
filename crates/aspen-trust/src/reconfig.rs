@@ -103,8 +103,10 @@ pub struct ReconfigCoordinator {
     old_epoch: u64,
     /// New epoch we're rotating to.
     new_epoch: u64,
-    /// Threshold for reconstruction.
-    threshold: u8,
+    /// Threshold for reconstruction from the old configuration.
+    old_threshold: u8,
+    /// Threshold for new shares in the next configuration.
+    new_threshold: u8,
     /// Nodes in the old configuration.
     old_members: BTreeSet<u64>,
     /// Nodes in the new configuration.
@@ -127,7 +129,8 @@ impl ReconfigCoordinator {
     pub fn new(
         old_epoch: u64,
         new_epoch: u64,
-        threshold: u8,
+        old_threshold: u8,
+        new_threshold: u8,
         old_members: BTreeSet<u64>,
         new_members: BTreeSet<u64>,
         expected_digests: BTreeMap<u64, ShareDigest>,
@@ -138,7 +141,8 @@ impl ReconfigCoordinator {
             state: ReconfigState::CollectingOldShares,
             old_epoch,
             new_epoch,
-            threshold,
+            old_threshold,
+            new_threshold,
             old_members,
             new_members,
             collected_shares: Vec::new(),
@@ -190,7 +194,7 @@ impl ReconfigCoordinator {
         self.share_sources.insert(from_node);
 
         // Check if we have enough shares
-        if self.collected_shares.len() as u8 >= self.threshold {
+        if self.collected_shares.len() as u8 >= self.old_threshold {
             self.prepare()
         } else {
             Ok(vec![])
@@ -202,7 +206,7 @@ impl ReconfigCoordinator {
         if self.state == ReconfigState::CollectingOldShares {
             let err = ReconfigError::Timeout {
                 collected: self.collected_shares.len() as u32,
-                needed: self.threshold as u32,
+                needed: self.old_threshold as u32,
             };
             self.state = ReconfigState::Failed {
                 reason: err.to_string(),
@@ -239,9 +243,8 @@ impl ReconfigCoordinator {
 
         // 5. Split new secret into shares for new members
         let n = self.new_members.len() as u8;
-        let new_threshold = crate::secret::Threshold::default_for_cluster_size(n as u32);
         let mut rng = rand::rng();
-        let shares = shamir::split_secret(new_secret.as_bytes(), new_threshold.value(), n, &mut rng)
+        let shares = shamir::split_secret(new_secret.as_bytes(), self.new_threshold, n, &mut rng)
             .map_err(|e| ReconfigError::SplitFailed { reason: e.to_string() })?;
 
         // Map shares to node IDs
@@ -330,6 +333,7 @@ mod tests {
             1,
             2,
             2,
+            2,
             old_members,
             new_members,
             digests,
@@ -373,8 +377,17 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 4].into();
 
-        let mut coordinator =
-            ReconfigCoordinator::new(1, 2, 2, old_members, new_members, digests, b"cluster".to_vec(), BTreeMap::new());
+        let mut coordinator = ReconfigCoordinator::new(
+            1,
+            2,
+            2,
+            2,
+            old_members,
+            new_members,
+            digests,
+            b"cluster".to_vec(),
+            BTreeMap::new(),
+        );
 
         let err = coordinator.on_timeout().unwrap_err();
         assert!(matches!(err, ReconfigError::Timeout {
@@ -391,8 +404,17 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 3].into();
 
-        let mut coordinator =
-            ReconfigCoordinator::new(1, 2, 2, old_members, new_members, digests, b"cluster".to_vec(), BTreeMap::new());
+        let mut coordinator = ReconfigCoordinator::new(
+            1,
+            2,
+            2,
+            2,
+            old_members,
+            new_members,
+            digests,
+            b"cluster".to_vec(),
+            BTreeMap::new(),
+        );
 
         // Send node 1's share but claim it's from node 2 → digest mismatch
         let result = coordinator.on_share_received(2, shares[0].clone());
@@ -406,8 +428,17 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 3].into();
 
-        let mut coordinator =
-            ReconfigCoordinator::new(1, 2, 2, old_members, new_members, digests, b"cluster".to_vec(), BTreeMap::new());
+        let mut coordinator = ReconfigCoordinator::new(
+            1,
+            2,
+            2,
+            2,
+            old_members,
+            new_members,
+            digests,
+            b"cluster".to_vec(),
+            BTreeMap::new(),
+        );
 
         coordinator.on_share_received(1, shares[0].clone()).unwrap();
         // Send again from node 1 → ignored

@@ -59,6 +59,8 @@ use openraft::Raft;
 use tokio::sync::Semaphore;
 
 use crate::StateMachineVariant;
+#[cfg(feature = "trust")]
+use crate::trust_share_client::TrustShareClient;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::write_batcher::BatchConfig;
@@ -114,6 +116,14 @@ pub struct RaftNode {
     /// leader instead of returning `NotLeader`. This prevents job ack failures
     /// and pipeline stalls during leader elections.
     write_forwarder: Option<Arc<dyn WriteForwarder>>,
+
+    /// Optional trust share client for membership-driven secret rotation.
+    #[cfg(feature = "trust")]
+    trust_share_client: Option<Arc<dyn TrustShareClient>>,
+
+    /// Cluster identifier used when deriving trust epoch keys.
+    #[cfg(feature = "trust")]
+    trust_cluster_id: Option<Vec<u8>>,
 }
 
 impl RaftNode {
@@ -129,6 +139,10 @@ impl RaftNode {
             sql_executor: OnceLock::new(),
             write_batcher: None,
             write_forwarder: None,
+            #[cfg(feature = "trust")]
+            trust_share_client: None,
+            #[cfg(feature = "trust")]
+            trust_cluster_id: None,
         }
     }
 
@@ -162,6 +176,10 @@ impl RaftNode {
             sql_executor: OnceLock::new(),
             write_batcher: Some(write_batcher),
             write_forwarder: None,
+            #[cfg(feature = "trust")]
+            trust_share_client: None,
+            #[cfg(feature = "trust")]
+            trust_cluster_id: None,
         }
     }
 
@@ -181,6 +199,25 @@ impl RaftNode {
     /// Get the write forwarder, if set.
     pub(crate) fn write_forwarder(&self) -> Option<&Arc<dyn WriteForwarder>> {
         self.write_forwarder.as_ref()
+    }
+
+    /// Set the trust share client and cluster identifier.
+    #[cfg(feature = "trust")]
+    pub fn set_trust_share_client(&mut self, client: Arc<dyn TrustShareClient>, cluster_id: Vec<u8>) {
+        self.trust_share_client = Some(client);
+        self.trust_cluster_id = Some(cluster_id);
+    }
+
+    /// Get the trust share client, if set.
+    #[cfg(feature = "trust")]
+    pub(crate) fn trust_share_client(&self) -> Option<&Arc<dyn TrustShareClient>> {
+        self.trust_share_client.as_ref()
+    }
+
+    /// Get the trust cluster identifier bytes.
+    #[cfg(feature = "trust")]
+    pub(crate) fn trust_cluster_id(&self) -> Option<&[u8]> {
+        self.trust_cluster_id.as_deref()
     }
 
     /// Get current leader's NodeId and EndpointAddr from Raft membership.
