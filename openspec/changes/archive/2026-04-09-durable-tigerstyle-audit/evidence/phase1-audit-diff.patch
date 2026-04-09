@@ -1,0 +1,139 @@
+diff --git a/openspec/changes/durable-tigerstyle-audit/audit-report.md b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+index 0fdc6ce83..5bce462a5 100644
+--- a/openspec/changes/durable-tigerstyle-audit/audit-report.md
++++ b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+@@ -1,57 +1,87 @@
+ # Tiger Style Audit Report
+ 
+-Status: audit-only planning artifact
++Status: audit-only
+ 
+-This report records the findings that prompted `durable-tigerstyle-audit`. It is intentionally reviewable from the repo and replaces the earlier split between chat-only notes and off-repo agent files.
++This report is the durable record for the Tiger Style audit that started this change. It keeps the current hotspot inventory, the scanner contract, and the evidence paths in one repo-visible place.
+ 
+ ## Scope
+ 
+-- Repo scan target: `crates/*/src/**/*.rs`
+-- Priority filters: production functions over 70 lines, zero-assert hotspots, recursion, `SystemTime::now()` / `Instant::now()` in `src/verified/`, and public or verified APIs that expose `usize`
+-- Manual spot checks: highest-ranked production hotspots from the scan
+-
+-## Current findings
+-
+-### Confirmed production hotspots
+-
+-- `crates/aspen-forge-handler/src/executor.rs:1538` `execute` — 693 lines
+-- `crates/aspen-core-essentials-handler/src/coordination.rs:93` `handle` — 547 lines
+-- `crates/aspen-ci-handler/src/handler/pipeline.rs:38` `handle_trigger_pipeline` — 287 lines
+-- `crates/aspen-auth/src/capability.rs:251` `Capability::authorizes` — 184 lines
+-- `crates/aspen-auth/src/capability.rs:452` `Capability::contains` — 164 lines
+-- `crates/aspen-forge/src/git/merge.rs:179` `merge_trees_recursive` — bounded recursion worth review
+-
+-### Verified-core and safety observations
+-
+-- No `SystemTime::now()` or `Instant::now()` calls were found under `crates/*/src/verified/**/*.rs` during the exploratory scan.
+-- The initial search found many `unwrap` and `expect` strings in `src/verified/`, but manual inspection showed that the visible examples in this audit were in tests or doc comments rather than production verified logic.
+-- The exploratory scan found multiple public or verified APIs still exposing `usize`, including:
+-  - `crates/aspen-ci-core/src/verified/pipeline.rs`
+-  - `crates/aspen-forge/src/verified/ref_validation.rs`
+-  - `crates/aspen-cluster/src/gossip/discovery/helpers.rs`
+-
+-## Scanner limitation discovered during exploration
+-
+-A naive regex-plus-brace scan miscounted trait method declarations as giant functions because it skipped past declaration signatures ending in `;` and grabbed the next `{` later in the file. The durable scanner for this change must treat that case as a regression fixture.
+-
+-## Interpretation
+-
+-This change is not yet remediation. It is a planning artifact for remediation. No production source refactors have landed under this change yet, so the correct status is `audit-only planning artifact`.
+-
+-The first remediation slice should target:
++- Scan target: `crates/*/src/**/*.rs`
++- Scanner command: `./scripts/tigerstyle-audit.py crates`
++- Hotspot rules:
++  - function bodies over 70 lines
++  - overlong functions with zero `assert!` / `debug_assert!` calls
++  - recursive function bodies
++  - `SystemTime::now()` or `Instant::now()` under `src/verified/`
++  - public or verified signatures that expose `usize`
++- Manual review focus: production handlers and pure APIs called out by the initial hotspot list
++
++## Methodology
++
++1. Run `./scripts/tigerstyle-audit.py --pretty --json crates` to emit a machine-readable inventory.
++2. Review the saved transcript at `openspec/changes/durable-tigerstyle-audit/evidence/initial-scan.txt`.
++3. Spot-check the highest-ranked production hotspots before turning them into refactor tasks.
++4. Keep the trait-declaration regression fixture green with `python3 tools/tigerstyle/test_tigerstyle_audit.py`.
++
++## Initial scan summary
++
++Source: `openspec/changes/durable-tigerstyle-audit/evidence/initial-scan.json`
++
++| Measure | Count |
++| --- | ---: |
++| Files scanned | 1285 |
++| Functions scanned | 16911 |
++| `function_length` hotspots | 363 |
++| `zero_assert_hotspot` hotspots | 363 |
++| `recursion` hotspots | 842 |
++| `usize_api` hotspots | 176 |
++| `verified_ambient_time` hotspots | 1 |
++| Parse errors | 5 |
++
++## Ranked hotspot table
++
++The scanner ranks by rule first, then by line count. This table calls out the highest-value production hotspots from the initial scan.
++
++| Rank | File | Function | Rules | Lines |
++| ---: | --- | --- | --- | ---: |
++| 1 | `crates/aspen-forge-handler/src/executor.rs` | `execute` | `zero_assert_hotspot`, `function_length` | 692 |
++| 2 | `crates/aspen-core-essentials-handler/src/coordination.rs` | `handle` | `zero_assert_hotspot`, `function_length` | 546 |
++| 3 | `crates/aspen-ci-handler/src/handler/pipeline.rs` | `handle_trigger_pipeline` | `zero_assert_hotspot`, `function_length` | 287 |
++| 4 | `crates/aspen-auth/src/capability.rs` | `authorizes` | `zero_assert_hotspot`, `function_length` | 184 |
++| 5 | `crates/aspen-auth/src/capability.rs` | `contains` | `zero_assert_hotspot`, `function_length` | 164 |
++| 6 | `crates/aspen-forge/src/git/merge.rs` | `merge_trees_recursive` | `zero_assert_hotspot`, `function_length`, `recursion` | 155 |
++| 7 | `crates/aspen-ci-core/src/verified/pipeline.rs` | verified/public `usize` API set | `usize_api` | n/a |
++| 8 | `crates/aspen-forge/src/verified/ref_validation.rs` | verified/public `usize` API set | `usize_api` | n/a |
++| 9 | `crates/aspen-cluster/src/gossip/discovery/helpers.rs` | verified/public `usize` API set | `usize_api` | n/a |
++
++## Known scanner limitations
++
++- The parser is brace- and semicolon-aware, but it is still a lightweight scanner. It does not expand macros or fully parse every Rust edge case.
++- The current run still reports five parse errors in complex files:
++  - `crates/aspen-ci/src/config/loader.rs`
++  - `crates/aspen-forge/src/cob/review.rs`
++  - `crates/aspen-forge/src/git/bridge/tests.rs`
++  - `crates/aspen-nostr-relay/src/connection.rs`
++  - `crates/aspen-rpc-handlers/src/registry.rs`
++- The recursion rule is purely lexical. It is good for prioritization, not proof.
++- The `usize_api` rule works at the signature level. It does not yet classify whether a `usize` is an internal adapter boundary or part of a durable public contract.
++
++## Regression coverage for the declaration-vs-body bug
++
++- Scanner: `scripts/tigerstyle-audit.py`
++- Fixture: `tools/tigerstyle/fixtures/trait_declaration_false_positive.rs`
++- Regression test: `tools/tigerstyle/test_tigerstyle_audit.py`
++- Saved run: `openspec/changes/durable-tigerstyle-audit/evidence/scanner-regression.txt`
++
++The fixture pins the failure mode from the exploratory scan: a trait declaration that ends in `;` must not be counted as a function body just because an impl body for the same name appears later in the file.
++
++## Current status
++
++This change is still audit-only. The report, scanner, fixture, and saved transcripts are now in-repo, but the production remediation tasks in phases 3 and 4 are still open.
++
++The first remediation slice stays the same:
+ 
+ 1. `handle_trigger_pipeline`
+ 2. `Capability::authorizes`
+ 3. `Capability::contains`
+-4. A small verified/public `usize` cleanup set
+-
+-The larger handlers in `aspen-core-essentials-handler` and `aspen-forge-handler` remain phase-two work.
+-
+-## Evidence policy for this change
+-
+-When the rerunnable scanner is added, this report must be updated to reference:
+-
+-- the scanner command path
+-- the saved transcript under `evidence/`
+-- the regression fixture covering the trait-declaration false positive
+-- before/after counts for each completed remediation slice
++4. The first verified/public `usize` cleanup set

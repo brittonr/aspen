@@ -1,0 +1,134 @@
+$ cargo test -p aspen-auth
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/aspen_auth-6a6ffca34407cc26)
+
+running 105 tests
+test hmac_auth::tests::test_auth_context_creation ... ok
+test hmac_auth::tests::test_auth_result_is_ok ... ok
+test credential::tests::test_credential_size_bounded ... ok
+test credential::tests::test_credential_encode_decode_roundtrip ... ok
+test credential::tests::test_credential_base64_roundtrip ... ok
+test hmac_auth::tests::test_challenge_generation ... ok
+test credential::tests::test_delegation_without_delegate_cap_rejected ... ok
+test credential::tests::test_delegation_outside_prefix_rejected ... ok
+test credential::tests::test_capability_escalation_rejected ... ok
+test hmac_auth::tests::test_constant_time_compare ... ok
+test hmac_auth::tests::test_successful_authentication ... ok
+test hmac_auth::tests::test_tampered_response_fails ... ok
+test credential::tests::test_credential_with_delegation_chain_roundtrip ... ok
+test hmac_auth::tests::test_wrong_client_id_fails ... ok
+test tests::federation_empty_prefix_matches_all ... ok
+test hmac_auth::tests::test_wrong_cookie_fails ... ok
+test tests::federation_pull_authorizes_matching_fed_id ... ok
+test tests::federation_pull_contains_narrower_prefix ... ok
+test tests::federation_pull_does_not_authorize_push ... ok
+test tests::federation_pull_does_not_contain_push ... ok
+test tests::federation_push_authorizes_matching_fed_id ... ok
+test tests::federation_push_contains_narrower_prefix ... ok
+test tests::net_admin_authorizes_all_net_ops ... ok
+test tests::net_admin_contains_all_net_caps ... ok
+test tests::net_connect_authorizes_matching_prefix ... ok
+test tests::net_connect_delegation_narrower_prefix ... ok
+test tests::net_connect_delegation_wider_prefix_rejected ... ok
+test tests::net_connect_denies_wrong_prefix ... ok
+test tests::net_connect_does_not_authorize_publish ... ok
+test tests::net_connect_does_not_contain_publish ... ok
+test tests::net_connect_wildcard_prefix ... ok
+test tests::net_publish_authorizes_matching_prefix ... ok
+test tests::net_publish_denies_wrong_prefix ... ok
+test tests::test_capability_authorizes_cluster_admin ... ok
+test tests::test_capability_authorizes_full ... ok
+test tests::test_capability_authorizes_read ... ok
+test tests::test_capability_authorizes_write ... ok
+test tests::test_capability_contains ... ok
+test tests::test_token_builder_with_nonce ... ok
+test tests::test_token_base64_roundtrip ... ok
+test tests::test_token_builder_with_audience ... ok
+test tests::test_token_encode_decode_roundtrip ... ok
+test tests::test_secrets_admin_authorizes_transit_and_pki_operations ... ok
+test tests::test_shell_execute_authorization_respects_pattern_and_working_dir ... ok
+test tests::test_shell_execute_contains_requires_narrower_pattern_and_working_dir ... ok
+test tests::test_token_builder_capability_escalation ... ok
+test tests::test_delegation_depth_tracking ... ok
+test tests::test_token_builder_too_many_capabilities ... ok
+test tests::test_token_builder_delegation_without_delegate_cap ... ok
+test tests::test_token_builder_basic ... ok
+test tests::test_token_too_large_on_decode ... ok
+test tests::test_token_encoding_typical_size ... ok
+test tests::test_token_builder_delegation ... ok
+test tests::test_concurrent_revocation_operations ... ok
+test tests::test_pki_manage_and_secrets_full_preserve_scope_rules ... ok
+test tests::test_verifier_load_and_get_revoked ... ok
+test tests::test_token_with_max_capabilities ... ok
+test verified_auth::tests::test_age_future_challenge ... ok
+test verified_auth::tests::test_age_normal ... ok
+test verified_auth::tests::test_age_same_time ... ok
+test tests::test_token_too_large_on_encode ... ok
+test verified_auth::tests::test_challenge_at_boundary ... ok
+test tests::test_verifier_rejects_tampered_signature ... ok
+test tests::test_concurrent_parent_registration ... ok
+test verified_auth::tests::test_challenge_expired ... ok
+test verified_auth::tests::test_challenge_future_timestamp ... ok
+test verified_auth::tests::test_challenge_within_window ... ok
+test verified_auth::tests::test_challenge_zero_max_age ... ok
+test verified_auth::tests::test_constant_time_compare_equal ... ok
+test verified_auth::tests::test_constant_time_compare_not_equal ... ok
+test verified_auth::tests::test_constant_time_compare_single_byte_diff ... ok
+test verified_auth::tests::test_fresh_challenge ... ok
+test verified_auth::tests::test_key_deterministic ... ok
+test verified_auth::tests::test_key_different_cookies ... ok
+test verified_auth::tests::test_key_empty_cookie ... ok
+test verified_auth::tests::test_key_long_cookie ... ok
+test tests::test_delegation_depth_at_max_allowed ... ok
+test verified_credential::tests::test_invalid_chain_too_deep ... ok
+test verified_credential::tests::test_valid_chain_single_level ... ok
+test verified_credential::tests::test_authorized_for_prefix ... ok
+test verified_credential::tests::test_authorized_for_prefix_full ... ok
+test verified_credential::tests::test_invalid_chain_no_delegate ... ok
+test verified_credential::tests::test_invalid_chain_escalation ... ok
+test verified_credential::tests::test_is_token_expired ... ok
+test verified_credential::tests::test_needs_refresh ... ok
+test tests::test_delegation_too_deep_error ... ok
+test credential::tests::test_root_credential_verification ... ok
+test credential::tests::test_broken_chain_rejected ... ok
+test tests::test_verifier_rejects_expired_token ... ok
+test tests::test_trusted_root_rejects_untrusted_issuer ... ok
+test tests::test_verifier_accepts_valid_token ... ok
+test credential::tests::test_two_level_chain_verification ... ok
+test tests::test_chain_verification_rejects_untrusted_root_in_chain ... ok
+test tests::test_verifier_revocation ... ok
+test tests::test_verifier_trusted_roots ... ok
+test credential::tests::test_token_with_facts_backward_compat ... ok
+test credential::tests::test_three_level_chain_verification ... ok
+test tests::test_delegated_token_requires_parent_for_chain_verification ... ok
+test tests::test_verify_with_chain_method ... ok
+test tests::test_verifier_checks_audience ... ok
+test tests::test_verifier_authorize ... ok
+test tests::test_generate_root_token ... ok
+test tests::test_full_authorization_flow ... ok
+test credential::tests::test_max_depth_chain ... ok
+test tests::test_concurrent_verify_and_revoke ... ok
+
+test result: ok. 105 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+   Doc-tests aspen_auth
+
+running 8 tests
+test crates/aspen-auth/src/builder.rs - builder::TokenBuilder (line 23) ... ignored
+test crates/aspen-auth/src/builder.rs - builder::generate_root_token (line 213) ... ignored
+test crates/aspen-auth/src/hmac_auth.rs - hmac_auth::AuthContext::new (line 150) ... ignored
+test crates/aspen-auth/src/lib.rs - (line 16) ... ignored
+test crates/aspen-auth/src/verifier.rs - verifier::TokenVerifier::verify_with_chain (line 241) ... ignored
+test crates/aspen-auth/src/verified_auth.rs - verified_auth::is_challenge_valid (line 59) ... ok
+test crates/aspen-auth/src/verified_auth.rs - verified_auth::calculate_challenge_age_ms (line 88) ... ok
+test crates/aspen-auth/src/verified_auth.rs - verified_auth::derive_hmac_key (line 116) ... ok
+
+test result: ok. 3 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 1.09s; merged doctests compilation took 1.09s

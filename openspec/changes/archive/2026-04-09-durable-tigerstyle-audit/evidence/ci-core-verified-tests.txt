@@ -1,0 +1,53 @@
+$ cargo test -p aspen-ci-core verified::pipeline
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling ppv-lite86 v0.2.21
+   Compiling syn v2.0.117
+   Compiling rand v0.9.2
+   Compiling chrono v0.4.44
+   Compiling rand_chacha v0.9.0
+   Compiling proptest v1.10.0
+   Compiling serde_json v1.0.149
+   Compiling uuid v1.22.0
+   Compiling serde_derive_internals v0.29.1
+   Compiling serde_derive v1.0.228
+   Compiling snafu-derive v0.8.9
+   Compiling schemars_derive v0.8.22
+   Compiling snafu v0.8.9
+   Compiling schemars v0.8.22
+   Compiling aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.36s
+     Running unittests src/lib.rs (target/debug/deps/aspen_ci_core-6fd50983f7097a04)
+
+running 20 tests
+test verified::pipeline::tests::test_after_build ... ok
+test verified::pipeline::tests::test_count_empty ... ok
+test verified::pipeline::tests::test_count_jobs ... ok
+test verified::pipeline::tests::test_cycle_detection ... ok
+test verified::pipeline::tests::test_deps_met ... ok
+test verified::pipeline::tests::test_empty_pipeline ... ok
+test verified::pipeline::tests::test_deps_not_met ... ok
+test verified::pipeline::tests::test_has_missing ... ok
+test verified::pipeline::tests::test_initial_ready ... ok
+test verified::pipeline::tests::test_linear_order ... ok
+test verified::pipeline::tests::test_no_deps ... ok
+test verified::pipeline::tests::test_no_missing ... ok
+test verified::pipeline::tests::test_parallel_stages ... ok
+test verified::pipeline::tests::test_self_dependency_empty ... ok
+test verified::pipeline::tests::test_self_dependency_false ... ok
+test verified::pipeline::tests::test_self_dependency_true ... ok
+test verified::pipeline::tests::test_stage_order_parallel ... ok
+test verified::pipeline::tests::test_too_many_jobs ... ok
+test verified::pipeline::tests::test_within_limits ... ok
+test verified::pipeline::tests::test_too_many_stages ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 62 filtered out; finished in 0.00s

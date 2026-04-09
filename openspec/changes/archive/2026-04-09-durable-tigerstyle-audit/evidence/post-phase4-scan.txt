@@ -1,0 +1,38 @@
+$ ./scripts/tigerstyle-audit.py crates
+scanner: scripts/tigerstyle-audit.py
+roots: crates
+files scanned: 1285
+functions scanned: 16990
+hotspot counts:
+  function_length: 364
+  recursion: 842
+  usize_api: 171
+  verified_ambient_time: 1
+  zero_assert_hotspot: 364
+top hotspots:
+  zero_assert_hotspot: crates/aspen-ci-executor-nix/src/flake_lock.rs:81 deserialize (1118 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-forge-handler/src/handler/handlers/federation.rs:1088 federation_import_objects (504 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-ci-executor-nix/src/executor.rs:261 try_native_build (452 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-cluster/src/gossip/discovery/lifecycle.rs:158 start_internal (407 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-client-api/src/messages/mod.rs:4247 required_app (392 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-client-api/src/messages/mod.rs:3881 variant_name (360 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-forge-handler/src/handler/handlers/federation.rs:656 handle_federation_fetch_refs (321 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-forge-handler/src/handler/handlers/federation_git.rs:148 sync_from_origin (295 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-transport/src/log_subscriber/connection.rs:44 handle_log_subscriber_connection (286 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-forge-handler/src/handler/handlers/federation.rs:1974 handle_federation_bidi_sync (255 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-core/src/test_support.rs:104 write (235 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-federation/src/gossip/receiver.rs:26 receiver_loop (215 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-forge-handler/src/handler/handlers/git_bridge.rs:187 handle_git_bridge_fetch (214 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-ci/src/orchestrator/deploy_executor.rs:194 execute (202 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-ci/src/agent/executor/process.rs:38 execute_inner (195 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-forge-handler/src/executor.rs:1934 execute_federation_request (191 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-ci-executor-nix/src/executor.rs:974 execute_build (182 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-ci-executor-shell/src/agent/executor.rs:207 execute_inner (181 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-cli/src/bin/aspen-cli/commands/cluster.rs:643 deploy_wait (181 lines, 0 asserts)
+  zero_assert_hotspot: crates/aspen-core-essentials-handler/src/core.rs:1006 handle_alert_evaluate (181 lines, 0 asserts)
+parse errors:
+  crates/aspen-ci/src/config/loader.rs: unterminated body for test_load_with_triggers in crates/aspen-ci/src/config/loader.rs
+  crates/aspen-forge/src/cob/review.rs: unterminated body for all_comments_chronological in crates/aspen-forge/src/cob/review.rs
+  crates/aspen-forge/src/git/bridge/tests.rs: unterminated body for test_federation_style_import_with_content_hash_correlation in crates/aspen-forge/src/git/bridge/tests.rs
+  crates/aspen-nostr-relay/src/connection.rs: unterminated body for handle_message in crates/aspen-nostr-relay/src/connection.rs
+  crates/aspen-rpc-handlers/src/registry.rs: unterminated body for dispatch_routes_to_matching_handler in crates/aspen-rpc-handlers/src/registry.rs

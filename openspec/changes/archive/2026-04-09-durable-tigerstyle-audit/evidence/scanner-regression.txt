@@ -1,0 +1,52 @@
+$ python3 tools/tigerstyle/test_tigerstyle_audit.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+OK
+
+$ ./scripts/tigerstyle-audit.py --pretty --json --line-limit 5 tools/tigerstyle/fixtures/trait_declaration_false_positive.rs
+{
+  "files_scanned": 1,
+  "functions_scanned": 2,
+  "hotspot_counts": {
+    "function_length": 1,
+    "usize_api": 1,
+    "zero_assert_hotspot": 1
+  },
+  "hotspots": [
+    {
+      "assert_count": 0,
+      "detail": "overlong function exceeds 5 lines with no assertions",
+      "file": "tools/tigerstyle/fixtures/trait_declaration_false_positive.rs",
+      "function": "declaration_only",
+      "line": 18,
+      "line_count": 13,
+      "rule": "zero_assert_hotspot"
+    },
+    {
+      "assert_count": 0,
+      "detail": "function exceeds 5 lines",
+      "file": "tools/tigerstyle/fixtures/trait_declaration_false_positive.rs",
+      "function": "declaration_only",
+      "line": 18,
+      "line_count": 13,
+      "rule": "function_length"
+    },
+    {
+      "assert_count": 0,
+      "detail": "public or verified signature exposes usize",
+      "file": "tools/tigerstyle/fixtures/trait_declaration_false_positive.rs",
+      "function": "regular_function",
+      "line": 33,
+      "line_count": 3,
+      "rule": "usize_api"
+    }
+  ],
+  "line_limit": 5,
+  "parse_errors": [],
+  "roots": [
+    "tools/tigerstyle/fixtures/trait_declaration_false_positive.rs"
+  ],
+  "scanner": "scripts/tigerstyle-audit.py"
+}

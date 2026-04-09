@@ -1,0 +1,26 @@
+$ cargo test -p aspen-cluster calculate_backoff_duration -- --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src/lib.rs (target/debug/deps/aspen_cluster-90e4c787d43bd42f)
+
+running 7 tests
+test gossip::discovery::tests::test_calculate_backoff_duration_last_index ... ok
+test gossip::discovery::tests::test_calculate_backoff_duration_clamps_to_max ... ok
+test gossip::discovery::tests::test_calculate_backoff_duration_first_index ... ok
+test gossip::discovery::tests::test_calculate_backoff_duration_middle_index ... ok
+test gossip::discovery::tests::test_calculate_backoff_duration_single_element ... ok
+test gossip::discovery::tests::test_calculate_backoff_duration_with_default_constants ... ok
+test gossip::discovery::tests::test_calculate_backoff_duration_zero_length_clamp ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 0.00s
+
+     Running tests/bootstrap_integration_test.rs (target/debug/deps/bootstrap_integration_test-56b6c201a5998071)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s

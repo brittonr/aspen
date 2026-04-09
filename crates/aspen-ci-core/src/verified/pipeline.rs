@@ -32,16 +32,16 @@ pub enum StageValidationError {
     /// Too many stages in pipeline.
     TooManyStages {
         /// Current number of stages
-        count: usize,
+        count: u32,
         /// Maximum allowed stages
-        max: usize,
+        max: u32,
     },
     /// Too many jobs in pipeline.
     TooManyJobs {
         /// Current number of jobs
-        count: usize,
+        count: u32,
         /// Maximum allowed jobs
-        max: usize,
+        max: u32,
     },
 }
 
@@ -189,7 +189,7 @@ pub fn find_ready_stages<'a>(
 ///
 /// # Returns
 ///
-/// Total job count (saturating at usize::MAX).
+/// Total job count (saturating at u32::MAX).
 ///
 /// # Example
 ///
@@ -200,8 +200,8 @@ pub fn find_ready_stages<'a>(
 /// assert_eq!(count_total_jobs(&[]), 0);
 /// ```
 #[inline]
-pub fn count_total_jobs(jobs_per_stage: &[usize]) -> usize {
-    jobs_per_stage.iter().fold(0usize, |acc, &count| acc.saturating_add(count))
+pub fn count_total_jobs(jobs_per_stage: &[u32]) -> u32 {
+    jobs_per_stage.iter().fold(0u32, |acc, &count| acc.saturating_add(count))
 }
 
 /// Check if pipeline size is within limits.
@@ -231,10 +231,10 @@ pub fn count_total_jobs(jobs_per_stage: &[usize]) -> usize {
 /// ```
 #[inline]
 pub fn check_pipeline_limits(
-    stage_count: usize,
-    job_count: usize,
-    max_stages: usize,
-    max_jobs: usize,
+    stage_count: u32,
+    job_count: u32,
+    max_stages: u32,
+    max_jobs: u32,
 ) -> Result<(), StageValidationError> {
     if stage_count > max_stages {
         return Err(StageValidationError::TooManyStages {
@@ -288,47 +288,64 @@ pub fn check_pipeline_limits(
 /// ];
 /// assert_eq!(compute_stage_order(cycle_deps, 2), None);
 /// ```
-pub fn compute_stage_order(stages_with_deps: &[(usize, Vec<usize>)], stage_count: usize) -> Option<Vec<usize>> {
+pub fn compute_stage_order(stages_with_deps: &[(u32, Vec<u32>)], stage_count: u32) -> Option<Vec<u32>> {
+    fn to_usize(value: u32) -> Option<usize> {
+        usize::try_from(value).ok()
+    }
+
     if stage_count == 0 {
         return Some(Vec::new());
     }
 
-    // Compute in-degree for each stage (number of dependencies)
-    let mut in_degree = vec![0usize; stage_count];
+    let stage_count_usize = to_usize(stage_count)?;
+    let mut in_degree = vec![0u32; stage_count_usize];
     for (idx, deps) in stages_with_deps {
-        if *idx < stage_count {
-            in_degree[*idx] = deps.len();
+        let Some(idx_usize) = to_usize(*idx) else {
+            continue;
+        };
+        if idx_usize < stage_count_usize {
+            in_degree[idx_usize] = u32::try_from(deps.len()).unwrap_or(u32::MAX);
         }
     }
 
-    // Start with stages that have no dependencies
-    let mut queue: Vec<usize> = (0..stage_count).filter(|&i| in_degree[i] == 0).collect();
+    let mut queue: Vec<u32> = (0..stage_count)
+        .filter(|&stage| {
+            let Some(stage_usize) = to_usize(stage) else {
+                return false;
+            };
+            in_degree[stage_usize] == 0
+        })
+        .collect();
 
-    let mut result = Vec::with_capacity(stage_count);
-    let mut processed = vec![false; stage_count];
+    let mut result = Vec::with_capacity(stage_count_usize);
+    let mut processed = vec![false; stage_count_usize];
 
     while let Some(stage) = queue.pop() {
-        if processed[stage] {
+        let stage_usize = to_usize(stage)?;
+        if processed[stage_usize] {
             continue;
         }
-        processed[stage] = true;
+        processed[stage_usize] = true;
         result.push(stage);
 
-        // Find stages that depend on this one and decrement their in-degree
         for (idx, deps) in stages_with_deps {
-            if !processed[*idx] && deps.contains(&stage) {
-                in_degree[*idx] = in_degree[*idx].saturating_sub(1);
-                if in_degree[*idx] == 0 {
-                    queue.push(*idx);
-                }
+            let Some(idx_usize) = to_usize(*idx) else {
+                continue;
+            };
+            if idx_usize >= processed.len() || processed[idx_usize] || !deps.contains(&stage) {
+                continue;
+            }
+            in_degree[idx_usize] = in_degree[idx_usize].saturating_sub(1);
+            if in_degree[idx_usize] == 0 {
+                queue.push(*idx);
             }
         }
     }
 
-    if result.len() == stage_count {
+    if result.len() == stage_count_usize {
         Some(result)
     } else {
-        None // Cycle detected
+        None
     }
 }
 
@@ -478,7 +495,7 @@ mod tests {
 
     #[test]
     fn test_empty_pipeline() {
-        let deps: &[(usize, Vec<usize>)] = &[];
+        let deps: &[(u32, Vec<u32>)] = &[];
         assert_eq!(compute_stage_order(deps, 0), Some(vec![]));
     }
 

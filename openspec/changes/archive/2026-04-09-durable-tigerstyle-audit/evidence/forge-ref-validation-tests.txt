@@ -1,0 +1,136 @@
+$ cargo test -p aspen-forge ref_validation
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on artifact directory
+   Compiling noq v0.17.0
+   Compiling rust_decimal v1.40.0
+   Compiling hickory-resolver v0.25.2
+   Compiling pkarr v5.0.2
+   Compiling bstr v1.12.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling ed25519 v2.2.3
+   Compiling tokio-tungstenite v0.28.0
+   Compiling cron v0.13.0
+   Compiling dtor-proc-macro v0.0.5
+   Compiling patchbay v0.1.0 (https://github.com/n0-computer/patchbay.git?rev=e0c48e094ae11442b1ea374b6d4d8fd55a498ac1#e0c48e09)
+   Compiling ctor-proc-macro v0.0.6
+   Compiling tokio-test v0.4.5
+   Compiling dtor v0.0.6
+   Compiling ctor v0.4.3
+   Compiling byte-unit v5.2.0
+   Compiling gix-validate v0.10.1
+   Compiling gix-date v0.12.1
+   Compiling openraft v0.10.0 (/home/brittonr/git/aspen/openraft/openraft)
+   Compiling gix-path v0.10.22
+   Compiling gix-actor v0.37.1
+   Compiling gix-object v0.54.1
+   Compiling ed25519-dalek v2.2.0
+   Compiling ssh-key v0.6.7
+   Compiling irpc v0.13.0
+   Compiling iroh-relay v0.97.0
+   Compiling iroh v0.97.0
+   Compiling aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+   Compiling aspen-crypto v0.1.0 (/home/brittonr/git/aspen/crates/aspen-crypto)
+   Compiling iroh-blobs v0.99.0
+   Compiling iroh-gossip v0.97.0
+   Compiling aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks-types)
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+   Compiling aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+   Compiling aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-core)
+   Compiling aspen-nostr-relay v0.1.0 (/home/brittonr/git/aspen/crates/aspen-nostr-relay)
+   Compiling aspen-testing-fixtures v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-fixtures)
+   Compiling aspen-auth v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth)
+   Compiling aspen-sharding v0.1.0 (/home/brittonr/git/aspen/crates/aspen-sharding)
+   Compiling aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-types)
+   Compiling aspen-coordination v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination)
+   Compiling aspen-redb-storage v0.1.0 (/home/brittonr/git/aspen/crates/aspen-redb-storage)
+   Compiling aspen-testing v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+   Compiling aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport)
+   Compiling aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+   Compiling aspen-federation v0.1.0 (/home/brittonr/git/aspen/crates/aspen-federation)
+   Compiling aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network)
+   Compiling aspen-jobs v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs)
+   Compiling aspen-dht-discovery v0.1.0 (/home/brittonr/git/aspen/crates/aspen-dht-discovery)
+   Compiling aspen-dag v0.1.0 (/home/brittonr/git/aspen/crates/aspen-dag)
+   Compiling aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+   Compiling aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster)
+   Compiling aspen-testing-patchbay v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-patchbay)
+   Compiling aspen-forge v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge)
+warning: unused import: `aspen_core::hlc::SerializableTimestamp`
+   --> crates/aspen-forge/src/cob/store/tests.rs:190:9
+    |
+190 |     use aspen_core::hlc::SerializableTimestamp;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `super::*`
+   --> crates/aspen-forge/src/cob/store/tests.rs:193:9
+    |
+193 |     use super::*;
+    |         ^^^^^^^^
+
+warning: `aspen-forge` (lib test) generated 2 warnings (run `cargo fix --lib -p aspen-forge --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 57.26s
+     Running unittests src/lib.rs (target/debug/deps/aspen_forge-03fc46478a8557c5)
+
+running 17 tests
+test verified::ref_validation::tests::test_component_starts_with_dot ... ok
+test verified::ref_validation::tests::test_consecutive_slashes ... ok
+test verified::ref_validation::tests::test_contains_at_brace ... ok
+test verified::ref_validation::tests::test_empty_ref_name ... ok
+test verified::ref_validation::tests::test_contains_double_dot ... ok
+test verified::ref_validation::tests::test_ends_with_dot ... ok
+test verified::ref_validation::tests::test_ends_with_lock ... ok
+test verified::ref_validation::tests::test_ends_with_slash ... ok
+test verified::ref_validation::tests::test_extract_ref_type ... ok
+test verified::ref_validation::tests::test_invalid_branch_names ... ok
+test verified::ref_validation::tests::test_invalid_chars ... ok
+test verified::ref_validation::tests::test_normalize ... ok
+test verified::ref_validation::tests::test_starts_with_dot ... ok
+test verified::ref_validation::tests::test_starts_with_slash ... ok
+test verified::ref_validation::tests::test_too_long_ref_name ... ok
+test verified::ref_validation::tests::test_valid_branch_names ... ok
+test verified::ref_validation::tests::test_valid_ref_names ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 313 filtered out; finished in 0.00s
+
+     Running tests/dag_sync_integration_test.rs (target/debug/deps/dag_sync_integration_test-5ecb8d971bf61aa5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+
+     Running tests/forge_lifecycle_test.rs (target/debug/deps/forge_lifecycle_test-5e963320e4a2fe97)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/git_push_announce_test.rs (target/debug/deps/git_push_announce_test-aa3df49a2fb97657)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/patchbay_dag_sync_test.rs (target/debug/deps/patchbay_dag_sync_test-0e67f655fe65c9f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/proptest_cob_resolution.rs (target/debug/deps/proptest_cob_resolution-4f920ea9461af3ac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s

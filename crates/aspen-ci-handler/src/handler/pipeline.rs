@@ -22,18 +22,219 @@ use super::helpers::pipeline_status_to_string;
 #[cfg(all(feature = "forge", feature = "blob"))]
 pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
+#[cfg(all(feature = "forge", feature = "blob"))]
+fn ci_trigger_error_response(message: impl Into<String>) -> ClientRpcResponse {
+    ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+        is_success: false,
+        run_id: None,
+        error: Some(message.into()),
+    })
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+fn ci_trigger_success_response(run_id: String) -> ClientRpcResponse {
+    ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+        is_success: true,
+        run_id: Some(run_id),
+        error: None,
+    })
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+#[allow(clippy::result_large_err)]
+fn parse_trigger_repo_id(repo_id: &str) -> Result<aspen_forge::identity::RepoId, ClientRpcResponse> {
+    use aspen_forge::identity::RepoId;
+
+    let parsed =
+        RepoId::from_hex(repo_id).map_err(|error| ci_trigger_error_response(format!("Invalid repo_id: {}", error)))?;
+    debug_assert_eq!(RepoId::from_hex(&parsed.to_hex()).ok(), Some(parsed));
+    Ok(parsed)
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+#[allow(clippy::result_large_err)]
+fn parse_requested_commit_hash(commit_hash: Option<&str>) -> Result<Option<[u8; 32]>, ClientRpcResponse> {
+    use super::helpers::parse_commit_hash;
+
+    commit_hash
+        .map(parse_commit_hash)
+        .transpose()
+        .map_err(|error| ci_trigger_error_response(format!("Invalid commit hash: {}", error)))
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+fn normalize_trigger_ref_name(ref_name: &str) -> String {
+    let ref_path = if ref_name.starts_with("refs/") {
+        ref_name.strip_prefix("refs/").unwrap_or(ref_name).to_string()
+    } else {
+        format!("heads/{ref_name}")
+    };
+    debug_assert!(!ref_path.starts_with("refs/"));
+    debug_assert!(!ref_path.is_empty());
+    ref_path
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+async fn resolve_trigger_commit_hash(
+    forge_node: &ForgeNodeRef,
+    repo_id: &str,
+    repo_id_parsed: &aspen_forge::identity::RepoId,
+    ref_name: &str,
+    requested_commit_hash: Option<[u8; 32]>,
+) -> Result<[u8; 32], ClientRpcResponse> {
+    if let Some(commit_hash) = requested_commit_hash {
+        return Ok(commit_hash);
+    }
+
+    let ref_path = normalize_trigger_ref_name(ref_name);
+    match forge_node.refs.get(repo_id_parsed, &ref_path).await {
+        Ok(Some(hash)) => {
+            info!(
+                repo_id = %repo_id,
+                ref_path = %ref_path,
+                commit = %hash,
+                "ci-trigger: ref resolved to commit"
+            );
+            Ok(*hash.as_bytes())
+        }
+        Ok(None) => Err(ci_trigger_error_response(format!("Ref '{}' not found in repository", ref_name))),
+        Err(error) => Err(ci_trigger_error_response(format!("Failed to resolve ref '{}': {}", ref_name, error))),
+    }
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+async fn load_trigger_pipeline_config(
+    forge_node: &ForgeNodeRef,
+    repo_id: &str,
+    commit_hash: [u8; 32],
+) -> Result<aspen_ci::config::types::PipelineConfig, ClientRpcResponse> {
+    use aspen_ci::config::load_pipeline_config_str_async;
+
+    use super::helpers::CI_CONFIG_PATH;
+    use super::helpers::walk_tree_for_file;
+
+    let commit_hash_blake3 = blake3::Hash::from_bytes(commit_hash);
+    info!(commit = %commit_hash_blake3, "ci-trigger: fetching commit object");
+    let commit = forge_node
+        .git
+        .get_commit(&commit_hash_blake3)
+        .await
+        .map_err(|error| ci_trigger_error_response(format!("Failed to get commit: {}", error)))?;
+
+    info!(
+        commit = %commit_hash_blake3,
+        tree = %commit.tree(),
+        "ci-trigger: commit resolved, walking tree for .aspen/ci.ncl"
+    );
+    let ci_config_content = match walk_tree_for_file(&forge_node.git, &commit.tree(), CI_CONFIG_PATH).await {
+        Ok(Some(content)) => content,
+        Ok(None) => {
+            warn!(
+                repo_id = %repo_id,
+                tree = %commit.tree(),
+                "ci-trigger: .aspen/ci.ncl NOT FOUND in commit tree"
+            );
+            return Err(ci_trigger_error_response("CI config file (.aspen/ci.ncl) not found in repository"));
+        }
+        Err(error) => {
+            warn!(repo_id = %repo_id, error = %error, "ci-trigger: error reading CI config from tree");
+            return Err(ci_trigger_error_response(format!("Failed to read CI config: {}", error)));
+        }
+    };
+
+    info!(
+        repo_id = %repo_id,
+        config_size_bytes = ci_config_content.len(),
+        "ci-trigger: found .aspen/ci.ncl"
+    );
+    let config_str = String::from_utf8(ci_config_content)
+        .map_err(|error| ci_trigger_error_response(format!("CI config is not valid UTF-8: {}", error)))?;
+
+    info!(repo_id = %repo_id, "ci-trigger: parsing Nickel CI config");
+    let pipeline_config = load_pipeline_config_str_async(config_str, ".aspen/ci.ncl".to_string())
+        .await
+        .map_err(|error| ci_trigger_error_response(format!("Failed to parse CI config: {}", error)))?;
+
+    info!(
+        repo_id = %repo_id,
+        stages = pipeline_config.stages.len(),
+        "ci-trigger: Nickel config parsed"
+    );
+    Ok(pipeline_config)
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+async fn cleanup_trigger_checkout(checkout_dir: &std::path::Path) {
+    use aspen_ci::checkout::cleanup_checkout;
+
+    let _ = cleanup_checkout(checkout_dir).await;
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+async fn checkout_trigger_repository(
+    forge_node: &ForgeNodeRef,
+    repo_id: &str,
+    commit_hash: &[u8; 32],
+    run_id: &str,
+) -> Result<std::path::PathBuf, ClientRpcResponse> {
+    use aspen_ci::checkout::checkout_dir_for_run;
+    use aspen_ci::checkout::checkout_repository;
+    use aspen_ci::checkout::prepare_for_ci_build;
+
+    let checkout_dir = checkout_dir_for_run(run_id);
+    debug_assert!(checkout_dir.ends_with(run_id));
+
+    info!(
+        repo_id = %repo_id,
+        commit = %hex::encode(commit_hash),
+        checkout_dir = %checkout_dir.display(),
+        "ci-trigger: checking out repository"
+    );
+    if let Err(error) = checkout_repository(forge_node, commit_hash, &checkout_dir).await {
+        warn!(repo_id = %repo_id, error = %error, "ci-trigger: checkout failed");
+        cleanup_trigger_checkout(&checkout_dir).await;
+        return Err(ci_trigger_error_response(format!("Failed to checkout repository: {}", error)));
+    }
+
+    if let Err(error) = prepare_for_ci_build(&checkout_dir, commit_hash).await {
+        cleanup_trigger_checkout(&checkout_dir).await;
+        return Err(ci_trigger_error_response(format!("Failed to prepare checkout for CI build: {}", error)));
+    }
+
+    Ok(checkout_dir)
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+fn build_trigger_context(
+    repo_id: aspen_forge::identity::RepoId,
+    commit_hash: [u8; 32],
+    ref_name: &str,
+    checkout_dir: &std::path::Path,
+) -> aspen_ci::orchestrator::PipelineContext {
+    use aspen_ci::orchestrator::PipelineContext;
+
+    let checkout_dir_string = checkout_dir.to_string_lossy().to_string();
+    let mut env = HashMap::new();
+    env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir_string.clone());
+    debug_assert_eq!(env.get("CI_CHECKOUT_DIR").map(String::as_str), Some(checkout_dir_string.as_str()));
+
+    let context = PipelineContext {
+        repo_id,
+        commit_hash,
+        ref_name: ref_name.to_string(),
+        triggered_by: "rpc".to_string(),
+        run_id: String::new(),
+        env,
+        checkout_dir: Some(checkout_dir.to_path_buf()),
+        source_hash: None,
+    };
+    debug_assert!(context.checkout_dir.is_some());
+    context
+}
+
 /// Handle CiTriggerPipeline request.
 ///
 /// Triggers a new pipeline run for the given repository and ref.
-///
-/// # Flow
-///
-/// 1. Parse repo_id from hex string
-/// 2. Resolve ref to commit hash (if commit_hash not provided)
-/// 3. Fetch `.aspen/ci.ncl` from the commit's tree
-/// 4. Parse the CI config
-/// 5. Create PipelineContext
-/// 6. Execute pipeline via orchestrator
 #[cfg(all(feature = "forge", feature = "blob"))]
 pub async fn handle_trigger_pipeline(
     orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
@@ -42,18 +243,6 @@ pub async fn handle_trigger_pipeline(
     ref_name: String,
     commit_hash_opt: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_ci::checkout::checkout_dir_for_run;
-    use aspen_ci::checkout::checkout_repository;
-    use aspen_ci::checkout::cleanup_checkout;
-    use aspen_ci::checkout::prepare_for_ci_build;
-    use aspen_ci::config::load_pipeline_config_str_async;
-    use aspen_ci::orchestrator::PipelineContext;
-    use aspen_forge::identity::RepoId;
-
-    use super::helpers::CI_CONFIG_PATH;
-    use super::helpers::parse_commit_hash;
-    use super::helpers::walk_tree_for_file;
-
     info!(
         repo_id = %repo_id,
         ref_name = %ref_name,
@@ -63,264 +252,52 @@ pub async fn handle_trigger_pipeline(
     );
 
     let Some(orchestrator) = orchestrator else {
-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            is_success: false,
-            run_id: None,
-            error: Some("CI orchestrator not available".to_string()),
-        }));
+        return Ok(ci_trigger_error_response("CI orchestrator not available"));
     };
-
     let Some(forge_node) = forge_node else {
-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            is_success: false,
-            run_id: None,
-            error: Some("Forge not available - required for CI config".to_string()),
-        }));
+        return Ok(ci_trigger_error_response("Forge not available - required for CI config"));
     };
 
-    // Parse repo_id from hex string
-    let repo_id_parsed = match RepoId::from_hex(&repo_id) {
-        Ok(id) => {
-            info!(repo_id = %repo_id, "ci-trigger: repo_id parsed successfully");
-            id
-        }
-        Err(e) => {
-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                is_success: false,
-                run_id: None,
-                error: Some(format!("Invalid repo_id: {}", e)),
-            }));
-        }
+    let repo_id_parsed = match parse_trigger_repo_id(&repo_id) {
+        Ok(parsed) => parsed,
+        Err(response) => return Ok(response),
+    };
+    let requested_commit_hash = match parse_requested_commit_hash(commit_hash_opt.as_deref()) {
+        Ok(hash) => hash,
+        Err(response) => return Ok(response),
+    };
+    let commit_hash = match resolve_trigger_commit_hash(
+        forge_node,
+        &repo_id,
+        &repo_id_parsed,
+        &ref_name,
+        requested_commit_hash,
+    )
+    .await
+    {
+        Ok(hash) => hash,
+        Err(response) => return Ok(response),
+    };
+    let pipeline_config = match load_trigger_pipeline_config(forge_node, &repo_id, commit_hash).await {
+        Ok(config) => config,
+        Err(response) => return Ok(response),
     };
 
-    // Resolve commit hash - either use provided or resolve from ref
-    let commit_hash = match commit_hash_opt {
-        Some(hash_str) => {
-            // Parse provided hash
-            match parse_commit_hash(&hash_str) {
-                Ok(hash) => hash,
-                Err(e) => {
-                    return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                        is_success: false,
-                        run_id: None,
-                        error: Some(format!("Invalid commit hash: {}", e)),
-                    }));
-                }
-            }
-        }
-        None => {
-            // Resolve from ref
-            let ref_path = if ref_name.starts_with("refs/") {
-                ref_name.strip_prefix("refs/").unwrap_or(&ref_name).to_string()
-            } else {
-                format!("heads/{}", ref_name)
-            };
-
-            match forge_node.refs.get(&repo_id_parsed, &ref_path).await {
-                Ok(Some(hash)) => {
-                    info!(
-                        repo_id = %repo_id,
-                        ref_path = %ref_path,
-                        commit = %hash,
-                        "ci-trigger: ref resolved to commit"
-                    );
-                    *hash.as_bytes()
-                }
-                Ok(None) => {
-                    return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                        is_success: false,
-                        run_id: None,
-                        error: Some(format!("Ref '{}' not found in repository", ref_name)),
-                    }));
-                }
-                Err(e) => {
-                    return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                        is_success: false,
-                        run_id: None,
-                        error: Some(format!("Failed to resolve ref '{}': {}", ref_name, e)),
-                    }));
-                }
-            }
-        }
-    };
-
-    // Get the commit to find its tree
-    let commit_hash_blake3 = blake3::Hash::from_bytes(commit_hash);
-    info!(
-        commit = %commit_hash_blake3,
-        "ci-trigger: fetching commit object"
-    );
-    let commit = match forge_node.git.get_commit(&commit_hash_blake3).await {
-        Ok(c) => {
-            info!(
-                commit = %commit_hash_blake3,
-                tree = %c.tree(),
-                "ci-trigger: commit resolved, walking tree for .aspen/ci.ncl"
-            );
-            c
-        }
-        Err(e) => {
-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                is_success: false,
-                run_id: None,
-                error: Some(format!("Failed to get commit: {}", e)),
-            }));
-        }
-    };
-
-    // Walk the tree to find .aspen/ci.ncl
-    let ci_config_content = match walk_tree_for_file(&forge_node.git, &commit.tree(), CI_CONFIG_PATH).await {
-        Ok(Some(content)) => {
-            info!(
-                repo_id = %repo_id,
-                config_size_bytes = content.len(),
-                "ci-trigger: found .aspen/ci.ncl ({} bytes)",
-                content.len()
-            );
-            content
-        }
-        Ok(None) => {
-            warn!(
-                repo_id = %repo_id,
-                tree = %commit.tree(),
-                "ci-trigger: .aspen/ci.ncl NOT FOUND in commit tree"
-            );
-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                is_success: false,
-                run_id: None,
-                error: Some("CI config file (.aspen/ci.ncl) not found in repository".to_string()),
-            }));
-        }
-        Err(e) => {
-            warn!(
-                repo_id = %repo_id,
-                error = %e,
-                "ci-trigger: error reading CI config from tree"
-            );
-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                is_success: false,
-                run_id: None,
-                error: Some(format!("Failed to read CI config: {}", e)),
-            }));
-        }
-    };
-
-    // Parse the CI config
-    let config_str = match String::from_utf8(ci_config_content) {
-        Ok(s) => s,
-        Err(e) => {
-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                is_success: false,
-                run_id: None,
-                error: Some(format!("CI config is not valid UTF-8: {}", e)),
-            }));
-        }
-    };
-
-    // Use async version to run Nickel evaluation on a thread with large stack
-    info!(repo_id = %repo_id, "ci-trigger: parsing Nickel CI config");
-    let pipeline_config = match load_pipeline_config_str_async(config_str, ".aspen/ci.ncl".to_string()).await {
-        Ok(c) => {
-            info!(
-                repo_id = %repo_id,
-                stages = c.stages.len(),
-                "ci-trigger: Nickel config parsed ({} stages)",
-                c.stages.len()
-            );
-            c
-        }
-        Err(e) => {
-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                is_success: false,
-                run_id: None,
-                error: Some(format!("Failed to parse CI config: {}", e)),
-            }));
-        }
-    };
-
-    // Generate checkout directory and perform checkout
     let run_id = uuid::Uuid::new_v4().to_string();
-    let checkout_dir = checkout_dir_for_run(&run_id);
-
-    info!(
-        repo_id = %repo_id,
-        commit = %hex::encode(commit_hash),
-        checkout_dir = %checkout_dir.display(),
-        "Checking out repository for CI"
-    );
-
-    info!(
-        repo_id = %repo_id,
-        checkout_dir = %checkout_dir.display(),
-        "ci-trigger: checking out repository"
-    );
-    if let Err(e) = checkout_repository(forge_node, &commit_hash, &checkout_dir).await {
-        warn!(
-            repo_id = %repo_id,
-            error = %e,
-            "ci-trigger: checkout failed"
-        );
-        // Clean up partial checkout directory
-        let _ = cleanup_checkout(&checkout_dir).await;
-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            is_success: false,
-            run_id: None,
-            error: Some(format!("Failed to checkout repository: {}", e)),
-        }));
-    }
-
-    // Prepare checkout for CI build (removes path patches from .cargo/config.toml)
-    if let Err(e) = prepare_for_ci_build(&checkout_dir, &commit_hash).await {
-        // Clean up failed checkout directory
-        let _ = cleanup_checkout(&checkout_dir).await;
-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-            is_success: false,
-            run_id: None,
-            error: Some(format!("Failed to prepare checkout for CI build: {}", e)),
-        }));
-    }
-
-    // Build environment variables
-    let mut env = HashMap::new();
-    env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir.to_string_lossy().to_string());
-
-    // Create pipeline context with checkout directory
-    // Note: source_hash is not set here because this is a direct RPC call without blob store.
-    // VM jobs triggered via this path will need checkout_dir to be accessible or use
-    // the OrchestratorPipelineStarter adapter which creates source archives.
-    let context = PipelineContext {
-        repo_id: repo_id_parsed,
-        commit_hash,
-        ref_name: ref_name.clone(),
-        triggered_by: "rpc".to_string(), // Could be enhanced with auth info
-        run_id: String::new(),           // Set by orchestrator after run ID generation
-        env,
-        checkout_dir: Some(checkout_dir),
-        source_hash: None, // VM jobs may fail without source_hash
+    let checkout_dir = match checkout_trigger_repository(forge_node, &repo_id, &commit_hash, &run_id).await {
+        Ok(path) => path,
+        Err(response) => return Ok(response),
     };
+    let context = build_trigger_context(repo_id_parsed, commit_hash, &ref_name, &checkout_dir);
 
-    // Execute the pipeline.
-    // Deploy monitoring is handled automatically by the orchestrator
-    // when a deploy dispatcher is configured — no need to spawn it here.
     info!(repo_id = %repo_id, "ci-trigger: starting pipeline via orchestrator");
     let run = match orchestrator.execute(pipeline_config, context).await {
-        Ok(r) => r,
-        Err(e) => {
-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-                is_success: false,
-                run_id: None,
-                error: Some(format!("Failed to start pipeline: {}", e)),
-            }));
-        }
+        Ok(run) => run,
+        Err(error) => return Ok(ci_trigger_error_response(format!("Failed to start pipeline: {}", error))),
     };
 
     info!(run_id = %run.id, "CI pipeline started successfully");
-
-    Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
-        is_success: true,
-        run_id: Some(run.id),
-        error: None,
-    }))
+    Ok(ci_trigger_success_response(run.id))
 }
 
 /// Handle CiGetStatus request.
@@ -591,5 +568,62 @@ pub async fn handle_cancel_run(
             is_success: false,
             error: Some(format!("Failed to cancel pipeline: {}", e)),
         })),
+    }
+}
+
+#[cfg(all(test, feature = "forge", feature = "blob"))]
+mod tests {
+    use std::path::Path;
+
+    use aspen_client_api::CiTriggerPipelineResponse;
+    use aspen_forge::identity::RepoId;
+
+    use super::*;
+
+    fn trigger_response(response: ClientRpcResponse) -> CiTriggerPipelineResponse {
+        match response {
+            ClientRpcResponse::CiTriggerPipelineResult(result) => result,
+            other => panic!("expected CiTriggerPipelineResult, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn normalize_trigger_ref_name_handles_short_and_full_refs() {
+        assert_eq!(normalize_trigger_ref_name("main"), "heads/main");
+        assert_eq!(normalize_trigger_ref_name("refs/heads/main"), "heads/main");
+        assert_eq!(normalize_trigger_ref_name("refs/tags/v1"), "tags/v1");
+    }
+
+    #[test]
+    fn parse_trigger_repo_id_rejects_invalid_hex() {
+        let response = parse_trigger_repo_id("not-hex").expect_err("invalid repo id should fail");
+        let result = trigger_response(response);
+        assert!(!result.is_success);
+        assert!(result.error.unwrap_or_default().contains("Invalid repo_id"));
+    }
+
+    #[test]
+    fn parse_requested_commit_hash_rejects_wrong_length() {
+        let response = parse_requested_commit_hash(Some("abcd")).expect_err("short commit hash should fail");
+        let result = trigger_response(response);
+        assert!(!result.is_success);
+        assert!(result.error.unwrap_or_default().contains("Invalid commit hash"));
+    }
+
+    #[test]
+    fn build_trigger_context_sets_checkout_env_and_empty_run_id() {
+        let repo_id = RepoId([7u8; 32]);
+        let commit_hash = [9u8; 32];
+        let checkout_dir = Path::new("/tmp/aspen-checkout/test-run");
+        let context = build_trigger_context(repo_id, commit_hash, "main", checkout_dir);
+
+        assert_eq!(context.repo_id, repo_id);
+        assert_eq!(context.commit_hash, commit_hash);
+        assert_eq!(context.ref_name, "main");
+        assert_eq!(context.triggered_by, "rpc");
+        assert!(context.run_id.is_empty());
+        assert_eq!(context.env.get("CI_CHECKOUT_DIR").map(String::as_str), Some("/tmp/aspen-checkout/test-run"));
+        assert_eq!(context.checkout_dir.as_deref(), Some(checkout_dir));
+        assert!(context.source_hash.is_none());
     }
 }

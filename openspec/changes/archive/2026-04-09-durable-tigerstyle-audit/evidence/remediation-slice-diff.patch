@@ -1,0 +1,1816 @@
+diff --git a/crates/aspen-auth/src/capability.rs b/crates/aspen-auth/src/capability.rs
+index 328a0528a..ca8874eac 100644
+--- a/crates/aspen-auth/src/capability.rs
++++ b/crates/aspen-auth/src/capability.rs
+@@ -244,192 +244,191 @@ pub enum Capability {
+     },
+ }
+ 
++fn matches_prefix_scope(prefix: &str, value: &str) -> bool {
++    value.starts_with(prefix)
++}
++
++fn matches_mount_scope(cap_mount: &str, op_mount: &str, cap_prefix: &str, path: &str) -> bool {
++    cap_mount == op_mount && matches_prefix_scope(cap_prefix, path)
++}
++
++fn shell_command_matches(pattern: &str, command: &str) -> bool {
++    match pattern {
++        "*" => true,
++        pattern if pattern.contains('*') => glob_match(pattern, command),
++        exact => exact == command,
++    }
++}
++
++fn shell_working_dir_matches(capability_dir: &Option<String>, requested_dir: &Option<String>) -> bool {
++    match (capability_dir, requested_dir) {
++        (None, _) => true,
++        (Some(parent), Some(child)) => child.starts_with(parent),
++        (Some(_), None) => false,
++    }
++}
++
++fn shell_pattern_contains(parent_pattern: &str, child_pattern: &str) -> bool {
++    if parent_pattern == "*" {
++        return true;
++    }
++    if child_pattern == "*" {
++        return false;
++    }
++    if parent_pattern.ends_with('*') && child_pattern.ends_with('*') {
++        return child_pattern.starts_with(parent_pattern.trim_end_matches('*'));
++    }
++    if parent_pattern.ends_with('*') {
++        return child_pattern.starts_with(parent_pattern.trim_end_matches('*'));
++    }
++    parent_pattern == child_pattern
++}
++
+ impl Capability {
+     /// Check if this capability authorizes the given operation.
+     ///
+     /// Returns true if this capability grants permission for the operation.
+     pub fn authorizes(&self, op: &Operation) -> bool {
++        self.authorizes_data(op)
++            .or_else(|| self.authorizes_shell(op))
++            .or_else(|| self.authorizes_secrets(op))
++            .or_else(|| self.authorizes_transit(op))
++            .or_else(|| self.authorizes_pki(op))
++            .or_else(|| self.authorizes_net(op))
++            .or_else(|| self.authorizes_federation(op))
++            .unwrap_or(false)
++    }
++
++    fn authorizes_data(&self, op: &Operation) -> Option<bool> {
++        match (self, op) {
++            (Capability::Full { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(prefix, key)),
++            (Capability::Full { prefix }, Operation::Write { key, .. }) => Some(matches_prefix_scope(prefix, key)),
++            (Capability::Full { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(prefix, key)),
++            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => {
++                Some(matches_prefix_scope(prefix, key_prefix))
++            }
++            (Capability::Read { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(prefix, key)),
++            (Capability::Write { prefix }, Operation::Write { key, .. }) => Some(matches_prefix_scope(prefix, key)),
++            (Capability::Delete { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(prefix, key)),
++            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => {
++                Some(matches_prefix_scope(prefix, key_prefix))
++            }
++            (Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => Some(true),
++            _ => None,
++        }
++    }
++
++    fn authorizes_shell(&self, op: &Operation) -> Option<bool> {
+         match (self, op) {
+-            // Full authorizes all data operations for matching prefix
+-            (Capability::Full { prefix }, Operation::Read { key }) => key.starts_with(prefix),
+-            (Capability::Full { prefix }, Operation::Write { key, .. }) => key.starts_with(prefix),
+-            (Capability::Full { prefix }, Operation::Delete { key }) => key.starts_with(prefix),
+-            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => key_prefix.starts_with(prefix),
+-            // Specific capabilities
+-            (Capability::Read { prefix }, Operation::Read { key }) => key.starts_with(prefix),
+-            (Capability::Write { prefix }, Operation::Write { key, .. }) => key.starts_with(prefix),
+-            (Capability::Delete { prefix }, Operation::Delete { key }) => key.starts_with(prefix),
+-            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => key_prefix.starts_with(prefix),
+-            // ClusterAdmin operations
+-            (Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => true,
+-            // ShellExecute operations
+             (
+                 Capability::ShellExecute {
+                     command_pattern,
+-                    working_dir: cap_wd,
++                    working_dir,
+                 },
+                 Operation::ShellExecute {
+                     command,
+-                    working_dir: op_wd,
+-                },
+-            ) => {
+-                // Check command pattern match
+-                let cmd_match = match command_pattern.as_str() {
+-                    "*" => true,
+-                    pattern if pattern.contains('*') => glob_match(pattern, command),
+-                    exact => exact == command,
+-                };
+-                // Check working directory constraint
+-                let wd_match = match (cap_wd, op_wd) {
+-                    (None, _) => true, // No constraint
+-                    (Some(cap_dir), Some(req_dir)) => req_dir.starts_with(cap_dir),
+-                    (Some(_), None) => false, // Capability requires wd, none provided
+-                };
+-                cmd_match && wd_match
+-            }
+-
+-            // ==========================================================================
+-            // Secrets Engine authorization
+-            // ==========================================================================
+-
+-            // SecretsAdmin authorizes all secrets operations
+-            (Capability::SecretsAdmin, Operation::SecretsRead { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::SecretsWrite { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::SecretsDelete { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::SecretsList { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::TransitEncrypt { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::TransitDecrypt { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::TransitSign { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::TransitVerify { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::TransitKeyManage { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::PkiIssue { .. }) => true,
+-            (Capability::SecretsAdmin, Operation::PkiRevoke) => true,
+-            (Capability::SecretsAdmin, Operation::PkiReadCa) => true,
+-            (Capability::SecretsAdmin, Operation::PkiManage) => true,
+-            (Capability::SecretsAdmin, Operation::SecretsAdmin { .. }) => true,
+-
+-            // SecretsFull authorizes all secrets KV operations for matching mount/prefix
+-            (
+-                Capability::SecretsFull {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
+-                },
+-                Operation::SecretsRead { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+-            (
+-                Capability::SecretsFull {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
+-                },
+-                Operation::SecretsWrite { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+-            (
+-                Capability::SecretsFull {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
++                    working_dir: requested_dir,
+                 },
+-                Operation::SecretsDelete { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+-            (
+-                Capability::SecretsFull {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
+-                },
+-                Operation::SecretsList { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
++            ) => Some(
++                shell_command_matches(command_pattern, command)
++                    && shell_working_dir_matches(working_dir, requested_dir),
++            ),
++            _ => None,
++        }
++    }
+ 
+-            // Specific secrets capabilities
++    fn authorizes_secrets(&self, op: &Operation) -> Option<bool> {
++        match (self, op) {
++            (Capability::SecretsAdmin, Operation::SecretsRead { .. })
++            | (Capability::SecretsAdmin, Operation::SecretsWrite { .. })
++            | (Capability::SecretsAdmin, Operation::SecretsDelete { .. })
++            | (Capability::SecretsAdmin, Operation::SecretsList { .. })
++            | (Capability::SecretsAdmin, Operation::SecretsAdmin { .. }) => Some(true),
+             (
+-                Capability::SecretsRead {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
+-                },
++                Capability::SecretsFull { mount, prefix }
++                | Capability::SecretsRead { mount, prefix },
+                 Operation::SecretsRead { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
++            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+             (
+-                Capability::SecretsWrite {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
+-                },
++                Capability::SecretsFull { mount, prefix }
++                | Capability::SecretsWrite { mount, prefix },
+                 Operation::SecretsWrite { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
++            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+             (
+-                Capability::SecretsDelete {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
+-                },
++                Capability::SecretsFull { mount, prefix }
++                | Capability::SecretsDelete { mount, prefix },
+                 Operation::SecretsDelete { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
++            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+             (
+-                Capability::SecretsList {
+-                    mount: cap_mount,
+-                    prefix: cap_prefix,
+-                },
++                Capability::SecretsFull { mount, prefix }
++                | Capability::SecretsList { mount, prefix },
+                 Operation::SecretsList { mount: op_mount, path },
+-            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
++            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
++            _ => None,
++        }
++    }
+ 
+-            // ==========================================================================
+-            // Transit Engine authorization
+-            // ==========================================================================
+-            (Capability::TransitEncrypt { key_prefix }, Operation::TransitEncrypt { key_name }) => {
+-                key_name.starts_with(key_prefix)
+-            }
+-            (Capability::TransitDecrypt { key_prefix }, Operation::TransitDecrypt { key_name }) => {
+-                key_name.starts_with(key_prefix)
+-            }
+-            (Capability::TransitSign { key_prefix }, Operation::TransitSign { key_name }) => {
+-                key_name.starts_with(key_prefix)
+-            }
+-            (Capability::TransitVerify { key_prefix }, Operation::TransitVerify { key_name }) => {
+-                key_name.starts_with(key_prefix)
+-            }
+-            (Capability::TransitKeyManage { key_prefix }, Operation::TransitKeyManage { key_name }) => {
+-                key_name.starts_with(key_prefix)
++    fn authorizes_transit(&self, op: &Operation) -> Option<bool> {
++        match (self, op) {
++            (Capability::SecretsAdmin, Operation::TransitEncrypt { .. })
++            | (Capability::SecretsAdmin, Operation::TransitDecrypt { .. })
++            | (Capability::SecretsAdmin, Operation::TransitSign { .. })
++            | (Capability::SecretsAdmin, Operation::TransitVerify { .. })
++            | (Capability::SecretsAdmin, Operation::TransitKeyManage { .. }) => Some(true),
++            (Capability::TransitEncrypt { key_prefix }, Operation::TransitEncrypt { key_name })
++            | (Capability::TransitDecrypt { key_prefix }, Operation::TransitDecrypt { key_name })
++            | (Capability::TransitSign { key_prefix }, Operation::TransitSign { key_name })
++            | (Capability::TransitVerify { key_prefix }, Operation::TransitVerify { key_name })
++            | (Capability::TransitKeyManage { key_prefix }, Operation::TransitKeyManage { key_name }) => {
++                Some(matches_prefix_scope(key_prefix, key_name))
+             }
++            _ => None,
++        }
++    }
+ 
+-            // ==========================================================================
+-            // PKI Engine authorization
+-            // ==========================================================================
+-            (Capability::PkiIssue { role_prefix }, Operation::PkiIssue { role }) => role.starts_with(role_prefix),
+-            (Capability::PkiRevoke, Operation::PkiRevoke) => true,
+-            (Capability::PkiReadCa, Operation::PkiReadCa) => true,
+-            (Capability::PkiManage, Operation::PkiManage) => true,
+-            // PkiManage also authorizes all other PKI operations
+-            (Capability::PkiManage, Operation::PkiIssue { .. }) => true,
+-            (Capability::PkiManage, Operation::PkiRevoke) => true,
+-            (Capability::PkiManage, Operation::PkiReadCa) => true,
+-
+-            // ==========================================================================
+-            // Net Service Mesh authorization
+-            // ==========================================================================
+-            (Capability::NetAdmin, Operation::NetConnect { .. }) => true,
+-            (Capability::NetAdmin, Operation::NetPublish { .. }) => true,
+-            (Capability::NetAdmin, Operation::NetUnpublish { .. }) => true,
+-            (Capability::NetAdmin, Operation::NetAdmin { .. }) => true,
+-
+-            (Capability::NetConnect { service_prefix }, Operation::NetConnect { service, .. }) => {
+-                service.starts_with(service_prefix)
++    fn authorizes_pki(&self, op: &Operation) -> Option<bool> {
++        match (self, op) {
++            (Capability::SecretsAdmin, Operation::PkiIssue { .. })
++            | (Capability::SecretsAdmin, Operation::PkiRevoke)
++            | (Capability::SecretsAdmin, Operation::PkiReadCa)
++            | (Capability::SecretsAdmin, Operation::PkiManage) => Some(true),
++            (Capability::PkiIssue { role_prefix }, Operation::PkiIssue { role }) => {
++                Some(matches_prefix_scope(role_prefix, role))
+             }
++            (Capability::PkiRevoke, Operation::PkiRevoke)
++            | (Capability::PkiReadCa, Operation::PkiReadCa)
++            | (Capability::PkiManage, Operation::PkiManage)
++            | (Capability::PkiManage, Operation::PkiRevoke)
++            | (Capability::PkiManage, Operation::PkiReadCa)
++            | (Capability::PkiManage, Operation::PkiIssue { .. }) => Some(true),
++            _ => None,
++        }
++    }
+ 
+-            (Capability::NetPublish { service_prefix }, Operation::NetPublish { service }) => {
+-                service.starts_with(service_prefix)
++    fn authorizes_net(&self, op: &Operation) -> Option<bool> {
++        match (self, op) {
++            (Capability::NetAdmin, Operation::NetConnect { .. })
++            | (Capability::NetAdmin, Operation::NetPublish { .. })
++            | (Capability::NetAdmin, Operation::NetUnpublish { .. })
++            | (Capability::NetAdmin, Operation::NetAdmin { .. }) => Some(true),
++            (Capability::NetConnect { service_prefix }, Operation::NetConnect { service, .. }) => {
++                Some(matches_prefix_scope(service_prefix, service))
+             }
+-            (Capability::NetPublish { service_prefix }, Operation::NetUnpublish { service }) => {
+-                service.starts_with(service_prefix)
++            (Capability::NetPublish { service_prefix }, Operation::NetPublish { service })
++            | (Capability::NetPublish { service_prefix }, Operation::NetUnpublish { service }) => {
++                Some(matches_prefix_scope(service_prefix, service))
+             }
++            _ => None,
++        }
++    }
+ 
+-            // ==========================================================================
+-            // Federation Sync authorization
+-            // ==========================================================================
+-            (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id }) => {
+-                fed_id.starts_with(repo_prefix)
+-            }
+-            (Capability::FederationPush { repo_prefix }, Operation::FederationPush { fed_id }) => {
+-                fed_id.starts_with(repo_prefix)
++    fn authorizes_federation(&self, op: &Operation) -> Option<bool> {
++        match (self, op) {
++            (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
++            | (Capability::FederationPush { repo_prefix }, Operation::FederationPush { fed_id }) => {
++                Some(matches_prefix_scope(repo_prefix, fed_id))
+             }
+-
+-            // No match
+-            _ => false,
++            _ => None,
+         }
+     }
+ 
+@@ -450,167 +449,209 @@ impl Capability {
+     ///
+     /// Returns true if `self` contains `other`.
+     pub fn contains(&self, other: &Capability) -> bool {
++        self.contains_data(other)
++            .or_else(|| self.contains_shell(other))
++            .or_else(|| self.contains_secrets(other))
++            .or_else(|| self.contains_transit(other))
++            .or_else(|| self.contains_pki(other))
++            .or_else(|| self.contains_net(other))
++            .or_else(|| self.contains_federation(other))
++            .unwrap_or(false)
++    }
++
++    fn contains_data(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (Capability::Full { prefix: parent }, Capability::Read { prefix: child })
++            | (Capability::Full { prefix: parent }, Capability::Write { prefix: child })
++            | (Capability::Full { prefix: parent }, Capability::Delete { prefix: child })
++            | (Capability::Full { prefix: parent }, Capability::Watch { prefix: child })
++            | (Capability::Full { prefix: parent }, Capability::Full { prefix: child })
++            | (Capability::Read { prefix: parent }, Capability::Read { prefix: child })
++            | (Capability::Write { prefix: parent }, Capability::Write { prefix: child })
++            | (Capability::Delete { prefix: parent }, Capability::Delete { prefix: child })
++            | (Capability::Watch { prefix: parent }, Capability::Watch { prefix: child }) => {
++                Some(matches_prefix_scope(parent, child))
++            }
++            (Capability::ClusterAdmin, Capability::ClusterAdmin)
++            | (Capability::Delegate, Capability::Delegate) => Some(true),
++            _ => None,
++        }
++    }
++
++    fn contains_shell(&self, other: &Capability) -> Option<bool> {
+         match (self, other) {
+-            // Full contains Read, Write, Delete, Watch for same or narrower prefix
+-            (Capability::Full { prefix: p1 }, Capability::Read { prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::Full { prefix: p1 }, Capability::Write { prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::Full { prefix: p1 }, Capability::Delete { prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::Full { prefix: p1 }, Capability::Watch { prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::Full { prefix: p1 }, Capability::Full { prefix: p2 }) => p2.starts_with(p1),
+-            // Same type with narrower prefix
+-            (Capability::Read { prefix: p1 }, Capability::Read { prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::Write { prefix: p1 }, Capability::Write { prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::Delete { prefix: p1 }, Capability::Delete { prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::Watch { prefix: p1 }, Capability::Watch { prefix: p2 }) => p2.starts_with(p1),
+-            // ClusterAdmin only contains itself
+-            (Capability::ClusterAdmin, Capability::ClusterAdmin) => true,
+-            // Delegate only contains itself
+-            (Capability::Delegate, Capability::Delegate) => true,
+-            // ShellExecute: child pattern must be subset of parent pattern
+             (
+                 Capability::ShellExecute {
+-                    command_pattern: p1,
+-                    working_dir: wd1,
++                    command_pattern: parent_pattern,
++                    working_dir: parent_dir,
+                 },
+                 Capability::ShellExecute {
+-                    command_pattern: p2,
+-                    working_dir: wd2,
++                    command_pattern: child_pattern,
++                    working_dir: child_dir,
+                 },
+-            ) => {
+-                // Child pattern must be more specific than parent
+-                let pattern_ok = if p1 == "*" {
+-                    true // Parent allows everything
+-                } else if p2 == "*" {
+-                    false // Child wants everything but parent doesn't allow it
+-                } else if p1.ends_with('*') && p2.ends_with('*') {
+-                    // Both are prefix patterns, child must be more specific
+-                    p2.starts_with(p1.trim_end_matches('*'))
+-                } else if p1.ends_with('*') {
+-                    // Parent is prefix pattern, child is exact
+-                    p2.starts_with(p1.trim_end_matches('*'))
+-                } else {
+-                    // Parent is exact, child must be same
+-                    p1 == p2
+-                };
+-
+-                // Child working_dir must be within parent's constraint
+-                let wd_ok = match (wd1, wd2) {
+-                    (None, _) => true,        // Parent has no constraint
+-                    (Some(_), None) => false, // Parent has constraint, child doesn't
+-                    (Some(parent_wd), Some(child_wd)) => child_wd.starts_with(parent_wd),
+-                };
+-
+-                pattern_ok && wd_ok
+-            }
++            ) => Some(
++                shell_pattern_contains(parent_pattern, child_pattern)
++                    && shell_working_dir_matches(parent_dir, child_dir),
++            ),
++            _ => None,
++        }
++    }
+ 
+-            // ==========================================================================
+-            // Secrets Engine capability containment
+-            // ==========================================================================
+-
+-            // SecretsAdmin contains all secrets-related capabilities
+-            (Capability::SecretsAdmin, Capability::SecretsAdmin) => true,
+-            (Capability::SecretsAdmin, Capability::SecretsFull { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::SecretsRead { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::SecretsWrite { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::SecretsDelete { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::SecretsList { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::TransitEncrypt { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::TransitDecrypt { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::TransitSign { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::TransitVerify { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::TransitKeyManage { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::PkiIssue { .. }) => true,
+-            (Capability::SecretsAdmin, Capability::PkiRevoke) => true,
+-            (Capability::SecretsAdmin, Capability::PkiReadCa) => true,
+-            (Capability::SecretsAdmin, Capability::PkiManage) => true,
+-
+-            // SecretsFull contains all secrets KV capabilities for same or narrower scope
+-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsFull { mount: m2, prefix: p2 }) => {
+-                m1 == m2 && p2.starts_with(p1)
+-            }
+-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsRead { mount: m2, prefix: p2 }) => {
+-                m1 == m2 && p2.starts_with(p1)
+-            }
+-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsWrite { mount: m2, prefix: p2 }) => {
+-                m1 == m2 && p2.starts_with(p1)
+-            }
+-            (
+-                Capability::SecretsFull { mount: m1, prefix: p1 },
+-                Capability::SecretsDelete { mount: m2, prefix: p2 },
+-            ) => m1 == m2 && p2.starts_with(p1),
+-            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsList { mount: m2, prefix: p2 }) => {
+-                m1 == m2 && p2.starts_with(p1)
+-            }
++    fn contains_secrets(&self, other: &Capability) -> Option<bool> {
++        self.contains_secrets_admin(other)
++            .or_else(|| self.contains_secrets_full(other))
++            .or_else(|| self.contains_secrets_scoped(other))
++    }
+ 
+-            // Same type with narrower scope
+-            (Capability::SecretsRead { mount: m1, prefix: p1 }, Capability::SecretsRead { mount: m2, prefix: p2 }) => {
+-                m1 == m2 && p2.starts_with(p1)
+-            }
+-            (
+-                Capability::SecretsWrite { mount: m1, prefix: p1 },
+-                Capability::SecretsWrite { mount: m2, prefix: p2 },
+-            ) => m1 == m2 && p2.starts_with(p1),
+-            (
+-                Capability::SecretsDelete { mount: m1, prefix: p1 },
+-                Capability::SecretsDelete { mount: m2, prefix: p2 },
+-            ) => m1 == m2 && p2.starts_with(p1),
+-            (Capability::SecretsList { mount: m1, prefix: p1 }, Capability::SecretsList { mount: m2, prefix: p2 }) => {
+-                m1 == m2 && p2.starts_with(p1)
+-            }
++    fn contains_secrets_admin(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (Capability::SecretsAdmin, Capability::SecretsAdmin)
++            | (Capability::SecretsAdmin, Capability::SecretsFull { .. })
++            | (Capability::SecretsAdmin, Capability::SecretsRead { .. })
++            | (Capability::SecretsAdmin, Capability::SecretsWrite { .. })
++            | (Capability::SecretsAdmin, Capability::SecretsDelete { .. })
++            | (Capability::SecretsAdmin, Capability::SecretsList { .. }) => Some(true),
++            _ => None,
++        }
++    }
+ 
+-            // Transit capabilities with prefix containment
+-            (Capability::TransitEncrypt { key_prefix: p1 }, Capability::TransitEncrypt { key_prefix: p2 }) => {
+-                p2.starts_with(p1)
+-            }
+-            (Capability::TransitDecrypt { key_prefix: p1 }, Capability::TransitDecrypt { key_prefix: p2 }) => {
+-                p2.starts_with(p1)
+-            }
+-            (Capability::TransitSign { key_prefix: p1 }, Capability::TransitSign { key_prefix: p2 }) => {
+-                p2.starts_with(p1)
+-            }
+-            (Capability::TransitVerify { key_prefix: p1 }, Capability::TransitVerify { key_prefix: p2 }) => {
+-                p2.starts_with(p1)
+-            }
+-            (Capability::TransitKeyManage { key_prefix: p1 }, Capability::TransitKeyManage { key_prefix: p2 }) => {
+-                p2.starts_with(p1)
+-            }
++    fn contains_secrets_full(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (
++                Capability::SecretsFull {
++                    mount: parent_mount,
++                    prefix: parent_prefix,
++                },
++                Capability::SecretsFull {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                }
++                | Capability::SecretsRead {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                }
++                | Capability::SecretsWrite {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                }
++                | Capability::SecretsDelete {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                }
++                | Capability::SecretsList {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                },
++            ) => Some(matches_mount_scope(parent_mount, child_mount, parent_prefix, child_prefix)),
++            _ => None,
++        }
++    }
+ 
+-            // PKI capabilities
+-            (Capability::PkiManage, Capability::PkiManage) => true,
+-            (Capability::PkiManage, Capability::PkiIssue { .. }) => true,
+-            (Capability::PkiManage, Capability::PkiRevoke) => true,
+-            (Capability::PkiManage, Capability::PkiReadCa) => true,
+-            (Capability::PkiIssue { role_prefix: p1 }, Capability::PkiIssue { role_prefix: p2 }) => p2.starts_with(p1),
+-            (Capability::PkiRevoke, Capability::PkiRevoke) => true,
+-            (Capability::PkiReadCa, Capability::PkiReadCa) => true,
+-
+-            // ==========================================================================
+-            // Net Service Mesh capability containment
+-            // ==========================================================================
+-            (Capability::NetAdmin, Capability::NetAdmin) => true,
+-            (Capability::NetAdmin, Capability::NetConnect { .. }) => true,
+-            (Capability::NetAdmin, Capability::NetPublish { .. }) => true,
+-
+-            (Capability::NetConnect { service_prefix: p1 }, Capability::NetConnect { service_prefix: p2 }) => {
+-                p2.starts_with(p1)
+-            }
++    fn contains_secrets_scoped(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (
++                Capability::SecretsRead {
++                    mount: parent_mount,
++                    prefix: parent_prefix,
++                },
++                Capability::SecretsRead {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                },
++            )
++            | (
++                Capability::SecretsWrite {
++                    mount: parent_mount,
++                    prefix: parent_prefix,
++                },
++                Capability::SecretsWrite {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                },
++            )
++            | (
++                Capability::SecretsDelete {
++                    mount: parent_mount,
++                    prefix: parent_prefix,
++                },
++                Capability::SecretsDelete {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                },
++            )
++            | (
++                Capability::SecretsList {
++                    mount: parent_mount,
++                    prefix: parent_prefix,
++                },
++                Capability::SecretsList {
++                    mount: child_mount,
++                    prefix: child_prefix,
++                },
++            ) => Some(matches_mount_scope(parent_mount, child_mount, parent_prefix, child_prefix)),
++            _ => None,
++        }
++    }
+ 
+-            (Capability::NetPublish { service_prefix: p1 }, Capability::NetPublish { service_prefix: p2 }) => {
+-                p2.starts_with(p1)
+-            }
++    fn contains_transit(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (Capability::SecretsAdmin, Capability::TransitEncrypt { .. })
++            | (Capability::SecretsAdmin, Capability::TransitDecrypt { .. })
++            | (Capability::SecretsAdmin, Capability::TransitSign { .. })
++            | (Capability::SecretsAdmin, Capability::TransitVerify { .. })
++            | (Capability::SecretsAdmin, Capability::TransitKeyManage { .. }) => Some(true),
++            (Capability::TransitEncrypt { key_prefix: parent }, Capability::TransitEncrypt { key_prefix: child })
++            | (Capability::TransitDecrypt { key_prefix: parent }, Capability::TransitDecrypt { key_prefix: child })
++            | (Capability::TransitSign { key_prefix: parent }, Capability::TransitSign { key_prefix: child })
++            | (Capability::TransitVerify { key_prefix: parent }, Capability::TransitVerify { key_prefix: child })
++            | (
++                Capability::TransitKeyManage { key_prefix: parent },
++                Capability::TransitKeyManage { key_prefix: child },
++            ) => Some(matches_prefix_scope(parent, child)),
++            _ => None,
++        }
++    }
+ 
+-            // ==========================================================================
+-            // Federation Sync capability containment
+-            // ==========================================================================
+-            (Capability::FederationPull { repo_prefix: p1 }, Capability::FederationPull { repo_prefix: p2 }) => {
+-                p2.starts_with(p1)
++    fn contains_pki(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (Capability::SecretsAdmin, Capability::PkiIssue { .. })
++            | (Capability::SecretsAdmin, Capability::PkiRevoke)
++            | (Capability::SecretsAdmin, Capability::PkiReadCa)
++            | (Capability::SecretsAdmin, Capability::PkiManage) => Some(true),
++            (Capability::PkiManage, Capability::PkiManage)
++            | (Capability::PkiManage, Capability::PkiIssue { .. })
++            | (Capability::PkiManage, Capability::PkiRevoke)
++            | (Capability::PkiManage, Capability::PkiReadCa)
++            | (Capability::PkiRevoke, Capability::PkiRevoke)
++            | (Capability::PkiReadCa, Capability::PkiReadCa) => Some(true),
++            (Capability::PkiIssue { role_prefix: parent }, Capability::PkiIssue { role_prefix: child }) => {
++                Some(matches_prefix_scope(parent, child))
+             }
++            _ => None,
++        }
++    }
+ 
+-            (Capability::FederationPush { repo_prefix: p1 }, Capability::FederationPush { repo_prefix: p2 }) => {
+-                p2.starts_with(p1)
++    fn contains_net(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (Capability::NetAdmin, Capability::NetAdmin)
++            | (Capability::NetAdmin, Capability::NetConnect { .. })
++            | (Capability::NetAdmin, Capability::NetPublish { .. }) => Some(true),
++            (Capability::NetConnect { service_prefix: parent }, Capability::NetConnect { service_prefix: child })
++            | (Capability::NetPublish { service_prefix: parent }, Capability::NetPublish { service_prefix: child }) => {
++                Some(matches_prefix_scope(parent, child))
+             }
++            _ => None,
++        }
++    }
+ 
+-            _ => false,
++    fn contains_federation(&self, other: &Capability) -> Option<bool> {
++        match (self, other) {
++            (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
++            | (
++                Capability::FederationPush { repo_prefix: parent },
++                Capability::FederationPush { repo_prefix: child },
++            ) => Some(matches_prefix_scope(parent, child)),
++            _ => None,
+         }
+     }
+ }
+diff --git a/crates/aspen-auth/src/tests.rs b/crates/aspen-auth/src/tests.rs
+index bfc98c02c..c6160dba0 100644
+--- a/crates/aspen-auth/src/tests.rs
++++ b/crates/aspen-auth/src/tests.rs
+@@ -145,6 +145,80 @@ fn test_capability_contains() {
+     assert!(!Capability::ClusterAdmin.contains(&Capability::Delegate));
+ }
+ 
++#[test]
++fn test_shell_execute_authorization_respects_pattern_and_working_dir() {
++    let cap = Capability::ShellExecute {
++        command_pattern: "pg_*".into(),
++        working_dir: Some("/srv/db".into()),
++    };
++
++    assert!(cap.authorizes_shell_command("pg_dump", Some("/srv/db/backups")));
++    assert!(!cap.authorizes_shell_command("pg_dump", Some("/tmp")));
++    assert!(!cap.authorizes_shell_command("sqlite3", Some("/srv/db/backups")));
++    assert!(!cap.authorizes_shell_command("pg_dump", None));
++}
++
++#[test]
++fn test_shell_execute_contains_requires_narrower_pattern_and_working_dir() {
++    let parent = Capability::ShellExecute {
++        command_pattern: "pg_*".into(),
++        working_dir: Some("/srv/db".into()),
++    };
++    let child = Capability::ShellExecute {
++        command_pattern: "pg_dump".into(),
++        working_dir: Some("/srv/db/backups".into()),
++    };
++    let wider = Capability::ShellExecute {
++        command_pattern: "*".into(),
++        working_dir: Some("/srv".into()),
++    };
++
++    assert!(parent.contains(&child));
++    assert!(!parent.contains(&wider));
++}
++
++#[test]
++fn test_secrets_admin_authorizes_transit_and_pki_operations() {
++    let admin = Capability::SecretsAdmin;
++
++    assert!(admin.authorizes(&Operation::TransitEncrypt {
++        key_name: "app-db".into(),
++    }));
++    assert!(admin.authorizes(&Operation::PkiManage));
++    assert!(admin.contains(&Capability::TransitKeyManage {
++        key_prefix: "app-".into(),
++    }));
++    assert!(admin.contains(&Capability::PkiIssue {
++        role_prefix: "web-".into(),
++    }));
++}
++
++#[test]
++fn test_pki_manage_and_secrets_full_preserve_scope_rules() {
++    let pki_manage = Capability::PkiManage;
++    assert!(pki_manage.authorizes(&Operation::PkiIssue {
++        role: "web-server".into(),
++    }));
++    assert!(pki_manage.contains(&Capability::PkiReadCa));
++
++    let secrets_full = Capability::SecretsFull {
++        mount: "secret/".into(),
++        prefix: "apps/".into(),
++    };
++    assert!(secrets_full.authorizes(&Operation::SecretsDelete {
++        mount: "secret/".into(),
++        path: "apps/web".into(),
++    }));
++    assert!(!secrets_full.authorizes(&Operation::SecretsDelete {
++        mount: "other/".into(),
++        path: "apps/web".into(),
++    }));
++    assert!(secrets_full.contains(&Capability::SecretsRead {
++        mount: "secret/".into(),
++        prefix: "apps/web".into(),
++    }));
++}
++
+ // ============================================================================
+ // Token Builder Tests
+ // ============================================================================
+diff --git a/crates/aspen-ci-core/src/verified/pipeline.rs b/crates/aspen-ci-core/src/verified/pipeline.rs
+index e70c34769..f3f45f541 100644
+--- a/crates/aspen-ci-core/src/verified/pipeline.rs
++++ b/crates/aspen-ci-core/src/verified/pipeline.rs
+@@ -32,16 +32,16 @@ pub enum StageValidationError {
+     /// Too many stages in pipeline.
+     TooManyStages {
+         /// Current number of stages
+-        count: usize,
++        count: u32,
+         /// Maximum allowed stages
+-        max: usize,
++        max: u32,
+     },
+     /// Too many jobs in pipeline.
+     TooManyJobs {
+         /// Current number of jobs
+-        count: usize,
++        count: u32,
+         /// Maximum allowed jobs
+-        max: usize,
++        max: u32,
+     },
+ }
+ 
+@@ -189,7 +189,7 @@ pub fn find_ready_stages<'a>(
+ ///
+ /// # Returns
+ ///
+-/// Total job count (saturating at usize::MAX).
++/// Total job count (saturating at u32::MAX).
+ ///
+ /// # Example
+ ///
+@@ -200,8 +200,8 @@ pub fn find_ready_stages<'a>(
+ /// assert_eq!(count_total_jobs(&[]), 0);
+ /// ```
+ #[inline]
+-pub fn count_total_jobs(jobs_per_stage: &[usize]) -> usize {
+-    jobs_per_stage.iter().fold(0usize, |acc, &count| acc.saturating_add(count))
++pub fn count_total_jobs(jobs_per_stage: &[u32]) -> u32 {
++    jobs_per_stage.iter().fold(0u32, |acc, &count| acc.saturating_add(count))
+ }
+ 
+ /// Check if pipeline size is within limits.
+@@ -231,10 +231,10 @@ pub fn count_total_jobs(jobs_per_stage: &[usize]) -> usize {
+ /// ```
+ #[inline]
+ pub fn check_pipeline_limits(
+-    stage_count: usize,
+-    job_count: usize,
+-    max_stages: usize,
+-    max_jobs: usize,
++    stage_count: u32,
++    job_count: u32,
++    max_stages: u32,
++    max_jobs: u32,
+ ) -> Result<(), StageValidationError> {
+     if stage_count > max_stages {
+         return Err(StageValidationError::TooManyStages {
+@@ -288,47 +288,66 @@ pub fn check_pipeline_limits(
+ /// ];
+ /// assert_eq!(compute_stage_order(cycle_deps, 2), None);
+ /// ```
+-pub fn compute_stage_order(stages_with_deps: &[(usize, Vec<usize>)], stage_count: usize) -> Option<Vec<usize>> {
++pub fn compute_stage_order(stages_with_deps: &[(u32, Vec<u32>)], stage_count: u32) -> Option<Vec<u32>> {
++    fn to_usize(value: u32) -> Option<usize> {
++        usize::try_from(value).ok()
++    }
++
+     if stage_count == 0 {
+         return Some(Vec::new());
+     }
+ 
+-    // Compute in-degree for each stage (number of dependencies)
+-    let mut in_degree = vec![0usize; stage_count];
++    let stage_count_usize = to_usize(stage_count)?;
++    let mut in_degree = vec![0u32; stage_count_usize];
+     for (idx, deps) in stages_with_deps {
+-        if *idx < stage_count {
+-            in_degree[*idx] = deps.len();
++        let Some(idx_usize) = to_usize(*idx) else {
++            continue;
++        };
++        if idx_usize < stage_count_usize {
++            in_degree[idx_usize] = u32::try_from(deps.len()).unwrap_or(u32::MAX);
+         }
+     }
+ 
+-    // Start with stages that have no dependencies
+-    let mut queue: Vec<usize> = (0..stage_count).filter(|&i| in_degree[i] == 0).collect();
++    let mut queue: Vec<u32> = (0..stage_count)
++        .filter(|&stage| {
++            let Some(stage_usize) = to_usize(stage) else {
++                return false;
++            };
++            in_degree[stage_usize] == 0
++        })
++        .collect();
+ 
+-    let mut result = Vec::with_capacity(stage_count);
+-    let mut processed = vec![false; stage_count];
++    let mut result = Vec::with_capacity(stage_count_usize);
++    let mut processed = vec![false; stage_count_usize];
+ 
+     while let Some(stage) = queue.pop() {
+-        if processed[stage] {
++        let Some(stage_usize) = to_usize(stage) else {
++            return None;
++        };
++        if processed[stage_usize] {
+             continue;
+         }
+-        processed[stage] = true;
++        processed[stage_usize] = true;
+         result.push(stage);
+ 
+-        // Find stages that depend on this one and decrement their in-degree
+         for (idx, deps) in stages_with_deps {
+-            if !processed[*idx] && deps.contains(&stage) {
+-                in_degree[*idx] = in_degree[*idx].saturating_sub(1);
+-                if in_degree[*idx] == 0 {
+-                    queue.push(*idx);
+-                }
++            let Some(idx_usize) = to_usize(*idx) else {
++                continue;
++            };
++            if idx_usize >= processed.len() || processed[idx_usize] || !deps.contains(&stage) {
++                continue;
++            }
++            in_degree[idx_usize] = in_degree[idx_usize].saturating_sub(1);
++            if in_degree[idx_usize] == 0 {
++                queue.push(*idx);
+             }
+         }
+     }
+ 
+-    if result.len() == stage_count {
++    if result.len() == stage_count_usize {
+         Some(result)
+     } else {
+-        None // Cycle detected
++        None
+     }
+ }
+ 
+@@ -478,7 +497,7 @@ mod tests {
+ 
+     #[test]
+     fn test_empty_pipeline() {
+-        let deps: &[(usize, Vec<usize>)] = &[];
++        let deps: &[(u32, Vec<u32>)] = &[];
+         assert_eq!(compute_stage_order(deps, 0), Some(vec![]));
+     }
+ 
+diff --git a/crates/aspen-ci-handler/src/handler/pipeline.rs b/crates/aspen-ci-handler/src/handler/pipeline.rs
+index 5692d26d4..dd94c8084 100644
+--- a/crates/aspen-ci-handler/src/handler/pipeline.rs
++++ b/crates/aspen-ci-handler/src/handler/pipeline.rs
+@@ -22,305 +22,286 @@ use super::helpers::pipeline_status_to_string;
+ #[cfg(all(feature = "forge", feature = "blob"))]
+ pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
+ 
+-/// Handle CiTriggerPipeline request.
+-///
+-/// Triggers a new pipeline run for the given repository and ref.
+-///
+-/// # Flow
+-///
+-/// 1. Parse repo_id from hex string
+-/// 2. Resolve ref to commit hash (if commit_hash not provided)
+-/// 3. Fetch `.aspen/ci.ncl` from the commit's tree
+-/// 4. Parse the CI config
+-/// 5. Create PipelineContext
+-/// 6. Execute pipeline via orchestrator
+ #[cfg(all(feature = "forge", feature = "blob"))]
+-pub async fn handle_trigger_pipeline(
+-    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+-    forge_node: Option<&ForgeNodeRef>,
+-    repo_id: String,
+-    ref_name: String,
+-    commit_hash_opt: Option<String>,
+-) -> anyhow::Result<ClientRpcResponse> {
+-    use aspen_ci::checkout::checkout_dir_for_run;
+-    use aspen_ci::checkout::checkout_repository;
+-    use aspen_ci::checkout::cleanup_checkout;
+-    use aspen_ci::checkout::prepare_for_ci_build;
+-    use aspen_ci::config::load_pipeline_config_str_async;
+-    use aspen_ci::orchestrator::PipelineContext;
++fn ci_trigger_error_response(message: impl Into<String>) -> ClientRpcResponse {
++    ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
++        is_success: false,
++        run_id: None,
++        error: Some(message.into()),
++    })
++}
++
++#[cfg(all(feature = "forge", feature = "blob"))]
++fn ci_trigger_success_response(run_id: String) -> ClientRpcResponse {
++    ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
++        is_success: true,
++        run_id: Some(run_id),
++        error: None,
++    })
++}
++
++#[cfg(all(feature = "forge", feature = "blob"))]
++fn parse_trigger_repo_id(repo_id: &str) -> Result<aspen_forge::identity::RepoId, ClientRpcResponse> {
+     use aspen_forge::identity::RepoId;
+ 
+-    use super::helpers::CI_CONFIG_PATH;
++    let parsed = RepoId::from_hex(repo_id)
++        .map_err(|error| ci_trigger_error_response(format!("Invalid repo_id: {}", error)))?;
++    debug_assert_eq!(RepoId::from_hex(&parsed.to_hex()).ok(), Some(parsed));
++    Ok(parsed)
++}
++
++#[cfg(all(feature = "forge", feature = "blob"))]
++fn parse_requested_commit_hash(commit_hash: Option<&str>) -> Result<Option<[u8; 32]>, ClientRpcResponse> {
+     use super::helpers::parse_commit_hash;
+-    use super::helpers::walk_tree_for_file;
+ 
+-    info!(
+-        repo_id = %repo_id,
+-        ref_name = %ref_name,
+-        has_orchestrator = orchestrator.is_some(),
+-        has_forge = forge_node.is_some(),
+-        "ci-trigger: starting pipeline trigger"
+-    );
++    commit_hash
++        .map(parse_commit_hash)
++        .transpose()
++        .map_err(|error| ci_trigger_error_response(format!("Invalid commit hash: {}", error)))
++}
+ 
+-    let Some(orchestrator) = orchestrator else {
+-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-            is_success: false,
+-            run_id: None,
+-            error: Some("CI orchestrator not available".to_string()),
+-        }));
++#[cfg(all(feature = "forge", feature = "blob"))]
++fn normalize_trigger_ref_name(ref_name: &str) -> String {
++    let ref_path = if ref_name.starts_with("refs/") {
++        ref_name.strip_prefix("refs/").unwrap_or(ref_name).to_string()
++    } else {
++        format!("heads/{ref_name}")
+     };
++    debug_assert!(!ref_path.starts_with("refs/"));
++    debug_assert!(!ref_path.is_empty());
++    ref_path
++}
+ 
+-    let Some(forge_node) = forge_node else {
+-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-            is_success: false,
+-            run_id: None,
+-            error: Some("Forge not available - required for CI config".to_string()),
+-        }));
+-    };
++#[cfg(all(feature = "forge", feature = "blob"))]
++async fn resolve_trigger_commit_hash(
++    forge_node: &ForgeNodeRef,
++    repo_id: &str,
++    repo_id_parsed: &aspen_forge::identity::RepoId,
++    ref_name: &str,
++    requested_commit_hash: Option<[u8; 32]>,
++) -> Result<[u8; 32], ClientRpcResponse> {
++    if let Some(commit_hash) = requested_commit_hash {
++        return Ok(commit_hash);
++    }
+ 
+-    // Parse repo_id from hex string
+-    let repo_id_parsed = match RepoId::from_hex(&repo_id) {
+-        Ok(id) => {
+-            info!(repo_id = %repo_id, "ci-trigger: repo_id parsed successfully");
+-            id
+-        }
+-        Err(e) => {
+-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                is_success: false,
+-                run_id: None,
+-                error: Some(format!("Invalid repo_id: {}", e)),
+-            }));
++    let ref_path = normalize_trigger_ref_name(ref_name);
++    match forge_node.refs.get(repo_id_parsed, &ref_path).await {
++        Ok(Some(hash)) => {
++            info!(
++                repo_id = %repo_id,
++                ref_path = %ref_path,
++                commit = %hash,
++                "ci-trigger: ref resolved to commit"
++            );
++            Ok(*hash.as_bytes())
+         }
+-    };
++        Ok(None) => Err(ci_trigger_error_response(format!("Ref '{}' not found in repository", ref_name))),
++        Err(error) => Err(ci_trigger_error_response(format!(
++            "Failed to resolve ref '{}': {}",
++            ref_name, error
++        ))),
++    }
++}
+ 
+-    // Resolve commit hash - either use provided or resolve from ref
+-    let commit_hash = match commit_hash_opt {
+-        Some(hash_str) => {
+-            // Parse provided hash
+-            match parse_commit_hash(&hash_str) {
+-                Ok(hash) => hash,
+-                Err(e) => {
+-                    return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                        is_success: false,
+-                        run_id: None,
+-                        error: Some(format!("Invalid commit hash: {}", e)),
+-                    }));
+-                }
+-            }
+-        }
+-        None => {
+-            // Resolve from ref
+-            let ref_path = if ref_name.starts_with("refs/") {
+-                ref_name.strip_prefix("refs/").unwrap_or(&ref_name).to_string()
+-            } else {
+-                format!("heads/{}", ref_name)
+-            };
+-
+-            match forge_node.refs.get(&repo_id_parsed, &ref_path).await {
+-                Ok(Some(hash)) => {
+-                    info!(
+-                        repo_id = %repo_id,
+-                        ref_path = %ref_path,
+-                        commit = %hash,
+-                        "ci-trigger: ref resolved to commit"
+-                    );
+-                    *hash.as_bytes()
+-                }
+-                Ok(None) => {
+-                    return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                        is_success: false,
+-                        run_id: None,
+-                        error: Some(format!("Ref '{}' not found in repository", ref_name)),
+-                    }));
+-                }
+-                Err(e) => {
+-                    return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                        is_success: false,
+-                        run_id: None,
+-                        error: Some(format!("Failed to resolve ref '{}': {}", ref_name, e)),
+-                    }));
+-                }
+-            }
+-        }
+-    };
++#[cfg(all(feature = "forge", feature = "blob"))]
++async fn load_trigger_pipeline_config(
++    forge_node: &ForgeNodeRef,
++    repo_id: &str,
++    commit_hash: [u8; 32],
++) -> Result<aspen_ci::config::types::PipelineConfig, ClientRpcResponse> {
++    use aspen_ci::config::load_pipeline_config_str_async;
++
++    use super::helpers::CI_CONFIG_PATH;
++    use super::helpers::walk_tree_for_file;
+ 
+-    // Get the commit to find its tree
+     let commit_hash_blake3 = blake3::Hash::from_bytes(commit_hash);
++    info!(commit = %commit_hash_blake3, "ci-trigger: fetching commit object");
++    let commit = forge_node
++        .git
++        .get_commit(&commit_hash_blake3)
++        .await
++        .map_err(|error| ci_trigger_error_response(format!("Failed to get commit: {}", error)))?;
++
+     info!(
+         commit = %commit_hash_blake3,
+-        "ci-trigger: fetching commit object"
++        tree = %commit.tree(),
++        "ci-trigger: commit resolved, walking tree for .aspen/ci.ncl"
+     );
+-    let commit = match forge_node.git.get_commit(&commit_hash_blake3).await {
+-        Ok(c) => {
+-            info!(
+-                commit = %commit_hash_blake3,
+-                tree = %c.tree(),
+-                "ci-trigger: commit resolved, walking tree for .aspen/ci.ncl"
+-            );
+-            c
+-        }
+-        Err(e) => {
+-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                is_success: false,
+-                run_id: None,
+-                error: Some(format!("Failed to get commit: {}", e)),
+-            }));
+-        }
+-    };
+-
+-    // Walk the tree to find .aspen/ci.ncl
+     let ci_config_content = match walk_tree_for_file(&forge_node.git, &commit.tree(), CI_CONFIG_PATH).await {
+-        Ok(Some(content)) => {
+-            info!(
+-                repo_id = %repo_id,
+-                config_size_bytes = content.len(),
+-                "ci-trigger: found .aspen/ci.ncl ({} bytes)",
+-                content.len()
+-            );
+-            content
+-        }
++        Ok(Some(content)) => content,
+         Ok(None) => {
+             warn!(
+                 repo_id = %repo_id,
+                 tree = %commit.tree(),
+                 "ci-trigger: .aspen/ci.ncl NOT FOUND in commit tree"
+             );
+-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                is_success: false,
+-                run_id: None,
+-                error: Some("CI config file (.aspen/ci.ncl) not found in repository".to_string()),
+-            }));
++            return Err(ci_trigger_error_response("CI config file (.aspen/ci.ncl) not found in repository"));
+         }
+-        Err(e) => {
+-            warn!(
+-                repo_id = %repo_id,
+-                error = %e,
+-                "ci-trigger: error reading CI config from tree"
+-            );
+-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                is_success: false,
+-                run_id: None,
+-                error: Some(format!("Failed to read CI config: {}", e)),
+-            }));
++        Err(error) => {
++            warn!(repo_id = %repo_id, error = %error, "ci-trigger: error reading CI config from tree");
++            return Err(ci_trigger_error_response(format!("Failed to read CI config: {}", error)));
+         }
+     };
+ 
+-    // Parse the CI config
+-    let config_str = match String::from_utf8(ci_config_content) {
+-        Ok(s) => s,
+-        Err(e) => {
+-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                is_success: false,
+-                run_id: None,
+-                error: Some(format!("CI config is not valid UTF-8: {}", e)),
+-            }));
+-        }
+-    };
++    info!(
++        repo_id = %repo_id,
++        config_size_bytes = ci_config_content.len(),
++        "ci-trigger: found .aspen/ci.ncl"
++    );
++    let config_str = String::from_utf8(ci_config_content)
++        .map_err(|error| ci_trigger_error_response(format!("CI config is not valid UTF-8: {}", error)))?;
+ 
+-    // Use async version to run Nickel evaluation on a thread with large stack
+     info!(repo_id = %repo_id, "ci-trigger: parsing Nickel CI config");
+-    let pipeline_config = match load_pipeline_config_str_async(config_str, ".aspen/ci.ncl".to_string()).await {
+-        Ok(c) => {
+-            info!(
+-                repo_id = %repo_id,
+-                stages = c.stages.len(),
+-                "ci-trigger: Nickel config parsed ({} stages)",
+-                c.stages.len()
+-            );
+-            c
+-        }
+-        Err(e) => {
+-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                is_success: false,
+-                run_id: None,
+-                error: Some(format!("Failed to parse CI config: {}", e)),
+-            }));
+-        }
+-    };
+-
+-    // Generate checkout directory and perform checkout
+-    let run_id = uuid::Uuid::new_v4().to_string();
+-    let checkout_dir = checkout_dir_for_run(&run_id);
++    let pipeline_config = load_pipeline_config_str_async(config_str, ".aspen/ci.ncl".to_string())
++        .await
++        .map_err(|error| ci_trigger_error_response(format!("Failed to parse CI config: {}", error)))?;
+ 
+     info!(
+         repo_id = %repo_id,
+-        commit = %hex::encode(commit_hash),
+-        checkout_dir = %checkout_dir.display(),
+-        "Checking out repository for CI"
++        stages = pipeline_config.stages.len(),
++        "ci-trigger: Nickel config parsed"
+     );
++    Ok(pipeline_config)
++}
++
++#[cfg(all(feature = "forge", feature = "blob"))]
++async fn cleanup_trigger_checkout(checkout_dir: &std::path::Path) {
++    use aspen_ci::checkout::cleanup_checkout;
++
++    let _ = cleanup_checkout(checkout_dir).await;
++}
++
++#[cfg(all(feature = "forge", feature = "blob"))]
++async fn checkout_trigger_repository(
++    forge_node: &ForgeNodeRef,
++    repo_id: &str,
++    commit_hash: &[u8; 32],
++    run_id: &str,
++) -> Result<std::path::PathBuf, ClientRpcResponse> {
++    use aspen_ci::checkout::checkout_dir_for_run;
++    use aspen_ci::checkout::checkout_repository;
++    use aspen_ci::checkout::prepare_for_ci_build;
++
++    let checkout_dir = checkout_dir_for_run(run_id);
++    debug_assert!(checkout_dir.ends_with(run_id));
+ 
+     info!(
+         repo_id = %repo_id,
++        commit = %hex::encode(commit_hash),
+         checkout_dir = %checkout_dir.display(),
+         "ci-trigger: checking out repository"
+     );
+-    if let Err(e) = checkout_repository(forge_node, &commit_hash, &checkout_dir).await {
+-        warn!(
+-            repo_id = %repo_id,
+-            error = %e,
+-            "ci-trigger: checkout failed"
+-        );
+-        // Clean up partial checkout directory
+-        let _ = cleanup_checkout(&checkout_dir).await;
+-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-            is_success: false,
+-            run_id: None,
+-            error: Some(format!("Failed to checkout repository: {}", e)),
+-        }));
++    if let Err(error) = checkout_repository(forge_node, commit_hash, &checkout_dir).await {
++        warn!(repo_id = %repo_id, error = %error, "ci-trigger: checkout failed");
++        cleanup_trigger_checkout(&checkout_dir).await;
++        return Err(ci_trigger_error_response(format!("Failed to checkout repository: {}", error)));
+     }
+ 
+-    // Prepare checkout for CI build (removes path patches from .cargo/config.toml)
+-    if let Err(e) = prepare_for_ci_build(&checkout_dir, &commit_hash).await {
+-        // Clean up failed checkout directory
+-        let _ = cleanup_checkout(&checkout_dir).await;
+-        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-            is_success: false,
+-            run_id: None,
+-            error: Some(format!("Failed to prepare checkout for CI build: {}", e)),
+-        }));
++    if let Err(error) = prepare_for_ci_build(&checkout_dir, commit_hash).await {
++        cleanup_trigger_checkout(&checkout_dir).await;
++        return Err(ci_trigger_error_response(format!(
++            "Failed to prepare checkout for CI build: {}",
++            error
++        )));
+     }
+ 
+-    // Build environment variables
++    Ok(checkout_dir)
++}
++
++#[cfg(all(feature = "forge", feature = "blob"))]
++fn build_trigger_context(
++    repo_id: aspen_forge::identity::RepoId,
++    commit_hash: [u8; 32],
++    ref_name: &str,
++    checkout_dir: &std::path::Path,
++) -> aspen_ci::orchestrator::PipelineContext {
++    use aspen_ci::orchestrator::PipelineContext;
++
++    let checkout_dir_string = checkout_dir.to_string_lossy().to_string();
+     let mut env = HashMap::new();
+-    env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir.to_string_lossy().to_string());
++    env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir_string.clone());
++    debug_assert_eq!(env.get("CI_CHECKOUT_DIR").map(String::as_str), Some(checkout_dir_string.as_str()));
+ 
+-    // Create pipeline context with checkout directory
+-    // Note: source_hash is not set here because this is a direct RPC call without blob store.
+-    // VM jobs triggered via this path will need checkout_dir to be accessible or use
+-    // the OrchestratorPipelineStarter adapter which creates source archives.
+     let context = PipelineContext {
+-        repo_id: repo_id_parsed,
++        repo_id,
+         commit_hash,
+-        ref_name: ref_name.clone(),
+-        triggered_by: "rpc".to_string(), // Could be enhanced with auth info
+-        run_id: String::new(),           // Set by orchestrator after run ID generation
++        ref_name: ref_name.to_string(),
++        triggered_by: "rpc".to_string(),
++        run_id: String::new(),
+         env,
+-        checkout_dir: Some(checkout_dir),
+-        source_hash: None, // VM jobs may fail without source_hash
++        checkout_dir: Some(checkout_dir.to_path_buf()),
++        source_hash: None,
+     };
++    debug_assert!(context.checkout_dir.is_some());
++    context
++}
++
++/// Handle CiTriggerPipeline request.
++///
++/// Triggers a new pipeline run for the given repository and ref.
++#[cfg(all(feature = "forge", feature = "blob"))]
++pub async fn handle_trigger_pipeline(
++    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
++    forge_node: Option<&ForgeNodeRef>,
++    repo_id: String,
++    ref_name: String,
++    commit_hash_opt: Option<String>,
++) -> anyhow::Result<ClientRpcResponse> {
++    info!(
++        repo_id = %repo_id,
++        ref_name = %ref_name,
++        has_orchestrator = orchestrator.is_some(),
++        has_forge = forge_node.is_some(),
++        "ci-trigger: starting pipeline trigger"
++    );
++
++    let Some(orchestrator) = orchestrator else {
++        return Ok(ci_trigger_error_response("CI orchestrator not available"));
++    };
++    let Some(forge_node) = forge_node else {
++        return Ok(ci_trigger_error_response("Forge not available - required for CI config"));
++    };
++
++    let repo_id_parsed = match parse_trigger_repo_id(&repo_id) {
++        Ok(parsed) => parsed,
++        Err(response) => return Ok(response),
++    };
++    let requested_commit_hash = match parse_requested_commit_hash(commit_hash_opt.as_deref()) {
++        Ok(hash) => hash,
++        Err(response) => return Ok(response),
++    };
++    let commit_hash = match resolve_trigger_commit_hash(
++        forge_node,
++        &repo_id,
++        &repo_id_parsed,
++        &ref_name,
++        requested_commit_hash,
++    )
++    .await
++    {
++        Ok(hash) => hash,
++        Err(response) => return Ok(response),
++    };
++    let pipeline_config = match load_trigger_pipeline_config(forge_node, &repo_id, commit_hash).await {
++        Ok(config) => config,
++        Err(response) => return Ok(response),
++    };
++
++    let run_id = uuid::Uuid::new_v4().to_string();
++    let checkout_dir = match checkout_trigger_repository(forge_node, &repo_id, &commit_hash, &run_id).await {
++        Ok(path) => path,
++        Err(response) => return Ok(response),
++    };
++    let context = build_trigger_context(repo_id_parsed, commit_hash, &ref_name, &checkout_dir);
+ 
+-    // Execute the pipeline.
+-    // Deploy monitoring is handled automatically by the orchestrator
+-    // when a deploy dispatcher is configured — no need to spawn it here.
+     info!(repo_id = %repo_id, "ci-trigger: starting pipeline via orchestrator");
+     let run = match orchestrator.execute(pipeline_config, context).await {
+-        Ok(r) => r,
+-        Err(e) => {
+-            return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-                is_success: false,
+-                run_id: None,
+-                error: Some(format!("Failed to start pipeline: {}", e)),
+-            }));
+-        }
++        Ok(run) => run,
++        Err(error) => return Ok(ci_trigger_error_response(format!("Failed to start pipeline: {}", error))),
+     };
+ 
+     info!(run_id = %run.id, "CI pipeline started successfully");
+-
+-    Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+-        is_success: true,
+-        run_id: Some(run.id),
+-        error: None,
+-    }))
++    Ok(ci_trigger_success_response(run.id))
+ }
+ 
+ /// Handle CiGetStatus request.
+@@ -593,3 +574,63 @@ pub async fn handle_cancel_run(
+         })),
+     }
+ }
++
++#[cfg(all(test, feature = "forge", feature = "blob"))]
++mod tests {
++    use std::path::Path;
++
++    use aspen_client_api::CiTriggerPipelineResponse;
++    use aspen_forge::identity::RepoId;
++
++    use super::*;
++
++    fn trigger_response(response: ClientRpcResponse) -> CiTriggerPipelineResponse {
++        match response {
++            ClientRpcResponse::CiTriggerPipelineResult(result) => result,
++            other => panic!("expected CiTriggerPipelineResult, got {other:?}"),
++        }
++    }
++
++    #[test]
++    fn normalize_trigger_ref_name_handles_short_and_full_refs() {
++        assert_eq!(normalize_trigger_ref_name("main"), "heads/main");
++        assert_eq!(normalize_trigger_ref_name("refs/heads/main"), "heads/main");
++        assert_eq!(normalize_trigger_ref_name("refs/tags/v1"), "tags/v1");
++    }
++
++    #[test]
++    fn parse_trigger_repo_id_rejects_invalid_hex() {
++        let response = parse_trigger_repo_id("not-hex").expect_err("invalid repo id should fail");
++        let result = trigger_response(response);
++        assert!(!result.is_success);
++        assert!(result.error.unwrap_or_default().contains("Invalid repo_id"));
++    }
++
++    #[test]
++    fn parse_requested_commit_hash_rejects_wrong_length() {
++        let response = parse_requested_commit_hash(Some("abcd")).expect_err("short commit hash should fail");
++        let result = trigger_response(response);
++        assert!(!result.is_success);
++        assert!(result.error.unwrap_or_default().contains("Invalid commit hash"));
++    }
++
++    #[test]
++    fn build_trigger_context_sets_checkout_env_and_empty_run_id() {
++        let repo_id = RepoId([7u8; 32]);
++        let commit_hash = [9u8; 32];
++        let checkout_dir = Path::new("/tmp/aspen-checkout/test-run");
++        let context = build_trigger_context(repo_id, commit_hash, "main", checkout_dir);
++
++        assert_eq!(context.repo_id, repo_id);
++        assert_eq!(context.commit_hash, commit_hash);
++        assert_eq!(context.ref_name, "main");
++        assert_eq!(context.triggered_by, "rpc");
++        assert!(context.run_id.is_empty());
++        assert_eq!(
++            context.env.get("CI_CHECKOUT_DIR").map(String::as_str),
++            Some("/tmp/aspen-checkout/test-run")
++        );
++        assert_eq!(context.checkout_dir.as_deref(), Some(checkout_dir));
++        assert!(context.source_hash.is_none());
++    }
++}
+diff --git a/crates/aspen-cluster/src/gossip/discovery/helpers.rs b/crates/aspen-cluster/src/gossip/discovery/helpers.rs
+index 07cee68d5..aa64f2110 100644
+--- a/crates/aspen-cluster/src/gossip/discovery/helpers.rs
++++ b/crates/aspen-cluster/src/gossip/discovery/helpers.rs
+@@ -5,11 +5,13 @@ use std::time::Duration;
+ /// Pure function for calculating backoff duration.
+ ///
+ /// Tiger Style: Pure function for testability and predictable behavior.
+-pub fn calculate_backoff_duration(restart_count: usize, backoff_durations: &[Duration]) -> Duration {
++pub fn calculate_backoff_duration(restart_count: u32, backoff_durations: &[Duration]) -> Duration {
+     // Tiger Style: backoff_durations must not be empty
+     debug_assert!(!backoff_durations.is_empty(), "backoff_durations must not be empty");
+ 
+-    let idx = restart_count.min(backoff_durations.len().saturating_sub(1));
++    let max_index_u32 = u32::try_from(backoff_durations.len().saturating_sub(1)).unwrap_or(u32::MAX);
++    let idx_u32 = restart_count.min(max_index_u32);
++    let idx = usize::try_from(idx_u32).unwrap_or(backoff_durations.len().saturating_sub(1));
+ 
+     // Tiger Style: index must be valid after min operation
+     debug_assert!(idx < backoff_durations.len(), "idx {} must be < len {}", idx, backoff_durations.len());
+diff --git a/crates/aspen-cluster/src/gossip/discovery/lifecycle.rs b/crates/aspen-cluster/src/gossip/discovery/lifecycle.rs
+index 33b3baf5d..92cd159eb 100644
+--- a/crates/aspen-cluster/src/gossip/discovery/lifecycle.rs
++++ b/crates/aspen-cluster/src/gossip/discovery/lifecycle.rs
+@@ -532,10 +532,7 @@ impl GossipPeerDiscovery {
+                         }
+ 
+                         // Calculate backoff duration using existing pure function
+-                        let backoff = calculate_backoff_duration(
+-                            (consecutive_errors as usize).saturating_sub(1),
+-                            &backoff_durations
+-                        );
++                        let backoff = calculate_backoff_duration(consecutive_errors.saturating_sub(1), &backoff_durations);
+ 
+                         tracing::warn!(
+                             "gossip receiver error (retry {}/{}), backing off for {:?}: {}",
+diff --git a/crates/aspen-cluster/src/gossip/discovery/mod.rs b/crates/aspen-cluster/src/gossip/discovery/mod.rs
+index b63fa5342..af0eb9b95 100644
+--- a/crates/aspen-cluster/src/gossip/discovery/mod.rs
++++ b/crates/aspen-cluster/src/gossip/discovery/mod.rs
+@@ -79,7 +79,7 @@ mod tests {
+         // Index 10 exceeds array length, should clamp to last element
+         assert_eq!(calculate_backoff_duration(10, &durations), Duration::from_secs(4));
+         assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(4));
+-        assert_eq!(calculate_backoff_duration(usize::MAX, &durations), Duration::from_secs(4));
++        assert_eq!(calculate_backoff_duration(u32::MAX, &durations), Duration::from_secs(4));
+     }
+ 
+     #[test]
+diff --git a/crates/aspen-forge/src/verified/ref_validation.rs b/crates/aspen-forge/src/verified/ref_validation.rs
+index 8bc94f897..a3c9d646e 100644
+--- a/crates/aspen-forge/src/verified/ref_validation.rs
++++ b/crates/aspen-forge/src/verified/ref_validation.rs
+@@ -15,7 +15,7 @@ pub enum RefNameError {
+     /// Ref name is empty.
+     Empty,
+     /// Ref name exceeds maximum length.
+-    TooLong { length: usize, max: usize },
++    TooLong { length: u32, max: u32 },
+     /// Ref name starts with a dot.
+     StartsWithDot,
+     /// Ref name ends with a dot.
+@@ -33,9 +33,9 @@ pub enum RefNameError {
+     /// Ref name contains consecutive slashes.
+     ConsecutiveSlashes,
+     /// Ref name contains invalid character.
+-    InvalidChar { char: char, position: usize },
++    InvalidChar { char: char, position: u32 },
+     /// Ref name contains a control character.
+-    ControlChar { position: usize },
++    ControlChar { position: u32 },
+     /// Ref name contains `@{`.
+     ContainsAtBrace,
+     /// Component starts with a dot.
+@@ -73,16 +73,21 @@ pub enum RefNameError {
+ /// assert_eq!(validate_ref_name(".hidden", 200), Err(RefNameError::StartsWithDot));
+ /// assert_eq!(validate_ref_name("refs/heads/main.lock", 200), Err(RefNameError::EndsWithLock));
+ /// ```
+-pub fn validate_ref_name(ref_name: &str, max_length: usize) -> Result<(), RefNameError> {
++pub fn validate_ref_name(ref_name: &str, max_length: u32) -> Result<(), RefNameError> {
++    fn saturating_u32(value: usize) -> u32 {
++        u32::try_from(value).unwrap_or(u32::MAX)
++    }
++
+     // Empty check
+     if ref_name.is_empty() {
+         return Err(RefNameError::Empty);
+     }
+ 
+     // Length check
+-    if ref_name.len() > max_length {
++    let ref_name_length = saturating_u32(ref_name.len());
++    if ref_name_length > max_length {
+         return Err(RefNameError::TooLong {
+-            length: ref_name.len(),
++            length: ref_name_length,
+             max: max_length,
+         });
+     }
+@@ -129,14 +134,16 @@ pub fn validate_ref_name(ref_name: &str, max_length: usize) -> Result<(), RefNam
+ 
+     // Check each character
+     for (i, c) in ref_name.chars().enumerate() {
++        let position = saturating_u32(i);
++
+         // Control characters
+         if c.is_control() {
+-            return Err(RefNameError::ControlChar { position: i });
++            return Err(RefNameError::ControlChar { position });
+         }
+ 
+         // Invalid characters
+         if matches!(c, ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\') {
+-            return Err(RefNameError::InvalidChar { char: c, position: i });
++            return Err(RefNameError::InvalidChar { char: c, position });
+         }
+     }
+ 
+diff --git a/openspec/changes/durable-tigerstyle-audit/audit-report.md b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+index 0fdc6ce83..dd9a76bb0 100644
+--- a/openspec/changes/durable-tigerstyle-audit/audit-report.md
++++ b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+@@ -1,57 +1,105 @@
+ # Tiger Style Audit Report
+ 
+-Status: audit-only planning artifact
++Status: remediation in progress
+ 
+-This report records the findings that prompted `durable-tigerstyle-audit`. It is intentionally reviewable from the repo and replaces the earlier split between chat-only notes and off-repo agent files.
++This report is the durable record for the Tiger Style audit that started this change. It keeps the current hotspot inventory, the scanner contract, and the evidence paths in one repo-visible place.
+ 
+ ## Scope
+ 
+-- Repo scan target: `crates/*/src/**/*.rs`
+-- Priority filters: production functions over 70 lines, zero-assert hotspots, recursion, `SystemTime::now()` / `Instant::now()` in `src/verified/`, and public or verified APIs that expose `usize`
+-- Manual spot checks: highest-ranked production hotspots from the scan
+-
+-## Current findings
+-
+-### Confirmed production hotspots
+-
+-- `crates/aspen-forge-handler/src/executor.rs:1538` `execute` — 693 lines
+-- `crates/aspen-core-essentials-handler/src/coordination.rs:93` `handle` — 547 lines
+-- `crates/aspen-ci-handler/src/handler/pipeline.rs:38` `handle_trigger_pipeline` — 287 lines
+-- `crates/aspen-auth/src/capability.rs:251` `Capability::authorizes` — 184 lines
+-- `crates/aspen-auth/src/capability.rs:452` `Capability::contains` — 164 lines
+-- `crates/aspen-forge/src/git/merge.rs:179` `merge_trees_recursive` — bounded recursion worth review
+-
+-### Verified-core and safety observations
+-
+-- No `SystemTime::now()` or `Instant::now()` calls were found under `crates/*/src/verified/**/*.rs` during the exploratory scan.
+-- The initial search found many `unwrap` and `expect` strings in `src/verified/`, but manual inspection showed that the visible examples in this audit were in tests or doc comments rather than production verified logic.
+-- The exploratory scan found multiple public or verified APIs still exposing `usize`, including:
++- Scan target: `crates/*/src/**/*.rs`
++- Scanner command: `./scripts/tigerstyle-audit.py crates`
++- Hotspot rules:
++  - function bodies over 70 lines
++  - overlong functions with zero `assert!` / `debug_assert!` calls
++  - recursive function bodies
++  - `SystemTime::now()` or `Instant::now()` under `src/verified/`
++  - public or verified signatures that expose `usize`
++- Manual review focus: production handlers and pure APIs called out by the initial hotspot list
++
++## Methodology
++
++1. Run `./scripts/tigerstyle-audit.py --pretty --json crates` to emit a machine-readable inventory.
++2. Review the saved transcript at `openspec/changes/durable-tigerstyle-audit/evidence/initial-scan.txt`.
++3. Spot-check the highest-ranked production hotspots before turning them into refactor tasks.
++4. Keep the trait-declaration regression fixture green with `python3 tools/tigerstyle/test_tigerstyle_audit.py`.
++
++## Initial scan summary
++
++Source: `openspec/changes/durable-tigerstyle-audit/evidence/initial-scan.json`
++
++| Measure | Count |
++| --- | ---: |
++| Files scanned | 1285 |
++| Functions scanned | 16911 |
++| `function_length` hotspots | 363 |
++| `zero_assert_hotspot` hotspots | 363 |
++| `recursion` hotspots | 842 |
++| `usize_api` hotspots | 176 |
++| `verified_ambient_time` hotspots | 1 |
++| Parse errors | 5 |
++
++## Ranked hotspot table
++
++The scanner ranks by rule first, then by line count. This table calls out the highest-value production hotspots from the initial scan.
++
++| Rank | File | Function | Rules | Lines |
++| ---: | --- | --- | --- | ---: |
++| 1 | `crates/aspen-forge-handler/src/executor.rs` | `execute` | `zero_assert_hotspot`, `function_length` | 692 |
++| 2 | `crates/aspen-core-essentials-handler/src/coordination.rs` | `handle` | `zero_assert_hotspot`, `function_length` | 546 |
++| 3 | `crates/aspen-ci-handler/src/handler/pipeline.rs` | `handle_trigger_pipeline` | `zero_assert_hotspot`, `function_length` | 287 |
++| 4 | `crates/aspen-auth/src/capability.rs` | `authorizes` | `zero_assert_hotspot`, `function_length` | 184 |
++| 5 | `crates/aspen-auth/src/capability.rs` | `contains` | `zero_assert_hotspot`, `function_length` | 164 |
++| 6 | `crates/aspen-forge/src/git/merge.rs` | `merge_trees_recursive` | `zero_assert_hotspot`, `function_length`, `recursion` | 155 |
++| 7 | `crates/aspen-ci-core/src/verified/pipeline.rs` | verified/public `usize` API set | `usize_api` | n/a |
++| 8 | `crates/aspen-forge/src/verified/ref_validation.rs` | verified/public `usize` API set | `usize_api` | n/a |
++| 9 | `crates/aspen-cluster/src/gossip/discovery/helpers.rs` | verified/public `usize` API set | `usize_api` | n/a |
++
++## Known scanner limitations
++
++- The parser is brace- and semicolon-aware, but it is still a lightweight scanner. It does not expand macros or fully parse every Rust edge case.
++- The current run still reports five parse errors in complex files:
++  - `crates/aspen-ci/src/config/loader.rs`
++  - `crates/aspen-forge/src/cob/review.rs`
++  - `crates/aspen-forge/src/git/bridge/tests.rs`
++  - `crates/aspen-nostr-relay/src/connection.rs`
++  - `crates/aspen-rpc-handlers/src/registry.rs`
++- The recursion rule is purely lexical. It is good for prioritization, not proof.
++- The `usize_api` rule works at the signature level. It does not yet classify whether a `usize` is an internal adapter boundary or part of a durable public contract.
++
++## Regression coverage for the declaration-vs-body bug
++
++- Scanner: `scripts/tigerstyle-audit.py`
++- Fixture: `tools/tigerstyle/fixtures/trait_declaration_false_positive.rs`
++- Regression test: `tools/tigerstyle/test_tigerstyle_audit.py`
++- Saved run: `openspec/changes/durable-tigerstyle-audit/evidence/scanner-regression.txt`
++
++The fixture pins the failure mode from the exploratory scan: a trait declaration that ends in `;` must not be counted as a function body just because an impl body for the same name appears later in the file.
++
++## First remediation slice update
++
++Source: `openspec/changes/durable-tigerstyle-audit/evidence/post-slice-scan.json`
++
++The first production slice is now in the tree:
++
++- `crates/aspen-ci-handler/src/handler/pipeline.rs:handle_trigger_pipeline` was split into smaller trigger helpers and no longer appears in the overlong-function inventory.
++- `crates/aspen-auth/src/capability.rs:Capability::authorizes` and `Capability::contains` were split into family-specific helpers and no longer appear in the overlong-function inventory.
++- The initial `usize` cleanup set no longer shows `usize_api` hits for:
+   - `crates/aspen-ci-core/src/verified/pipeline.rs`
+   - `crates/aspen-forge/src/verified/ref_validation.rs`
+   - `crates/aspen-cluster/src/gossip/discovery/helpers.rs`
+ 
+-## Scanner limitation discovered during exploration
+-
+-A naive regex-plus-brace scan miscounted trait method declarations as giant functions because it skipped past declaration signatures ending in `;` and grabbed the next `{` later in the file. The durable scanner for this change must treat that case as a regression fixture.
+-
+-## Interpretation
+-
+-This change is not yet remediation. It is a planning artifact for remediation. No production source refactors have landed under this change yet, so the correct status is `audit-only planning artifact`.
+-
+-The first remediation slice should target:
+-
+-1. `handle_trigger_pipeline`
+-2. `Capability::authorizes`
+-3. `Capability::contains`
+-4. A small verified/public `usize` cleanup set
++### Before / after counts for the first slice
+ 
+-The larger handlers in `aspen-core-essentials-handler` and `aspen-forge-handler` remain phase-two work.
++| Rule | Initial scan | Post-slice scan | Delta |
++| --- | ---: | ---: | ---: |
++| `function_length` | 363 | 360 | -3 |
++| `zero_assert_hotspot` | 363 | 360 | -3 |
++| `usize_api` | 176 | 171 | -5 |
++| `recursion` | 842 | 842 | 0 |
++| `verified_ambient_time` | 1 | 1 | 0 |
+ 
+-## Evidence policy for this change
++The scan still reports `crates/aspen-forge/src/verified/ref_validation.rs:validate_ref_name` as overlong after the `usize` cleanup. That length issue stays in the backlog for a later slice; the current task here was only the `usize` leak.
+ 
+-When the rerunnable scanner is added, this report must be updated to reference:
++## Current status
+ 
+-- the scanner command path
+-- the saved transcript under `evidence/`
+-- the regression fixture covering the trait-declaration false positive
+-- before/after counts for each completed remediation slice
++This change is no longer audit-only. The audit artifacts are durable, the regression fixture is committed, and the first remediation slice has landed. Phases 3 and 4 still have open work, so the right status is `remediation in progress`.

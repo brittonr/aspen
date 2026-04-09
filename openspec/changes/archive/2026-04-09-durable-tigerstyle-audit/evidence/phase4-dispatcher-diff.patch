@@ -1,0 +1,1766 @@
+diff --git a/crates/aspen-core-essentials-handler/src/coordination.rs b/crates/aspen-core-essentials-handler/src/coordination.rs
+index 3ebc29414..8b3b743c9 100644
+--- a/crates/aspen-core-essentials-handler/src/coordination.rs
++++ b/crates/aspen-core-essentials-handler/src/coordination.rs
+@@ -47,6 +47,15 @@ use crate::RequestHandler;
+ /// here — they fall through to the WASM plugin handler.
+ pub struct CoordinationHandler;
+ 
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++enum CoordinationRequestFamily {
++    Counter,
++    SignedCounter,
++    Sequence,
++    Lock,
++    RateLimiter,
++}
++
+ impl CoordinationHandler {
+     /// KV key prefix for coordination counters.
+     const COUNTER_PREFIX: &'static str = "__coord:counter:";
+@@ -56,6 +65,87 @@ impl CoordinationHandler {
+     const LOCK_PREFIX: &'static str = "__coord:lock:";
+     /// KV key prefix for rate limiters.
+     const RATE_LIMITER_PREFIX: &'static str = "__coord:ratelimit:";
++
++    fn request_family(request: &ClientRpcRequest) -> CoordinationRequestFamily {
++        match request {
++            ClientRpcRequest::CounterGet { .. }
++            | ClientRpcRequest::CounterIncrement { .. }
++            | ClientRpcRequest::CounterDecrement { .. }
++            | ClientRpcRequest::CounterAdd { .. }
++            | ClientRpcRequest::CounterSubtract { .. }
++            | ClientRpcRequest::CounterSet { .. }
++            | ClientRpcRequest::CounterCompareAndSet { .. } => CoordinationRequestFamily::Counter,
++            ClientRpcRequest::SignedCounterGet { .. } | ClientRpcRequest::SignedCounterAdd { .. } => {
++                CoordinationRequestFamily::SignedCounter
++            }
++            ClientRpcRequest::SequenceNext { .. }
++            | ClientRpcRequest::SequenceReserve { .. }
++            | ClientRpcRequest::SequenceCurrent { .. } => CoordinationRequestFamily::Sequence,
++            ClientRpcRequest::LockAcquire { .. }
++            | ClientRpcRequest::LockTryAcquire { .. }
++            | ClientRpcRequest::LockRelease { .. }
++            | ClientRpcRequest::LockRenew { .. } => CoordinationRequestFamily::Lock,
++            ClientRpcRequest::RateLimiterTryAcquire { .. }
++            | ClientRpcRequest::RateLimiterAcquire { .. }
++            | ClientRpcRequest::RateLimiterAvailable { .. }
++            | ClientRpcRequest::RateLimiterReset { .. } => CoordinationRequestFamily::RateLimiter,
++            _ => unreachable!("unexpected request in CoordinationHandler"),
++        }
++    }
++
++    fn counter_response(is_success: bool, value: Option<u64>, error: Option<String>) -> ClientRpcResponse {
++        ClientRpcResponse::CounterResult(CounterResultResponse {
++            is_success,
++            value,
++            error,
++        })
++    }
++
++    fn signed_counter_response(is_success: bool, value: Option<i64>, error: Option<String>) -> ClientRpcResponse {
++        ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
++            is_success,
++            value,
++            error,
++        })
++    }
++
++    fn sequence_response(is_success: bool, value: Option<u64>, error: Option<String>) -> ClientRpcResponse {
++        ClientRpcResponse::SequenceResult(SequenceResultResponse {
++            is_success,
++            value,
++            error,
++        })
++    }
++
++    fn lock_response(
++        is_success: bool,
++        fencing_token: Option<u64>,
++        holder_id: Option<String>,
++        deadline_ms: Option<u64>,
++        error: Option<String>,
++    ) -> ClientRpcResponse {
++        ClientRpcResponse::LockResult(LockResultResponse {
++            is_success,
++            fencing_token,
++            holder_id,
++            deadline_ms,
++            error,
++        })
++    }
++
++    fn rate_limiter_response(
++        is_success: bool,
++        tokens_remaining: Option<u64>,
++        retry_after_ms: Option<u64>,
++        error: Option<String>,
++    ) -> ClientRpcResponse {
++        ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
++            is_success,
++            tokens_remaining,
++            retry_after_ms,
++            error,
++        })
++    }
+ }
+ 
+ #[async_trait]
+@@ -92,98 +182,68 @@ impl RequestHandler for CoordinationHandler {
+     }
+ 
+     async fn handle(&self, request: ClientRpcRequest, ctx: &ClientProtocolContext) -> Result<ClientRpcResponse> {
++        let response = match Self::request_family(&request) {
++            CoordinationRequestFamily::Counter => self.handle_counter_request(request, ctx).await,
++            CoordinationRequestFamily::SignedCounter => self.handle_signed_counter_request(request, ctx).await,
++            CoordinationRequestFamily::Sequence => self.handle_sequence_request(request, ctx).await,
++            CoordinationRequestFamily::Lock => self.handle_lock_request(request, ctx).await,
++            CoordinationRequestFamily::RateLimiter => self.handle_rate_limiter_request(request, ctx).await,
++        };
++        Ok(response)
++    }
++
++    fn name(&self) -> &'static str {
++        "CoordinationHandler"
++    }
++}
++
++// =============================================================================
++// Helper methods for request dispatch and primitive creation
++// =============================================================================
++
++impl CoordinationHandler {
++    async fn handle_counter_request(&self, request: ClientRpcRequest, ctx: &ClientProtocolContext) -> ClientRpcResponse {
+         match request {
+-            // =================================================================
+-            // Counter operations (native)
+-            // =================================================================
+             ClientRpcRequest::CounterGet { key } => {
+                 let counter = self.make_counter(&ctx.kv_store, &key);
+                 match counter.get().await {
+-                    Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(value) => Self::counter_response(true, Some(value), None),
++                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::CounterIncrement { key } => {
+                 let counter = self.make_counter(&ctx.kv_store, &key);
+                 match counter.increment().await {
+-                    Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(value) => Self::counter_response(true, Some(value), None),
++                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::CounterDecrement { key } => {
+                 let counter = self.make_counter(&ctx.kv_store, &key);
+                 match counter.decrement().await {
+-                    Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(value) => Self::counter_response(true, Some(value), None),
++                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::CounterAdd { key, amount } => {
+                 let counter = self.make_counter(&ctx.kv_store, &key);
+                 match counter.add(amount).await {
+-                    Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(value) => Self::counter_response(true, Some(value), None),
++                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::CounterSubtract { key, amount } => {
+                 let counter = self.make_counter(&ctx.kv_store, &key);
+                 match counter.subtract(amount).await {
+-                    Ok(value) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(value) => Self::counter_response(true, Some(value), None),
++                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::CounterSet { key, value } => {
+                 let counter = self.make_counter(&ctx.kv_store, &key);
+                 match counter.set(value).await {
+-                    Ok(()) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(()) => Self::counter_response(true, Some(value), None),
++                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::CounterCompareAndSet {
+@@ -193,109 +253,71 @@ impl RequestHandler for CoordinationHandler {
+             } => {
+                 let counter = self.make_counter(&ctx.kv_store, &key);
+                 match counter.compare_and_set(expected, new_value).await {
+-                    Ok(swapped) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: swapped,
+-                        value: Some(if swapped { new_value } else { expected }),
+-                        error: if swapped {
+-                            None
+-                        } else {
+-                            Some("compare-and-set failed: value has changed".into())
+-                        },
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(swapped) => Self::counter_response(
++                        swapped,
++                        Some(if swapped { new_value } else { expected }),
++                        (!swapped).then(|| "compare-and-set failed: value has changed".to_string()),
++                    ),
++                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+                 }
+             }
++            _ => unreachable!("unexpected counter request"),
++        }
++    }
+ 
+-            // =================================================================
+-            // Signed counter operations (native)
+-            // =================================================================
++    async fn handle_signed_counter_request(
++        &self,
++        request: ClientRpcRequest,
++        ctx: &ClientProtocolContext,
++    ) -> ClientRpcResponse {
++        match request {
+             ClientRpcRequest::SignedCounterGet { key } => {
+                 let counter = self.make_signed_counter(&ctx.kv_store, &key);
+                 match counter.get().await {
+-                    Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(value) => Self::signed_counter_response(true, Some(value), None),
++                    Err(error) => Self::signed_counter_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::SignedCounterAdd { key, amount } => {
+                 let counter = self.make_signed_counter(&ctx.kv_store, &key);
+                 match counter.add(amount).await {
+-                    Ok(value) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::SignedCounterResult(SignedCounterResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(value) => Self::signed_counter_response(true, Some(value), None),
++                    Err(error) => Self::signed_counter_response(false, None, Some(error.to_string())),
+                 }
+             }
++            _ => unreachable!("unexpected signed counter request"),
++        }
++    }
+ 
+-            // =================================================================
+-            // Sequence operations (native)
+-            // =================================================================
++    async fn handle_sequence_request(&self, request: ClientRpcRequest, ctx: &ClientProtocolContext) -> ClientRpcResponse {
++        match request {
+             ClientRpcRequest::SequenceNext { key } => {
+-                let seq = self.make_sequence(&ctx.kv_store, &key);
+-                match seq.next().await {
+-                    Ok(value) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                let sequence = self.make_sequence(&ctx.kv_store, &key);
++                match sequence.next().await {
++                    Ok(value) => Self::sequence_response(true, Some(value), None),
++                    Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::SequenceReserve { key, count } => {
+-                let seq = self.make_sequence(&ctx.kv_store, &key);
+-                match seq.reserve(count).await {
+-                    Ok(start) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+-                        is_success: true,
+-                        value: Some(start),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                let sequence = self.make_sequence(&ctx.kv_store, &key);
++                match sequence.reserve(count).await {
++                    Ok(start) => Self::sequence_response(true, Some(start), None),
++                    Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::SequenceCurrent { key } => {
+-                let seq = self.make_sequence(&ctx.kv_store, &key);
+-                match seq.current().await {
+-                    Ok(value) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+-                        is_success: true,
+-                        value: Some(value),
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::SequenceResult(SequenceResultResponse {
+-                        is_success: false,
+-                        value: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                let sequence = self.make_sequence(&ctx.kv_store, &key);
++                match sequence.current().await {
++                    Ok(value) => Self::sequence_response(true, Some(value), None),
++                    Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
+                 }
+             }
++            _ => unreachable!("unexpected sequence request"),
++        }
++    }
+ 
+-            // =================================================================
+-            // Lock operations (all native)
+-            // =================================================================
++    async fn handle_lock_request(&self, request: ClientRpcRequest, ctx: &ClientProtocolContext) -> ClientRpcResponse {
++        match request {
+             ClientRpcRequest::LockAcquire {
+                 key,
+                 holder_id,
+@@ -314,230 +336,38 @@ impl RequestHandler for CoordinationHandler {
+                     config,
+                 );
+                 match lock.acquire().await {
+-                    Ok(guard) => {
+-                        let token = guard.fencing_token();
+-                        let deadline = guard.deadline_ms();
+-                        // Intentionally forget the guard so the lock persists beyond this request.
+-                        // The lock is released via LockRelease or TTL expiration.
+-                        std::mem::forget(guard);
+-                        Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                            is_success: true,
+-                            fencing_token: Some(token.value()),
+-                            holder_id: Some(holder_id),
+-                            deadline_ms: Some(deadline),
+-                            error: None,
+-                        }))
+-                    }
+-                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                        is_success: false,
+-                        fencing_token: None,
+-                        holder_id: None,
+-                        deadline_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(guard) => Self::forget_lock_guard(guard, holder_id),
++                    Err(error) => Self::lock_response(false, None, None, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::LockTryAcquire { key, holder_id, ttl_ms } => {
+                 let lock = self.make_lock(&ctx.kv_store, &key, &holder_id, ttl_ms);
+                 match lock.try_acquire().await {
+-                    Ok(guard) => {
+-                        let token = guard.fencing_token();
+-                        let deadline = guard.deadline_ms();
+-                        std::mem::forget(guard);
+-                        Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                            is_success: true,
+-                            fencing_token: Some(token.value()),
+-                            holder_id: Some(holder_id),
+-                            deadline_ms: Some(deadline),
+-                            error: None,
+-                        }))
+-                    }
+-                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                        is_success: false,
+-                        fencing_token: None,
+-                        holder_id: None,
+-                        deadline_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(guard) => Self::forget_lock_guard(guard, holder_id),
++                    Err(error) => Self::lock_response(false, None, None, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::LockRelease {
+                 key,
+                 holder_id,
+                 fencing_token,
+-            } => {
+-                let lock_key = format!("{}{key}", Self::LOCK_PREFIX);
+-                // Read current entry, verify holder owns it, then CAS a "released"
+-                // entry that preserves the fencing token for monotonicity.
+-                match ctx.kv_store.read(ReadRequest::new(lock_key.clone())).await {
+-                    Ok(result) if result.kv.is_some() => {
+-                        let current_json = result.kv.as_ref().map(|kv| kv.value.clone()).unwrap_or_default();
+-                        match serde_json::from_str::<LockEntry>(&current_json) {
+-                            Ok(entry) if entry.holder_id == holder_id && entry.fencing_token == fencing_token => {
+-                                let released = entry.released();
+-                                let released_json = serde_json::to_string(&released).unwrap_or_default();
+-                                match ctx
+-                                    .kv_store
+-                                    .write(WriteRequest {
+-                                        command: WriteCommand::CompareAndSwap {
+-                                            key: lock_key,
+-                                            expected: Some(current_json),
+-                                            new_value: released_json,
+-                                        },
+-                                    })
+-                                    .await
+-                                {
+-                                    Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                        is_success: true,
+-                                        fencing_token: Some(fencing_token),
+-                                        holder_id: Some(holder_id),
+-                                        deadline_ms: Some(0),
+-                                        error: None,
+-                                    })),
+-                                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                        is_success: false,
+-                                        fencing_token: None,
+-                                        holder_id: Some(holder_id),
+-                                        deadline_ms: None,
+-                                        error: Some(e.to_string()),
+-                                    })),
+-                                }
+-                            }
+-                            Ok(entry) => {
+-                                let msg = format!(
+-                                    "lock held by '{}' with token {}, not '{}' with token {}",
+-                                    entry.holder_id, entry.fencing_token, holder_id, fencing_token
+-                                );
+-                                Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                    is_success: false,
+-                                    fencing_token: None,
+-                                    holder_id: Some(holder_id),
+-                                    deadline_ms: None,
+-                                    error: Some(msg),
+-                                }))
+-                            }
+-                            Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                is_success: false,
+-                                fencing_token: None,
+-                                holder_id: Some(holder_id),
+-                                deadline_ms: None,
+-                                error: Some(format!("failed to parse lock entry: {e}")),
+-                            })),
+-                        }
+-                    }
+-                    Ok(_) => {
+-                        // Lock key doesn't exist — already released or never acquired
+-                        Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                            is_success: true,
+-                            fencing_token: None,
+-                            holder_id: Some(holder_id),
+-                            deadline_ms: None,
+-                            error: None,
+-                        }))
+-                    }
+-                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                        is_success: false,
+-                        fencing_token: None,
+-                        holder_id: Some(holder_id),
+-                        deadline_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
+-                }
+-            }
++            } => self.release_lock(ctx, key, holder_id, fencing_token).await,
+             ClientRpcRequest::LockRenew {
+                 key,
+                 holder_id,
+                 fencing_token,
+                 ttl_ms,
+-            } => {
+-                // Renew: read current entry, verify holder+token match, CAS with new
+-                // deadline but SAME fencing token (renew must not bump the token).
+-                let lock_key = format!("{}{key}", Self::LOCK_PREFIX);
+-                match ctx.kv_store.read(ReadRequest::new(lock_key.clone())).await {
+-                    Ok(result) if result.kv.is_some() => {
+-                        let current_json = result.kv.as_ref().map(|kv| kv.value.clone()).unwrap_or_default();
+-                        match serde_json::from_str::<LockEntry>(&current_json) {
+-                            Ok(entry)
+-                                if entry.holder_id == holder_id
+-                                    && entry.fencing_token == fencing_token
+-                                    && !entry.is_expired() =>
+-                            {
+-                                // Create renewed entry: same token, fresh deadline
+-                                let renewed = LockEntry::new(holder_id.clone(), fencing_token, ttl_ms);
+-                                let renewed_json = serde_json::to_string(&renewed).unwrap_or_default();
+-                                match ctx
+-                                    .kv_store
+-                                    .write(WriteRequest {
+-                                        command: WriteCommand::CompareAndSwap {
+-                                            key: lock_key,
+-                                            expected: Some(current_json),
+-                                            new_value: renewed_json,
+-                                        },
+-                                    })
+-                                    .await
+-                                {
+-                                    Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                        is_success: true,
+-                                        fencing_token: Some(fencing_token),
+-                                        holder_id: Some(holder_id),
+-                                        deadline_ms: Some(renewed.deadline_ms),
+-                                        error: None,
+-                                    })),
+-                                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                        is_success: false,
+-                                        fencing_token: Some(fencing_token),
+-                                        holder_id: Some(holder_id),
+-                                        deadline_ms: None,
+-                                        error: Some(e.to_string()),
+-                                    })),
+-                                }
+-                            }
+-                            Ok(entry) => {
+-                                let reason = if entry.is_expired() {
+-                                    "lock expired".to_string()
+-                                } else {
+-                                    format!(
+-                                        "lock held by '{}' with token {}, not '{holder_id}' with token {fencing_token}",
+-                                        entry.holder_id, entry.fencing_token
+-                                    )
+-                                };
+-                                Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                    is_success: false,
+-                                    fencing_token: None,
+-                                    holder_id: Some(holder_id),
+-                                    deadline_ms: None,
+-                                    error: Some(reason),
+-                                }))
+-                            }
+-                            Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                                is_success: false,
+-                                fencing_token: None,
+-                                holder_id: Some(holder_id),
+-                                deadline_ms: None,
+-                                error: Some(format!("failed to parse lock entry: {e}")),
+-                            })),
+-                        }
+-                    }
+-                    Ok(_) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                        is_success: false,
+-                        fencing_token: None,
+-                        holder_id: Some(holder_id),
+-                        deadline_ms: None,
+-                        error: Some("lock not found".to_string()),
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+-                        is_success: false,
+-                        fencing_token: None,
+-                        holder_id: Some(holder_id),
+-                        deadline_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
+-                }
+-            }
++            } => self.renew_lock(ctx, key, holder_id, fencing_token, ttl_ms).await,
++            _ => unreachable!("unexpected lock request"),
++        }
++    }
+ 
+-            // =================================================================
+-            // Rate limiter operations (native)
+-            // =================================================================
++    async fn handle_rate_limiter_request(
++        &self,
++        request: ClientRpcRequest,
++        ctx: &ClientProtocolContext,
++    ) -> ClientRpcResponse {
++        match request {
+             ClientRpcRequest::RateLimiterTryAcquire {
+                 key,
+                 tokens,
+@@ -546,26 +376,11 @@ impl RequestHandler for CoordinationHandler {
+             } => {
+                 let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                 match limiter.try_acquire_n(tokens).await {
+-                    Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: true,
+-                        tokens_remaining: Some(remaining),
+-                        retry_after_ms: None,
+-                        error: None,
+-                    })),
++                    Ok(remaining) => Self::rate_limiter_response(true, Some(remaining), None, None),
+                     Err(aspen_coordination::RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
+-                        Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                            is_success: false,
+-                            tokens_remaining: None,
+-                            retry_after_ms: Some(retry_after_ms),
+-                            error: Some("rate limited".into()),
+-                        }))
++                        Self::rate_limiter_response(false, None, Some(retry_after_ms), Some("rate limited".into()))
+                     }
+-                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: false,
+-                        tokens_remaining: None,
+-                        retry_after_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::RateLimiterAcquire {
+@@ -577,18 +392,8 @@ impl RequestHandler for CoordinationHandler {
+             } => {
+                 let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                 match limiter.acquire_n(tokens, Duration::from_millis(timeout_ms)).await {
+-                    Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: true,
+-                        tokens_remaining: Some(remaining),
+-                        retry_after_ms: None,
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: false,
+-                        tokens_remaining: None,
+-                        retry_after_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(remaining) => Self::rate_limiter_response(true, Some(remaining), None, None),
++                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::RateLimiterAvailable {
+@@ -598,18 +403,8 @@ impl RequestHandler for CoordinationHandler {
+             } => {
+                 let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                 match limiter.available().await {
+-                    Ok(available) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: true,
+-                        tokens_remaining: Some(available),
+-                        retry_after_ms: None,
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: false,
+-                        tokens_remaining: None,
+-                        retry_after_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(available) => Self::rate_limiter_response(true, Some(available), None, None),
++                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+                 }
+             }
+             ClientRpcRequest::RateLimiterReset {
+@@ -619,35 +414,149 @@ impl RequestHandler for CoordinationHandler {
+             } => {
+                 let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+                 match limiter.reset().await {
+-                    Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: true,
+-                        tokens_remaining: Some(capacity_tokens),
+-                        retry_after_ms: None,
+-                        error: None,
+-                    })),
+-                    Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+-                        is_success: false,
+-                        tokens_remaining: None,
+-                        retry_after_ms: None,
+-                        error: Some(e.to_string()),
+-                    })),
++                    Ok(()) => Self::rate_limiter_response(true, Some(capacity_tokens), None, None),
++                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+                 }
+             }
+-
+-            _ => Err(anyhow::anyhow!("unexpected request in CoordinationHandler")),
++            _ => unreachable!("unexpected rate limiter request"),
+         }
+     }
+ 
+-    fn name(&self) -> &'static str {
+-        "CoordinationHandler"
++    fn forget_lock_guard(
++        guard: aspen_coordination::LockGuard<dyn KeyValueStore>,
++        holder_id: String,
++    ) -> ClientRpcResponse {
++        let token = guard.fencing_token();
++        let deadline = guard.deadline_ms();
++        std::mem::forget(guard);
++        Self::lock_response(true, Some(token.value()), Some(holder_id), Some(deadline), None)
+     }
+-}
+ 
+-// =============================================================================
+-// Helper methods for creating coordination primitives
+-// =============================================================================
++    async fn release_lock(
++        &self,
++        ctx: &ClientProtocolContext,
++        key: String,
++        holder_id: String,
++        fencing_token: u64,
++    ) -> ClientRpcResponse {
++        let lock_key = format!("{}{key}", Self::LOCK_PREFIX);
++        match ctx.kv_store.read(ReadRequest::new(lock_key.clone())).await {
++            Ok(result) if result.kv.is_some() => {
++                let current_json = result.kv.as_ref().map(|kv| kv.value.clone()).unwrap_or_default();
++                match serde_json::from_str::<LockEntry>(&current_json) {
++                    Ok(entry) if entry.holder_id == holder_id && entry.fencing_token == fencing_token => {
++                        let released = entry.released();
++                        let released_json = serde_json::to_string(&released).unwrap_or_default();
++                        match ctx
++                            .kv_store
++                            .write(WriteRequest {
++                                command: WriteCommand::CompareAndSwap {
++                                    key: lock_key,
++                                    expected: Some(current_json),
++                                    new_value: released_json,
++                                },
++                            })
++                            .await
++                        {
++                            Ok(_) => Self::lock_response(true, Some(fencing_token), Some(holder_id), Some(0), None),
++                            Err(error) => {
++                                Self::lock_response(false, None, Some(holder_id), None, Some(error.to_string()))
++                            }
++                        }
++                    }
++                    Ok(entry) => {
++                        let message = format!(
++                            "lock held by '{}' with token {}, not '{}' with token {}",
++                            entry.holder_id, entry.fencing_token, holder_id, fencing_token
++                        );
++                        Self::lock_response(false, None, Some(holder_id), None, Some(message))
++                    }
++                    Err(error) => Self::lock_response(
++                        false,
++                        None,
++                        Some(holder_id),
++                        None,
++                        Some(format!("failed to parse lock entry: {error}")),
++                    ),
++                }
++            }
++            Ok(_) => Self::lock_response(true, None, Some(holder_id), None, None),
++            Err(error) => Self::lock_response(false, None, Some(holder_id), None, Some(error.to_string())),
++        }
++    }
++
++    async fn renew_lock(
++        &self,
++        ctx: &ClientProtocolContext,
++        key: String,
++        holder_id: String,
++        fencing_token: u64,
++        ttl_ms: u64,
++    ) -> ClientRpcResponse {
++        let lock_key = format!("{}{key}", Self::LOCK_PREFIX);
++        match ctx.kv_store.read(ReadRequest::new(lock_key.clone())).await {
++            Ok(result) if result.kv.is_some() => {
++                let current_json = result.kv.as_ref().map(|kv| kv.value.clone()).unwrap_or_default();
++                match serde_json::from_str::<LockEntry>(&current_json) {
++                    Ok(entry)
++                        if entry.holder_id == holder_id
++                            && entry.fencing_token == fencing_token
++                            && !entry.is_expired() =>
++                    {
++                        let renewed = LockEntry::new(holder_id.clone(), fencing_token, ttl_ms);
++                        let renewed_json = serde_json::to_string(&renewed).unwrap_or_default();
++                        match ctx
++                            .kv_store
++                            .write(WriteRequest {
++                                command: WriteCommand::CompareAndSwap {
++                                    key: lock_key,
++                                    expected: Some(current_json),
++                                    new_value: renewed_json,
++                                },
++                            })
++                            .await
++                        {
++                            Ok(_) => Self::lock_response(
++                                true,
++                                Some(fencing_token),
++                                Some(holder_id),
++                                Some(renewed.deadline_ms),
++                                None,
++                            ),
++                            Err(error) => Self::lock_response(
++                                false,
++                                Some(fencing_token),
++                                Some(holder_id),
++                                None,
++                                Some(error.to_string()),
++                            ),
++                        }
++                    }
++                    Ok(entry) => {
++                        let reason = if entry.is_expired() {
++                            "lock expired".to_string()
++                        } else {
++                            format!(
++                                "lock held by '{}' with token {}, not '{holder_id}' with token {fencing_token}",
++                                entry.holder_id, entry.fencing_token
++                            )
++                        };
++                        Self::lock_response(false, None, Some(holder_id), None, Some(reason))
++                    }
++                    Err(error) => Self::lock_response(
++                        false,
++                        None,
++                        Some(holder_id),
++                        None,
++                        Some(format!("failed to parse lock entry: {error}")),
++                    ),
++                }
++            }
++            Ok(_) => Self::lock_response(false, None, Some(holder_id), None, Some("lock not found".to_string())),
++            Err(error) => Self::lock_response(false, None, Some(holder_id), None, Some(error.to_string())),
++        }
++    }
+ 
+-impl CoordinationHandler {
+     fn make_counter(&self, store: &Arc<dyn KeyValueStore>, key: &str) -> AtomicCounter<dyn KeyValueStore> {
+         let prefixed = format!("{}{key}", Self::COUNTER_PREFIX);
+         AtomicCounter::new(Arc::clone(store), prefixed, CounterConfig::default())
+@@ -693,12 +602,33 @@ impl CoordinationHandler {
+ 
+ #[cfg(test)]
+ mod tests {
++    use std::sync::Arc;
++
++    use aspen_rpc_core::test_support::MockEndpointProvider;
++    use aspen_rpc_core::test_support::TestContextBuilder;
++    use aspen_testing::DeterministicClusterController;
++    use aspen_testing::DeterministicKeyValueStore;
++
+     use super::*;
+ 
+     fn handler() -> CoordinationHandler {
+         CoordinationHandler
+     }
+ 
++    async fn setup_test_context() -> ClientProtocolContext {
++        let controller = Arc::new(DeterministicClusterController::new());
++        let kv_store = Arc::new(DeterministicKeyValueStore::new());
++        let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(777).await);
++
++        TestContextBuilder::new()
++            .with_node_id(7)
++            .with_controller(controller)
++            .with_kv_store(kv_store)
++            .with_endpoint_manager(mock_endpoint)
++            .with_cookie("coord-test")
++            .build()
++    }
++
+     // =========================================================================
+     // can_handle: operations we implement natively → true
+     // =========================================================================
+@@ -862,4 +792,187 @@ mod tests {
+         assert!(!h.can_handle(&ClientRpcRequest::GetHealth));
+         assert!(!h.can_handle(&ClientRpcRequest::ReadKey { key: "k".into() }));
+     }
++
++    #[test]
++    fn test_request_family_routes_native_variants() {
++        assert_eq!(
++            CoordinationHandler::request_family(&ClientRpcRequest::CounterGet { key: "k".into() }),
++            CoordinationRequestFamily::Counter
++        );
++        assert_eq!(
++            CoordinationHandler::request_family(&ClientRpcRequest::SignedCounterAdd {
++                key: "k".into(),
++                amount: -1,
++            }),
++            CoordinationRequestFamily::SignedCounter
++        );
++        assert_eq!(
++            CoordinationHandler::request_family(&ClientRpcRequest::SequenceCurrent { key: "s".into() }),
++            CoordinationRequestFamily::Sequence
++        );
++        assert_eq!(
++            CoordinationHandler::request_family(&ClientRpcRequest::LockTryAcquire {
++                key: "l".into(),
++                holder_id: "h".into(),
++                ttl_ms: 1000,
++            }),
++            CoordinationRequestFamily::Lock
++        );
++        assert_eq!(
++            CoordinationHandler::request_family(&ClientRpcRequest::RateLimiterAvailable {
++                key: "r".into(),
++                capacity_tokens: 10,
++                refill_rate: 1.0,
++            }),
++            CoordinationRequestFamily::RateLimiter
++        );
++    }
++
++    #[tokio::test]
++    async fn test_handle_counter_increment_then_get() {
++        let ctx = setup_test_context().await;
++        let result = handler()
++            .handle(ClientRpcRequest::CounterIncrement { key: "ctr".into() }, &ctx)
++            .await
++            .expect("counter increment should succeed");
++        match result {
++            ClientRpcResponse::CounterResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.value, Some(1));
++            }
++            other => panic!("expected CounterResult, got {other:?}"),
++        }
++
++        let get_result = handler()
++            .handle(ClientRpcRequest::CounterGet { key: "ctr".into() }, &ctx)
++            .await
++            .expect("counter get should succeed");
++        match get_result {
++            ClientRpcResponse::CounterResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.value, Some(1));
++            }
++            other => panic!("expected CounterResult, got {other:?}"),
++        }
++    }
++
++    #[tokio::test]
++    async fn test_handle_sequence_reserve_then_current() {
++        let ctx = setup_test_context().await;
++        let reserve_result = handler()
++            .handle(
++                ClientRpcRequest::SequenceReserve {
++                    key: "seq".into(),
++                    count: 5,
++                },
++                &ctx,
++            )
++            .await
++            .expect("sequence reserve should succeed");
++        match reserve_result {
++            ClientRpcResponse::SequenceResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.value, Some(1));
++            }
++            other => panic!("expected SequenceResult, got {other:?}"),
++        }
++
++        let current_result = handler()
++            .handle(ClientRpcRequest::SequenceCurrent { key: "seq".into() }, &ctx)
++            .await
++            .expect("sequence current should succeed");
++        match current_result {
++            ClientRpcResponse::SequenceResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.value, Some(6));
++            }
++            other => panic!("expected SequenceResult, got {other:?}"),
++        }
++    }
++
++    #[tokio::test]
++    async fn test_handle_lock_try_acquire_and_release() {
++        let ctx = setup_test_context().await;
++        let acquire_result = handler()
++            .handle(
++                ClientRpcRequest::LockTryAcquire {
++                    key: "lock".into(),
++                    holder_id: "holder-a".into(),
++                    ttl_ms: 5_000,
++                },
++                &ctx,
++            )
++            .await
++            .expect("lock acquisition should succeed");
++        let fencing_token = match acquire_result {
++            ClientRpcResponse::LockResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.holder_id.as_deref(), Some("holder-a"));
++                response.fencing_token.expect("fencing token")
++            }
++            other => panic!("expected LockResult, got {other:?}"),
++        };
++
++        let release_result = handler()
++            .handle(
++                ClientRpcRequest::LockRelease {
++                    key: "lock".into(),
++                    holder_id: "holder-a".into(),
++                    fencing_token,
++                },
++                &ctx,
++            )
++            .await
++            .expect("lock release should succeed");
++        match release_result {
++            ClientRpcResponse::LockResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.deadline_ms, Some(0));
++            }
++            other => panic!("expected LockResult, got {other:?}"),
++        }
++    }
++
++    #[tokio::test]
++    async fn test_handle_rate_limiter_available_and_try_acquire() {
++        let ctx = setup_test_context().await;
++        let available_result = handler()
++            .handle(
++                ClientRpcRequest::RateLimiterAvailable {
++                    key: "limit".into(),
++                    capacity_tokens: 3,
++                    refill_rate: 1.0,
++                },
++                &ctx,
++            )
++            .await
++            .expect("available should succeed");
++        match available_result {
++            ClientRpcResponse::RateLimiterResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.tokens_remaining, Some(3));
++            }
++            other => panic!("expected RateLimiterResult, got {other:?}"),
++        }
++
++        let try_result = handler()
++            .handle(
++                ClientRpcRequest::RateLimiterTryAcquire {
++                    key: "limit".into(),
++                    tokens: 2,
++                    capacity_tokens: 3,
++                    refill_rate: 1.0,
++                },
++                &ctx,
++            )
++            .await
++            .expect("try acquire should succeed");
++        match try_result {
++            ClientRpcResponse::RateLimiterResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.tokens_remaining, Some(1));
++            }
++            other => panic!("expected RateLimiterResult, got {other:?}"),
++        }
++    }
+ }
+diff --git a/crates/aspen-forge-handler/src/executor.rs b/crates/aspen-forge-handler/src/executor.rs
+index eb8db7381..06c6b5b95 100644
+--- a/crates/aspen-forge-handler/src/executor.rs
++++ b/crates/aspen-forge-handler/src/executor.rs
+@@ -114,6 +114,24 @@ pub struct ForgeServiceExecutor {
+     nostr_auth: Arc<aspen_forge::identity::nostr_auth::NostrAuthService<dyn aspen_core::KeyValueStore>>,
+ }
+ 
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++enum ForgeRequestGroup {
++    Repo,
++    Blob,
++    Tree,
++    Commit,
++    Ref,
++    Issue,
++    Patch,
++    Discussion,
++    Fork,
++    Mirror,
++    Federation,
++    GitBridge,
++    Nostr,
++    Diff,
++}
++
+ impl ForgeServiceExecutor {
+     /// Variant names handled by this executor (for testing without constructing).
+     pub const HANDLES: &'static [&'static str] = &[
+@@ -240,6 +258,84 @@ impl ForgeServiceExecutor {
+ }
+ 
+ impl ForgeServiceExecutor {
++    fn request_group(request: &ClientRpcRequest) -> ForgeRequestGroup {
++        match request {
++            ClientRpcRequest::ForgeCreateRepo { .. }
++            | ClientRpcRequest::ForgeListRepos { .. }
++            | ClientRpcRequest::ForgeGetRepo { .. } => ForgeRequestGroup::Repo,
++            ClientRpcRequest::ForgeStoreBlob { .. } | ClientRpcRequest::ForgeGetBlob { .. } => ForgeRequestGroup::Blob,
++            ClientRpcRequest::ForgeCreateTree { .. } | ClientRpcRequest::ForgeGetTree { .. } => ForgeRequestGroup::Tree,
++            ClientRpcRequest::ForgeCommit { .. }
++            | ClientRpcRequest::ForgeGetCommit { .. }
++            | ClientRpcRequest::ForgeLog { .. } => ForgeRequestGroup::Commit,
++            ClientRpcRequest::ForgeGetRef { .. }
++            | ClientRpcRequest::ForgeSetRef { .. }
++            | ClientRpcRequest::ForgeDeleteRef { .. }
++            | ClientRpcRequest::ForgeCasRef { .. }
++            | ClientRpcRequest::ForgeListBranches { .. }
++            | ClientRpcRequest::ForgeListTags { .. } => ForgeRequestGroup::Ref,
++            ClientRpcRequest::ForgeCreateIssue { .. }
++            | ClientRpcRequest::ForgeListIssues { .. }
++            | ClientRpcRequest::ForgeGetIssue { .. }
++            | ClientRpcRequest::ForgeCommentIssue { .. }
++            | ClientRpcRequest::ForgeCloseIssue { .. }
++            | ClientRpcRequest::ForgeReopenIssue { .. } => ForgeRequestGroup::Issue,
++            ClientRpcRequest::ForgeCreatePatch { .. }
++            | ClientRpcRequest::ForgeListPatches { .. }
++            | ClientRpcRequest::ForgeGetPatch { .. }
++            | ClientRpcRequest::ForgeUpdatePatch { .. }
++            | ClientRpcRequest::ForgeApprovePatch { .. }
++            | ClientRpcRequest::ForgeMergePatch { .. }
++            | ClientRpcRequest::ForgeCheckMerge { .. }
++            | ClientRpcRequest::ForgeClosePatch { .. } => ForgeRequestGroup::Patch,
++            ClientRpcRequest::ForgeCreateDiscussion { .. }
++            | ClientRpcRequest::ForgeListDiscussions { .. }
++            | ClientRpcRequest::ForgeGetDiscussion { .. }
++            | ClientRpcRequest::ForgeReplyDiscussion { .. }
++            | ClientRpcRequest::ForgeLockDiscussion { .. }
++            | ClientRpcRequest::ForgeUnlockDiscussion { .. }
++            | ClientRpcRequest::ForgeCloseDiscussion { .. }
++            | ClientRpcRequest::ForgeReopenDiscussion { .. } => ForgeRequestGroup::Discussion,
++            ClientRpcRequest::ForgeForkRepo { .. } => ForgeRequestGroup::Fork,
++            ClientRpcRequest::ForgeSetMirror { .. }
++            | ClientRpcRequest::ForgeDisableMirror { .. }
++            | ClientRpcRequest::ForgeGetMirrorStatus { .. } => ForgeRequestGroup::Mirror,
++            ClientRpcRequest::ForgeGetDelegateKey { .. }
++            | ClientRpcRequest::GetFederationStatus
++            | ClientRpcRequest::ListDiscoveredClusters
++            | ClientRpcRequest::GetDiscoveredCluster { .. }
++            | ClientRpcRequest::TrustCluster { .. }
++            | ClientRpcRequest::UntrustCluster { .. }
++            | ClientRpcRequest::FederateRepository { .. }
++            | ClientRpcRequest::ListFederatedRepositories
++            | ClientRpcRequest::FederationSyncPeer { .. }
++            | ClientRpcRequest::FederationFetchRefs { .. }
++            | ClientRpcRequest::FederationGitListRefs { .. }
++            | ClientRpcRequest::FederationGitFetch { .. }
++            | ClientRpcRequest::FederationPull { .. }
++            | ClientRpcRequest::FederationPush { .. }
++            | ClientRpcRequest::FederationBidiSync { .. }
++            | ClientRpcRequest::ForgeFetchFederated { .. } => ForgeRequestGroup::Federation,
++            ClientRpcRequest::GitBridgeListRefs { .. }
++            | ClientRpcRequest::GitBridgeFetch { .. }
++            | ClientRpcRequest::GitBridgeFetchStart { .. }
++            | ClientRpcRequest::GitBridgeFetchChunk { .. }
++            | ClientRpcRequest::GitBridgeFetchComplete { .. }
++            | ClientRpcRequest::GitBridgePush { .. }
++            | ClientRpcRequest::GitBridgePushStart { .. }
++            | ClientRpcRequest::GitBridgePushChunk { .. }
++            | ClientRpcRequest::GitBridgePushComplete { .. }
++            | ClientRpcRequest::GitBridgeProbeObjects { .. } => ForgeRequestGroup::GitBridge,
++            ClientRpcRequest::NostrAuthChallenge { .. }
++            | ClientRpcRequest::NostrAuthVerify { .. }
++            | ClientRpcRequest::NostrGetProfile { .. } => ForgeRequestGroup::Nostr,
++            ClientRpcRequest::ForgeDiffCommits { .. } | ClientRpcRequest::ForgeDiffRefs { .. } => {
++                ForgeRequestGroup::Diff
++            }
++            _ => unreachable!("ForgeServiceExecutor received unhandled request"),
++        }
++    }
++
+     // ========================================================================
+     // Helper Methods for Git Operations
+     // ========================================================================
+@@ -1537,10 +1633,28 @@ impl ServiceExecutor for ForgeServiceExecutor {
+     }
+ 
+     async fn execute(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+-        use crate::handler::handlers::federation::*;
++        match Self::request_group(&request) {
++            ForgeRequestGroup::Repo => self.execute_repo_request(request).await,
++            ForgeRequestGroup::Blob => self.execute_blob_request(request).await,
++            ForgeRequestGroup::Tree => self.execute_tree_request(request).await,
++            ForgeRequestGroup::Commit => self.execute_commit_request(request).await,
++            ForgeRequestGroup::Ref => self.execute_ref_request(request).await,
++            ForgeRequestGroup::Issue => self.execute_issue_request(request).await,
++            ForgeRequestGroup::Patch => self.execute_patch_request(request).await,
++            ForgeRequestGroup::Discussion => self.execute_discussion_request(request).await,
++            ForgeRequestGroup::Fork => self.execute_fork_request(request).await,
++            ForgeRequestGroup::Mirror => self.execute_mirror_request(request).await,
++            ForgeRequestGroup::Federation => self.execute_federation_request(request).await,
++            ForgeRequestGroup::GitBridge => self.execute_git_bridge_request(request).await,
++            ForgeRequestGroup::Nostr => self.execute_nostr_request(request).await,
++            ForgeRequestGroup::Diff => self.execute_diff_request(request).await,
++        }
++    }
++}
+ 
++impl ForgeServiceExecutor {
++    async fn execute_repo_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+         match request {
+-            // Repository operations (previously WASM-only, now native for self-hosting)
+             ClientRpcRequest::ForgeCreateRepo {
+                 name,
+                 description,
+@@ -1549,7 +1663,6 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 use aspen_client_api::ForgeRepoInfo;
+                 use aspen_client_api::ForgeRepoResultResponse;
+ 
+-                // Use the node's own public key as the default delegate
+                 let delegates = vec![self.forge_node.public_key()];
+                 match self.forge_node.create_repo(&name, delegates, 1).await {
+                     Ok(identity) => {
+@@ -1568,10 +1681,10 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                             error: None,
+                         }))
+                     }
+-                    Err(e) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
++                    Err(error) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                         is_success: false,
+                         repo: None,
+-                        error: Some(format!("{}", e)),
++                        error: Some(error.to_string()),
+                     })),
+                 }
+             }
+@@ -1584,7 +1697,7 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 match self.forge_node.list_repos().await {
+                     Ok(repos) => {
+                         let count = repos.len() as u32;
+-                        let repos: Vec<ForgeRepoInfo> = repos
++                        let repos = repos
+                             .into_iter()
+                             .skip(offset)
+                             .take(limit)
+@@ -1605,28 +1718,40 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                             error: None,
+                         }))
+                     }
+-                    Err(e) => Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
++                    Err(error) => Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+                         is_success: false,
+                         repos: vec![],
+                         count: 0,
+-                        error: Some(format!("{}", e)),
++                        error: Some(error.to_string()),
+                     })),
+                 }
+             }
+             ClientRpcRequest::ForgeGetRepo { repo_id } => self.handle_get_repo(repo_id).await,
++            _ => unreachable!("unexpected repo request"),
++        }
++    }
+ 
+-            // Blob operations
++    async fn execute_blob_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeStoreBlob { repo_id, content } => self.handle_store_blob(repo_id, content).await,
+             ClientRpcRequest::ForgeGetBlob { hash } => self.handle_get_blob(hash).await,
++            _ => unreachable!("unexpected blob request"),
++        }
++    }
+ 
+-            // Tree operations
++    async fn execute_tree_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeCreateTree {
+                 repo_id: _,
+                 entries_json,
+             } => self.handle_create_tree(entries_json).await,
+             ClientRpcRequest::ForgeGetTree { hash } => self.handle_get_tree(hash).await,
++            _ => unreachable!("unexpected tree request"),
++        }
++    }
+ 
+-            // Commit operations
++    async fn execute_commit_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeCommit {
+                 repo_id,
+                 tree,
+@@ -1639,8 +1764,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 ref_name,
+                 limit,
+             } => self.handle_log(repo_id, ref_name, limit).await,
++            _ => unreachable!("unexpected commit request"),
++        }
++    }
+ 
+-            // Ref operations
++    async fn execute_ref_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => self.handle_get_ref(repo_id, ref_name).await,
+             ClientRpcRequest::ForgeSetRef {
+                 repo_id,
+@@ -1662,8 +1791,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
+             } => self.handle_cas_ref(repo_id, ref_name, expected, new_hash).await,
+             ClientRpcRequest::ForgeListBranches { repo_id } => self.handle_list_branches(repo_id).await,
+             ClientRpcRequest::ForgeListTags { repo_id } => self.handle_list_tags(repo_id).await,
++            _ => unreachable!("unexpected ref request"),
++        }
++    }
+ 
+-            // Issue operations
++    async fn execute_issue_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeCreateIssue {
+                 repo_id,
+                 title,
+@@ -1686,11 +1819,13 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 issue_id,
+                 reason,
+             } => self.handle_close_issue(repo_id, issue_id, reason).await,
+-            ClientRpcRequest::ForgeReopenIssue { repo_id, issue_id } => {
+-                self.handle_reopen_issue(repo_id, issue_id).await
+-            }
++            ClientRpcRequest::ForgeReopenIssue { repo_id, issue_id } => self.handle_reopen_issue(repo_id, issue_id).await,
++            _ => unreachable!("unexpected issue request"),
++        }
++    }
+ 
+-            // Patch operations
++    async fn execute_patch_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeCreatePatch {
+                 repo_id,
+                 title,
+@@ -1728,8 +1863,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 patch_id,
+                 reason,
+             } => self.handle_close_patch(repo_id, patch_id, reason).await,
++            _ => unreachable!("unexpected patch request"),
++        }
++    }
+ 
+-            // Discussion operations
++    async fn execute_discussion_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeCreateDiscussion {
+                 repo_id,
+                 title,
+@@ -1764,15 +1903,23 @@ impl ServiceExecutor for ForgeServiceExecutor {
+             ClientRpcRequest::ForgeReopenDiscussion { repo_id, discussion_id } => {
+                 self.handle_reopen_discussion(repo_id, discussion_id).await
+             }
++            _ => unreachable!("unexpected discussion request"),
++        }
++    }
+ 
+-            // Fork operations
++    async fn execute_fork_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeForkRepo {
+                 upstream_repo_id,
+                 name,
+                 description,
+             } => self.handle_fork_repo(upstream_repo_id, name, description).await,
++            _ => unreachable!("unexpected fork request"),
++        }
++    }
+ 
+-            // Mirror operations
++    async fn execute_mirror_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeSetMirror {
+                 repo_id,
+                 upstream_repo_id,
+@@ -1780,11 +1927,15 @@ impl ServiceExecutor for ForgeServiceExecutor {
+             } => self.handle_set_mirror(repo_id, upstream_repo_id, interval_secs).await,
+             ClientRpcRequest::ForgeDisableMirror { repo_id } => self.handle_disable_mirror(repo_id).await,
+             ClientRpcRequest::ForgeGetMirrorStatus { repo_id } => self.handle_get_mirror_status(repo_id).await,
++            _ => unreachable!("unexpected mirror request"),
++        }
++    }
+ 
+-            // Federation operations
+-            ClientRpcRequest::ForgeGetDelegateKey { repo_id } => {
+-                handle_get_delegate_key(&self.forge_node, repo_id).await
+-            }
++    async fn execute_federation_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        use crate::handler::handlers::federation::*;
++
++        match request {
++            ClientRpcRequest::ForgeGetDelegateKey { repo_id } => handle_get_delegate_key(&self.forge_node, repo_id).await,
+             ClientRpcRequest::GetFederationStatus => {
+                 #[cfg(feature = "global-discovery")]
+                 {
+@@ -1894,7 +2045,7 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 .await
+             }
+             #[cfg(not(feature = "git-bridge"))]
+-            ClientRpcRequest::FederationPush { .. } => Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
++            ClientRpcRequest::FederationPush { .. } => Ok(ClientRpcResponse::Error(ErrorResponse {
+                 code: "UNSUPPORTED".to_string(),
+                 message: "federation push requires git-bridge feature".to_string(),
+             })),
+@@ -1917,12 +2068,10 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 .await
+             }
+             #[cfg(not(feature = "git-bridge"))]
+-            ClientRpcRequest::FederationBidiSync { .. } => {
+-                Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+-                    code: "UNSUPPORTED".to_string(),
+-                    message: "federation bidi sync requires git-bridge feature".to_string(),
+-                }))
+-            }
++            ClientRpcRequest::FederationBidiSync { .. } => Ok(ClientRpcResponse::Error(ErrorResponse {
++                code: "UNSUPPORTED".to_string(),
++                message: "federation bidi sync requires git-bridge feature".to_string(),
++            })),
+             #[cfg(feature = "git-bridge")]
+             ClientRpcRequest::FederationGitListRefs {
+                 origin_key,
+@@ -1970,8 +2119,12 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 federated_id,
+                 remote_cluster,
+             } => handle_fetch_federated(&self.forge_node, federated_id, remote_cluster).await,
++            _ => unreachable!("unexpected federation request"),
++        }
++    }
+ 
+-            // Git Bridge operations
++    async fn execute_git_bridge_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             #[cfg(feature = "git-bridge")]
+             ClientRpcRequest::GitBridgeListRefs { repo_id } => {
+                 crate::handler::handlers::git_bridge::handle_git_bridge_list_refs(&self.forge_node, repo_id).await
+@@ -1983,21 +2136,20 @@ impl ServiceExecutor for ForgeServiceExecutor {
+             }
+             #[cfg(feature = "git-bridge")]
+             ClientRpcRequest::GitBridgePush { repo_id, objects, refs } => {
+-                let resp = crate::handler::handlers::git_bridge::handle_git_bridge_push(
++                let response = crate::handler::handlers::git_bridge::handle_git_bridge_push(
+                     &self.forge_node,
+                     repo_id.clone(),
+                     objects,
+                     refs,
+                 )
+                 .await?;
+-                // Emit hook events for successful pushes
+                 #[cfg(feature = "hooks")]
+-                if let ClientRpcResponse::GitBridgePush(ref push_resp) = resp
+-                    && push_resp.is_success
++                if let ClientRpcResponse::GitBridgePush(ref push_response) = response
++                    && push_response.is_success
+                 {
+-                    self.emit_push_hook(&repo_id, &push_resp.ref_results);
++                    self.emit_push_hook(&repo_id, &push_response.ref_results);
+                 }
+-                Ok(resp)
++                Ok(response)
+             }
+             #[cfg(feature = "git-bridge")]
+             ClientRpcRequest::GitBridgePushStart {
+@@ -2040,22 +2192,20 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 session_id,
+                 content_hash,
+             } => {
+-                let resp = crate::handler::handlers::git_bridge::handle_git_bridge_push_complete(
++                let response = crate::handler::handlers::git_bridge::handle_git_bridge_push_complete(
+                     &self.forge_node,
+                     session_id,
+                     content_hash,
+                 )
+                 .await?;
+-                // Emit hook events for successful chunked pushes
+                 #[cfg(feature = "hooks")]
+-                if let ClientRpcResponse::GitBridgePushComplete(ref push_resp) = resp
+-                    && push_resp.is_success
++                if let ClientRpcResponse::GitBridgePushComplete(ref push_response) = response
++                    && push_response.is_success
+                 {
+-                    self.emit_push_hook("", &push_resp.ref_results);
++                    self.emit_push_hook("", &push_response.ref_results);
+                 }
+-                Ok(resp)
++                Ok(response)
+             }
+-
+             #[cfg(feature = "git-bridge")]
+             ClientRpcRequest::GitBridgeProbeObjects { repo_id, sha1s } => {
+                 crate::handler::handlers::git_bridge::handle_git_bridge_probe_objects(&self.forge_node, repo_id, sha1s)
+@@ -2084,7 +2234,6 @@ impl ServiceExecutor for ForgeServiceExecutor {
+             ClientRpcRequest::GitBridgeFetchComplete { session_id } => {
+                 crate::handler::handlers::git_bridge::handle_git_bridge_fetch_complete(session_id).await
+             }
+-
+             #[cfg(not(feature = "git-bridge"))]
+             ClientRpcRequest::GitBridgeListRefs { .. }
+             | ClientRpcRequest::GitBridgeFetch { .. }
+@@ -2099,15 +2248,19 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 "GIT_BRIDGE_UNAVAILABLE",
+                 "Git bridge feature not enabled. Rebuild with --features git-bridge",
+             )),
++            _ => unreachable!("unexpected git bridge request"),
++        }
++    }
+ 
+-            // Nostr identity authentication
++    async fn execute_nostr_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::NostrAuthChallenge { npub_hex } => {
+                 match self.nostr_auth.create_challenge(&npub_hex).await {
+                     Ok((challenge_id, challenge_bytes)) => Ok(ClientRpcResponse::NostrAuthChallengeResult {
+                         challenge_id,
+                         challenge_hex: hex::encode(challenge_bytes),
+                     }),
+-                    Err(e) => Ok(ClientRpcResponse::error("AUTH_CHALLENGE_FAILED", format!("{e}"))),
++                    Err(error) => Ok(ClientRpcResponse::error("AUTH_CHALLENGE_FAILED", format!("{error}"))),
+                 }
+             }
+             ClientRpcRequest::NostrAuthVerify {
+@@ -2126,31 +2279,29 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                                 error: None,
+                             })
+                         }
+-                        Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
++                        Err(error) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                             is_success: false,
+                             token: None,
+                             ed25519_public_key: None,
+-                            error: Some(format!("token serialization failed: {e}")),
++                            error: Some(format!("token serialization failed: {error}")),
+                         }),
+                     },
+-                    Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
++                    Err(error) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                         is_success: false,
+                         token: None,
+                         ed25519_public_key: None,
+-                        error: Some(format!("{e}")),
++                        error: Some(error.to_string()),
+                     }),
+                 },
+-                Err(e) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
++                Err(error) => Ok(ClientRpcResponse::NostrAuthVerifyResult {
+                     is_success: false,
+                     token: None,
+                     ed25519_public_key: None,
+-                    error: Some(format!("{e}")),
++                    error: Some(error.to_string()),
+                 }),
+             },
+-
+             #[allow(clippy::collapsible_if)]
+             ClientRpcRequest::NostrGetProfile { npub_hex } => {
+-                // Query KV for kind 0 events by this author
+                 let prefix = format!("nostr:au:{}:", npub_hex);
+                 let scan = self
+                     .forge_node
+@@ -2164,10 +2315,8 @@ impl ServiceExecutor for ForgeServiceExecutor {
+ 
+                 let mut display_name = None;
+                 let mut nip05 = None;
+-
+                 if let Ok(results) = scan {
+                     for kv in &results.entries {
+-                        // Fetch the event by ID (last segment of the key)
+                         let event_id = kv.key.rsplit(':').next().unwrap_or("");
+                         let event_key = format!("nostr:ev:{event_id}");
+                         if let Ok(ev_result) = self
+@@ -2178,38 +2327,35 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                                 consistency: aspen_core::ReadConsistency::Linearizable,
+                             })
+                             .await
++                            && let Some(ev_kv) = ev_result.kv
++                            && let Ok(event) = serde_json::from_str::<serde_json::Value>(&ev_kv.value)
++                            && event.get("kind").and_then(|k| k.as_u64()).unwrap_or(0) == 0
+                         {
+-                            if let Some(ev_kv) = ev_result.kv {
+-                                // Parse the stored event JSON
+-                                if let Ok(event) = serde_json::from_str::<serde_json::Value>(&ev_kv.value) {
+-                                    let kind = event.get("kind").and_then(|k| k.as_u64()).unwrap_or(0);
+-                                    if kind == 0 {
+-                                        // Kind 0 = profile metadata, content is JSON
+-                                        if let Some(content_str) = event.get("content").and_then(|c| c.as_str()) {
+-                                            if let Ok(profile) = serde_json::from_str::<serde_json::Value>(content_str)
+-                                            {
+-                                                display_name = profile
+-                                                    .get("display_name")
+-                                                    .or_else(|| profile.get("name"))
+-                                                    .and_then(|v| v.as_str())
+-                                                    .map(|s| s.to_string());
+-                                                nip05 = profile
+-                                                    .get("nip05")
+-                                                    .and_then(|v| v.as_str())
+-                                                    .map(|s| s.to_string());
+-                                            }
+-                                        }
+-                                        break;
+-                                    }
+-                                }
++                            if let Some(content_str) = event.get("content").and_then(|c| c.as_str())
++                                && let Ok(profile) = serde_json::from_str::<serde_json::Value>(content_str)
++                            {
++                                display_name = profile
++                                    .get("display_name")
++                                    .or_else(|| profile.get("name"))
++                                    .and_then(|value| value.as_str())
++                                    .map(ToString::to_string);
++                                nip05 = profile
++                                    .get("nip05")
++                                    .and_then(|value| value.as_str())
++                                    .map(ToString::to_string);
+                             }
++                            break;
+                         }
+                     }
+                 }
+-
+                 Ok(ClientRpcResponse::NostrGetProfileResult { display_name, nip05 })
+             }
++            _ => unreachable!("unexpected nostr request"),
++        }
++    }
+ 
++    async fn execute_diff_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
++        match request {
+             ClientRpcRequest::ForgeDiffCommits {
+                 repo_id,
+                 old_commit,
+@@ -2224,8 +2370,78 @@ impl ServiceExecutor for ForgeServiceExecutor {
+                 include_content,
+                 context_lines,
+             } => self.handle_diff_refs(repo_id, old_ref, new_ref, include_content, context_lines).await,
+-
+-            _ => unreachable!("ForgeServiceExecutor received unhandled request"),
++            _ => unreachable!("unexpected diff request"),
+         }
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_request_group_routes_repo_and_git_bridge_requests() {
++        assert_eq!(
++            ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeCreateRepo {
++                name: "repo".into(),
++                description: None,
++                default_branch: None,
++            }),
++            ForgeRequestGroup::Repo
++        );
++        assert_eq!(
++            ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeGetRef {
++                repo_id: "abcd".into(),
++                ref_name: "main".into(),
++            }),
++            ForgeRequestGroup::Ref
++        );
++        assert_eq!(
++            ForgeServiceExecutor::request_group(&ClientRpcRequest::GitBridgeFetch {
++                repo_id: "abcd".into(),
++                want: vec![],
++                have: vec![],
++            }),
++            ForgeRequestGroup::GitBridge
++        );
++    }
++
++    #[test]
++    fn test_request_group_routes_federation_nostr_and_diff_requests() {
++        assert_eq!(
++            ForgeServiceExecutor::request_group(&ClientRpcRequest::FederationPull {
++                mirror_repo_id: None,
++                peer_node_id: None,
++                peer_addr: None,
++                repo_id: Some("repo".into()),
++            }),
++            ForgeRequestGroup::Federation
++        );
++        assert_eq!(
++            ForgeServiceExecutor::request_group(&ClientRpcRequest::NostrAuthChallenge {
++                npub_hex: "npub".into(),
++            }),
++            ForgeRequestGroup::Nostr
++        );
++        assert_eq!(
++            ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeDiffRefs {
++                repo_id: "repo".into(),
++                old_ref: "main".into(),
++                new_ref: "feature".into(),
++                include_content: false,
++                context_lines: None,
++            }),
++            ForgeRequestGroup::Diff
++        );
++    }
++
++    #[test]
++    fn test_execute_dispatch_metadata_is_stable() {
++        assert_eq!(ForgeServiceExecutor::SERVICE_NAME, "forge");
++        assert_eq!(ForgeServiceExecutor::PRIORITY, 540);
++        assert_eq!(ForgeServiceExecutor::APP_ID, Some("forge"));
++        assert!(ForgeServiceExecutor::HANDLES.contains(&"ForgeCreateRepo"));
++        assert!(ForgeServiceExecutor::HANDLES.contains(&"GitBridgePush"));
++        assert!(ForgeServiceExecutor::HANDLES.contains(&"NostrAuthVerify"));
++    }
++}
+diff --git a/openspec/changes/durable-tigerstyle-audit/audit-report.md b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+index dd9a76bb0..de8ca19ad 100644
+--- a/openspec/changes/durable-tigerstyle-audit/audit-report.md
++++ b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+@@ -100,6 +100,17 @@ The first production slice is now in the tree:
+ 
+ The scan still reports `crates/aspen-forge/src/verified/ref_validation.rs:validate_ref_name` as overlong after the `usize` cleanup. That length issue stays in the backlog for a later slice; the current task here was only the `usize` leak.
+ 
++## Phase 4 dispatcher update
++
++Source: `openspec/changes/durable-tigerstyle-audit/evidence/post-phase4-scan.json`
++
++The second remediation slice removed the original top-level dispatcher hotspots from the scan:
++
++- `crates/aspen-core-essentials-handler/src/coordination.rs:handle`
++- `crates/aspen-forge-handler/src/executor.rs:execute`
++
++That work split the dispatchers by request family and added characterization tests for the routing behavior. The post-phase-4 scan still shows follow-on hotspots in some newly extracted helpers (`renew_lock`, `execute_federation_request`, `execute_git_bridge_request`, `execute_nostr_request`, `execute_repo_request`, and `request_group`). Those are smaller and more localized than the original monoliths, but they remain backlog candidates for later cleanup.
++
+ ## Current status
+ 
+ This change is no longer audit-only. The audit artifacts are durable, the regression fixture is committed, and the first remediation slice has landed. Phases 3 and 4 still have open work, so the right status is `remediation in progress`.

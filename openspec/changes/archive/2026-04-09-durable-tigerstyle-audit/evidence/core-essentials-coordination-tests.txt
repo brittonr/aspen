@@ -1,0 +1,34 @@
+$ cargo test -p aspen-core-essentials-handler coordination
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling aspen-core-essentials-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-essentials-handler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.08s
+     Running unittests src/lib.rs (target/debug/deps/aspen_core_essentials_handler-c31aa89b455984bf)
+
+running 17 tests
+test coordination::tests::test_can_handle_lock_variants ... ok
+test coordination::tests::test_can_handle_counter_variants ... ok
+test coordination::tests::test_can_handle_ratelimiter_variants ... ok
+test coordination::tests::test_can_handle_sequence_variants ... ok
+test coordination::tests::test_can_handle_signed_counter_variants ... ok
+test coordination::tests::test_cannot_handle_barrier_variants ... ok
+test coordination::tests::test_cannot_handle_non_coordination ... ok
+test coordination::tests::test_cannot_handle_queue_variants ... ok
+test coordination::tests::test_cannot_handle_rwlock_variants ... ok
+test coordination::tests::test_cannot_handle_semaphore_variants ... ok
+test coordination::tests::test_cannot_handle_service_registry_variants ... ok
+test coordination::tests::test_request_family_routes_native_variants ... ok
+test coordination::tests::test_handle_rejects_non_coordination_requests_with_error ... ok
+test coordination::tests::test_handle_counter_increment_then_get ... ok
+test coordination::tests::test_handle_rate_limiter_available_and_try_acquire ... ok
+test coordination::tests::test_handle_sequence_reserve_then_current ... ok
+test coordination::tests::test_handle_lock_try_acquire_and_release ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 123 filtered out; finished in 0.02s

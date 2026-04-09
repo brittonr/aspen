@@ -1,0 +1,455 @@
+diff --git a/crates/aspen-core-essentials-handler/src/coordination.rs b/crates/aspen-core-essentials-handler/src/coordination.rs
+index 8b3b743c9..0e59a22a1 100644
+--- a/crates/aspen-core-essentials-handler/src/coordination.rs
++++ b/crates/aspen-core-essentials-handler/src/coordination.rs
+@@ -13,6 +13,7 @@ use std::sync::Arc;
+ use std::time::Duration;
+ 
+ use anyhow::Result;
++use anyhow::anyhow;
+ use aspen_client_api::ClientRpcRequest;
+ use aspen_client_api::ClientRpcResponse;
+ use aspen_client_api::RateLimiterResultResponse;
+@@ -66,7 +67,7 @@ impl CoordinationHandler {
+     /// KV key prefix for rate limiters.
+     const RATE_LIMITER_PREFIX: &'static str = "__coord:ratelimit:";
+ 
+-    fn request_family(request: &ClientRpcRequest) -> CoordinationRequestFamily {
++    fn request_family(request: &ClientRpcRequest) -> Result<CoordinationRequestFamily> {
+         match request {
+             ClientRpcRequest::CounterGet { .. }
+             | ClientRpcRequest::CounterIncrement { .. }
+@@ -74,22 +75,22 @@ impl CoordinationHandler {
+             | ClientRpcRequest::CounterAdd { .. }
+             | ClientRpcRequest::CounterSubtract { .. }
+             | ClientRpcRequest::CounterSet { .. }
+-            | ClientRpcRequest::CounterCompareAndSet { .. } => CoordinationRequestFamily::Counter,
++            | ClientRpcRequest::CounterCompareAndSet { .. } => Ok(CoordinationRequestFamily::Counter),
+             ClientRpcRequest::SignedCounterGet { .. } | ClientRpcRequest::SignedCounterAdd { .. } => {
+-                CoordinationRequestFamily::SignedCounter
++                Ok(CoordinationRequestFamily::SignedCounter)
+             }
+             ClientRpcRequest::SequenceNext { .. }
+             | ClientRpcRequest::SequenceReserve { .. }
+-            | ClientRpcRequest::SequenceCurrent { .. } => CoordinationRequestFamily::Sequence,
++            | ClientRpcRequest::SequenceCurrent { .. } => Ok(CoordinationRequestFamily::Sequence),
+             ClientRpcRequest::LockAcquire { .. }
+             | ClientRpcRequest::LockTryAcquire { .. }
+             | ClientRpcRequest::LockRelease { .. }
+-            | ClientRpcRequest::LockRenew { .. } => CoordinationRequestFamily::Lock,
++            | ClientRpcRequest::LockRenew { .. } => Ok(CoordinationRequestFamily::Lock),
+             ClientRpcRequest::RateLimiterTryAcquire { .. }
+             | ClientRpcRequest::RateLimiterAcquire { .. }
+             | ClientRpcRequest::RateLimiterAvailable { .. }
+-            | ClientRpcRequest::RateLimiterReset { .. } => CoordinationRequestFamily::RateLimiter,
+-            _ => unreachable!("unexpected request in CoordinationHandler"),
++            | ClientRpcRequest::RateLimiterReset { .. } => Ok(CoordinationRequestFamily::RateLimiter),
++            _ => Err(anyhow!("unexpected request in CoordinationHandler")),
+         }
+     }
+ 
+@@ -182,7 +183,7 @@ impl RequestHandler for CoordinationHandler {
+     }
+ 
+     async fn handle(&self, request: ClientRpcRequest, ctx: &ClientProtocolContext) -> Result<ClientRpcResponse> {
+-        let response = match Self::request_family(&request) {
++        let response = match Self::request_family(&request)? {
+             CoordinationRequestFamily::Counter => self.handle_counter_request(request, ctx).await,
+             CoordinationRequestFamily::SignedCounter => self.handle_signed_counter_request(request, ctx).await,
+             CoordinationRequestFamily::Sequence => self.handle_sequence_request(request, ctx).await,
+@@ -796,18 +797,21 @@ mod tests {
+     #[test]
+     fn test_request_family_routes_native_variants() {
+         assert_eq!(
+-            CoordinationHandler::request_family(&ClientRpcRequest::CounterGet { key: "k".into() }),
++            CoordinationHandler::request_family(&ClientRpcRequest::CounterGet { key: "k".into() })
++                .expect("counter route should succeed"),
+             CoordinationRequestFamily::Counter
+         );
+         assert_eq!(
+             CoordinationHandler::request_family(&ClientRpcRequest::SignedCounterAdd {
+                 key: "k".into(),
+                 amount: -1,
+-            }),
++            })
++            .expect("signed counter route should succeed"),
+             CoordinationRequestFamily::SignedCounter
+         );
+         assert_eq!(
+-            CoordinationHandler::request_family(&ClientRpcRequest::SequenceCurrent { key: "s".into() }),
++            CoordinationHandler::request_family(&ClientRpcRequest::SequenceCurrent { key: "s".into() })
++                .expect("sequence route should succeed"),
+             CoordinationRequestFamily::Sequence
+         );
+         assert_eq!(
+@@ -815,7 +819,8 @@ mod tests {
+                 key: "l".into(),
+                 holder_id: "h".into(),
+                 ttl_ms: 1000,
+-            }),
++            })
++            .expect("lock route should succeed"),
+             CoordinationRequestFamily::Lock
+         );
+         assert_eq!(
+@@ -823,11 +828,22 @@ mod tests {
+                 key: "r".into(),
+                 capacity_tokens: 10,
+                 refill_rate: 1.0,
+-            }),
++            })
++            .expect("rate limiter route should succeed"),
+             CoordinationRequestFamily::RateLimiter
+         );
+     }
+ 
++    #[tokio::test]
++    async fn test_handle_rejects_non_coordination_requests_with_error() {
++        let ctx = setup_test_context().await;
++        let error = handler()
++            .handle(ClientRpcRequest::Ping, &ctx)
++            .await
++            .expect_err("non-coordination request should return an error");
++        assert!(error.to_string().contains("unexpected request in CoordinationHandler"));
++    }
++
+     #[tokio::test]
+     async fn test_handle_counter_increment_then_get() {
+         let ctx = setup_test_context().await;
+diff --git a/crates/aspen-forge-handler/Cargo.toml b/crates/aspen-forge-handler/Cargo.toml
+index 4688449dd..59712f700 100644
+--- a/crates/aspen-forge-handler/Cargo.toml
++++ b/crates/aspen-forge-handler/Cargo.toml
+@@ -46,6 +46,7 @@ global-discovery = ["aspen-rpc-core/global-discovery", "aspen-core/global-discov
+ hooks = ["dep:aspen-hooks", "dep:aspen-hooks-types", "aspen-rpc-core/hooks"]
+ 
+ [dev-dependencies]
++aspen-testing-core = { path = "../aspen-testing-core" }
+ tokio = { version = "1.0", features = ["full", "test-util"] }
+ rand = "0.9"
+ serde_json = "1.0"
+diff --git a/crates/aspen-forge-handler/src/executor.rs b/crates/aspen-forge-handler/src/executor.rs
+index 06c6b5b95..4d6ae6a0b 100644
+--- a/crates/aspen-forge-handler/src/executor.rs
++++ b/crates/aspen-forge-handler/src/executor.rs
+@@ -6,6 +6,7 @@
+ use std::sync::Arc;
+ 
+ use anyhow::Result;
++use anyhow::anyhow;
+ use aspen_client_api::ClientRpcRequest;
+ use aspen_client_api::ClientRpcResponse;
+ #[cfg(not(feature = "git-bridge"))]
+@@ -258,28 +259,28 @@ impl ForgeServiceExecutor {
+ }
+ 
+ impl ForgeServiceExecutor {
+-    fn request_group(request: &ClientRpcRequest) -> ForgeRequestGroup {
++    fn request_group(request: &ClientRpcRequest) -> Result<ForgeRequestGroup> {
+         match request {
+             ClientRpcRequest::ForgeCreateRepo { .. }
+             | ClientRpcRequest::ForgeListRepos { .. }
+-            | ClientRpcRequest::ForgeGetRepo { .. } => ForgeRequestGroup::Repo,
+-            ClientRpcRequest::ForgeStoreBlob { .. } | ClientRpcRequest::ForgeGetBlob { .. } => ForgeRequestGroup::Blob,
+-            ClientRpcRequest::ForgeCreateTree { .. } | ClientRpcRequest::ForgeGetTree { .. } => ForgeRequestGroup::Tree,
++            | ClientRpcRequest::ForgeGetRepo { .. } => Ok(ForgeRequestGroup::Repo),
++            ClientRpcRequest::ForgeStoreBlob { .. } | ClientRpcRequest::ForgeGetBlob { .. } => Ok(ForgeRequestGroup::Blob),
++            ClientRpcRequest::ForgeCreateTree { .. } | ClientRpcRequest::ForgeGetTree { .. } => Ok(ForgeRequestGroup::Tree),
+             ClientRpcRequest::ForgeCommit { .. }
+             | ClientRpcRequest::ForgeGetCommit { .. }
+-            | ClientRpcRequest::ForgeLog { .. } => ForgeRequestGroup::Commit,
++            | ClientRpcRequest::ForgeLog { .. } => Ok(ForgeRequestGroup::Commit),
+             ClientRpcRequest::ForgeGetRef { .. }
+             | ClientRpcRequest::ForgeSetRef { .. }
+             | ClientRpcRequest::ForgeDeleteRef { .. }
+             | ClientRpcRequest::ForgeCasRef { .. }
+             | ClientRpcRequest::ForgeListBranches { .. }
+-            | ClientRpcRequest::ForgeListTags { .. } => ForgeRequestGroup::Ref,
++            | ClientRpcRequest::ForgeListTags { .. } => Ok(ForgeRequestGroup::Ref),
+             ClientRpcRequest::ForgeCreateIssue { .. }
+             | ClientRpcRequest::ForgeListIssues { .. }
+             | ClientRpcRequest::ForgeGetIssue { .. }
+             | ClientRpcRequest::ForgeCommentIssue { .. }
+             | ClientRpcRequest::ForgeCloseIssue { .. }
+-            | ClientRpcRequest::ForgeReopenIssue { .. } => ForgeRequestGroup::Issue,
++            | ClientRpcRequest::ForgeReopenIssue { .. } => Ok(ForgeRequestGroup::Issue),
+             ClientRpcRequest::ForgeCreatePatch { .. }
+             | ClientRpcRequest::ForgeListPatches { .. }
+             | ClientRpcRequest::ForgeGetPatch { .. }
+@@ -287,7 +288,7 @@ impl ForgeServiceExecutor {
+             | ClientRpcRequest::ForgeApprovePatch { .. }
+             | ClientRpcRequest::ForgeMergePatch { .. }
+             | ClientRpcRequest::ForgeCheckMerge { .. }
+-            | ClientRpcRequest::ForgeClosePatch { .. } => ForgeRequestGroup::Patch,
++            | ClientRpcRequest::ForgeClosePatch { .. } => Ok(ForgeRequestGroup::Patch),
+             ClientRpcRequest::ForgeCreateDiscussion { .. }
+             | ClientRpcRequest::ForgeListDiscussions { .. }
+             | ClientRpcRequest::ForgeGetDiscussion { .. }
+@@ -295,11 +296,11 @@ impl ForgeServiceExecutor {
+             | ClientRpcRequest::ForgeLockDiscussion { .. }
+             | ClientRpcRequest::ForgeUnlockDiscussion { .. }
+             | ClientRpcRequest::ForgeCloseDiscussion { .. }
+-            | ClientRpcRequest::ForgeReopenDiscussion { .. } => ForgeRequestGroup::Discussion,
+-            ClientRpcRequest::ForgeForkRepo { .. } => ForgeRequestGroup::Fork,
++            | ClientRpcRequest::ForgeReopenDiscussion { .. } => Ok(ForgeRequestGroup::Discussion),
++            ClientRpcRequest::ForgeForkRepo { .. } => Ok(ForgeRequestGroup::Fork),
+             ClientRpcRequest::ForgeSetMirror { .. }
+             | ClientRpcRequest::ForgeDisableMirror { .. }
+-            | ClientRpcRequest::ForgeGetMirrorStatus { .. } => ForgeRequestGroup::Mirror,
++            | ClientRpcRequest::ForgeGetMirrorStatus { .. } => Ok(ForgeRequestGroup::Mirror),
+             ClientRpcRequest::ForgeGetDelegateKey { .. }
+             | ClientRpcRequest::GetFederationStatus
+             | ClientRpcRequest::ListDiscoveredClusters
+@@ -315,7 +316,7 @@ impl ForgeServiceExecutor {
+             | ClientRpcRequest::FederationPull { .. }
+             | ClientRpcRequest::FederationPush { .. }
+             | ClientRpcRequest::FederationBidiSync { .. }
+-            | ClientRpcRequest::ForgeFetchFederated { .. } => ForgeRequestGroup::Federation,
++            | ClientRpcRequest::ForgeFetchFederated { .. } => Ok(ForgeRequestGroup::Federation),
+             ClientRpcRequest::GitBridgeListRefs { .. }
+             | ClientRpcRequest::GitBridgeFetch { .. }
+             | ClientRpcRequest::GitBridgeFetchStart { .. }
+@@ -325,14 +326,14 @@ impl ForgeServiceExecutor {
+             | ClientRpcRequest::GitBridgePushStart { .. }
+             | ClientRpcRequest::GitBridgePushChunk { .. }
+             | ClientRpcRequest::GitBridgePushComplete { .. }
+-            | ClientRpcRequest::GitBridgeProbeObjects { .. } => ForgeRequestGroup::GitBridge,
++            | ClientRpcRequest::GitBridgeProbeObjects { .. } => Ok(ForgeRequestGroup::GitBridge),
+             ClientRpcRequest::NostrAuthChallenge { .. }
+             | ClientRpcRequest::NostrAuthVerify { .. }
+-            | ClientRpcRequest::NostrGetProfile { .. } => ForgeRequestGroup::Nostr,
++            | ClientRpcRequest::NostrGetProfile { .. } => Ok(ForgeRequestGroup::Nostr),
+             ClientRpcRequest::ForgeDiffCommits { .. } | ClientRpcRequest::ForgeDiffRefs { .. } => {
+-                ForgeRequestGroup::Diff
++                Ok(ForgeRequestGroup::Diff)
+             }
+-            _ => unreachable!("ForgeServiceExecutor received unhandled request"),
++            _ => Err(anyhow!("ForgeServiceExecutor received unhandled request")),
+         }
+     }
+ 
+@@ -1633,7 +1634,7 @@ impl ServiceExecutor for ForgeServiceExecutor {
+     }
+ 
+     async fn execute(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+-        match Self::request_group(&request) {
++        match Self::request_group(&request)? {
+             ForgeRequestGroup::Repo => self.execute_repo_request(request).await,
+             ForgeRequestGroup::Blob => self.execute_blob_request(request).await,
+             ForgeRequestGroup::Tree => self.execute_tree_request(request).await,
+@@ -2377,8 +2378,59 @@ impl ForgeServiceExecutor {
+ 
+ #[cfg(test)]
+ mod tests {
++    use std::fs;
++    use std::net::SocketAddrV4;
++    use std::sync::Arc;
++
++    use aspen_blob::IrohBlobStore;
++    use aspen_core::EndpointProvider;
++    use aspen_rpc_core::ServiceExecutor;
++    use aspen_testing_core::DeterministicKeyValueStore;
++
+     use super::*;
+ 
++    async fn make_test_executor() -> ForgeServiceExecutor {
++        let endpoint_secret = iroh::SecretKey::generate(&mut rand::rng());
++        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
++            .secret_key(endpoint_secret)
++            .bind_addr(
++                "127.0.0.1:0"
++                    .parse::<SocketAddrV4>()
++                    .expect("loopback bind address should parse"),
++            )
++            .expect("loopback bind address should be valid")
++            .bind()
++            .await
++            .expect("test endpoint should bind");
++        let blob_dir = std::env::temp_dir().join(format!(
++            "aspen-forge-handler-executor-{}",
++            uuid::Uuid::new_v4()
++        ));
++        fs::create_dir_all(&blob_dir).expect("blob directory should be created");
++        let blob_store = Arc::new(
++            IrohBlobStore::new(&blob_dir, endpoint.clone())
++                .await
++                .expect("blob store should initialize"),
++        );
++        let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
++        let forge_secret = iroh::SecretKey::generate(&mut rand::rng());
++        let forge_node = Arc::new(aspen_forge::ForgeNode::new(blob_store, kv, forge_secret));
++        ForgeServiceExecutor::new(
++            forge_node,
++            #[cfg(feature = "global-discovery")]
++            None,
++            #[cfg(feature = "global-discovery")]
++            None,
++            None,
++            None,
++            None,
++            Some(Arc::new(endpoint)),
++            #[cfg(all(feature = "hooks", feature = "git-bridge"))]
++            None,
++            7,
++        )
++    }
++
+     #[test]
+     fn test_request_group_routes_repo_and_git_bridge_requests() {
+         assert_eq!(
+@@ -2386,14 +2438,16 @@ mod tests {
+                 name: "repo".into(),
+                 description: None,
+                 default_branch: None,
+-            }),
++            })
++            .expect("repo request should route"),
+             ForgeRequestGroup::Repo
+         );
+         assert_eq!(
+             ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeGetRef {
+                 repo_id: "abcd".into(),
+                 ref_name: "main".into(),
+-            }),
++            })
++            .expect("ref request should route"),
+             ForgeRequestGroup::Ref
+         );
+         assert_eq!(
+@@ -2401,7 +2455,8 @@ mod tests {
+                 repo_id: "abcd".into(),
+                 want: vec![],
+                 have: vec![],
+-            }),
++            })
++            .expect("git bridge request should route"),
+             ForgeRequestGroup::GitBridge
+         );
+     }
+@@ -2414,13 +2469,15 @@ mod tests {
+                 peer_node_id: None,
+                 peer_addr: None,
+                 repo_id: Some("repo".into()),
+-            }),
++            })
++            .expect("federation request should route"),
+             ForgeRequestGroup::Federation
+         );
+         assert_eq!(
+             ForgeServiceExecutor::request_group(&ClientRpcRequest::NostrAuthChallenge {
+                 npub_hex: "npub".into(),
+-            }),
++            })
++            .expect("nostr request should route"),
+             ForgeRequestGroup::Nostr
+         );
+         assert_eq!(
+@@ -2430,11 +2487,84 @@ mod tests {
+                 new_ref: "feature".into(),
+                 include_content: false,
+                 context_lines: None,
+-            }),
++            })
++            .expect("diff request should route"),
+             ForgeRequestGroup::Diff
+         );
+     }
+ 
++    #[tokio::test]
++    async fn test_execute_create_repo_then_list_repos() {
++        let executor = make_test_executor().await;
++        let create_result = executor
++            .execute(ClientRpcRequest::ForgeCreateRepo {
++                name: "repo".into(),
++                description: Some("demo".into()),
++                default_branch: None,
++            })
++            .await
++            .expect("create repo should succeed");
++        match create_result {
++            ClientRpcResponse::ForgeRepoResult(response) => {
++                assert!(response.is_success);
++                let repo = response.repo.expect("repo result should include created repo");
++                assert_eq!(repo.name, "repo");
++                assert_eq!(repo.default_branch, "main");
++            }
++            other => panic!("expected ForgeRepoResult, got {other:?}"),
++        }
++
++        let list_result = executor
++            .execute(ClientRpcRequest::ForgeListRepos {
++                limit: Some(10),
++                offset: Some(0),
++            })
++            .await
++            .expect("list repos should succeed");
++        match list_result {
++            ClientRpcResponse::ForgeRepoListResult(response) => {
++                assert!(response.is_success);
++                assert_eq!(response.count, 1);
++                assert_eq!(response.repos.len(), 1);
++                assert_eq!(response.repos[0].name, "repo");
++            }
++            other => panic!("expected ForgeRepoListResult, got {other:?}"),
++        }
++    }
++
++    #[tokio::test]
++    async fn test_execute_routes_nostr_requests() {
++        let executor = make_test_executor().await;
++        let response = executor
++            .execute(ClientRpcRequest::NostrAuthChallenge {
++                npub_hex: "npub-test".into(),
++            })
++            .await
++            .expect("nostr auth challenge should succeed");
++        match response {
++            ClientRpcResponse::NostrAuthChallengeResult {
++                challenge_id,
++                challenge_hex,
++            } => {
++                assert_eq!(challenge_id.len(), 32);
++                assert_eq!(challenge_hex.len(), 64);
++            }
++            other => panic!("expected NostrAuthChallengeResult, got {other:?}"),
++        }
++    }
++
++    #[tokio::test]
++    async fn test_execute_rejects_unhandled_requests_with_error() {
++        let executor = make_test_executor().await;
++        let error = executor
++            .execute(ClientRpcRequest::Ping)
++            .await
++            .expect_err("unhandled request should return an error");
++        assert!(error
++            .to_string()
++            .contains("ForgeServiceExecutor received unhandled request"));
++    }
++
+     #[test]
+     fn test_execute_dispatch_metadata_is_stable() {
+         assert_eq!(ForgeServiceExecutor::SERVICE_NAME, "forge");
+diff --git a/openspec/changes/durable-tigerstyle-audit/audit-report.md b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+index de8ca19ad..62abcbc07 100644
+--- a/openspec/changes/durable-tigerstyle-audit/audit-report.md
++++ b/openspec/changes/durable-tigerstyle-audit/audit-report.md
+@@ -1,6 +1,6 @@
+ # Tiger Style Audit Report
+ 
+-Status: remediation in progress
++Status: remediation complete
+ 
+ This report is the durable record for the Tiger Style audit that started this change. It keeps the current hotspot inventory, the scanner contract, and the evidence paths in one repo-visible place.
+ 
+@@ -109,8 +109,8 @@ The second remediation slice removed the original top-level dispatcher hotspots
+ - `crates/aspen-core-essentials-handler/src/coordination.rs:handle`
+ - `crates/aspen-forge-handler/src/executor.rs:execute`
+ 
+-That work split the dispatchers by request family and added characterization tests for the routing behavior. The post-phase-4 scan still shows follow-on hotspots in some newly extracted helpers (`renew_lock`, `execute_federation_request`, `execute_git_bridge_request`, `execute_nostr_request`, `execute_repo_request`, and `request_group`). Those are smaller and more localized than the original monoliths, but they remain backlog candidates for later cleanup.
++That work split the dispatchers by request family and added direct execution coverage for representative coordination and forge requests, including unsupported-request error behavior. The post-phase-4 scan still shows follow-on hotspots in some newly extracted helpers (`renew_lock`, `execute_federation_request`, `execute_git_bridge_request`, `execute_nostr_request`, `execute_repo_request`, and `request_group`). Those are smaller and more localized than the original monoliths, but they remain backlog candidates for later cleanup.
+ 
+ ## Current status
+ 
+-This change is no longer audit-only. The audit artifacts are durable, the regression fixture is committed, and the first remediation slice has landed. Phases 3 and 4 still have open work, so the right status is `remediation in progress`.
++This change is complete for its scoped tasks. The audit artifacts are durable, the scanner regression fixture is committed, both remediation slices landed with targeted coverage, and the saved preflight transcript shows `19 / 19` tasks checked. Remaining scan hotspots outside this task list stay as backlog for later changes rather than blocking this one.
