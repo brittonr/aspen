@@ -79,6 +79,7 @@ async fn test_fuse_mount_with_raft_cluster() {
     // Initialize cluster
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(1, node.endpoint_addr())],
+        trust: Default::default(),
     };
     node.raft_node().init(init_request).await.unwrap();
 

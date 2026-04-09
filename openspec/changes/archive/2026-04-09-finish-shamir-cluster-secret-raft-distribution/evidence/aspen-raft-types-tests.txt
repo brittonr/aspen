@@ -1,0 +1,71 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/aspen_raft_types-90be4c860614cfdd)
+
+running 53 tests
+test constants::tests::test_snapshot_threshold_above_safety_floor ... ok
+test constants::tests::test_timeout_ordering ... ok
+test member::tests::test_raft_member_info_clone ... ok
+test member::tests::test_raft_member_info_default ... ok
+test member::tests::test_raft_member_info_display ... ok
+test member::tests::test_raft_member_info_new ... ok
+test member::tests::test_raft_member_info_equality ... ok
+test network::tests::test_connection_health_debug ... ok
+test network::tests::test_connection_health_copy ... ok
+test member::tests::test_raft_member_info_serde_roundtrip ... ok
+test network::tests::test_connection_health_degraded ... ok
+test network::tests::test_connection_health_eq_different_variants ... ok
+test network::tests::test_connection_health_eq_same_degraded_different_counts ... ok
+test network::tests::test_connection_health_failed ... ok
+test network::tests::test_connection_health_healthy ... ok
+test network::tests::test_connection_status_copy ... ok
+test network::tests::test_connection_status_debug ... ok
+test network::tests::test_connection_health_serde_roundtrip ... ok
+test network::tests::test_connection_status_equality ... ok
+test network::tests::test_connection_status_serde_roundtrip ... ok
+test network::tests::test_drift_severity_copy ... ok
+test network::tests::test_drift_severity_debug ... ok
+test network::tests::test_drift_severity_equality ... ok
+test network::tests::test_drift_severity_serde_roundtrip ... ok
+test network::tests::test_failure_type_copy ... ok
+test network::tests::test_failure_type_debug ... ok
+test network::tests::test_failure_type_equality ... ok
+test network::tests::test_failure_type_serde_roundtrip ... ok
+test network::tests::test_stream_priority_copy ... ok
+test network::tests::test_stream_priority_critical_higher_than_bulk ... ok
+test network::tests::test_stream_priority_equality ... ok
+test network::tests::test_stream_priority_serde_roundtrip ... ok
+test network::tests::test_stream_priority_to_i32 ... ok
+test request::tests::test_app_request_delete_display ... ok
+test request::tests::test_app_request_delete_multi_empty ... ok
+test request::tests::test_app_request_delete_multi_many ... ok
+test request::tests::test_app_request_serde_delete ... ok
+test request::tests::test_app_request_serde_set ... ok
+test request::tests::test_app_request_serde_delete_multi ... ok
+test request::tests::test_app_request_serde_set_multi ... ok
+test request::tests::test_app_request_set_display ... ok
+test request::tests::test_app_request_set_multi_empty ... ok
+test request::tests::test_app_request_set_multi_many ... ok
+test request::tests::test_app_request_set_multi_one ... ok
+test request::tests::test_app_request_serde_trust_initialize ... ok
+test request::tests::test_app_request_trust_initialize_display ... ok
+test request::tests::test_app_response_cas_failed ... ok
+test request::tests::test_app_response_cas_succeeded ... ok
+test request::tests::test_app_response_deleted_false ... ok
+test request::tests::test_app_response_deleted_true ... ok
+test request::tests::test_app_response_cas_serde_roundtrip ... ok
+test request::tests::test_app_response_with_value ... ok
+test request::tests::test_app_response_serde_roundtrip ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_raft_types
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

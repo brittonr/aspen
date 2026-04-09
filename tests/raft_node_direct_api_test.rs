@@ -55,6 +55,7 @@ async fn init_single_node(node: &aspen::node::Node) -> anyhow::Result<()> {
 
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(node.node_id().0, endpoint_addr)],
+        trust: Default::default(),
     };
 
     raft_node.init(init_request).await?;
@@ -74,6 +75,7 @@ async fn test_init_empty_members_fails() {
     let raft_node = node.raft_node();
     let init_request = InitRequest {
         initial_members: vec![],
+        trust: Default::default(),
     };
 
     let result = raft_node.init(init_request).await;
@@ -93,6 +95,7 @@ async fn test_init_single_node_success() {
 
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(101, endpoint_addr)],
+        trust: Default::default(),
     };
 
     let result = timeout(TEST_TIMEOUT, raft_node.init(init_request)).await.unwrap();

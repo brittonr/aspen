@@ -151,6 +151,7 @@ async fn test_cluster_init_verification() {
                 ClusterNode::new(2, "node2", None),
                 ClusterNode::new(3, "node3", None),
             ],
+            trust: Default::default(),
         })
         .await
         .expect("init should succeed");
@@ -178,6 +179,7 @@ async fn test_cluster_leader_verification() {
     controller
         .init(InitRequest {
             initial_members: vec![ClusterNode::new(1, "node1", None)],
+            trust: Default::default(),
         })
         .await
         .expect("init should succeed");

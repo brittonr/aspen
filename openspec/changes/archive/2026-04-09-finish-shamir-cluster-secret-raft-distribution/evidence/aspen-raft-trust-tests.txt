@@ -1,0 +1,22 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src/lib.rs (target/debug/deps/aspen_raft-c6cbaa83c1c90ffb)
+
+running 4 tests
+test node::trust::tests::test_build_trust_initialize_payload_rejects_invalid_threshold ... ok
+test node::trust::tests::test_build_trust_initialize_payload_assigns_every_member ... ok
+test membership_watcher::tests::test_trusted_peers_registry_set_peers ... ok
+test storage_shared::trust::tests::test_apply_trust_initialize_stores_only_local_share ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 707 filtered out; finished in 0.09s
+
+     Running tests/write_batcher_metrics.rs (target/debug/deps/write_batcher_metrics-9bdb293658672d16)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s

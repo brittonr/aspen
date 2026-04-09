@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-04-09-finish-shamir-cluster-secret-raft-distribution
+  tasks: 9 total / 9 checked
+  changed files listed: 31
+  verification artifacts: 5

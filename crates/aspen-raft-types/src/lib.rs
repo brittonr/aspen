@@ -62,6 +62,7 @@ pub use network::FailureType;
 pub use network::StreamPriority;
 pub use request::AppRequest;
 pub use request::AppResponse;
+pub use request::TrustInitializePayload;
 
 // Note: AppTypeConfig is NOT defined here due to Rust's orphan rules.
 // The type configuration must be declared in the crate where openraft traits

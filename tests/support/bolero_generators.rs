@@ -1287,7 +1287,8 @@ mod tests {
             | AppRequest::OptimisticTransaction { .. }
             | AppRequest::ShardSplit { .. }
             | AppRequest::ShardMerge { .. }
-            | AppRequest::TopologyUpdate { .. } => {}
+            | AppRequest::TopologyUpdate { .. }
+            | AppRequest::TrustInitialize(_) => {}
         });
 
         // With 200 iterations and 25% probability each, should see all variants

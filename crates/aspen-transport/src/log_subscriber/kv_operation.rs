@@ -337,9 +337,10 @@ impl From<aspen_raft_types::AppRequest> for KvOperation {
             }
             // Shard topology operations are converted to Noop for log subscribers
             // (subscribers don't need to track topology changes)
-            AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
-                KvOperation::Noop
-            }
+            AppRequest::ShardSplit { .. }
+            | AppRequest::ShardMerge { .. }
+            | AppRequest::TopologyUpdate { .. }
+            | AppRequest::TrustInitialize(_) => KvOperation::Noop,
         }
     }
 }

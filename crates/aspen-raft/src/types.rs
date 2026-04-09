@@ -29,6 +29,7 @@ pub use aspen_raft_types::AppRequest;
 pub use aspen_raft_types::AppResponse;
 pub use aspen_raft_types::NodeId;
 pub use aspen_raft_types::RaftMemberInfo;
+pub use aspen_raft_types::TrustInitializePayload;
 use openraft::declare_raft_types;
 
 // Declare AppTypeConfig here to satisfy orphan rules.

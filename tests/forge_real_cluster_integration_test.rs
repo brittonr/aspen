@@ -96,6 +96,7 @@ impl ForgeClusterTester {
         let node1 = &nodes[0];
         let init_request = InitRequest {
             initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+            trust: Default::default(),
         };
 
         timeout(CLUSTER_FORMATION_TIMEOUT, node1.raft_node().init(init_request))

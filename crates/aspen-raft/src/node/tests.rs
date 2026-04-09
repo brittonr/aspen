@@ -18,6 +18,7 @@ use aspen_traits::ClusterController;
 use aspen_traits::CoordinationBackend;
 use aspen_traits::KeyValueStore;
 use openraft::Config;
+use tempfile::TempDir;
 
 use super::RaftNode;
 use super::arc_wrapper::ArcRaftNode;
@@ -32,6 +33,7 @@ const MAX_CONCURRENT_OPS: usize = 1000;
 use crate::StateMachineVariant;
 use crate::storage::InMemoryLogStore;
 use crate::storage::InMemoryStateMachine;
+use crate::storage_shared::SharedRedbStorage;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 
@@ -62,6 +64,46 @@ async fn create_test_node(node_id: u64) -> RaftNode {
         .expect("Failed to register node with router");
 
     RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::InMemory(state_machine))
+}
+
+struct RedbTestNode {
+    node: RaftNode,
+    storage: Arc<SharedRedbStorage>,
+    _temp_dir: TempDir,
+}
+
+async fn create_test_redb_node(
+    node_id: u64,
+    router: Arc<MadsimRaftRouter>,
+    failure_injector: Arc<FailureInjector>,
+    cluster_name: &str,
+) -> RedbTestNode {
+    let temp_dir = TempDir::new().expect("temp dir");
+    let db_path = temp_dir.path().join(format!("node-{node_id}.redb"));
+    let storage = SharedRedbStorage::new(&db_path, &node_id.to_string()).expect("create redb storage");
+    let network_factory = MadsimNetworkFactory::new(NodeId(node_id), router.clone(), failure_injector);
+    let config = Arc::new(Config {
+        cluster_name: cluster_name.to_string(),
+        ..Default::default()
+    });
+
+    let raft: openraft::Raft<AppTypeConfig> =
+        openraft::Raft::new(NodeId(node_id), config, network_factory, storage.clone(), storage.clone())
+            .await
+            .expect("Failed to create redb raft instance");
+
+    router
+        .register_node(NodeId(node_id), format!("127.0.0.1:{}", 27000 + node_id), raft.clone())
+        .expect("Failed to register redb node with router");
+
+    let storage = Arc::new(storage);
+    let node = RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::Redb(storage.clone()));
+
+    RedbTestNode {
+        node,
+        storage,
+        _temp_dir: temp_dir,
+    }
 }
 
 /// Helper to set the initialized flag for testing.
@@ -160,6 +202,72 @@ async fn test_init_missing_iroh_addr_fails() {
         }
         _ => panic!("Expected InvalidRequest error"),
     }
+}
+
+#[cfg(feature = "trust")]
+#[tokio::test]
+async fn test_multi_node_trust_init_persists_follower_shares() {
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+    let cluster_name = "trust-init-redb-test";
+
+    let node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
+    let node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
+    let node3 = create_test_redb_node(3, router.clone(), failure_injector, cluster_name).await;
+
+    let members: Vec<ClusterNode> = (1u64..=3)
+        .map(|id| {
+            let secret = iroh::SecretKey::generate(&mut rand::rng());
+            let mut node = ClusterNode::new(id, format!("node-{id}"), None);
+            node.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
+                secret.public(),
+                std::iter::empty(),
+            )));
+            node
+        })
+        .collect();
+
+    ClusterController::init(&node1.node, InitRequest {
+        initial_members: members,
+        trust: aspen_cluster_types::TrustConfig::enabled(),
+    })
+    .await
+    .expect("init 3-node trust cluster");
+
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let ready = [node1.storage.as_ref(), node2.storage.as_ref(), node3.storage.as_ref()]
+                .iter()
+                .all(|storage| storage.load_share(1).unwrap().is_some() && storage.load_digests(1).unwrap().len() == 3);
+            if ready {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("followers should persist trust shares after committed init");
+
+    let share1 = node1.storage.load_share(1).unwrap().unwrap();
+    let share2 = node2.storage.load_share(1).unwrap().unwrap();
+    let share3 = node3.storage.load_share(1).unwrap().unwrap();
+
+    assert_ne!(share1, share2);
+    assert_ne!(share1, share3);
+    assert_ne!(share2, share3);
+
+    let secret_12 = aspen_trust::shamir::reconstruct_secret(&[share1.clone(), share2.clone()]).unwrap();
+    let secret_13 = aspen_trust::shamir::reconstruct_secret(&[share1.clone(), share3.clone()]).unwrap();
+    let secret_23 = aspen_trust::shamir::reconstruct_secret(&[share2, share3]).unwrap();
+    assert_eq!(secret_12, secret_13);
+    assert_eq!(secret_12, secret_23);
+
+    let digests1 = node1.storage.load_digests(1).unwrap();
+    let digests2 = node2.storage.load_digests(1).unwrap();
+    let digests3 = node3.storage.load_digests(1).unwrap();
+    assert_eq!(digests1.len(), 3);
+    assert_eq!(digests1, digests2);
+    assert_eq!(digests1, digests3);
 }
 
 /// Test ensure_initialized returns error before init.

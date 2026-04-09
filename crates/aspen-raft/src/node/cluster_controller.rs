@@ -71,7 +71,7 @@ impl ClusterController for RaftNode {
         // Initialize trust (Shamir secret sharing) if enabled
         #[cfg(feature = "trust")]
         if request.trust.enabled {
-            self.initialize_trust(&request).map_err(|e| ControlPlaneError::Failed {
+            self.initialize_trust(&request).await.map_err(|e| ControlPlaneError::Failed {
                 reason: format!("trust initialization failed: {e}"),
             })?;
         }

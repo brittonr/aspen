@@ -159,6 +159,9 @@ pub struct SharedRedbStorage {
     db: Arc<Database>,
     /// Path to the database file.
     path: PathBuf,
+    /// Parsed local Raft node ID, used by state-machine paths that must select
+    /// node-local state from committed entries.
+    local_node_id: Option<u64>,
     /// Cached chain tip state for efficient appends.
     chain_tip: Arc<StdRwLock<ChainTipState>>,
     /// Optional broadcast sender for log entry notifications.
@@ -186,6 +189,7 @@ impl std::fmt::Debug for SharedRedbStorage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SharedRedbStorage")
             .field("path", &self.path)
+            .field("local_node_id", &self.local_node_id)
             .field("chain_tip", &self.chain_tip)
             .finish_non_exhaustive()
     }

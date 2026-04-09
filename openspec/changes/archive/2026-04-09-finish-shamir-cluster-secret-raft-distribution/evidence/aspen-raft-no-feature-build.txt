@@ -1,0 +1,9 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+  Executable unittests src/lib.rs (target/debug/deps/aspen_raft-32d9679499f19048)
+  Executable tests/write_batcher_metrics.rs (target/debug/deps/write_batcher_metrics-35fff88ea92b6d89)

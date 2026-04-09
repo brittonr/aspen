@@ -4,11 +4,15 @@ use super::super::*;
 
 impl SharedRedbStorage {
     /// Apply a single AppRequest to the state machine tables within a transaction.
+    #[allow(clippy::too_many_arguments)]
     pub(in crate::storage_shared) fn apply_request_in_txn(
+        &self,
         kv_table: &mut redb::Table<&[u8], &[u8]>,
         index_table: &mut redb::Table<&[u8], &[u8]>,
         index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
+        #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
+        #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
         request: &AppRequest,
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
@@ -148,6 +152,12 @@ impl SharedRedbStorage {
                 write_set,
                 log_index,
             ),
+            #[cfg(feature = "trust")]
+            AppRequest::TrustInitialize(payload) => {
+                self.apply_trust_initialize_in_txn(trust_shares_table, trust_digests_table, payload)
+            }
+            #[cfg(not(feature = "trust"))]
+            AppRequest::TrustInitialize(_) => Ok(AppResponse::default()),
             // Shard operations - pass through without state changes
             AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
                 Ok(AppResponse::default())

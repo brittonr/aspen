@@ -595,6 +595,7 @@ fn apply_app_request(data: &mut BTreeMap<String, String>, req: &AppRequest) -> A
         } => apply_transaction(data, compare, success, failure),
         // OptimisticTransaction: in-memory doesn't track versions
         AppRequest::OptimisticTransaction { write_set, .. } => apply_optimistic_transaction(data, write_set),
+        AppRequest::TrustInitialize(_) => AppResponse::default(),
         // Shard topology operations: no-op for in-memory (testing only)
         AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
             AppResponse::default()

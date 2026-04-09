@@ -78,6 +78,7 @@ async fn form_cluster(nodes: &[Node]) -> Result<()> {
     // Initialize cluster on node 1
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+        trust: Default::default(),
     };
     timeout(CLUSTER_TIMEOUT, node1.raft_node().init(init_request)).await??;
     sleep(LEADER_ELECTION_WAIT).await;

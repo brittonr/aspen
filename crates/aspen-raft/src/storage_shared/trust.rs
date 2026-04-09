@@ -5,11 +5,13 @@
 
 use std::collections::BTreeMap;
 
+use aspen_raft_types::TrustInitializePayload;
 use aspen_trust::shamir::SECRET_SIZE;
 use aspen_trust::shamir::Share;
 use aspen_trust::shamir::ShareDigest;
 use snafu::ResultExt;
 
+use super::AppResponse;
 use super::BeginReadSnafu;
 use super::BeginWriteSnafu;
 use super::CommitSnafu;
@@ -149,6 +151,47 @@ impl SharedRedbStorage {
         Ok(())
     }
 
+    /// Apply a committed trust initialization request to the local storage tables.
+    pub(crate) fn apply_trust_initialize_in_txn(
+        &self,
+        shares_table: &mut redb::Table<u64, &[u8]>,
+        digests_table: &mut redb::Table<&str, &[u8]>,
+        payload: &TrustInitializePayload,
+    ) -> Result<AppResponse, SharedStorageError> {
+        let local_node_id = self.local_node_id.ok_or_else(|| SharedStorageError::Internal {
+            reason: "trust initialization requires a numeric local node id".to_string(),
+        })?;
+
+        let share_bytes = payload
+            .shares
+            .iter()
+            .find_map(|(node_id, bytes)| if *node_id == local_node_id { Some(bytes) } else { None })
+            .ok_or_else(|| SharedStorageError::Internal {
+                reason: format!("no trust share assigned for local node {local_node_id}"),
+            })?;
+
+        if share_bytes.len() != SECRET_SIZE + 1 {
+            return Err(SharedStorageError::Internal {
+                reason: format!("invalid trust share length {}, expected {}", share_bytes.len(), SECRET_SIZE + 1),
+            });
+        }
+
+        let mut share_array = [0u8; SECRET_SIZE + 1];
+        share_array.copy_from_slice(share_bytes);
+        let share = Share::from_bytes(&share_array).map_err(|e| SharedStorageError::Internal {
+            reason: format!("failed to decode trust share: {e}"),
+        })?;
+
+        shares_table.insert(payload.epoch, share.to_bytes().as_slice()).context(super::InsertSnafu)?;
+
+        for (node_id, digest) in &payload.digests {
+            let key = format!("{}:{}", payload.epoch, node_id);
+            digests_table.insert(key.as_str(), digest.as_slice()).context(super::InsertSnafu)?;
+        }
+
+        Ok(AppResponse::default())
+    }
+
     /// Load all digests for the given epoch.
     ///
     /// Returns a map from node_id to SHA3-256 digest.
@@ -178,5 +221,53 @@ impl SharedRedbStorage {
         }
 
         Ok(digests)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn test_apply_trust_initialize_stores_only_local_share() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("trust-init.redb");
+        let storage = SharedRedbStorage::new(&db_path, "2").unwrap();
+
+        let secret = [9u8; SECRET_SIZE];
+        let mut rng = rand::rng();
+        let shares = aspen_trust::shamir::split_secret(&secret, 2, 3, &mut rng).unwrap();
+        let payload = TrustInitializePayload {
+            epoch: 1,
+            shares: vec![
+                (1, shares[0].to_bytes().to_vec()),
+                (2, shares[1].to_bytes().to_vec()),
+                (3, shares[2].to_bytes().to_vec()),
+            ],
+            digests: vec![
+                (1, aspen_trust::shamir::share_digest(&shares[0])),
+                (2, aspen_trust::shamir::share_digest(&shares[1])),
+                (3, aspen_trust::shamir::share_digest(&shares[2])),
+            ],
+        };
+
+        let write_txn = storage.db.begin_write().unwrap();
+        {
+            let mut shares_table = write_txn.open_table(TRUST_SHARES_TABLE).unwrap();
+            let mut digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).unwrap();
+            storage.apply_trust_initialize_in_txn(&mut shares_table, &mut digests_table, &payload).unwrap();
+        }
+        write_txn.commit().unwrap();
+
+        let stored_share = storage.load_share(1).unwrap().unwrap();
+        assert_eq!(stored_share, shares[1]);
+
+        let digests = storage.load_digests(1).unwrap();
+        let expected: BTreeMap<u64, ShareDigest> = payload.digests.iter().copied().collect();
+        assert_eq!(digests, expected);
     }
 }

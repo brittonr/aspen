@@ -58,6 +58,7 @@ async fn setup_node_with_batching(temp_dir: &TempDir, batch_config: BatchConfig)
     raft_node
         .init(InitRequest {
             initial_members: vec![ClusterNode::with_iroh_addr(1, endpoint_addr)],
+            trust: Default::default(),
         })
         .await?;
 
@@ -92,6 +93,7 @@ async fn setup_node_without_batching(temp_dir: &TempDir) -> anyhow::Result<Node>
     raft_node
         .init(InitRequest {
             initial_members: vec![ClusterNode::with_iroh_addr(1, endpoint_addr)],
+            trust: Default::default(),
         })
         .await?;
 

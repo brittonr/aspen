@@ -118,6 +118,8 @@ impl SharedRedbStorage {
 
         let db = Arc::new(db);
 
+        let local_node_id = node_id.parse::<u64>().ok();
+
         // Load chain tip from database
         let chain_tip = Self::load_chain_tip(&db)?;
 
@@ -131,6 +133,7 @@ impl SharedRedbStorage {
         Ok(Self {
             db,
             path,
+            local_node_id,
             chain_tip: Arc::new(StdRwLock::new(chain_tip)),
             log_broadcast,
             snapshot_broadcast,

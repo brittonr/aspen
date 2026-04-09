@@ -16,6 +16,17 @@ use aspen_core::TxnOpResult;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Payload for committed trust initialization.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct TrustInitializePayload {
+    /// Trust epoch being initialized.
+    pub epoch: u64,
+    /// Serialized 33-byte shares keyed by node ID.
+    pub shares: Vec<(u64, Vec<u8>)>,
+    /// SHA3-256 digests for all shares in this epoch.
+    pub digests: Vec<(u64, [u8; 32])>,
+}
+
 /// Application-level requests replicated through Raft.
 ///
 /// All write operations go through Raft consensus to ensure linearizability.
@@ -29,6 +40,7 @@ use serde::Serialize;
 ///   LeaseKeepalive
 /// - **Atomic operations**: CompareAndSwap, CompareAndDelete, Batch, ConditionalBatch
 /// - **Transactions**: Transaction (etcd-style If/Then/Else semantics)
+/// - **Trust bootstrapping**: TrustInitialize
 ///
 /// # Tiger Style
 ///
@@ -205,6 +217,8 @@ pub enum AppRequest {
         /// Serialized ShardTopology (bincode).
         topology_data: Vec<u8>,
     },
+    /// Initialize trust shares for a newly created cluster epoch.
+    TrustInitialize(TrustInitializePayload),
 }
 
 impl fmt::Display for AppRequest {
@@ -312,6 +326,15 @@ impl fmt::Display for AppRequest {
             }
             AppRequest::TopologyUpdate { topology_data } => {
                 write!(f, "TopologyUpdate {{ size: {} }}", topology_data.len())
+            }
+            AppRequest::TrustInitialize(payload) => {
+                write!(
+                    f,
+                    "TrustInitialize {{ epoch: {}, shares: {}, digests: {} }}",
+                    payload.epoch,
+                    payload.shares.len(),
+                    payload.digests.len()
+                )
             }
         }
     }
@@ -517,6 +540,28 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
         assert!(matches!(deserialized, AppRequest::DeleteMulti { keys } if keys.len() == 2));
+    }
+
+    #[test]
+    fn test_app_request_trust_initialize_display() {
+        let req = AppRequest::TrustInitialize(TrustInitializePayload {
+            epoch: 1,
+            shares: vec![(1, vec![1; 33]), (2, vec![2; 33])],
+            digests: vec![(1, [7; 32]), (2, [8; 32])],
+        });
+        assert_eq!(format!("{}", req), "TrustInitialize { epoch: 1, shares: 2, digests: 2 }");
+    }
+
+    #[test]
+    fn test_app_request_serde_trust_initialize() {
+        let original = AppRequest::TrustInitialize(TrustInitializePayload {
+            epoch: 9,
+            shares: vec![(1, vec![1; 33]), (5, vec![5; 33])],
+            digests: vec![(1, [3; 32]), (5, [4; 32])],
+        });
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(format!("{}", deserialized), "TrustInitialize { epoch: 9, shares: 2, digests: 2 }");
     }
 
     // =========================================================================

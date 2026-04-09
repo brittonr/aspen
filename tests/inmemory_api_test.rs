@@ -47,6 +47,7 @@ async fn test_cluster_controller_init_with_empty_members_fails() {
     let result = controller
         .init(InitRequest {
             initial_members: vec![],
+            trust: Default::default(),
         })
         .await;
 
@@ -65,6 +66,7 @@ async fn test_cluster_controller_init_with_single_member() {
     let result = controller
         .init(InitRequest {
             initial_members: vec![node.clone()],
+            trust: Default::default(),
         })
         .await
         .unwrap();
@@ -82,7 +84,13 @@ async fn test_cluster_controller_init_with_multiple_members() {
         ClusterNode::new(2, "node2", None),
         ClusterNode::new(3, "node3", None),
     ];
-    let result = controller.init(InitRequest { initial_members: nodes }).await.unwrap();
+    let result = controller
+        .init(InitRequest {
+            initial_members: nodes,
+            trust: Default::default(),
+        })
+        .await
+        .unwrap();
 
     assert_eq!(result.nodes.len(), 3);
     assert_eq!(result.members, vec![1, 2, 3]);
@@ -97,6 +105,7 @@ async fn test_cluster_controller_add_learner() {
     controller
         .init(InitRequest {
             initial_members: vec![node],
+            trust: Default::default(),
         })
         .await
         .unwrap();
@@ -147,7 +156,13 @@ async fn test_cluster_controller_change_membership_updates_members() {
 
     // Initialize with 3 members
     let nodes: Vec<ClusterNode> = (1..=3).map(|i| ClusterNode::new(i, format!("node{}", i), None)).collect();
-    controller.init(InitRequest { initial_members: nodes }).await.unwrap();
+    controller
+        .init(InitRequest {
+            initial_members: nodes,
+            trust: Default::default(),
+        })
+        .await
+        .unwrap();
 
     // Change to new membership
     let result = controller
@@ -197,6 +212,7 @@ async fn test_cluster_controller_current_state_returns_latest() {
     controller
         .init(InitRequest {
             initial_members: vec![node],
+            trust: Default::default(),
         })
         .await
         .unwrap();

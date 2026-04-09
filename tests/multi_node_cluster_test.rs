@@ -110,6 +110,7 @@ async fn test_multi_node_cluster_lifecycle() -> Result<()> {
     let node1 = &nodes[0];
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+        trust: Default::default(),
     };
 
     timeout(CLUSTER_TIMEOUT, node1.raft_node().init(init_request)).await??;
@@ -241,6 +242,7 @@ async fn test_replication_to_followers() -> Result<()> {
     let node1 = &nodes[0];
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+        trust: Default::default(),
     };
     node1.raft_node().init(init_request).await?;
     sleep(LEADER_ELECTION_WAIT).await;
@@ -322,6 +324,7 @@ async fn test_leader_failover() -> Result<()> {
     // Initialize cluster
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+        trust: Default::default(),
     };
     node1.raft_node().init(init_request).await?;
     sleep(LEADER_ELECTION_WAIT).await;
@@ -422,6 +425,7 @@ async fn test_scan_across_cluster() -> Result<()> {
     let node1 = &nodes[0];
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
+        trust: Default::default(),
     };
     node1.raft_node().init(init_request).await?;
     sleep(LEADER_ELECTION_WAIT).await;

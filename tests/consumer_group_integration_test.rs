@@ -107,6 +107,7 @@ async fn init_single_node_cluster(node: &Node) -> Result<()> {
 
     let init_request = InitRequest {
         initial_members: vec![ClusterNode::with_iroh_addr(node.node_id().0, endpoint_addr)],
+        trust: Default::default(),
     };
 
     timeout(CLUSTER_TIMEOUT, raft_node.init(init_request))

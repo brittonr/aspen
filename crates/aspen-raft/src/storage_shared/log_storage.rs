@@ -361,6 +361,10 @@ impl SharedRedbStorage {
         let mut index_table = write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
         let mut leases_table = write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
         let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+        #[cfg(feature = "trust")]
+        let mut trust_shares_table = write_txn.open_table(TRUST_SHARES_TABLE).context(OpenTableSnafu)?;
+        #[cfg(feature = "trust")]
+        let mut trust_digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).context(OpenTableSnafu)?;
 
         let mut new_tip_hash = prev_hash;
         let mut new_tip_index: u64 = 0;
@@ -379,6 +383,10 @@ impl SharedRedbStorage {
                 &mut index_table,
                 &mut leases_table,
                 &mut sm_meta_table,
+                #[cfg(feature = "trust")]
+                &mut trust_shares_table,
+                #[cfg(feature = "trust")]
+                &mut trust_digests_table,
                 &mut pending_response_batch,
             )?;
 
@@ -409,6 +417,8 @@ impl SharedRedbStorage {
         index_table: &mut redb::Table<&[u8], &[u8]>,
         leases_table: &mut redb::Table<u64, &[u8]>,
         sm_meta_table: &mut redb::Table<&str, &[u8]>,
+        #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
+        #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
         pending_response_batch: &mut Vec<(u64, AppResponse)>,
     ) -> Result<([u8; 32], u64), io::Error> {
         let log_id = entry.log_id();
@@ -427,8 +437,19 @@ impl SharedRedbStorage {
         log_table.insert(index, data.as_slice()).context(InsertSnafu)?;
         hash_table.insert(index, entry_hash.as_slice()).context(InsertSnafu)?;
 
-        let response =
-            self.append_apply_entry_payload(entry, log_id, index, kv_table, index_table, leases_table, sm_meta_table)?;
+        let response = self.append_apply_entry_payload(
+            entry,
+            log_id,
+            index,
+            kv_table,
+            index_table,
+            leases_table,
+            sm_meta_table,
+            #[cfg(feature = "trust")]
+            trust_shares_table,
+            #[cfg(feature = "trust")]
+            trust_digests_table,
+        )?;
         pending_response_batch.push((index, response));
 
         let log_id_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
@@ -448,13 +469,19 @@ impl SharedRedbStorage {
         index_table: &mut redb::Table<&[u8], &[u8]>,
         leases_table: &mut redb::Table<u64, &[u8]>,
         sm_meta_table: &mut redb::Table<&str, &[u8]>,
+        #[cfg(feature = "trust")] trust_shares_table: &mut redb::Table<u64, &[u8]>,
+        #[cfg(feature = "trust")] trust_digests_table: &mut redb::Table<&str, &[u8]>,
     ) -> Result<AppResponse, io::Error> {
         match &entry.payload {
-            EntryPayload::Normal(request) => Ok(Self::apply_request_in_txn(
+            EntryPayload::Normal(request) => Ok(self.apply_request_in_txn(
                 kv_table,
                 index_table,
                 &self.index_registry,
                 leases_table,
+                #[cfg(feature = "trust")]
+                trust_shares_table,
+                #[cfg(feature = "trust")]
+                trust_digests_table,
                 request,
                 index,
             )?),
