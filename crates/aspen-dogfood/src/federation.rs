@@ -70,28 +70,45 @@ async fn federate_repo(ticket: &str, repo_id: &str) -> DogfoodResult<()> {
         )
         .await?;
 
-        match response {
-            ClientRpcResponse::FederateRepositoryResult(result) if result.is_success => Ok(()),
-            ClientRpcResponse::FederateRepositoryResult(result) => FederationSnafu {
-                operation: "federate repo",
-                reason: result.error.unwrap_or_else(|| "unknown error".to_string()),
-            }
-            .fail(),
-            ClientRpcResponse::Error(error) => FederationSnafu {
-                operation: "federate repo",
-                reason: format!("{}: {}", error.code, error.message),
-            }
-            .fail(),
-            other => FederationSnafu {
-                operation: "federate repo",
-                reason: format!("unexpected response: {other:?}"),
-            }
-            .fail(),
-        }
+        interpret_federate_response(response)
     }
     .await;
     client.shutdown().await;
     result
+}
+
+fn interpret_federate_response(response: ClientRpcResponse) -> DogfoodResult<()> {
+    match response {
+        ClientRpcResponse::FederateRepositoryResult(result) if result.is_success => Ok(()),
+        ClientRpcResponse::FederateRepositoryResult(result) => {
+            let reason = result.error.unwrap_or_else(|| "unknown error".to_string());
+            if is_already_federated_reason(&reason) {
+                info!(reason, "  repo already federated; continuing");
+                return Ok(());
+            }
+
+            FederationSnafu {
+                operation: "federate repo",
+                reason,
+            }
+            .fail()
+        }
+        ClientRpcResponse::Error(error) => FederationSnafu {
+            operation: "federate repo",
+            reason: format!("{}: {}", error.code, error.message),
+        }
+        .fail(),
+        other => FederationSnafu {
+            operation: "federate repo",
+            reason: format!("unexpected response: {other:?}"),
+        }
+        .fail(),
+    }
+}
+
+fn is_already_federated_reason(reason: &str) -> bool {
+    let reason_lower = reason.to_ascii_lowercase();
+    reason_lower.contains("already federat") || reason_lower.contains("already public")
 }
 
 async fn sync_repo(ticket: &str, peer: &FederationPeer) -> DogfoodResult<()> {
@@ -382,5 +399,30 @@ mod tests {
         ]);
 
         assert_eq!(select_addr_hint(&endpoint_addr).as_deref(), Some("127.0.0.1:7001"));
+    }
+
+    #[test]
+    fn interpret_federate_response_accepts_already_federated_errors() {
+        let response =
+            ClientRpcResponse::FederateRepositoryResult(aspen_client_api::FederateRepositoryResultResponse {
+                is_success: false,
+                fed_id: None,
+                error: Some("repository is already federated in public mode".to_string()),
+            });
+
+        assert!(interpret_federate_response(response).is_ok());
+    }
+
+    #[test]
+    fn interpret_federate_response_rejects_other_errors() {
+        let response =
+            ClientRpcResponse::FederateRepositoryResult(aspen_client_api::FederateRepositoryResultResponse {
+                is_success: false,
+                fed_id: None,
+                error: Some("permission denied".to_string()),
+            });
+
+        let error = interpret_federate_response(response).expect_err("non-idempotent errors must fail");
+        assert!(error.to_string().contains("permission denied"));
     }
 }
