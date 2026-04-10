@@ -438,6 +438,8 @@ pub mod test_support {
         hooks_config: Option<aspen_hooks_types::HooksConfig>,
         #[cfg(feature = "sql")]
         sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
+        #[cfg(feature = "forge")]
+        forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn KeyValueStore>>>,
     }
 
     impl Default for TestContextBuilder {
@@ -459,6 +461,8 @@ pub mod test_support {
                 hooks_config: None,
                 #[cfg(feature = "sql")]
                 sql_executor: None,
+                #[cfg(feature = "forge")]
+                forge_node: None,
             }
         }
 
@@ -511,6 +515,16 @@ pub mod test_support {
             self
         }
 
+        /// Set the forge node.
+        #[cfg(feature = "forge")]
+        pub fn with_forge_node(
+            mut self,
+            forge_node: Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn KeyValueStore>>,
+        ) -> Self {
+            self.forge_node = Some(forge_node);
+            self
+        }
+
         /// Build the test context.
         ///
         /// Uses deterministic in-memory implementations for any dependencies
@@ -549,7 +563,7 @@ pub mod test_support {
                 #[cfg(feature = "global-discovery")]
                 content_discovery: None,
                 #[cfg(feature = "forge")]
-                forge_node: None,
+                forge_node: self.forge_node,
                 #[cfg(feature = "jobs")]
                 job_manager: None,
                 #[cfg(feature = "worker")]

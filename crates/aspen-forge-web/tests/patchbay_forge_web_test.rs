@@ -236,33 +236,15 @@ fn build_test_context(
 ) -> ClientProtocolContext {
     // All fields listed unconditionally — feature gates are evaluated against
     // aspen-rpc-core's features (blob, forge enabled via dev-deps), not ours.
-    ClientProtocolContext {
-        node_id,
-        controller: aspen_testing_core::DeterministicClusterController::new(),
-        kv_store,
-        state_machine: None,
-        endpoint_manager,
-        blob_store: None,
-        blob_replication_manager: None,
-        peer_manager: None,
-        docs_sync: None,
-        cluster_cookie: "test".to_string(),
-        start_time: std::time::Instant::now(),
-        network_factory: None,
-        token_verifier: None,
-        require_auth: false,
-        topology: None,
-        forge_node,
-        watch_registry: None,
-        hooks_config: Default::default(),
-        secrets_service: None,
-        federation_identity: None,
-        federation_trust_manager: None,
-        service_executors: Vec::new(),
-        app_registry: aspen_core::shared_registry(),
-        proxy_config: aspen_rpc_core::ProxyConfig::default(),
-        prometheus_handle: None,
+    let mut builder = aspen_rpc_core::test_support::TestContextBuilder::new()
+        .with_node_id(node_id)
+        .with_kv_store(kv_store)
+        .with_endpoint_manager(endpoint_manager)
+        .with_cookie("test");
+    if let Some(forge) = forge_node {
+        builder = builder.with_forge_node(forge);
     }
+    builder.build()
 }
 
 /// Minimal EndpointProvider for tests.

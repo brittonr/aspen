@@ -72,7 +72,7 @@ aspen-client = { workspace = true }
 aspen-client-api = { workspace = true }
 aspen-core = { workspace = true }
 aspen-forge = { path = "../aspen-forge" }
-aspen-rpc-core = { path = "../aspen-rpc-core" }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
 aspen-rpc-handlers = { path = "../aspen-rpc-handlers", features = ["forge", "blob"] }
 aspen-testing-core = { path = "../aspen-testing-core" }
 aspen-testing-patchbay = { path = "../aspen-testing-patchbay" }
