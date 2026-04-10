@@ -73,6 +73,17 @@ pub const TRUST_MEMBERS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::n
 #[cfg(feature = "trust")]
 pub const TRUST_EXPUNGED_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("trust_expunged");
 
+/// Trust nonce counter table: key = node_id (u64), value = last persisted counter (u64).
+/// Used by `NonceGenerator` for at-rest encryption to prevent nonce reuse after restart.
+#[cfg(feature = "trust")]
+pub const TRUST_NONCE_COUNTER_TABLE: TableDefinition<u64, u64> = TableDefinition::new("trust_nonce_counter");
+
+/// Re-encryption progress table: key = table name (str), value = last processed key (bytes).
+/// Tracks checkpoint state for the background re-encryption task so it can resume after crash.
+#[cfg(feature = "trust")]
+pub const TRUST_REENCRYPTION_PROGRESS_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("trust_reencryption_progress");
+
 // ====================================================================================
 // Storage Types
 // ====================================================================================

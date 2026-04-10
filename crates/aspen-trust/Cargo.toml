@@ -6,6 +6,7 @@ description = "Shamir secret sharing and cluster trust primitives for Aspen"
 publish = false
 
 [dependencies]
+async-trait = "0.1"
 chacha20poly1305 = "0.10"
 hkdf = "0.12"
 rand = "0.9"
@@ -15,8 +16,10 @@ serde_json = "1.0"
 sha3 = "0.10"
 snafu = "0.8"
 subtle = "2.6"
+tokio = { workspace = true, features = ["sync"] }
 zeroize = { version = "1.8", features = ["derive"] }
 
 [dev-dependencies]
 postcard = { workspace = true }
 proptest = "1.6"
+tokio = { workspace = true, features = ["rt", "macros"] }

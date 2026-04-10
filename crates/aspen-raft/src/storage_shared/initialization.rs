@@ -115,6 +115,8 @@ impl SharedRedbStorage {
                 write_txn.open_table(super::TRUST_CHAINS_TABLE).context(OpenTableSnafu)?;
                 write_txn.open_table(super::TRUST_MEMBERS_TABLE).context(OpenTableSnafu)?;
                 write_txn.open_table(super::TRUST_EXPUNGED_TABLE).context(OpenTableSnafu)?;
+                write_txn.open_table(super::TRUST_NONCE_COUNTER_TABLE).context(OpenTableSnafu)?;
+                write_txn.open_table(super::TRUST_REENCRYPTION_PROGRESS_TABLE).context(OpenTableSnafu)?;
             }
         }
         write_txn.commit().context(CommitSnafu)?;

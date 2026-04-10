@@ -26,6 +26,7 @@ use super::TRUST_CHAINS_TABLE;
 use super::TRUST_DIGESTS_TABLE;
 use super::TRUST_EXPUNGED_TABLE;
 use super::TRUST_MEMBERS_TABLE;
+use super::TRUST_NONCE_COUNTER_TABLE;
 use super::TRUST_SHARES_TABLE;
 
 impl SharedRedbStorage {
@@ -252,6 +253,30 @@ impl SharedRedbStorage {
         store_trust_threshold_override_in_txn(sm_meta_table, payload.threshold_override)?;
 
         Ok(AppResponse::default())
+    }
+
+    /// Persist the nonce counter for a given node.
+    ///
+    /// Called by the encryption layer after each `wrap_write` to ensure
+    /// nonce counters survive restarts and prevent nonce reuse.
+    pub fn store_nonce_counter(&self, node_id: u64, counter: u64) -> Result<(), SharedStorageError> {
+        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        {
+            let mut table = write_txn.open_table(TRUST_NONCE_COUNTER_TABLE).context(OpenTableSnafu)?;
+            table.insert(node_id, counter).context(super::InsertSnafu)?;
+        }
+        write_txn.commit().context(CommitSnafu)?;
+        Ok(())
+    }
+
+    /// Load the persisted nonce counter for a given node.
+    ///
+    /// Returns `None` if no counter has been persisted yet (fresh node).
+    pub fn load_nonce_counter(&self, node_id: u64) -> Result<Option<u64>, SharedStorageError> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(TRUST_NONCE_COUNTER_TABLE).context(OpenTableSnafu)?;
+        let entry = table.get(node_id).context(GetSnafu)?;
+        Ok(entry.map(|v| v.value()))
     }
 
     /// Load all digests for the given epoch.

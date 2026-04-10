@@ -503,6 +503,45 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_stored_value_is_ciphertext_not_plaintext() {
+            use aspen_core::KeyValueStore;
+            use aspen_core::ReadRequest;
+            use base64::Engine;
+
+            let kv = aspen_testing::DeterministicKeyValueStore::new();
+            let enc = make_encryption();
+            let backend = AspenSecretsBackend::with_encryption(kv.clone(), "test", enc);
+
+            let plaintext = b"super-secret-api-key-12345";
+            backend.put("verify/key", plaintext).await.unwrap();
+
+            // Read the raw stored value from the underlying KV store
+            let full_key = format!("{}test/verify/key", crate::constants::SECRETS_SYSTEM_PREFIX);
+            let stored = kv.read(ReadRequest::new(&full_key)).await.unwrap();
+            let entry = stored.kv.unwrap();
+            let decoded = base64::engine::general_purpose::STANDARD.decode(&entry.value).unwrap();
+
+            // Raw stored bytes must NOT contain the plaintext
+            let plaintext_str = std::str::from_utf8(plaintext).unwrap();
+            let stored_str = String::from_utf8_lossy(&decoded);
+            assert!(
+                !stored_str.contains(plaintext_str),
+                "raw KV value should be ciphertext, but contains plaintext: {stored_str}"
+            );
+
+            // Must start with AENC magic (encrypted envelope)
+            assert_eq!(
+                &decoded[..4],
+                &aspen_trust::envelope::ENVELOPE_MAGIC,
+                "stored value should start with AENC magic"
+            );
+
+            // Read back through the backend should return original plaintext
+            let result = backend.get("verify/key").await.unwrap().unwrap();
+            assert_eq!(&result, plaintext);
+        }
+
+        #[tokio::test]
         async fn test_tampered_envelope_returns_error_not_plaintext() {
             use aspen_core::KeyValueStore;
             use aspen_core::ReadRequest;

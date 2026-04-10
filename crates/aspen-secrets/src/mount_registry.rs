@@ -64,6 +64,10 @@ pub struct MountRegistry {
 
     /// Underlying KV store for all backends.
     kv: Arc<dyn aspen_core::KeyValueStore>,
+
+    /// Optional at-rest encryption context (enabled with `trust` feature).
+    #[cfg(feature = "trust")]
+    encryption: RwLock<Option<Arc<aspen_trust::encryption::SecretsEncryption>>>,
 }
 
 impl MountRegistry {
@@ -74,7 +78,18 @@ impl MountRegistry {
             transit_stores: Arc::new(RwLock::new(HashMap::new())),
             kv_stores: Arc::new(RwLock::new(HashMap::new())),
             kv,
+            #[cfg(feature = "trust")]
+            encryption: RwLock::new(None),
         }
+    }
+
+    /// Set the at-rest encryption context for all newly created backends.
+    ///
+    /// Existing stores are not updated — call this before any stores are
+    /// created, or clear cached stores after calling.
+    #[cfg(feature = "trust")]
+    pub async fn set_encryption(&self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
+        *self.encryption.write().await = Some(encryption);
     }
 
     /// Get or create a PKI store for the given mount point.
@@ -114,7 +129,7 @@ impl MountRegistry {
         }
 
         // Create new store with mount-specific backend
-        let backend = Arc::new(AspenSecretsBackend::new(self.kv.clone(), mount));
+        let backend = Arc::new(self.create_backend(mount).await);
         let store: Arc<dyn PkiStore> = Arc::new(DefaultPkiStore::with_mount(backend, mount));
         stores.insert(mount.to_string(), Arc::clone(&store));
 
@@ -160,7 +175,7 @@ impl MountRegistry {
         }
 
         // Create new store with mount-specific backend
-        let backend = Arc::new(AspenSecretsBackend::new(self.kv.clone(), mount));
+        let backend = Arc::new(self.create_backend(mount).await);
         let store: Arc<dyn TransitStore> = Arc::new(DefaultTransitStore::new(backend));
         stores.insert(mount.to_string(), Arc::clone(&store));
 
@@ -206,13 +221,25 @@ impl MountRegistry {
         }
 
         // Create new store with mount-specific backend
-        let backend = Arc::new(AspenSecretsBackend::new(self.kv.clone(), mount));
+        let backend = Arc::new(self.create_backend(mount).await);
         let store: Arc<dyn KvStore> = Arc::new(DefaultKvStore::new(backend));
         stores.insert(mount.to_string(), Arc::clone(&store));
 
         tracing::debug!(mount = %mount, "created KV store for mount");
 
         Ok(store)
+    }
+
+    /// Create an `AspenSecretsBackend` for the given mount, with encryption if available.
+    async fn create_backend(&self, mount: &str) -> AspenSecretsBackend {
+        #[cfg(feature = "trust")]
+        {
+            let enc = self.encryption.read().await;
+            if let Some(encryption) = enc.as_ref() {
+                return AspenSecretsBackend::with_encryption(self.kv.clone(), mount, Arc::clone(encryption));
+            }
+        }
+        AspenSecretsBackend::new(self.kv.clone(), mount)
     }
 
     /// Validate a mount name against Tiger Style limits.

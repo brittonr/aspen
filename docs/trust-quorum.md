@@ -84,12 +84,48 @@ All trust functionality is behind the `trust` feature flag:
 - `aspen-raft --features trust` — enables redb trust tables and init integration
 - `aspen --features trust` — top-level feature, included in `full`
 
+## Secrets At Rest Encryption
+
+With the `trust` feature enabled, all secrets engine data (KV, Transit key material, PKI private keys) is encrypted at rest using keys derived from the cluster secret.
+
+### How It Works
+
+1. **Lazy reconstruction**: On first secrets access, the node collects shares from K peers, reconstructs the cluster secret, and derives the at-rest encryption key via HKDF
+2. **Transparent encryption**: `AspenSecretsBackend` wraps all writes with ChaCha20-Poly1305 and unwraps on read. Callers see only plaintext
+3. **Wire format**: `[AENC magic (4)] [version (1)] [epoch (8)] [nonce (12)] [ciphertext + Poly1305 tag]`
+4. **Nonce uniqueness**: 12-byte nonces = `[node_id (4)] [counter (8)]`, counter persisted in `trust_nonce_counter` redb table
+
+### Epoch Rotation
+
+When membership changes trigger `secret-rotation-on-membership-change`:
+
+1. New secret is split and distributed via Raft
+2. Each node derives the new at-rest key from the new secret
+3. A background re-encryption task scans all secrets and re-encrypts with the new key
+4. During re-encryption, reads check the epoch byte to select the correct key
+5. After completion, the old epoch's key is zeroized
+
+### Operational Requirements
+
+- **Quorum required**: Secrets are unavailable until K nodes are reachable for share collection. Non-secret KV data remains available
+- **Backup/restore**: Redb backups contain ciphertext. Restoring requires quorum to reconstruct the decryption key
+- **Re-encryption cost**: On epoch change, every secret is re-read and re-written. For large stores this takes seconds. Membership changes are rare, so this is acceptable
+- **Memory exposure**: One 32-byte derived key in process memory (zeroized on drop). Smaller exposure than the alternative of megabytes of plaintext secrets
+
+### Modules
+
+- `crates/aspen-trust/src/envelope.rs` — `EncryptedValue` wire format, encrypt/decrypt
+- `crates/aspen-trust/src/encryption.rs` — `SecretsEncryption` context, multi-epoch key management
+- `crates/aspen-trust/src/nonce.rs` — Counter-based nonce generation
+- `crates/aspen-trust/src/key_manager.rs` — Lazy reconstruction, epoch rotation lifecycle
+- `crates/aspen-trust/src/reencrypt.rs` — Background re-encryption with checkpoint resume
+- `crates/aspen-secrets/src/backend.rs` — `AspenSecretsBackend` with transparent encrypt/decrypt
+- `crates/aspen-secrets/src/mount_registry.rs` — Propagates encryption context to all engine backends
+
 ## Limitations
 
-- **No proactive resharing**: Share redistribution on membership change is not yet implemented
 - **No VSS**: We trust the Raft leader (not Byzantine fault tolerant)
 - **No HSM integration**: Shares are stored in software
-- **Single-node init only**: Multi-node share distribution via Raft log entries is planned
 
 ## References
 
