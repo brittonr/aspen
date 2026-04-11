@@ -209,6 +209,12 @@ impl SharedRedbStorage {
     }
 
     /// Apply a committed trust initialization request to the local storage tables.
+    ///
+    /// Nodes that join after epoch 1 still replay the historical `TrustInitialize`
+    /// entry during replication. Those nodes were not assigned an epoch-1 share,
+    /// so they persist the cluster-wide trust metadata without storing a local share.
+    /// If the payload says this node was an initial member, however, the share
+    /// must still be present; otherwise the committed entry is malformed.
     pub(crate) fn apply_trust_initialize_in_txn(
         &self,
         shares_table: &mut redb::Table<u64, &[u8]>,
@@ -217,8 +223,21 @@ impl SharedRedbStorage {
         sm_meta_table: &mut redb::Table<&str, &[u8]>,
         payload: &TrustInitializePayload,
     ) -> Result<AppResponse, SharedStorageError> {
-        let share = decode_local_share(self.local_node_id, &payload.shares)?;
-        shares_table.insert(payload.epoch, share.to_bytes().as_slice()).context(super::InsertSnafu)?;
+        let local_node_id = self.local_node_id.ok_or_else(|| SharedStorageError::Internal {
+            reason: "trust operations require a numeric local node id".to_string(),
+        })?;
+        let local_is_initial_member = payload.members.iter().any(|(node_id, _)| *node_id == local_node_id);
+        let local_share = decode_optional_local_share(Some(local_node_id), &payload.shares)?;
+        if local_is_initial_member {
+            let share = local_share.ok_or_else(|| SharedStorageError::Internal {
+                reason: format!("no trust share assigned for initial member {local_node_id}"),
+            })?;
+            shares_table.insert(payload.epoch, share.to_bytes().as_slice()).context(super::InsertSnafu)?;
+        } else if local_share.is_some() {
+            return Err(SharedStorageError::Internal {
+                reason: format!("trust share assigned for non-member {local_node_id}"),
+            });
+        }
         store_epoch_digests_in_txn(digests_table, payload.epoch, &payload.digests)?;
         store_epoch_members_in_txn(members_table, payload.epoch, &payload.members)?;
         store_trust_threshold_override_in_txn(sm_meta_table, payload.threshold_override)?;
@@ -309,12 +328,6 @@ impl SharedRedbStorage {
 
         Ok(digests)
     }
-}
-
-fn decode_local_share(local_node_id: Option<u64>, shares: &[(u64, Vec<u8>)]) -> Result<Share, SharedStorageError> {
-    decode_optional_local_share(local_node_id, shares)?.ok_or_else(|| SharedStorageError::Internal {
-        reason: format!("no trust share assigned for local node {}", local_node_id.unwrap_or_default()),
-    })
 }
 
 fn decode_optional_local_share(
@@ -457,6 +470,145 @@ mod tests {
         assert_eq!(digests, expected);
         assert_eq!(storage.load_trust_threshold_override().unwrap(), Some(2));
         assert_eq!(storage.load_members(1).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_apply_trust_initialize_allows_later_joiner_without_share() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("trust-init-late-joiner.redb");
+        let storage = SharedRedbStorage::new(&db_path, "4").unwrap();
+
+        let secret = [5u8; SECRET_SIZE];
+        let mut rng = rand::rng();
+        let shares = aspen_trust::shamir::split_secret(&secret, 2, 3, &mut rng).unwrap();
+        let payload = TrustInitializePayload {
+            epoch: 1,
+            threshold_override: Some(2),
+            shares: vec![
+                (1, shares[0].to_bytes().to_vec()),
+                (2, shares[1].to_bytes().to_vec()),
+                (3, shares[2].to_bytes().to_vec()),
+            ],
+            digests: vec![
+                (1, aspen_trust::shamir::share_digest(&shares[0])),
+                (2, aspen_trust::shamir::share_digest(&shares[1])),
+                (3, aspen_trust::shamir::share_digest(&shares[2])),
+            ],
+            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
+        };
+
+        let write_txn = storage.db.begin_write().unwrap();
+        {
+            let mut shares_table = write_txn.open_table(TRUST_SHARES_TABLE).unwrap();
+            let mut digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).unwrap();
+            let mut members_table = write_txn.open_table(TRUST_MEMBERS_TABLE).unwrap();
+            let mut sm_meta_table = write_txn.open_table(super::super::SM_META_TABLE).unwrap();
+            storage
+                .apply_trust_initialize_in_txn(
+                    &mut shares_table,
+                    &mut digests_table,
+                    &mut members_table,
+                    &mut sm_meta_table,
+                    &payload,
+                )
+                .unwrap();
+        }
+        write_txn.commit().unwrap();
+
+        assert_eq!(storage.load_share(1).unwrap(), None);
+        assert_eq!(storage.load_digests(1).unwrap().len(), 3);
+        assert_eq!(storage.load_trust_threshold_override().unwrap(), Some(2));
+        assert_eq!(storage.load_members(1).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_apply_trust_initialize_rejects_share_for_non_member() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("trust-init-non-member-share.redb");
+        let storage = SharedRedbStorage::new(&db_path, "4").unwrap();
+
+        let secret = [4u8; SECRET_SIZE];
+        let mut rng = rand::rng();
+        let shares = aspen_trust::shamir::split_secret(&secret, 2, 4, &mut rng).unwrap();
+        let payload = TrustInitializePayload {
+            epoch: 1,
+            threshold_override: Some(2),
+            shares: vec![
+                (1, shares[0].to_bytes().to_vec()),
+                (2, shares[1].to_bytes().to_vec()),
+                (3, shares[2].to_bytes().to_vec()),
+                (4, shares[3].to_bytes().to_vec()),
+            ],
+            digests: vec![
+                (1, aspen_trust::shamir::share_digest(&shares[0])),
+                (2, aspen_trust::shamir::share_digest(&shares[1])),
+                (3, aspen_trust::shamir::share_digest(&shares[2])),
+                (4, aspen_trust::shamir::share_digest(&shares[3])),
+            ],
+            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
+        };
+
+        let write_txn = storage.db.begin_write().unwrap();
+        let err = {
+            let mut shares_table = write_txn.open_table(TRUST_SHARES_TABLE).unwrap();
+            let mut digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).unwrap();
+            let mut members_table = write_txn.open_table(TRUST_MEMBERS_TABLE).unwrap();
+            let mut sm_meta_table = write_txn.open_table(super::super::SM_META_TABLE).unwrap();
+            storage
+                .apply_trust_initialize_in_txn(
+                    &mut shares_table,
+                    &mut digests_table,
+                    &mut members_table,
+                    &mut sm_meta_table,
+                    &payload,
+                )
+                .unwrap_err()
+        };
+
+        assert!(matches!(err, SharedStorageError::Internal { .. }));
+        assert!(err.to_string().contains("trust share assigned for non-member 4"));
+    }
+
+    #[test]
+    fn test_apply_trust_initialize_requires_share_for_initial_member() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("trust-init-missing-local-share.redb");
+        let storage = SharedRedbStorage::new(&db_path, "2").unwrap();
+
+        let secret = [6u8; SECRET_SIZE];
+        let mut rng = rand::rng();
+        let shares = aspen_trust::shamir::split_secret(&secret, 2, 3, &mut rng).unwrap();
+        let payload = TrustInitializePayload {
+            epoch: 1,
+            threshold_override: Some(2),
+            shares: vec![(1, shares[0].to_bytes().to_vec()), (3, shares[2].to_bytes().to_vec())],
+            digests: vec![
+                (1, aspen_trust::shamir::share_digest(&shares[0])),
+                (2, aspen_trust::shamir::share_digest(&shares[1])),
+                (3, aspen_trust::shamir::share_digest(&shares[2])),
+            ],
+            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
+        };
+
+        let write_txn = storage.db.begin_write().unwrap();
+        let err = {
+            let mut shares_table = write_txn.open_table(TRUST_SHARES_TABLE).unwrap();
+            let mut digests_table = write_txn.open_table(TRUST_DIGESTS_TABLE).unwrap();
+            let mut members_table = write_txn.open_table(TRUST_MEMBERS_TABLE).unwrap();
+            let mut sm_meta_table = write_txn.open_table(super::super::SM_META_TABLE).unwrap();
+            storage
+                .apply_trust_initialize_in_txn(
+                    &mut shares_table,
+                    &mut digests_table,
+                    &mut members_table,
+                    &mut sm_meta_table,
+                    &payload,
+                )
+                .unwrap_err()
+        };
+
+        assert!(matches!(err, SharedStorageError::Internal { .. }));
+        assert!(err.to_string().contains("no trust share assigned for initial member 2"));
     }
 
     #[test]

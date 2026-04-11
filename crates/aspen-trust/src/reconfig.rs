@@ -308,6 +308,8 @@ impl ReconfigCtx for TestReconfigCtx {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
     use crate::secret::ClusterSecret;
 
@@ -322,12 +324,34 @@ mod tests {
         (shares, digests, *secret.as_bytes())
     }
 
+    fn dispatch_action(ctx: &mut TestReconfigCtx, action: ReconfigAction) {
+        match action {
+            ReconfigAction::SendGetShare { target_node, epoch } => ctx.send_get_share(target_node, epoch),
+            ReconfigAction::ProposeNewConfig {
+                new_shares,
+                new_digests,
+                encrypted_chain,
+                new_epoch,
+            } => ctx.propose_new_config(new_shares, new_digests, encrypted_chain, new_epoch),
+        }
+    }
+
+    fn dispatch_actions(ctx: &mut TestReconfigCtx, actions: Vec<ReconfigAction>) {
+        for action in actions {
+            dispatch_action(ctx, action);
+        }
+    }
+
+    fn majority_threshold(count: u8) -> u8 {
+        ((u32::from(count) / 2) + 1) as u8
+    }
+
     #[test]
     fn test_full_reconfig_flow() {
         let (shares, digests, _secret_bytes) = setup_3node();
 
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
-        let new_members: BTreeSet<u64> = [1, 2, 4].into(); // replace node 3 with 4
+        let new_members: BTreeSet<u64> = [1, 2, 4].into();
 
         let mut coordinator = ReconfigCoordinator::new(
             1,
@@ -341,16 +365,14 @@ mod tests {
             BTreeMap::new(),
         );
 
-        // Start → get share requests
         let actions = coordinator.start();
         assert_eq!(actions.len(), 3);
 
-        // Feed shares from nodes 1 and 2 (threshold = 2)
         let actions = coordinator.on_share_received(1, shares[0].clone()).unwrap();
-        assert!(actions.is_empty()); // need more
+        assert!(actions.is_empty());
 
         let actions = coordinator.on_share_received(2, shares[1].clone()).unwrap();
-        assert_eq!(actions.len(), 1); // threshold reached → ProposeNewConfig
+        assert_eq!(actions.len(), 1);
 
         match &actions[0] {
             ReconfigAction::ProposeNewConfig {
@@ -360,14 +382,61 @@ mod tests {
                 new_epoch,
             } => {
                 assert_eq!(*new_epoch, 2);
-                assert_eq!(new_shares.len(), 3); // 3 new members
+                assert_eq!(new_shares.len(), 3);
                 assert_eq!(new_digests.len(), 3);
-                assert_eq!(encrypted_chain.prior_count, 1); // 1 prior secret
+                assert_eq!(encrypted_chain.prior_count, 1);
             }
-            _ => panic!("expected ProposeNewConfig"),
+            ReconfigAction::SendGetShare { .. } => panic!("expected ProposeNewConfig"),
         }
 
         assert_eq!(coordinator.state(), &ReconfigState::Preparing);
+    }
+
+    #[test]
+    fn test_reconfig_state_machine_driven_by_test_ctx_commits() {
+        let (shares, digests, old_secret) = setup_3node();
+        let old_members: BTreeSet<u64> = [1, 2, 3].into();
+        let new_members: BTreeSet<u64> = [1, 2, 4].into();
+        let mut coordinator = ReconfigCoordinator::new(
+            10,
+            22,
+            2,
+            2,
+            old_members.clone(),
+            new_members,
+            digests,
+            b"ctx-cluster".to_vec(),
+            BTreeMap::from([(5, [0x55; 32])]),
+        );
+        let mut ctx = TestReconfigCtx::new(old_members.clone());
+
+        dispatch_actions(&mut ctx, coordinator.start());
+        assert_eq!(ctx.get_share_requests.len(), old_members.len());
+        assert_eq!(ctx.connected_members(), old_members);
+
+        dispatch_actions(&mut ctx, coordinator.on_share_received(1, shares[0].clone()).unwrap());
+        assert!(ctx.proposals.is_empty());
+
+        dispatch_actions(&mut ctx, coordinator.on_share_received(2, shares[1].clone()).unwrap());
+        assert_eq!(ctx.proposals.len(), 1);
+        assert_eq!(coordinator.state(), &ReconfigState::Preparing);
+
+        let (new_shares, new_digests, encrypted_chain, new_epoch) = &ctx.proposals[0];
+        assert_eq!(*new_epoch, 22);
+        assert_eq!(new_shares.len(), 3);
+        assert_eq!(new_digests.len(), 3);
+        assert_eq!(encrypted_chain.prior_count, 2);
+
+        let reconstructed_new_secret = shamir::reconstruct_secret(
+            &new_shares.values().take(2).cloned().collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let prior = chain::decrypt_chain(encrypted_chain, &reconstructed_new_secret, b"ctx-cluster").unwrap();
+        assert_eq!(prior.get(&5), Some(&[0x55; 32]));
+        assert_eq!(prior.get(&10), Some(&old_secret));
+
+        coordinator.on_committed();
+        assert_eq!(coordinator.state(), &ReconfigState::Committed);
     }
 
     #[test]
@@ -416,7 +485,6 @@ mod tests {
             BTreeMap::new(),
         );
 
-        // Send node 1's share but claim it's from node 2 → digest mismatch
         let result = coordinator.on_share_received(2, shares[0].clone());
         assert!(matches!(result, Err(ReconfigError::InvalidShare { node_id: 2 })));
     }
@@ -441,7 +509,6 @@ mod tests {
         );
 
         coordinator.on_share_received(1, shares[0].clone()).unwrap();
-        // Send again from node 1 → ignored
         let actions = coordinator.on_share_received(1, shares[0].clone()).unwrap();
         assert!(actions.is_empty());
     }
@@ -457,5 +524,79 @@ mod tests {
         assert_eq!(ctx.get_share_requests[0], (1, 5));
         assert_eq!(ctx.connected_members(), connected);
         assert!(ctx.proposals.is_empty());
+    }
+
+    proptest! {
+        #[test]
+        fn prop_reconfiguration_produces_reconstructible_new_shares(
+            old_count in 1u8..=5,
+            keep_count in 0u8..=5,
+            add_count in 0u8..=3,
+        ) {
+            prop_assume!(keep_count <= old_count);
+            prop_assume!(keep_count > 0 || add_count > 0);
+            let new_count = keep_count + add_count;
+            prop_assume!(new_count >= 1);
+            prop_assume!(new_count <= 6);
+
+            let old_members: BTreeSet<u64> = (1u64..=u64::from(old_count)).collect();
+            let mut new_members: BTreeSet<u64> = (1u64..=u64::from(keep_count)).collect();
+            for extra in 0..u64::from(add_count) {
+                new_members.insert(100 + extra);
+            }
+
+            let old_threshold = majority_threshold(old_count);
+            let new_threshold = majority_threshold(new_count);
+            let old_secret = ClusterSecret::generate();
+            let mut rng = rand::rng();
+            let shares = shamir::split_secret(old_secret.as_bytes(), old_threshold, old_count, &mut rng).unwrap();
+            let expected_digests: BTreeMap<u64, ShareDigest> =
+                old_members.iter().zip(shares.iter()).map(|(&node_id, share)| (node_id, shamir::share_digest(share))).collect();
+
+            let old_epoch = 7u64;
+            let mut coordinator = ReconfigCoordinator::new(
+                old_epoch,
+                19,
+                old_threshold,
+                new_threshold,
+                old_members.clone(),
+                new_members.clone(),
+                expected_digests,
+                b"prop-cluster".to_vec(),
+                BTreeMap::new(),
+            );
+
+            let mut proposal = None;
+            for (&node_id, share) in old_members.iter().zip(shares.iter()).take(usize::from(old_threshold)) {
+                for action in coordinator.on_share_received(node_id, share.clone()).unwrap() {
+                    if let ReconfigAction::ProposeNewConfig {
+                        new_shares,
+                        new_digests,
+                        encrypted_chain,
+                        new_epoch,
+                    } = action {
+                        proposal = Some((new_shares, new_digests, encrypted_chain, new_epoch));
+                    }
+                }
+            }
+
+            prop_assert!(proposal.is_some());
+            let (new_shares, new_digests, encrypted_chain, new_epoch) = proposal.unwrap();
+            prop_assert_eq!(new_epoch, 19);
+            prop_assert_eq!(new_shares.len(), usize::from(new_count));
+            prop_assert_eq!(new_digests.len(), usize::from(new_count));
+
+            let share_values: Vec<Share> = new_shares.values().cloned().collect();
+            let threshold_usize = usize::from(new_threshold);
+            let first_secret = shamir::reconstruct_secret(&share_values[..threshold_usize]).unwrap();
+            let last_secret = shamir::reconstruct_secret(&share_values[share_values.len() - threshold_usize..]).unwrap();
+            prop_assert_eq!(first_secret, last_secret);
+
+            let prior = chain::decrypt_chain(&encrypted_chain, &first_secret, b"prop-cluster").unwrap();
+            prop_assert_eq!(prior.len(), 1);
+            prop_assert_eq!(prior.get(&old_epoch), Some(old_secret.as_bytes()));
+            prop_assert_eq!(encrypted_chain.prior_count, 1);
+            prop_assert_eq!(coordinator.state(), &ReconfigState::Preparing);
+        }
     }
 }

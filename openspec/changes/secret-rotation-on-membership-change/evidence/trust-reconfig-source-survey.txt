@@ -1,0 +1,71 @@
+## Reconfig coordinator
+30:pub trait ReconfigCtx {
+49:pub enum ReconfigState {
+99:pub struct ReconfigCoordinator {
+175:    pub fn on_share_received(&mut self, from_node: u64, share: Share) -> Result<Vec<ReconfigAction>, ReconfigError> {
+205:    pub fn on_timeout(&mut self) -> Result<(), ReconfigError> {
+268:pub struct TestReconfigCtx {
+278:impl TestReconfigCtx {
+289:impl ReconfigCtx for TestReconfigCtx {
+327:    fn dispatch_action(ctx: &mut TestReconfigCtx, action: ReconfigAction) {
+339:    fn dispatch_actions(ctx: &mut TestReconfigCtx, actions: Vec<ReconfigAction>) {
+371:        let actions = coordinator.on_share_received(1, shares[0].clone()).unwrap();
+374:        let actions = coordinator.on_share_received(2, shares[1].clone()).unwrap();
+411:        let mut ctx = TestReconfigCtx::new(old_members.clone());
+417:        dispatch_actions(&mut ctx, coordinator.on_share_received(1, shares[0].clone()).unwrap());
+420:        dispatch_actions(&mut ctx, coordinator.on_share_received(2, shares[1].clone()).unwrap());
+461:        let err = coordinator.on_timeout().unwrap_err();
+488:        let result = coordinator.on_share_received(2, shares[0].clone());
+511:        coordinator.on_share_received(1, shares[0].clone()).unwrap();
+512:        let actions = coordinator.on_share_received(1, shares[0].clone()).unwrap();
+519:        let mut ctx = TestReconfigCtx::new(connected.clone());
+571:                for action in coordinator.on_share_received(node_id, share.clone()).unwrap() {
+
+## Chain
+31:pub struct EncryptedSecretChain {
+68:pub fn encrypt_chain(
+104:pub fn decrypt_chain(
+152:        let chain = encrypt_chain(&prior, &new_secret, cluster_id, 3).unwrap();
+156:        let recovered = decrypt_chain(&chain, &new_secret, cluster_id).unwrap();
+166:        let mut chain = encrypt_chain(&prior, &new_secret, b"cluster", 2).unwrap();
+172:        let result = decrypt_chain(&chain, &new_secret, b"cluster");
+182:        let chain = encrypt_chain(&prior, &new_secret, b"cluster", 2).unwrap();
+185:        let result = decrypt_chain(&chain, &wrong, b"cluster");
+194:        let chain = encrypt_chain(&prior, &new_secret, b"cluster", 1).unwrap();
+197:        let recovered = decrypt_chain(&chain, &new_secret, b"cluster").unwrap();
+214:        let chain = encrypt_chain(&prior, &all_secrets[&5], cluster_id, 5).unwrap();
+217:        let recovered = decrypt_chain(&chain, &all_secrets[&5], cluster_id).unwrap();
+230:        let chain = encrypt_chain(&prior, &secret, b"cluster-a", 2).unwrap();
+232:        let result = decrypt_chain(&chain, &secret, b"cluster-b");
+249:            let chain = encrypt_chain(&prior, &current_secret, b"prop-chain", epoch).unwrap();
+250:            let recovered = decrypt_chain(&chain, &current_secret, b"prop-chain").unwrap();
+
+## Trust payload and protocol
+crates/aspen-trust/src/protocol.rs:16:pub struct GetShareRequest {
+crates/aspen-trust/src/protocol.rs:23:pub struct ShareResponse {
+crates/aspen-trust/src/protocol.rs:34:    GetShare(GetShareRequest),
+crates/aspen-trust/src/protocol.rs:41:    Share(ShareResponse),
+crates/aspen-trust/src/protocol.rs:54:        let message = TrustResponse::Share(ShareResponse { epoch: 11, share });
+crates/aspen-trust/src/protocol.rs:62:        let request = TrustRequest::GetShare(GetShareRequest { epoch: 42 });
+crates/aspen-raft-types/src/request.rs:37:pub struct TrustReconfigurationPayload {
+crates/aspen-raft-types/src/request.rs:245:    TrustReconfiguration(TrustReconfigurationPayload),
+crates/aspen-raft-types/src/request.rs:607:        let req = AppRequest::TrustReconfiguration(TrustReconfigurationPayload {
+crates/aspen-raft-types/src/request.rs:625:        let original = AppRequest::TrustReconfiguration(TrustReconfigurationPayload {
+crates/aspen-transport/src/constants.rs:77:pub const TRUST_ALPN: &[u8] = b"/aspen/trust/1";
+
+## Raft integration
+crates/aspen-raft/src/trust_reconfig_watcher.rs:16:pub fn spawn_trust_reconfig_watcher(node: Arc<RaftNode>) -> CancellationToken {
+crates/aspen-raft/src/trust_reconfig_watcher.rs:46:                        let pending = match node.pending_trust_reconfiguration(&metrics) {
+crates/aspen-raft/src/trust_reconfig_watcher.rs:65:                            .rotate_trust_after_membership_change(old_members, new_members, target_epoch)
+crates/aspen-raft/src/node/trust.rs:256:                .get_share(endpoint, plan.old_epoch)
+crates/aspen-raft/src/node/trust.rs:297:    pub(crate) fn pending_trust_reconfiguration(
+crates/aspen-raft/src/node/trust.rs:335:    pub(crate) async fn rotate_trust_after_membership_change(
+crates/aspen-raft/src/node/trust.rs:398:                .load_encrypted_chain(old_epoch)
+crates/aspen-raft/src/node/trust.rs:493:    async fn get_share(&self, requester: EndpointId, epoch: u64) -> anyhow::Result<Option<ShareResponse>> {
+crates/aspen-raft/src/node/trust.rs:621:        async fn get_share(&self, target: EndpointAddr, _epoch: u64) -> anyhow::Result<ShareResponse> {
+crates/aspen-raft/src/storage_shared/trust.rs:124:    pub fn load_encrypted_chain(&self, epoch: u64) -> Result<Option<EncryptedSecretChain>, SharedStorageError> {
+crates/aspen-raft/src/storage_shared/trust.rs:229:    pub(crate) fn apply_trust_reconfiguration_in_txn(
+crates/aspen-raft/src/storage_shared/trust.rs:501:                .apply_trust_reconfiguration_in_txn(
+crates/aspen-raft/src/storage_shared/trust.rs:518:        assert_eq!(storage.load_encrypted_chain(8).unwrap(), Some(payload.encrypted_chain));
+crates/aspen-raft/src/storage_shared/trust.rs:560:                .apply_trust_reconfiguration_in_txn(
+crates/aspen-raft/src/storage_shared/trust.rs:575:        assert_eq!(storage.load_encrypted_chain(8).unwrap(), Some(payload.encrypted_chain));

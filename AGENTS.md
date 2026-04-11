@@ -679,3 +679,4 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 - Backwards compatibility is not a concern; prioritize clean solutions
 - All legacy `RaftActor` references have been removed; the codebase uses `RaftNode` throughout
 - `openspec list --json` treats `openspec/changes/active/` as a change named `active`; inspect the dated directory inside `openspec/changes/active/` directly instead of assuming `active` is a real change
+- Fresh trust joiners replay the historical `TrustInitialize` log even though they were not initial members. `apply_trust_initialize_in_txn()` must tolerate a missing local epoch-1 share and still persist the epoch metadata; otherwise the new node fatally shuts down before it can apply the later `TrustReconfiguration` entry that assigns its first real share.

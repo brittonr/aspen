@@ -1,0 +1,4 @@
+OK: openspec/changes/secret-rotation-on-membership-change
+  tasks: 29 total / 29 checked
+  changed files listed: 15
+  verification artifacts: 6

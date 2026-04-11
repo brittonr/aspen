@@ -129,6 +129,8 @@ pub fn decrypt_chain(
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     fn make_secret(seed: u8) -> [u8; 32] {
@@ -163,7 +165,6 @@ mod tests {
         let new_secret = make_secret(0xCC);
         let mut chain = encrypt_chain(&prior, &new_secret, b"cluster", 2).unwrap();
 
-        // Tamper
         if let Some(byte) = chain.data.first_mut() {
             *byte ^= 0xFF;
         }
@@ -199,7 +200,6 @@ mod tests {
 
     #[test]
     fn test_multi_epoch_chain() {
-        // Simulate 5 epochs of rotation
         let mut all_secrets = BTreeMap::new();
         let cluster_id = b"multi-epoch";
 
@@ -208,7 +208,6 @@ mod tests {
             all_secrets.insert(epoch, secret);
         }
 
-        // Build chain at epoch 5 containing secrets 1-4
         let prior: BTreeMap<u64, [u8; 32]> =
             all_secrets.iter().filter(|(k, _)| **k < 5).map(|(&k, &v)| (k, v)).collect();
 
@@ -232,5 +231,28 @@ mod tests {
 
         let result = decrypt_chain(&chain, &secret, b"cluster-b");
         assert!(matches!(result, Err(ChainError::DecryptFailed)));
+    }
+
+    proptest! {
+        #[test]
+        fn prop_chain_at_epoch_n_contains_n_minus_1_decodable_secrets(
+            epoch in 1u64..8,
+            current_secret in any::<[u8; 32]>(),
+            prior_candidates in proptest::collection::vec(any::<[u8; 32]>(), 7),
+        ) {
+            let mut prior = BTreeMap::new();
+            let expected_len = (epoch - 1) as usize;
+            for (index, secret) in prior_candidates.into_iter().take(expected_len).enumerate() {
+                prior.insert((index as u64) + 1, secret);
+            }
+
+            let chain = encrypt_chain(&prior, &current_secret, b"prop-chain", epoch).unwrap();
+            let recovered = decrypt_chain(&chain, &current_secret, b"prop-chain").unwrap();
+
+            prop_assert_eq!(chain.epoch, epoch);
+            prop_assert_eq!(chain.prior_count, (epoch - 1) as u32);
+            prop_assert_eq!(recovered.len(), expected_len);
+            prop_assert_eq!(recovered, prior);
+        }
     }
 }

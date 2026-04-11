@@ -1,6 +1,12 @@
 //! Unit tests for RaftNode.
 
+#[cfg(feature = "trust")]
+use std::collections::BTreeMap;
+#[cfg(feature = "trust")]
+use std::collections::BTreeSet;
 use std::sync::Arc;
+#[cfg(feature = "trust")]
+use std::time::Duration;
 
 use aspen_cluster_types::AddLearnerRequest;
 use aspen_cluster_types::ChangeMembershipRequest;
@@ -19,6 +25,21 @@ use aspen_traits::CoordinationBackend;
 use aspen_traits::KeyValueStore;
 use openraft::Config;
 use tempfile::TempDir;
+#[cfg(feature = "trust")]
+use tokio::sync::Notify;
+#[cfg(feature = "trust")]
+use tokio_util::sync::CancellationToken;
+
+#[cfg(feature = "trust")]
+use aspen_trust::chain;
+#[cfg(feature = "trust")]
+use aspen_trust::shamir;
+#[cfg(feature = "trust")]
+use async_trait::async_trait;
+#[cfg(feature = "trust")]
+use iroh::EndpointAddr;
+#[cfg(feature = "trust")]
+use iroh::SecretKey;
 
 use super::RaftNode;
 use super::arc_wrapper::ArcRaftNode;
@@ -67,7 +88,7 @@ async fn create_test_node(node_id: u64) -> RaftNode {
 }
 
 struct RedbTestNode {
-    node: RaftNode,
+    node: Arc<RaftNode>,
     storage: Arc<SharedRedbStorage>,
     _temp_dir: TempDir,
 }
@@ -97,13 +118,128 @@ async fn create_test_redb_node(
         .expect("Failed to register redb node with router");
 
     let storage = Arc::new(storage);
-    let node = RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::Redb(storage.clone()));
+    let node = Arc::new(RaftNode::new(
+        NodeId(node_id),
+        Arc::new(raft),
+        StateMachineVariant::Redb(storage.clone()),
+    ));
 
     RedbTestNode {
         node,
         storage,
         _temp_dir: temp_dir,
     }
+}
+
+#[cfg(feature = "trust")]
+fn endpoint_addr_for_node(_node_id: u64) -> EndpointAddr {
+    let key = SecretKey::generate(&mut rand::rng());
+    EndpointAddr::from_parts(key.public(), std::iter::empty())
+}
+
+#[cfg(feature = "trust")]
+fn cluster_node_with_endpoint(node_id: u64, endpoint: EndpointAddr) -> ClusterNode {
+    let mut node = ClusterNode::new(node_id, format!("node-{node_id}"), None);
+    node.node_addr = Some(aspen_cluster_types::NodeAddress::new(endpoint));
+    node
+}
+
+#[cfg(feature = "trust")]
+#[derive(Clone)]
+struct TestTrustShareClient {
+    storages_by_endpoint: BTreeMap<String, Arc<SharedRedbStorage>>,
+    block_started: Option<Arc<Notify>>,
+    block_release: Option<Arc<Notify>>,
+}
+
+#[cfg(feature = "trust")]
+impl TestTrustShareClient {
+    fn immediate(storages_by_endpoint: BTreeMap<String, Arc<SharedRedbStorage>>) -> Self {
+        Self {
+            storages_by_endpoint,
+            block_started: None,
+            block_release: None,
+        }
+    }
+
+    fn blocking(
+        storages_by_endpoint: BTreeMap<String, Arc<SharedRedbStorage>>,
+        block_started: Arc<Notify>,
+        block_release: Arc<Notify>,
+    ) -> Self {
+        Self {
+            storages_by_endpoint,
+            block_started: Some(block_started),
+            block_release: Some(block_release),
+        }
+    }
+}
+
+#[cfg(feature = "trust")]
+#[async_trait]
+impl crate::trust_share_client::TrustShareClient for TestTrustShareClient {
+    async fn get_share(&self, target: EndpointAddr, epoch: u64) -> anyhow::Result<aspen_trust::protocol::ShareResponse> {
+        if let Some(started) = &self.block_started {
+            started.notify_waiters();
+        }
+        if let Some(release) = &self.block_release {
+            release.notified().await;
+        }
+
+        let key = target.id.to_string();
+        let storage = self
+            .storages_by_endpoint
+            .get(&key)
+            .ok_or_else(|| anyhow::anyhow!("missing storage for endpoint {}", target.id))?;
+        let share = storage
+            .load_share(epoch)?
+            .ok_or_else(|| anyhow::anyhow!("missing share for epoch {epoch}"))?;
+        Ok(aspen_trust::protocol::ShareResponse { epoch, share })
+    }
+}
+
+#[cfg(feature = "trust")]
+fn rebuild_secret_from_storage(storage: &[Arc<SharedRedbStorage>], epoch: u64, threshold: usize) -> [u8; 32] {
+    let shares: Vec<_> = storage
+        .iter()
+        .take(threshold)
+        .map(|store| store.load_share(epoch).unwrap().unwrap())
+        .collect();
+    shamir::reconstruct_secret(&shares).unwrap()
+}
+
+#[cfg(feature = "trust")]
+async fn wait_for_trust_epoch(storages: &[Arc<SharedRedbStorage>], epoch: u64, timeout: Duration) {
+    let result = tokio::time::timeout(timeout, async {
+        loop {
+            let all_ready = storages.iter().all(|storage| storage.load_current_trust_epoch().unwrap() == Some(epoch));
+            if all_ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+
+    if result.is_err() {
+        let epochs: Vec<_> = storages.iter().map(|storage| storage.load_current_trust_epoch().unwrap()).collect();
+        panic!("trust epoch should converge to {epoch}, got {:?}", epochs);
+    }
+}
+
+#[cfg(feature = "trust")]
+async fn wait_for_leader(node: &RaftNode, expected_leader: u64, timeout: Duration) {
+    tokio::time::timeout(timeout, async {
+        loop {
+            let metrics = node.raft().metrics().borrow().clone();
+            if metrics.current_leader == Some(NodeId(expected_leader)) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("leader should be elected");
 }
 
 /// Helper to set the initialized flag for testing.
@@ -268,6 +404,239 @@ async fn test_multi_node_trust_init_persists_follower_shares() {
     assert_eq!(digests1.len(), 3);
     assert_eq!(digests1, digests2);
     assert_eq!(digests1, digests3);
+}
+
+#[cfg(feature = "trust")]
+#[tokio::test]
+async fn test_multi_node_trust_membership_change_rotates_secret_add_and_remove() {
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+    let cluster_name = "trust-rotation-redb-test";
+    let cluster_id = b"trust-rotation-cluster".to_vec();
+
+    let mut node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node3 = create_test_redb_node(3, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node4 = create_test_redb_node(4, router.clone(), failure_injector, cluster_name).await;
+
+    let endpoint1 = endpoint_addr_for_node(1);
+    let endpoint2 = endpoint_addr_for_node(2);
+    let endpoint3 = endpoint_addr_for_node(3);
+    let endpoint4 = endpoint_addr_for_node(4);
+    let storages_by_endpoint = BTreeMap::from([
+        (endpoint1.id.to_string(), node1.storage.clone()),
+        (endpoint2.id.to_string(), node2.storage.clone()),
+        (endpoint3.id.to_string(), node3.storage.clone()),
+        (endpoint4.id.to_string(), node4.storage.clone()),
+    ]);
+    let client: Arc<dyn crate::trust_share_client::TrustShareClient> =
+        Arc::new(TestTrustShareClient::immediate(storages_by_endpoint));
+
+    Arc::get_mut(&mut node1.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node3.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node4.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
+
+    ClusterController::init(&node1.node, InitRequest {
+        initial_members: vec![
+            cluster_node_with_endpoint(1, endpoint1.clone()),
+            cluster_node_with_endpoint(2, endpoint2.clone()),
+            cluster_node_with_endpoint(3, endpoint3.clone()),
+        ],
+        trust: aspen_cluster_types::TrustConfig::enabled(),
+    })
+    .await
+    .expect("init 3-node trust cluster");
+
+    wait_for_leader(&node1.node, 1, Duration::from_secs(10)).await;
+    node4.node.raft().trigger().elect().await.expect("wake node 4 raft core before promotion");
+
+    ClusterController::add_learner(&node1.node, AddLearnerRequest {
+        learner: cluster_node_with_endpoint(4, endpoint4.clone()),
+    })
+    .await
+    .expect("add learner 4");
+
+    let add_result = ClusterController::change_membership(&node1.node, ChangeMembershipRequest {
+        members: vec![1, 2, 3, 4],
+    })
+    .await
+    .expect("promote node 4 and rotate trust");
+    assert_eq!(add_result.members.len(), 4);
+
+    let add_epoch = node1.storage.load_current_trust_epoch().unwrap().unwrap();
+    let _ = ClusterController::add_learner(&node1.node, AddLearnerRequest {
+        learner: cluster_node_with_endpoint(4, endpoint4.clone()),
+    })
+    .await;
+    for _ in 0..5 {
+        node1.node.raft().trigger().heartbeat().await.expect("heartbeat after voter promotion");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(add_epoch > 1);
+    wait_for_trust_epoch(
+        &[node1.storage.clone(), node2.storage.clone(), node3.storage.clone()],
+        add_epoch,
+        Duration::from_secs(15),
+    )
+    .await;
+    assert_eq!(node1.storage.load_digests(add_epoch).unwrap().len(), 4);
+    assert_eq!(node1.storage.load_members(add_epoch).unwrap().len(), 4);
+    tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            let has_epoch = node4.storage.load_current_trust_epoch().unwrap() == Some(add_epoch);
+            let has_share = node4.storage.load_share(add_epoch).unwrap().is_some();
+            if has_epoch && has_share {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("new voter should reach the rotated epoch and persist its share");
+
+    let add_secret = rebuild_secret_from_storage(
+        &[node1.storage.clone(), node2.storage.clone(), node3.storage.clone()],
+        add_epoch,
+        3,
+    );
+    let add_chain = node1.storage.load_encrypted_chain(add_epoch).unwrap().unwrap();
+    let add_prior = chain::decrypt_chain(&add_chain, &add_secret, &cluster_id).unwrap();
+    assert_eq!(add_chain.prior_count, 1);
+    assert_eq!(add_prior.len(), 1);
+    assert!(add_prior.contains_key(&1));
+
+    let remove_result = ClusterController::change_membership(&node1.node, ChangeMembershipRequest {
+        members: vec![1, 2, 3],
+    })
+    .await
+    .expect("remove voter 4 and rotate trust again");
+    assert_eq!(remove_result.members.len(), 3);
+
+    let remove_epoch = node1.storage.load_current_trust_epoch().unwrap().unwrap();
+    assert!(remove_epoch > add_epoch);
+    wait_for_trust_epoch(
+        &[node1.storage.clone(), node2.storage.clone(), node3.storage.clone()],
+        remove_epoch,
+        Duration::from_secs(15),
+    )
+    .await;
+    assert_eq!(node1.storage.load_digests(remove_epoch).unwrap().len(), 3);
+    assert_eq!(node1.storage.load_members(remove_epoch).unwrap().len(), 3);
+    assert_eq!(node4.storage.load_share(remove_epoch).unwrap(), None);
+
+    let remove_secret = rebuild_secret_from_storage(&[node1.storage.clone(), node2.storage.clone()], remove_epoch, 2);
+    let remove_chain = node1.storage.load_encrypted_chain(remove_epoch).unwrap().unwrap();
+    let remove_prior = chain::decrypt_chain(&remove_chain, &remove_secret, &cluster_id).unwrap();
+    assert_eq!(remove_chain.prior_count, 2);
+    assert_eq!(remove_prior.len(), 2);
+    assert!(remove_prior.contains_key(&1));
+    assert!(remove_prior.contains_key(&add_epoch));
+}
+
+#[cfg(feature = "trust")]
+#[tokio::test]
+async fn test_trust_reconfiguration_restarts_after_leader_crash_during_share_collection() {
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+    let cluster_name = "trust-crash-redb-test";
+    let cluster_id = b"trust-crash-cluster".to_vec();
+
+    let mut node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node3 = create_test_redb_node(3, router.clone(), failure_injector, cluster_name).await;
+
+    let endpoint1 = endpoint_addr_for_node(1);
+    let endpoint2 = endpoint_addr_for_node(2);
+    let endpoint3 = endpoint_addr_for_node(3);
+    let storages_by_endpoint = BTreeMap::from([
+        (endpoint1.id.to_string(), node1.storage.clone()),
+        (endpoint2.id.to_string(), node2.storage.clone()),
+        (endpoint3.id.to_string(), node3.storage.clone()),
+    ]);
+
+    let block_started = Arc::new(Notify::new());
+    let block_release = Arc::new(Notify::new());
+    let blocked_client: Arc<dyn crate::trust_share_client::TrustShareClient> = Arc::new(TestTrustShareClient::blocking(
+        storages_by_endpoint.clone(),
+        block_started.clone(),
+        block_release.clone(),
+    ));
+    let immediate_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
+        Arc::new(TestTrustShareClient::immediate(storages_by_endpoint));
+
+    Arc::get_mut(&mut node1.node).unwrap().set_trust_share_client(blocked_client, cluster_id.clone());
+    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(immediate_client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node3.node).unwrap().set_trust_share_client(immediate_client.clone(), cluster_id.clone());
+
+    ClusterController::init(&node1.node, InitRequest {
+        initial_members: vec![
+            cluster_node_with_endpoint(1, endpoint1.clone()),
+            cluster_node_with_endpoint(2, endpoint2.clone()),
+            cluster_node_with_endpoint(3, endpoint3.clone()),
+        ],
+        trust: aspen_cluster_types::TrustConfig::enabled(),
+    })
+    .await
+    .expect("init 3-node trust cluster");
+    wait_for_leader(&node1.node, 1, Duration::from_secs(10)).await;
+
+    let membership_response = node1
+        .node
+        .raft()
+        .change_membership([2_u64, 3].into_iter().map(NodeId), false)
+        .await
+        .expect("commit membership change without automatic trust rotation");
+    let target_epoch = membership_response.log_id.index();
+
+    let watcher_node2 = crate::trust_reconfig_watcher::spawn_trust_reconfig_watcher(node2.node.clone());
+    let watcher_node3 = crate::trust_reconfig_watcher::spawn_trust_reconfig_watcher(node3.node.clone());
+    let watcher_tokens: [CancellationToken; 2] = [watcher_node2, watcher_node3];
+
+    let rotate_task = tokio::spawn({
+        let node = node1.node.clone();
+        async move {
+            node.rotate_trust_after_membership_change(
+                BTreeSet::from([1_u64, 2, 3]),
+                BTreeSet::from([2_u64, 3]),
+                target_epoch,
+            )
+            .await
+        }
+    });
+
+    tokio::time::timeout(Duration::from_secs(2), block_started.notified())
+        .await
+        .expect("leader should begin remote share collection");
+
+    node1.node.raft().shutdown().await.expect("shutdown leader raft instance");
+    node2.node.raft().trigger().elect().await.expect("force node 2 to start election");
+
+    wait_for_trust_epoch(
+        &[node2.storage.clone(), node3.storage.clone()],
+        target_epoch,
+        Duration::from_secs(15),
+    )
+    .await;
+
+    let restarted_secret = rebuild_secret_from_storage(&[node2.storage.clone(), node3.storage.clone()], target_epoch, 2);
+    let restarted_chain = node2.storage.load_encrypted_chain(target_epoch).unwrap().unwrap();
+    let restarted_prior = chain::decrypt_chain(&restarted_chain, &restarted_secret, &cluster_id).unwrap();
+    assert_eq!(restarted_chain.prior_count, 1);
+    assert!(restarted_prior.contains_key(&1));
+    assert_eq!(node2.storage.load_digests(target_epoch).unwrap().len(), 2);
+    assert_eq!(node2.storage.load_members(target_epoch).unwrap().len(), 2);
+
+    block_release.notify_waiters();
+    let old_leader_result = tokio::time::timeout(Duration::from_secs(5), rotate_task)
+        .await
+        .expect("old leader task should finish once released")
+        .expect("old leader join should succeed");
+    assert!(old_leader_result.is_err());
+
+    for token in watcher_tokens {
+        token.cancel();
+    }
 }
 
 /// Test ensure_initialized returns error before init.

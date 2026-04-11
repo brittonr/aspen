@@ -15,7 +15,7 @@
 - [x] 2.4 Test: encrypt then decrypt roundtrip recovers all prior secrets
 - [x] 2.5 Test: tampered ciphertext fails authentication
 - [x] 2.6 Test: wrong secret fails decryption
-- [ ] 2.7 Add Verus spec for chain length invariant: chain at epoch N contains exactly N-1 prior secrets
+- [x] 2.7 Add Verus spec for chain length invariant: chain at epoch N contains exactly N-1 prior secrets
 
 ## 3. Raft Integration
 
@@ -36,8 +36,8 @@
 
 ## 5. Testing
 
-- [ ] 5.1 Unit test the `ReconfigCoordinator` state machine with `TestReconfigCtx`: full flow from init through share collection to commit
-- [ ] 5.2 Property test: for random membership changes on random cluster sizes, reconfiguration always produces valid shares that reconstruct the new secret
-- [ ] 5.3 Property test: encrypted chain at epoch N always contains N-1 decodable secrets
-- [ ] 5.4 Integration test: 3-node cluster → add voter → verify new shares and old chain → remove voter → verify rotation
-- [ ] 5.5 Crash test: kill leader during share collection, verify new leader completes reconfiguration
+- [x] 5.1 Unit test the `ReconfigCoordinator` state machine with `TestReconfigCtx`: full flow from init through share collection to commit
+- [x] 5.2 Property test: for random membership changes on random cluster sizes, reconfiguration always produces valid shares that reconstruct the new secret
+- [x] 5.3 Property test: encrypted chain at epoch N always contains N-1 decodable secrets
+- [x] 5.4 Integration test: 3-node cluster → add voter → verify new shares and old chain → remove voter → verify rotation
+- [x] 5.5 Crash test: kill leader during share collection, verify new leader completes reconfiguration
