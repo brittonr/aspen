@@ -1,6 +1,15 @@
 use aspen_auth::Operation;
 
 use super::super::ClientRpcRequest;
+use crate::coordination::LockSetMemberTokenWire;
+
+fn canonical_lockset_member(members: &[String]) -> Option<&str> {
+    members.iter().map(String::as_str).min()
+}
+
+fn canonical_lockset_token_member(member_tokens: &[LockSetMemberTokenWire]) -> Option<&str> {
+    member_tokens.iter().map(|token| token.member.as_str()).min()
+}
 
 pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     to_operation_lock_counter(request)
@@ -20,7 +29,7 @@ fn to_operation_lock_counter(request: &ClientRpcRequest) -> Option<Option<Operat
             value: vec![],
         })),
         ClientRpcRequest::LockSetAcquire { members, .. } | ClientRpcRequest::LockSetTryAcquire { members, .. } => {
-            members.first().map(|member| {
+            canonical_lockset_member(members).map(|member| {
                 Some(Operation::Write {
                     key: format!("_lock:{member}"),
                     value: vec![],
@@ -28,12 +37,14 @@ fn to_operation_lock_counter(request: &ClientRpcRequest) -> Option<Option<Operat
             })
         }
         ClientRpcRequest::LockSetRelease { member_tokens, .. }
-        | ClientRpcRequest::LockSetRenew { member_tokens, .. } => member_tokens.first().map(|member| {
-            Some(Operation::Write {
-                key: format!("_lock:{}", member.member),
-                value: vec![],
+        | ClientRpcRequest::LockSetRenew { member_tokens, .. } => {
+            canonical_lockset_token_member(member_tokens).map(|member| {
+                Some(Operation::Write {
+                    key: format!("_lock:{member}"),
+                    value: vec![],
+                })
             })
-        }),
+        }
 
         ClientRpcRequest::CounterGet { key }
         | ClientRpcRequest::SignedCounterGet { key }
@@ -158,5 +169,36 @@ fn to_operation_service(request: &ClientRpcRequest) -> Option<Option<Operation>>
         })),
 
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_auth::Operation;
+
+    use super::*;
+
+    #[test]
+    fn test_client_rpc_lockset_requests_use_canonical_operation_member() {
+        let request_a = ClientRpcRequest::LockSetTryAcquire {
+            members: vec!["pipeline:42".to_string(), "repo:a".to_string()],
+            holder_id: "holder-a".to_string(),
+            ttl_ms: 1_000,
+        };
+        let request_b = ClientRpcRequest::LockSetTryAcquire {
+            members: vec!["repo:a".to_string(), "pipeline:42".to_string()],
+            holder_id: "holder-a".to_string(),
+            ttl_ms: 1_000,
+        };
+
+        let operation_a = to_operation(&request_a).flatten().unwrap();
+        let operation_b = to_operation(&request_b).flatten().unwrap();
+        match (operation_a, operation_b) {
+            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
+                assert_eq!(key_a, "_lock:pipeline:42");
+                assert_eq!(key_a, key_b);
+            }
+            _ => panic!("expected write operations"),
+        }
     }
 }

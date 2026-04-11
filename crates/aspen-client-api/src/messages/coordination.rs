@@ -356,6 +356,16 @@ pub enum CoordinationRequest {
 }
 
 #[cfg(feature = "auth")]
+fn canonical_lockset_member(members: &[String]) -> Option<&str> {
+    members.iter().map(String::as_str).min()
+}
+
+#[cfg(feature = "auth")]
+fn canonical_lockset_token_member(member_tokens: &[LockSetMemberTokenWire]) -> Option<&str> {
+    member_tokens.iter().map(|token| token.member.as_str()).min()
+}
+
+#[cfg(feature = "auth")]
 impl CoordinationRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
@@ -377,14 +387,14 @@ impl CoordinationRequest {
                 value: vec![],
             }),
             Self::LockSetAcquire { members, .. } | Self::LockSetTryAcquire { members, .. } => {
-                members.first().map(|member| Operation::Write {
+                canonical_lockset_member(members).map(|member| Operation::Write {
                     key: format!("_lock:{member}"),
                     value: vec![],
                 })
             }
             Self::LockSetRelease { member_tokens, .. } | Self::LockSetRenew { member_tokens, .. } => {
-                member_tokens.first().map(|member| Operation::Write {
-                    key: format!("_lock:{}", member.member),
+                canonical_lockset_token_member(member_tokens).map(|member| Operation::Write {
+                    key: format!("_lock:{member}"),
                     value: vec![],
                 })
             }
@@ -514,6 +524,39 @@ impl CoordinationRequest {
             }),
 
             _ => None,
+        }
+    }
+}
+
+#[cfg(all(test, feature = "auth"))]
+mod tests {
+    use aspen_auth::Operation;
+
+    use super::*;
+
+    #[test]
+    fn test_lockset_requests_use_canonical_operation_member() {
+        let request_a = CoordinationRequest::LockSetAcquire {
+            members: vec!["pipeline:42".to_string(), "repo:a".to_string()],
+            holder_id: "holder-a".to_string(),
+            ttl_ms: 1_000,
+            timeout_ms: 500,
+        };
+        let request_b = CoordinationRequest::LockSetAcquire {
+            members: vec!["repo:a".to_string(), "pipeline:42".to_string()],
+            holder_id: "holder-a".to_string(),
+            ttl_ms: 1_000,
+            timeout_ms: 500,
+        };
+
+        let operation_a = request_a.to_operation().unwrap();
+        let operation_b = request_b.to_operation().unwrap();
+        match (operation_a, operation_b) {
+            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
+                assert_eq!(key_a, "_lock:pipeline:42");
+                assert_eq!(key_a, key_b);
+            }
+            _ => panic!("expected write operations"),
         }
     }
 }
