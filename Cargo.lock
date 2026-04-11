@@ -2342,6 +2342,7 @@ dependencies = [
  "aspen-raft-network",
  "aspen-raft-types",
  "aspen-redb-storage",
+ "aspen-secrets",
  "aspen-sharding",
  "aspen-sql",
  "aspen-storage-types",

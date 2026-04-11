@@ -23,13 +23,6 @@ use aspen_kv_types::WriteRequest;
 use aspen_traits::ClusterController;
 use aspen_traits::CoordinationBackend;
 use aspen_traits::KeyValueStore;
-use openraft::Config;
-use tempfile::TempDir;
-#[cfg(feature = "trust")]
-use tokio::sync::Notify;
-#[cfg(feature = "trust")]
-use tokio_util::sync::CancellationToken;
-
 #[cfg(feature = "trust")]
 use aspen_trust::chain;
 #[cfg(feature = "trust")]
@@ -40,6 +33,12 @@ use async_trait::async_trait;
 use iroh::EndpointAddr;
 #[cfg(feature = "trust")]
 use iroh::SecretKey;
+use openraft::Config;
+use tempfile::TempDir;
+#[cfg(feature = "trust")]
+use tokio::sync::Notify;
+#[cfg(feature = "trust")]
+use tokio_util::sync::CancellationToken;
 
 use super::RaftNode;
 use super::arc_wrapper::ArcRaftNode;
@@ -90,18 +89,17 @@ async fn create_test_node(node_id: u64) -> RaftNode {
 struct RedbTestNode {
     node: Arc<RaftNode>,
     storage: Arc<SharedRedbStorage>,
-    _temp_dir: TempDir,
+    _temp_dir: Option<TempDir>,
 }
 
-async fn create_test_redb_node(
+async fn create_test_redb_node_at_path(
     node_id: u64,
     router: Arc<MadsimRaftRouter>,
     failure_injector: Arc<FailureInjector>,
     cluster_name: &str,
+    db_path: &std::path::Path,
 ) -> RedbTestNode {
-    let temp_dir = TempDir::new().expect("temp dir");
-    let db_path = temp_dir.path().join(format!("node-{node_id}.redb"));
-    let storage = SharedRedbStorage::new(&db_path, &node_id.to_string()).expect("create redb storage");
+    let storage = SharedRedbStorage::new(db_path, &node_id.to_string()).expect("create redb storage");
     let network_factory = MadsimNetworkFactory::new(NodeId(node_id), router.clone(), failure_injector);
     let config = Arc::new(Config {
         cluster_name: cluster_name.to_string(),
@@ -118,17 +116,26 @@ async fn create_test_redb_node(
         .expect("Failed to register redb node with router");
 
     let storage = Arc::new(storage);
-    let node = Arc::new(RaftNode::new(
-        NodeId(node_id),
-        Arc::new(raft),
-        StateMachineVariant::Redb(storage.clone()),
-    ));
+    let node = Arc::new(RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::Redb(storage.clone())));
 
     RedbTestNode {
         node,
         storage,
-        _temp_dir: temp_dir,
+        _temp_dir: None,
     }
+}
+
+async fn create_test_redb_node(
+    node_id: u64,
+    router: Arc<MadsimRaftRouter>,
+    failure_injector: Arc<FailureInjector>,
+    cluster_name: &str,
+) -> RedbTestNode {
+    let temp_dir = TempDir::new().expect("temp dir");
+    let db_path = temp_dir.path().join(format!("node-{node_id}.redb"));
+    let mut node = create_test_redb_node_at_path(node_id, router, failure_injector, cluster_name, &db_path).await;
+    node._temp_dir = Some(temp_dir);
+    node
 }
 
 #[cfg(feature = "trust")]
@@ -150,6 +157,24 @@ struct TestTrustShareClient {
     storages_by_endpoint: BTreeMap<String, Arc<SharedRedbStorage>>,
     block_started: Option<Arc<Notify>>,
     block_release: Option<Arc<Notify>>,
+}
+
+#[cfg(feature = "trust")]
+#[derive(Clone)]
+struct TestSecretsShareCollector {
+    storages_by_node: BTreeMap<u64, std::sync::Weak<SharedRedbStorage>>,
+    threshold: u32,
+}
+
+#[cfg(feature = "trust")]
+struct StorageReadAdapter {
+    storage: Arc<SharedRedbStorage>,
+}
+
+#[cfg(feature = "trust")]
+struct KeyManagerEncryptionProvider {
+    manager: Arc<aspen_trust::key_manager::KeyManager>,
+    collector: Arc<dyn aspen_trust::key_manager::ShareCollector>,
 }
 
 #[cfg(feature = "trust")]
@@ -176,9 +201,26 @@ impl TestTrustShareClient {
 }
 
 #[cfg(feature = "trust")]
+impl TestSecretsShareCollector {
+    fn new(storages_by_node: BTreeMap<u64, Arc<SharedRedbStorage>>, threshold: u32) -> Self {
+        Self {
+            storages_by_node: storages_by_node
+                .into_iter()
+                .map(|(node_id, storage)| (node_id, Arc::downgrade(&storage)))
+                .collect(),
+            threshold,
+        }
+    }
+}
+
+#[cfg(feature = "trust")]
 #[async_trait]
 impl crate::trust_share_client::TrustShareClient for TestTrustShareClient {
-    async fn get_share(&self, target: EndpointAddr, epoch: u64) -> anyhow::Result<aspen_trust::protocol::ShareResponse> {
+    async fn get_share(
+        &self,
+        target: EndpointAddr,
+        epoch: u64,
+    ) -> anyhow::Result<aspen_trust::protocol::ShareResponse> {
         if let Some(started) = &self.block_started {
             started.notify_waiters();
         }
@@ -191,20 +233,101 @@ impl crate::trust_share_client::TrustShareClient for TestTrustShareClient {
             .storages_by_endpoint
             .get(&key)
             .ok_or_else(|| anyhow::anyhow!("missing storage for endpoint {}", target.id))?;
-        let share = storage
-            .load_share(epoch)?
-            .ok_or_else(|| anyhow::anyhow!("missing share for epoch {epoch}"))?;
+        let share = storage.load_share(epoch)?.ok_or_else(|| anyhow::anyhow!("missing share for epoch {epoch}"))?;
         Ok(aspen_trust::protocol::ShareResponse { epoch, share })
     }
 }
 
 #[cfg(feature = "trust")]
+#[async_trait]
+impl aspen_trust::key_manager::ShareCollector for TestSecretsShareCollector {
+    async fn collect_shares(
+        &self,
+        epoch: u64,
+    ) -> Result<Vec<shamir::Share>, aspen_trust::key_manager::ShareCollectionError> {
+        let mut shares = Vec::new();
+
+        for (node_id, storage_weak) in &self.storages_by_node {
+            let Some(storage) = storage_weak.upgrade() else {
+                continue;
+            };
+            let share = storage.load_share(epoch).map_err(|e| {
+                aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
+                    reason: format!("failed to load share for node {node_id}: {e}"),
+                }
+            })?;
+            if let Some(share) = share {
+                shares.push(share);
+            }
+        }
+
+        if shares.len() < self.threshold as usize {
+            return Err(aspen_trust::key_manager::ShareCollectionError::BelowQuorum {
+                collected: shares.len() as u32,
+                threshold: self.threshold,
+            });
+        }
+
+        Ok(shares)
+    }
+}
+
+#[cfg(feature = "trust")]
+#[async_trait]
+impl aspen_secrets::SecretsEncryptionProvider for KeyManagerEncryptionProvider {
+    async fn get_encryption(
+        &self,
+    ) -> std::result::Result<
+        Arc<aspen_trust::encryption::SecretsEncryption>,
+        aspen_trust::encryption::SecretsUnavailableError,
+    > {
+        self.manager.ensure_initialized(self.collector.as_ref()).await
+    }
+}
+
+#[cfg(feature = "trust")]
+#[async_trait]
+impl aspen_traits::KeyValueStore for StorageReadAdapter {
+    async fn write(&self, _request: WriteRequest) -> Result<aspen_kv_types::WriteResult, KeyValueStoreError> {
+        Err(KeyValueStoreError::Failed {
+            reason: "StorageReadAdapter only supports reads in this test".to_string(),
+        })
+    }
+
+    async fn read(&self, request: ReadRequest) -> Result<aspen_kv_types::ReadResult, KeyValueStoreError> {
+        let kv = self.storage.get_with_revision(&request.key).map_err(|error| KeyValueStoreError::Failed {
+            reason: format!("storage read failed: {error}"),
+        })?;
+        Ok(aspen_kv_types::ReadResult { kv })
+    }
+
+    async fn delete(&self, _request: DeleteRequest) -> Result<aspen_kv_types::DeleteResult, KeyValueStoreError> {
+        Err(KeyValueStoreError::Failed {
+            reason: "StorageReadAdapter only supports reads in this test".to_string(),
+        })
+    }
+
+    async fn scan(&self, request: ScanRequest) -> Result<aspen_kv_types::ScanResult, KeyValueStoreError> {
+        let entries = self
+            .storage
+            .scan(&request.prefix, request.continuation_token.as_deref(), request.limit_results)
+            .map_err(|error| KeyValueStoreError::Failed {
+                reason: format!("storage scan failed: {error}"),
+            })?;
+        let result_count = entries.len() as u32;
+        Ok(aspen_kv_types::ScanResult {
+            entries,
+            result_count,
+            is_truncated: false,
+            continuation_token: None,
+        })
+    }
+}
+
+#[cfg(feature = "trust")]
 fn rebuild_secret_from_storage(storage: &[Arc<SharedRedbStorage>], epoch: u64, threshold: usize) -> [u8; 32] {
-    let shares: Vec<_> = storage
-        .iter()
-        .take(threshold)
-        .map(|store| store.load_share(epoch).unwrap().unwrap())
-        .collect();
+    let shares: Vec<_> =
+        storage.iter().take(threshold).map(|store| store.load_share(epoch).unwrap().unwrap()).collect();
     shamir::reconstruct_secret(&shares).unwrap()
 }
 
@@ -408,6 +531,166 @@ async fn test_multi_node_trust_init_persists_follower_shares() {
 
 #[cfg(feature = "trust")]
 #[tokio::test]
+async fn test_secrets_become_unavailable_below_quorum_and_recover_after_nodes_return() {
+    use aspen_secrets::AspenSecretsBackend;
+    use aspen_secrets::SecretsBackend;
+
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+    let cluster_name = "trust-secrets-quorum-redb-test";
+    let cluster_id = b"trust-secrets-quorum-cluster".to_vec();
+    let temp_dir = TempDir::new().expect("temp dir");
+    let node1_path = temp_dir.path().join("node-1.redb");
+    let node2_path = temp_dir.path().join("node-2.redb");
+    let node3_path = temp_dir.path().join("node-3.redb");
+
+    let node1 =
+        create_test_redb_node_at_path(1, router.clone(), failure_injector.clone(), cluster_name, &node1_path).await;
+    let node2 =
+        create_test_redb_node_at_path(2, router.clone(), failure_injector.clone(), cluster_name, &node2_path).await;
+    let node3 =
+        create_test_redb_node_at_path(3, router.clone(), failure_injector.clone(), cluster_name, &node3_path).await;
+
+    let endpoint1 = endpoint_addr_for_node(1);
+    let endpoint2 = endpoint_addr_for_node(2);
+    let endpoint3 = endpoint_addr_for_node(3);
+
+    ClusterController::init(&node1.node, InitRequest {
+        initial_members: vec![
+            cluster_node_with_endpoint(1, endpoint1),
+            cluster_node_with_endpoint(2, endpoint2),
+            cluster_node_with_endpoint(3, endpoint3),
+        ],
+        trust: aspen_cluster_types::TrustConfig::enabled(),
+    })
+    .await
+    .expect("init 3-node trust cluster");
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let shares_ready = [node1.storage.as_ref(), node2.storage.as_ref(), node3.storage.as_ref()]
+                .iter()
+                .all(|storage| storage.load_share(1).unwrap().is_some());
+            if shares_ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("all nodes should persist epoch 1 trust shares");
+
+    let initial_collector = TestSecretsShareCollector::new(
+        BTreeMap::from([
+            (1_u64, node1.storage.clone()),
+            (2_u64, node2.storage.clone()),
+            (3_u64, node3.storage.clone()),
+        ]),
+        2,
+    );
+    let config = aspen_trust::key_manager::KeyManagerConfig {
+        cluster_id: cluster_id.clone(),
+        node_id: 1,
+        initial_nonce_counter: 0,
+        epoch: 1,
+    };
+    let writer_manager = aspen_trust::key_manager::KeyManager::new(aspen_trust::key_manager::KeyManagerConfig {
+        cluster_id: cluster_id.clone(),
+        node_id: config.node_id,
+        initial_nonce_counter: config.initial_nonce_counter,
+        epoch: config.epoch,
+    });
+    let writer_encryption = writer_manager
+        .ensure_initialized(&initial_collector)
+        .await
+        .expect("quorum should reconstruct the at-rest key");
+    let writer_kv_store: Arc<dyn aspen_core::KeyValueStore> = node1.node.clone();
+    let writer_backend = AspenSecretsBackend::with_encryption(writer_kv_store, "quorum", writer_encryption);
+    let plaintext = b"quorum-gated-secret";
+    writer_backend.put("service/api-key", plaintext).await.expect("store secret through real backend");
+    drop(writer_backend);
+    drop(writer_manager);
+
+    node2.node.raft().shutdown().await.expect("shutdown node 2");
+    node3.node.raft().shutdown().await.expect("shutdown node 3");
+    drop(node2);
+    drop(node3);
+
+    node1.node.raft().shutdown().await.expect("shutdown node 1 before reopen");
+    drop(node1);
+
+    let node1_reopened =
+        create_test_redb_node_at_path(1, router.clone(), failure_injector.clone(), cluster_name, &node1_path).await;
+    let below_quorum_collector: Arc<dyn aspen_trust::key_manager::ShareCollector> =
+        Arc::new(TestSecretsShareCollector::new(BTreeMap::from([(1_u64, node1_reopened.storage.clone())]), 2));
+    let unavailable_manager =
+        Arc::new(aspen_trust::key_manager::KeyManager::new(aspen_trust::key_manager::KeyManagerConfig {
+            cluster_id: cluster_id.clone(),
+            node_id: config.node_id,
+            initial_nonce_counter: config.initial_nonce_counter,
+            epoch: config.epoch,
+        }));
+    let reopened_kv_store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(StorageReadAdapter {
+        storage: node1_reopened.storage.clone(),
+    });
+    let unavailable_backend = AspenSecretsBackend::with_encryption_provider(
+        reopened_kv_store.clone(),
+        "quorum",
+        Arc::new(KeyManagerEncryptionProvider {
+            manager: unavailable_manager,
+            collector: below_quorum_collector,
+        }),
+    );
+    let unavailable_read = unavailable_backend.get("service/api-key").await;
+    assert!(
+        matches!(
+            unavailable_read,
+            Err(aspen_secrets::SecretsError::SecretsUnavailable {
+                source: aspen_trust::encryption::SecretsUnavailableError::BelowQuorum
+            })
+        ),
+        "expected secrets unavailable from backend read, got {:?}",
+        unavailable_read
+    );
+
+    let node2_reopened =
+        create_test_redb_node_at_path(2, router.clone(), failure_injector.clone(), cluster_name, &node2_path).await;
+    let node3_reopened =
+        create_test_redb_node_at_path(3, router.clone(), failure_injector.clone(), cluster_name, &node3_path).await;
+
+    let recovered_collector: Arc<dyn aspen_trust::key_manager::ShareCollector> =
+        Arc::new(TestSecretsShareCollector::new(
+            BTreeMap::from([
+                (1_u64, node1_reopened.storage.clone()),
+                (2_u64, node2_reopened.storage.clone()),
+                (3_u64, node3_reopened.storage.clone()),
+            ]),
+            2,
+        ));
+    let recovered_manager = Arc::new(aspen_trust::key_manager::KeyManager::new(config));
+    let recovered_backend = AspenSecretsBackend::with_encryption_provider(
+        reopened_kv_store.clone(),
+        "quorum",
+        Arc::new(KeyManagerEncryptionProvider {
+            manager: recovered_manager,
+            collector: recovered_collector,
+        }),
+    );
+    let recovered = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            match recovered_backend.get("service/api-key").await {
+                Ok(Some(value)) if value == plaintext => break value,
+                _ => tokio::time::sleep(Duration::from_millis(50)).await,
+            }
+        }
+    })
+    .await
+    .expect("secret should become readable again after nodes restart");
+    assert_eq!(recovered, plaintext);
+}
+
+#[cfg(feature = "trust")]
+#[tokio::test]
 async fn test_multi_node_trust_membership_change_rotates_secret_add_and_remove() {
     let router = Arc::new(MadsimRaftRouter::new());
     let failure_injector = Arc::new(FailureInjector::new());
@@ -506,11 +789,10 @@ async fn test_multi_node_trust_membership_change_rotates_secret_add_and_remove()
     assert_eq!(add_prior.len(), 1);
     assert!(add_prior.contains_key(&1));
 
-    let remove_result = ClusterController::change_membership(&node1.node, ChangeMembershipRequest {
-        members: vec![1, 2, 3],
-    })
-    .await
-    .expect("remove voter 4 and rotate trust again");
+    let remove_result =
+        ClusterController::change_membership(&node1.node, ChangeMembershipRequest { members: vec![1, 2, 3] })
+            .await
+            .expect("remove voter 4 and rotate trust again");
     assert_eq!(remove_result.members.len(), 3);
 
     let remove_epoch = node1.storage.load_current_trust_epoch().unwrap().unwrap();
@@ -557,17 +839,19 @@ async fn test_trust_reconfiguration_restarts_after_leader_crash_during_share_col
 
     let block_started = Arc::new(Notify::new());
     let block_release = Arc::new(Notify::new());
-    let blocked_client: Arc<dyn crate::trust_share_client::TrustShareClient> = Arc::new(TestTrustShareClient::blocking(
-        storages_by_endpoint.clone(),
-        block_started.clone(),
-        block_release.clone(),
-    ));
+    let blocked_client: Arc<dyn crate::trust_share_client::TrustShareClient> = Arc::new(
+        TestTrustShareClient::blocking(storages_by_endpoint.clone(), block_started.clone(), block_release.clone()),
+    );
     let immediate_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
         Arc::new(TestTrustShareClient::immediate(storages_by_endpoint));
 
     Arc::get_mut(&mut node1.node).unwrap().set_trust_share_client(blocked_client, cluster_id.clone());
-    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(immediate_client.clone(), cluster_id.clone());
-    Arc::get_mut(&mut node3.node).unwrap().set_trust_share_client(immediate_client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node2.node)
+        .unwrap()
+        .set_trust_share_client(immediate_client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node3.node)
+        .unwrap()
+        .set_trust_share_client(immediate_client.clone(), cluster_id.clone());
 
     ClusterController::init(&node1.node, InitRequest {
         initial_members: vec![
@@ -612,14 +896,10 @@ async fn test_trust_reconfiguration_restarts_after_leader_crash_during_share_col
     node1.node.raft().shutdown().await.expect("shutdown leader raft instance");
     node2.node.raft().trigger().elect().await.expect("force node 2 to start election");
 
-    wait_for_trust_epoch(
-        &[node2.storage.clone(), node3.storage.clone()],
-        target_epoch,
-        Duration::from_secs(15),
-    )
-    .await;
+    wait_for_trust_epoch(&[node2.storage.clone(), node3.storage.clone()], target_epoch, Duration::from_secs(15)).await;
 
-    let restarted_secret = rebuild_secret_from_storage(&[node2.storage.clone(), node3.storage.clone()], target_epoch, 2);
+    let restarted_secret =
+        rebuild_secret_from_storage(&[node2.storage.clone(), node3.storage.clone()], target_epoch, 2);
     let restarted_chain = node2.storage.load_encrypted_chain(target_epoch).unwrap().unwrap();
     let restarted_prior = chain::decrypt_chain(&restarted_chain, &restarted_secret, &cluster_id).unwrap();
     assert_eq!(restarted_chain.prior_count, 1);

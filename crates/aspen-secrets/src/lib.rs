@@ -78,6 +78,8 @@ pub mod verified;
 pub use backend::AspenSecretsBackend;
 pub use backend::InMemorySecretsBackend;
 pub use backend::SecretsBackend;
+#[cfg(feature = "trust")]
+pub use backend::SecretsEncryptionProvider;
 pub use constants::*;
 pub use error::Result;
 pub use error::SecretsError;

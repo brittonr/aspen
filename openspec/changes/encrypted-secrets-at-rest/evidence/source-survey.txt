@@ -1,0 +1,201 @@
+openspec/changes/encrypted-secrets-at-rest/tasks.md:3:- [x] 1.1 Create `aspen-trust/src/envelope.rs` with `EncryptedValue` type: `version: u8`, `epoch: u64`, `nonce: [u8; 12]`, `ciphertext: Vec<u8>` (includes Poly1305 tag)
+openspec/changes/encrypted-secrets-at-rest/tasks.md:4:- [x] 1.2 Implement `encrypt_value(key: &[u8; 32], epoch: u64, nonce: &[u8; 12], plaintext: &[u8]) -> EncryptedValue`
+openspec/changes/encrypted-secrets-at-rest/tasks.md:5:- [x] 1.3 Implement `decrypt_value(key: &[u8; 32], value: &EncryptedValue) -> Result<Vec<u8>, DecryptError>`
+openspec/changes/encrypted-secrets-at-rest/tasks.md:6:- [x] 1.4 Implement `EncryptedValue::to_bytes()/from_bytes()` for the wire format: `magic(4: AENC) + version(1) + epoch(8) + nonce(12) + ciphertext+tag`
+openspec/changes/encrypted-secrets-at-rest/tasks.md:14:- [x] 2.1 Add `trust_nonce_counter` table to redb: `TableDefinition<u64, u64>` (node_id → counter)
+openspec/changes/encrypted-secrets-at-rest/tasks.md:15:- [x] 2.2 Implement `NonceGenerator` struct: loads counter from redb, increments on each `next_nonce()`, constructs 12-byte nonce as `[node_id: 4 bytes][counter: 8 bytes]`
+openspec/changes/encrypted-secrets-at-rest/tasks.md:21:- [x] 3.1 Add `SecretsEncryption` struct holding the cached derived key, nonce generator, and epoch
+openspec/changes/encrypted-secrets-at-rest/tasks.md:22:- [x] 3.2 Implement `wrap_write(&self, plaintext: &[u8]) -> Vec<u8>` that encrypts and serializes
+openspec/changes/encrypted-secrets-at-rest/tasks.md:23:- [x] 3.3 Implement `unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, SecretsError>` that deserializes and decrypts with the appropriate epoch's derived key (multi-epoch key map; EpochMismatch only for unknown epochs)
+openspec/changes/encrypted-secrets-at-rest/tasks.md:32:- [x] 4.2 Return `SecretsUnavailable` error if reconstruction fails (cluster below quorum) — type defined in encryption.rs
+openspec/changes/encrypted-secrets-at-rest/tasks.md:33:- [x] 4.3 On epoch change notification: derive new key, swap into `SecretsEncryption`, start re-encryption task
+openspec/changes/encrypted-secrets-at-rest/tasks.md:39:- [x] 5.2 Track re-encryption progress in a `trust_reencryption_progress` redb table (last processed key per table)
+openspec/changes/encrypted-secrets-at-rest/tasks.md:49:- [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations
+openspec/changes/encrypted-secrets-at-rest/verification.md:18:- [x] 1.1 Create `aspen-trust/src/envelope.rs` with `EncryptedValue` type: `version: u8`, `epoch: u64`, `nonce: [u8; 12]`, `ciphertext: Vec<u8>` (includes Poly1305 tag)
+openspec/changes/encrypted-secrets-at-rest/verification.md:20:- [x] 1.2 Implement `encrypt_value(key: &[u8; 32], epoch: u64, nonce: &[u8; 12], plaintext: &[u8]) -> EncryptedValue`
+openspec/changes/encrypted-secrets-at-rest/verification.md:22:- [x] 1.3 Implement `decrypt_value(key: &[u8; 32], value: &EncryptedValue) -> Result<Vec<u8>, DecryptError>`
+openspec/changes/encrypted-secrets-at-rest/verification.md:24:- [x] 1.4 Implement `EncryptedValue::to_bytes()/from_bytes()` for the wire format: `magic(4: AENC) + version(1) + epoch(8) + nonce(12) + ciphertext+tag`
+openspec/changes/encrypted-secrets-at-rest/verification.md:34:- [x] 2.1 Add `trust_nonce_counter` table to redb: `TableDefinition<u64, u64>` (node_id → counter)
+openspec/changes/encrypted-secrets-at-rest/verification.md:36:- [x] 2.2 Implement `NonceGenerator` struct: loads counter from redb, increments on each `next_nonce()`, constructs 12-byte nonce as `[node_id: 4 bytes][counter: 8 bytes]`
+openspec/changes/encrypted-secrets-at-rest/verification.md:42:- [x] 3.1 Add `SecretsEncryption` struct holding the cached derived key, nonce generator, and epoch
+openspec/changes/encrypted-secrets-at-rest/verification.md:44:- [x] 3.2 Implement `wrap_write(&self, plaintext: &[u8]) -> Vec<u8>` that encrypts and serializes
+openspec/changes/encrypted-secrets-at-rest/verification.md:46:- [x] 3.3 Implement `unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, SecretsError>` that deserializes and decrypts with the appropriate epoch's derived key (multi-epoch key map; EpochMismatch only for unknown epochs)
+openspec/changes/encrypted-secrets-at-rest/verification.md:58:- [x] 4.2 Return `SecretsUnavailable` error if reconstruction fails (cluster below quorum) — type defined in encryption.rs
+openspec/changes/encrypted-secrets-at-rest/verification.md:60:- [x] 4.3 On epoch change notification: derive new key, swap into `SecretsEncryption`, start re-encryption task
+openspec/changes/encrypted-secrets-at-rest/verification.md:66:- [x] 5.2 Track re-encryption progress in a `trust_reencryption_progress` redb table (last processed key per table)
+openspec/changes/encrypted-secrets-at-rest/verification.md:78:- [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations
+openspec/changes/encrypted-secrets-at-rest/verification.md:90:### `rg -n "EncryptedValue|encrypt_value\(|decrypt_value\(|NonceGenerator|trust_nonce_counter|SecretsEncryption|wrap_write\(|unwrap_read\(|SecretsUnavailableError|rotate_epoch\(|run_reencryption|trust_reencryption_progress|test_stored_value_is_ciphertext_not_plaintext|test_tampered_envelope_returns_error_not_plaintext|test_secrets_become_unavailable_below_quorum_and_recover_after_nodes_return|backup considerations|quorum needed for secrets access" crates docs openspec/changes/encrypted-secrets-at-rest -g "*.rs" -g "*.md"`
+openspec/changes/encrypted-secrets-at-rest/verification.md:95:### `cargo test -p aspen-raft --features trust,testing test_secrets_become_unavailable_below_quorum_and_recover_after_nodes_return -- --nocapture`
+docs/trust-quorum.md:96:4. **Nonce uniqueness**: 12-byte nonces = `[node_id (4)] [counter (8)]`, counter persisted in `trust_nonce_counter` redb table
+docs/trust-quorum.md:117:- `crates/aspen-trust/src/envelope.rs` — `EncryptedValue` wire format, encrypt/decrypt
+docs/trust-quorum.md:118:- `crates/aspen-trust/src/encryption.rs` — `SecretsEncryption` context, multi-epoch key management
+crates/aspen-trust/src/reencrypt.rs:17:use crate::encryption::SecretsEncryption;
+crates/aspen-trust/src/reencrypt.rs:18:use crate::envelope::EncryptedValue;
+crates/aspen-trust/src/reencrypt.rs:83:    encryption: &SecretsEncryption,
+crates/aspen-trust/src/reencrypt.rs:103:            match EncryptedValue::from_bytes(stored_bytes) {
+crates/aspen-trust/src/reencrypt.rs:107:                        encryption.unwrap_read(stored_bytes).map_err(|e| ReencryptionError::Decryption {
+crates/aspen-trust/src/reencrypt.rs:113:                        encryption.wrap_write(&plaintext).map_err(|e| ReencryptionError::Decryption {
+crates/aspen-trust/src/reencrypt.rs:222:    fn make_encryption(secret: &[u8; 32], epoch: u64) -> SecretsEncryption {
+crates/aspen-trust/src/reencrypt.rs:223:        SecretsEncryption::new(secret, b"test-cluster", epoch, 1, 0)
+crates/aspen-trust/src/reencrypt.rs:235:        let (ct1, _) = enc1.wrap_write(b"secret-one").unwrap();
+crates/aspen-trust/src/reencrypt.rs:236:        let (ct2, _) = enc1.wrap_write(b"secret-two").unwrap();
+crates/aspen-trust/src/reencrypt.rs:237:        let (ct3, _) = enc1.wrap_write(b"secret-three").unwrap();
+crates/aspen-trust/src/reencrypt.rs:259:            let epoch = SecretsEncryption::peek_epoch(&stored).unwrap();
+crates/aspen-trust/src/reencrypt.rs:264:        let a = enc2.unwrap_read(&store.get("secrets/a").unwrap()).unwrap();
+crates/aspen-trust/src/reencrypt.rs:284:        let (ct_old, _) = enc1.wrap_write(b"old-secret").unwrap();
+crates/aspen-trust/src/reencrypt.rs:288:        let (ct_new, _) = enc2.wrap_write(b"new-secret").unwrap();
+crates/aspen-trust/src/reencrypt.rs:311:        let (ct1, _) = enc1.wrap_write(b"s1").unwrap();
+crates/aspen-trust/src/reencrypt.rs:312:        let (ct2, _) = enc1.wrap_write(b"s2").unwrap();
+crates/aspen-trust/src/reencrypt.rs:313:        let (ct3, _) = enc1.wrap_write(b"s3").unwrap();
+crates/aspen-trust/src/reencrypt.rs:321:        let (new_ct1, _) = enc2.wrap_write(b"s1").unwrap();
+crates/aspen-trust/src/reencrypt.rs:332:            let epoch = SecretsEncryption::peek_epoch(&stored).unwrap();
+crates/aspen-trust/src/envelope.rs:3://! Uses ChaCha20-Poly1305 (RFC 8439) for AEAD. Each `EncryptedValue` carries
+crates/aspen-trust/src/envelope.rs:33:pub struct EncryptedValue {
+crates/aspen-trust/src/envelope.rs:71:/// `NonceGenerator` for counter-based nonce management.
+crates/aspen-trust/src/envelope.rs:72:pub fn encrypt_value(
+crates/aspen-trust/src/envelope.rs:77:) -> Result<EncryptedValue, EnvelopeError> {
+crates/aspen-trust/src/envelope.rs:82:    Ok(EncryptedValue {
+crates/aspen-trust/src/envelope.rs:90:/// Decrypt an `EncryptedValue` using the given key.
+crates/aspen-trust/src/envelope.rs:93:pub fn decrypt_value(key: &[u8; 32], value: &EncryptedValue) -> Result<Vec<u8>, EnvelopeError> {
+crates/aspen-trust/src/envelope.rs:103:impl EncryptedValue {
+crates/aspen-trust/src/envelope.rs:170:        let encrypted = encrypt_value(&key, 42, &nonce, plaintext).unwrap();
+crates/aspen-trust/src/envelope.rs:171:        let decrypted = decrypt_value(&key, &encrypted).unwrap();
+crates/aspen-trust/src/envelope.rs:184:        let mut encrypted = encrypt_value(&key, 1, &nonce, plaintext).unwrap();
+crates/aspen-trust/src/envelope.rs:190:        let result = decrypt_value(&key, &encrypted);
+crates/aspen-trust/src/envelope.rs:200:        let encrypted = encrypt_value(&key, 1, &nonce, plaintext).unwrap();
+crates/aspen-trust/src/envelope.rs:204:        let result = decrypt_value(&wrong_key, &encrypted);
+crates/aspen-trust/src/envelope.rs:213:        let bad = EncryptedValue {
+crates/aspen-trust/src/envelope.rs:219:        let result = decrypt_value(&key, &bad);
+crates/aspen-trust/src/envelope.rs:229:        let encrypted = encrypt_value(&key, 7, &nonce, plaintext).unwrap();
+crates/aspen-trust/src/envelope.rs:231:        let deserialized = EncryptedValue::from_bytes(&bytes).unwrap();
+crates/aspen-trust/src/envelope.rs:236:        let decrypted = decrypt_value(&key, &deserialized).unwrap();
+crates/aspen-trust/src/envelope.rs:242:        let result = EncryptedValue::from_bytes(&[1, 2, 3]);
+crates/aspen-trust/src/envelope.rs:250:        let result = EncryptedValue::from_bytes(&bytes);
+crates/aspen-trust/src/envelope.rs:260:        let result = EncryptedValue::from_bytes(&bytes);
+crates/aspen-trust/src/envelope.rs:269:        let encrypted = encrypt_value(&key, 0, &nonce, b"").unwrap();
+crates/aspen-trust/src/envelope.rs:270:        let decrypted = decrypt_value(&key, &encrypted).unwrap();
+crates/aspen-trust/src/envelope.rs:284:        let e1 = encrypt_value(&key, 0, &n1, plaintext).unwrap();
+crates/aspen-trust/src/envelope.rs:285:        let e2 = encrypt_value(&key, 0, &n2, plaintext).unwrap();
+crates/aspen-trust/src/encryption.rs:3://! `SecretsEncryption` wraps the envelope and nonce modules into a
+crates/aspen-trust/src/encryption.rs:13:use crate::envelope::EncryptedValue;
+crates/aspen-trust/src/encryption.rs:16:use crate::nonce::NonceGenerator;
+crates/aspen-trust/src/encryption.rs:23:pub struct SecretsEncryption {
+crates/aspen-trust/src/encryption.rs:30:    nonce_gen: NonceGenerator,
+crates/aspen-trust/src/encryption.rs:33:impl Drop for SecretsEncryption {
+crates/aspen-trust/src/encryption.rs:41:impl SecretsEncryption {
+crates/aspen-trust/src/encryption.rs:58:            nonce_gen: NonceGenerator::new(node_id, initial_nonce_counter),
+crates/aspen-trust/src/encryption.rs:64:    /// Returns the serialized `EncryptedValue` bytes.
+crates/aspen-trust/src/encryption.rs:66:    pub fn wrap_write(&self, plaintext: &[u8]) -> Result<(Vec<u8>, u64), EnvelopeError> {
+crates/aspen-trust/src/encryption.rs:69:        let encrypted = envelope::encrypt_value(key, self.epoch, &nonce, plaintext)?;
+crates/aspen-trust/src/encryption.rs:80:    pub fn unwrap_read(&self, stored: &[u8]) -> Result<Vec<u8>, EnvelopeError> {
+crates/aspen-trust/src/encryption.rs:81:        let encrypted = EncryptedValue::from_bytes(stored)?;
+crates/aspen-trust/src/encryption.rs:86:        envelope::decrypt_value(key, &encrypted)
+crates/aspen-trust/src/encryption.rs:145:        let encrypted = EncryptedValue::from_bytes(stored)?;
+crates/aspen-trust/src/encryption.rs:146:        envelope::decrypt_value(key, &encrypted)
+crates/aspen-trust/src/encryption.rs:156:impl std::fmt::Debug for SecretsEncryption {
+crates/aspen-trust/src/encryption.rs:158:        f.debug_struct("SecretsEncryption")
+crates/aspen-trust/src/encryption.rs:183:/// 1. **Parse**: Try `EncryptedValue::from_bytes()`. If this fails (wrong magic, too short, bad
+crates/aspen-trust/src/encryption.rs:192:pub fn try_decrypt(enc: &SecretsEncryption, stored: &[u8]) -> DecryptOutcome {
+crates/aspen-trust/src/encryption.rs:194:    let encrypted = match envelope::EncryptedValue::from_bytes(stored) {
+crates/aspen-trust/src/encryption.rs:210:    match envelope::decrypt_value(key, &encrypted) {
+crates/aspen-trust/src/encryption.rs:218:pub enum SecretsUnavailableError {
+crates/aspen-trust/src/encryption.rs:228:impl From<EnvelopeError> for SecretsUnavailableError {
+crates/aspen-trust/src/encryption.rs:230:        SecretsUnavailableError::Envelope { source }
+crates/aspen-trust/src/encryption.rs:248:        let enc = SecretsEncryption::new(&secret, b"test-cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:251:        let (stored, _counter) = enc.wrap_write(plaintext).unwrap();
+crates/aspen-trust/src/encryption.rs:252:        let recovered = enc.unwrap_read(&stored).unwrap();
+crates/aspen-trust/src/encryption.rs:260:        let enc1 = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:261:        let enc2 = SecretsEncryption::new(&secret, b"cluster", 2, 1, 0);
+crates/aspen-trust/src/encryption.rs:263:        let (stored_at_2, _) = enc2.wrap_write(b"data").unwrap();
+crates/aspen-trust/src/encryption.rs:264:        let result = enc1.unwrap_read(&stored_at_2);
+crates/aspen-trust/src/encryption.rs:276:        let mut enc = SecretsEncryption::new(&secret1, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:278:        let (stored_v1, _) = enc.wrap_write(b"epoch-1-secret").unwrap();
+crates/aspen-trust/src/encryption.rs:288:        let (stored_v2, _) = enc.wrap_write(b"epoch-2-secret").unwrap();
+crates/aspen-trust/src/encryption.rs:291:        let recovered_v1 = enc.unwrap_read(&stored_v1).unwrap();
+crates/aspen-trust/src/encryption.rs:294:        let recovered_v2 = enc.unwrap_read(&stored_v2).unwrap();
+crates/aspen-trust/src/encryption.rs:300:        let result = enc.unwrap_read(&stored_v1);
+crates/aspen-trust/src/encryption.rs:304:        let recovered_v2_again = enc.unwrap_read(&stored_v2).unwrap();
+crates/aspen-trust/src/encryption.rs:311:        let enc = SecretsEncryption::new(&secret, b"cluster", 42, 1, 0);
+crates/aspen-trust/src/encryption.rs:313:        let (stored, _) = enc.wrap_write(b"data").unwrap();
+crates/aspen-trust/src/encryption.rs:314:        let epoch = SecretsEncryption::peek_epoch(&stored).unwrap();
+crates/aspen-trust/src/encryption.rs:321:        let mut enc = SecretsEncryption::new(&secret1, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:323:        let (stored_v1, _) = enc.wrap_write(b"important-secret").unwrap();
+crates/aspen-trust/src/encryption.rs:332:        let plaintext = enc.unwrap_read(&stored_v1).unwrap();
+crates/aspen-trust/src/encryption.rs:336:        let (stored_v2, _) = enc.wrap_write(&plaintext).unwrap();
+crates/aspen-trust/src/encryption.rs:337:        let recovered = enc.unwrap_read(&stored_v2).unwrap();
+crates/aspen-trust/src/encryption.rs:342:        let result = enc.unwrap_read(&stored_v1);
+crates/aspen-trust/src/encryption.rs:349:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:351:        let (stored, _) = enc.wrap_write(b"secret-data").unwrap();
+crates/aspen-trust/src/encryption.rs:361:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:375:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:390:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:403:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:405:        let (mut stored, _) = enc.wrap_write(b"real-secret").unwrap();
+crates/aspen-trust/src/encryption.rs:417:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:419:        let (stored, _) = enc.wrap_write(b"data").unwrap();
+crates/aspen-trust/src/encryption.rs:420:        let enc2 = SecretsEncryption::new(&secret, b"other-cluster", 5, 1, 0);
+crates/aspen-trust/src/encryption.rs:428:        let mut enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:435:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:444:        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+crates/aspen-trust/src/encryption.rs:446:        let (s1, _) = enc.wrap_write(b"same").unwrap();
+crates/aspen-trust/src/encryption.rs:447:        let (s2, _) = enc.wrap_write(b"same").unwrap();
+crates/aspen-trust/src/nonce.rs:16:pub struct NonceGenerator {
+crates/aspen-trust/src/nonce.rs:23:impl NonceGenerator {
+crates/aspen-trust/src/nonce.rs:60:        let nonce_gen = NonceGenerator::new(1, 0);
+crates/aspen-trust/src/nonce.rs:70:        let nonce_gen1 = NonceGenerator::new(1, 0);
+crates/aspen-trust/src/nonce.rs:71:        let nonce_gen2 = NonceGenerator::new(2, 0);
+crates/aspen-trust/src/nonce.rs:80:        let nonce_gen = NonceGenerator::new(0x0102_0304, 99);
+crates/aspen-trust/src/nonce.rs:92:        let gen1 = NonceGenerator::new(1, 0);
+crates/aspen-trust/src/nonce.rs:100:        let gen2 = NonceGenerator::new(1, persisted);
+crates/aspen-trust/src/nonce.rs:113:        let nonce_gen = NonceGenerator::new(1, u64::MAX - 2);
+crates/aspen-trust/src/key_manager.rs:6://!    the cluster secret, derives the at-rest key, and creates a `SecretsEncryption` context.
+crates/aspen-trust/src/key_manager.rs:19:use crate::encryption::SecretsEncryption;
+crates/aspen-trust/src/key_manager.rs:20:use crate::encryption::SecretsUnavailableError;
+crates/aspen-trust/src/key_manager.rs:66:    encryption: RwLock<Option<Arc<SecretsEncryption>>>,
+crates/aspen-trust/src/key_manager.rs:91:        let enc = SecretsEncryption::new(
+crates/aspen-trust/src/key_manager.rs:110:    /// Returns `SecretsUnavailable` if reconstruction fails (cluster below quorum).
+crates/aspen-trust/src/key_manager.rs:114:    ) -> Result<Arc<SecretsEncryption>, SecretsUnavailableError> {
+crates/aspen-trust/src/key_manager.rs:127:            return Err(SecretsUnavailableError::BelowQuorum);
+crates/aspen-trust/src/key_manager.rs:136:            .map_err(|_| SecretsUnavailableError::BelowQuorum)?;
+crates/aspen-trust/src/key_manager.rs:139:        let secret_bytes = shamir::reconstruct_secret(&shares).map_err(|_| SecretsUnavailableError::BelowQuorum)?;
+crates/aspen-trust/src/key_manager.rs:142:        let enc = SecretsEncryption::new(
+crates/aspen-trust/src/key_manager.rs:159:    pub async fn get_if_initialized(&self) -> Option<Arc<SecretsEncryption>> {
+crates/aspen-trust/src/key_manager.rs:160:        let guard: tokio::sync::RwLockReadGuard<'_, Option<Arc<SecretsEncryption>>> = self.encryption.read().await;
+crates/aspen-trust/src/key_manager.rs:170:    pub async fn rotate_epoch(&self, new_secret: &[u8; 32], new_epoch: u64) -> Arc<SecretsEncryption> {
+crates/aspen-trust/src/key_manager.rs:171:        let mut guard: tokio::sync::RwLockWriteGuard<'_, Option<Arc<SecretsEncryption>>> =
+crates/aspen-trust/src/key_manager.rs:178:                let new_enc = SecretsEncryption::new(
+crates/aspen-trust/src/key_manager.rs:191:                let enc = SecretsEncryption::new(
+crates/aspen-trust/src/key_manager.rs:290:        assert!(matches!(result, Err(SecretsUnavailableError::BelowQuorum)));
+crates/aspen-trust/src/key_manager.rs:294:        assert!(matches!(result, Err(SecretsUnavailableError::BelowQuorum)));
+crates/aspen-raft/src/storage_shared/types.rs:77:/// Used by `NonceGenerator` for at-rest encryption to prevent nonce reuse after restart.
+crates/aspen-raft/src/storage_shared/types.rs:79:pub const TRUST_NONCE_COUNTER_TABLE: TableDefinition<u64, u64> = TableDefinition::new("trust_nonce_counter");
+crates/aspen-raft/src/storage_shared/types.rs:85:    TableDefinition::new("trust_reencryption_progress");
+crates/aspen-raft/src/node/tests.rs:280:impl aspen_secrets::SecretsEncryptionProvider for KeyManagerEncryptionProvider {
+crates/aspen-raft/src/node/tests.rs:283:    ) -> std::result::Result<Arc<aspen_trust::encryption::SecretsEncryption>, aspen_trust::encryption::SecretsUnavailableError>
+crates/aspen-raft/src/node/tests.rs:538:async fn test_secrets_become_unavailable_below_quorum_and_recover_after_nodes_return() {
+crates/aspen-raft/src/node/tests.rs:642:    let unavailable_backend = AspenSecretsBackend::with_encryption_provider(
+crates/aspen-raft/src/node/tests.rs:654:            Err(aspen_secrets::SecretsError::SecretsUnavailable {
+crates/aspen-raft/src/node/tests.rs:655:                source: aspen_trust::encryption::SecretsUnavailableError::BelowQuorum
+crates/aspen-raft/src/node/tests.rs:678:    let recovered_backend = AspenSecretsBackend::with_encryption_provider(
+crates/aspen-secrets/src/lib.rs:82:pub use backend::SecretsEncryptionProvider;
+crates/aspen-secrets/src/error.rs:279:    SecretsUnavailable {
+crates/aspen-secrets/src/error.rs:281:        source: aspen_trust::encryption::SecretsUnavailableError,
+crates/aspen-secrets/src/backend.rs:15:pub trait SecretsEncryptionProvider: Send + Sync {
+crates/aspen-secrets/src/backend.rs:18:    ) -> std::result::Result<Arc<aspen_trust::encryption::SecretsEncryption>, aspen_trust::encryption::SecretsUnavailableError>;
+crates/aspen-secrets/src/backend.rs:78:    encryption: Option<Arc<aspen_trust::encryption::SecretsEncryption>>,
+crates/aspen-secrets/src/backend.rs:81:    encryption_provider: Option<Arc<dyn SecretsEncryptionProvider>>,
+crates/aspen-secrets/src/backend.rs:102:        encryption: Arc<aspen_trust::encryption::SecretsEncryption>,
+crates/aspen-secrets/src/backend.rs:114:    pub fn with_encryption_provider(
+crates/aspen-secrets/src/backend.rs:117:        encryption_provider: Arc<dyn SecretsEncryptionProvider>,
+crates/aspen-secrets/src/backend.rs:129:    pub fn set_encryption(&mut self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
+crates/aspen-secrets/src/backend.rs:140:    async fn encryption_context(&self) -> Result<Option<Arc<aspen_trust::encryption::SecretsEncryption>>> {
+crates/aspen-secrets/src/backend.rs:148:                .map_err(|source| SecretsError::SecretsUnavailable { source })?;
+crates/aspen-secrets/src/backend.rs:157:        encryption: Option<&aspen_trust::encryption::SecretsEncryption>,
+crates/aspen-secrets/src/backend.rs:162:                let (ciphertext, _counter) = enc.wrap_write(plaintext).map_err(|e| SecretsError::Internal {
+crates/aspen-secrets/src/backend.rs:178:        encryption: Option<&aspen_trust::encryption::SecretsEncryption>,
+crates/aspen-secrets/src/backend.rs:535:        fn make_encryption() -> Arc<aspen_trust::encryption::SecretsEncryption> {
+crates/aspen-secrets/src/backend.rs:539:            Arc::new(aspen_trust::encryption::SecretsEncryption::new(&secret, b"test-cluster", 1, 1, 0))
+crates/aspen-secrets/src/backend.rs:569:        async fn test_stored_value_is_ciphertext_not_plaintext() {
+crates/aspen-secrets/src/backend.rs:608:        async fn test_tampered_envelope_returns_error_not_plaintext() {
+crates/aspen-secrets/src/mount_registry.rs:70:    encryption: RwLock<Option<Arc<aspen_trust::encryption::SecretsEncryption>>>,
+crates/aspen-secrets/src/mount_registry.rs:91:    pub async fn set_encryption(&self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {

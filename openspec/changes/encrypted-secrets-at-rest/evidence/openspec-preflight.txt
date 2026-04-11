@@ -1,0 +1,4 @@
+OK: openspec/changes/encrypted-secrets-at-rest
+  tasks: 32 total / 31 checked
+  changed files listed: 12
+  verification artifacts: 4

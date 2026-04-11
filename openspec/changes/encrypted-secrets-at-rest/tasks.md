@@ -44,6 +44,6 @@
 ## 6. Testing and Documentation
 
 - [x] 6.1 Integration test: write secrets, verify redb contains only ciphertext, read back plaintext matches
-- [ ] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
+- [x] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
 - [ ] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
 - [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations

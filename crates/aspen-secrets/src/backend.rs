@@ -10,6 +10,17 @@ use async_trait::async_trait;
 use crate::error::Result;
 use crate::error::SecretsError;
 
+#[cfg(feature = "trust")]
+#[async_trait]
+pub trait SecretsEncryptionProvider: Send + Sync {
+    async fn get_encryption(
+        &self,
+    ) -> std::result::Result<
+        Arc<aspen_trust::encryption::SecretsEncryption>,
+        aspen_trust::encryption::SecretsUnavailableError,
+    >;
+}
+
 /// Storage backend for secrets engines.
 ///
 /// This trait abstracts the underlying storage mechanism, allowing secrets
@@ -68,6 +79,9 @@ pub struct AspenSecretsBackend {
     /// Optional at-rest encryption (enabled with `trust` feature).
     #[cfg(feature = "trust")]
     encryption: Option<Arc<aspen_trust::encryption::SecretsEncryption>>,
+    /// Optional lazy encryption provider used to reconstruct the at-rest key on demand.
+    #[cfg(feature = "trust")]
+    encryption_provider: Option<Arc<dyn SecretsEncryptionProvider>>,
 }
 
 impl AspenSecretsBackend {
@@ -78,6 +92,8 @@ impl AspenSecretsBackend {
             prefix: format!("{}{}/", crate::constants::SECRETS_SYSTEM_PREFIX, mount),
             #[cfg(feature = "trust")]
             encryption: None,
+            #[cfg(feature = "trust")]
+            encryption_provider: None,
         }
     }
 
@@ -92,6 +108,22 @@ impl AspenSecretsBackend {
             kv,
             prefix: format!("{}{}/", crate::constants::SECRETS_SYSTEM_PREFIX, mount),
             encryption: Some(encryption),
+            encryption_provider: None,
+        }
+    }
+
+    /// Create a new secrets backend with a lazy encryption provider.
+    #[cfg(feature = "trust")]
+    pub fn with_encryption_provider(
+        kv: Arc<dyn aspen_core::KeyValueStore>,
+        mount: &str,
+        encryption_provider: Arc<dyn SecretsEncryptionProvider>,
+    ) -> Self {
+        Self {
+            kv,
+            prefix: format!("{}{}/", crate::constants::SECRETS_SYSTEM_PREFIX, mount),
+            encryption: None,
+            encryption_provider: Some(encryption_provider),
         }
     }
 
@@ -99,6 +131,7 @@ impl AspenSecretsBackend {
     #[cfg(feature = "trust")]
     pub fn set_encryption(&mut self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
         self.encryption = Some(encryption);
+        self.encryption_provider = None;
     }
 
     /// Get the full path for a relative secrets path.
@@ -106,10 +139,25 @@ impl AspenSecretsBackend {
         format!("{}{}", self.prefix, path)
     }
 
+    #[cfg(feature = "trust")]
+    async fn encryption_context(&self) -> Result<Option<Arc<aspen_trust::encryption::SecretsEncryption>>> {
+        if let Some(enc) = &self.encryption {
+            return Ok(Some(Arc::clone(enc)));
+        }
+        if let Some(provider) = &self.encryption_provider {
+            let enc = provider.get_encryption().await.map_err(|source| SecretsError::SecretsUnavailable { source })?;
+            return Ok(Some(enc));
+        }
+        Ok(None)
+    }
+
     /// Encrypt bytes if encryption is enabled.
     #[cfg(feature = "trust")]
-    fn encrypt_bytes(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        match &self.encryption {
+    fn encrypt_bytes(
+        encryption: Option<&aspen_trust::encryption::SecretsEncryption>,
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>> {
+        match encryption {
             Some(enc) => {
                 let (ciphertext, _counter) = enc.wrap_write(plaintext).map_err(|e| SecretsError::Internal {
                     reason: format!("at-rest encryption failed: {e}"),
@@ -126,8 +174,11 @@ impl AspenSecretsBackend {
     /// - Bytes are not an envelope (legacy plaintext) → return raw bytes
     /// - Bytes are an envelope → decrypt; auth failure is an error
     #[cfg(feature = "trust")]
-    fn decrypt_bytes(&self, stored: &[u8]) -> Result<Vec<u8>> {
-        match &self.encryption {
+    fn decrypt_bytes(
+        encryption: Option<&aspen_trust::encryption::SecretsEncryption>,
+        stored: &[u8],
+    ) -> Result<Vec<u8>> {
+        match encryption {
             Some(enc) => match aspen_trust::encryption::try_decrypt(enc, stored) {
                 aspen_trust::encryption::DecryptOutcome::Decrypted(plaintext) => Ok(plaintext),
                 aspen_trust::encryption::DecryptOutcome::NotAnEnvelope => Ok(stored.to_vec()),
@@ -151,7 +202,10 @@ impl SecretsBackend for AspenSecretsBackend {
 
         // Encrypt if trust feature is enabled and encryption context is set
         #[cfg(feature = "trust")]
-        let bytes_to_store = self.encrypt_bytes(value)?;
+        let bytes_to_store = {
+            let encryption = self.encryption_context().await?;
+            Self::encrypt_bytes(encryption.as_deref(), value)?
+        };
         #[cfg(not(feature = "trust"))]
         let bytes_to_store = value;
 
@@ -188,7 +242,10 @@ impl SecretsBackend for AspenSecretsBackend {
 
                     // Decrypt if trust feature is enabled and encryption context is set
                     #[cfg(feature = "trust")]
-                    let plaintext = self.decrypt_bytes(&decoded)?;
+                    let plaintext = {
+                        let encryption = self.encryption_context().await?;
+                        Self::decrypt_bytes(encryption.as_deref(), &decoded)?
+                    };
                     #[cfg(not(feature = "trust"))]
                     let plaintext = decoded;
 
@@ -256,7 +313,10 @@ impl SecretsBackend for AspenSecretsBackend {
         let full_path = self.full_path(path);
 
         #[cfg(feature = "trust")]
-        let bytes_to_store = self.encrypt_bytes(value)?;
+        let bytes_to_store = {
+            let encryption = self.encryption_context().await?;
+            Self::encrypt_bytes(encryption.as_deref(), value)?
+        };
         #[cfg(not(feature = "trust"))]
         let bytes_to_store = value;
 
@@ -293,7 +353,10 @@ impl SecretsBackend for AspenSecretsBackend {
                     })?;
 
                     #[cfg(feature = "trust")]
-                    let plaintext = self.decrypt_bytes(&decoded)?;
+                    let plaintext = {
+                        let encryption = self.encryption_context().await?;
+                        Self::decrypt_bytes(encryption.as_deref(), &decoded)?
+                    };
                     #[cfg(not(feature = "trust"))]
                     let plaintext = decoded;
 

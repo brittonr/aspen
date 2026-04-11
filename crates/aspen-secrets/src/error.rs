@@ -273,6 +273,14 @@ pub enum SecretsError {
     #[error("encryption error: {reason}")]
     Encryption { reason: String },
 
+    /// Secrets are temporarily unavailable because the at-rest key cannot be reconstructed.
+    #[cfg(feature = "trust")]
+    #[error("secrets unavailable: {source}")]
+    SecretsUnavailable {
+        #[source]
+        source: aspen_trust::encryption::SecretsUnavailableError,
+    },
+
     /// Serialization error.
     #[error("serialization error: {reason}")]
     Serialization { reason: String },
