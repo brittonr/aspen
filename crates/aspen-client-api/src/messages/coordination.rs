@@ -534,6 +534,16 @@ mod tests {
 
     use super::*;
 
+    fn assert_canonical_lock_operation(operation_a: Operation, operation_b: Operation) {
+        match (operation_a, operation_b) {
+            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
+                assert_eq!(key_a, "_lock:pipeline:42");
+                assert_eq!(key_a, key_b);
+            }
+            _ => panic!("expected write operations"),
+        }
+    }
+
     #[test]
     fn test_lockset_requests_use_canonical_operation_member() {
         let request_a = CoordinationRequest::LockSetAcquire {
@@ -551,12 +561,51 @@ mod tests {
 
         let operation_a = request_a.to_operation().unwrap();
         let operation_b = request_b.to_operation().unwrap();
-        match (operation_a, operation_b) {
-            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
-                assert_eq!(key_a, "_lock:pipeline:42");
-                assert_eq!(key_a, key_b);
-            }
-            _ => panic!("expected write operations"),
-        }
+        assert_canonical_lock_operation(operation_a, operation_b);
+    }
+
+    #[test]
+    fn test_lockset_token_requests_use_canonical_operation_member() {
+        let tokens_a = vec![
+            LockSetMemberTokenWire {
+                member: "repo:a".to_string(),
+                fencing_token: 7,
+            },
+            LockSetMemberTokenWire {
+                member: "pipeline:42".to_string(),
+                fencing_token: 3,
+            },
+        ];
+        let tokens_b = vec![
+            LockSetMemberTokenWire {
+                member: "pipeline:42".to_string(),
+                fencing_token: 3,
+            },
+            LockSetMemberTokenWire {
+                member: "repo:a".to_string(),
+                fencing_token: 7,
+            },
+        ];
+        let release_a = CoordinationRequest::LockSetRelease {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_a.clone(),
+        };
+        let release_b = CoordinationRequest::LockSetRelease {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_b.clone(),
+        };
+        let renew_a = CoordinationRequest::LockSetRenew {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_a,
+            ttl_ms: 1_000,
+        };
+        let renew_b = CoordinationRequest::LockSetRenew {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_b,
+            ttl_ms: 1_000,
+        };
+
+        assert_canonical_lock_operation(release_a.to_operation().unwrap(), release_b.to_operation().unwrap());
+        assert_canonical_lock_operation(renew_a.to_operation().unwrap(), renew_b.to_operation().unwrap());
     }
 }

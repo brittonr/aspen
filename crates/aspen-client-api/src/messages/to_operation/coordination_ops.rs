@@ -178,6 +178,16 @@ mod tests {
 
     use super::*;
 
+    fn assert_canonical_lock_operation(operation_a: Operation, operation_b: Operation) {
+        match (operation_a, operation_b) {
+            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
+                assert_eq!(key_a, "_lock:pipeline:42");
+                assert_eq!(key_a, key_b);
+            }
+            _ => panic!("expected write operations"),
+        }
+    }
+
     #[test]
     fn test_client_rpc_lockset_requests_use_canonical_operation_member() {
         let request_a = ClientRpcRequest::LockSetTryAcquire {
@@ -193,12 +203,57 @@ mod tests {
 
         let operation_a = to_operation(&request_a).flatten().unwrap();
         let operation_b = to_operation(&request_b).flatten().unwrap();
-        match (operation_a, operation_b) {
-            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
-                assert_eq!(key_a, "_lock:pipeline:42");
-                assert_eq!(key_a, key_b);
-            }
-            _ => panic!("expected write operations"),
-        }
+        assert_canonical_lock_operation(operation_a, operation_b);
+    }
+
+    #[test]
+    fn test_client_rpc_lockset_token_requests_use_canonical_operation_member() {
+        let tokens_a = vec![
+            LockSetMemberTokenWire {
+                member: "repo:a".to_string(),
+                fencing_token: 7,
+            },
+            LockSetMemberTokenWire {
+                member: "pipeline:42".to_string(),
+                fencing_token: 3,
+            },
+        ];
+        let tokens_b = vec![
+            LockSetMemberTokenWire {
+                member: "pipeline:42".to_string(),
+                fencing_token: 3,
+            },
+            LockSetMemberTokenWire {
+                member: "repo:a".to_string(),
+                fencing_token: 7,
+            },
+        ];
+        let release_a = ClientRpcRequest::LockSetRelease {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_a.clone(),
+        };
+        let release_b = ClientRpcRequest::LockSetRelease {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_b.clone(),
+        };
+        let renew_a = ClientRpcRequest::LockSetRenew {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_a,
+            ttl_ms: 1_000,
+        };
+        let renew_b = ClientRpcRequest::LockSetRenew {
+            holder_id: "holder-a".to_string(),
+            member_tokens: tokens_b,
+            ttl_ms: 1_000,
+        };
+
+        assert_canonical_lock_operation(
+            to_operation(&release_a).flatten().unwrap(),
+            to_operation(&release_b).flatten().unwrap(),
+        );
+        assert_canonical_lock_operation(
+            to_operation(&renew_a).flatten().unwrap(),
+            to_operation(&renew_b).flatten().unwrap(),
+        );
     }
 }
