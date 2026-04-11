@@ -9,5 +9,5 @@
 //! 5. **SHAMIR-5: Default Threshold Valid**: default_threshold(n) is always valid for n
 //! 6. **CHAIN-1: Prior Secret Count**: a chain at epoch N contains exactly N-1 prior secrets
 
-mod shamir_spec;
 mod chain_spec;
+mod shamir_spec;

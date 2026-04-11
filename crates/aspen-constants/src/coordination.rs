@@ -384,6 +384,12 @@ pub const MAX_LOCK_TTL_MS: u64 = 3_600_000;
 /// Tiger Style: Reasonable default for most critical sections.
 pub const DEFAULT_LOCK_TTL_MS: u64 = 60_000;
 
+/// Maximum members in one atomic lock set.
+///
+/// Tiger Style: keep lock-set validation, read fan-out, and conditional batch
+/// writes bounded.
+pub const MAX_LOCKSET_KEYS: u32 = 16;
+
 // ============================================================================
 // Bridge Event Dispatch Constants
 // ============================================================================

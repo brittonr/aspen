@@ -27,6 +27,57 @@ pub enum CoordinationError {
         current_holder: String,
     },
 
+    /// Lock set is blocked by a live holder.
+    #[snafu(display("lock set blocked on '{member}': held by '{holder}' until {deadline_ms}ms"))]
+    LockSetHeld {
+        /// Blocking member name.
+        member: String,
+        /// Current holder.
+        holder: String,
+        /// When that member expires.
+        deadline_ms: u64,
+    },
+
+    /// Lock set guard no longer matches the live state.
+    #[snafu(display("lock set lost on '{member}': held by '{current_holder}', not '{expected_holder}'"))]
+    LockSetLost {
+        /// Member that no longer matches.
+        member: String,
+        /// Holder we expected.
+        expected_holder: String,
+        /// Current observed holder or state.
+        current_holder: String,
+    },
+
+    /// Lock set contains the same member more than once.
+    #[snafu(display("duplicate lock-set member '{member}'"))]
+    DuplicateLockSetMember {
+        /// Duplicate member name.
+        member: String,
+    },
+
+    /// Lock set exceeds the configured bound.
+    #[snafu(display("lock set has {count} members, max {max}"))]
+    LockSetTooLarge {
+        /// Requested member count.
+        count: u32,
+        /// Maximum allowed member count.
+        max: u32,
+    },
+
+    /// Lock set must contain at least one member.
+    #[snafu(display("lock set must contain at least one member"))]
+    EmptyLockSet,
+
+    /// Guard members did not match the expected canonical set.
+    #[snafu(display("lock set membership mismatch: expected [{expected_members}], got [{actual_members}]"))]
+    LockSetMembershipMismatch {
+        /// Expected canonical members.
+        expected_members: String,
+        /// Actual canonical members.
+        actual_members: String,
+    },
+
     /// Operation timed out.
     #[snafu(display("operation timed out: {operation}"))]
     Timeout {

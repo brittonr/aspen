@@ -6,12 +6,25 @@
 //! ## Usage
 //!
 //! ```ignore
-//! use aspen::client::coordination::{LockClient, CounterClient, SequenceClient, RateLimiterClient};
+//! use aspen::client::coordination::{LockClient, LockSetClient, CounterClient, SequenceClient, RateLimiterClient};
 //!
 //! // Get a distributed lock
 //! let lock = LockClient::new(rpc_client.clone(), "my-resource");
 //! let guard = lock.acquire("holder-1", Duration::from_secs(30)).await?;
 //! // ... protected work ...
+//! guard.release().await?;
+//!
+//! // Get an atomic lock set. Member ordering is canonicalized server-side.
+//! let lockset = LockSetClient::new(rpc_client.clone());
+//! let guard = lockset
+//!     .acquire(
+//!         vec!["pipeline:42".to_string(), "repo:a".to_string()],
+//!         "holder-1",
+//!         Duration::from_secs(30),
+//!         Duration::from_secs(5),
+//!     )
+//!     .await?;
+//! let repo_token = guard.fencing_token_for("repo:a").unwrap();
 //! guard.release().await?;
 //!
 //! // Use an atomic counter
@@ -34,6 +47,7 @@ mod batch;
 mod counter;
 mod lease;
 mod lock;
+mod lockset;
 mod queue;
 mod rate_limiter;
 mod rwlock;
@@ -77,6 +91,10 @@ pub use lease::LeaseRevokeResult;
 pub use lease::LeaseTimeToLiveResult;
 pub use lock::LockClient;
 pub use lock::RemoteLockGuard;
+pub use lockset::LockSetBlocked;
+pub use lockset::LockSetClient;
+pub use lockset::LockSetTryAcquireResult;
+pub use lockset::RemoteLockSetGuard;
 pub use queue::QueueClient;
 pub use queue::QueueCreateConfig;
 pub use queue::QueueDLQItemInfo;

@@ -19,6 +19,21 @@ fn to_operation_lock_counter(request: &ClientRpcRequest) -> Option<Option<Operat
             key: format!("_lock:{key}"),
             value: vec![],
         })),
+        ClientRpcRequest::LockSetAcquire { members, .. } | ClientRpcRequest::LockSetTryAcquire { members, .. } => {
+            members.first().map(|member| {
+                Some(Operation::Write {
+                    key: format!("_lock:{member}"),
+                    value: vec![],
+                })
+            })
+        }
+        ClientRpcRequest::LockSetRelease { member_tokens, .. }
+        | ClientRpcRequest::LockSetRenew { member_tokens, .. } => member_tokens.first().map(|member| {
+            Some(Operation::Write {
+                key: format!("_lock:{}", member.member),
+                value: vec![],
+            })
+        }),
 
         ClientRpcRequest::CounterGet { key }
         | ClientRpcRequest::SignedCounterGet { key }

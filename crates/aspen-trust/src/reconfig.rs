@@ -427,10 +427,8 @@ mod tests {
         assert_eq!(new_digests.len(), 3);
         assert_eq!(encrypted_chain.prior_count, 2);
 
-        let reconstructed_new_secret = shamir::reconstruct_secret(
-            &new_shares.values().take(2).cloned().collect::<Vec<_>>(),
-        )
-        .unwrap();
+        let reconstructed_new_secret =
+            shamir::reconstruct_secret(&new_shares.values().take(2).cloned().collect::<Vec<_>>()).unwrap();
         let prior = chain::decrypt_chain(encrypted_chain, &reconstructed_new_secret, b"ctx-cluster").unwrap();
         assert_eq!(prior.get(&5), Some(&[0x55; 32]));
         assert_eq!(prior.get(&10), Some(&old_secret));

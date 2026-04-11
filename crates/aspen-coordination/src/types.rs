@@ -23,13 +23,17 @@ pub struct LockEntry {
 impl LockEntry {
     /// Create a new lock entry.
     pub fn new(holder_id: String, fencing_token: u64, ttl_ms: u64) -> Self {
-        let acquired_at_ms = now_unix_ms();
+        Self::new_at(holder_id, fencing_token, ttl_ms, now_unix_ms())
+    }
+
+    /// Create a new lock entry at an explicit acquisition timestamp.
+    pub fn new_at(holder_id: String, fencing_token: u64, ttl_ms: u64, acquired_at_ms: u64) -> Self {
         Self {
             holder_id,
             fencing_token,
             acquired_at_ms,
             ttl_ms,
-            deadline_ms: acquired_at_ms + ttl_ms,
+            deadline_ms: acquired_at_ms.saturating_add(ttl_ms),
         }
     }
 
@@ -77,6 +81,25 @@ impl FencingToken {
 impl std::fmt::Display for FencingToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "FencingToken({})", self.0)
+    }
+}
+
+/// Per-member fencing token for a lock set.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockSetMemberToken {
+    /// Canonical member name.
+    pub member: String,
+    /// Fencing token for that member.
+    pub fencing_token: FencingToken,
+}
+
+impl LockSetMemberToken {
+    /// Create a new member-token pair.
+    pub fn new(member: impl Into<String>, fencing_token: FencingToken) -> Self {
+        Self {
+            member: member.into(),
+            fencing_token,
+        }
     }
 }
 

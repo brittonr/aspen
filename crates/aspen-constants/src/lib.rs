@@ -65,6 +65,7 @@ pub mod prelude {
     pub use crate::coordination::CAS_RETRY_MAX_BACKOFF_MS;
     pub use crate::coordination::MAX_CAS_RETRIES;
     // RWLock and Semaphore constants
+    pub use crate::coordination::MAX_LOCKSET_KEYS;
     pub use crate::coordination::MAX_RWLOCK_PENDING_WRITERS;
     pub use crate::coordination::MAX_RWLOCK_READERS;
     pub use crate::coordination::MAX_SEMAPHORE_HOLDERS;
@@ -118,6 +119,7 @@ pub use api::METRIC_MAX_TTL_SECONDS;
 pub use coordination::CAS_RETRY_INITIAL_BACKOFF_MS;
 pub use coordination::CAS_RETRY_MAX_BACKOFF_MS;
 pub use coordination::MAX_CAS_RETRIES;
+pub use coordination::MAX_LOCKSET_KEYS;
 pub use coordination::MAX_RWLOCK_PENDING_WRITERS;
 pub use coordination::MAX_RWLOCK_READERS;
 pub use coordination::MAX_SEMAPHORE_HOLDERS;
@@ -196,6 +198,7 @@ mod tests {
         assert_eq!(coordination::MAX_RWLOCK_READERS, 128);
         assert_eq!(coordination::MAX_RWLOCK_PENDING_WRITERS, 64);
         assert_eq!(coordination::MAX_SEMAPHORE_HOLDERS, 256);
+        assert_eq!(coordination::MAX_LOCKSET_KEYS, 16);
         assert_eq!(coordination::MAX_LOCK_WAIT_TIMEOUT_MS, 300_000);
         assert_eq!(coordination::DEFAULT_LOCK_WAIT_TIMEOUT_MS, 30_000);
         assert_eq!(coordination::MAX_LOCK_TTL_MS, 3_600_000);

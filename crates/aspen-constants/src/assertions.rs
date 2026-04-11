@@ -155,6 +155,8 @@ const _: () = assert!(MAX_LOCK_WAIT_TIMEOUT_MS > 0);
 const _: () = assert!(DEFAULT_LOCK_TTL_MS > 0);
 const _: () = assert!(DEFAULT_LOCK_TTL_MS <= MAX_LOCK_TTL_MS);
 const _: () = assert!(MAX_LOCK_TTL_MS > 0);
+const _: () = assert!(MAX_LOCKSET_KEYS > 0);
+const _: () = assert!(MAX_LOCKSET_KEYS <= 64);
 
 // ============================================================================
 // CAS Retry Constants

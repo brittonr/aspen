@@ -106,6 +106,7 @@ pub use coordination::CAS_RETRY_INITIAL_BACKOFF_MS;
 pub use coordination::CAS_RETRY_MAX_BACKOFF_MS;
 pub use coordination::MAX_CAS_RETRIES;
 // RWLock and Semaphore constants
+pub use coordination::MAX_LOCKSET_KEYS;
 pub use coordination::MAX_RWLOCK_PENDING_WRITERS;
 pub use coordination::MAX_RWLOCK_READERS;
 pub use coordination::MAX_SEMAPHORE_HOLDERS;

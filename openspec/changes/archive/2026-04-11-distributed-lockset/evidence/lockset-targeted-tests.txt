@@ -1,0 +1,73 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unused variable: `idx3`
+   --> crates/aspen-coordination/src/worker_strategies.rs:684:13
+    |
+684 |         let idx3 = strategy.select(&workers, "email", &context).unwrap();
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_idx3`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `aspen-coordination` (lib test) generated 1 warning (run `cargo fix --lib -p aspen-coordination --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/lib.rs (target/debug/deps/aspen_coordination-51c34013262e72e6)
+
+running 17 tests
+test lockset::tests::test_lockset_canonical_request_model ... ok
+test spec::lockset_invariants::tests::test_lockset_invariant_accepts_single_holder ... ok
+test spec::lockset_invariants::tests::test_lockset_invariant_rejects_split_live_holders ... ok
+test spec::lockset_invariants::tests::test_member_tokens_monotonic ... ok
+test lockset::tests::test_lockset_try_acquire_release ... ok
+test verified::lockset::tests::test_normalize_lockset_member_tokens_sorts ... ok
+test lockset::tests::test_lockset_renew_keeps_tokens ... ok
+test lockset::tests::test_lockset_reacquire_increments_overlapping_member_token ... ok
+test lockset::tests::test_lockset_contention_is_all_or_nothing ... ok
+test verified::lockset::tests::test_normalize_lockset_members_sorts ... ok
+test verified::lockset::tests::test_normalize_lockset_members_rejects_duplicate ... ok
+test verified::lockset::tests::test_should_renew_lockset_inside_window ... ok
+test verified::lockset::tests::prop_lockset_member_token_is_monotonic ... ok
+test verified::lockset::tests::prop_takeover_count_is_bounded ... ok
+test verified::lockset::tests::prop_normalized_members_are_sorted ... ok
+test lockset::tests::test_lockset_explicit_release_disarms_drop ... ok
+test lockset::tests::test_lockset_expiry_takeover ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 447 filtered out; finished in 0.10s
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (target/debug/deps/aspen_client-407349fed7d63a2d)
+
+running 5 tests
+test coordination::lockset::tests::test_remote_lockset_guard_release_and_renew ... ok
+test coordination::lockset::tests::test_lockset_client_acquire ... ok
+test coordination::lockset::tests::test_lockset_client_try_acquire_exposes_blocked_details ... ok
+test coordination::lockset::tests::test_lockset_client_try_acquire_rejects_partial_contention_metadata ... ok
+test coordination::lockset::tests::test_lockset_client_try_acquire_rejects_non_contention_errors ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 130 filtered out; finished in 0.00s
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running unittests src/lib.rs (target/debug/deps/aspen_core_essentials_handler-9cabb46f4af1863e)
+
+running 4 tests
+test coordination::tests::test_handle_lockset_overlap_conflict_has_no_partial_claim ... ok
+test coordination::tests::test_handle_lockset_compound_operation_scenario ... ok
+test coordination::tests::test_handle_lockset_try_acquire_renew_and_release ... ok
+test coordination::tests::test_handle_lockset_expiry_takeover ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 140 filtered out; finished in 0.13s

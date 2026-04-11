@@ -3,6 +3,7 @@
 //! This module provides high-level coordination primitives for distributed systems:
 //!
 //! - `DistributedLock` - Mutual exclusion with fencing tokens
+//! - `DistributedLockSet` - Atomic multi-resource lock acquisition
 //! - `LeaderElection` - Leader election with automatic lease renewal
 //! - `AtomicCounter` - Race-free increment/decrement
 //! - `SequenceGenerator` - Monotonically increasing unique IDs
@@ -51,12 +52,37 @@
 //!
 //! // Lock released on drop
 //! ```
+//!
+//! ## Lock-Set Example
+//!
+//! `DistributedLockSet` canonicalizes member ordering internally. A caller can
+//! request `repo:a` + `pipeline:42` in any order and still contend on the same
+//! atomic guard.
+//!
+//! ```ignore
+//! use aspen_coordination::{DistributedLockSet, LockConfig};
+//!
+//! let lockset = DistributedLockSet::new(
+//!     store,
+//!     vec!["pipeline:42".to_string(), "repo:a".to_string()],
+//!     "deploy-worker-7",
+//!     LockConfig::default(),
+//! )?;
+//! let guard = lockset.acquire().await?;
+//!
+//! let repo_token = guard.fencing_token_for("repo:a").unwrap();
+//! let pipeline_token = guard.fencing_token_for("pipeline:42").unwrap();
+//! // Use both fencing tokens while coordinating the compound operation.
+//!
+//! guard.release().await?;
+//! ```
 
 mod barrier;
 mod counter;
 mod election;
 mod error;
 mod lock;
+mod lockset;
 mod queue;
 mod rate_limiter;
 mod registry;
@@ -86,6 +112,9 @@ pub use error::RateLimitError;
 pub use lock::DistributedLock;
 pub use lock::LockConfig;
 pub use lock::LockGuard;
+pub use lockset::DistributedLockSet;
+pub use lockset::LockSetGuard;
+pub use lockset::LockSetRequest;
 pub use queue::DLQItem;
 pub use queue::DLQReason;
 pub use queue::DequeuedItem;
@@ -119,6 +148,7 @@ pub use sequence::SequenceGenerator;
 pub use types::BucketState;
 pub use types::FencingToken;
 pub use types::LockEntry;
+pub use types::LockSetMemberToken;
 pub use types::now_unix_ms;
 pub use worker_coordinator::DistributedWorkerCoordinator;
 pub use worker_coordinator::GroupState;

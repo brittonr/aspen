@@ -176,6 +176,8 @@ pub use coordination::BarrierResultResponse;
 pub use coordination::CoordinationRequest;
 pub use coordination::CounterResultResponse;
 pub use coordination::LockResultResponse;
+pub use coordination::LockSetMemberTokenWire;
+pub use coordination::LockSetResultResponse;
 pub use coordination::QueueAckResultResponse;
 pub use coordination::QueueCreateResultResponse;
 pub use coordination::QueueDLQItemResponse;
@@ -1052,6 +1054,46 @@ pub enum ClientRpcRequest {
         holder_id: String,
         /// Fencing token from acquire operation.
         fencing_token: u64,
+        /// New TTL in milliseconds.
+        ttl_ms: u64,
+    },
+
+    /// Acquire a distributed lock set with timeout.
+    LockSetAcquire {
+        /// Requested lock-set members.
+        members: Vec<String>,
+        /// Holder ID.
+        holder_id: String,
+        /// Lock TTL in milliseconds.
+        ttl_ms: u64,
+        /// Acquire timeout in milliseconds.
+        timeout_ms: u64,
+    },
+
+    /// Try to acquire a distributed lock set without blocking.
+    LockSetTryAcquire {
+        /// Requested lock-set members.
+        members: Vec<String>,
+        /// Holder ID.
+        holder_id: String,
+        /// Lock TTL in milliseconds.
+        ttl_ms: u64,
+    },
+
+    /// Release a distributed lock set.
+    LockSetRelease {
+        /// Holder ID.
+        holder_id: String,
+        /// Canonical member tokens from the guard.
+        member_tokens: Vec<LockSetMemberTokenWire>,
+    },
+
+    /// Renew a distributed lock set.
+    LockSetRenew {
+        /// Holder ID.
+        holder_id: String,
+        /// Canonical member tokens from the guard.
+        member_tokens: Vec<LockSetMemberTokenWire>,
         /// New TTL in milliseconds.
         ttl_ms: u64,
     },
@@ -4103,6 +4145,10 @@ impl ClientRpcRequest {
             Self::LockAcquire { .. } => "LockAcquire",
             Self::LockRelease { .. } => "LockRelease",
             Self::LockRenew { .. } => "LockRenew",
+            Self::LockSetAcquire { .. } => "LockSetAcquire",
+            Self::LockSetRelease { .. } => "LockSetRelease",
+            Self::LockSetRenew { .. } => "LockSetRenew",
+            Self::LockSetTryAcquire { .. } => "LockSetTryAcquire",
             Self::LockTryAcquire { .. } => "LockTryAcquire",
             Self::Ping => "Ping",
             Self::PromoteLearner { .. } => "PromoteLearner",
@@ -4317,6 +4363,10 @@ impl ClientRpcRequest {
             | Self::LockTryAcquire { .. }
             | Self::LockRelease { .. }
             | Self::LockRenew { .. }
+            | Self::LockSetAcquire { .. }
+            | Self::LockSetTryAcquire { .. }
+            | Self::LockSetRelease { .. }
+            | Self::LockSetRenew { .. }
             | Self::CounterGet { .. }
             | Self::CounterIncrement { .. }
             | Self::CounterDecrement { .. }
@@ -4828,6 +4878,9 @@ pub enum ClientRpcResponse {
     // =========================================================================
     /// Lock operation result (acquire, try_acquire, release, renew).
     LockResult(LockResultResponse),
+
+    /// Lock-set operation result.
+    LockSetResult(LockSetResultResponse),
 
     /// Atomic counter operation result.
     CounterResult(CounterResultResponse),

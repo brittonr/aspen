@@ -16,6 +16,8 @@ use anyhow::Result;
 use anyhow::anyhow;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::LockSetMemberTokenWire;
+use aspen_client_api::LockSetResultResponse;
 use aspen_client_api::RateLimiterResultResponse;
 use aspen_client_api::coordination::CounterResultResponse;
 use aspen_client_api::coordination::LockResultResponse;
@@ -24,9 +26,11 @@ use aspen_client_api::coordination::SignedCounterResultResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedLock;
+use aspen_coordination::DistributedLockSet;
 use aspen_coordination::DistributedRateLimiter;
 use aspen_coordination::LockConfig;
 use aspen_coordination::LockEntry;
+use aspen_coordination::LockSetMemberToken;
 use aspen_coordination::RateLimiterConfig;
 use aspen_coordination::SequenceConfig;
 use aspen_coordination::SequenceGenerator;
@@ -85,7 +89,11 @@ impl CoordinationHandler {
             ClientRpcRequest::LockAcquire { .. }
             | ClientRpcRequest::LockTryAcquire { .. }
             | ClientRpcRequest::LockRelease { .. }
-            | ClientRpcRequest::LockRenew { .. } => Ok(CoordinationRequestFamily::Lock),
+            | ClientRpcRequest::LockRenew { .. }
+            | ClientRpcRequest::LockSetAcquire { .. }
+            | ClientRpcRequest::LockSetTryAcquire { .. }
+            | ClientRpcRequest::LockSetRelease { .. }
+            | ClientRpcRequest::LockSetRenew { .. } => Ok(CoordinationRequestFamily::Lock),
             ClientRpcRequest::RateLimiterTryAcquire { .. }
             | ClientRpcRequest::RateLimiterAcquire { .. }
             | ClientRpcRequest::RateLimiterAvailable { .. }
@@ -134,6 +142,26 @@ impl CoordinationHandler {
         })
     }
 
+    fn lockset_response(
+        is_success: bool,
+        holder_id: Option<String>,
+        member_tokens: Vec<LockSetMemberTokenWire>,
+        deadline_ms: Option<u64>,
+        blocked_member: Option<String>,
+        blocked_holder: Option<String>,
+        error: Option<String>,
+    ) -> ClientRpcResponse {
+        ClientRpcResponse::LockSetResult(LockSetResultResponse {
+            is_success,
+            holder_id,
+            member_tokens,
+            deadline_ms,
+            blocked_member,
+            blocked_holder,
+            error,
+        })
+    }
+
     fn rate_limiter_response(
         is_success: bool,
         tokens_remaining: Option<u64>,
@@ -159,6 +187,10 @@ impl RequestHandler for CoordinationHandler {
                 | ClientRpcRequest::LockTryAcquire { .. }
                 | ClientRpcRequest::LockRelease { .. }
                 | ClientRpcRequest::LockRenew { .. }
+                | ClientRpcRequest::LockSetAcquire { .. }
+                | ClientRpcRequest::LockSetTryAcquire { .. }
+                | ClientRpcRequest::LockSetRelease { .. }
+                | ClientRpcRequest::LockSetRenew { .. }
                 // Counter
                 | ClientRpcRequest::CounterGet { .. }
                 | ClientRpcRequest::CounterIncrement { .. }
@@ -367,6 +399,26 @@ impl CoordinationHandler {
                 fencing_token,
                 ttl_ms,
             } => self.renew_lock(ctx, key, holder_id, fencing_token, ttl_ms).await,
+            ClientRpcRequest::LockSetAcquire {
+                members,
+                holder_id,
+                ttl_ms,
+                timeout_ms,
+            } => self.acquire_lockset(ctx, members, holder_id, ttl_ms, timeout_ms).await,
+            ClientRpcRequest::LockSetTryAcquire {
+                members,
+                holder_id,
+                ttl_ms,
+            } => self.try_acquire_lockset(ctx, members, holder_id, ttl_ms).await,
+            ClientRpcRequest::LockSetRelease {
+                holder_id,
+                member_tokens,
+            } => self.release_lockset(ctx, holder_id, member_tokens).await,
+            ClientRpcRequest::LockSetRenew {
+                holder_id,
+                member_tokens,
+                ttl_ms,
+            } => self.renew_lockset(ctx, holder_id, member_tokens, ttl_ms).await,
             _ => unreachable!("unexpected lock request"),
         }
     }
@@ -439,6 +491,157 @@ impl CoordinationHandler {
         let deadline = guard.deadline_ms();
         std::mem::forget(guard);
         Self::lock_response(true, Some(token.value()), Some(holder_id), Some(deadline), None)
+    }
+
+    fn forget_lockset_guard(
+        guard: aspen_coordination::LockSetGuard<dyn KeyValueStore>,
+        holder_id: String,
+    ) -> ClientRpcResponse {
+        let deadline = guard.deadline_ms();
+        let member_tokens = guard
+            .member_tokens()
+            .iter()
+            .map(|token| LockSetMemberTokenWire {
+                member: Self::strip_lock_prefix(&token.member),
+                fencing_token: token.fencing_token.value(),
+            })
+            .collect();
+        std::mem::forget(guard);
+        Self::lockset_response(true, Some(holder_id), member_tokens, Some(deadline), None, None, None)
+    }
+
+    async fn acquire_lockset(
+        &self,
+        ctx: &ClientProtocolContext,
+        members: Vec<String>,
+        holder_id: String,
+        ttl_ms: u64,
+        timeout_ms: u64,
+    ) -> ClientRpcResponse {
+        let config = LockConfig {
+            ttl_ms,
+            acquire_timeout_ms: timeout_ms,
+            ..LockConfig::default()
+        };
+        let prefixed_members = Self::prefix_lockset_members(members);
+        match DistributedLockSet::new(Arc::clone(&ctx.kv_store), prefixed_members, holder_id.clone(), config) {
+            Ok(lockset) => match lockset.acquire().await {
+                Ok(guard) => Self::forget_lockset_guard(guard, holder_id),
+                Err(error) => Self::lockset_error_response(error),
+            },
+            Err(error) => Self::lockset_error_response(error),
+        }
+    }
+
+    async fn try_acquire_lockset(
+        &self,
+        ctx: &ClientProtocolContext,
+        members: Vec<String>,
+        holder_id: String,
+        ttl_ms: u64,
+    ) -> ClientRpcResponse {
+        let prefixed_members = Self::prefix_lockset_members(members);
+        match DistributedLockSet::new(Arc::clone(&ctx.kv_store), prefixed_members, holder_id.clone(), LockConfig {
+            ttl_ms,
+            ..LockConfig::default()
+        }) {
+            Ok(lockset) => match lockset.try_acquire().await {
+                Ok(guard) => Self::forget_lockset_guard(guard, holder_id),
+                Err(error) => Self::lockset_error_response(error),
+            },
+            Err(error) => Self::lockset_error_response(error),
+        }
+    }
+
+    async fn release_lockset(
+        &self,
+        ctx: &ClientProtocolContext,
+        holder_id: String,
+        member_tokens: Vec<LockSetMemberTokenWire>,
+    ) -> ClientRpcResponse {
+        let coordination_tokens = Self::prefix_member_tokens(member_tokens);
+        let members: Vec<String> = coordination_tokens.iter().map(|token| token.member.clone()).collect();
+        match DistributedLockSet::new(Arc::clone(&ctx.kv_store), members, holder_id.clone(), LockConfig::default()) {
+            Ok(lockset) => match lockset.release_member_tokens(&coordination_tokens).await {
+                Ok(()) => Self::lockset_response(true, Some(holder_id), Vec::new(), Some(0), None, None, None),
+                Err(error) => Self::lockset_error_response(error),
+            },
+            Err(error) => Self::lockset_error_response(error),
+        }
+    }
+
+    async fn renew_lockset(
+        &self,
+        ctx: &ClientProtocolContext,
+        holder_id: String,
+        member_tokens: Vec<LockSetMemberTokenWire>,
+        ttl_ms: u64,
+    ) -> ClientRpcResponse {
+        let coordination_tokens = Self::prefix_member_tokens(member_tokens);
+        let members: Vec<String> = coordination_tokens.iter().map(|token| token.member.clone()).collect();
+        match DistributedLockSet::new(Arc::clone(&ctx.kv_store), members, holder_id.clone(), LockConfig {
+            ttl_ms,
+            ..LockConfig::default()
+        }) {
+            Ok(lockset) => match lockset.renew_member_tokens(&coordination_tokens).await {
+                Ok(deadline_ms) => Self::lockset_response(
+                    true,
+                    Some(holder_id),
+                    coordination_tokens
+                        .iter()
+                        .map(|token| LockSetMemberTokenWire {
+                            member: Self::strip_lock_prefix(&token.member),
+                            fencing_token: token.fencing_token.value(),
+                        })
+                        .collect(),
+                    Some(deadline_ms),
+                    None,
+                    None,
+                    None,
+                ),
+                Err(error) => Self::lockset_error_response(error),
+            },
+            Err(error) => Self::lockset_error_response(error),
+        }
+    }
+
+    fn lockset_error_response(error: aspen_coordination::CoordinationError) -> ClientRpcResponse {
+        match error {
+            aspen_coordination::CoordinationError::LockSetHeld {
+                member,
+                holder,
+                deadline_ms,
+            } => Self::lockset_response(
+                false,
+                None,
+                Vec::new(),
+                Some(deadline_ms),
+                Some(Self::strip_lock_prefix(&member)),
+                Some(holder),
+                Some("lock set blocked".to_string()),
+            ),
+            other => Self::lockset_response(false, None, Vec::new(), None, None, None, Some(other.to_string())),
+        }
+    }
+
+    fn prefix_lockset_members(members: Vec<String>) -> Vec<String> {
+        members.into_iter().map(|member| format!("{}{}", Self::LOCK_PREFIX, member)).collect()
+    }
+
+    fn prefix_member_tokens(member_tokens: Vec<LockSetMemberTokenWire>) -> Vec<LockSetMemberToken> {
+        member_tokens
+            .into_iter()
+            .map(|token| {
+                LockSetMemberToken::new(
+                    format!("{}{}", Self::LOCK_PREFIX, token.member),
+                    aspen_coordination::FencingToken::new(token.fencing_token),
+                )
+            })
+            .collect()
+    }
+
+    fn strip_lock_prefix(member: &str) -> String {
+        member.strip_prefix(Self::LOCK_PREFIX).unwrap_or(member).to_string()
     }
 
     async fn release_lock(
@@ -713,6 +916,32 @@ mod tests {
             fencing_token: 1,
             ttl_ms: 1000,
         }));
+        assert!(h.can_handle(&ClientRpcRequest::LockSetAcquire {
+            members: vec!["repo:a".into(), "pipeline:42".into()],
+            holder_id: "h".into(),
+            ttl_ms: 1000,
+            timeout_ms: 5000,
+        }));
+        assert!(h.can_handle(&ClientRpcRequest::LockSetTryAcquire {
+            members: vec!["repo:a".into(), "pipeline:42".into()],
+            holder_id: "h".into(),
+            ttl_ms: 1000,
+        }));
+        assert!(h.can_handle(&ClientRpcRequest::LockSetRelease {
+            holder_id: "h".into(),
+            member_tokens: vec![LockSetMemberTokenWire {
+                member: "repo:a".into(),
+                fencing_token: 1,
+            }],
+        }));
+        assert!(h.can_handle(&ClientRpcRequest::LockSetRenew {
+            holder_id: "h".into(),
+            member_tokens: vec![LockSetMemberTokenWire {
+                member: "repo:a".into(),
+                fencing_token: 1,
+            }],
+            ttl_ms: 1000,
+        }));
     }
 
     #[test]
@@ -954,6 +1183,179 @@ mod tests {
                 assert_eq!(response.deadline_ms, Some(0));
             }
             other => panic!("expected LockResult, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_lockset_try_acquire_renew_and_release() {
+        let ctx = setup_test_context().await;
+        let acquire_result = handler()
+            .handle(
+                ClientRpcRequest::LockSetTryAcquire {
+                    members: vec!["pipeline:42".into(), "repo:a".into()],
+                    holder_id: "holder-a".into(),
+                    ttl_ms: 5_000,
+                },
+                &ctx,
+            )
+            .await
+            .expect("lockset acquisition should succeed");
+        let member_tokens = match acquire_result {
+            ClientRpcResponse::LockSetResult(response) => {
+                assert!(response.is_success);
+                assert_eq!(response.member_tokens.len(), 2);
+                assert_eq!(response.member_tokens[0].member, "pipeline:42");
+                response.member_tokens
+            }
+            other => panic!("expected LockSetResult, got {other:?}"),
+        };
+
+        let renew_result = handler()
+            .handle(
+                ClientRpcRequest::LockSetRenew {
+                    holder_id: "holder-a".into(),
+                    member_tokens: member_tokens.clone(),
+                    ttl_ms: 10_000,
+                },
+                &ctx,
+            )
+            .await
+            .expect("lockset renew should succeed");
+        match renew_result {
+            ClientRpcResponse::LockSetResult(response) => {
+                assert!(response.is_success);
+                assert!(response.deadline_ms.unwrap_or(0) > 0);
+            }
+            other => panic!("expected LockSetResult, got {other:?}"),
+        }
+
+        let release_result = handler()
+            .handle(
+                ClientRpcRequest::LockSetRelease {
+                    holder_id: "holder-a".into(),
+                    member_tokens,
+                },
+                &ctx,
+            )
+            .await
+            .expect("lockset release should succeed");
+        match release_result {
+            ClientRpcResponse::LockSetResult(response) => {
+                assert!(response.is_success);
+                assert_eq!(response.deadline_ms, Some(0));
+            }
+            other => panic!("expected LockSetResult, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_lockset_overlap_conflict_has_no_partial_claim() {
+        let ctx = setup_test_context().await;
+        let first = handler()
+            .handle(
+                ClientRpcRequest::LockSetTryAcquire {
+                    members: vec!["repo:a".into(), "pipeline:42".into()],
+                    holder_id: "holder-a".into(),
+                    ttl_ms: 5_000,
+                },
+                &ctx,
+            )
+            .await
+            .expect("first acquire should succeed");
+        match first {
+            ClientRpcResponse::LockSetResult(response) => assert!(response.is_success),
+            other => panic!("expected LockSetResult, got {other:?}"),
+        }
+
+        let second = handler()
+            .handle(
+                ClientRpcRequest::LockSetTryAcquire {
+                    members: vec!["repo:a".into(), "deploy:prod".into()],
+                    holder_id: "holder-b".into(),
+                    ttl_ms: 5_000,
+                },
+                &ctx,
+            )
+            .await
+            .expect("second acquire should return cleanly");
+        match second {
+            ClientRpcResponse::LockSetResult(response) => {
+                assert!(!response.is_success);
+                assert_eq!(response.blocked_member.as_deref(), Some("repo:a"));
+            }
+            other => panic!("expected LockSetResult, got {other:?}"),
+        }
+        assert!(ctx.kv_store.read(ReadRequest::new("__coord:lock:deploy:prod")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_handle_lockset_expiry_takeover() {
+        let ctx = setup_test_context().await;
+        let first = handler()
+            .handle(
+                ClientRpcRequest::LockSetTryAcquire {
+                    members: vec!["repo:a".into(), "pipeline:42".into()],
+                    holder_id: "holder-a".into(),
+                    ttl_ms: 50,
+                },
+                &ctx,
+            )
+            .await
+            .expect("first acquire should succeed");
+        let first_tokens = match first {
+            ClientRpcResponse::LockSetResult(response) => response.member_tokens,
+            other => panic!("expected LockSetResult, got {other:?}"),
+        };
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let second = handler()
+            .handle(
+                ClientRpcRequest::LockSetTryAcquire {
+                    members: vec!["repo:a".into(), "pipeline:42".into()],
+                    holder_id: "holder-b".into(),
+                    ttl_ms: 50,
+                },
+                &ctx,
+            )
+            .await
+            .expect("second acquire should succeed after expiry");
+        match second {
+            ClientRpcResponse::LockSetResult(response) => {
+                assert!(response.is_success);
+                let old_repo = first_tokens.iter().find(|token| token.member == "repo:a").unwrap().fencing_token;
+                let new_repo =
+                    response.member_tokens.iter().find(|token| token.member == "repo:a").unwrap().fencing_token;
+                assert!(new_repo > old_repo);
+            }
+            other => panic!("expected LockSetResult, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_lockset_compound_operation_scenario() {
+        let ctx = setup_test_context().await;
+        let response = handler()
+            .handle(
+                ClientRpcRequest::LockSetAcquire {
+                    members: vec!["repo:alpha".into(), "pipeline:42".into(), "deploy:prod".into()],
+                    holder_id: "deploy-worker".into(),
+                    ttl_ms: 5_000,
+                    timeout_ms: 5_000,
+                },
+                &ctx,
+            )
+            .await
+            .expect("compound lockset acquire should succeed");
+        match response {
+            ClientRpcResponse::LockSetResult(result) => {
+                assert!(result.is_success);
+                assert_eq!(result.member_tokens.iter().map(|token| token.member.as_str()).collect::<Vec<_>>(), vec![
+                    "deploy:prod",
+                    "pipeline:42",
+                    "repo:alpha"
+                ]);
+            }
+            other => panic!("expected LockSetResult, got {other:?}"),
         }
     }
 

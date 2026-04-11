@@ -14,6 +14,7 @@
 //! # Module Structure
 //!
 //! - `lock_invariants`: Runtime invariant checks for lock state
+//! - `lockset_invariants`: Runtime invariant checks for atomic lock-set state
 //! - `verus_shim`: Zero-cost ghost code macros for production use
 //!
 //! # Usage
@@ -41,10 +42,12 @@
 //! - Preservation proofs (which invariants are maintained)
 
 pub mod lock_invariants;
+pub mod lockset_invariants;
 pub mod verus_shim;
 
 // Re-export key types for use in lock.rs
 pub use lock_invariants::GhostLockState;
 pub use lock_invariants::LockStateSpec;
+pub use lockset_invariants::LockSetStateSpec;
 // Re-export verus shims for ghost code in production
 pub use verus_shim::*;

@@ -52,6 +52,42 @@ pub enum CoordinationRequest {
         /// New TTL in milliseconds.
         ttl_ms: u64,
     },
+    /// Acquire a distributed lock set with timeout.
+    LockSetAcquire {
+        /// Requested lock-set members.
+        members: Vec<String>,
+        /// Holder ID.
+        holder_id: String,
+        /// Lock TTL in milliseconds.
+        ttl_ms: u64,
+        /// Acquire timeout in milliseconds.
+        timeout_ms: u64,
+    },
+    /// Try to acquire a distributed lock set without blocking.
+    LockSetTryAcquire {
+        /// Requested lock-set members.
+        members: Vec<String>,
+        /// Holder ID.
+        holder_id: String,
+        /// Lock TTL in milliseconds.
+        ttl_ms: u64,
+    },
+    /// Release a distributed lock set.
+    LockSetRelease {
+        /// Holder ID.
+        holder_id: String,
+        /// Canonical member tokens from the guard.
+        member_tokens: Vec<LockSetMemberTokenWire>,
+    },
+    /// Renew a distributed lock set.
+    LockSetRenew {
+        /// Holder ID.
+        holder_id: String,
+        /// Canonical member tokens from the guard.
+        member_tokens: Vec<LockSetMemberTokenWire>,
+        /// New TTL in milliseconds.
+        ttl_ms: u64,
+    },
 
     // Counter operations
     /// Get the current value of an atomic counter.
@@ -340,6 +376,18 @@ impl CoordinationRequest {
                 key: format!("_lock:{key}"),
                 value: vec![],
             }),
+            Self::LockSetAcquire { members, .. } | Self::LockSetTryAcquire { members, .. } => {
+                members.first().map(|member| Operation::Write {
+                    key: format!("_lock:{member}"),
+                    value: vec![],
+                })
+            }
+            Self::LockSetRelease { member_tokens, .. } | Self::LockSetRenew { member_tokens, .. } => {
+                member_tokens.first().map(|member| Operation::Write {
+                    key: format!("_lock:{}", member.member),
+                    value: vec![],
+                })
+            }
 
             Self::CounterGet { key } | Self::SignedCounterGet { key } | Self::SequenceCurrent { key } => {
                 Some(Operation::Read {

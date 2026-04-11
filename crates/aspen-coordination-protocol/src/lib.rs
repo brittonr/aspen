@@ -28,6 +28,34 @@ pub struct LockResultResponse {
     pub error: Option<String>,
 }
 
+/// Per-member fencing token for a lock-set guard.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockSetMemberTokenWire {
+    /// Canonical member name.
+    pub member: String,
+    /// Fencing token assigned to this member.
+    pub fencing_token: u64,
+}
+
+/// Lock-set operation result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LockSetResultResponse {
+    /// Whether the lock-set operation succeeded.
+    pub is_success: bool,
+    /// Holder ID for the acquired set.
+    pub holder_id: Option<String>,
+    /// Canonical member tokens for the full set.
+    pub member_tokens: Vec<LockSetMemberTokenWire>,
+    /// Shared deadline in Unix milliseconds.
+    pub deadline_ms: Option<u64>,
+    /// Blocking member when acquisition fails.
+    pub blocked_member: Option<String>,
+    /// Blocking holder when acquisition fails.
+    pub blocked_holder: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
 // =============================================================================
 // Counter types
 // =============================================================================
