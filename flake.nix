@@ -3616,6 +3616,18 @@
                 aspenCliPackage = ciVmTestCliBin [];
               };
 
+              # Trust domain node expungement: 3-node cluster with trust feature,
+              # direct expungement + peer enforcement + factory reset rejoin.
+              # Build: nix build .#checks.x86_64-linux.trust-expungement-test --option sandbox false
+              trust-expungement-test = import ./nix/tests/trust-expungement.nix {
+                inherit pkgs;
+                aspenNodePackage = ciVmTestBin {
+                  name = "aspen-node";
+                  features = ["docs" "hooks" "automerge" "blob" "trust"];
+                };
+                aspenCliPackage = ciVmTestCliBin [];
+              };
+
               # Build: nix build .#checks.x86_64-linux.multi-node-dogfood-test --option sandbox false
               multi-node-dogfood-test = import ./nix/tests/multi-node-dogfood.nix {
                 inherit pkgs;

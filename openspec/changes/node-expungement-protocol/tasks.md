@@ -36,5 +36,5 @@
 - [x] 6.1 Unit test: `mark_expunged()` sets the flag, zeroizes shares, survives reload
 - [x] 6.2 Unit test: expunged node rejects all trust protocol messages
 - [x] 6.3 Unit test: peer sends `Expunged` when receiving GetShare from non-member
-- [ ] 6.4 Integration test: 3-node cluster → expunge node 3 → verify node 3 can't rejoin → wipe data_dir → re-add as fresh member
-- [ ] 6.5 Test: expunged node that never received the message gets expunged via peer enforcement on next communication attempt
+- [x] 6.4 Integration test: 3-node cluster → expunge node 3 → verify node 3 can't rejoin → wipe data_dir → re-add as fresh member
+- [x] 6.5 Test: expunged node that never received the message gets expunged via peer enforcement on next communication attempt
