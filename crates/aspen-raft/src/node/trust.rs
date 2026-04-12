@@ -64,6 +64,13 @@ struct ShareCollectionPlan {
     timeout: Duration,
 }
 
+pub(crate) enum PeerExpungementProbeOutcome {
+    NotApplicable,
+    Healthy,
+    RetryNeeded,
+    Expunged { epoch: u64 },
+}
+
 pub(crate) fn build_trust_initialize_payload(request: &InitRequest) -> Result<TrustInitializePayload, String> {
     let total_members = request.initial_members.len();
     let threshold = resolve_trust_threshold(total_members, request.trust.threshold)?;
@@ -337,6 +344,59 @@ impl RaftNode {
         let membership = metrics.membership_config.membership();
         let voters: BTreeSet<_> = membership.voter_ids().collect();
         membership.nodes().any(|(node_id, node)| voters.contains(node_id) && node.iroh_addr.id == requester)
+    }
+
+    pub(crate) async fn probe_for_peer_expungement(&self) -> Result<PeerExpungementProbeOutcome, String> {
+        let StateMachineVariant::Redb(storage) = self.state_machine() else {
+            return Ok(PeerExpungementProbeOutcome::NotApplicable);
+        };
+        if storage.is_expunged().map_err(|e| e.to_string())? {
+            let epoch = storage.load_expunged().map_err(|e| e.to_string())?.map(|metadata| metadata.epoch).unwrap_or(0);
+            return Ok(PeerExpungementProbeOutcome::Expunged { epoch });
+        }
+
+        let Some(client) = self.trust_share_client().cloned() else {
+            return Ok(PeerExpungementProbeOutcome::NotApplicable);
+        };
+        let current_epoch = match storage.load_current_trust_epoch().map_err(|e| e.to_string())? {
+            Some(epoch) => epoch,
+            None => {
+                if storage.load_digests(1).map_err(|e| e.to_string())?.is_empty() {
+                    return Ok(PeerExpungementProbeOutcome::NotApplicable);
+                }
+                1
+            }
+        };
+
+        let mut peers = storage.load_members(current_epoch).map_err(|e| e.to_string())?;
+        peers.remove(&self.node_id().0);
+        if peers.is_empty() {
+            return Ok(PeerExpungementProbeOutcome::NotApplicable);
+        }
+
+        let mut saw_retryable_error = false;
+        for (node_id, endpoint) in peers {
+            match client.get_share(endpoint, current_epoch).await {
+                Ok(_share) => {
+                    info!(node_id, epoch = current_epoch, "peer expungement probe confirmed local membership");
+                    return Ok(PeerExpungementProbeOutcome::Healthy);
+                }
+                Err(error) => {
+                    if let Some(expunged) = error.downcast_ref::<ExpungedByPeer>() {
+                        self.handle_peer_expungement(expunged.epoch, node_id)?;
+                        return Ok(PeerExpungementProbeOutcome::Expunged { epoch: expunged.epoch });
+                    }
+                    saw_retryable_error = true;
+                    warn!(node_id, epoch = current_epoch, error = %error, "peer expungement probe failed");
+                }
+            }
+        }
+
+        if saw_retryable_error {
+            Ok(PeerExpungementProbeOutcome::RetryNeeded)
+        } else {
+            Ok(PeerExpungementProbeOutcome::NotApplicable)
+        }
     }
 
     pub(crate) async fn rotate_trust_after_membership_change(

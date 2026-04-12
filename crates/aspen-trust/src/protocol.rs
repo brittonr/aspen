@@ -34,8 +34,9 @@ pub enum TrustRequest {
     GetShare(GetShareRequest),
     /// Notify a node that it has been expunged at the given epoch.
     ///
-    /// Fire-and-forget: the receiver records expungement and zeroizes its
-    /// shares. No response is expected (the sender closes the stream).
+    /// The receiver records expungement, zeroizes its shares, then replies
+    /// with `TrustResponse::Expunged { epoch }` as an acknowledgement so the
+    /// sender knows peer-side processing finished before the stream closes.
     Expunged {
         /// The epoch at which the recipient was removed.
         epoch: u64,

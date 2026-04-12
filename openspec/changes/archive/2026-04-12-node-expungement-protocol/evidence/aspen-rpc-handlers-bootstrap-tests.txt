@@ -1,0 +1,50 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running unittests src/lib.rs (target/debug/deps/aspen_rpc_handlers-fd957ee56779ed08)
+
+running 38 tests
+test client::tests::test_change_membership_remains_rate_limit_exempt ... ok
+test client::tests::test_init_cluster_with_trust_is_bootstrap_operation ... ok
+test registry::tests::add_handlers_empty_vec_is_noop ... ok
+test registry::tests::add_handlers_sorts_by_priority ... ok
+test registry::tests::add_handlers_appends_after_existing ... ok
+test registry::tests::swap_plugin_handlers_empty_removes_all_plugins ... ok
+test registry::tests::swap_plugin_handlers_replaces_plugins_keeps_native ... ok
+test verified::conversions::tests::test_bytes_to_string_lossy_valid_utf8 ... ok
+test verified::conversions::tests::test_bytes_to_string_lossy_invalid_utf8 ... ok
+test verified::conversions::tests::test_convert_dlq_reason_known ... ok
+test verified::conversions::tests::test_convert_dlq_reason_unknown ... ok
+test verified::conversions::tests::test_optional_bytes_to_string_lossy_none ... ok
+test test_mocks::tests::test_mock_network_factory_add_remove ... ok
+test test_mocks::tests::test_mock_watch_registry_lifecycle ... ok
+test verified::conversions::tests::test_optional_bytes_to_string_lossy_some ... ok
+test verified::timeout::tests::test_is_indefinite_timeout_false ... ok
+test verified::timeout::tests::test_is_indefinite_timeout_true ... ok
+test verified::timeout::tests::test_normalize_timeout_nonzero ... ok
+test verified::timeout::tests::test_normalize_timeout_u32_nonzero ... ok
+test verified::timeout::tests::test_normalize_timeout_zero ... ok
+test verified::timeout::tests::test_normalize_timeout_u32_zero ... ok
+test verified::validation::tests::test_is_lock_owner_both_mismatch ... ok
+test verified::validation::tests::test_is_lock_owner_empty_holder ... ok
+test verified::validation::tests::test_is_lock_owner_holder_mismatch ... ok
+test verified::validation::tests::test_is_lock_owner_large_token ... ok
+test verified::validation::tests::test_is_lock_owner_matching ... ok
+test verified::validation::tests::test_is_lock_owner_token_mismatch ... ok
+test verified::validation::tests::test_validate_lock_ownership_both_mismatch ... ok
+test verified::validation::tests::test_validate_lock_ownership_holder_mismatch ... ok
+test verified::validation::tests::test_validate_lock_ownership_token_mismatch ... ok
+test verified::validation::tests::test_validate_lock_ownership_valid ... ok
+test registry::tests::dispatch_app_request_without_handler_returns_capability_unavailable ... ok
+test test_mocks::tests::test_mock_endpoint_provider_peer_id ... ok
+test registry::tests::dispatch_core_request_without_handler_returns_error ... ok
+test registry::tests::dispatch_routes_to_matching_handler ... ok
+test test_mocks::tests::test_mock_endpoint_provider_deterministic ... ok
+test proxy::tests::proxy_service_respects_hop_limit ... ok
+test proxy::tests::proxy_service_returns_none_without_discovery ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s

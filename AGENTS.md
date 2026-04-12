@@ -671,6 +671,7 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 - Every checked task in `tasks.md` must appear verbatim in `verification.md` with repo-relative evidence paths.
 - If you cite `bash -n` or `scripts/openspec-preflight.sh` in your completion summary, save those transcripts as evidence too.
 - Before `request_done_review` or claiming an OpenSpec task is complete, run `scripts/openspec-preflight.sh <change-dir-or-name>`.
+- `scripts/openspec-preflight.sh` also checks that every `verification.md` `Changed file:` entry is currently modified/staged. For retroactive verification of already-landed code, keep `Implementation Evidence` limited to the new verification/evidence artifacts and cite committed source files under `Task Coverage` or saved diff artifacts.
 - Stage newly created source files before `nix build` / `nix run`; untracked files can be excluded by the flake source filter and create false verification results.
 
 ## Important Notes
@@ -681,6 +682,9 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 - All legacy `RaftActor` references have been removed; the codebase uses `RaftNode` throughout
 - `openspec list --json` treats `openspec/changes/active/` as a change named `active`; inspect the dated directory inside `openspec/changes/active/` directly instead of assuming `active` is a real change
 - Fresh trust joiners replay the historical `TrustInitialize` log even though they were not initial members. `apply_trust_initialize_in_txn()` must tolerate a missing local epoch-1 share and still persist the epoch metadata; otherwise the new node fatally shuts down before it can apply the later `TrustReconfiguration` entry that assigns its first real share.
+- `ClientRpcRequest::InitClusterWithTrust { .. }` must stay classified as a bootstrap + rate-limit-exempt RPC in `crates/aspen-rpc-handlers/src/client.rs`; otherwise `aspen-cli cluster init --trust` is rejected before initialization and trust VM tests fail at startup.
+- `IrohTrustShareClient::send_expunged()` must keep the QUIC stream alive until `send.stopped()` (or equivalent peer ack) completes; `send.finish()` alone lets the connection close before the removed node reads the expungement payload.
+- Offline-expunged nodes may restart without issuing any trust traffic on their own. `crates/aspen-raft/src/trust_peer_probe.rs` now runs a bounded startup probe that asks a current peer for the local node's current-epoch share; an `ExpungedByPeer` response must still persist the expunged marker before the node can continue booting.
 - Secrets-at-rest epoch rotation must carry forward prior epoch keys into the new `SecretsEncryption` context until background re-encryption finishes; replacing the context with only the new epoch key breaks mixed-epoch reads during migration.
 - `trust_current_epoch` is written only by `TrustReconfiguration`, not by `TrustInitialize`. Code that watches trust epochs must infer epoch 1 from persisted trust digests/shares when the metadata key is still absent.
 - Redb-backed `RaftNode` tests cannot simulate a full in-process restart by reopening the same database path after `drop(node)`: openraft background tasks keep the Redb handle alive and `SharedRedbStorage::new()` returns `DatabaseAlreadyOpen`. Test startup-resume logic by creating a fresh provider/watcher on the existing node/storage state instead.

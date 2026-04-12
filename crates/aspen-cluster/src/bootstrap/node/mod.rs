@@ -570,6 +570,50 @@ async fn init_consensus(
     })
 }
 
+#[cfg(all(test, feature = "trust"))]
+#[derive(Default)]
+struct TrustPeerProbeSpawnObserver {
+    notify: Option<Arc<tokio::sync::Notify>>,
+    cancel: Option<CancellationToken>,
+}
+
+#[cfg(all(test, feature = "trust"))]
+fn trust_peer_probe_spawn_observer() -> &'static std::sync::Mutex<TrustPeerProbeSpawnObserver> {
+    static OBSERVER: std::sync::OnceLock<std::sync::Mutex<TrustPeerProbeSpawnObserver>> = std::sync::OnceLock::new();
+    OBSERVER.get_or_init(|| std::sync::Mutex::new(TrustPeerProbeSpawnObserver::default()))
+}
+
+#[cfg(all(test, feature = "trust"))]
+fn set_test_trust_peer_probe_spawn_notify(notify: Arc<tokio::sync::Notify>) {
+    let mut observer = trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned");
+    observer.notify = Some(notify);
+    observer.cancel = None;
+}
+
+#[cfg(all(test, feature = "trust"))]
+fn record_test_trust_peer_probe_spawn(cancel: CancellationToken) {
+    let notify = {
+        let mut observer = trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned");
+        observer.cancel = Some(cancel);
+        observer.notify.clone()
+    };
+    if let Some(notify) = notify {
+        notify.notify_waiters();
+    }
+}
+
+#[cfg(all(test, feature = "trust"))]
+fn take_test_trust_peer_probe_cancel() -> Option<CancellationToken> {
+    trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned").cancel.take()
+}
+
+#[cfg(all(test, feature = "trust"))]
+fn clear_test_trust_peer_probe_spawn_observer() {
+    let mut observer = trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned");
+    observer.notify = None;
+    observer.cancel = None;
+}
+
 /// Create a `RaftNode`, optionally with write batching, and with write forwarding.
 fn create_raft_node(
     config: &NodeConfig,
@@ -610,6 +654,10 @@ fn create_raft_node(
     #[cfg(feature = "trust")]
     {
         let _cancel = aspen_raft::trust_reconfig_watcher::spawn_trust_reconfig_watcher(node.clone());
+        let peer_probe_cancel = aspen_raft::trust_peer_probe::spawn_trust_peer_probe(node.clone());
+        #[cfg(all(test, feature = "trust"))]
+        record_test_trust_peer_probe_spawn(peer_probe_cancel.clone());
+        let _cancel = peer_probe_cancel;
     }
 
     node
@@ -868,7 +916,19 @@ fn register_node_metadata(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    #[cfg(feature = "trust")]
+    use aspen_raft::StateMachineVariant;
+    #[cfg(feature = "trust")]
+    use aspen_raft::storage::InMemoryLogStore;
+    #[cfg(feature = "trust")]
+    use aspen_raft::storage::InMemoryStateMachine;
     use aspen_raft::storage::StorageBackend;
+    #[cfg(feature = "trust")]
+    use tempfile::TempDir;
 
     use super::*;
 
@@ -898,6 +958,54 @@ mod tests {
         // Calling cancel again is safe
         cancel_token.cancel();
         assert!(cancel_token.is_cancelled());
+    }
+
+    #[cfg(feature = "trust")]
+    #[tokio::test]
+    async fn test_create_raft_node_spawns_trust_peer_probe_during_bootstrap() {
+        let notify = Arc::new(tokio::sync::Notify::new());
+        let spawned = notify.notified();
+        set_test_trust_peer_probe_spawn_notify(notify.clone());
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let key_path = temp_dir.path().join("iroh.key");
+        let endpoint_config = crate::IrohEndpointConfig::new()
+            .with_secret_key_path(&key_path)
+            .with_bind_port(0)
+            .with_ipv6(false)
+            .with_gossip(false)
+            .with_mdns(false)
+            .with_dns_discovery(false);
+        let iroh_manager = Arc::new(IrohEndpointManager::new(endpoint_config).await.expect("iroh manager"));
+        let network_factory = crate::IrpcRaftNetworkFactory::new(iroh_manager.clone(), HashMap::new(), false);
+        let raft_config = Arc::new(openraft::Config {
+            cluster_name: "bootstrap-trust-peer-probe-test".to_string(),
+            ..Default::default()
+        });
+        let log_store = InMemoryLogStore::default();
+        let state_machine = Arc::new(InMemoryStateMachine::default());
+        let raft = Arc::new(
+            openraft::Raft::new(1_u64.into(), raft_config, network_factory, log_store, state_machine.clone())
+                .await
+                .expect("create raft"),
+        );
+
+        let mut config = NodeConfig::default();
+        config.node_id = 1;
+        config.cookie = "bootstrap-trust-peer-probe-test".to_string();
+        config.batch_config = None;
+
+        let node = create_raft_node(&config, raft, StateMachineVariant::InMemory(state_machine), &iroh_manager);
+
+        tokio::time::timeout(Duration::from_secs(2), spawned)
+            .await
+            .expect("bootstrap path should spawn trust peer probe");
+
+        let cancel = take_test_trust_peer_probe_cancel().expect("bootstrap path should retain probe cancel token");
+        cancel.cancel();
+        clear_test_trust_peer_probe_spawn_observer();
+        node.raft().shutdown().await.expect("shutdown raft");
+        iroh_manager.shutdown().await.expect("shutdown iroh manager");
     }
 
     #[test]

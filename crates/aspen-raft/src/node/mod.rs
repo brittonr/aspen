@@ -34,6 +34,8 @@ mod kv_store;
 mod trust;
 pub use kv_store::read_index_retry_count;
 pub use kv_store::read_index_retry_success_count;
+#[cfg(feature = "trust")]
+pub(crate) use trust::PeerExpungementProbeOutcome;
 mod membership_refresh;
 #[cfg(feature = "sql")]
 mod sql;

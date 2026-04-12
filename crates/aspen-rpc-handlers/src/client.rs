@@ -239,6 +239,7 @@ fn handle_client_request_is_bootstrap(request: &ClientRpcRequest) -> bool {
             | ClientRpcRequest::GetClusterTicket
             | ClientRpcRequest::GetRaftMetrics
             | ClientRpcRequest::InitCluster
+            | ClientRpcRequest::InitClusterWithTrust { .. }
     )
 }
 
@@ -500,4 +501,26 @@ async fn handle_client_request(
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_client_api::ClientRpcRequest;
+
+    use super::handle_client_request_is_bootstrap;
+    use super::handle_client_request_is_rate_limit_exempt;
+
+    #[test]
+    fn test_init_cluster_with_trust_is_bootstrap_operation() {
+        let request = ClientRpcRequest::InitClusterWithTrust { threshold: None };
+        assert!(handle_client_request_is_bootstrap(&request));
+        assert!(handle_client_request_is_rate_limit_exempt(&request));
+    }
+
+    #[test]
+    fn test_change_membership_remains_rate_limit_exempt() {
+        let request = ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] };
+        assert!(!handle_client_request_is_bootstrap(&request));
+        assert!(handle_client_request_is_rate_limit_exempt(&request));
+    }
 }

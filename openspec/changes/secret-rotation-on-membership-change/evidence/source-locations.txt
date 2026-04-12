@@ -1,5 +1,0 @@
-crates/aspen-trust/verus/chain_spec.rs:27:pub fn compute_prior_secret_count(epoch: u64) -> (result: u32)
-crates/aspen-trust/verus/chain_spec.rs:56:pub proof fn computed_count_satisfies_invariant(epoch: u64)
-crates/aspen-raft/src/node/tests.rs:411:#[ignore = "madsim redb learner promotion does not converge for a freshly added node"]
-crates/aspen-raft/src/node/tests.rs:412:async fn test_multi_node_trust_membership_change_rotates_secret_add_and_remove() {
-crates/aspen-raft/src/node/tests.rs:540:async fn test_trust_reconfiguration_restarts_after_leader_crash_during_share_collection() {

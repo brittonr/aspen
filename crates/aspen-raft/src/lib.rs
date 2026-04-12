@@ -87,6 +87,9 @@ pub mod storage_shared;
 pub mod storage_validation;
 /// Task supervision with restart logic.
 pub mod supervisor;
+/// Startup probe that lets peers expunge stale offline members.
+#[cfg(feature = "trust")]
+pub mod trust_peer_probe;
 /// Leadership watcher for restarting pending trust reconfiguration.
 #[cfg(feature = "trust")]
 pub mod trust_reconfig_watcher;

@@ -1,0 +1,2 @@
+$ bash -n scripts/openspec-preflight.sh
+OK: bash -n scripts/openspec-preflight.sh

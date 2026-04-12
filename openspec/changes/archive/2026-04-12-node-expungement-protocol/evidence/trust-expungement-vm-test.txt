@@ -1,0 +1,24 @@
+3817:[1m[32msubtest: 6.4: expunge node 3 from cluster[0m
+4270:node1: node 3 expunged from cluster
+6888:(finished: subtest: 6.4: expunge node 3 from cluster, in 5.89 seconds)
+6913:[1m[32msubtest: 6.4: verify node 3 detects expungement[0m
+9923:[2mnode3 # [   34.832926] aspen-node[871]: Error: THIS NODE HAS BEEN PERMANENTLY EXPUNGED from the cluster at epoch 56. Removed by node 0. To rejoin, wipe the data directory (/var/lib/aspen) and restart.[0m
+12017:node3: PASS: node 3 detected expungement marker on restart
+12018:(finished: subtest: 6.4: verify node 3 detects expungement, in 10.53 seconds)
+12019:[1m[32msubtest: 6.4: wipe data dir and re-add as fresh member[0m
+15864:node3: PASS: node 3 successfully rejoined as fresh member
+15865:(finished: subtest: 6.4: wipe data dir and re-add as fresh member, in 29.90 seconds)
+15866:[1m[32msubtest: 6.5: stop node 2 before expungement[0m
+18739:(finished: subtest: 6.5: stop node 2 before expungement, in 5.41 seconds)
+18741:[1m[32msubtest: 6.5: expunge node 2 while it is offline[0m
+21810:node1: node 2 expunged while offline
+21950:(finished: subtest: 6.5: expunge node 2 while it is offline, in 6.24 seconds)
+21951:[1m[32msubtest: 6.5: restart node 2 and verify peer enforcement[0m
+22059:node2: node 2 restarted (doesn't know it's expunged)
+23802:[2mnode2 # [   84.602766] aspen-node[890]: [2m2026-04-12T21:52:48.328385Z[0m [31mERROR[0m THIS NODE HAS BEEN PERMANENTLY EXPUNGED — factory reset required to rejoin [3mepoch[0m[2m=[0m860 [3mremoved_by[0m[2m=[0m1[0m
+23936:node2: node 2 detected expungement via peer enforcement
+26987:[2mnode2 # [   90.199087] aspen-node[949]: Error: THIS NODE HAS BEEN PERMANENTLY EXPUNGED from the cluster at epoch 860. Removed by node 1. To rejoin, wipe the data directory (/var/lib/aspen) and restart.[0m
+29770:node2: PASS: node 2 blocked from restarting after peer enforcement
+29771:(finished: subtest: 6.5: restart node 2 and verify peer enforcement, in 13.84 seconds)
+29772:node1: === Trust expungement tests PASSED ===
+29899:[2mnode2 # [   95.363701] aspen-node[969]: Error: THIS NODE HAS BEEN PERMANENTLY EXPUNGED from the cluster at epoch 860. Removed by node 1. To rejoin, wipe the data directory (/var/lib/aspen) and restart.[0m

@@ -1,0 +1,33 @@
+crates/aspen-rpc-handlers/src/client.rs:242:            | ClientRpcRequest::InitClusterWithTrust { .. }
+crates/aspen-rpc-handlers/src/client.rs:515:        let request = ClientRpcRequest::InitClusterWithTrust { threshold: None };
+crates/aspen-raft/src/trust_share_client.rs:44:    async fn send_expunged(&self, target: iroh::EndpointAddr, epoch: u64) -> anyhow::Result<()>;
+crates/aspen-raft/src/trust_share_client.rs:62:    async fn send_expunged(&self, target: iroh::EndpointAddr, epoch: u64) -> anyhow::Result<()> {
+crates/aspen-raft/src/trust_share_client.rs:85:            TrustResponse::Expunged { epoch: ack_epoch } if ack_epoch == epoch => Ok(()),
+crates/aspen-raft/src/trust_share_client.rs:86:            TrustResponse::Expunged { epoch: ack_epoch } => {
+crates/aspen-raft/src/trust_share_client.rs:118:            TrustResponse::Expunged { epoch } => Err(ExpungedByPeer { epoch }.into()),
+crates/aspen-raft/src/trust_share_client.rs:195:            async move { client.send_expunged(server_addr, 7).await }
+crates/aspen-transport/src/trust.rs:36:    /// - `Some(TrustResponse::Expunged { .. })` if the requester is no longer a member
+crates/aspen-transport/src/trust.rs:136:            let bytes = postcard::to_stdvec(&TrustResponse::Expunged { epoch })
+crates/aspen-transport/src/trust.rs:137:                .context("failed to serialize expungement acknowledgement")?;
+crates/aspen-transport/src/trust.rs:138:            send.write_all(&bytes).await.context("failed to write expungement acknowledgement")?;
+crates/aspen-transport/src/trust.rs:139:            send.finish().context("failed to finish expungement acknowledgement")?;
+crates/aspen-trust/src/protocol.rs:38:    /// with `TrustResponse::Expunged { epoch }` as an acknowledgement so the
+crates/aspen-trust/src/protocol.rs:95:        let message = TrustResponse::Expunged { epoch: 5 };
+crates/aspen-raft/src/node/trust.rs:349:    pub(crate) async fn probe_for_peer_expungement(&self) -> Result<PeerExpungementProbeOutcome, String> {
+crates/aspen-raft/src/node/trust.rs:531:                        if let Err(e) = client.send_expunged(endpoint, epoch).await {
+crates/aspen-raft/src/node/trust.rs:649:            return Ok(Some(TrustResponse::Expunged { epoch: current_epoch }));
+crates/aspen-raft/src/node/trust.rs:813:        async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
+crates/aspen-raft/src/node/tests.rs:272:    async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
+crates/aspen-raft/src/node/tests.rs:288:    async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
+crates/aspen-raft/src/node/tests.rs:1320:async fn test_spawn_trust_peer_probe_marks_removed_node() {
+crates/aspen-raft/src/node/tests.rs:1363:    let cancel = crate::trust_peer_probe::spawn_trust_peer_probe(node2.node.clone());
+crates/aspen-raft/src/trust_peer_probe.rs:6://! `TrustResponse::Expunged`, which permanently marks the node as expunged.
+crates/aspen-raft/src/trust_peer_probe.rs:23:pub fn spawn_trust_peer_probe(node: Arc<RaftNode>) -> CancellationToken {
+crates/aspen-raft/src/trust_peer_probe.rs:44:        match node.probe_for_peer_expungement().await {
+crates/aspen-cluster/src/bootstrap/node/mod.rs:596:fn record_test_trust_peer_probe_spawn(cancel: CancellationToken) {
+crates/aspen-cluster/src/bootstrap/node/mod.rs:663:        let peer_probe_cancel = aspen_raft::trust_peer_probe::spawn_trust_peer_probe(node.clone());
+crates/aspen-cluster/src/bootstrap/node/mod.rs:665:        record_test_trust_peer_probe_spawn(peer_probe_cancel.clone());
+crates/aspen-cluster/src/bootstrap/node/mod.rs:971:    async fn test_create_raft_node_spawns_trust_peer_probe_during_bootstrap() {
+nix/tests/trust-expungement.nix:152:      def wait_for_voter_count(node, expected, timeout=60):
+nix/tests/trust-expungement.nix:199:          wait_for_voter_count(node1, 3, timeout=60)
+nix/tests/trust-expungement.nix:369:          # TrustResponse::Expunged, triggering on_expunged() which marks

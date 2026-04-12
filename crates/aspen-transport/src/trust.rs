@@ -133,7 +133,10 @@ async fn handle_trust_stream(
         TrustRequest::Expunged { epoch } => {
             info!(remote = %remote, epoch, "received expungement notification from peer");
             provider.on_expunged(remote, epoch).await?;
-            // No response — fire and forget.
+            let bytes = postcard::to_stdvec(&TrustResponse::Expunged { epoch })
+                .context("failed to serialize expungement acknowledgement")?;
+            send.write_all(&bytes).await.context("failed to write expungement acknowledgement")?;
+            send.finish().context("failed to finish expungement acknowledgement")?;
             Ok(())
         }
     }

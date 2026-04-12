@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-04-12-secret-rotation-on-membership-change
+  tasks: 29 total / 28 checked
+  changed files listed: 3
+  verification artifacts: 6

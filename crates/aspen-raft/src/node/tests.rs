@@ -165,6 +165,12 @@ struct TestTrustShareClient {
 
 #[cfg(feature = "trust")]
 #[derive(Clone)]
+struct ExpungedTrustShareClient {
+    epoch: u64,
+}
+
+#[cfg(feature = "trust")]
+#[derive(Clone)]
 struct TestSecretsShareCollector {
     storages_by_node: BTreeMap<u64, std::sync::Weak<SharedRedbStorage>>,
     threshold: u32,
@@ -261,6 +267,22 @@ impl crate::trust_share_client::TrustShareClient for TestTrustShareClient {
             .ok_or_else(|| anyhow::anyhow!("missing storage for endpoint {}", target.id))?;
         let share = storage.load_share(epoch)?.ok_or_else(|| anyhow::anyhow!("missing share for epoch {epoch}"))?;
         Ok(aspen_trust::protocol::ShareResponse { epoch, share })
+    }
+
+    async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "trust")]
+#[async_trait]
+impl crate::trust_share_client::TrustShareClient for ExpungedTrustShareClient {
+    async fn get_share(
+        &self,
+        _target: EndpointAddr,
+        _epoch: u64,
+    ) -> anyhow::Result<aspen_trust::protocol::ShareResponse> {
+        Err(crate::trust_share_client::ExpungedByPeer { epoch: self.epoch }.into())
     }
 
     async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
@@ -1291,6 +1313,71 @@ async fn test_trust_reconfiguration_restarts_after_leader_crash_during_share_col
     for token in watcher_tokens {
         token.cancel();
     }
+}
+
+#[cfg(feature = "trust")]
+#[tokio::test]
+async fn test_spawn_trust_peer_probe_marks_removed_node() {
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+    let cluster_name = "peer-expungement-probe";
+    let cluster_id = cluster_name.as_bytes().to_vec();
+
+    let mut node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node2 = create_test_redb_node(2, router.clone(), failure_injector, cluster_name).await;
+
+    let endpoint1 = endpoint_addr_for_node(1);
+    let endpoint2 = endpoint_addr_for_node(2);
+    let immediate_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
+        Arc::new(TestTrustShareClient::immediate(BTreeMap::new()));
+    let expunged_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
+        Arc::new(ExpungedTrustShareClient { epoch: 7 });
+
+    Arc::get_mut(&mut node1.node).unwrap().set_trust_share_client(immediate_client, cluster_id.clone());
+    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(expunged_client, cluster_id);
+
+    ClusterController::init(&node1.node, InitRequest {
+        initial_members: vec![
+            cluster_node_with_endpoint(1, endpoint1),
+            cluster_node_with_endpoint(2, endpoint2),
+        ],
+        trust: aspen_cluster_types::TrustConfig::enabled(),
+    })
+    .await
+    .expect("init trust cluster");
+    wait_for_leader(&node1.node, 1, Duration::from_secs(10)).await;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let ready = [node1.storage.as_ref(), node2.storage.as_ref()]
+                .iter()
+                .all(|storage| storage.load_share(1).unwrap().is_some() && storage.load_digests(1).unwrap().len() == 2);
+            if ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("both nodes should persist epoch 1 trust state");
+
+    let cancel = crate::trust_peer_probe::spawn_trust_peer_probe(node2.node.clone());
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if node2.storage.is_expunged().unwrap() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("startup probe should mark removed node as expunged");
+    cancel.cancel();
+
+    let metadata = node2.storage.load_expunged().unwrap().expect("expunged metadata should be stored");
+    assert_eq!(metadata.epoch, 7);
+    assert_eq!(metadata.removed_by, 1);
+    assert!(node2.storage.is_expunged().unwrap());
+    assert!(node2.storage.load_share(1).unwrap().is_none());
 }
 
 /// Test ensure_initialized returns error before init.

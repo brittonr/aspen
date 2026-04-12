@@ -1,0 +1,104 @@
+b40218df5 trust: keep secrets recovery aligned with runtime trust
+05eaf75f4 Add NixOS VM integration test for node expungement
+c4eb0d86b feat(trust): implement node expungement protocol
+90dbc6872 feat(coordination): add distributed lock sets
+df428f5a2 trust: Keep secret rotation safe for fresh voters
+bbe2918c8 trust: Encrypt secrets engine data at rest using cluster-derived keys
+28307f564 trust: Preserve rotation context across membership changes
+995a1c652 openspec: complete finish-shamir-cluster-secret-raft-distribution — sync specs + archive
+37b688992 testing: Extract shared TestCluster trait and replace fixed sleeps with polling
+70840a989 Implement node expungement core types and storage
+c8e50f1e3 Add Shamir cluster secret sharing (aspen-trust crate)
+7865afcb6 tree-diff-api: rename detection, unified renderer, RPC, CLI
+995f2fa4a observability: wire connection pool metrics through full stack
+4cde4d39f observability: RPC counter tests, write batcher metrics test, snapshot transfer ring buffer
+8e7310669 cluster observability: metrics registry, RPC instrumentation, snapshot/batcher metrics
+2237ff15d fix: deploy --wait tolerates node restarts instead of bailing after 60s
+f5223d61c feat: QUIC stream priority for Raft traffic under load
+04e8db9c8 feat: chunked git bridge fetch protocol for large repos
+aa8e3443e fix: prevent self-forwarding in read/write/scan/delete paths
+be557b13b feat: follower read forwarding via leader QUIC
+e900c3c7b federation auth tokens: capability-scoped credentials for push/pull sync
+a1d1874f4 federation bidi sync: compare refs, pull and push in one connection
+d8d7c1b57 federation pull: cold pull from remote cluster, incremental sync, mirror metadata
+e01939251 federation push: wire protocol, handler, client, RPC, CLI, tests
+f9ac991ca federated git clone: end-to-end across two independent clusters
+271c6204f federation blob transfer: serve git objects via sync protocol, create mirror repos
+fc2f55016 archive federation-ref-pull, sync 2 specs to main
+f7ddf1bc1 expose iroh_node_id in health response, fix NixOS federation handshake test
+fed16b7b6 add federation sync CLI command and RPC plumbing
+9938b87a3 unify dogfood deploy: use cluster deploy RPC instead of bash orchestration
+67478596a feat(fuse): lazy file fetch, content-hash cache validation, offline mode
+55e4e1eb7 cli: return non-zero on add-learner/change-membership/promote failure
+05ed77651 Add cluster update-peer CLI subcommand for direct peer address updates
+cf574f155 fix three loose threads: batcher forwarding, election re-randomization, prefetch kill
+83a3a0ce0 follower write forwarding: transparent leader forwarding during elections
+13dc01240 raft: quiet per-RPC log spam that drowns out meaningful events
+178dbaed6 add per-node election timeout jitter to prevent split-votes
+d267b7ea5 propagate gossip-discovered addresses into Raft membership
+400a36d73 forge: add discussion COB, fork/mirror support, integration and property tests
+18c04e255 forge: server-side merge workflow with strategy selection
+8542ee6e8 forge: NIP-34 bridge, profile resolution, and CLI auth
+bcaee14d7 forge: Nostr login via NIP-07 browser extension
+71f5fbca9 iroh 0.95→0.97: full ecosystem upgrade
+39e9de567 deploy: executor feedback with configurable binary validation
+c7f1735ec Wire real iroh QUIC RPCs into the deploy path
+ce2686418 cli: Expose rolling deployments to operators
+d4287f976 Orchestrate rolling deployments across the cluster
+5943253a7 Lay groundwork for quorum-safe rolling deployments
+b8b0caa7a enable self-hosted building without WASM plugins
+805a67a70 Wire forge, CI, and nix cache into a single push-to-publish pipeline
+cea3fe985 add nix cache gateway: HTTP bridge for substituter integration
+519805893 contacts & calendar: domain crates, RPC types, vCard/iCal parsers
+018c99175 aspen-net: wire RPC variants, handler, CLI subcommands, daemon binary
+9a96bba62 Fix clippy errors from relay-server feature gate
+7a0de3325 feat: add server-side metrics ingest/query and alert rules with evaluation engine
+5c59de153 feat: add trace query RPCs (TraceList, TraceGet, TraceSearch)
+044d45284 feat: add trace ingest pipeline and index create/drop/scan RPCs
+47a1e6c87 docs: remove stale RaftActor references from aspen-raft
+4327e577b fix: snapshot race root cause, variant ordering, golden discriminants, native coordination
+b0c1df933 fix: postcard discriminant stability, snapshot race, and regression tests
+fdd2a1495 consolidate workspace: merge 17 extension repos into main workspace
+0cb04e873 Consolidate 37 core crates into workspace
+7a32d79b2 Extract aspen-cluster to ~/git/aspen-cluster
+e5a47de91 Extract aspen-transport to ~/git/aspen-transport
+a1a643c01 cleanup: remove stale dirs + fix workspace members for extracted crates
+407cf8ff2 Extract Raft family to ~/git/aspen-raft
+3cfc5d189 cleanup: remove stale crate directories (aspen-cluster-types, aspen-constants)
+3806297ec Remove extracted RPC crates
+a43be478a move dns to its own repo at ~/git/aspen-dns
+527a44d5d Extract pijul into standalone repo at ../aspen-pijul
+5e140bdd5 docs: rename secrets KV v2 to just KV
+8bb91154a Fix three multi-node cluster failures exposed by VM tests
+8c4f57910 Enable plugin lifecycle and hot-reload without node restarts
+6670e63ea Enable cross-cluster request proxying for federated plugin dispatch
+7c0bad475 Harden WASM plugin host: eliminate dispatch allocs, enforce timeouts, standardize error encoding
+104a96be7 feat: add capability-aware federation dispatch
+cc63909c3 fix: make aspen-auth optional so WASM plugins compile for wasm32
+14e1a8d7c refactor: exhaustive Tiger Style compliance audit and fixes
+d891a100e fix: Tiger Style compliance - unit suffixes and field naming
+0560366bc fix: Tiger Style boolean naming compliance across codebase
+31ce9d0d3 fix: Tiger Style compliance - error handling, assertions, type safety
+5ee3f1540 fix: comprehensive Tiger Style compliance across 65 files
+39b623296 fix: comprehensive Tiger Style compliance across 7 phases
+0d63f59be fix: Tiger Style compliance - track spawns with TaskTracker, remove .expect(), add assertions
+c92dbc49d refactor: modularize 9 large files into focused submodules
+50139723e refactor: comprehensive modularization across 4 large files and 7 handler crates
+dbd5745ef refactor: modularize 5 large files into focused submodules
+c4c95cfec refactor: modularize god-modules to reduce compile times and improve maintainability
+f8baa97f3 refactor: split messages.rs into domain-specific modules
+4a4bc82f0 refactor: split node.rs into focused modules
+b190cc6b3 refactor: modularize storage_shared into focused modules
+a1034b8f9 refactor: modularize Aspen codebase for improved build times
+72f268e95 refactor: update aspen-raft and aspen-jobs to use extracted crates directly
+d74d57492 refactor: extract aspen-kv-types, aspen-cluster-types, and aspen-traits from aspen-core
+214c1eb7d Add Raft server integration tests for lifecycle and limits
+bf75a7a6c Merge branch 'crate-consolidation' into main
+9ed7f6433 refactor: update imports from aspen_client_rpc to aspen_client_api
+63d8afcbd refactor(core): consolidate aspen-constants and aspen-layer into aspen-core
+d39a20ec7 fix: resolve timeout and Tiger Style violations
+8f6fc75dd style: apply rustfmt formatting
+d233a3d07 fix: resolve all compilation errors and warnings after modularization
+37d897099 refactor(cli): extract command-line interface into aspen-cli crate
+caf9ed684 refactor(raft): extract Raft consensus into aspen-raft crate
+2e8176922 refactor: decompose monolithic architecture into focused crates

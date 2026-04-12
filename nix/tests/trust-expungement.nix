@@ -115,6 +115,13 @@ in
           ).strip()
 
       def get_endpoint_addr_json(node):
+          node.wait_for_file("/var/lib/aspen/cluster-ticket.txt", timeout=30)
+          node.wait_until_succeeds(
+              "journalctl -u aspen-node --no-pager 2>/dev/null"
+              " | grep 'cluster ticket generated'"
+              " | tail -1",
+              timeout=30,
+          )
           output = node.succeed(
               "journalctl -u aspen-node --no-pager 2>/dev/null"
               " | grep 'cluster ticket generated'"
@@ -127,6 +134,8 @@ in
           addr_match = re.search(r'direct_addrs=\[(.*?)\]', output)
           if addr_match:
               for a in re.findall(r'\d+\.\d+\.\d+\.\d+:\d+', addr_match.group(1)):
+                  if a.startswith("10.0.2.15:"):
+                      continue
                   addrs.append(a)
           assert len(addrs) > 0, f"no IPv4 addresses found"
           return json.dumps({"id": eid, "addrs": [{"Ip": a} for a in addrs]})
@@ -137,6 +146,14 @@ in
           ticket = get_ticket(node)
           node.wait_until_succeeds(
               f"aspen-cli --ticket '{ticket}' cluster health 2>/dev/null",
+              timeout=timeout,
+          )
+
+      def wait_for_voter_count(node, expected, timeout=60):
+          ticket = get_ticket(node)
+          node.wait_until_succeeds(
+              f"aspen-cli --ticket '{ticket}' --json cluster status >/tmp/_cluster_status.json 2>/dev/null"
+              f" && jq -e '[.nodes[] | select(.is_voter == true)] | length == {expected}' /tmp/_cluster_status.json >/dev/null",
               timeout=timeout,
           )
 
@@ -151,7 +168,8 @@ in
           node1.log(f"node2 addr: {addr2_json}")
           node1.log(f"node3 addr: {addr3_json}")
 
-          cli_text(node1, "cluster init")
+          cli_text(node1, "cluster init --trust")
+          time.sleep(2)
 
           node1.wait_until_succeeds(
               f"aspen-cli --ticket '{get_ticket(node1)}'"
@@ -159,22 +177,29 @@ in
               f" 2>/dev/null",
               timeout=30,
           )
+          time.sleep(2)
           node1.wait_until_succeeds(
               f"aspen-cli --ticket '{get_ticket(node1)}'"
               f" cluster add-learner --node-id 3 --addr '{addr3_json}'"
               f" 2>/dev/null",
               timeout=30,
           )
+          time.sleep(2)
 
-          node1.wait_until_succeeds(
+          rc, _ = node1.execute(
               f"aspen-cli --ticket '{get_ticket(node1)}'"
               f" cluster change-membership 1 2 3"
-              f" 2>/dev/null",
-              timeout=30,
+              f" >/tmp/_change_membership.out 2>/tmp/_change_membership.err"
           )
+          stdout = node1.succeed("cat /tmp/_change_membership.out 2>/dev/null || true").strip()
+          stderr = node1.succeed("cat /tmp/_change_membership.err 2>/dev/null || true").strip()
+          node1.log(
+              f"initial change-membership rc={rc} stdout={stdout!r} stderr={stderr!r}"
+          )
+          wait_for_voter_count(node1, 3, timeout=60)
 
           for n in [node1, node2, node3]:
-              wait_for_healthy(n, timeout=30)
+              wait_for_healthy(n, timeout=60)
 
           # Write some data to verify cluster is working
           ticket1 = get_ticket(node1)
@@ -193,7 +218,7 @@ in
           # Expunge node 3 via CLI on node 1 (the leader)
           result = cli(
               node1,
-              "cluster expunge --node-id 3 --confirm",
+              "cluster expunge 3 --confirm",
               ticket=ticket1,
           )
           node1.log(f"expunge result: {result}")
@@ -317,7 +342,7 @@ in
           # Expunge node 2 from the cluster while it's down
           result = cli(
               node1,
-              "cluster expunge --node-id 2 --confirm",
+              "cluster expunge 2 --confirm",
               ticket=ticket1,
           )
           node1.log(f"expunge node 2 result: {result}")

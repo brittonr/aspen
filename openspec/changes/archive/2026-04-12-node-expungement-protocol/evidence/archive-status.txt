@@ -1,0 +1,4 @@
+$ find openspec/changes -maxdepth 1 -mindepth 1 -type d ! -name archive | sort
+openspec/changes/tla-plus-model-checking
+$ test ! -e openspec/changes/node-expungement-protocol
+OK: openspec/changes/node-expungement-protocol removed after archive

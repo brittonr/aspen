@@ -1,0 +1,142 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on artifact directory
+   Compiling displaydoc v0.2.5
+   Compiling derive_more-impl v2.1.1
+   Compiling n0-error v0.1.3
+   Compiling bytes v1.11.1
+   Compiling time v0.3.47
+   Compiling tracing-core v0.1.36
+   Compiling zerovec v0.11.5
+   Compiling aes-gcm v0.10.3
+   Compiling num-traits v0.2.19
+   Compiling serde_json v1.0.149
+   Compiling rand v0.8.5
+   Compiling either v1.15.0
+   Compiling petgraph v0.7.1
+   Compiling crypto-common v0.1.7
+   Compiling futures-concurrency v7.7.1
+   Compiling digest v0.10.7
+   Compiling itertools v0.14.0
+   Compiling sha3 v0.10.8
+   Compiling zerotrie v0.2.3
+   Compiling tracing v0.1.44
+   Compiling yasna v0.5.2
+   Compiling tokio v1.50.0
+   Compiling http v1.4.0
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling noq-udp v0.9.0
+   Compiling mainline v6.0.1
+   Compiling iroh-metrics v0.38.3
+   Compiling tracing-futures v0.2.5
+   Compiling uhlc v0.8.2
+   Compiling icu_collections v2.1.1
+   Compiling icu_locale_core v2.1.1
+   Compiling aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
+   Compiling rcgen v0.14.7
+   Compiling chrono v0.4.44
+   Compiling rust_decimal v1.40.0
+   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
+   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination-protocol)
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-protocol)
+   Compiling schemars v0.8.22
+   Compiling lalrpop v0.22.2
+   Compiling byte-unit v5.2.0
+   Compiling malachite-base v0.6.1
+   Compiling http-body v1.0.1
+   Compiling icu_provider v2.1.1
+   Compiling http-body-util v0.1.3
+   Compiling icu_properties v2.1.2
+   Compiling icu_normalizer v2.1.1
+   Compiling idna_adapter v1.2.1
+   Compiling derive_more v2.1.1
+   Compiling idna v1.1.0
+   Compiling noq-proto v0.16.0
+   Compiling url v2.5.8
+   Compiling attohttpc v0.30.1
+   Compiling iroh-base v0.97.0
+   Compiling iroh-tickets v0.4.0
+   Compiling tokio-util v0.7.18
+   Compiling tokio-rustls v0.26.4
+   Compiling netlink-sys v0.8.8
+   Compiling tower v0.5.3
+   Compiling async-compat v0.2.5
+   Compiling acto v0.8.0
+   Compiling backon v1.6.0
+   Compiling aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+   Compiling openraft v0.10.0 (/home/brittonr/git/aspen/openraft/openraft)
+   Compiling netlink-proto v0.12.0
+   Compiling netdev v0.40.1
+   Compiling tower-http v0.6.8
+   Compiling malachite-nz v0.6.1
+   Compiling h2 v0.4.13
+   Compiling n0-future v0.3.2
+   Compiling tokio-stream v0.1.18
+   Compiling tokio-websockets v0.12.3
+   Compiling n0-watcher v0.6.1
+   Compiling netwatch v0.15.0
+   Compiling nickel-lang-parser v0.1.1
+   Compiling nickel-lang-core v0.16.1
+   Compiling noq v0.17.0
+   Compiling irpc v0.13.0
+   Compiling hyper v1.8.1
+   Compiling hickory-proto v0.25.2
+   Compiling malachite-q v0.6.1
+   Compiling hyper-util v0.1.20
+   Compiling malachite-float v0.6.1
+   Compiling hyper-rustls v0.27.7
+   Compiling igd-next v0.16.2
+   Compiling reqwest v0.12.28
+   Compiling metrics-exporter-prometheus v0.16.2
+   Compiling malachite v0.6.1
+   Compiling hickory-resolver v0.25.2
+   Compiling swarm-discovery v0.5.0
+   Compiling portmapper v0.15.0
+   Compiling pkarr v5.0.2
+   Compiling iroh-relay v0.97.0
+   Compiling iroh v0.97.0
+   Compiling aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+   Compiling aspen-crypto v0.1.0 (/home/brittonr/git/aspen/crates/aspen-crypto)
+   Compiling iroh-gossip v0.97.0
+   Compiling aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks-types)
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+   Compiling aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+   Compiling aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-core)
+   Compiling aspen-deploy v0.1.0 (/home/brittonr/git/aspen/crates/aspen-deploy)
+   Compiling aspen-testing-fixtures v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-fixtures)
+   Compiling aspen-auth v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth)
+   Compiling aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-types)
+   Compiling aspen-sharding v0.1.0 (/home/brittonr/git/aspen/crates/aspen-sharding)
+   Compiling aspen-redb-storage v0.1.0 (/home/brittonr/git/aspen/crates/aspen-redb-storage)
+   Compiling aspen-coordination v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+   Compiling aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport)
+   Compiling aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+   Compiling aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network)
+   Compiling aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+   Compiling aspen-client v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client)
+   Compiling nickel-lang v2.0.0
+   Compiling aspen-testing v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing)
+   Compiling aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-rpc-core)
+   Compiling aspen-cluster-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-handler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 02s
+     Running unittests src/lib.rs (target/debug/deps/aspen_cluster_handler-321c1f5babc3dd1c)
+
+running 1 test
+test handler::tests::test_can_handle_expunge_node ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 34 filtered out; finished in 0.00s
+
+     Running tests/deploy_rpc_integration.rs (target/debug/deps/deploy_rpc_integration-76b1420b1b7e14fe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

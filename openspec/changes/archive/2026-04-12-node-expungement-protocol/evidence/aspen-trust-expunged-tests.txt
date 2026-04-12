@@ -1,0 +1,31 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.33s
+     Running unittests src/lib.rs (target/debug/deps/aspen_trust-0b2b245501a03cdb)
+
+running 2 tests
+test protocol::tests::test_expunged_request_serde ... ok
+test protocol::tests::test_expunged_response_serde ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 90 filtered out; finished in 0.00s
+
+     Running tests/cluster_trust_integration.rs (target/debug/deps/cluster_trust_integration-a92a6ef2a32a953a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/shamir_proptest.rs (target/debug/deps/shamir_proptest-d18a14d8dc813cd7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
