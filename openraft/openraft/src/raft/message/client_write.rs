@@ -76,11 +76,6 @@ impl<C> fmt::Display for ClientWriteResponse<C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "ClientWriteResponse{{log_id:{}, membership:{}}}",
-            self.log_id,
-            self.membership.display()
-        )
+        write!(f, "ClientWriteResponse{{log_id:{}, membership:{}}}", self.log_id, self.membership.display())
     }
 }

@@ -1,37 +1,48 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
-use http::{StatusCode, Version};
-use iroh::{
-    EndpointId,
-    endpoint::{Connection, ConnectionError, RecvStream, SendStream},
-    protocol::{AcceptError, ProtocolHandler},
-};
-use n0_error::{Result, StackResultExt, StdResultExt};
+use http::StatusCode;
+use http::Version;
+use iroh::EndpointId;
+use iroh::endpoint::Connection;
+use iroh::endpoint::ConnectionError;
+use iroh::endpoint::RecvStream;
+use iroh::endpoint::SendStream;
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
+use n0_error::Result;
+use n0_error::StackResultExt;
+use n0_error::StdResultExt;
 use n0_future::stream::StreamExt;
-use tokio::{
-    io::{AsyncWrite, AsyncWriteExt},
-    net::TcpStream,
-};
-use tokio_util::{future::FutureExt, sync::CancellationToken, task::TaskTracker};
-use tracing::{Instrument, debug, error_span, instrument, warn};
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio_util::future::FutureExt;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+use tracing::Instrument;
+use tracing::debug;
+use tracing::error_span;
+use tracing::instrument;
+use tracing::warn;
 
-use crate::{
-    Authority, HEADER_SECTION_MAX_LENGTH, HttpResponse,
-    parse::{
-        HttpProxyRequestKind, HttpRequest, absolute_target_to_origin_form,
-        filter_hop_by_hop_headers,
-    },
-    util::{
-        Prebuffered, StreamEvent, TrackedRead, TrackedStream, TrackedWrite, forward_bidi, nores,
-        recv_to_stream,
-    },
-};
+use crate::Authority;
+use crate::HEADER_SECTION_MAX_LENGTH;
+use crate::HttpResponse;
+use crate::parse::HttpProxyRequestKind;
+use crate::parse::HttpRequest;
+use crate::parse::absolute_target_to_origin_form;
+use crate::parse::filter_hop_by_hop_headers;
+use crate::util::Prebuffered;
+use crate::util::StreamEvent;
+use crate::util::TrackedRead;
+use crate::util::TrackedStream;
+use crate::util::TrackedWrite;
+use crate::util::forward_bidi;
+use crate::util::nores;
+use crate::util::recv_to_stream;
 
 mod auth;
 mod metrics;
@@ -50,10 +61,10 @@ const SUPPORTED_UPGRADE_PROTOCOLS: &[&str] = &["websocket"];
 ///
 /// # Protocol Support
 ///
-/// - **CONNECT tunnels**: Establishes TCP connections to the requested authority
-///   and bidirectionally forwards data.
-/// - **Absolute-form requests**: Forwards HTTP requests to origin servers using
-///   reqwest, with hop-by-hop header filtering per RFC 9110.
+/// - **CONNECT tunnels**: Establishes TCP connections to the requested authority and
+///   bidirectionally forwards data.
+/// - **Absolute-form requests**: Forwards HTTP requests to origin servers using reqwest, with
+///   hop-by-hop header filtering per RFC 9110.
 ///
 /// # Authorization
 ///
@@ -83,16 +94,10 @@ pub struct UpstreamProxy {
 
 impl ProtocolHandler for UpstreamProxy {
     #[instrument("accept", level="error", skip_all, fields(id=self.conn_id.fetch_add(1, Ordering::SeqCst)))]
-    async fn accept(
-        &self,
-        connection: Connection,
-    ) -> std::result::Result<(), iroh::protocol::AcceptError> {
+    async fn accept(&self, connection: Connection) -> std::result::Result<(), iroh::protocol::AcceptError> {
         debug!(remote_id=%connection.remote_id().fmt_short(), "accepted connection");
         self.metrics.connections_accepted.inc();
-        let res = self
-            .handle_connection(connection)
-            .await
-            .map_err(AcceptError::from_err);
+        let res = self.handle_connection(connection).await.map_err(AcceptError::from_err);
         self.metrics.connections_completed.inc();
         res
     }
@@ -103,10 +108,7 @@ impl ProtocolHandler for UpstreamProxy {
         debug!("shutting down ({} pending tasks)", self.tasks.len());
         match self.tasks.wait().timeout(GRACEFUL_SHUTDOWN_TIMEOUT).await {
             Ok(_) => debug!("all streams closed cleanly"),
-            Err(_) => debug!(
-                remaining = self.tasks.len(),
-                "not all streams closed in time, abort"
-            ),
+            Err(_) => debug!(remaining = self.tasks.len(), "not all streams closed in time, abort"),
         }
     }
 }
@@ -138,11 +140,7 @@ impl UpstreamProxy {
         let remote_id = connection.remote_id();
         let mut stream_id = 0;
         loop {
-            let (send, recv) = match connection
-                .accept_bi()
-                .with_cancellation_token(&self.shutdown)
-                .await
-            {
+            let (send, recv) = match connection.accept_bi().with_cancellation_token(&self.shutdown).await {
                 None => return Ok(()),
                 Some(Ok(streams)) => streams,
                 Some(Err(ConnectionError::ApplicationClosed(_))) => {
@@ -158,18 +156,11 @@ impl UpstreamProxy {
             let http_client = self.http_client.clone();
             let metrics = self.metrics.clone();
             self.tasks.spawn(
-                // We don't actually shutdown the stream task. If it didn't end by the time we stop waiting at shutdown,
-                // the connection will be closed, which causes the task to finish.
+                // We don't actually shutdown the stream task. If it didn't end by the time we stop waiting at
+                // shutdown, the connection will be closed, which causes the task to finish.
                 async move {
-                    if let Err(err) = Self::handle_remote_streams(
-                        auth,
-                        remote_id,
-                        send,
-                        recv,
-                        http_client,
-                        metrics,
-                    )
-                    .await
+                    if let Err(err) =
+                        Self::handle_remote_streams(auth, remote_id, send, recv, http_client, metrics).await
                     {
                         if shutdown.is_cancelled() {
                             debug!("aborted at shutdown: {err:#}");
@@ -197,9 +188,7 @@ impl UpstreamProxy {
         downstream_recv.discard(request_len);
 
         debug!(?req, "handle request");
-        let req = req
-            .try_into_proxy_request()
-            .context("Received origin-form request but expected proxy request")?;
+        let req = req.try_into_proxy_request().context("Received origin-form request but expected proxy request")?;
 
         let id = req.kind.authority()?;
         let req_metrics = metrics.get_or_insert(id);
@@ -215,11 +204,7 @@ impl UpstreamProxy {
                 metrics.requests_denied.inc();
                 req_metrics.requests_denied.inc();
                 debug!(?reason, "request is not authorized, abort");
-                HttpResponse::new(StatusCode::FORBIDDEN)
-                    .no_body()
-                    .write(&mut downstream_send, true)
-                    .await
-                    .ok();
+                HttpResponse::new(StatusCode::FORBIDDEN).no_body().write(&mut downstream_send, true).await.ok();
                 downstream_send.finish().anyerr()?;
                 return Ok(());
             }
@@ -280,11 +265,7 @@ impl UpstreamProxy {
                     .headers
                     .get(http::header::UPGRADE)
                     .and_then(|v| v.to_str().ok())
-                    .filter(|proto| {
-                        SUPPORTED_UPGRADE_PROTOCOLS
-                            .iter()
-                            .any(|p| p.eq_ignore_ascii_case(proto))
-                    });
+                    .filter(|proto| SUPPORTED_UPGRADE_PROTOCOLS.iter().any(|p| p.eq_ignore_ascii_case(proto)));
 
                 if let Some(protocol) = upgrade_protocol {
                     debug!(%target, %protocol, "upgrade request: connecting to origin");
@@ -353,12 +334,7 @@ impl UpstreamProxy {
                     };
                     filter_hop_by_hop_headers(response.headers_mut());
                     debug!(?response, "received response from origin");
-                    let res = forward_reqwest_response(
-                        response,
-                        &mut downstream_send,
-                        req_metrics.clone(),
-                    )
-                    .await;
+                    let res = forward_reqwest_response(response, &mut downstream_send, req_metrics.clone()).await;
                     match res {
                         Ok(total) => {
                             debug!(response_body_len=%total, "finish");
@@ -423,13 +399,8 @@ impl UpstreamProxy {
         }
 
         // Pipe bidirectionally after successful upgrade
-        let (to_origin, from_origin) = forward_bidi(
-            &mut downstream_recv,
-            &mut downstream_send,
-            &mut origin_recv,
-            &mut origin_send,
-        )
-        .await?;
+        let (to_origin, from_origin) =
+            forward_bidi(&mut downstream_recv, &mut downstream_send, &mut origin_recv, &mut origin_send).await?;
         debug!(to_origin, from_origin, "upgrade connection finished");
         Ok(())
     }
@@ -468,10 +439,7 @@ async fn error_response_and_finish(mut send: SendStream) -> Result<(), n0_error:
     Ok(())
 }
 
-async fn write_response(
-    res: &reqwest::Response,
-    send: &mut (impl AsyncWrite + Unpin),
-) -> Result<()> {
+async fn write_response(res: &reqwest::Response, send: &mut (impl AsyncWrite + Unpin)) -> Result<()> {
     let status_line = format!(
         "{:?} {} {}\r\n",
         res.version(),

@@ -1,18 +1,24 @@
-use std::{
-    io,
-    pin::Pin,
-    task::{Context, Poll, ready},
-};
+use std::io;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::ready;
 
 use bytes::Bytes;
 use iroh::endpoint::RecvStream;
-use n0_error::{Result, StackResultExt};
-use n0_future::{Stream, stream};
-use pin_project::{pin_project, pinned_drop};
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use n0_error::Result;
+use n0_error::StackResultExt;
+use n0_future::Stream;
+use n0_future::stream;
+use pin_project::pin_project;
+use pin_project::pinned_drop;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
 use tracing::trace;
 
-pub(crate) use self::prebuffered::{Prebufferable, Prebuffered};
+pub(crate) use self::prebuffered::Prebufferable;
+pub(crate) use self::prebuffered::Prebuffered;
 
 mod prebuffered;
 
@@ -47,9 +53,7 @@ pub(crate) async fn forward_bidi(
 }
 
 // Converts a [`Prebuffered`] recv stream into a stream of [`Bytes`].
-pub(crate) fn recv_to_stream(
-    recv: Prebuffered<RecvStream>,
-) -> impl Stream<Item = io::Result<Bytes>> + Send + 'static {
+pub(crate) fn recv_to_stream(recv: Prebuffered<RecvStream>) -> impl Stream<Item = io::Result<Bytes>> + Send + 'static {
     let (init, recv) = recv.into_parts();
     stream::unfold((Some(init), recv), async |(mut init, mut recv)| {
         let item: io::Result<Bytes> = if let Some(init) = init.take() {
@@ -70,8 +74,7 @@ pub(crate) fn recv_to_stream(
 #[pin_project(PinnedDrop)]
 #[derive(Debug)]
 pub struct TrackedStream<S, F>
-where
-    F: for<'a> Fn(StreamEvent<'a>) + Unpin + Send + 'static,
+where F: for<'a> Fn(StreamEvent<'a>) + Unpin + Send + 'static
 {
     #[pin]
     inner: S,
@@ -99,8 +102,7 @@ where
 
 #[pinned_drop]
 impl<S, F> PinnedDrop for TrackedStream<S, F>
-where
-    F: for<'a> Fn(StreamEvent<'a>) + Unpin + Send + 'static,
+where F: for<'a> Fn(StreamEvent<'a>) + Unpin + Send + 'static
 {
     fn drop(self: Pin<&mut Self>) {
         if let Some(f) = self.project().on_event.take() {
@@ -200,11 +202,7 @@ impl<R: AsyncRead + Unpin + Send, F: Fn(u64) + Unpin + Send, G: Unpin + Send> Pr
 }
 
 impl<R: AsyncRead + Unpin, F: Fn(u64) + Unpin, G: Unpin> AsyncRead for TrackedRead<R, F, G> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<io::Result<()>> {
         let before = buf.filled().len();
         let this = self.get_mut();
         let result = Pin::new(&mut this.inner).poll_read(cx, buf);
@@ -250,11 +248,7 @@ impl<W: AsyncWrite + Unpin, F: Fn(u64) + Unpin, G: Unpin> TrackedWrite<W, F, G> 
 }
 
 impl<W: AsyncWrite + Unpin, F: Fn(u64) + Unpin, G: Unpin> AsyncWrite for TrackedWrite<W, F, G> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
         let result = Pin::new(&mut this.inner).poll_write(cx, buf);
         if let Poll::Ready(Ok(n)) = result {

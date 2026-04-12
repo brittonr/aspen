@@ -145,10 +145,7 @@ where C: RaftTypeConfig
     {
         let voter_nodes = config.as_joint().ids().map(|x| (x, C::Node::default())).collect::<BTreeMap<_, _>>();
 
-        let nodes = Self::extend_nodes(
-            nodes.into_iter().map(|x| (x, C::Node::default())).collect(),
-            &voter_nodes,
-        );
+        let nodes = Self::extend_nodes(nodes.into_iter().map(|x| (x, C::Node::default())).collect(), &voter_nodes);
 
         Membership { configs: config, nodes }
     }
@@ -442,10 +439,7 @@ mod tests {
         // Add: no such learner
         {
             let res = m().change(ChangeMembers::AddVoterIds(btreeset! {4}), true);
-            assert_eq!(
-                Err(ChangeMembershipError::LearnerNotFound(LearnerNotFound { node_id: 4 })),
-                res
-            );
+            assert_eq!(Err(ChangeMembershipError::LearnerNotFound(LearnerNotFound { node_id: 4 })), res);
         }
 
         // Add: ok
@@ -598,10 +592,7 @@ mod tests {
         // RemoveNodes: cannot remove node for voter
         {
             let res = m().change(ChangeMembers::RemoveNodes(btreeset! {2}), false);
-            assert_eq!(
-                Err(ChangeMembershipError::LearnerNotFound(LearnerNotFound { node_id: 2 })),
-                res
-            );
+            assert_eq!(Err(ChangeMembershipError::LearnerNotFound(LearnerNotFound { node_id: 2 })), res);
         }
 
         // RemoveNodes: Ok

@@ -275,10 +275,7 @@ where
 
         let snapshot = self.state_machine.get_current_snapshot().await.sto_read_snapshot(None)?;
 
-        tracing::info!(
-            "sending back snapshot: meta: {}",
-            snapshot.as_ref().map(|s| &s.meta).display()
-        );
+        tracing::info!("sending back snapshot: meta: {}", snapshot.as_ref().map(|s| &s.meta).display());
         let _ = tx.send(snapshot);
         Ok(())
     }

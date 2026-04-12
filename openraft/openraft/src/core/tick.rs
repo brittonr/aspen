@@ -199,11 +199,7 @@ mod tests {
             received.push(x);
         }
 
-        assert!(
-            received.len() < 10,
-            "no more tick will be received after shutdown: {}",
-            received.len()
-        );
+        assert!(received.len() < 10, "no more tick will be received after shutdown: {}", received.len());
 
         Ok(())
     }

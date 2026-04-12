@@ -33,12 +33,7 @@ impl<C> Display for ReplicationSessionId<C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "(leader_vote:{}, membership_log_id:{})",
-            self.leader_vote,
-            self.membership_log_id.display()
-        )
+        write!(f, "(leader_vote:{}, membership_log_id:{})", self.leader_vote, self.membership_log_id.display())
     }
 }
 

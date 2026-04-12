@@ -196,18 +196,11 @@ where C: RaftTypeConfig
         // Update membership state with the last 2 membership configs found in new log entries.
         // Other membership log can be just ignored.
         for (i, m) in memberships.into_iter().enumerate() {
-            tracing::debug!(
-                last = display(&m),
-                "applying {}-th new membership configs received from leader",
-                i
-            );
+            tracing::debug!(last = display(&m), "applying {}-th new membership configs received from leader", i);
             self.state.membership_state.append(Arc::new(EffectiveMembership::new_from_stored_membership(m)));
         }
 
-        tracing::debug!(
-            membership_state = display(&self.state.membership_state),
-            "updated membership state"
-        );
+        tracing::debug!(membership_state = display(&self.state.membership_state), "updated membership state");
 
         self.server_state_handler().update_server_state_if_changed();
     }
@@ -288,9 +281,7 @@ where C: RaftTypeConfig
         self.state.apply_progress_mut().accept(snap_last_log_id.clone());
         self.state.snapshot_progress_mut().accept(snap_last_log_id.clone());
 
-        self.update_committed_membership(EffectiveMembership::new_from_stored_membership(
-            meta.last_membership.clone(),
-        ));
+        self.update_committed_membership(EffectiveMembership::new_from_stored_membership(meta.last_membership.clone()));
 
         self.output.push_command(Command::from(sm::Command::install_full_snapshot(snapshot, log_io_id)));
 

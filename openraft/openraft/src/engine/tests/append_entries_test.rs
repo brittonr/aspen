@@ -89,11 +89,7 @@ fn test_append_entries_prev_log_id_is_applied() -> anyhow::Result<()> {
     eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new(1, 2));
     eng.output.take_commands();
 
-    let res = eng.append_entries(
-        &Vote::new_committed(2, 1),
-        Some(log_id(0, 1, 0)),
-        Vec::<Entry<UTConfig>>::new(),
-    );
+    let res = eng.append_entries(&Vote::new_committed(2, 1), Some(log_id(0, 1, 0)), Vec::<Entry<UTConfig>>::new());
 
     assert_eq!(Ok(()), res);
     assert_eq!(
@@ -135,11 +131,7 @@ fn test_append_entries_prev_log_id_is_applied() -> anyhow::Result<()> {
 fn test_append_entries_prev_log_id_conflict() -> anyhow::Result<()> {
     let mut eng = eng();
 
-    let res = eng.append_entries(
-        &Vote::new_committed(2, 1),
-        Some(log_id(2, 1, 2)),
-        Vec::<Entry<UTConfig>>::new(),
-    );
+    let res = eng.append_entries(&Vote::new_committed(2, 1), Some(log_id(2, 1, 2)), Vec::<Entry<UTConfig>>::new());
 
     assert_eq!(
         Err(RejectAppendEntries::ByConflictingLogId {

@@ -109,10 +109,7 @@ where C: RaftTypeConfig
     pub(crate) fn to_vote_and_log_id(&self) -> (Vote<C>, Option<LogId<C>>) {
         match self {
             Self::Vote(non_committed_vote) => (non_committed_vote.clone().into_internal_vote(), None),
-            Self::Log(log_io_id) => (
-                log_io_id.committed_vote.clone().into_internal_vote(),
-                log_io_id.log_id.clone(),
-            ),
+            Self::Log(log_io_id) => (log_io_id.committed_vote.clone().into_internal_vote(), log_io_id.log_id.clone()),
         }
     }
 

@@ -49,11 +49,7 @@ fn eng() -> Engine<UTConfig> {
         Arc::new(EffectiveMembership::new(Some(log_id(1, 1, 1)), m01())),
         Arc::new(EffectiveMembership::new(Some(log_id(2, 1, 3)), m23())),
     );
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(6, 2),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(6, 2));
     eng.state.server_state = eng.calc_server_state();
     eng
 }
@@ -74,11 +70,7 @@ fn test_leader_append_membership_for_leader() -> anyhow::Result<()> {
         ),
         eng.state.membership_state
     );
-    assert_eq!(
-        ServerState::Leader,
-        eng.state.server_state,
-        "Leader wont be affected by membership change"
-    );
+    assert_eq!(ServerState::Leader, eng.state.server_state, "Leader wont be affected by membership change");
 
     assert_eq!(
         vec![
@@ -94,10 +86,7 @@ fn test_leader_append_membership_for_leader() -> anyhow::Result<()> {
         eng.output.take_commands()
     );
 
-    assert!(
-        eng.leader.as_ref().unwrap().progress.get(&4).matching().is_none(),
-        "exists, but it is a None"
-    );
+    assert!(eng.leader.as_ref().unwrap().progress.get(&4).matching().is_none(), "exists, but it is a None");
 
     Ok(())
 }

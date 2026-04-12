@@ -157,12 +157,7 @@ where C: RaftTypeConfig
         log_id: Option<LogIdOf<C>>,
         inflight_id: Option<InflightId>,
     ) {
-        tracing::debug!(
-            node_id = display(&node_id),
-            log_id = display(log_id.display()),
-            "{}",
-            func_name!()
-        );
+        tracing::debug!(node_id = display(&node_id), log_id = display(log_id.display()), "{}", func_name!());
 
         debug_assert!(log_id.is_some(), "a valid update can never set matching to None");
 
@@ -177,10 +172,7 @@ where C: RaftTypeConfig
             .expect("it should always update existing progress")
             .clone();
 
-        tracing::debug!(
-            quorum_accepted = display(quorum_accepted.display()),
-            "after updating progress"
-        );
+        tracing::debug!(quorum_accepted = display(quorum_accepted.display()), "after updating progress");
 
         self.try_commit_quorum_accepted(quorum_accepted);
     }
@@ -243,11 +235,7 @@ where C: RaftTypeConfig
     /// - If the node is not found in the progress tracker, this method ignore it.
     pub(crate) fn allow_next_revert(&mut self, target: C::NodeId, allow: bool) -> Result<(), NodeNotFound<C>> {
         let Some(prog_entry) = self.leader.progress.get_mut(&target) else {
-            tracing::warn!(
-                "target node {} not found in progress tracker, when {}",
-                target,
-                func_name!()
-            );
+            tracing::warn!("target node {} not found in progress tracker, when {}", target, func_name!());
             return Err(NodeNotFound::new(target, Operation::AllowNextRevert));
         };
 
@@ -421,10 +409,7 @@ where C: RaftTypeConfig
 
         // The leader may not be in membership anymore
         if let Some(prog_entry) = self.leader.progress.get_mut(&id) {
-            tracing::debug!(
-                self_matching = display(prog_entry.matching().display()),
-                "update progress"
-            );
+            tracing::debug!(self_matching = display(prog_entry.matching().display()), "update progress");
 
             if prog_entry.matching() >= upto.as_ref() {
                 return;

@@ -122,13 +122,8 @@ where C: RaftTypeConfig
 
         let membership = self.state.membership_state.effective().membership();
 
-        self.candidate = Some(Candidate::new(
-            now,
-            vote,
-            last_log_id,
-            membership.to_quorum_set(),
-            membership.learner_ids(),
-        ));
+        self.candidate =
+            Some(Candidate::new(now, vote, last_log_id, membership.to_quorum_set(), membership.learner_ids()));
 
         self.candidate.as_mut().unwrap()
     }
@@ -167,11 +162,7 @@ where C: RaftTypeConfig
 
         self.state.server_state = server_state;
 
-        tracing::info!(
-            "startup done: id={} target_state: {:?}",
-            self.config.id,
-            self.state.server_state
-        );
+        tracing::info!("startup done: id={} target_state: {:?}", self.config.id, self.state.server_state);
     }
 
     /// Initialize a node by appending the first log.
@@ -467,9 +458,9 @@ where C: RaftTypeConfig
     ) {
         tracing::info!(vote = display(&vote), snapshot = display(&snapshot), "{}", func_name!());
 
-        let vote_res = self.vote_handler().accept_vote(&vote, tx, |state, _rejected| {
-            SnapshotResponse::new(state.vote_ref().clone())
-        });
+        let vote_res = self
+            .vote_handler()
+            .accept_vote(&vote, tx, |state, _rejected| SnapshotResponse::new(state.vote_ref().clone()));
 
         let Some(tx) = vote_res else {
             return;
@@ -574,11 +565,7 @@ where C: RaftTypeConfig
     /// other tasks are using the logs.
     #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn try_purge_log(&mut self) {
-        tracing::debug!(
-            purge_upto = display(self.state.purge_upto().display()),
-            "{}",
-            func_name!()
-        );
+        tracing::debug!(purge_upto = display(self.state.purge_upto().display()), "{}", func_name!());
 
         if self.leader.is_some() {
             // If it is leading, it must not delete a log that is in use by a replication task.
@@ -605,11 +592,7 @@ where C: RaftTypeConfig
         let scheduled = self.state.purge_upto();
 
         if index < scheduled.next_index() {
-            tracing::info!(
-                "no update, already scheduled: {}; index: {}",
-                scheduled.display(),
-                index,
-            );
+            tracing::info!("no update, already scheduled: {}; index: {}", scheduled.display(), index,);
             return;
         }
 
@@ -635,11 +618,7 @@ where C: RaftTypeConfig
         tracing::info!(to = display(&to), "{}", func_name!());
 
         let Some((mut lh, _)) = self.get_leader_handler_or_reject(None::<WriteResponderOf<C>>) else {
-            tracing::info!(
-                to = display(to),
-                "{}: this node is not a Leader, ignore transfer Leader",
-                func_name!()
-            );
+            tracing::info!(to = display(to), "{}: this node is not a Leader, ignore transfer Leader", func_name!());
             return;
         };
 
@@ -863,11 +842,7 @@ where C: RaftTypeConfig
         debug_assert!(self.leader.is_none());
 
         let leader_vote = self.state.vote_ref().clone();
-        debug_assert!(
-            leader_vote.is_committed(),
-            "Expect the Leader vote to be committed: {}",
-            leader_vote
-        );
+        debug_assert!(leader_vote.is_committed(), "Expect the Leader vote to be committed: {}", leader_vote);
 
         FollowingHandler {
             leader_vote: leader_vote.into_committed(),

@@ -28,11 +28,7 @@ fn m23() -> Membership<UTConfig> {
 fn new_state() -> RaftState<UTConfig> {
     let mut state = RaftState::default();
 
-    state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(2, 1),
-    );
+    state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 1));
     state.apply_progress_mut().accept(log_id(1, 1, 1));
     state.membership_state = MembershipState::new(
         Arc::new(EffectiveMembership::new(Some(log_id(1, 1, 1)), m01())),
@@ -123,10 +119,7 @@ fn test_update_committed_local_vote_lags_cluster_vote() -> anyhow::Result<()> {
 
     // Local committed must not advance until an IO accepted under the new leader vote arrives.
     assert_eq!(Some(&log_id(1, 1, 1)), state.committed());
-    assert_eq!(
-        Some(cluster_committed),
-        state.io_state.cluster_committed.value().cloned()
-    );
+    assert_eq!(Some(cluster_committed), state.io_state.cluster_committed.value().cloned());
     assert_eq!(Some(&log_id(1, 1, 1)), state.io_state.apply_progress.accepted());
     assert_eq!(None, state.io_state.apply_progress.submitted());
 

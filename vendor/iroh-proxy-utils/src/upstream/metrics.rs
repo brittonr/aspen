@@ -1,7 +1,6 @@
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, RwLock},
-};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 use iroh_metrics::Counter;
 
@@ -47,9 +46,7 @@ impl UpstreamMetrics {
     ///
     /// Uses saturating arithmetic since counters are read non-atomically.
     pub fn active_iroh_connections(&self) -> u64 {
-        self.connections_accepted
-            .get()
-            .saturating_sub(self.connections_completed.get())
+        self.connections_accepted.get().saturating_sub(self.connections_completed.get())
     }
 
     /// Returns the total number of iroh connections ever accepted.

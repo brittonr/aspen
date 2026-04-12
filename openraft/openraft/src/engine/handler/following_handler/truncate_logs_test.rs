@@ -34,11 +34,7 @@ fn eng() -> Engine<UTConfig> {
     eng.state.enable_validation(false); // Disable validation for incomplete state
 
     eng.config.id = 2;
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(2, 1),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 1));
     eng.state.log_ids = LogIdList::new(vec![
         log_id(2, 1, 2), //
         log_id(4, 1, 4),
@@ -99,10 +95,7 @@ fn test_truncate_logs_since_4() -> anyhow::Result<()> {
     );
     assert_eq!(ServerState::Follower, eng.state.server_state);
 
-    assert_eq!(
-        vec![Command::TruncateLog { since: log_id(4, 1, 4) }],
-        eng.output.take_commands()
-    );
+    assert_eq!(vec![Command::TruncateLog { since: log_id(4, 1, 4) }], eng.output.take_commands());
 
     Ok(())
 }
@@ -115,10 +108,7 @@ fn test_truncate_logs_since_5() -> anyhow::Result<()> {
 
     assert_eq!(Some(&log_id(4, 1, 4)), eng.state.last_log_id());
     assert_eq!(&[log_id(2, 1, 2), log_id(4, 1, 4)], eng.state.log_ids.key_log_ids());
-    assert_eq!(
-        vec![Command::TruncateLog { since: log_id(4, 1, 5) }],
-        eng.output.take_commands()
-    );
+    assert_eq!(vec![Command::TruncateLog { since: log_id(4, 1, 5) }], eng.output.take_commands());
 
     Ok(())
 }
@@ -130,14 +120,8 @@ fn test_truncate_logs_since_6() -> anyhow::Result<()> {
     eng.following_handler().truncate_logs(6);
 
     assert_eq!(Some(&log_id(4, 1, 5)), eng.state.last_log_id());
-    assert_eq!(
-        &[log_id(2, 1, 2), log_id(4, 1, 4), log_id(4, 1, 5)],
-        eng.state.log_ids.key_log_ids()
-    );
-    assert_eq!(
-        vec![Command::TruncateLog { since: log_id(4, 1, 6) }],
-        eng.output.take_commands()
-    );
+    assert_eq!(&[log_id(2, 1, 2), log_id(4, 1, 4), log_id(4, 1, 5)], eng.state.log_ids.key_log_ids());
+    assert_eq!(vec![Command::TruncateLog { since: log_id(4, 1, 6) }], eng.output.take_commands());
 
     Ok(())
 }
@@ -149,10 +133,7 @@ fn test_truncate_logs_since_7() -> anyhow::Result<()> {
     eng.following_handler().truncate_logs(7);
 
     assert_eq!(Some(&log_id(4, 1, 6)), eng.state.last_log_id());
-    assert_eq!(
-        &[log_id(2, 1, 2), log_id(4, 1, 4), log_id(4, 1, 6)],
-        eng.state.log_ids.key_log_ids()
-    );
+    assert_eq!(&[log_id(2, 1, 2), log_id(4, 1, 4), log_id(4, 1, 6)], eng.state.log_ids.key_log_ids());
     assert!(eng.output.take_commands().is_empty());
 
     Ok(())
@@ -165,10 +146,7 @@ fn test_truncate_logs_since_8() -> anyhow::Result<()> {
     eng.following_handler().truncate_logs(8);
 
     assert_eq!(Some(&log_id(4, 1, 6)), eng.state.last_log_id());
-    assert_eq!(
-        &[log_id(2, 1, 2), log_id(4, 1, 4), log_id(4, 1, 6)],
-        eng.state.log_ids.key_log_ids()
-    );
+    assert_eq!(&[log_id(2, 1, 2), log_id(4, 1, 4), log_id(4, 1, 6)], eng.state.log_ids.key_log_ids());
     assert!(eng.output.take_commands().is_empty());
 
     Ok(())

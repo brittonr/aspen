@@ -378,11 +378,7 @@ where
 
         let append_resp = append_res?;
 
-        tracing::debug!(
-            req = display(&sending_range),
-            resp = display(&append_resp),
-            "append_entries resp"
-        );
+        tracing::debug!(req = display(&sending_range), resp = display(&append_resp), "append_entries resp");
 
         match append_resp {
             AppendEntriesResponse::Success => {
@@ -529,11 +525,7 @@ where
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn backoff_drain_events(&mut self, until: InstantOf<C>) -> Result<(), ReplicationClosed> {
         let d = until - C::now();
-        tracing::warn!(
-            interval = debug(d),
-            "{} backoff mode: drain events without processing them",
-            func_name!()
-        );
+        tracing::warn!(interval = debug(d), "{} backoff mode: drain events without processing them", func_name!());
 
         loop {
             let sleep_duration = until - C::now();

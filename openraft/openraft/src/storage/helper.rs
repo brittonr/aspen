@@ -136,11 +136,7 @@ where
                 return Err(StorageError::read_log_at_index(start, err));
             }
 
-            tracing::info!(
-                start,
-                end,
-                "Re-applying committed logs to restore state machine to latest state"
-            );
+            tracing::info!(start, end, "Re-applying committed logs to restore state machine to latest state");
 
             self.reapply_committed(start, end).await?;
 
@@ -163,11 +159,7 @@ where
             last_purged_log_id = last_applied.clone();
         }
 
-        tracing::info!(
-            "load key log ids from ({},{}]",
-            last_purged_log_id.display(),
-            last_log_id.display()
-        );
+        tracing::info!("load key log ids from ({},{}]", last_purged_log_id.display(), last_log_id.display());
 
         let log_id_list = self.get_key_log_ids(last_purged_log_id.clone(), last_log_id.clone()).await?;
 
@@ -260,12 +252,7 @@ where
     pub(crate) async fn reapply_committed(&mut self, mut start: u64, end: u64) -> Result<(), StorageError<C>> {
         let chunk_size = 64;
 
-        tracing::info!(
-            "re-apply log [{}..{}) in {} item chunks to state machine",
-            start,
-            end,
-            chunk_size,
-        );
+        tracing::info!("re-apply log [{}..{}) in {} item chunks to state machine", start, end, chunk_size,);
 
         let mut log_reader = self.log_store.get_log_reader().await;
 
@@ -293,12 +280,7 @@ where
                 return Err(StorageError::read_log_at_index(chunk_end - 1, make_err()));
             }
 
-            tracing::info!(
-                "re-apply {} log entries: [{}, {}),",
-                chunk_end - start,
-                start,
-                chunk_end
-            );
+            tracing::info!("re-apply {} log entries: [{}, {}),", chunk_end - start, start, chunk_end);
             let last_applied = entries.last().map(|e| e.log_id()).unwrap();
             let apply_items = entries.into_iter().map(|entry| Ok((entry, None)));
             let apply_stream = futures::stream::iter(apply_items);

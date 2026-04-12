@@ -25,12 +25,7 @@ impl<C> fmt::Display for LeaderChanged<C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "LeaderChanged: from {} to vote {}",
-            self.expected_leader,
-            self.current_vote.display()
-        )
+        write!(f, "LeaderChanged: from {} to vote {}", self.expected_leader, self.current_vote.display())
     }
 }
 

@@ -16,10 +16,10 @@
 //!
 //! The proxy operates in two layers:
 //!
-//! - **Downstream proxy** ([`downstream::DownstreamProxy`]): Accepts TCP connections from
-//!   clients and forwards them over iroh to an upstream proxy.
-//! - **Upstream proxy** ([`upstream::UpstreamProxy`]): Receives proxied streams from iroh
-//!   and forwards them to origin TCP servers.
+//! - **Downstream proxy** ([`downstream::DownstreamProxy`]): Accepts TCP connections from clients
+//!   and forwards them over iroh to an upstream proxy.
+//! - **Upstream proxy** ([`upstream::UpstreamProxy`]): Receives proxied streams from iroh and
+//!   forwards them to origin TCP servers.
 //!
 //! # Protocol
 //!
@@ -40,9 +40,12 @@ mod parse;
 pub mod upstream;
 mod util;
 
-pub use parse::{
-    Authority, HttpProxyRequest, HttpProxyRequestKind, HttpRequest, HttpRequestKind, HttpResponse,
-};
+pub use parse::Authority;
+pub use parse::HttpProxyRequest;
+pub use parse::HttpProxyRequestKind;
+pub use parse::HttpRequest;
+pub use parse::HttpRequestKind;
+pub use parse::HttpResponse;
 
 /// Maximum bytes to buffer when reading HTTP header sections.
 ///

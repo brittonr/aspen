@@ -43,11 +43,7 @@ fn test_forward_to_leader_vote_not_committed() {
 #[test]
 fn test_forward_to_leader_not_a_member() {
     let rs = RaftState::<UTConfig<u64>> {
-        vote: Leased::new(
-            UTConfig::<()>::now(),
-            Duration::from_millis(500),
-            Vote::new_committed(1, 3),
-        ),
+        vote: Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(1, 3)),
         membership_state: MembershipState::new(
             Arc::new(EffectiveMembership::new(Some(log_id(1, 0, 1)), m12())),
             Arc::new(EffectiveMembership::new(Some(log_id(1, 0, 1)), m12())),
@@ -63,11 +59,7 @@ fn test_forward_to_leader_has_leader() {
     let m123 = || Membership::<UTConfig<u64>>::new(vec![btreeset! {1,2}], btreemap! {1=>4,2=>5,3=>6}).unwrap();
 
     let rs = RaftState::<UTConfig<u64>> {
-        vote: Leased::new(
-            UTConfig::<()>::now(),
-            Duration::from_millis(500),
-            Vote::new_committed(1, 3),
-        ),
+        vote: Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(1, 3)),
         membership_state: MembershipState::new(
             Arc::new(EffectiveMembership::new(Some(log_id(1, 0, 1)), m123())),
             Arc::new(EffectiveMembership::new(Some(log_id(1, 0, 1)), m123())),

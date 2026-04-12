@@ -396,11 +396,7 @@ where C: RaftTypeConfig
             let ref_log_id = ent.ref_log_id();
 
             if !self.has_log_id(ref_log_id) {
-                tracing::debug!(
-                    at = display(i),
-                    entry_log_id = display(ref_log_id),
-                    "found nonexistent log id"
-                );
+                tracing::debug!(at = display(i), entry_log_id = display(ref_log_id), "found nonexistent log id");
                 return i;
             }
         }
@@ -485,12 +481,7 @@ where C: RaftTypeConfig
 
         let last_leader_log_ids = self.log_ids.by_last_leader();
 
-        Leader::new(
-            self.vote_ref().to_committed(),
-            em.to_quorum_set(),
-            em.learner_ids(),
-            last_leader_log_ids,
-        )
+        Leader::new(self.vote_ref().to_committed(), em.to_quorum_set(), em.learner_ids(), last_leader_log_ids)
     }
 
     /// Build a ForwardToLeader error that contains the leader id and node it knows.

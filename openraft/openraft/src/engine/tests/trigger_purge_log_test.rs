@@ -82,16 +82,9 @@ fn test_trigger_purge_log_delete_only_in_snapshot_logs() -> anyhow::Result<()> {
 
     eng.trigger_purge_log(5);
 
-    assert_eq!(
-        Some(log_id(1, 0, 3)),
-        eng.state.purge_upto,
-        "delete only in snapshot logs"
-    );
+    assert_eq!(Some(log_id(1, 0, 3)), eng.state.purge_upto, "delete only in snapshot logs");
 
-    assert_eq!(
-        vec![Command::PurgeLog { upto: log_id(1, 0, 3) },],
-        eng.output.take_commands()
-    );
+    assert_eq!(vec![Command::PurgeLog { upto: log_id(1, 0, 3) },], eng.output.take_commands());
 
     Ok(())
 }
@@ -107,11 +100,7 @@ fn test_trigger_purge_log_in_used_wont_be_delete() -> anyhow::Result<()> {
     eng.state.purge_upto = Some(log_id(1, 0, 2));
     eng.state.io_state.purged = Some(log_id(1, 0, 2));
     eng.state.log_ids = LogIdList::new([log_id(1, 0, 2), log_id(1, 0, 10)]);
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(2, 1),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 1));
 
     // Make it a leader and mark the logs are in flight.
     eng.testing_new_leader();
@@ -120,11 +109,7 @@ fn test_trigger_purge_log_in_used_wont_be_delete() -> anyhow::Result<()> {
 
     eng.trigger_purge_log(5);
 
-    assert_eq!(
-        Some(log_id(1, 0, 3)),
-        eng.state.purge_upto,
-        "delete only in snapshot logs"
-    );
+    assert_eq!(Some(log_id(1, 0, 3)), eng.state.purge_upto, "delete only in snapshot logs");
 
     assert_eq!(0, eng.output.take_commands().len(), "in used log wont be deleted");
 

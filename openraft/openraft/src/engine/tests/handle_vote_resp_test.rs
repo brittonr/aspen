@@ -86,10 +86,7 @@ fn test_handle_vote_resp() -> anyhow::Result<()> {
         assert_eq!(Vote::new(2, 1), *eng.state.vote_ref());
 
         assert_eq!(&Vote::new(2, 1), eng.candidate_ref().unwrap().vote_ref());
-        assert_eq!(
-            btreeset! {1},
-            eng.candidate_ref().unwrap().granters().collect::<BTreeSet<_>>()
-        );
+        assert_eq!(btreeset! {1}, eng.candidate_ref().unwrap().granters().collect::<BTreeSet<_>>());
 
         assert_eq!(ServerState::Candidate, eng.state.server_state);
 
@@ -153,10 +150,7 @@ fn test_handle_vote_resp() -> anyhow::Result<()> {
         assert_eq!(Vote::new(2, 1), *eng.state.vote_ref());
 
         assert_eq!(&Vote::new(2, 1), eng.candidate_ref().unwrap().vote_ref());
-        assert_eq!(
-            btreeset! {1,2},
-            eng.candidate_ref().unwrap().granters().collect::<BTreeSet<_>>()
-        );
+        assert_eq!(btreeset! {1,2}, eng.candidate_ref().unwrap().granters().collect::<BTreeSet<_>>());
 
         assert_eq!(ServerState::Candidate, eng.state.server_state);
 
@@ -187,21 +181,12 @@ fn test_handle_vote_resp_equal_vote() -> anyhow::Result<()> {
         assert_eq!(Vote::new_committed(2, 1), *eng.state.vote_ref(),);
 
         assert_eq!(log_id(2, 1, 1), eng.leader.as_ref().unwrap().noop_log_id);
+        assert_eq!(Some(log_id(2, 1, 1)), eng.leader.as_ref().unwrap().last_log_id().copied());
         assert_eq!(
-            Some(log_id(2, 1, 1)),
-            eng.leader.as_ref().unwrap().last_log_id().copied()
-        );
-        assert_eq!(
-            Some(&IOId::new_log_io(
-                Vote::new(2, 1).into_committed(),
-                Some(log_id(2, 1, 1))
-            )),
+            Some(&IOId::new_log_io(Vote::new(2, 1).into_committed(), Some(log_id(2, 1, 1)))),
             eng.state.accepted_log_io()
         );
-        assert!(
-            eng.candidate_ref().is_none(),
-            "candidate state is removed when becoming leader"
-        );
+        assert!(eng.candidate_ref().is_none(), "candidate state is removed when becoming leader");
 
         assert_eq!(ServerState::Leader, eng.state.server_state);
 

@@ -184,11 +184,7 @@ fn test_install_snapshot_conflict() -> anyhow::Result<()> {
         let mut eng = Engine::<UTConfig>::testing_default(0);
         eng.state.enable_validation(false); // Disable validation for incomplete state
 
-        eng.state.vote.update(
-            UTConfig::<()>::now(),
-            Duration::from_millis(500),
-            Vote::new_committed(2, 1),
-        );
+        eng.state.vote.update(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 1));
         eng.state.apply_progress_mut().accept(log_id(2, 1, 3));
         eng.state.log_ids = LogIdList::new(vec![
             //
@@ -346,10 +342,7 @@ fn test_install_snapshot_update_accepted() -> anyhow::Result<()> {
     );
 
     assert_eq!(
-        Some(&IOId::new_log_io(
-            Vote::new(2, 1).into_committed(),
-            Some(log_id(100, 1, 100))
-        )),
+        Some(&IOId::new_log_io(Vote::new(2, 1).into_committed(), Some(log_id(100, 1, 100)))),
         eng.state.accepted_log_io()
     );
 

@@ -32,8 +32,5 @@ where
     C::Term: From<u64>,
     C::Node: Default,
 {
-    crate::Entry::new_membership(
-        log_id::<C>(term, node_id, index),
-        crate::Membership::new_with_defaults(config, []),
-    )
+    crate::Entry::new_membership(log_id::<C>(term, node_id, index), crate::Membership::new_with_defaults(config, []))
 }

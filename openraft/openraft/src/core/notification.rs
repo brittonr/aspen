@@ -101,22 +101,14 @@ where C: RaftTypeConfig
                 resp,
                 candidate_vote,
             } => {
-                write!(
-                    f,
-                    "VoteResponse: from target={}, to candidate_vote: {}, {}",
-                    target, candidate_vote, resp
-                )
+                write!(f, "VoteResponse: from target={}, to candidate_vote: {}, {}", target, candidate_vote, resp)
             }
             Self::HigherVote {
                 target,
                 higher: new_vote,
                 leader_vote: vote,
             } => {
-                write!(
-                    f,
-                    "Seen a higher vote: target: {}, vote: {}, server_state_vote: {}",
-                    target, new_vote, vote
-                )
+                write!(f, "Seen a higher vote: target: {}, vote: {}, server_state_vote: {}", target, new_vote, vote)
             }
             Self::StorageError { error } => write!(f, "StorageError: {}", error),
             Self::LocalIO { io_id } => write!(f, "IOFlushed: {}", io_id),

@@ -40,11 +40,7 @@ fn eng() -> Engine<UTConfig> {
 #[test]
 fn test_handle_message_vote_reject_smaller_vote() -> anyhow::Result<()> {
     let mut eng = eng();
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(2, 1),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 1));
     eng.testing_new_leader();
 
     let resp = eng.vote_handler().update_vote(&Vote::new(1, 2));
@@ -127,10 +123,7 @@ fn test_handle_message_vote_granted_greater_vote() -> anyhow::Result<()> {
     assert!(eng.leader.is_none());
 
     assert_eq!(ServerState::Follower, eng.state.server_state);
-    assert_eq!(
-        vec![Command::SaveVote { vote: Vote::new(3, 1) },],
-        eng.output.take_commands()
-    );
+    assert_eq!(vec![Command::SaveVote { vote: Vote::new(3, 1) },], eng.output.take_commands());
     Ok(())
 }
 

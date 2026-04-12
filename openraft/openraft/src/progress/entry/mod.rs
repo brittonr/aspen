@@ -193,13 +193,7 @@ impl<C> Display for ProgressEntry<C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{{[{}, {}), inflight:{}}}",
-            self.matching().display(),
-            self.searching_end,
-            self.inflight
-        )
+        write!(f, "{{[{}, {}), inflight:{}}}", self.matching().display(), self.searching_end, self.inflight)
     }
 }
 

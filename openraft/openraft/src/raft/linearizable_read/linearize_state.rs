@@ -37,12 +37,7 @@ where C: RaftTypeConfig
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "LinearizeState[id={}]", self.node_id)?;
 
-        write!(
-            f,
-            "{{ read_log_id: {}, applied: {} }}",
-            self.read_log_id,
-            self.applied.display()
-        )
+        write!(f, "{{ read_log_id: {}, applied: {} }}", self.read_log_id, self.applied.display())
     }
 }
 
@@ -106,15 +101,9 @@ mod tests {
     #[test]
     fn test_display() {
         let state = LinearizeState::new(1, log_id(1, 1, 1), Some(log_id(1, 1, 0)));
-        assert_eq!(
-            format!("{}", state),
-            "LinearizeState[id=1]{ read_log_id: T1-N1.1, applied: T1-N1.0 }"
-        );
+        assert_eq!(format!("{}", state), "LinearizeState[id=1]{ read_log_id: T1-N1.1, applied: T1-N1.0 }");
 
         let state = state.with_applied(2, Some(log_id(3, 3, 3)));
-        assert_eq!(
-            format!("{}", state),
-            "LinearizeState[id=2]{ read_log_id: T1-N1.1, applied: T3-N3.3 }"
-        );
+        assert_eq!(format!("{}", state), "LinearizeState[id=2]{ read_log_id: T1-N1.1, applied: T3-N3.3 }");
     }
 }

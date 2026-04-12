@@ -233,10 +233,7 @@ fn test_membership_new() -> anyhow::Result<()> {
     );
 
     let res = with_nodes(btreemap! {1=>node()});
-    assert_eq!(
-        res.unwrap_err(),
-        MembershipError::NodeNotFound(NodeNotFound::new(2, Operation::None))
-    );
+    assert_eq!(res.unwrap_err(), MembershipError::NodeNotFound(NodeNotFound::new(2, Operation::None)));
 
     Ok(())
 }
@@ -276,18 +273,9 @@ fn test_membership_next_coherent() -> anyhow::Result<()> {
 
     assert_eq!(m1, m1.next_coherent(c1(), false));
     assert_eq!(m12, m1.next_coherent(c2(), false));
-    assert_eq!(
-        new_mem(vec![c1()], vec![1, 2, 3, 6, 7, 8, 9]),
-        m12.next_coherent(c1(), false)
-    );
-    assert_eq!(
-        new_mem(vec![c2()], vec![3, 4, 5, 6, 7, 8, 9]),
-        m12.next_coherent(c2(), false)
-    );
-    assert_eq!(
-        new_mem(vec![c2(), c3()], vec![3, 4, 5, 6, 7, 8, 9]),
-        m12.next_coherent(c3(), false)
-    );
+    assert_eq!(new_mem(vec![c1()], vec![1, 2, 3, 6, 7, 8, 9]), m12.next_coherent(c1(), false));
+    assert_eq!(new_mem(vec![c2()], vec![3, 4, 5, 6, 7, 8, 9]), m12.next_coherent(c2(), false));
+    assert_eq!(new_mem(vec![c2(), c3()], vec![3, 4, 5, 6, 7, 8, 9]), m12.next_coherent(c3(), false));
 
     // Turn removed members to learners
 

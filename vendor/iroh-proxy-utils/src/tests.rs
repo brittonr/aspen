@@ -1,48 +1,63 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    str::FromStr,
-    sync::{Arc, OnceLock},
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use http::StatusCode;
 use hyper_util::rt::TokioExecutor;
-use iroh::{
-    Endpoint, EndpointId, discovery::static_provider::StaticProvider, endpoint::BindError,
-    protocol::Router,
-};
-use n0_error::{AnyError, Result, StdResultExt, stack_error};
+use iroh::Endpoint;
+use iroh::EndpointId;
+use iroh::discovery::static_provider::StaticProvider;
+use iroh::endpoint::BindError;
+use iroh::protocol::Router;
+use n0_error::AnyError;
+use n0_error::Result;
+use n0_error::StdResultExt;
+use n0_error::stack_error;
 use n0_future::task::AbortOnDropHandle;
 use n0_tracing_test::traced_test;
-use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-};
+use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpListener;
+use tokio::net::TcpStream;
 use tokio_util::time::FutureExt;
 use tracing::debug;
 
-use crate::{
-    ALPN, Authority, HttpProxyRequest, HttpProxyRequestKind, HttpRequest, HttpResponse,
-    IROH_DESTINATION_HEADER,
-    downstream::{
-        Deny, DownstreamMetrics, DownstreamProxy, EndpointAuthority, HttpProxyOpts, ProxyMode,
-        RequestHandler, SrcAddr,
-        opts::{RequestHandlerChain, StaticForwardProxy, StaticReverseProxy},
-    },
-    upstream::{AcceptAll, AuthError, AuthHandler, UpstreamMetrics, UpstreamProxy},
-    util::Prebuffered,
-};
+use crate::ALPN;
+use crate::Authority;
+use crate::HttpProxyRequest;
+use crate::HttpProxyRequestKind;
+use crate::HttpRequest;
+use crate::HttpResponse;
+use crate::IROH_DESTINATION_HEADER;
+use crate::downstream::Deny;
+use crate::downstream::DownstreamMetrics;
+use crate::downstream::DownstreamProxy;
+use crate::downstream::EndpointAuthority;
+use crate::downstream::HttpProxyOpts;
+use crate::downstream::ProxyMode;
+use crate::downstream::RequestHandler;
+use crate::downstream::SrcAddr;
+use crate::downstream::opts::RequestHandlerChain;
+use crate::downstream::opts::StaticForwardProxy;
+use crate::downstream::opts::StaticReverseProxy;
+use crate::upstream::AcceptAll;
+use crate::upstream::AuthError;
+use crate::upstream::AuthHandler;
+use crate::upstream::UpstreamMetrics;
+use crate::upstream::UpstreamProxy;
+use crate::util::Prebuffered;
 
 // -- Test helpers --
 
 async fn bind_endpoint() -> Result<Endpoint, BindError> {
     static STATIC_DISCOVERY: OnceLock<StaticProvider> = OnceLock::new();
     let discovery = STATIC_DISCOVERY.get_or_init(StaticProvider::default);
-    let endpoint = Endpoint::empty_builder(iroh::RelayMode::Disabled)
-        .discovery(discovery.clone())
-        .bind()
-        .await?;
+    let endpoint = Endpoint::empty_builder(iroh::RelayMode::Disabled).discovery(discovery.clone()).bind().await?;
     discovery.add_endpoint_info(endpoint.addr());
     Ok(endpoint)
 }
@@ -64,18 +79,14 @@ async fn spawn_upstream_proxy_with_auth(
     let endpoint = bind_endpoint().await?;
     let upstream_proxy = UpstreamProxy::new(auth)?;
     let metrics = upstream_proxy.metrics();
-    let router = Router::builder(endpoint)
-        .accept(ALPN, upstream_proxy)
-        .spawn();
+    let router = Router::builder(endpoint).accept(ALPN, upstream_proxy).spawn();
     let endpoint_id = router.endpoint().id();
     debug!(endpoint_id=%endpoint_id.fmt_short(), "spawned upstream proxy");
     Ok((router, endpoint_id, metrics))
 }
 
 /// Spawns a downstream proxy with given mode and returns (addr, endpoint_id, task).
-async fn spawn_downstream_proxy(
-    mode: ProxyMode,
-) -> Result<(SocketAddr, EndpointId, AbortOnDropHandle<Result>)> {
+async fn spawn_downstream_proxy(mode: ProxyMode) -> Result<(SocketAddr, EndpointId, AbortOnDropHandle<Result>)> {
     let endpoint = bind_endpoint().await?;
     let endpoint_id = endpoint.id();
     let proxy = DownstreamProxy::new(endpoint, Default::default());
@@ -88,12 +99,7 @@ async fn spawn_downstream_proxy(
 
 async fn spawn_downstream_proxy_with_metrics(
     mode: ProxyMode,
-) -> Result<(
-    SocketAddr,
-    EndpointId,
-    Arc<DownstreamMetrics>,
-    AbortOnDropHandle<Result>,
-)> {
+) -> Result<(SocketAddr, EndpointId, Arc<DownstreamMetrics>, AbortOnDropHandle<Result>)> {
     let endpoint = bind_endpoint().await?;
     let endpoint_id = endpoint.id();
     let proxy = DownstreamProxy::new(endpoint, Default::default());
@@ -115,9 +121,7 @@ async fn spawn_origin_server(label: &'static str) -> Result<(SocketAddr, AbortOn
 }
 
 /// Spawns a simple HTTP origin server that echoes back "{label} {method} {path}: {body}".
-async fn spawn_origin_server_echo_body(
-    label: &'static str,
-) -> Result<(SocketAddr, AbortOnDropHandle<()>)> {
+async fn spawn_origin_server_echo_body(label: &'static str) -> Result<(SocketAddr, AbortOnDropHandle<()>)> {
     let listener = TcpListener::bind("localhost:0").await?;
     let tcp_addr = listener.local_addr()?;
     debug!(%label, %tcp_addr, "spawned origin server");
@@ -144,14 +148,11 @@ async fn spawn_echo_server() -> Result<(SocketAddr, AbortOnDropHandle<()>)> {
 }
 
 /// Spawns an HTTP server with WebSocket support on /ws endpoint.
-async fn spawn_websocket_origin(
-    label: &'static str,
-) -> Result<(SocketAddr, AbortOnDropHandle<()>)> {
+async fn spawn_websocket_origin(label: &'static str) -> Result<(SocketAddr, AbortOnDropHandle<()>)> {
     let listener = TcpListener::bind("localhost:0").await?;
     let tcp_addr = listener.local_addr()?;
     debug!(%label, %tcp_addr, "spawned websocket origin server");
-    let task =
-        tokio::spawn(async move { origin_server::run_with_websocket(listener, label).await });
+    let task = tokio::spawn(async move { origin_server::run_with_websocket(listener, label).await });
     Ok((tcp_addr, AbortOnDropHandle::new(task)))
 }
 
@@ -188,14 +189,9 @@ async fn create_http_connect_tunnel(
 }
 
 /// Reads HTTP response and returns (status_code, body).
-async fn read_http_response(
-    stream: &mut (impl AsyncRead + Unpin + Send),
-) -> Result<(u16, Vec<u8>)> {
+async fn read_http_response(stream: &mut (impl AsyncRead + Unpin + Send)) -> Result<(u16, Vec<u8>)> {
     let mut prebuf = Prebuffered::new(stream, 8192);
-    let response = HttpResponse::read(&mut prebuf)
-        .timeout(Duration::from_secs(3))
-        .await
-        .anyerr()??;
+    let response = HttpResponse::read(&mut prebuf).timeout(Duration::from_secs(3)).await.anyerr()??;
     debug!("RESPONSE {:?}", response);
 
     // Read body based on Content-Length if present
@@ -208,11 +204,7 @@ async fn read_http_response(
 
     let mut body = vec![0u8; content_length];
     if content_length > 0 {
-        prebuf
-            .read_exact(&mut body)
-            .timeout(Duration::from_secs(3))
-            .await
-            .anyerr()??;
+        prebuf.read_exact(&mut body).timeout(Duration::from_secs(3)).await.anyerr()??;
     }
     Ok((response.status.as_u16(), body))
 }
@@ -223,19 +215,12 @@ async fn read_http_response(
 struct HeaderResolver;
 
 impl RequestHandler for HeaderResolver {
-    async fn handle_request(
-        &self,
-        src_addr: SrcAddr,
-        req: &mut HttpRequest,
-    ) -> Result<EndpointId, Deny> {
+    async fn handle_request(&self, src_addr: SrcAddr, req: &mut HttpRequest) -> Result<EndpointId, Deny> {
         let header = req
             .headers
             .get(IROH_DESTINATION_HEADER)
             .ok_or_else(|| Deny::bad_request("missing iroh-destination header"))?;
-        let header_str = header
-            .to_str()
-            .std_context("invalid iroh-destination header")
-            .map_err(Deny::bad_request)?;
+        let header_str = header.to_str().std_context("invalid iroh-destination header").map_err(Deny::bad_request)?;
         let destination = EndpointId::from_str(header_str).map_err(Deny::bad_request);
         req.set_forwarded_for_if_tcp(src_addr);
         destination
@@ -248,18 +233,9 @@ struct SubdomainRouter {
 }
 
 impl RequestHandler for SubdomainRouter {
-    async fn handle_request(
-        &self,
-        _src_addr: SrcAddr,
-        req: &mut HttpRequest,
-    ) -> Result<EndpointId, Deny> {
-        let host = req
-            .host()
-            .ok_or_else(|| Deny::bad_request("missing host header"))?;
-        let subdomain = host
-            .split('.')
-            .next()
-            .ok_or_else(|| Deny::bad_request("invalid host header"))?;
+    async fn handle_request(&self, _src_addr: SrcAddr, req: &mut HttpRequest) -> Result<EndpointId, Deny> {
+        let host = req.host().ok_or_else(|| Deny::bad_request("missing host header"))?;
+        let subdomain = host.split('.').next().ok_or_else(|| Deny::bad_request("invalid host header"))?;
         let destination = self
             .routes
             .get(subdomain)
@@ -275,11 +251,7 @@ impl RequestHandler for SubdomainRouter {
 struct AllowEndpoints(Vec<EndpointId>);
 
 impl AuthHandler for AllowEndpoints {
-    async fn authorize(
-        &self,
-        remote_id: EndpointId,
-        _req: &HttpProxyRequest,
-    ) -> Result<(), AuthError> {
+    async fn authorize(&self, remote_id: EndpointId, _req: &HttpProxyRequest) -> Result<(), AuthError> {
         if self.0.contains(&remote_id) {
             Ok(())
         } else {
@@ -292,24 +264,16 @@ impl AuthHandler for AllowEndpoints {
 struct AllowAuthorities(Vec<String>);
 
 impl AuthHandler for AllowAuthorities {
-    async fn authorize(
-        &self,
-        _remote_id: EndpointId,
-        req: &HttpProxyRequest,
-    ) -> Result<(), AuthError> {
+    async fn authorize(&self, _remote_id: EndpointId, req: &HttpProxyRequest) -> Result<(), AuthError> {
         let target = match &req.kind {
             HttpProxyRequestKind::Tunnel { target } => target.to_string(),
-            HttpProxyRequestKind::Absolute { target, .. } => Authority::from_absolute_uri(target)
-                .map(|a| a.to_string())
-                .unwrap_or_default(),
+            HttpProxyRequestKind::Absolute { target, .. } => {
+                Authority::from_absolute_uri(target).map(|a| a.to_string()).unwrap_or_default()
+            }
         };
         let allowed = self.0.contains(&target);
         debug!(?allowed, ?target, list=?self.0, "AllowAuthorities::authorize");
-        if allowed {
-            Ok(())
-        } else {
-            Err(AuthError::Forbidden)
-        }
+        if allowed { Ok(()) } else { Err(AuthError::Forbidden) }
     }
 }
 
@@ -322,10 +286,7 @@ async fn test_tcp_mode() -> Result {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (echo_addr, _echo_task) = spawn_echo_server().await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&echo_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&echo_addr.to_string())?);
     let mode = ProxyMode::Tcp(destination);
     let (proxy_addr, _, _proxy_task) = spawn_downstream_proxy(mode).await?;
 
@@ -357,11 +318,7 @@ async fn test_http_forward_absolute_form() -> Result {
         .proxy(reqwest::Proxy::http(format!("http://{proxy_addr}")).anyerr()?)
         .build()
         .anyerr()?;
-    let res = client
-        .get(format!("http://{origin_addr}/test/path"))
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.get(format!("http://{origin_addr}/test/path")).send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     let text = res.text().await.anyerr()?;
     assert_eq!(text, "origin GET /test/path");
@@ -402,20 +359,13 @@ async fn test_http_reverse_simple() -> Result {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server("origin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (proxy_addr, _, proxy_task) = spawn_downstream_proxy(mode).await?;
 
     // Direct request to reverse proxy (no proxy config - sends origin-form)
     let client = reqwest::Client::new();
-    let res = client
-        .get(format!("http://{proxy_addr}/reverse/path"))
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.get(format!("http://{proxy_addr}/reverse/path")).send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     let text = res.text().await.anyerr()?;
     assert_eq!(text, "origin GET /reverse/path");
@@ -483,11 +433,7 @@ async fn test_http_forward_dynamic_missing_header() -> Result {
         .proxy(reqwest::Proxy::http(format!("http://{proxy_addr}")).anyerr()?)
         .build()
         .anyerr()?;
-    let res = client
-        .get("http://example.com/path")
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.get("http://example.com/path").send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 
     Ok(())
@@ -508,17 +454,11 @@ async fn test_http_reverse_dynamic() -> Result {
     let mut routes = HashMap::new();
     routes.insert(
         "proxy1".to_string(),
-        EndpointAuthority::new(
-            upstream1_id,
-            Authority::from_authority_str(&origin1_addr.to_string())?,
-        ),
+        EndpointAuthority::new(upstream1_id, Authority::from_authority_str(&origin1_addr.to_string())?),
     );
     routes.insert(
         "proxy2".to_string(),
-        EndpointAuthority::new(
-            upstream2_id,
-            Authority::from_authority_str(&origin2_addr.to_string())?,
-        ),
+        EndpointAuthority::new(upstream2_id, Authority::from_authority_str(&origin2_addr.to_string())?),
     );
 
     let mode = ProxyMode::Http(HttpProxyOpts::new(SubdomainRouter { routes }));
@@ -595,10 +535,8 @@ async fn test_upstream_auth_endpoint() -> Result {
     assert_eq!(body, b"origin GET /test");
 
     // Spawn another downstream (different endpoint ID) - should be rejected
-    let (proxy_addr2, _, proxy_task2) = spawn_downstream_proxy(ProxyMode::Http(
-        HttpProxyOpts::new(StaticForwardProxy(upstream_id)),
-    ))
-    .await?;
+    let (proxy_addr2, _, proxy_task2) =
+        spawn_downstream_proxy(ProxyMode::Http(HttpProxyOpts::new(StaticForwardProxy(upstream_id)))).await?;
 
     let mut stream2 = TcpStream::connect(proxy_addr2).await?;
     let req2 = format!(
@@ -638,9 +576,7 @@ async fn test_upstream_auth_authority() -> Result {
 
     // CONNECT to allowed origin should succeed
     let mut stream = create_http_connect_tunnel(proxy_addr, allowed_addr, None).await?;
-    stream
-        .write_all(b"GET /check HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
-        .await?;
+    stream.write_all(b"GET /check HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").await?;
     let (upstream_status, body) = read_http_response(&mut stream).await?;
     assert_eq!(upstream_status, 200);
     assert_eq!(body, b"allowed GET /check");
@@ -694,30 +630,17 @@ async fn test_http_reverse_post_with_body() -> Result {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server_echo_body("origin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (proxy_addr, _, proxy_task) = spawn_downstream_proxy(mode).await?;
 
     let client = reqwest::Client::new();
-    let res = client
-        .post(format!("http://{proxy_addr}/data"))
-        .body("post body content")
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.post(format!("http://{proxy_addr}/data")).body("post body content").send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     let text = res.text().await.anyerr()?;
     assert_eq!(text, "origin POST /data: post body content");
 
-    let res = client
-        .post(format!("http://{proxy_addr}/data"))
-        .body("post body content 2")
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.post(format!("http://{proxy_addr}/data")).body("post body content 2").send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     let text = res.text().await.anyerr()?;
     assert_eq!(text, "origin POST /data: post body content 2");
@@ -760,9 +683,7 @@ async fn test_origin_form_to_forward_only_proxy() -> Result {
 
     // Send origin-form request (no scheme) - this is what a reverse proxy would handle
     let mut stream = TcpStream::connect(proxy_addr).await?;
-    stream
-        .write_all(b"GET /path HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")
-        .await?;
+    stream.write_all(b"GET /path HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n").await?;
 
     let (status, _) = read_http_response(&mut stream).await?;
     assert_eq!(status, 400);
@@ -779,19 +700,14 @@ async fn test_forward_request_to_reverse_only_proxy() -> Result {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server("origin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     // Only reverse mode configured (no forward)
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (proxy_addr, _, proxy_task) = spawn_downstream_proxy(mode).await?;
 
     // Send absolute-form request (with scheme) - this is what a forward proxy would handle
     let mut stream = TcpStream::connect(proxy_addr).await?;
-    let req = format!(
-        "GET http://{origin_addr}/path HTTP/1.1\r\nHost: {origin_addr}\r\nConnection: close\r\n\r\n"
-    );
+    let req = format!("GET http://{origin_addr}/path HTTP/1.1\r\nHost: {origin_addr}\r\nConnection: close\r\n\r\n");
     stream.write_all(req.as_bytes()).await?;
 
     let (status, _) = read_http_response(&mut stream).await?;
@@ -809,10 +725,7 @@ async fn test_connect_to_reverse_only_proxy() -> Result {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server("origin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     // Only reverse mode configured
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (proxy_addr, _, proxy_task) = spawn_downstream_proxy(mode).await?;
@@ -841,9 +754,7 @@ async fn test_connect_unreachable_origin() -> Result {
 
     // CONNECT to a port that's not listening
     let mut stream = TcpStream::connect(proxy_addr).await?;
-    stream
-        .write_all(b"CONNECT 127.0.0.1:1 HTTP/1.1\r\nHost: 127.0.0.1:1\r\n\r\n")
-        .await?;
+    stream.write_all(b"CONNECT 127.0.0.1:1 HTTP/1.1\r\nHost: 127.0.0.1:1\r\n\r\n").await?;
 
     let (status, _) = read_http_response(&mut stream).await?;
     assert_eq!(status, 502);
@@ -906,12 +817,7 @@ async fn test_large_request_body() -> Result {
 
     // 1MB body
     let body = "x".repeat(1024 * 1024);
-    let res = client
-        .post(format!("http://{origin_addr}/large"))
-        .body(body.clone())
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.post(format!("http://{origin_addr}/large")).body(body.clone()).send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     let text = res.text().await.anyerr()?;
     assert_eq!(text, format!("origin POST /large: {body}"));
@@ -928,10 +834,8 @@ async fn test_forward_and_reverse_combined() -> Result {
     let (forward_origin_addr, _forward_origin_task) = spawn_origin_server("forward").await?;
     let (reverse_origin_addr, _reverse_origin_task) = spawn_origin_server("reverse").await?;
 
-    let reverse_destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&reverse_origin_addr.to_string())?,
-    );
+    let reverse_destination =
+        EndpointAuthority::new(upstream_id, Authority::from_authority_str(&reverse_origin_addr.to_string())?);
     let handler = RequestHandlerChain::default()
         .push(StaticForwardProxy(upstream_id))
         .push(StaticReverseProxy(reverse_destination));
@@ -943,21 +847,13 @@ async fn test_forward_and_reverse_combined() -> Result {
         .proxy(reqwest::Proxy::http(format!("http://{proxy_addr}")).anyerr()?)
         .build()
         .anyerr()?;
-    let res = client
-        .get(format!("http://{forward_origin_addr}/forward-path"))
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.get(format!("http://{forward_origin_addr}/forward-path")).send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(res.text().await.anyerr()?, "forward GET /forward-path");
 
     // Origin-form request should go to reverse origin
     let client = reqwest::Client::new();
-    let res = client
-        .get(format!("http://{proxy_addr}/reverse-path"))
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.get(format!("http://{proxy_addr}/reverse-path")).send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(res.text().await.anyerr()?, "reverse GET /reverse-path");
 
@@ -977,9 +873,11 @@ async fn test_forward_and_reverse_combined() -> Result {
 #[traced_test]
 async fn h2_multiple_connect_requests_single_connection() -> Result<()> {
     use bytes::Bytes;
-    use http_body_util::{BodyExt, Full};
+    use http_body_util::BodyExt;
+    use http_body_util::Full;
     use hyper::Request;
-    use hyper_util::rt::{TokioExecutor, TokioIo};
+    use hyper_util::rt::TokioExecutor;
+    use hyper_util::rt::TokioIo;
 
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server("origin").await?;
@@ -988,9 +886,7 @@ async fn h2_multiple_connect_requests_single_connection() -> Result<()> {
 
     let stream = TcpStream::connect(proxy_addr).await?;
     let io = TokioIo::new(stream);
-    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io)
-        .await
-        .anyerr()?;
+    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await.anyerr()?;
     let conn_task = tokio::spawn(async move { conn.await });
 
     // Test multiple requests over a single HTTP/2 connection
@@ -1027,22 +923,12 @@ async fn h2_reqwest_reverse() -> Result<()> {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server("origin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (proxy_addr, _, _proxy_task) = spawn_downstream_proxy(mode).await?;
 
-    let client = reqwest::Client::builder()
-        .http2_prior_knowledge()
-        .build()
-        .anyerr()?;
-    let res = client
-        .get(format!("http://{proxy_addr}/reverse/path"))
-        .send()
-        .await
-        .anyerr()?;
+    let client = reqwest::Client::builder().http2_prior_knowledge().build().anyerr()?;
+    let res = client.get(format!("http://{proxy_addr}/reverse/path")).send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     let text = res.text().await.anyerr()?;
     assert_eq!(text, "origin GET /reverse/path");
@@ -1066,11 +952,7 @@ async fn h2_reqwest_forward() -> Result<()> {
         .proxy(reqwest::Proxy::http(format!("http://{proxy_addr}")).anyerr()?)
         .build()
         .anyerr()?;
-    let res = client
-        .get(format!("http://{origin_addr}/test/path"))
-        .send()
-        .await
-        .anyerr()?;
+    let res = client.get(format!("http://{origin_addr}/test/path")).send().await.anyerr()?;
     assert_eq!(res.status(), StatusCode::OK);
     let text = res.text().await.anyerr()?;
     assert_eq!(text, "origin GET /test/path");
@@ -1098,7 +980,11 @@ where
 #[tokio::test]
 #[traced_test]
 async fn test_websocket_http1_forward_connect() -> Result {
-    use fastwebsockets::{FragmentCollector, Frame, OpCode, Payload, handshake};
+    use fastwebsockets::FragmentCollector;
+    use fastwebsockets::Frame;
+    use fastwebsockets::OpCode;
+    use fastwebsockets::Payload;
+    use fastwebsockets::handshake;
     use hyper::Request;
 
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
@@ -1119,10 +1005,7 @@ async fn test_websocket_http1_forward_connect() -> Result {
     let mut buf = vec![0u8; 1024];
     let n = stream.read(&mut buf).await?;
     let response = String::from_utf8_lossy(&buf[..n]);
-    assert!(
-        response.starts_with("HTTP/1.1 200"),
-        "Expected 200 OK, got: {response}"
-    );
+    assert!(response.starts_with("HTTP/1.1 200"), "Expected 200 OK, got: {response}");
 
     // Now perform WebSocket handshake through the tunnel
     let req = Request::builder()
@@ -1136,15 +1019,11 @@ async fn test_websocket_http1_forward_connect() -> Result {
         .body(http_body_util::Empty::<bytes::Bytes>::new())
         .anyerr()?;
 
-    let (ws, _) = handshake::client(&SpawnExecutor, req, stream)
-        .await
-        .anyerr()?;
+    let (ws, _) = handshake::client(&SpawnExecutor, req, stream).await.anyerr()?;
     let mut ws = FragmentCollector::new(ws);
 
     // Send a text message
-    ws.write_frame(Frame::text(Payload::Borrowed(b"hello websocket")))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::text(Payload::Borrowed(b"hello websocket"))).await.anyerr()?;
 
     // Receive the echoed message
     let frame = ws.read_frame().await.anyerr()?;
@@ -1152,18 +1031,14 @@ async fn test_websocket_http1_forward_connect() -> Result {
     assert_eq!(&*frame.payload, b"hello websocket");
 
     // Send another message to verify the connection is stable
-    ws.write_frame(Frame::text(Payload::Borrowed(b"second message")))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::text(Payload::Borrowed(b"second message"))).await.anyerr()?;
 
     let frame = ws.read_frame().await.anyerr()?;
     assert_eq!(frame.opcode, OpCode::Text);
     assert_eq!(&*frame.payload, b"second message");
 
     // Close the WebSocket
-    ws.write_frame(Frame::close_raw(vec![].into()))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::close_raw(vec![].into())).await.anyerr()?;
 
     upstream_router.shutdown().await.anyerr()?;
     Ok(())
@@ -1174,7 +1049,11 @@ async fn test_websocket_http1_forward_connect() -> Result {
 #[tokio::test]
 #[traced_test]
 async fn test_websocket_http1_forward_absolute() -> Result {
-    use fastwebsockets::{FragmentCollector, Frame, OpCode, Payload, handshake};
+    use fastwebsockets::FragmentCollector;
+    use fastwebsockets::Frame;
+    use fastwebsockets::OpCode;
+    use fastwebsockets::Payload;
+    use fastwebsockets::handshake;
     use hyper::Request;
 
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
@@ -1198,15 +1077,11 @@ async fn test_websocket_http1_forward_absolute() -> Result {
         .body(http_body_util::Empty::<bytes::Bytes>::new())
         .anyerr()?;
 
-    let (ws, _) = handshake::client(&SpawnExecutor, req, stream)
-        .await
-        .anyerr()?;
+    let (ws, _) = handshake::client(&SpawnExecutor, req, stream).await.anyerr()?;
     let mut ws = FragmentCollector::new(ws);
 
     // Send a text message
-    ws.write_frame(Frame::text(Payload::Borrowed(b"hello absolute-form ws")))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::text(Payload::Borrowed(b"hello absolute-form ws"))).await.anyerr()?;
 
     // Receive the echoed message
     let frame = ws.read_frame().await.anyerr()?;
@@ -1214,18 +1089,14 @@ async fn test_websocket_http1_forward_absolute() -> Result {
     assert_eq!(&*frame.payload, b"hello absolute-form ws");
 
     // Send another message to verify the connection is stable
-    ws.write_frame(Frame::text(Payload::Borrowed(b"second message")))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::text(Payload::Borrowed(b"second message"))).await.anyerr()?;
 
     let frame = ws.read_frame().await.anyerr()?;
     assert_eq!(frame.opcode, OpCode::Text);
     assert_eq!(&*frame.payload, b"second message");
 
     // Close the WebSocket
-    ws.write_frame(Frame::close_raw(vec![].into()))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::close_raw(vec![].into())).await.anyerr()?;
 
     upstream_router.shutdown().await.anyerr()?;
     Ok(())
@@ -1239,16 +1110,17 @@ async fn test_websocket_http1_forward_absolute() -> Result {
 #[tokio::test]
 #[traced_test]
 async fn test_websocket_http1_reverse() -> Result {
-    use fastwebsockets::{FragmentCollector, Frame, OpCode, Payload, handshake};
+    use fastwebsockets::FragmentCollector;
+    use fastwebsockets::Frame;
+    use fastwebsockets::OpCode;
+    use fastwebsockets::Payload;
+    use fastwebsockets::handshake;
     use hyper::Request;
 
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_websocket_origin("wsorigin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (proxy_addr, _, _proxy_task) = spawn_downstream_proxy(mode).await?;
 
@@ -1267,23 +1139,17 @@ async fn test_websocket_http1_reverse() -> Result {
         .body(http_body_util::Empty::<bytes::Bytes>::new())
         .anyerr()?;
 
-    let (ws, _) = handshake::client(&SpawnExecutor, req, stream)
-        .await
-        .anyerr()?;
+    let (ws, _) = handshake::client(&SpawnExecutor, req, stream).await.anyerr()?;
     let mut ws = FragmentCollector::new(ws);
 
     // Send and receive messages
-    ws.write_frame(Frame::text(Payload::Borrowed(b"reverse proxy ws")))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::text(Payload::Borrowed(b"reverse proxy ws"))).await.anyerr()?;
 
     let frame = ws.read_frame().await.anyerr()?;
     assert_eq!(frame.opcode, OpCode::Text);
     assert_eq!(&*frame.payload, b"reverse proxy ws");
 
-    ws.write_frame(Frame::close_raw(vec![].into()))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::close_raw(vec![].into())).await.anyerr()?;
 
     upstream_router.shutdown().await.anyerr()?;
     Ok(())
@@ -1302,7 +1168,11 @@ async fn test_websocket_http1_reverse() -> Result {
 #[traced_test]
 async fn test_websocket_h2_forward_connect() -> Result {
     use bytes::Bytes;
-    use fastwebsockets::{FragmentCollector, Frame, OpCode, Payload, handshake};
+    use fastwebsockets::FragmentCollector;
+    use fastwebsockets::Frame;
+    use fastwebsockets::OpCode;
+    use fastwebsockets::Payload;
+    use fastwebsockets::handshake;
     use http_body_util::Empty;
     use hyper::Request;
     use hyper_util::rt::TokioIo;
@@ -1316,9 +1186,7 @@ async fn test_websocket_h2_forward_connect() -> Result {
     // Establish HTTP/2 connection to the proxy
     let stream = TcpStream::connect(proxy_addr).await?;
     let io = TokioIo::new(stream);
-    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io)
-        .await
-        .anyerr()?;
+    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await.anyerr()?;
     let conn_task = tokio::spawn(async move { conn.await });
 
     // Send CONNECT request to establish tunnel
@@ -1347,15 +1215,11 @@ async fn test_websocket_h2_forward_connect() -> Result {
         .body(Empty::<Bytes>::new())
         .anyerr()?;
 
-    let (ws, _) = handshake::client(&SpawnExecutor, req, TokioIo::new(upgraded))
-        .await
-        .anyerr()?;
+    let (ws, _) = handshake::client(&SpawnExecutor, req, TokioIo::new(upgraded)).await.anyerr()?;
     let mut ws = FragmentCollector::new(ws);
 
     // Test WebSocket echo
-    ws.write_frame(Frame::text(Payload::Borrowed(b"h2 websocket test")))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::text(Payload::Borrowed(b"h2 websocket test"))).await.anyerr()?;
 
     let frame = ws.read_frame().await.anyerr()?;
     assert_eq!(frame.opcode, OpCode::Text);
@@ -1364,18 +1228,14 @@ async fn test_websocket_h2_forward_connect() -> Result {
     // Send multiple messages to verify stability
     for i in 0..3 {
         let msg = format!("message {i}");
-        ws.write_frame(Frame::text(Payload::Owned(msg.as_bytes().to_vec())))
-            .await
-            .anyerr()?;
+        ws.write_frame(Frame::text(Payload::Owned(msg.as_bytes().to_vec()))).await.anyerr()?;
 
         let frame = ws.read_frame().await.anyerr()?;
         assert_eq!(frame.opcode, OpCode::Text);
         assert_eq!(&*frame.payload, msg.as_bytes());
     }
 
-    ws.write_frame(Frame::close_raw(vec![].into()))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::close_raw(vec![].into())).await.anyerr()?;
 
     conn_task.abort();
     upstream_router.shutdown().await.anyerr()?;
@@ -1389,7 +1249,10 @@ async fn test_websocket_h2_forward_connect() -> Result {
 #[traced_test]
 async fn test_websocket_h2_reverse() -> Result {
     use bytes::Bytes;
-    use fastwebsockets::{FragmentCollector, Frame, OpCode, handshake};
+    use fastwebsockets::FragmentCollector;
+    use fastwebsockets::Frame;
+    use fastwebsockets::OpCode;
+    use fastwebsockets::handshake;
     use http_body_util::Empty;
     use hyper::Request;
     use hyper_util::rt::TokioIo;
@@ -1397,19 +1260,14 @@ async fn test_websocket_h2_reverse() -> Result {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_websocket_origin("wsorigin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (proxy_addr, _, _proxy_task) = spawn_downstream_proxy(mode).await?;
 
     // Establish HTTP/2 connection to the reverse proxy
     let stream = TcpStream::connect(proxy_addr).await?;
     let io = TokioIo::new(stream);
-    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io)
-        .await
-        .anyerr()?;
+    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await.anyerr()?;
     let conn_task = tokio::spawn(async move { conn.await });
 
     // Build extended CONNECT request with :protocol pseudo-header
@@ -1436,20 +1294,16 @@ async fn test_websocket_h2_reverse() -> Result {
     ));
 
     // Send and receive message
-    ws.write_frame(Frame::text(fastwebsockets::Payload::Borrowed(
-        b"hello h2 extended connect",
-    )))
-    .await
-    .anyerr()?;
+    ws.write_frame(Frame::text(fastwebsockets::Payload::Borrowed(b"hello h2 extended connect")))
+        .await
+        .anyerr()?;
     debug!("written");
     let frame = ws.read_frame().await.anyerr()?;
     debug!("read");
     assert_eq!(frame.opcode, OpCode::Text);
     assert_eq!(frame.payload.as_ref(), b"hello h2 extended connect");
 
-    ws.write_frame(Frame::close_raw(vec![].into()))
-        .await
-        .anyerr()?;
+    ws.write_frame(Frame::close_raw(vec![].into())).await.anyerr()?;
 
     conn_task.abort();
     upstream_router.shutdown().await.anyerr()?;
@@ -1475,11 +1329,7 @@ async fn test_hop_by_hop_headers_not_forwarded() -> Result {
 
         // Echo back the received headers in the response body
         let body = request.to_string();
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
+        let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}", body.len(), body);
         stream.write_all(response.as_bytes()).await.unwrap();
     });
     let _origin_task = AbortOnDropHandle::new(origin_task);
@@ -1511,10 +1361,7 @@ async fn test_hop_by_hop_headers_not_forwarded() -> Result {
         !body_str.to_lowercase().contains("proxy-authorization"),
         "Proxy-Authorization header was forwarded but shouldn't be"
     );
-    assert!(
-        !body_str.to_lowercase().contains("keep-alive:"),
-        "Keep-Alive header was forwarded but shouldn't be"
-    );
+    assert!(!body_str.to_lowercase().contains("keep-alive:"), "Keep-Alive header was forwarded but shouldn't be");
 
     upstream_router.shutdown().await.anyerr()?;
     Ok(())
@@ -1569,10 +1416,7 @@ async fn test_response_hop_by_hop_headers_filtered() -> Result {
         !response_lower.contains("proxy-authenticate"),
         "Proxy-Authenticate response header was forwarded but shouldn't be"
     );
-    assert!(
-        !response_lower.contains("keep-alive:"),
-        "Keep-Alive response header was forwarded but shouldn't be"
-    );
+    assert!(!response_lower.contains("keep-alive:"), "Keep-Alive response header was forwarded but shouldn't be");
 
     upstream_router.shutdown().await.anyerr()?;
     Ok(())
@@ -1608,10 +1452,7 @@ async fn test_uds_http1_reverse() -> Result {
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server("origin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (socket_path, _, proxy_task) = spawn_downstream_proxy_uds(mode).await?;
 
@@ -1619,9 +1460,7 @@ async fn test_uds_http1_reverse() -> Result {
     let mut stream = tokio::net::UnixStream::connect(&socket_path).await?;
 
     // Send HTTP/1.1 request
-    stream
-        .write_all(b"GET /uds/path HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-        .await?;
+    stream.write_all(b"GET /uds/path HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").await?;
 
     let (status, body) = read_http_response(&mut stream).await?;
     assert_eq!(status, 200);
@@ -1639,26 +1478,22 @@ async fn test_uds_http1_reverse() -> Result {
 #[traced_test]
 async fn test_uds_http2_reverse() -> Result<()> {
     use bytes::Bytes;
-    use http_body_util::{BodyExt, Full};
+    use http_body_util::BodyExt;
+    use http_body_util::Full;
     use hyper::Request;
     use hyper_util::rt::TokioIo;
 
     let (upstream_router, upstream_id) = spawn_upstream_proxy().await?;
     let (origin_addr, _origin_task) = spawn_origin_server("origin").await?;
 
-    let destination = EndpointAuthority::new(
-        upstream_id,
-        Authority::from_authority_str(&origin_addr.to_string())?,
-    );
+    let destination = EndpointAuthority::new(upstream_id, Authority::from_authority_str(&origin_addr.to_string())?);
     let mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     let (socket_path, _, proxy_task) = spawn_downstream_proxy_uds(mode).await?;
 
     // Connect via Unix socket and perform HTTP/2 handshake
     let stream = tokio::net::UnixStream::connect(&socket_path).await?;
     let io = TokioIo::new(stream);
-    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io)
-        .await
-        .anyerr()?;
+    let (mut sender, conn) = hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await.anyerr()?;
     let conn_task = tokio::spawn(async move { conn.await });
 
     // Send multiple requests over the HTTP/2 connection
@@ -1690,12 +1525,23 @@ async fn test_uds_http2_reverse() -> Result<()> {
 }
 
 mod origin_server {
-    use std::{convert::Infallible, sync::Arc};
+    use std::convert::Infallible;
+    use std::sync::Arc;
 
-    use fastwebsockets::{FragmentCollector, Frame, OpCode, Payload, WebSocketError};
+    use fastwebsockets::FragmentCollector;
+    use fastwebsockets::Frame;
+    use fastwebsockets::OpCode;
+    use fastwebsockets::Payload;
+    use fastwebsockets::WebSocketError;
     use http::HeaderValue;
-    use http_body_util::{BodyExt, Empty, Full};
-    use hyper::{Request, Response, body::Bytes, server::conn::http1, service::service_fn};
+    use http_body_util::BodyExt;
+    use http_body_util::Empty;
+    use http_body_util::Full;
+    use hyper::Request;
+    use hyper::Response;
+    use hyper::body::Bytes;
+    use hyper::server::conn::http1;
+    use hyper::service::service_fn;
     use hyper_util::rt::TokioIo;
     use tokio::net::TcpListener;
     use tracing::debug;
@@ -1717,17 +1563,13 @@ mod origin_server {
                         let body = format!("{} {} {}", *label, req.method(), req.uri().path());
                         let len = body.len();
                         let mut res = Response::new(Full::new(Bytes::from(body)));
-                        res.headers_mut().insert(
-                            http::header::CONTENT_LENGTH,
-                            HeaderValue::from_str(&len.to_string()).unwrap(),
-                        );
+                        res.headers_mut()
+                            .insert(http::header::CONTENT_LENGTH, HeaderValue::from_str(&len.to_string()).unwrap());
 
                         Ok::<_, Infallible>(res)
                     }
                 };
-                let _ = http1::Builder::new()
-                    .serve_connection(io, service_fn(handler))
-                    .await;
+                let _ = http1::Builder::new().serve_connection(io, service_fn(handler)).await;
             });
         }
     }
@@ -1753,9 +1595,7 @@ mod origin_server {
                         Ok::<_, Infallible>(Response::new(Full::new(Bytes::from(response))))
                     }
                 };
-                let _ = http1::Builder::new()
-                    .serve_connection(io, service_fn(handler))
-                    .await;
+                let _ = http1::Builder::new().serve_connection(io, service_fn(handler)).await;
             });
         }
     }
@@ -1781,42 +1621,30 @@ mod origin_server {
 
                         // Check if this is a WebSocket upgrade request to /ws
                         if path == "/ws" && fastwebsockets::upgrade::is_upgrade_request(&req) {
-                            let (response, fut) =
-                                fastwebsockets::upgrade::upgrade(&mut req).unwrap();
+                            let (response, fut) = fastwebsockets::upgrade::upgrade(&mut req).unwrap();
                             tokio::spawn(async move {
                                 if let Err(e) = handle_websocket(fut).await {
                                     debug!("WebSocket error: {e:?}");
                                 }
                             });
-                            return Ok(
-                                response.map(|_| Empty::new().map_err(|e| match e {}).boxed())
-                            );
+                            return Ok(response.map(|_| Empty::new().map_err(|e| match e {}).boxed()));
                         }
 
                         // Normal HTTP response
                         let body = format!("{} {} {}", *label, req.method(), path);
                         let len = body.len();
-                        let mut res = Response::new(
-                            Full::new(Bytes::from(body)).map_err(|e| match e {}).boxed(),
-                        );
-                        res.headers_mut().insert(
-                            http::header::CONTENT_LENGTH,
-                            HeaderValue::from_str(&len.to_string()).unwrap(),
-                        );
+                        let mut res = Response::new(Full::new(Bytes::from(body)).map_err(|e| match e {}).boxed());
+                        res.headers_mut()
+                            .insert(http::header::CONTENT_LENGTH, HeaderValue::from_str(&len.to_string()).unwrap());
                         Ok::<_, WebSocketError>(res)
                     }
                 };
-                let _ = http1::Builder::new()
-                    .serve_connection(io, service_fn(handler))
-                    .with_upgrades()
-                    .await;
+                let _ = http1::Builder::new().serve_connection(io, service_fn(handler)).with_upgrades().await;
             });
         }
     }
 
-    async fn handle_websocket(
-        fut: fastwebsockets::upgrade::UpgradeFut,
-    ) -> Result<(), WebSocketError> {
+    async fn handle_websocket(fut: fastwebsockets::upgrade::UpgradeFut) -> Result<(), WebSocketError> {
         let ws = fut.await?;
         let mut ws = FragmentCollector::new(ws);
 
@@ -1832,8 +1660,7 @@ mod origin_server {
                 OpCode::Binary => {
                     // Echo binary messages back too
                     let payload = frame.payload.to_vec();
-                    ws.write_frame(Frame::binary(Payload::Owned(payload)))
-                        .await?;
+                    ws.write_frame(Frame::binary(Payload::Owned(payload))).await?;
                 }
                 _ => {}
             }
@@ -1851,11 +1678,7 @@ mod metrics {
     struct RejectAll;
 
     impl RequestHandler for RejectAll {
-        async fn handle_request(
-            &self,
-            _src_addr: SrcAddr,
-            _req: &mut HttpRequest,
-        ) -> Result<EndpointId, Deny> {
+        async fn handle_request(&self, _src_addr: SrcAddr, _req: &mut HttpRequest) -> Result<EndpointId, Deny> {
             Err(Deny::bad_request("denied by RejectAll"))
         }
     }
@@ -1864,11 +1687,9 @@ mod metrics {
     #[traced_test]
     async fn http_metrics_track_requests() -> Result {
         let (origin_addr, origin_task) = spawn_origin_server_echo_body("origin").await?;
-        let (upstream_router, upstream_id, upstream_metrics) =
-            spawn_upstream_proxy_with_metrics().await?;
+        let (upstream_router, upstream_id, upstream_metrics) = spawn_upstream_proxy_with_metrics().await?;
         let mode = ProxyMode::Http(HttpProxyOpts::new(StaticForwardProxy(upstream_id)));
-        let (proxy_addr, _, downstream_metrics, proxy_task) =
-            spawn_downstream_proxy_with_metrics(mode).await?;
+        let (proxy_addr, _, downstream_metrics, proxy_task) = spawn_downstream_proxy_with_metrics(mode).await?;
         let client = reqwest::Client::builder()
             .proxy(reqwest::Proxy::http(format!("http://{proxy_addr}")).anyerr()?)
             .build()
@@ -1887,12 +1708,7 @@ mod metrics {
                 drop(tx);
             }
         });
-        let res = client
-            .post(format!("http://{origin_addr}/upload"))
-            .body(body)
-            .send()
-            .await
-            .anyerr()?;
+        let res = client.post(format!("http://{origin_addr}/upload")).body(body).send().await.anyerr()?;
         body_task.await.expect("task panicked");
         assert_eq!(res.status(), StatusCode::OK);
         let body = res.bytes().await.anyerr()?;
@@ -1918,14 +1734,8 @@ mod metrics {
             .get(&Authority::from_authority_str(&origin_addr.to_string()).unwrap())
             .expect("exists");
 
-        assert_eq!(
-            origin_metrics.bytes_from_origin(),
-            downstream_metrics.bytes_from_upstream.get()
-        );
-        assert_eq!(
-            origin_metrics.bytes_to_origin(),
-            downstream_metrics.bytes_to_upstream.get()
-        );
+        assert_eq!(origin_metrics.bytes_from_origin(), downstream_metrics.bytes_from_upstream.get());
+        assert_eq!(origin_metrics.bytes_to_origin(), downstream_metrics.bytes_to_upstream.get());
 
         debug!("downstream metrics: {downstream_metrics:#?}");
         Ok(())
@@ -1935,17 +1745,12 @@ mod metrics {
     #[traced_test]
     async fn http_metrics_deny_behavior() -> Result {
         let mode = ProxyMode::Http(HttpProxyOpts::new(RejectAll));
-        let (proxy_addr, _, metrics, proxy_task) =
-            spawn_downstream_proxy_with_metrics(mode).await?;
+        let (proxy_addr, _, metrics, proxy_task) = spawn_downstream_proxy_with_metrics(mode).await?;
         let client = reqwest::Client::builder()
             .proxy(reqwest::Proxy::http(format!("http://{proxy_addr}")).anyerr()?)
             .build()
             .anyerr()?;
-        let res = client
-            .get("http://example.com/denied")
-            .send()
-            .await
-            .anyerr()?;
+        let res = client.get("http://example.com/denied").send().await.anyerr()?;
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(metrics.requests_denied.get(), 1);

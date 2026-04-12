@@ -84,12 +84,7 @@ where C: RaftTypeConfig
                 write!(f, "TriggerTransferLeader: to {}", to)
             }
             ExternalCommand::AllowNextRevert { to, allow, .. } => {
-                write!(
-                    f,
-                    "{}-on-next-log-revert: to {}",
-                    if *allow { "AllowReset" } else { "Panic" },
-                    to
-                )
+                write!(f, "{}-on-next-log-revert: to {}", if *allow { "AllowReset" } else { "Panic" }, to)
             }
             ExternalCommand::StateMachineCommand { sm_cmd } => {
                 write!(f, "StateMachineCommand: {}", sm_cmd)

@@ -38,11 +38,7 @@ where C: RaftTypeConfig
     ///
     /// [`Config::allow_log_reversion`]: `crate::config::Config::allow_log_reversion`
     pub(crate) fn update_conflicting(&mut self, conflict: u64, inflight_id: Option<InflightId>) {
-        tracing::debug!(
-            "update_conflict: current progress_entry: {}; conflict: {}",
-            self.entry,
-            conflict
-        );
+        tracing::debug!("update_conflict: current progress_entry: {}; conflict: {}", self.entry, conflict);
 
         // The inflight may be None if the conflict is caused by a heartbeat response.
         if let Some(inflight_id) = inflight_id {
@@ -50,11 +46,7 @@ where C: RaftTypeConfig
         }
 
         if conflict >= self.entry.searching_end {
-            tracing::debug!(
-                "conflict {} >= searching_end {}; no need to update",
-                conflict,
-                self.entry.searching_end
-            );
+            tracing::debug!("conflict {} >= searching_end {}; no need to update", conflict, self.entry.searching_end);
             return;
         }
 
@@ -98,11 +90,7 @@ where C: RaftTypeConfig
     /// corresponds to a replication request with log payload. If `None`, the response is from
     /// an RPC without payload (e.g., heartbeat), and inflight state is not modified.
     pub(crate) fn update_matching(&mut self, matching: Option<LogIdOf<C>>, inflight_id: Option<InflightId>) {
-        tracing::debug!(
-            "update_matching: current progress_entry: {}; matching: {}",
-            self.entry,
-            matching.display()
-        );
+        tracing::debug!("update_matching: current progress_entry: {}; matching: {}", self.entry, matching.display());
 
         if let Some(inflight_id) = inflight_id {
             self.entry.inflight.ack(matching.clone(), inflight_id);

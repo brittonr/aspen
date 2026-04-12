@@ -94,11 +94,7 @@ impl<C: RaftTypeConfig> fmt::Display for Data<C> {
                 inflight_id,
                 log_id_range,
             } => {
-                write!(
-                    f,
-                    "Logs{{log_id_range: {}, inflight_id: {}}}",
-                    log_id_range, inflight_id
-                )
+                write!(f, "Logs{{log_id_range: {}, inflight_id: {}}}", log_id_range, inflight_id)
             }
         }
     }

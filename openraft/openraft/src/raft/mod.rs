@@ -443,12 +443,8 @@ where C: RaftTypeConfig
 
         let sm_span = tracing::span!(parent: &core_span, Level::DEBUG, "sm_worker");
 
-        let sm_handle = worker::Worker::spawn(
-            state_machine,
-            log_store.get_log_reader().await,
-            tx_notify.clone(),
-            sm_span,
-        );
+        let sm_handle =
+            worker::Worker::spawn(state_machine, log_store.get_log_reader().await, tx_notify.clone(), sm_span);
 
         let core: RaftCore<C, N, LS> = RaftCore {
             id: id.clone(),

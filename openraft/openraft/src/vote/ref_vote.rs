@@ -63,11 +63,6 @@ impl<C> std::fmt::Display for RefVote<'_, C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "<{}:{}>",
-            self.leader_id,
-            if self.is_committed() { "Q" } else { "-" }
-        )
+        write!(f, "<{}:{}>", self.leader_id, if self.is_committed() { "Q" } else { "-" })
     }
 }

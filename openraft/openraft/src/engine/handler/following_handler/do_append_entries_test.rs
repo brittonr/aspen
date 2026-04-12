@@ -42,11 +42,7 @@ fn eng() -> Engine<UTConfig> {
     eng.state.enable_validation(false); // Disable validation for incomplete state
 
     eng.config.id = 2;
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(2, 1),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 1));
     eng.state.log_ids.append(log_id(1, 1, 1));
     eng.state.log_ids.append(log_id(2, 1, 3));
     eng.state.membership_state = MembershipState::new(
@@ -127,11 +123,7 @@ fn test_follower_do_append_entries_one_membership_entry() -> anyhow::Result<()> 
         eng.state.membership_state,
         "previous effective become committed"
     );
-    assert_eq!(
-        ServerState::Learner,
-        eng.state.server_state,
-        "not in membership, become learner"
-    );
+    assert_eq!(ServerState::Learner, eng.state.server_state, "not in membership, become learner");
     assert_eq!(
         vec![Command::AppendEntries {
             committed_vote: Vote::new(1, 1).into_committed(),
@@ -186,11 +178,7 @@ fn test_follower_do_append_entries_three_membership_entries() -> anyhow::Result<
         eng.state.membership_state,
         "seen 3 membership, the last 2 become committed and effective"
     );
-    assert_eq!(
-        ServerState::Follower,
-        eng.state.server_state,
-        "in membership, become follower"
-    );
+    assert_eq!(ServerState::Follower, eng.state.server_state, "in membership, become follower");
     assert_eq!(
         vec![Command::AppendEntries {
             committed_vote: Vote::new(1, 1).into_committed(),

@@ -112,13 +112,7 @@ impl<Rt: AsyncRuntime> Suite<Rt> {
         // While theoretically possible for all to be equal, it's astronomically unlikely
         // This just verifies the RNG is functioning and producing values
         let all_same = r1 == r2 && r2 == r3;
-        assert!(
-            !all_same || r1 != 0,
-            "RNG should produce varying values (got {}, {}, {})",
-            r1,
-            r2,
-            r3
-        );
+        assert!(!all_same || r1 != 0, "RNG should produce varying values (got {}, {}, {})", r1, r2, r3);
 
         // Test range generation
         for _ in 0..100 {
@@ -803,11 +797,7 @@ impl<Rt: AsyncRuntime> Suite<Rt> {
         }
 
         // Should have taken only a few iterations (not 100s which would indicate hot loop)
-        assert!(
-            iterations <= 10,
-            "Too many iterations ({}), possible hot loop",
-            iterations
-        );
+        assert!(iterations <= 10, "Too many iterations ({}), possible hot loop", iterations);
 
         drop(tx);
     }
@@ -934,10 +924,7 @@ impl<Rt: AsyncRuntime> Suite<Rt> {
 
         let another_guard_fut = lock.lock();
         let mut pinned_another_guard_fut = pin!(another_guard_fut);
-        assert!(matches!(
-            poll_in_place(pinned_another_guard_fut.as_mut()),
-            Poll::Pending
-        ));
+        assert!(matches!(poll_in_place(pinned_another_guard_fut.as_mut()), Poll::Pending));
 
         drop(guard);
         assert!(matches!(poll_in_place(pinned_another_guard_fut), Poll::Ready(_)));

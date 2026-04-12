@@ -4,13 +4,17 @@
 //! allows explicit buffering, inspection, partial consumption, and seamless
 //! fallthrough to the inner reader.
 
-use std::{
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
-use bytes::{BufMut, Bytes, BytesMut};
-use tokio::io::{self, AsyncRead, AsyncReadExt, ReadBuf};
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
+use tokio::io::ReadBuf;
+use tokio::io::{self};
 
 /// Initial capacity for the internal buffer.
 const INITIAL_CAPACITY: usize = 4 * 1024;
@@ -92,15 +96,9 @@ impl<R: AsyncRead + Unpin> Prebuffered<R> {
     /// Buffers more data from the inner reader.
     pub(crate) async fn buffer_more(&mut self) -> io::Result<usize> {
         let max = self.max_len.saturating_sub(self.buf.len());
-        let n = (&mut self.inner)
-            .take(max as u64)
-            .read_buf(&mut self.buf)
-            .await?;
+        let n = (&mut self.inner).take(max as u64).read_buf(&mut self.buf).await?;
         if n == 0 {
-            Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "wanted to buffer more but stream closed",
-            ))
+            Err(io::Error::new(io::ErrorKind::UnexpectedEof, "wanted to buffer more but stream closed"))
         } else {
             Ok(n)
         }
@@ -113,11 +111,7 @@ impl<R: AsyncRead + Unpin> Prebuffered<R> {
 }
 
 impl<R: AsyncRead + Unpin> AsyncRead for Prebuffered<R> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        out: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, out: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         if !out.has_remaining_mut() {
             Poll::Ready(Ok(()))
         } else if !self.buf.is_empty() {

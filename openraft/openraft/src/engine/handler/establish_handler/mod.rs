@@ -24,11 +24,7 @@ where C: RaftTypeConfig
     ) -> Option<&'x mut Leader<C, LeaderQuorumSet<C>>> {
         let vote = candidate.vote_ref().clone();
 
-        debug_assert_eq!(
-            vote.leader_node_id(),
-            &self.config.id,
-            "it can only commit its own vote"
-        );
+        debug_assert_eq!(vote.leader_node_id(), &self.config.id, "it can only commit its own vote");
 
         if let Some(l) = self.leader.as_ref() {
             #[allow(clippy::neg_cmp_op_on_partial_ord)]

@@ -1,23 +1,37 @@
-use std::{
-    net::SocketAddr,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use clap::Parser;
-use iroh::{Endpoint, EndpointId, protocol::Router};
-use iroh_proxy_utils::{
-    ALPN, Authority, HttpRequest, IROH_DESTINATION_HEADER,
-    downstream::{
-        Deny, DownstreamProxy, EndpointAuthority, HttpProxyOpts, ProxyMode, RequestHandler,
-        SrcAddr, StaticForwardProxy, StaticReverseProxy,
-    },
-    upstream::{AcceptAll, UpstreamProxy},
-};
-use n0_error::{Result, StdResultExt};
+use iroh::Endpoint;
+use iroh::EndpointId;
+use iroh::protocol::Router;
+use iroh_proxy_utils::ALPN;
+use iroh_proxy_utils::Authority;
+use iroh_proxy_utils::HttpRequest;
+use iroh_proxy_utils::IROH_DESTINATION_HEADER;
+use iroh_proxy_utils::downstream::Deny;
+use iroh_proxy_utils::downstream::DownstreamProxy;
+use iroh_proxy_utils::downstream::EndpointAuthority;
+use iroh_proxy_utils::downstream::HttpProxyOpts;
+use iroh_proxy_utils::downstream::ProxyMode;
+use iroh_proxy_utils::downstream::RequestHandler;
+use iroh_proxy_utils::downstream::SrcAddr;
+use iroh_proxy_utils::downstream::StaticForwardProxy;
+use iroh_proxy_utils::downstream::StaticReverseProxy;
+use iroh_proxy_utils::upstream::AcceptAll;
+use iroh_proxy_utils::upstream::UpstreamProxy;
+use n0_error::Result;
+use n0_error::StdResultExt;
 use tokio::net::TcpListener;
-use tracing::{Instrument, debug, error_span, info, info_span, warn};
+use tracing::Instrument;
+use tracing::debug;
+use tracing::error_span;
+use tracing::info;
+use tracing::info_span;
+use tracing::warn;
 
 #[derive(Parser, Clone)]
 struct BenchOpts {
@@ -98,11 +112,7 @@ async fn main() -> Result<()> {
     match cli {
         Cli::Origin { port } => cmd_origin(port).await,
         Cli::Upstream => cmd_upstream().await,
-        Cli::ReverseProxy {
-            port,
-            upstream,
-            origin,
-        } => cmd_reverse_proxy(port, upstream, origin).await,
+        Cli::ReverseProxy { port, upstream, origin } => cmd_reverse_proxy(port, upstream, origin).await,
         Cli::ForwardProxy { port } => cmd_forward_proxy(port).await,
         Cli::BenchServer {
             origin_port,
@@ -140,16 +150,17 @@ async fn cmd_origin(port: u16) -> Result<()> {
 async fn origin_server(listener: TcpListener) -> Result<()> {
     use std::convert::Infallible;
 
-    use http_body_util::{BodyExt, Full, StreamBody};
-    use hyper::{
-        Request, Response,
-        body::{Bytes, Frame},
-        service::service_fn,
-    };
-    use hyper_util::{
-        rt::{TokioExecutor, TokioIo},
-        server::conn::auto,
-    };
+    use http_body_util::BodyExt;
+    use http_body_util::Full;
+    use http_body_util::StreamBody;
+    use hyper::Request;
+    use hyper::Response;
+    use hyper::body::Bytes;
+    use hyper::body::Frame;
+    use hyper::service::service_fn;
+    use hyper_util::rt::TokioExecutor;
+    use hyper_util::rt::TokioIo;
+    use hyper_util::server::conn::auto;
 
     type BoxBody = http_body_util::combinators::BoxBody<Bytes, Infallible>;
 
@@ -163,13 +174,11 @@ async fn origin_server(listener: TcpListener) -> Result<()> {
                     let path = req.uri().path().to_owned();
                     match path.as_str() {
                         "/hello" => {
-                            let body =
-                                Full::new(Bytes::from("hello world")).map_err(|e| match e {});
+                            let body = Full::new(Bytes::from("hello world")).map_err(|e| match e {});
                             Ok::<_, Infallible>(Response::new(BoxBody::new(body)))
                         }
                         "/echo" => {
-                            let (tx, rx) =
-                                tokio::sync::mpsc::channel::<Result<Frame<Bytes>, Infallible>>(4);
+                            let (tx, rx) = tokio::sync::mpsc::channel::<Result<Frame<Bytes>, Infallible>>(4);
                             let incoming = req.into_body();
                             tokio::spawn(async move {
                                 let mut body = incoming;
@@ -184,8 +193,7 @@ async fn origin_server(listener: TcpListener) -> Result<()> {
                             Ok(Response::new(BoxBody::new(body)))
                         }
                         "/download" => {
-                            let (tx, rx) =
-                                tokio::sync::mpsc::channel::<Result<Frame<Bytes>, Infallible>>(4);
+                            let (tx, rx) = tokio::sync::mpsc::channel::<Result<Frame<Bytes>, Infallible>>(4);
                             tokio::spawn(async move {
                                 // 1MB in 1KB chunks
                                 let chunk = Bytes::from(vec![b'x'; 1024]);
@@ -208,9 +216,8 @@ async fn origin_server(listener: TcpListener) -> Result<()> {
                         }
                     }
                 });
-                if let Err(err) = auto::Builder::new(TokioExecutor::new())
-                    .serve_connection_with_upgrades(io, service)
-                    .await
+                if let Err(err) =
+                    auto::Builder::new(TokioExecutor::new()).serve_connection_with_upgrades(io, service).await
                 {
                     warn!("handling connection failed: {err:#}");
                 }
@@ -226,9 +233,7 @@ async fn origin_server(listener: TcpListener) -> Result<()> {
 async fn cmd_upstream() -> Result<()> {
     let endpoint = Endpoint::builder().bind().await?;
     let endpoint_id = endpoint.id();
-    let router = Router::builder(endpoint)
-        .accept(ALPN, UpstreamProxy::new(AcceptAll)?)
-        .spawn();
+    let router = Router::builder(endpoint).accept(ALPN, UpstreamProxy::new(AcceptAll)?).spawn();
     println!("upstream endpoint: {endpoint_id}");
     tokio::signal::ctrl_c().await?;
     router.shutdown().await.anyerr()?;
@@ -259,19 +264,12 @@ async fn cmd_reverse_proxy(port: u16, upstream: EndpointId, origin: String) -> R
 struct HeaderResolver;
 
 impl RequestHandler for HeaderResolver {
-    async fn handle_request(
-        &self,
-        src_addr: SrcAddr,
-        req: &mut HttpRequest,
-    ) -> Result<EndpointId, Deny> {
+    async fn handle_request(&self, src_addr: SrcAddr, req: &mut HttpRequest) -> Result<EndpointId, Deny> {
         let header = req
             .headers
             .get(IROH_DESTINATION_HEADER)
             .ok_or_else(|| Deny::bad_request("missing iroh-destination header"))?;
-        let header_str = header
-            .to_str()
-            .std_context("invalid iroh-destination header")
-            .map_err(Deny::bad_request)?;
+        let header_str = header.to_str().std_context("invalid iroh-destination header").map_err(Deny::bad_request)?;
         let destination = EndpointId::from_str(header_str).map_err(Deny::bad_request)?;
         req.set_forwarded_for_if_tcp(src_addr);
         Ok(destination)
@@ -305,11 +303,7 @@ struct BenchResult {
     latencies: Vec<Duration>,
 }
 
-async fn spawn_bench_server(
-    origin_port: u16,
-    forward_port: u16,
-    reverse_port: u16,
-) -> Result<(ServerAddrs, Router)> {
+async fn spawn_bench_server(origin_port: u16, forward_port: u16, reverse_port: u16) -> Result<(ServerAddrs, Router)> {
     // 1. Origin server
     let origin_listener = TcpListener::bind(format!("127.0.0.1:{origin_port}")).await?;
     let origin_addr = origin_listener.local_addr()?;
@@ -323,9 +317,7 @@ async fn spawn_bench_server(
     // 2. Upstream proxy (iroh endpoint with AcceptAll)
     let upstream_endpoint = Endpoint::builder().bind().await?;
     let upstream_id = upstream_endpoint.id();
-    let router = Router::builder(upstream_endpoint)
-        .accept(ALPN, UpstreamProxy::new(AcceptAll)?)
-        .spawn();
+    let router = Router::builder(upstream_endpoint).accept(ALPN, UpstreamProxy::new(AcceptAll)?).spawn();
     router.endpoint().online().await;
     println!("upstream endpoint: {upstream_id}");
 
@@ -336,10 +328,7 @@ async fn spawn_bench_server(
     let forward_addr = forward_listener.local_addr()?;
     let forward_mode = ProxyMode::Http(HttpProxyOpts::new(StaticForwardProxy(upstream_id)));
     tokio::spawn(async move {
-        if let Err(e) = forward_proxy
-            .forward_tcp_listener(forward_listener, forward_mode)
-            .await
-        {
+        if let Err(e) = forward_proxy.forward_tcp_listener(forward_listener, forward_mode).await {
             eprintln!("forward proxy error: {e:#}");
         }
     });
@@ -353,10 +342,7 @@ async fn spawn_bench_server(
     let destination = EndpointAuthority::new(upstream_id, authority);
     let reverse_mode = ProxyMode::Http(HttpProxyOpts::new(StaticReverseProxy(destination)));
     tokio::spawn(async move {
-        if let Err(e) = reverse_proxy
-            .forward_tcp_listener(reverse_listener, reverse_mode)
-            .await
-        {
+        if let Err(e) = reverse_proxy.forward_tcp_listener(reverse_listener, reverse_mode).await {
             eprintln!("reverse proxy error: {e:#}");
         }
     });
@@ -393,12 +379,7 @@ async fn cmd_bench_client(
     Ok(())
 }
 
-async fn cmd_bench(
-    origin_port: u16,
-    forward_port: u16,
-    reverse_port: u16,
-    opts: BenchOpts,
-) -> Result<()> {
+async fn cmd_bench(origin_port: u16, forward_port: u16, reverse_port: u16, opts: BenchOpts) -> Result<()> {
     let (addrs, _router) = spawn_bench_server(origin_port, forward_port, reverse_port).await?;
     println!();
     println!("client:");
@@ -425,20 +406,14 @@ async fn run_all_benchmarks(
     let mut results = Vec::new();
 
     // 1. Direct
-    println!(
-        "Running: Direct ({} requests, concurrency {})",
-        opts.n, opts.concurrency
-    );
+    println!("Running: Direct ({} requests, concurrency {})", opts.n, opts.concurrency);
     let client = build_client(opts, None)?;
     let url = format!("http://{origin_host}/hello");
     let result = run_bench_mode(&client, &url, opts.n, opts.concurrency).await;
     results.push(("Direct", result));
 
     // 2. Forward proxy
-    println!(
-        "Running: Forward Proxy ({} requests, concurrency {})",
-        opts.n, opts.concurrency
-    );
+    println!("Running: Forward Proxy ({} requests, concurrency {})", opts.n, opts.concurrency);
     let proxy_url = format!("http://{forward_host}");
     let client = build_client(opts, Some(&proxy_url))?;
     let url = format!("http://{origin_host}/hello");
@@ -446,10 +421,7 @@ async fn run_all_benchmarks(
     results.push(("Forward Proxy", result));
 
     // 3. Reverse proxy
-    println!(
-        "Running: Reverse Proxy ({} requests, concurrency {})",
-        opts.n, opts.concurrency
-    );
+    println!("Running: Reverse Proxy ({} requests, concurrency {})", opts.n, opts.concurrency);
     let client = build_client(opts, None)?;
     let url = format!("http://{reverse_host}/hello");
     let result = run_bench_mode(&client, &url, opts.n, opts.concurrency).await;
@@ -473,12 +445,7 @@ fn build_client(opts: &BenchOpts, proxy: Option<&str>) -> Result<reqwest::Client
     builder.build().anyerr()
 }
 
-async fn run_bench_mode(
-    client: &reqwest::Client,
-    url: &str,
-    n: usize,
-    concurrency: usize,
-) -> BenchResult {
+async fn run_bench_mode(client: &reqwest::Client, url: &str, n: usize, concurrency: usize) -> BenchResult {
     // Warmup: 1 request
     let resp = client.get(url).send().await.expect("warmup request failed");
     resp.bytes().await.expect("warmup read failed");
@@ -495,12 +462,7 @@ async fn run_bench_mode(
             async move {
                 debug!("start");
                 let req_start = Instant::now();
-                let resp = client
-                    .get(&url)
-                    .send()
-                    .await
-                    .inspect_err(|err| warn!("{err:#}"))
-                    .expect("request failed");
+                let resp = client.get(&url).send().await.inspect_err(|err| warn!("{err:#}")).expect("request failed");
                 let _body = resp.bytes().await.expect("read body failed");
                 drop(permit);
                 let elapsed = req_start.elapsed();
@@ -539,10 +501,7 @@ fn percentile(sorted: &[Duration], p: f64) -> Duration {
 }
 
 fn print_table(results: &[(&str, BenchResult)]) {
-    println!(
-        "{:<18}{:<10}{:<10}{:<10}{:<10}{:<10}{:<10}",
-        "Mode", "Total", "Avg", "Req/s", "p50", "p90", "p99"
-    );
+    println!("{:<18}{:<10}{:<10}{:<10}{:<10}{:<10}{:<10}", "Mode", "Total", "Avg", "Req/s", "p50", "p90", "p99");
     println!("{}", "\u{2500}".repeat(78));
     for (name, result) in results {
         let n = result.latencies.len();

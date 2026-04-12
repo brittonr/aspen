@@ -136,11 +136,7 @@ impl<C: RaftTypeConfig> Debug for ApplyResult<C> {
 
 impl<C: RaftTypeConfig> fmt::Display for ApplyResult<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "ApplyResult([{}, {}), last_applied={})",
-            self.since, self.end, self.last_applied,
-        )
+        write!(f, "ApplyResult([{}, {}), last_applied={})", self.since, self.end, self.last_applied,)
     }
 }
 
@@ -493,10 +489,7 @@ where
                 }
                 Err(_timeout) => {
                     // Overall timeout expired - quorum confirmation took too long
-                    tracing::warn!(
-                        timeout_ms = overall_timeout.as_millis(),
-                        "ReadIndex quorum confirmation timed out"
-                    );
+                    tracing::warn!(timeout_ms = overall_timeout.as_millis(), "ReadIndex quorum confirmation timed out");
                     // Note: granted set is not available here since it was moved into the inner async block.
                     // We report an empty granted set for the timeout case. The timeout error message
                     // provides sufficient diagnostic information.
@@ -600,11 +593,7 @@ where
         tracing::debug!(now = display(C::now().display()), "send_heartbeat");
 
         let Some((mut lh, _)) = self.engine.get_leader_handler_or_reject(None::<WriteResponderOf<C>>) else {
-            tracing::debug!(
-                now = display(C::now().display()),
-                "{} failed to send heartbeat, not a Leader",
-                emitter
-            );
+            tracing::debug!(now = display(C::now().display()), "{} failed to send heartbeat, not a Leader", emitter);
             return false;
         };
 
@@ -1057,12 +1046,7 @@ where
         );
 
         for (phase, respond) in self.engine.output.pending_responds.drain_satisfied(io_state) {
-            tracing::debug!(
-                "RAFT_stats id={:<2}    cmd: send respond waiting for {}: {}",
-                self.id,
-                phase,
-                respond
-            );
+            tracing::debug!("RAFT_stats id={:<2}    cmd: send respond waiting for {}: {}", self.id, phase, respond);
             respond.send();
         }
     }
@@ -1078,11 +1062,7 @@ where
         loop {
             self.flush_metrics();
 
-            tracing::debug!(
-                "RAFT_stats id={:<2} log_io: {}",
-                self.id,
-                self.engine.state.log_progress()
-            );
+            tracing::debug!("RAFT_stats id={:<2} log_io: {}", self.id, self.engine.state.log_progress());
 
             // In each loop, it does not have to check rx_shutdown and flush metrics for every RaftMsg
             // processed.
@@ -1212,10 +1192,7 @@ where
             self.run_engine_commands().await?;
         }
 
-        tracing::debug!(
-            "at_most({}) reached, there are more queued Notification to process",
-            at_most
-        );
+        tracing::debug!("at_most({}) reached, there are more queued Notification to process", at_most);
 
         Ok(at_most)
     }
@@ -1419,11 +1396,7 @@ where
                 self.write_entry(C::Entry::new_normal(LogIdOf::<C>::default(), app_data), responder);
             }
             RaftMsg::Initialize { members, tx } => {
-                tracing::info!(
-                    members = debug(&members),
-                    "received RaftMsg::Initialize: {}",
-                    func_name!()
-                );
+                tracing::info!(members = debug(&members), "received RaftMsg::Initialize: {}", func_name!());
 
                 self.handle_initialize(members, tx);
             }

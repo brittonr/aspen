@@ -69,10 +69,7 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
         eng.state.log_ids.key_log_ids()
     );
     assert_eq!(
-        Some(&IOId::new_log_io(
-            Vote::new(2, 1).into_committed(),
-            Some(log_id(3, 1, 5))
-        )),
+        Some(&IOId::new_log_io(Vote::new(2, 1).into_committed(), Some(log_id(3, 1, 5)))),
         eng.state.accepted_log_io()
     );
     assert_eq!(eng.output.take_commands(), vec![
@@ -86,21 +83,14 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
     // Update to a new Leader and smaller log id
     {
         // Assume this node's Leader becomes T3-N1
-        eng.state.vote = Leased::new(
-            UTConfig::<()>::now(),
-            Duration::from_millis(500),
-            Vote::new_committed(3, 1),
-        );
+        eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(3, 1));
         eng.following_handler().append_entries(Some(log_id(2, 1, 3)), vec![
             //
             blank_ent(3, 1, 4),
         ]);
         assert_eq!(Some(&log_id(3, 1, 5)), eng.state.last_log_id());
         assert_eq!(
-            Some(&IOId::new_log_io(
-                Vote::new(3, 1).into_committed(),
-                Some(log_id(3, 1, 4))
-            )),
+            Some(&IOId::new_log_io(Vote::new(3, 1).into_committed(), Some(log_id(3, 1, 4)))),
             eng.state.accepted_log_io()
         );
         assert_eq!(eng.output.take_commands(), vec![
@@ -119,10 +109,7 @@ fn test_follower_append_entries_update_accepted() -> anyhow::Result<()> {
         eng.following_handler().append_entries(Some(log_id(2, 1, 3)), vec![]);
         assert_eq!(Some(&log_id(3, 1, 5)), eng.state.last_log_id());
         assert_eq!(
-            Some(&IOId::new_log_io(
-                Vote::new(3, 1).into_committed(),
-                Some(log_id(3, 1, 4))
-            )),
+            Some(&IOId::new_log_io(Vote::new(3, 1).into_committed(), Some(log_id(3, 1, 4)))),
             eng.state.accepted_log_io()
         );
 

@@ -14,25 +14,34 @@
 
 #![deny(missing_docs)]
 
-use std::{
-    convert::TryInto,
-    future::Future,
-    pin::Pin,
-    sync::Arc,
-    task::{self, Poll},
-};
+use std::convert::TryInto;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Poll;
+use std::task::{self};
 
-use bytes::{Buf, Bytes};
-use futures::{
-    Stream, StreamExt, ready,
-    stream::{self},
-};
-use h3::{
-    error::Code,
-    quic::{self, ConnectionErrorIncoming, StreamErrorIncoming, StreamId, WriteBuf},
-};
-pub use iroh::endpoint::{AcceptBi, AcceptUni, Endpoint, OpenBi, OpenUni, VarInt};
-use iroh::endpoint::{ConnectionError, ReadError, WriteError};
+use bytes::Buf;
+use bytes::Bytes;
+use futures::Stream;
+use futures::StreamExt;
+use futures::ready;
+use futures::stream::{self};
+use h3::error::Code;
+use h3::quic::ConnectionErrorIncoming;
+use h3::quic::StreamErrorIncoming;
+use h3::quic::StreamId;
+use h3::quic::WriteBuf;
+use h3::quic::{self};
+pub use iroh::endpoint::AcceptBi;
+pub use iroh::endpoint::AcceptUni;
+use iroh::endpoint::ConnectionError;
+pub use iroh::endpoint::Endpoint;
+pub use iroh::endpoint::OpenBi;
+pub use iroh::endpoint::OpenUni;
+use iroh::endpoint::ReadError;
+pub use iroh::endpoint::VarInt;
+use iroh::endpoint::WriteError;
 use tokio_util::sync::ReusableBoxFuture;
 
 /// BoxStream type alias with `Sync` and `Send` requirements.
@@ -63,9 +72,7 @@ impl Connection {
     pub fn new(conn: iroh::endpoint::Connection) -> Self {
         Self {
             conn: conn.clone(),
-            incoming_bi: Box::pin(stream::unfold(conn.clone(), |conn| async {
-                Some((conn.accept_bi().await, conn))
-            })),
+            incoming_bi: Box::pin(stream::unfold(conn.clone(), |conn| async { Some((conn.accept_bi().await, conn)) })),
             opening_bi: None,
             incoming_uni: Box::pin(stream::unfold(conn.clone(), |conn| async {
                 Some((conn.accept_uni().await, conn))
@@ -76,8 +83,7 @@ impl Connection {
 }
 
 impl<B> quic::Connection<B> for Connection
-where
-    B: Buf,
+where B: Buf
 {
     type RecvStream = RecvStream;
     type OpenStreams = OpenStreams;
@@ -125,26 +131,21 @@ where
 /// Converts an [`iroh::endpoint::ConnectionError`] to an [`h3::quic::ConnectionErrorIncoming`].
 fn convert_connection_error(e: ConnectionError) -> h3::quic::ConnectionErrorIncoming {
     match e {
-        ConnectionError::ApplicationClosed(application_close) => {
-            ConnectionErrorIncoming::ApplicationClose {
-                error_code: application_close.error_code.into(),
-            }
-        }
+        ConnectionError::ApplicationClosed(application_close) => ConnectionErrorIncoming::ApplicationClose {
+            error_code: application_close.error_code.into(),
+        },
         ConnectionError::TimedOut => ConnectionErrorIncoming::Timeout,
         error @ ConnectionError::VersionMismatch
         | error @ ConnectionError::Reset
         | error @ ConnectionError::LocallyClosed
         | error @ ConnectionError::CidsExhausted
         | error @ ConnectionError::TransportError(_)
-        | error @ ConnectionError::ConnectionClosed(_) => {
-            ConnectionErrorIncoming::Undefined(Arc::new(error))
-        }
+        | error @ ConnectionError::ConnectionClosed(_) => ConnectionErrorIncoming::Undefined(Arc::new(error)),
     }
 }
 
 impl<B> quic::OpenStreams<B> for Connection
-where
-    B: Buf,
+where B: Buf
 {
     type SendStream = SendStream<B>;
     type BidiStream = BidiStream<B>;
@@ -152,20 +153,15 @@ where
     /// Attempts to open a new bidirectional stream for sending and receiving.
     ///
     /// Returns a [`BidiStream`] once ready, or a [`StreamErrorIncoming`] on failure.
-    fn poll_open_bidi(
-        &mut self,
-        cx: &mut task::Context<'_>,
-    ) -> Poll<Result<Self::BidiStream, StreamErrorIncoming>> {
+    fn poll_open_bidi(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<Self::BidiStream, StreamErrorIncoming>> {
         let bi = self.opening_bi.get_or_insert_with(|| {
-            Box::pin(stream::unfold(self.conn.clone(), |conn| async {
-                Some((conn.open_bi().await, conn))
-            }))
+            Box::pin(stream::unfold(self.conn.clone(), |conn| async { Some((conn.open_bi().await, conn)) }))
         });
-        let (send, recv) = ready!(bi.poll_next_unpin(cx))
-            .expect("BoxStream does not return None")
-            .map_err(|e| StreamErrorIncoming::ConnectionErrorIncoming {
+        let (send, recv) = ready!(bi.poll_next_unpin(cx)).expect("BoxStream does not return None").map_err(|e| {
+            StreamErrorIncoming::ConnectionErrorIncoming {
                 connection_error: convert_connection_error(e),
-            })?;
+            }
+        })?;
         Poll::Ready(Ok(Self::BidiStream {
             send: Self::SendStream::new(send),
             recv: RecvStream::new(recv),
@@ -175,30 +171,22 @@ where
     /// Attempts to open a new unidirectional send stream.
     ///
     /// Returns a [`SendStream`] once ready.
-    fn poll_open_send(
-        &mut self,
-        cx: &mut task::Context<'_>,
-    ) -> Poll<Result<Self::SendStream, StreamErrorIncoming>> {
+    fn poll_open_send(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<Self::SendStream, StreamErrorIncoming>> {
         let uni = self.opening_uni.get_or_insert_with(|| {
-            Box::pin(stream::unfold(self.conn.clone(), |conn| async {
-                Some((conn.open_uni().await, conn))
-            }))
+            Box::pin(stream::unfold(self.conn.clone(), |conn| async { Some((conn.open_uni().await, conn)) }))
         });
 
-        let send = ready!(uni.poll_next_unpin(cx))
-            .expect("BoxStream does not return None")
-            .map_err(|e| StreamErrorIncoming::ConnectionErrorIncoming {
+        let send = ready!(uni.poll_next_unpin(cx)).expect("BoxStream does not return None").map_err(|e| {
+            StreamErrorIncoming::ConnectionErrorIncoming {
                 connection_error: convert_connection_error(e),
-            })?;
+            }
+        })?;
         Poll::Ready(Ok(Self::SendStream::new(send)))
     }
 
     /// Closes the QUIC connection with the provided application error code and reason.
     fn close(&mut self, code: Code, reason: &[u8]) {
-        self.conn.close(
-            VarInt::from_u64(code.value()).expect("error code VarInt"),
-            reason,
-        );
+        self.conn.close(VarInt::from_u64(code.value()).expect("error code VarInt"), reason);
     }
 }
 
@@ -212,8 +200,7 @@ pub struct OpenStreams {
 }
 
 impl<B> quic::OpenStreams<B> for OpenStreams
-where
-    B: Buf,
+where B: Buf
 {
     type SendStream = SendStream<B>;
     type BidiStream = BidiStream<B>;
@@ -221,21 +208,16 @@ where
     /// Polls for opening a new bidirectional stream.
     ///
     /// Returns a [`BidiStream`] on success.
-    fn poll_open_bidi(
-        &mut self,
-        cx: &mut task::Context<'_>,
-    ) -> Poll<Result<Self::BidiStream, StreamErrorIncoming>> {
+    fn poll_open_bidi(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<Self::BidiStream, StreamErrorIncoming>> {
         let bi = self.opening_bi.get_or_insert_with(|| {
-            Box::pin(stream::unfold(self.conn.clone(), |conn| async {
-                Some((conn.open_bi().await, conn))
-            }))
+            Box::pin(stream::unfold(self.conn.clone(), |conn| async { Some((conn.open_bi().await, conn)) }))
         });
 
-        let (send, recv) = ready!(bi.poll_next_unpin(cx))
-            .expect("BoxStream does not return None")
-            .map_err(|e| StreamErrorIncoming::ConnectionErrorIncoming {
+        let (send, recv) = ready!(bi.poll_next_unpin(cx)).expect("BoxStream does not return None").map_err(|e| {
+            StreamErrorIncoming::ConnectionErrorIncoming {
                 connection_error: convert_connection_error(e),
-            })?;
+            }
+        })?;
         Poll::Ready(Ok(Self::BidiStream {
             send: Self::SendStream::new(send),
             recv: RecvStream::new(recv),
@@ -245,30 +227,22 @@ where
     /// Polls for opening a new unidirectional send stream.
     ///
     /// Returns a [`SendStream`] on success.
-    fn poll_open_send(
-        &mut self,
-        cx: &mut task::Context<'_>,
-    ) -> Poll<Result<Self::SendStream, StreamErrorIncoming>> {
+    fn poll_open_send(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<Self::SendStream, StreamErrorIncoming>> {
         let uni = self.opening_uni.get_or_insert_with(|| {
-            Box::pin(stream::unfold(self.conn.clone(), |conn| async {
-                Some((conn.open_uni().await, conn))
-            }))
+            Box::pin(stream::unfold(self.conn.clone(), |conn| async { Some((conn.open_uni().await, conn)) }))
         });
 
-        let send = ready!(uni.poll_next_unpin(cx))
-            .expect("BoxStream does not return None")
-            .map_err(|e| StreamErrorIncoming::ConnectionErrorIncoming {
+        let send = ready!(uni.poll_next_unpin(cx)).expect("BoxStream does not return None").map_err(|e| {
+            StreamErrorIncoming::ConnectionErrorIncoming {
                 connection_error: convert_connection_error(e),
-            })?;
+            }
+        })?;
         Poll::Ready(Ok(Self::SendStream::new(send)))
     }
 
     /// Closes the underlying connection with the given error code and reason.
     fn close(&mut self, code: Code, reason: &[u8]) {
-        self.conn.close(
-            VarInt::from_u64(code.value()).expect("error code VarInt"),
-            reason,
-        );
+        self.conn.close(VarInt::from_u64(code.value()).expect("error code VarInt"), reason);
     }
 }
 
@@ -288,16 +262,14 @@ impl Clone for OpenStreams {
 /// This struct implements both [`h3::quic::BidiStream`], [`h3::quic::RecvStream`],
 /// and [`h3::quic::SendStream`] traits, allowing it to be split or used directly.
 pub struct BidiStream<B>
-where
-    B: Buf,
+where B: Buf
 {
     send: SendStream<B>,
     recv: RecvStream,
 }
 
 impl<B> quic::BidiStream<B> for BidiStream<B>
-where
-    B: Buf,
+where B: Buf
 {
     type SendStream = SendStream<B>;
     type RecvStream = RecvStream;
@@ -319,10 +291,7 @@ impl<B: Buf> quic::RecvStream for BidiStream<B> {
     /// Returns `Poll::Ready(Ok(Some(Bytes)))` when data is available,
     /// `Poll::Ready(Ok(None))` when the stream is finished,
     /// or `Poll::Ready(Err(StreamErrorIncoming))` on error.
-    fn poll_data(
-        &mut self,
-        cx: &mut task::Context<'_>,
-    ) -> Poll<Result<Option<Self::Buf>, StreamErrorIncoming>> {
+    fn poll_data(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<Option<Self::Buf>, StreamErrorIncoming>> {
         self.recv.poll_data(cx)
     }
 
@@ -338,8 +307,7 @@ impl<B: Buf> quic::RecvStream for BidiStream<B> {
 }
 
 impl<B> quic::SendStream<B> for BidiStream<B>
-where
-    B: Buf,
+where B: Buf
 {
     /// Polls for readiness to send data on the stream.
     fn poll_ready(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), StreamErrorIncoming>> {
@@ -368,8 +336,7 @@ where
 }
 
 impl<B> quic::SendStreamUnframed<B> for BidiStream<B>
-where
-    B: Buf,
+where B: Buf
 {
     /// Polls to send raw unframed data from the provided buffer.
     ///
@@ -395,10 +362,7 @@ pub struct RecvStream {
 /// Type alias for a reusable boxed future that reads the next chunk.
 type ReadChunkFuture = ReusableBoxFuture<
     'static,
-    (
-        iroh::endpoint::RecvStream,
-        Result<Option<iroh::endpoint::Chunk>, iroh::endpoint::ReadError>,
-    ),
+    (iroh::endpoint::RecvStream, Result<Option<iroh::endpoint::Chunk>, iroh::endpoint::ReadError>),
 >;
 
 impl RecvStream {
@@ -420,10 +384,7 @@ impl quic::RecvStream for RecvStream {
     /// * `Poll::Ready(Ok(Some(Bytes)))` — when data is available.
     /// * `Poll::Ready(Ok(None))` — when the stream has finished.
     /// * `Poll::Ready(Err(StreamErrorIncoming))` — when an error occurs.
-    fn poll_data(
-        &mut self,
-        cx: &mut task::Context<'_>,
-    ) -> Poll<Result<Option<Self::Buf>, StreamErrorIncoming>> {
+    fn poll_data(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<Option<Self::Buf>, StreamErrorIncoming>> {
         if let Some(mut stream) = self.stream.take() {
             self.read_chunk_fut.set(async move {
                 let chunk = stream.read_chunk(usize::MAX).await;
@@ -433,18 +394,12 @@ impl quic::RecvStream for RecvStream {
 
         let (stream, chunk) = ready!(self.read_chunk_fut.poll(cx));
         self.stream = Some(stream);
-        Poll::Ready(Ok(chunk
-            .map_err(convert_read_error_to_stream_error)?
-            .map(|c| c.bytes)))
+        Poll::Ready(Ok(chunk.map_err(convert_read_error_to_stream_error)?.map(|c| c.bytes)))
     }
 
     /// Cancels further reception on this stream with the given error code.
     fn stop_sending(&mut self, error_code: u64) {
-        self.stream
-            .as_mut()
-            .unwrap()
-            .stop(VarInt::from_u64(error_code).expect("invalid error_code"))
-            .ok();
+        self.stream.as_mut().unwrap().stop(VarInt::from_u64(error_code).expect("invalid error_code")).ok();
     }
 
     /// Returns the QUIC stream ID associated with this receive stream.
@@ -460,11 +415,9 @@ fn convert_read_error_to_stream_error(error: ReadError) -> StreamErrorIncoming {
         ReadError::Reset(var_int) => StreamErrorIncoming::StreamTerminated {
             error_code: var_int.into_inner(),
         },
-        ReadError::ConnectionLost(connection_error) => {
-            StreamErrorIncoming::ConnectionErrorIncoming {
-                connection_error: convert_connection_error(connection_error),
-            }
-        }
+        ReadError::ConnectionLost(connection_error) => StreamErrorIncoming::ConnectionErrorIncoming {
+            connection_error: convert_connection_error(connection_error),
+        },
         error @ ReadError::ClosedStream => StreamErrorIncoming::Unknown(Box::new(error)),
         error @ ReadError::ZeroRttRejected => StreamErrorIncoming::Unknown(Box::new(error)),
     }
@@ -476,11 +429,9 @@ fn convert_write_error_to_stream_error(error: WriteError) -> StreamErrorIncoming
         WriteError::Stopped(var_int) => StreamErrorIncoming::StreamTerminated {
             error_code: var_int.into_inner(),
         },
-        WriteError::ConnectionLost(connection_error) => {
-            StreamErrorIncoming::ConnectionErrorIncoming {
-                connection_error: convert_connection_error(connection_error),
-            }
-        }
+        WriteError::ConnectionLost(connection_error) => StreamErrorIncoming::ConnectionErrorIncoming {
+            connection_error: convert_connection_error(connection_error),
+        },
         error @ WriteError::ClosedStream | error @ WriteError::ZeroRttRejected => {
             StreamErrorIncoming::Unknown(Box::new(error))
         }
@@ -497,21 +448,16 @@ pub struct SendStream<B: Buf> {
 }
 
 impl<B> SendStream<B>
-where
-    B: Buf,
+where B: Buf
 {
     /// Creates a new [`SendStream`] from an [`iroh::endpoint::SendStream`].
     fn new(stream: iroh::endpoint::SendStream) -> SendStream<B> {
-        Self {
-            stream,
-            writing: None,
-        }
+        Self { stream, writing: None }
     }
 }
 
 impl<B> quic::SendStream<B> for SendStream<B>
-where
-    B: Buf,
+where B: Buf
 {
     /// Polls to check if the stream is ready to send more data.
     ///
@@ -520,8 +466,8 @@ where
         if let Some(ref mut data) = self.writing {
             while data.has_remaining() {
                 let stream = Pin::new(&mut self.stream);
-                let written = ready!(stream.poll_write(cx, data.chunk()))
-                    .map_err(convert_write_error_to_stream_error)?;
+                let written =
+                    ready!(stream.poll_write(cx, data.chunk())).map_err(convert_write_error_to_stream_error)?;
                 data.advance(written);
             }
         }
@@ -530,22 +476,13 @@ where
     }
 
     /// Finishes sending data on this stream and closes it gracefully.
-    fn poll_finish(
-        &mut self,
-        _cx: &mut task::Context<'_>,
-    ) -> Poll<Result<(), StreamErrorIncoming>> {
-        Poll::Ready(
-            self.stream
-                .finish()
-                .map_err(|e| StreamErrorIncoming::Unknown(Box::new(e))),
-        )
+    fn poll_finish(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<(), StreamErrorIncoming>> {
+        Poll::Ready(self.stream.finish().map_err(|e| StreamErrorIncoming::Unknown(Box::new(e))))
     }
 
     /// Resets the stream with the provided error code, immediately terminating it.
     fn reset(&mut self, reset_code: u64) {
-        let _ = self
-            .stream
-            .reset(VarInt::from_u64(reset_code).unwrap_or(VarInt::MAX));
+        let _ = self.stream.reset(VarInt::from_u64(reset_code).unwrap_or(VarInt::MAX));
     }
 
     /// Queues data to be sent in the next `poll_ready` call.
@@ -571,8 +508,7 @@ where
 }
 
 impl<B> quic::SendStreamUnframed<B> for SendStream<B>
-where
-    B: Buf,
+where B: Buf
 {
     /// Polls to send unframed raw data directly from the provided buffer.
     ///

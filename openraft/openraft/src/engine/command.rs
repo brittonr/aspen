@@ -324,10 +324,9 @@ where C: RaftTypeConfig
     pub(crate) fn is_met(&self, io_state: &IOState<C>) -> bool {
         match self {
             Condition::IOFlushed { io_id } => self.is_satisfied_by(io_id, io_state.log_progress.flushed()),
-            Condition::LogFlushed { log_id } => self.is_satisfied_by(
-                log_id,
-                io_state.log_progress.flushed().and_then(|io_id| io_id.last_log_id()),
-            ),
+            Condition::LogFlushed { log_id } => {
+                self.is_satisfied_by(log_id, io_state.log_progress.flushed().and_then(|io_id| io_id.last_log_id()))
+            }
             Condition::Applied { log_id } => self.is_satisfied_by(log_id, io_state.apply_progress.flushed()),
             Condition::Snapshot { log_id } => self.is_satisfied_by(log_id, io_state.snapshot.flushed()),
         }
@@ -373,11 +372,7 @@ where C: RaftTypeConfig
             Respond::Vote(vs) => write!(f, "Vote {}", vs.value()),
             Respond::AppendEntries(vs) => write!(f, "AppendEntries {}", vs.value()),
             Respond::ReceiveSnapshotChunk(vs) => {
-                write!(
-                    f,
-                    "ReceiveSnapshotChunk {}",
-                    vs.value().as_ref().map(|_x| "()").display()
-                )
+                write!(f, "ReceiveSnapshotChunk {}", vs.value().as_ref().map(|_x| "()").display())
             }
             Respond::InstallSnapshot(vs) => write!(f, "InstallSnapshot {}", vs.value().display()),
             Respond::InstallFullSnapshot(vs) => write!(f, "InstallFullSnapshot {}", vs.value()),

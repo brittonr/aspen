@@ -80,11 +80,7 @@ fn test_elect_single_node_elect_again() -> anyhow::Result<()> {
             .set_effective(Arc::new(EffectiveMembership::new(Some(log_id(0, 1, 1)), m1())));
 
         // Build in-progress election state
-        eng.state.vote = Leased::new(
-            UTConfig::<()>::now(),
-            Duration::from_millis(500),
-            Vote::new_committed(1, 2),
-        );
+        eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(1, 2));
         eng.testing_new_leader();
         eng.candidate_mut().map(|candidate| candidate.grant_by(&1));
 
@@ -131,10 +127,7 @@ fn test_elect_multi_node_enter_candidate() -> anyhow::Result<()> {
         assert!(eng.leader.is_none());
         assert_eq!(Vote::new(1, 1), *eng.candidate_ref().unwrap().vote_ref());
 
-        assert_eq!(
-            Some(btreeset! {},),
-            eng.candidate_ref().map(|x| x.granters().collect::<BTreeSet<_>>())
-        );
+        assert_eq!(Some(btreeset! {},), eng.candidate_ref().map(|x| x.granters().collect::<BTreeSet<_>>()));
 
         assert_eq!(ServerState::Candidate, eng.state.server_state);
 

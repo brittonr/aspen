@@ -272,10 +272,7 @@ where C: RaftTypeConfig
         // truncate any log entries smaller than the committed, thus it is safe to apply them to the
         // state machine.
         if accepted_vote >= cluster_committed_vote {
-            std::cmp::min(
-                accepted.last_log_id().cloned(),
-                cluster_committed.last_log_id().cloned(),
-            )
+            std::cmp::min(accepted.last_log_id().cloned(), cluster_committed.last_log_id().cloned())
         } else {
             None
         }

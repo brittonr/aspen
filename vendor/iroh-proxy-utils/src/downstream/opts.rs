@@ -1,16 +1,21 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use dynosaur::dynosaur;
-use http::{HeaderValue, Method, StatusCode, header::InvalidHeaderValue};
+use http::HeaderValue;
+use http::Method;
+use http::StatusCode;
+use http::header::InvalidHeaderValue;
 use http_body_util::BodyExt;
 use iroh::EndpointId;
 use iroh_blobs::util::connection_pool;
-use n0_error::{AnyError, Result};
+use n0_error::AnyError;
+use n0_error::Result;
 
-use crate::{
-    downstream::{EndpointAuthority, HyperBody, SrcAddr},
-    parse::HttpRequest,
-};
+use crate::downstream::EndpointAuthority;
+use crate::downstream::HyperBody;
+use crate::downstream::SrcAddr;
+use crate::parse::HttpRequest;
 
 /// Configuration for the upstream connection pool.
 ///
@@ -88,10 +93,7 @@ impl HttpProxyOpts {
         self
     }
 
-    pub(crate) async fn error_response<'a>(
-        &'a self,
-        status: StatusCode,
-    ) -> hyper::Response<HyperBody> {
+    pub(crate) async fn error_response<'a>(&'a self, status: StatusCode) -> hyper::Response<HyperBody> {
         let response_writer: &DynErrorResponder = match self.response_writer.as_ref() {
             Some(writer) => writer.as_ref(),
             None => DynErrorResponder::from_ref(&DefaultResponseWriter),
@@ -107,10 +109,8 @@ impl HttpProxyOpts {
 /// proxy operations fail.
 pub trait ErrorResponder: Send + Sync {
     /// Generates an HTTP response for the given error status code.
-    fn error_response<'a>(
-        &'a self,
-        status: StatusCode,
-    ) -> impl Future<Output = hyper::Response<HyperBody>> + Send + 'a;
+    fn error_response<'a>(&'a self, status: StatusCode)
+    -> impl Future<Output = hyper::Response<HyperBody>> + Send + 'a;
 }
 
 pub(crate) struct DefaultResponseWriter;
@@ -118,10 +118,7 @@ impl ErrorResponder for DefaultResponseWriter {
     async fn error_response<'a>(&'a self, status: StatusCode) -> hyper::Response<HyperBody> {
         let body = http_body_util::Empty::new().map_err(|_| unreachable!("infallible"));
         let mut res = hyper::Response::builder().status(status);
-        res.headers_mut().unwrap().insert(
-            http::header::CONTENT_LENGTH,
-            HeaderValue::from_str("0").unwrap(),
-        );
+        res.headers_mut().unwrap().insert(http::header::CONTENT_LENGTH, HeaderValue::from_str("0").unwrap());
         res.body(body.boxed()).unwrap()
     }
 }
@@ -154,27 +151,17 @@ pub trait RequestHandler: Send + Sync {
 pub struct StaticForwardProxy(pub EndpointId);
 
 impl RequestHandler for StaticForwardProxy {
-    async fn handle_request(
-        &self,
-        src_addr: SrcAddr,
-        req: &mut HttpRequest,
-    ) -> Result<EndpointId, Deny> {
+    async fn handle_request(&self, src_addr: SrcAddr, req: &mut HttpRequest) -> Result<EndpointId, Deny> {
         if req.method == Method::CONNECT {
-            if req.uri.authority().is_none()
-                || req.uri.scheme().is_some()
-                || req.uri.path_and_query().is_some()
-            {
-                return Err(Deny::bad_request(
-                    "invalid request target for CONNECT request",
-                ));
+            if req.uri.authority().is_none() || req.uri.scheme().is_some() || req.uri.path_and_query().is_some() {
+                return Err(Deny::bad_request("invalid request target for CONNECT request"));
             }
         } else {
             if req.uri.authority().is_none() || req.uri.scheme().is_none() {
                 return Err(Deny::bad_request("missing absolute-form request target"));
             }
         }
-        req.set_forwarded_for_if_tcp(src_addr)
-            .set_via("iroh-proxy")?;
+        req.set_forwarded_for_if_tcp(src_addr).set_via("iroh-proxy")?;
         Ok(self.0)
     }
 }
@@ -190,22 +177,12 @@ impl RequestHandler for StaticForwardProxy {
 pub struct StaticReverseProxy(pub EndpointAuthority);
 
 impl RequestHandler for StaticReverseProxy {
-    async fn handle_request(
-        &self,
-        src_addr: SrcAddr,
-        req: &mut HttpRequest,
-    ) -> Result<EndpointId, Deny> {
+    async fn handle_request(&self, src_addr: SrcAddr, req: &mut HttpRequest) -> Result<EndpointId, Deny> {
         if req.method == Method::CONNECT {
-            return Err(Deny::new(
-                StatusCode::BAD_REQUEST,
-                "CONNECT requests are not supported",
-            ));
+            return Err(Deny::new(StatusCode::BAD_REQUEST, "CONNECT requests are not supported"));
         }
         if req.version < http::Version::HTTP_2 && req.uri.scheme().is_some() {
-            return Err(Deny::new(
-                StatusCode::BAD_REQUEST,
-                "Absolute-form request targets are not supported",
-            ));
+            return Err(Deny::new(StatusCode::BAD_REQUEST, "Absolute-form request targets are not supported"));
         }
         req.set_forwarded_for_if_tcp(src_addr)
             .set_via("iroh-proxy")?
@@ -239,11 +216,7 @@ impl RequestHandlerChain {
 }
 
 impl RequestHandler for RequestHandlerChain {
-    async fn handle_request(
-        &self,
-        src_addr: SrcAddr,
-        req: &mut HttpRequest,
-    ) -> Result<EndpointId, Deny> {
+    async fn handle_request(&self, src_addr: SrcAddr, req: &mut HttpRequest) -> Result<EndpointId, Deny> {
         let mut last_err = None;
         for handler in self.0.iter() {
             match handler.handle_request(src_addr.clone(), req).await {

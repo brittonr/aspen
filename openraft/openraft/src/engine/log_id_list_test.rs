@@ -267,39 +267,12 @@ fn test_log_id_list_purge() -> anyhow::Result<()> {
             log_id(9, 1, 9),
             log_id(9, 1, 11),
         ]),
-        (log_id(3, 1, 3), vec![
-            log_id(3, 1, 3),
-            log_id(6, 1, 6),
-            log_id(9, 1, 9),
-            log_id(9, 1, 11),
-        ]),
-        (log_id(3, 1, 4), vec![
-            log_id(3, 1, 4),
-            log_id(6, 1, 6),
-            log_id(9, 1, 9),
-            log_id(9, 1, 11),
-        ]),
-        (log_id(3, 1, 5), vec![
-            log_id(3, 1, 5),
-            log_id(6, 1, 6),
-            log_id(9, 1, 9),
-            log_id(9, 1, 11),
-        ]),
-        (log_id(6, 1, 6), vec![
-            log_id(6, 1, 6),
-            log_id(9, 1, 9),
-            log_id(9, 1, 11),
-        ]),
-        (log_id(6, 1, 7), vec![
-            log_id(6, 1, 7),
-            log_id(9, 1, 9),
-            log_id(9, 1, 11),
-        ]),
-        (log_id(6, 1, 8), vec![
-            log_id(6, 1, 8),
-            log_id(9, 1, 9),
-            log_id(9, 1, 11),
-        ]),
+        (log_id(3, 1, 3), vec![log_id(3, 1, 3), log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)]),
+        (log_id(3, 1, 4), vec![log_id(3, 1, 4), log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)]),
+        (log_id(3, 1, 5), vec![log_id(3, 1, 5), log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)]),
+        (log_id(6, 1, 6), vec![log_id(6, 1, 6), log_id(9, 1, 9), log_id(9, 1, 11)]),
+        (log_id(6, 1, 7), vec![log_id(6, 1, 7), log_id(9, 1, 9), log_id(9, 1, 11)]),
+        (log_id(6, 1, 8), vec![log_id(6, 1, 8), log_id(9, 1, 9), log_id(9, 1, 11)]),
         (log_id(9, 1, 9), vec![log_id(9, 1, 9), log_id(9, 1, 11)]),
         (log_id(9, 1, 10), vec![log_id(9, 1, 10), log_id(9, 1, 11)]),
         (log_id(9, 1, 11), vec![log_id(9, 1, 11)]),
@@ -370,17 +343,11 @@ fn test_log_id_list_by_last_leader() -> anyhow::Result<()> {
 
     // len == 2, the last leader has two logs
     let ids = LogIdList::<UTConfig>::new([log_id(1, 1, 1), log_id(1, 1, 3)]);
-    assert_eq!(
-        LeaderLogIds::new_start_end(log_id(1, 1, 1), log_id(1, 1, 3)),
-        ids.by_last_leader()
-    );
+    assert_eq!(LeaderLogIds::new_start_end(log_id(1, 1, 1), log_id(1, 1, 3)), ids.by_last_leader());
 
     // len > 2, the last leader has only more than one logs
     let ids = LogIdList::<UTConfig>::new([log_id(1, 1, 1), log_id(7, 1, 8), log_id(7, 1, 10)]);
-    assert_eq!(
-        LeaderLogIds::new_start_end(log_id(7, 1, 8), log_id(7, 1, 10)),
-        ids.by_last_leader()
-    );
+    assert_eq!(LeaderLogIds::new_start_end(log_id(7, 1, 8), log_id(7, 1, 10)), ids.by_last_leader());
 
     Ok(())
 }

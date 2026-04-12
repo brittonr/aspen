@@ -183,12 +183,7 @@ where C: RaftTypeConfig
         )?;
 
         if let Some(quorum_acked) = &self.last_quorum_acked {
-            write!(
-                f,
-                "(quorum_acked_time:{}, {:?} ago)",
-                quorum_acked,
-                quorum_acked.elapsed()
-            )?;
+            write!(f, "(quorum_acked_time:{}, {:?} ago)", quorum_acked, quorum_acked.elapsed())?;
         } else {
             write!(f, "(quorum_acked_time:None)")?;
         }
@@ -311,12 +306,7 @@ where C: RaftTypeConfig
         )?;
 
         if let Some(quorum_acked) = &self.last_quorum_acked {
-            write!(
-                f,
-                ", quorum_acked_time:({}, {:?} ago)",
-                quorum_acked,
-                quorum_acked.elapsed()
-            )?;
+            write!(f, ", quorum_acked_time:({}, {:?} ago)", quorum_acked, quorum_acked.elapsed())?;
         } else {
             write!(f, ", quorum_acked_time:None")?;
         }

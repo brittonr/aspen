@@ -112,10 +112,7 @@ where C: RaftTypeConfig
         let changes = ChangeMembers::AddVoterIds(Default::default());
         let client_write_result = self.inner.call_core(RaftMsg::ChangeMembership { changes, retain, tx }, rx).await?;
 
-        tracing::info!(
-            "result of second step of change_membership: {}",
-            client_write_result.display()
-        );
+        tracing::info!("result of second step of change_membership: {}", client_write_result.display());
 
         if let Err(e) = &client_write_result {
             tracing::error!("the second step error: {}", e);
@@ -173,10 +170,7 @@ where C: RaftTypeConfig
             )
             .await;
 
-        tracing::info!(
-            wait_res = display(DisplayResult(&wait_res)),
-            "waiting for replication to new learner"
-        );
+        tracing::info!(wait_res = display(DisplayResult(&wait_res)), "waiting for replication to new learner");
 
         Ok(Ok(resp))
     }

@@ -110,10 +110,7 @@ mod tests {
             vec![BTreeSet::from([1, 2])],
             [],
         ));
-        assert_eq!(
-            format!("{:?}", membership),
-            "membership:Membership { configs: [{1, 2}], nodes: {1: (), 2: ()} }"
-        );
+        assert_eq!(format!("{:?}", membership), "membership:Membership { configs: [{1, 2}], nodes: {1: (), 2: ()} }");
     }
 
     #[test]
@@ -128,9 +125,6 @@ mod tests {
             vec![BTreeSet::from([1, 2])],
             [],
         ));
-        assert_eq!(
-            format!("{}", membership),
-            "membership:{voters:[{1:(),2:()}], learners:[]}"
-        );
+        assert_eq!(format!("{}", membership), "membership:{voters:[{1:(),2:()}], learners:[]}");
     }
 }

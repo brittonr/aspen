@@ -96,13 +96,7 @@ mod tokio_rt {
                 };
 
                 // Send the RPC over to the target.
-                tracing::debug!(
-                    snapshot_size = req.data.len(),
-                    req.offset,
-                    end,
-                    req.done,
-                    "sending snapshot chunk"
-                );
+                tracing::debug!(snapshot_size = req.data.len(), req.offset, end, req.done, "sending snapshot chunk");
 
                 #[allow(deprecated)]
                 let res = C::timeout(option.hard_ttl(), net.install_snapshot(req, option.clone())).await;

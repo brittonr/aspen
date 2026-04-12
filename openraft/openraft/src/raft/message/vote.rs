@@ -74,11 +74,6 @@ impl<C> fmt::Display for VoteResponse<C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{{{}, last_log:{:?}}}",
-            self.vote,
-            self.last_log_id.as_ref().map(|x| x.to_string())
-        )
+        write!(f, "{{{}, last_log:{:?}}}", self.vote, self.last_log_id.as_ref().map(|x| x.to_string()))
     }
 }

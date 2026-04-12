@@ -63,18 +63,13 @@ where C: RaftTypeConfig
         let mut membership_entry = None;
         for entry in entries.iter() {
             if let Some(m) = entry.get_membership() {
-                debug_assert!(
-                    membership_entry.is_none(),
-                    "only one membership entry is allowed in a batch"
-                );
+                debug_assert!(membership_entry.is_none(), "only one membership entry is allowed in a batch");
                 membership_entry = Some((entry.log_id(), m));
             }
         }
 
-        self.state.accept_log_io(IOId::new_log_io(
-            self.leader.committed_vote.clone(),
-            self.leader.last_log_id().cloned(),
-        ));
+        self.state
+            .accept_log_io(IOId::new_log_io(self.leader.committed_vote.clone(), self.leader.last_log_id().cloned()));
 
         self.output.push_command(Command::AppendEntries {
             // A leader should always use the leader's vote.

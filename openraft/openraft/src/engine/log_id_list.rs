@@ -310,10 +310,7 @@ where C: RaftTypeConfig
             }
         };
 
-        Some(RefLogId::new(
-            self.key_log_ids[change_point].committed_leader_id(),
-            index,
-        ))
+        Some(RefLogId::new(self.key_log_ids[change_point].committed_leader_id(), index))
     }
 
     pub(crate) fn first(&self) -> Option<&LogIdOf<C>> {

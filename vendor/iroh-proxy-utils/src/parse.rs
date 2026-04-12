@@ -1,17 +1,30 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::net::SocketAddr;
+use std::str::FromStr;
 
-use http::{
-    HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Version,
-    header::{self, AsHeaderName, InvalidHeaderValue},
-    uri::{Scheme, Uri},
-};
-use n0_error::{Result, StackResultExt, StdResultExt, anyerr, ensure_any};
-use tokio::io::{self, AsyncRead, AsyncWrite, AsyncWriteExt};
+use http::HeaderMap;
+use http::HeaderName;
+use http::HeaderValue;
+use http::Method;
+use http::StatusCode;
+use http::Version;
+use http::header::AsHeaderName;
+use http::header::InvalidHeaderValue;
+use http::header::{self};
+use http::uri::Scheme;
+use http::uri::Uri;
+use n0_error::Result;
+use n0_error::StackResultExt;
+use n0_error::StdResultExt;
+use n0_error::anyerr;
+use n0_error::ensure_any;
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
+use tokio::io::{self};
 
-use crate::{
-    downstream::SrcAddr,
-    util::{Prebufferable, Prebuffered},
-};
+use crate::downstream::SrcAddr;
+use crate::util::Prebufferable;
+use crate::util::Prebuffered;
 
 /// Hop-by-hop headers that MUST NOT be forwarded by proxies per RFC 9110 Section 7.6.1.
 const HOP_BY_HOP_HEADERS: &[HeaderName] = &[
@@ -203,9 +216,7 @@ impl HttpRequest {
         let mut req = httparse::Request::new(&mut headers);
         match req.parse(buf).std_context("Invalid HTTP request")? {
             httparse::Status::Partial => Ok(None),
-            httparse::Status::Complete(header_len) => {
-                Self::from_parsed_request(req).map(|req| Some((header_len, req)))
-            }
+            httparse::Status::Complete(header_len) => Self::from_parsed_request(req).map(|req| Some((header_len, req))),
         }
     }
 
@@ -336,10 +347,7 @@ impl HttpRequest {
                 // Absolute-form requests are only support for HTTP/1. In HTTP/2, absolute-form and origin-form
                 // requests are indistinguishable, so we always report origin-form.
                 if self.uri.scheme().is_some() && self.version < Version::HTTP_2 {
-                    ensure_any!(
-                        self.uri.authority().is_some(),
-                        "Invalid request target: scheme without authority"
-                    );
+                    ensure_any!(self.uri.authority().is_some(), "Invalid request target: scheme without authority");
                     Ok(HttpRequestKind::Http1Absolute)
                 } else {
                     Ok(HttpRequestKind::Origin)
@@ -353,10 +361,8 @@ impl HttpRequest {
     /// Per the de facto standard, this identifies the originating client IP
     /// for requests forwarded through proxies.
     pub fn set_forwarded_for(&mut self, src_addr: SocketAddr) -> &mut Self {
-        self.headers.append(
-            X_FORWARDED_FOR,
-            HeaderValue::from_str(&src_addr.to_string()).expect("valid header value"),
-        );
+        self.headers
+            .append(X_FORWARDED_FOR, HeaderValue::from_str(&src_addr.to_string()).expect("valid header value"));
         self
     }
 
@@ -372,10 +378,7 @@ impl HttpRequest {
     }
 
     /// Removes the specified headers from the request.
-    pub fn remove_headers(
-        &mut self,
-        names: impl IntoIterator<Item = impl AsHeaderName>,
-    ) -> &mut Self {
+    pub fn remove_headers(&mut self, names: impl IntoIterator<Item = impl AsHeaderName>) -> &mut Self {
         for header in names {
             self.headers.remove(header);
         }
@@ -385,14 +388,9 @@ impl HttpRequest {
     /// Appends a `Via` header indicating this proxy (RFC 9110 §7.6.3).
     ///
     /// The header value includes the protocol version and the given pseudonym.
-    pub fn set_via(
-        &mut self,
-        pseudonym: impl std::fmt::Display,
-    ) -> Result<&mut Self, InvalidHeaderValue> {
-        self.headers.append(
-            header::VIA,
-            HeaderValue::from_str(&format!("{:?} {}", self.version, pseudonym))?,
-        );
+    pub fn set_via(&mut self, pseudonym: impl std::fmt::Display) -> Result<&mut Self, InvalidHeaderValue> {
+        self.headers
+            .append(header::VIA, HeaderValue::from_str(&format!("{:?} {}", self.version, pseudonym))?);
         Ok(self)
     }
 
@@ -404,8 +402,7 @@ impl HttpRequest {
             self.headers.insert(X_FORWARDED_HOST, original_host);
         }
         if let Some(authority) = target.authority() {
-            self.headers
-                .insert(header::HOST, HeaderValue::from_str(authority.as_str())?);
+            self.headers.insert(header::HOST, HeaderValue::from_str(authority.as_str())?);
         }
         self.uri = target;
         Ok(self)
@@ -424,15 +421,9 @@ impl HttpRequest {
         Ok(self)
     }
 
-    pub(crate) async fn write(
-        &self,
-        writer: &mut (impl AsyncWrite + Send + Unpin),
-    ) -> io::Result<()> {
+    pub(crate) async fn write(&self, writer: &mut (impl AsyncWrite + Send + Unpin)) -> io::Result<()> {
         let Self {
-            method,
-            uri,
-            headers,
-            ..
+            method, uri, headers, ..
         } = self;
         writer.write_all(method.as_str().as_bytes()).await?;
         writer.write_all(b" ").await?;
@@ -467,7 +458,8 @@ pub enum HttpRequestKind {
     Tunnel,
     /// Request with absolute-form target (`http://host/path`).
     ///
-    /// Only available in HTTP/1, because in HTTP/2 origin-form request usually have the authority set as well.
+    /// Only available in HTTP/1, because in HTTP/2 origin-form request usually have the authority
+    /// set as well.
     Http1Absolute,
     /// Request with origin-form target (`/path`).
     Origin,
@@ -496,7 +488,8 @@ pub enum HttpProxyRequestKind {
 impl HttpProxyRequestKind {
     /// Returns a [`ProxyTargetId`] for this request.
     ///
-    /// Returns an error if the absolute-form URI does not contain a port and does not have an HTTP(s) scheme.
+    /// Returns an error if the absolute-form URI does not contain a port and does not have an
+    /// HTTP(s) scheme.
     pub fn authority(&self) -> Result<Authority> {
         match self {
             HttpProxyRequestKind::Tunnel { target } => Ok(target.clone()),
@@ -552,18 +545,11 @@ impl HttpResponse {
     }
 
     pub(crate) fn no_body(mut self) -> Self {
-        self.headers.insert(
-            http::header::CONTENT_LENGTH,
-            HeaderValue::from_str("0").unwrap(),
-        );
+        self.headers.insert(http::header::CONTENT_LENGTH, HeaderValue::from_str("0").unwrap());
         self
     }
 
-    pub(crate) async fn write(
-        &self,
-        writer: &mut (impl AsyncWrite + Send + Unpin),
-        finalize: bool,
-    ) -> io::Result<()> {
+    pub(crate) async fn write(&self, writer: &mut (impl AsyncWrite + Send + Unpin), finalize: bool) -> io::Result<()> {
         writer.write_all(self.status_line().as_bytes()).await?;
         for (key, value) in self.headers.iter() {
             writer.write_all(key.as_str().as_bytes()).await?;
@@ -579,10 +565,7 @@ impl HttpResponse {
 
     /// Returns the reason phrase, falling back to the canonical phrase for the status code.
     pub fn reason(&self) -> &str {
-        self.reason
-            .as_deref()
-            .or(self.status.canonical_reason())
-            .unwrap_or("")
+        self.reason.as_deref().or(self.status.canonical_reason()).unwrap_or("")
     }
 
     /// Formats an HTTP/1.1 status line (e.g., `HTTP/1.1 200 OK\r\n`).
@@ -590,10 +573,7 @@ impl HttpResponse {
         format!(
             "HTTP/1.1 {} {}\r\n",
             self.status.as_u16(),
-            self.reason
-                .as_deref()
-                .or(self.status.canonical_reason())
-                .unwrap_or("")
+            self.reason.as_deref().or(self.status.canonical_reason()).unwrap_or("")
         )
     }
 
@@ -608,29 +588,22 @@ impl HttpResponse {
     pub fn parse_with_len(buf: &[u8]) -> Result<Option<(usize, Self)>> {
         let mut headers = [httparse::EMPTY_HEADER; 64];
         let mut res = httparse::Response::new(&mut headers);
-        match res
-            .parse(buf)
-            .std_context("Failed to parse HTTP response")?
-        {
+        match res.parse(buf).std_context("Failed to parse HTTP response")? {
             httparse::Status::Partial => Ok(None),
             httparse::Status::Complete(header_len) => {
                 let code = res.code.context("Missing response status code")?;
-                let status =
-                    StatusCode::from_u16(code).std_context("Invalid response status code")?;
+                let status = StatusCode::from_u16(code).std_context("Invalid response status code")?;
                 let reason = res.reason.map(ToOwned::to_owned);
                 let headers = HeaderMap::from_iter(res.headers.iter().flat_map(|h| {
                     let value = HeaderValue::from_bytes(h.value).ok()?;
                     let name = http::HeaderName::from_bytes(h.name.as_bytes()).ok()?;
                     Some((name, value))
                 }));
-                Ok(Some((
-                    header_len,
-                    HttpResponse {
-                        status,
-                        reason,
-                        headers,
-                    },
-                )))
+                Ok(Some((header_len, HttpResponse {
+                    status,
+                    reason,
+                    headers,
+                })))
             }
         }
     }

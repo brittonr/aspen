@@ -150,12 +150,7 @@ impl<C> fmt::Display for EffectiveMembership<C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "EffectiveMembership{{log_id: {}, membership: {}}}",
-            self.log_id().display(),
-            self.membership()
-        )
+        write!(f, "EffectiveMembership{{log_id: {}, membership: {}}}", self.log_id().display(), self.membership())
     }
 }
 

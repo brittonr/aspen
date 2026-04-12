@@ -92,20 +92,15 @@ async fn test_wait() -> anyhow::Result<()> {
         let h = tokio::spawn(async move {
             sleep(Duration::from_millis(10)).await;
             let mut update = init.clone();
-            update.membership_config = Arc::new(StoredMembership::new(
-                None,
-                Membership::new_with_defaults(vec![btreeset! {1,2}], [3]),
-            ));
+            update.membership_config =
+                Arc::new(StoredMembership::new(None, Membership::new_with_defaults(vec![btreeset! {1,2}], [3])));
             let rst = tx.send(update);
             assert!(rst.is_ok());
         });
         let got = w.voter_ids([1, 2], "members").await?;
         h.await?;
 
-        assert_eq!(
-            btreeset![1, 2],
-            got.membership_config.membership().get_joint_config().first().unwrap().clone()
-        );
+        assert_eq!(btreeset![1, 2], got.membership_config.membership().get_joint_config().first().unwrap().clone());
     }
 
     tracing::info!("--- wait for snapshot, Ok");

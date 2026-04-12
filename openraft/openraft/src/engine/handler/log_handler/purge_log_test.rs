@@ -59,10 +59,7 @@ fn test_purge_log_same_leader_as_prev_last_purged() -> anyhow::Result<()> {
     assert_eq!(log_id(2, 1, 3), lh.state.log_ids.key_log_ids()[0],);
     assert_eq!(Some(&log_id(4, 1, 6)), lh.state.last_log_id());
 
-    assert_eq!(
-        vec![Command::PurgeLog { upto: log_id(2, 1, 3) }],
-        lh.output.take_commands()
-    );
+    assert_eq!(vec![Command::PurgeLog { upto: log_id(2, 1, 3) }], lh.output.take_commands());
 
     Ok(())
 }
@@ -79,10 +76,7 @@ fn test_purge_log_to_last_key_log() -> anyhow::Result<()> {
     assert_eq!(log_id(4, 1, 4), lh.state.log_ids.key_log_ids()[0],);
     assert_eq!(Some(&log_id(4, 1, 6)), lh.state.last_log_id());
 
-    assert_eq!(
-        vec![Command::PurgeLog { upto: log_id(4, 1, 4) }],
-        lh.output.take_commands()
-    );
+    assert_eq!(vec![Command::PurgeLog { upto: log_id(4, 1, 4) }], lh.output.take_commands());
 
     Ok(())
 }
@@ -99,10 +93,7 @@ fn test_purge_log_go_pass_last_key_log() -> anyhow::Result<()> {
     assert_eq!(log_id(4, 1, 5), lh.state.log_ids.key_log_ids()[0],);
     assert_eq!(Some(&log_id(4, 1, 6)), lh.state.last_log_id());
 
-    assert_eq!(
-        vec![Command::PurgeLog { upto: log_id(4, 1, 5) }],
-        lh.output.take_commands()
-    );
+    assert_eq!(vec![Command::PurgeLog { upto: log_id(4, 1, 5) }], lh.output.take_commands());
 
     Ok(())
 }
@@ -119,10 +110,7 @@ fn test_purge_log_to_last_log_id() -> anyhow::Result<()> {
     assert_eq!(log_id(4, 1, 6), lh.state.log_ids.key_log_ids()[0],);
     assert_eq!(Some(&log_id(4, 1, 6)), lh.state.last_log_id());
 
-    assert_eq!(
-        vec![Command::PurgeLog { upto: log_id(4, 1, 6) }],
-        lh.output.take_commands()
-    );
+    assert_eq!(vec![Command::PurgeLog { upto: log_id(4, 1, 6) }], lh.output.take_commands());
 
     Ok(())
 }
@@ -139,10 +127,7 @@ fn test_purge_log_go_pass_last_log_id() -> anyhow::Result<()> {
     assert_eq!(log_id(4, 1, 7), lh.state.log_ids.key_log_ids()[0],);
     assert_eq!(Some(&log_id(4, 1, 7)), lh.state.last_log_id());
 
-    assert_eq!(
-        vec![Command::PurgeLog { upto: log_id(4, 1, 7) }],
-        lh.output.take_commands()
-    );
+    assert_eq!(vec![Command::PurgeLog { upto: log_id(4, 1, 7) }], lh.output.take_commands());
 
     Ok(())
 }
@@ -159,10 +144,7 @@ fn test_purge_log_to_higher_leader_lgo() -> anyhow::Result<()> {
     assert_eq!(log_id(5, 1, 7), lh.state.log_ids.key_log_ids()[0],);
     assert_eq!(Some(&log_id(5, 1, 7)), lh.state.last_log_id());
 
-    assert_eq!(
-        vec![Command::PurgeLog { upto: log_id(5, 1, 7) }],
-        lh.output.take_commands()
-    );
+    assert_eq!(vec![Command::PurgeLog { upto: log_id(5, 1, 7) }], lh.output.take_commands());
 
     Ok(())
 }

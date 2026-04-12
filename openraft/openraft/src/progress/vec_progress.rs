@@ -565,14 +565,7 @@ mod tests {
 
         for (ith, (id, v, want_quorum_accepted)) in cases.iter().enumerate() {
             let got = progress.update(id, *v);
-            assert_eq!(
-                want_quorum_accepted.clone(),
-                got,
-                "{}-th case: id:{}, v:{:?}",
-                ith,
-                id,
-                v
-            );
+            assert_eq!(want_quorum_accepted.clone(), got, "{}-th case: id:{}, v:{:?}", ith, id, v);
         }
 
         // Check progress data
@@ -615,11 +608,7 @@ mod tests {
         // After upgrading to a bigger quorum set, quorum-accepted fall back to 0
 
         let mut p012_345 = p012.upgrade_quorum_set(qs012_345, [6], || 0);
-        assert_eq!(
-            &0,
-            p012_345.quorum_accepted(),
-            "quorum extended from 012 to 012_345, quorum-accepted falls back"
-        );
+        assert_eq!(&0, p012_345.quorum_accepted(), "quorum extended from 012 to 012_345, quorum-accepted falls back");
         assert_eq!(&9, p012_345.get(&5), "inherit learner progress");
 
         // When quorum set shrinks, quorum-accepted becomes greater.
@@ -630,11 +619,7 @@ mod tests {
 
         let p345 = p012_345.upgrade_quorum_set(qs345, [1], || 0);
 
-        assert_eq!(
-            &8,
-            p345.quorum_accepted(),
-            "shrink quorum set, greater value becomes quorum-accepted"
-        );
+        assert_eq!(&8, p345.quorum_accepted(), "shrink quorum set, greater value becomes quorum-accepted");
         assert_eq!(&6, p345.get(&1), "inherit voter progress");
     }
 

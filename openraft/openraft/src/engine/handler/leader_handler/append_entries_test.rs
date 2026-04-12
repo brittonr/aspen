@@ -54,11 +54,7 @@ fn eng() -> Engine<UTConfig> {
 
     eng.config.id = 1;
     eng.state.apply_progress_mut().accept(log_id(0, 1, 0));
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(3, 1),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(3, 1));
     eng.state.log_ids.append(log_id(1, 1, 1));
     eng.state.log_ids.append(log_id(2, 1, 3));
     eng.state.membership_state = MembershipState::new(
@@ -78,11 +74,7 @@ fn test_leader_append_entries_empty() -> anyhow::Result<()> {
 
     eng.leader_handler()?.leader_append_entries(Vec::<Entry<UTConfig>>::new());
 
-    assert_eq!(
-        None,
-        eng.state.accepted_log_io(),
-        "no accepted log updated for empty entries"
-    );
+    assert_eq!(None, eng.state.accepted_log_io(), "no accepted log updated for empty entries");
     assert_eq!(
         &[
             log_id(1, 1, 1), //
@@ -116,10 +108,7 @@ fn test_leader_append_entries_normal() -> anyhow::Result<()> {
     ]);
 
     assert_eq!(
-        Some(&IOId::new_log_io(
-            Vote::new(3, 1).into_committed(),
-            Some(log_id(3, 1, 6))
-        )),
+        Some(&IOId::new_log_io(Vote::new(3, 1).into_committed(), Some(log_id(3, 1, 6)))),
         eng.state.accepted_log_io()
     );
     assert_eq!(
@@ -182,10 +171,7 @@ fn test_leader_append_entries_single_node_leader() -> anyhow::Result<()> {
     ]);
 
     assert_eq!(
-        Some(&IOId::new_log_io(
-            Vote::new(3, 1).into_committed(),
-            Some(log_id(3, 1, 6))
-        )),
+        Some(&IOId::new_log_io(Vote::new(3, 1).into_committed(), Some(log_id(3, 1, 6)))),
         eng.state.accepted_log_io()
     );
     assert_eq!(
@@ -240,10 +226,7 @@ fn test_leader_append_entries_with_membership_log() -> anyhow::Result<()> {
     ]);
 
     assert_eq!(
-        Some(&IOId::new_log_io(
-            Vote::new(3, 1).into_committed(),
-            Some(log_id(3, 1, 6))
-        )),
+        Some(&IOId::new_log_io(Vote::new(3, 1).into_committed(), Some(log_id(3, 1, 6)))),
         eng.state.accepted_log_io()
     );
     assert_eq!(

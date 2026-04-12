@@ -26,10 +26,7 @@ where C: RaftTypeConfig
         let entries = self.try_get_log_entries(log_index..=log_index).await.sto_read_logs()?;
 
         if entries.is_empty() {
-            return Err(StorageError::read_log_at_index(
-                log_index,
-                AnyError::error("log entry not found"),
-            ));
+            return Err(StorageError::read_log_at_index(log_index, AnyError::error("log entry not found")));
         }
 
         Ok(entries[0].log_id())

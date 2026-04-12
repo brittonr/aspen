@@ -44,11 +44,7 @@ pub trait AuthHandler: Send + Sync {
 pub struct DenyAll;
 
 impl AuthHandler for DenyAll {
-    async fn authorize<'a>(
-        &'a self,
-        _remote_id: EndpointId,
-        _req: &'a HttpProxyRequest,
-    ) -> Result<(), AuthError> {
+    async fn authorize<'a>(&'a self, _remote_id: EndpointId, _req: &'a HttpProxyRequest) -> Result<(), AuthError> {
         Err(AuthError::Forbidden)
     }
 }
@@ -60,11 +56,7 @@ impl AuthHandler for DenyAll {
 pub struct AcceptAll;
 
 impl AuthHandler for AcceptAll {
-    async fn authorize<'a>(
-        &'a self,
-        _remote_id: EndpointId,
-        _req: &'a HttpProxyRequest,
-    ) -> Result<(), AuthError> {
+    async fn authorize<'a>(&'a self, _remote_id: EndpointId, _req: &'a HttpProxyRequest) -> Result<(), AuthError> {
         Ok(())
     }
 }

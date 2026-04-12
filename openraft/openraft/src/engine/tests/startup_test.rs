@@ -57,11 +57,7 @@ fn test_startup_as_leader_without_logs() -> anyhow::Result<()> {
         .set_effective(Arc::new(EffectiveMembership::new(Some(log_id(1, 1, 3)), m23())));
     eng.state.log_ids = LogIdList::new([log_id(1, 1, 3)]);
     // Committed vote makes it a leader at startup.
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(2, 2),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 2));
 
     eng.startup();
 
@@ -109,11 +105,7 @@ fn test_startup_as_leader_with_proposed_logs() -> anyhow::Result<()> {
     // Fake existing log ids
     eng.state.log_ids = LogIdList::new([log_id(1, 1, 2), log_id(1, 2, 4), log_id(1, 2, 6)]);
     // Committed vote makes it a leader at startup.
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(1, 2),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(1, 2));
 
     eng.startup();
 
@@ -155,11 +147,7 @@ fn test_startup_as_leader_not_voter_issue_920() -> anyhow::Result<()> {
         .membership_state
         .set_effective(Arc::new(EffectiveMembership::new(Some(log_id(2, 1, 3)), m_empty())));
     // Committed vote makes it a leader at startup.
-    eng.state.vote = Leased::new(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(1, 2),
-    );
+    eng.state.vote = Leased::new(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(1, 2));
 
     eng.startup();
 

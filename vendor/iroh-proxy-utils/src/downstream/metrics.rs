@@ -1,4 +1,5 @@
-use iroh_metrics::{Counter, MetricsGroup};
+use iroh_metrics::Counter;
+use iroh_metrics::MetricsGroup;
 
 #[derive(Debug, MetricsGroup)]
 #[non_exhaustive]

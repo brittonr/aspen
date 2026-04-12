@@ -75,8 +75,8 @@ where C: RaftTypeConfig
     /// Called on each election attempt per Raft §5.2 to prevent persistent
     /// split-votes when nodes have similar initial timeouts.
     pub(crate) fn rerandomize_election_timeout(&mut self) {
-        let new_timeout = AsyncRuntimeOf::<C>::thread_rng()
-            .random_range(self.election_timeout_min..self.election_timeout_max);
+        let new_timeout =
+            AsyncRuntimeOf::<C>::thread_rng().random_range(self.election_timeout_min..self.election_timeout_max);
         self.timer_config.election_timeout = Duration::from_millis(new_timeout);
     }
 }

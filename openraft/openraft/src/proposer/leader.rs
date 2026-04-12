@@ -305,11 +305,7 @@ mod tests {
         let mut entries = vec![Entry::<UTConfig>::new_blank(log_id(5, 5, 2))];
         leader.assign_log_ids(&mut entries);
 
-        assert_eq!(
-            entries[0].log_id(),
-            log_id(2, 2, 4),
-            "entry log id assigned following last-log-id"
-        );
+        assert_eq!(entries[0].log_id(), log_id(2, 2, 4), "entry log id assigned following last-log-id");
         assert_eq!(Some(log_id(2, 2, 4)), leader.last_log_id);
     }
 

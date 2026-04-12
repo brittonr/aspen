@@ -16,11 +16,7 @@ fn eng() -> Engine<UTConfig> {
 fn test_trigger_snapshot() -> anyhow::Result<()> {
     let mut eng = eng();
 
-    assert_eq!(
-        false,
-        eng.state.io_state_mut().building_snapshot(),
-        "initially, snapshot is not triggered"
-    );
+    assert_eq!(false, eng.state.io_state_mut().building_snapshot(), "initially, snapshot is not triggered");
 
     // Trigger snapshot.
 

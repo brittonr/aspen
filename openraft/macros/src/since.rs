@@ -52,10 +52,8 @@ impl Since {
                         }
 
                         name => {
-                            let msg = format!(
-                                "Unknown attribute {} is specified; expected one of: `version`, `date`",
-                                name,
-                            );
+                            let msg =
+                                format!("Unknown attribute {} is specified; expected one of: `version`, `date`", name,);
                             return Err(syn::Error::new_spanned(namevalue, msg));
                         }
                     }
@@ -67,10 +65,7 @@ impl Since {
         }
 
         if since.version.is_none() {
-            return Err(syn::Error::new_spanned(
-                proc_macro2::TokenStream::from(args),
-                "Missing `version` attribute",
-            ));
+            return Err(syn::Error::new_spanned(proc_macro2::TokenStream::from(args), "Missing `version` attribute"));
         }
 
         Ok(since)
@@ -171,10 +166,7 @@ impl Since {
         chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").map_err(|_e| {
             syn::Error::new(
                 span,
-                format!(
-                    "`date`(`{}`) is not valid date string. Expected format: yyyy-mm-dd",
-                    date_str
-                ),
+                format!("`date`(`{}`) is not valid date string. Expected format: yyyy-mm-dd", date_str),
             )
         })?;
 
@@ -198,18 +190,12 @@ impl Since {
                 syn::Lit::Str(s) => s.value(),
                 syn::Lit::Verbatim(s) => s.to_string(),
                 _ => {
-                    return Err(syn::Error::new(
-                        span,
-                        format!("Failed to parse value of `{}` as string.", field),
-                    ));
+                    return Err(syn::Error::new(span, format!("Failed to parse value of `{}` as string.", field)));
                 }
             },
             syn::Expr::Verbatim(s) => s.to_string(),
             _ => {
-                return Err(syn::Error::new(
-                    span,
-                    format!("Failed to parse value of `{}` as string.", field),
-                ));
+                return Err(syn::Error::new(span, format!("Failed to parse value of `{}` as string.", field)));
             }
         };
         Ok(s)

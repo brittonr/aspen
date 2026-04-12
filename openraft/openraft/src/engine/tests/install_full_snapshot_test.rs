@@ -34,11 +34,7 @@ fn eng() -> Engine<UTConfig> {
     let mut eng: Engine<UTConfig> = Engine::testing_default(0);
     eng.state.enable_validation(false); // Disable validation for incomplete state
 
-    eng.state.vote.update(
-        UTConfig::<()>::now(),
-        Duration::from_millis(500),
-        Vote::new_committed(2, 1),
-    );
+    eng.state.vote.update(UTConfig::<()>::now(), Duration::from_millis(500), Vote::new_committed(2, 1));
     eng.state.apply_progress_mut().accept(log_id(4, 1, 5));
     eng.state.log_ids = LogIdList::new(vec![
         //

@@ -102,12 +102,7 @@ where C: RaftTypeConfig
         }
 
         let log_id = self.state.log_ids.ref_at(purge_end - 1);
-        debug_assert!(
-            log_id.is_some(),
-            "log id not found at {}, engine.state:{:?}",
-            purge_end - 1,
-            st
-        );
+        debug_assert!(log_id.is_some(), "log id not found at {}, engine.state:{:?}", purge_end - 1, st);
 
         log_id.to_log_id()
     }

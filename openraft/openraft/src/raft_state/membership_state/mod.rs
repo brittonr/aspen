@@ -55,11 +55,7 @@ impl<C> fmt::Display for MembershipState<C>
 where C: RaftTypeConfig
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "MembershipState{{committed: {}, effective: {}}}",
-            self.committed, self.effective
-        )
+        write!(f, "MembershipState{{committed: {}, effective: {}}}", self.committed, self.effective)
     }
 }
 
@@ -133,10 +129,7 @@ where C: RaftTypeConfig
     /// - Or a follower has confirmed preceding logs matches the leaders' and appends membership
     ///   received from the leader.
     pub(crate) fn append(&mut self, m: Arc<EffectiveMembership<C>>) {
-        debug_assert!(
-            m.log_id() > self.effective.log_id(),
-            "new membership has to have a greater log_id"
-        );
+        debug_assert!(m.log_id() > self.effective.log_id(), "new membership has to have a greater log_id");
         debug_assert!(
             m.log_id().index() > self.effective.log_id().index(),
             "new membership has to have a greater index"

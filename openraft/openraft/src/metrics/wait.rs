@@ -58,10 +58,7 @@ where C: RaftTypeConfig
 
             let now = C::now();
             if now >= timeout_at {
-                return Err(WaitError::Timeout(
-                    self.timeout,
-                    format!("{} latest: {}", msg.to_string(), latest),
-                ));
+                return Err(WaitError::Timeout(self.timeout, format!("{} latest: {}", msg.to_string(), latest)));
             }
 
             let sleep_time = timeout_at - now;
@@ -166,11 +163,8 @@ where C: RaftTypeConfig
     /// Wait for `state` to become `want_state` or timeout.
     #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn state(&self, want_state: ServerState, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
-        self.metrics(
-            |m| m.state == want_state,
-            &format!("{} .state == {:?}", msg.to_string(), want_state),
-        )
-        .await
+        self.metrics(|m| m.state == want_state, &format!("{} .state == {:?}", msg.to_string(), want_state))
+            .await
     }
 
     /// Wait for `membership` to become the expected node id set or timeout.
