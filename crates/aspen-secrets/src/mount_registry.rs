@@ -20,10 +20,14 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+#[cfg(feature = "trust")]
+use std::sync::RwLock as StdRwLock;
 
 use tokio::sync::RwLock;
 
 use crate::backend::AspenSecretsBackend;
+#[cfg(feature = "trust")]
+use crate::backend::SecretsEncryptionProvider;
 use crate::constants::MAX_MOUNT_NAME_LENGTH;
 use crate::constants::MAX_MOUNTS;
 use crate::error::Result;
@@ -67,7 +71,11 @@ pub struct MountRegistry {
 
     /// Optional at-rest encryption context (enabled with `trust` feature).
     #[cfg(feature = "trust")]
-    encryption: RwLock<Option<Arc<aspen_trust::encryption::SecretsEncryption>>>,
+    encryption: StdRwLock<Option<Arc<aspen_trust::encryption::SecretsEncryption>>>,
+
+    /// Optional lazy encryption provider used for trust-aware epoch rotation.
+    #[cfg(feature = "trust")]
+    encryption_provider: StdRwLock<Option<Arc<dyn SecretsEncryptionProvider>>>,
 }
 
 impl MountRegistry {
@@ -79,7 +87,9 @@ impl MountRegistry {
             kv_stores: Arc::new(RwLock::new(HashMap::new())),
             kv,
             #[cfg(feature = "trust")]
-            encryption: RwLock::new(None),
+            encryption: StdRwLock::new(None),
+            #[cfg(feature = "trust")]
+            encryption_provider: StdRwLock::new(None),
         }
     }
 
@@ -88,8 +98,19 @@ impl MountRegistry {
     /// Existing stores are not updated — call this before any stores are
     /// created, or clear cached stores after calling.
     #[cfg(feature = "trust")]
-    pub async fn set_encryption(&self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
-        *self.encryption.write().await = Some(encryption);
+    pub fn set_encryption(&self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
+        *self.encryption.write().expect("mount registry encryption lock poisoned") = Some(encryption);
+        *self.encryption_provider.write().expect("mount registry encryption provider lock poisoned") = None;
+    }
+
+    /// Set the lazy at-rest encryption provider for all newly created backends.
+    ///
+    /// Existing stores are not updated — call this before any stores are
+    /// created, or clear cached stores after calling.
+    #[cfg(feature = "trust")]
+    pub fn set_encryption_provider(&self, provider: Arc<dyn SecretsEncryptionProvider>) {
+        *self.encryption_provider.write().expect("mount registry encryption provider lock poisoned") = Some(provider);
+        *self.encryption.write().expect("mount registry encryption lock poisoned") = None;
     }
 
     /// Get or create a PKI store for the given mount point.
@@ -234,7 +255,12 @@ impl MountRegistry {
     async fn create_backend(&self, mount: &str) -> AspenSecretsBackend {
         #[cfg(feature = "trust")]
         {
-            let enc = self.encryption.read().await;
+            let provider = self.encryption_provider.read().expect("mount registry encryption provider lock poisoned");
+            if let Some(provider) = provider.as_ref() {
+                return AspenSecretsBackend::with_encryption_provider(self.kv.clone(), mount, Arc::clone(provider));
+            }
+
+            let enc = self.encryption.read().expect("mount registry encryption lock poisoned");
             if let Some(encryption) = enc.as_ref() {
                 return AspenSecretsBackend::with_encryption(self.kv.clone(), mount, Arc::clone(encryption));
             }

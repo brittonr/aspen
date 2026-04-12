@@ -68,6 +68,9 @@ pub mod node;
 pub mod node_failure_detection;
 /// IRPC service definitions for Raft RPC over Iroh.
 pub mod rpc;
+/// Trust-aware secrets-at-rest integration.
+#[cfg(all(feature = "trust", feature = "secrets"))]
+pub mod secrets_at_rest;
 /// Raft server protocol handlers.
 pub mod server;
 /// Sharded Raft RPC types for horizontal scaling.

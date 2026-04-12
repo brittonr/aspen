@@ -20,6 +20,7 @@ use super::CommitSnafu;
 use super::GetSnafu;
 use super::OpenTableSnafu;
 use super::RangeSnafu;
+use super::RemoveSnafu;
 use super::SharedRedbStorage;
 use super::SharedStorageError;
 use super::TRUST_CHAINS_TABLE;
@@ -27,6 +28,7 @@ use super::TRUST_DIGESTS_TABLE;
 use super::TRUST_EXPUNGED_TABLE;
 use super::TRUST_MEMBERS_TABLE;
 use super::TRUST_NONCE_COUNTER_TABLE;
+use super::TRUST_REENCRYPTION_PROGRESS_TABLE;
 use super::TRUST_SHARES_TABLE;
 
 impl SharedRedbStorage {
@@ -296,6 +298,43 @@ impl SharedRedbStorage {
         let table = read_txn.open_table(TRUST_NONCE_COUNTER_TABLE).context(OpenTableSnafu)?;
         let entry = table.get(node_id).context(GetSnafu)?;
         Ok(entry.map(|v| v.value()))
+    }
+
+    /// Save re-encryption checkpoint progress for a table prefix.
+    pub fn save_reencryption_checkpoint(&self, table_name: &str, last_key: &str) -> Result<(), SharedStorageError> {
+        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        {
+            let mut table = write_txn.open_table(TRUST_REENCRYPTION_PROGRESS_TABLE).context(OpenTableSnafu)?;
+            table.insert(table_name, last_key.as_bytes()).context(super::InsertSnafu)?;
+        }
+        write_txn.commit().context(CommitSnafu)?;
+        Ok(())
+    }
+
+    /// Load re-encryption checkpoint progress for a table prefix.
+    pub fn load_reencryption_checkpoint(&self, table_name: &str) -> Result<Option<String>, SharedStorageError> {
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(TRUST_REENCRYPTION_PROGRESS_TABLE).context(OpenTableSnafu)?;
+        let entry = table.get(table_name).context(GetSnafu)?;
+        entry
+            .map(|value| {
+                let bytes: &[u8] = value.value();
+                String::from_utf8(bytes.to_vec()).map_err(|error| SharedStorageError::Internal {
+                    reason: format!("invalid reencryption checkpoint UTF-8: {error}"),
+                })
+            })
+            .transpose()
+    }
+
+    /// Clear re-encryption checkpoint progress for a table prefix.
+    pub fn clear_reencryption_checkpoint(&self, table_name: &str) -> Result<(), SharedStorageError> {
+        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+        {
+            let mut table = write_txn.open_table(TRUST_REENCRYPTION_PROGRESS_TABLE).context(OpenTableSnafu)?;
+            table.remove(table_name).context(RemoveSnafu)?;
+        }
+        write_txn.commit().context(CommitSnafu)?;
+        Ok(())
     }
 
     /// Load all digests for the given epoch.

@@ -116,6 +116,16 @@ impl SecretsEncryption {
         self.keys.insert(epoch, key);
     }
 
+    /// Copy all known epoch keys from an earlier context.
+    ///
+    /// Used during epoch rotation so the new context can still decrypt
+    /// old-epoch values until background re-encryption completes.
+    pub fn copy_epoch_keys_from(&mut self, other: &Self) {
+        for (epoch, key) in &other.keys {
+            self.keys.entry(*epoch).or_insert(*key);
+        }
+    }
+
     /// Remove a prior epoch's key (after re-encryption completes).
     ///
     /// Zeroizes the key material before removal.

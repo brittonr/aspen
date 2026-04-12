@@ -11,6 +11,7 @@
 //! The `KeyManager` is the bridge between the trust protocol layer (share
 //! collection) and the secrets engine (encryption/decryption).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -18,6 +19,7 @@ use tokio::sync::RwLock;
 
 use crate::encryption::SecretsEncryption;
 use crate::encryption::SecretsUnavailableError;
+use crate::kdf;
 use crate::shamir;
 
 /// Callback trait for share collection from peers.
@@ -168,43 +170,48 @@ impl KeyManager {
     ///
     /// Returns the updated encryption context.
     pub async fn rotate_epoch(&self, new_secret: &[u8; 32], new_epoch: u64) -> Arc<SecretsEncryption> {
+        self.rotate_epoch_with_prior_secrets(new_secret, new_epoch, &BTreeMap::new()).await
+    }
+
+    /// Rotate to a new epoch and seed keys for prior epochs recovered from the chain.
+    pub async fn rotate_epoch_with_prior_secrets(
+        &self,
+        new_secret: &[u8; 32],
+        new_epoch: u64,
+        prior_secrets: &BTreeMap<u64, [u8; 32]>,
+    ) -> Arc<SecretsEncryption> {
         let mut guard: tokio::sync::RwLockWriteGuard<'_, Option<Arc<SecretsEncryption>>> =
             self.encryption.write().await;
 
-        match guard.as_ref() {
-            Some(existing) => {
-                // Create a new context from the new secret at the new epoch.
-                // The nonce counter continues from where the existing context left off.
-                let new_enc = SecretsEncryption::new(
-                    new_secret,
-                    &self.config.cluster_id,
-                    new_epoch,
-                    self.config.node_id,
-                    existing.nonce_counter(),
-                );
-                let result = Arc::new(new_enc);
-                *guard = Some(Arc::clone(&result));
-                result
-            }
-            None => {
-                // First initialization via rotation (leader path).
-                let enc = SecretsEncryption::new(
-                    new_secret,
-                    &self.config.cluster_id,
-                    new_epoch,
-                    self.config.node_id,
-                    self.config.initial_nonce_counter,
-                );
-                let result = Arc::new(enc);
-                *guard = Some(Arc::clone(&result));
+        let initial_counter =
+            guard.as_ref().map(|existing| existing.nonce_counter()).unwrap_or(self.config.initial_nonce_counter);
+        let mut new_enc = SecretsEncryption::new(
+            new_secret,
+            &self.config.cluster_id,
+            new_epoch,
+            self.config.node_id,
+            initial_counter,
+        );
 
-                // Mark as initialized
-                let mut attempted = self.reconstruction_attempted.write().await;
-                *attempted = true;
-
-                result
-            }
+        if let Some(existing) = guard.as_ref() {
+            new_enc.copy_epoch_keys_from(existing.as_ref());
         }
+
+        for (epoch, secret) in prior_secrets {
+            if *epoch == new_epoch {
+                continue;
+            }
+            let key = kdf::derive_key(secret, kdf::CONTEXT_SECRETS_AT_REST, &self.config.cluster_id, *epoch);
+            new_enc.add_epoch_key(*epoch, key);
+        }
+
+        let result = Arc::new(new_enc);
+        *guard = Some(Arc::clone(&result));
+
+        let mut attempted = self.reconstruction_attempted.write().await;
+        *attempted = true;
+
+        result
     }
 
     /// Allow retry of reconstruction (e.g., after more nodes come online).
@@ -254,7 +261,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lazy_reconstruction_success() {
-        let (secret, shares) = make_shares();
+        let (_secret, shares) = make_shares();
         let collector = MockCollector {
             shares: shares[..2].to_vec(),
         };
@@ -345,9 +352,14 @@ mod tests {
         };
         let km = KeyManager::with_secret(config, &secret);
 
+        let old_enc = km.get_if_initialized().await.unwrap();
+        let (old_ciphertext, _) = old_enc.wrap_write(b"legacy-secret").unwrap();
+
         let new_secret = [0xCDu8; 32];
         let new_enc = km.rotate_epoch(&new_secret, 2).await;
         assert_eq!(new_enc.epoch(), 2);
+        assert_eq!(new_enc.epoch_key_count(), 2);
+        assert_eq!(new_enc.unwrap_read(&old_ciphertext).unwrap(), b"legacy-secret");
     }
 
     #[tokio::test]

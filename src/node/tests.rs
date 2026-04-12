@@ -247,6 +247,115 @@ async fn test_nodebuilder_start_creates_node() {
     assert!(node.shutdown().await.is_ok());
 }
 
+#[cfg(all(
+    feature = "trust",
+    feature = "secrets",
+    feature = "jobs",
+    feature = "docs",
+    feature = "hooks",
+    feature = "federation"
+))]
+#[tokio::test]
+async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust() {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use tokio::sync::RwLock;
+
+    struct InMemoryKvStore {
+        data: Arc<RwLock<HashMap<String, String>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl aspen_core::KeyValueStore for InMemoryKvStore {
+        async fn read(
+            &self,
+            request: aspen_core::ReadRequest,
+        ) -> std::result::Result<aspen_core::ReadResult, aspen_core::KeyValueStoreError> {
+            let data = self.data.read().await;
+            let kv = data.get(&request.key).map(|value| aspen_core::KeyValueWithRevision {
+                key: request.key,
+                value: value.clone(),
+                version: 1,
+                create_revision: 1,
+                mod_revision: 1,
+            });
+            Ok(aspen_core::ReadResult { kv })
+        }
+
+        async fn write(
+            &self,
+            request: aspen_core::WriteRequest,
+        ) -> std::result::Result<aspen_core::WriteResult, aspen_core::KeyValueStoreError> {
+            if let aspen_core::WriteCommand::Set { key, value } = &request.command {
+                self.data.write().await.insert(key.clone(), value.clone());
+            }
+            Ok(aspen_core::WriteResult {
+                command: Some(request.command),
+                batch_applied: None,
+                conditions_met: None,
+                failed_condition_index: None,
+                lease_id: None,
+                ttl_seconds: None,
+                keys_deleted: None,
+                succeeded: Some(true),
+                txn_results: None,
+                header_revision: None,
+                occ_conflict: None,
+                conflict_key: None,
+                conflict_expected_version: None,
+                conflict_actual_version: None,
+            })
+        }
+
+        async fn delete(
+            &self,
+            request: aspen_core::DeleteRequest,
+        ) -> std::result::Result<aspen_core::DeleteResult, aspen_core::KeyValueStoreError> {
+            let existed = self.data.write().await.remove(&request.key).is_some();
+            Ok(aspen_core::DeleteResult {
+                key: request.key,
+                is_deleted: existed,
+            })
+        }
+
+        async fn scan(
+            &self,
+            request: aspen_core::ScanRequest,
+        ) -> std::result::Result<aspen_core::ScanResult, aspen_core::KeyValueStoreError> {
+            let data = self.data.read().await;
+            let entries = data
+                .iter()
+                .filter(|(key, _)| key.starts_with(&request.prefix))
+                .map(|(key, value)| aspen_core::KeyValueWithRevision {
+                    key: key.clone(),
+                    value: value.clone(),
+                    version: 1,
+                    create_revision: 1,
+                    mod_revision: 1,
+                })
+                .collect::<Vec<_>>();
+            Ok(aspen_core::ScanResult {
+                result_count: entries.len() as u32,
+                entries,
+                is_truncated: false,
+                continuation_token: None,
+            })
+        }
+    }
+
+    let kv = Arc::new(InMemoryKvStore {
+        data: Arc::new(RwLock::new(HashMap::new())),
+    });
+    let mount_registry = Arc::new(aspen_secrets::MountRegistry::new(kv));
+
+    let secrets_service = Node::finish_secrets_service_setup(mount_registry, Ok(None));
+    assert!(
+        secrets_service.is_some(),
+        "secrets service should stay available when trust feature is compiled but runtime trust is not configured"
+    );
+}
+
 #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 #[tokio::test]
 async fn test_nodebuilder_node_handle_accessors() {

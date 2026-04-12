@@ -466,6 +466,41 @@ impl Node {
         self.federation_resource_settings.as_ref()
     }
 
+    #[cfg(feature = "secrets")]
+    fn finish_secrets_service_setup(
+        mount_registry: Arc<aspen_secrets::MountRegistry>,
+        provider: Result<Option<Arc<dyn aspen_secrets::SecretsEncryptionProvider>>, String>,
+    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+        #[cfg(feature = "trust")]
+        {
+            match provider {
+                Ok(Some(provider)) => {
+                    mount_registry.set_encryption_provider(provider);
+                    tracing::info!("Secrets service initialized with trust-aware secrets-at-rest support");
+                    Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
+                }
+                Ok(None) => {
+                    tracing::info!("Secrets service initialized without trust-aware secrets-at-rest provider");
+                    Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
+                }
+                Err(error) => {
+                    tracing::error!(
+                        error,
+                        "failed to initialize trust-aware secrets-at-rest provider; disabling secrets service"
+                    );
+                    None
+                }
+            }
+        }
+
+        #[cfg(not(feature = "trust"))]
+        {
+            let _ = provider;
+            tracing::info!("Secrets service initialized with multi-mount support");
+            Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
+        }
+    }
+
     /// Create a ClientProtocolContext for the Client RPC handler.
     ///
     /// This context provides all the dependencies needed by the Client RPC handlers.
@@ -486,8 +521,21 @@ impl Node {
             let mount_registry =
                 Arc::new(aspen_secrets::MountRegistry::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>));
 
-            tracing::info!("Secrets service initialized with multi-mount support");
-            Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
+            #[cfg(feature = "trust")]
+            let provider = if aspen_raft::secrets_at_rest::has_runtime_trust_configuration(raft_node.as_ref()) {
+                aspen_raft::secrets_at_rest::build_trust_aware_secrets_provider(
+                    raft_node.clone(),
+                    raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
+                )
+                .map(Some)
+            } else {
+                Ok(None)
+            };
+
+            #[cfg(not(feature = "trust"))]
+            let provider: Result<Option<Arc<dyn aspen_secrets::SecretsEncryptionProvider>>, String> = Ok(None);
+
+            Self::finish_secrets_service_setup(mount_registry, provider)
         };
 
         ClientProtocolContext {

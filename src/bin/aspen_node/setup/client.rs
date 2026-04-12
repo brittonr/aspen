@@ -109,6 +109,24 @@ pub async fn setup_client_protocol(
         let mount_registry =
             Arc::new(aspen_secrets::MountRegistry::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>));
 
+        #[cfg(feature = "trust")]
+        {
+            if aspen_raft::secrets_at_rest::has_runtime_trust_configuration(primary_raft_node.as_ref()) {
+                let provider = aspen_raft::secrets_at_rest::build_trust_aware_secrets_provider(
+                    primary_raft_node.clone(),
+                    kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>,
+                )
+                .map_err(|error| {
+                    anyhow::anyhow!("failed to initialize trust-aware secrets-at-rest provider: {error}")
+                })?;
+                mount_registry.set_encryption_provider(provider);
+                info!("Secrets service initialized with trust-aware secrets-at-rest support");
+            } else {
+                info!("Secrets service initialized without trust-aware secrets-at-rest provider");
+            }
+        }
+
+        #[cfg(not(feature = "trust"))]
         info!("Secrets service initialized with multi-mount support");
         Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
     };
