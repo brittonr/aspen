@@ -869,8 +869,15 @@ proptest! {
 
         rt.block_on(async {
             let store = DeterministicKeyValueStore::new();
-            // High refill rate doesn't matter — we're testing burst within one instant
-            let config = RateLimiterConfig::new(1000.0, capacity);
+            // No refill: this property models a single burst with no time advance.
+            // Using a positive refill rate here makes the test depend on wall-clock
+            // scheduling between awaits, which can make the real limiter drift away
+            // from the zero-time model and fail nondeterministically.
+            let config = RateLimiterConfig {
+                capacity_tokens: capacity,
+                refill_rate: 0.0,
+                initial_tokens: Some(capacity),
+            };
             let limiter = DistributedRateLimiter::new(store, "test-limiter", config);
             let mut model = RateLimiterModel::new(capacity);
 

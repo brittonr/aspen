@@ -40,6 +40,26 @@ pub use messages::*;
 mod tests {
     use super::*;
 
+    fn decode_varint(bytes: &[u8]) -> u32 {
+        let mut result = 0u32;
+        let mut shift = 0u32;
+
+        for &byte in bytes {
+            result |= u32::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return result;
+            }
+            shift += 7;
+        }
+
+        panic!("unterminated postcard discriminant varint");
+    }
+
+    fn discriminant_of<T: serde::Serialize>(value: &T) -> u32 {
+        let bytes = postcard::to_stdvec(value).expect("serialize discriminant");
+        decode_varint(&bytes)
+    }
+
     // =========================================================================
     // Postcard wire-format stability tests
     //
@@ -180,7 +200,7 @@ mod tests {
         });
         let first_bytes = postcard::to_stdvec(&first).expect("first serialize");
         // The first variant's postcard discriminant should be 0
-        assert_eq!(first_bytes[0], 0, "Health must be discriminant 0");
+        assert_eq!(discriminant_of(&first), 0, "Health must be discriminant 0");
 
         let decoded: ClientRpcResponse = postcard::from_bytes(&first_bytes).expect("first deserialize");
         assert!(matches!(decoded, ClientRpcResponse::Health(_)));
@@ -217,7 +237,7 @@ mod tests {
         // Error is variant index 14 (0-indexed) — if this changes, the
         // CLI's retry loop may break because it deserializes the wrong type.
         // Update this value if you intentionally reorder variants BEFORE Error.
-        let discriminant = bytes[0];
+        let discriminant = discriminant_of(&err);
 
         let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
         match decoded {
@@ -246,15 +266,9 @@ mod tests {
     /// is a single byte equal to the index. For indices >= 128 it's multi-byte.
     #[test]
     fn test_response_discriminant_golden_table() {
-        // Helper: serialize a response and extract its postcard discriminant
-        fn discriminant_of(resp: &ClientRpcResponse) -> u8 {
-            let bytes = postcard::to_stdvec(resp).expect("serialize");
-            bytes[0]
-        }
-
         // Critical variants with pinned discriminants.
         // Format: (variant, expected discriminant, name for error message)
-        let golden: Vec<(ClientRpcResponse, u8, &str)> = vec![
+        let golden: Vec<(ClientRpcResponse, u32, &str)> = vec![
             (
                 ClientRpcResponse::Health(HealthResponse {
                     status: "ok".into(),
@@ -288,11 +302,6 @@ mod tests {
     /// (after CalendarExportResult, before CapabilityUnavailable).
     #[test]
     fn test_deploy_response_discriminant_golden_table() {
-        fn discriminant_of(resp: &ClientRpcResponse) -> u8 {
-            let bytes = postcard::to_stdvec(resp).expect("serialize");
-            bytes[0]
-        }
-
         let deploy_result = ClientRpcResponse::ClusterDeployResult(ClusterDeployResultResponse {
             is_accepted: true,
             deploy_id: Some("d1".into()),
@@ -348,7 +357,7 @@ mod tests {
         }
 
         // Verify deploy variants are consecutive (no gaps)
-        let discs: Vec<u8> = deploy_variants.iter().map(|(v, _)| discriminant_of(v)).collect();
+        let discs: Vec<u32> = deploy_variants.iter().map(|(v, _)| discriminant_of(v)).collect();
         for window in discs.windows(2) {
             assert_eq!(window[1], window[0] + 1, "Deploy response variants must be consecutive");
         }
@@ -364,11 +373,6 @@ mod tests {
     /// Pin the postcard discriminant of deploy request variants.
     #[test]
     fn test_deploy_request_discriminant_golden_table() {
-        fn discriminant_of(req: &ClientRpcRequest) -> u8 {
-            let bytes = postcard::to_stdvec(req).expect("serialize");
-            bytes[0]
-        }
-
         let deploy_requests: Vec<(ClientRpcRequest, &str)> = vec![
             (
                 ClientRpcRequest::ClusterDeploy {
@@ -411,7 +415,7 @@ mod tests {
         }
 
         // Verify deploy requests are consecutive
-        let discs: Vec<u8> = deploy_requests.iter().map(|(r, _)| discriminant_of(r)).collect();
+        let discs: Vec<u32> = deploy_requests.iter().map(|(r, _)| discriminant_of(r)).collect();
         for window in discs.windows(2) {
             assert_eq!(window[1], window[0] + 1, "Deploy request variants must be consecutive");
         }
@@ -529,21 +533,16 @@ mod tests {
     /// Pin the postcard discriminant of critical request variants.
     #[test]
     fn test_request_discriminant_golden_table() {
-        fn discriminant_of(req: &ClientRpcRequest) -> u8 {
-            let bytes = postcard::to_stdvec(req).expect("serialize");
-            bytes[0]
-        }
-
-        let golden: Vec<(ClientRpcRequest, u8, &str)> = vec![
+        let golden: Vec<(ClientRpcRequest, u32, &str)> = vec![
             (ClientRpcRequest::GetHealth, 0, "GetHealth"),
-            (ClientRpcRequest::Ping, 13, "Ping"),
-            (ClientRpcRequest::ReadKey { key: String::new() }, 6, "ReadKey"),
+            (ClientRpcRequest::Ping, 14, "Ping"),
+            (ClientRpcRequest::ReadKey { key: String::new() }, 7, "ReadKey"),
             (
                 ClientRpcRequest::WriteKey {
                     key: String::new(),
                     value: vec![],
                 },
-                7,
+                8,
                 "WriteKey",
             ),
         ];
@@ -579,22 +578,22 @@ mod tests {
             error: None,
             message: String::new(),
         });
-        let plugin_bytes = postcard::to_stdvec(&plugin).expect("serialize plugin");
+        let plugin_discriminant = discriminant_of(&plugin);
 
         let automerge = ClientRpcResponse::AutomergeCreateResult(automerge::AutomergeCreateResultResponse {
             is_success: true,
             document_id: None,
             error: None,
         });
-        let automerge_bytes = postcard::to_stdvec(&automerge).expect("serialize automerge");
+        let automerge_discriminant = discriminant_of(&automerge);
 
         assert!(
-            plugin_bytes[0] < automerge_bytes[0],
+            plugin_discriminant < automerge_discriminant,
             "PluginReloadResult (discriminant {}) must appear BEFORE \
              AutomergeCreateResult (discriminant {}). Non-gated variants \
              must not be placed after feature-gated variants.",
-            plugin_bytes[0],
-            automerge_bytes[0],
+            plugin_discriminant,
+            automerge_discriminant,
         );
     }
 
@@ -608,22 +607,22 @@ mod tests {
             status: None,
             error: None,
         });
-        let ci_bytes = postcard::to_stdvec(&ci_variant).expect("serialize ci");
+        let ci_discriminant = discriminant_of(&ci_variant);
 
         let am_variant = ClientRpcResponse::AutomergeCreateResult(automerge::AutomergeCreateResultResponse {
             is_success: true,
             document_id: None,
             error: None,
         });
-        let am_bytes = postcard::to_stdvec(&am_variant).expect("serialize automerge");
+        let am_discriminant = discriminant_of(&am_variant);
 
         // CI-gated variants must all have lower discriminants than automerge-gated
         assert!(
-            ci_bytes[0] < am_bytes[0],
+            ci_discriminant < am_discriminant,
             "CI gated variants (discriminant {}) must precede automerge \
              gated variants (discriminant {})",
-            ci_bytes[0],
-            am_bytes[0],
+            ci_discriminant,
+            am_discriminant,
         );
     }
 
