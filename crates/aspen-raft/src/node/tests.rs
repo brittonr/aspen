@@ -165,8 +165,22 @@ struct TestTrustShareClient {
 
 #[cfg(feature = "trust")]
 #[derive(Clone)]
-struct ExpungedTrustShareClient {
-    epoch: u64,
+enum ScriptedProbeResponse {
+    Share(Arc<SharedRedbStorage>),
+    Expunged {
+        epoch: u64,
+    },
+    BlockingExpunged {
+        epoch: u64,
+        started: Arc<Notify>,
+        release: Arc<Notify>,
+    },
+}
+
+#[cfg(feature = "trust")]
+#[derive(Clone)]
+struct ScriptedProbeTrustShareClient {
+    responses_by_endpoint: BTreeMap<String, ScriptedProbeResponse>,
 }
 
 #[cfg(feature = "trust")]
@@ -276,13 +290,37 @@ impl crate::trust_share_client::TrustShareClient for TestTrustShareClient {
 
 #[cfg(feature = "trust")]
 #[async_trait]
-impl crate::trust_share_client::TrustShareClient for ExpungedTrustShareClient {
+impl crate::trust_share_client::TrustShareClient for ScriptedProbeTrustShareClient {
     async fn get_share(
         &self,
-        _target: EndpointAddr,
-        _epoch: u64,
+        target: EndpointAddr,
+        epoch: u64,
     ) -> anyhow::Result<aspen_trust::protocol::ShareResponse> {
-        Err(crate::trust_share_client::ExpungedByPeer { epoch: self.epoch }.into())
+        let key = target.id.to_string();
+        let response = self
+            .responses_by_endpoint
+            .get(&key)
+            .ok_or_else(|| anyhow::anyhow!("missing scripted probe response for endpoint {}", target.id))?;
+
+        match response {
+            ScriptedProbeResponse::Share(storage) => {
+                let share =
+                    storage.load_share(epoch)?.ok_or_else(|| anyhow::anyhow!("missing share for epoch {epoch}"))?;
+                Ok(aspen_trust::protocol::ShareResponse { epoch, share })
+            }
+            ScriptedProbeResponse::Expunged { epoch } => {
+                Err(crate::trust_share_client::ExpungedByPeer { epoch: *epoch }.into())
+            }
+            ScriptedProbeResponse::BlockingExpunged {
+                epoch: expunged_epoch,
+                started,
+                release,
+            } => {
+                started.notify_waiters();
+                release.notified().await;
+                Err(crate::trust_share_client::ExpungedByPeer { epoch: *expunged_epoch }.into())
+            }
+        }
     }
 
     async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
@@ -1317,10 +1355,10 @@ async fn test_trust_reconfiguration_restarts_after_leader_crash_during_share_col
 
 #[cfg(feature = "trust")]
 #[tokio::test]
-async fn test_spawn_trust_peer_probe_marks_removed_node() {
+async fn test_startup_trust_peer_probe_persists_expungement_before_returning() {
     let router = Arc::new(MadsimRaftRouter::new());
     let failure_injector = Arc::new(FailureInjector::new());
-    let cluster_name = "peer-expungement-probe";
+    let cluster_name = "peer-expungement-probe-blocking";
     let cluster_id = cluster_name.as_bytes().to_vec();
 
     let mut node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
@@ -1328,13 +1366,22 @@ async fn test_spawn_trust_peer_probe_marks_removed_node() {
 
     let endpoint1 = endpoint_addr_for_node(1);
     let endpoint2 = endpoint_addr_for_node(2);
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
     let immediate_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
         Arc::new(TestTrustShareClient::immediate(BTreeMap::new()));
-    let expunged_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
-        Arc::new(ExpungedTrustShareClient { epoch: 7 });
+    let mut responses = BTreeMap::new();
+    responses.insert(endpoint1.id.to_string(), ScriptedProbeResponse::BlockingExpunged {
+        epoch: 7,
+        started: started.clone(),
+        release: release.clone(),
+    });
+    let probe_client: Arc<dyn crate::trust_share_client::TrustShareClient> = Arc::new(ScriptedProbeTrustShareClient {
+        responses_by_endpoint: responses,
+    });
 
     Arc::get_mut(&mut node1.node).unwrap().set_trust_share_client(immediate_client, cluster_id.clone());
-    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(expunged_client, cluster_id);
+    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(probe_client, cluster_id);
 
     ClusterController::init(&node1.node, InitRequest {
         initial_members: vec![
@@ -1360,24 +1407,153 @@ async fn test_spawn_trust_peer_probe_marks_removed_node() {
     .await
     .expect("both nodes should persist epoch 1 trust state");
 
-    let cancel = crate::trust_peer_probe::spawn_trust_peer_probe(node2.node.clone());
-    tokio::time::timeout(Duration::from_secs(10), async {
-        loop {
-            if node2.storage.is_expunged().unwrap() {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    })
-    .await
-    .expect("startup probe should mark removed node as expunged");
-    cancel.cancel();
+    let probe_task = tokio::spawn(crate::trust_peer_probe::ensure_startup_trust_peer_probe(node2.node.clone()));
+    tokio::time::timeout(Duration::from_secs(2), started.notified())
+        .await
+        .expect("startup probe should begin peer request before returning");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(!probe_task.is_finished(), "startup probe returned before peer processed expungement");
+    assert!(
+        !node2.storage.is_expunged().unwrap(),
+        "expungement marker should not exist before peer reply completes"
+    );
+
+    release.notify_waiters();
+    let probe_error = probe_task
+        .await
+        .expect("probe task should join")
+        .expect_err("startup probe should fail closed once peer expunges node");
+    assert!(probe_error.contains("expunged"));
 
     let metadata = node2.storage.load_expunged().unwrap().expect("expunged metadata should be stored");
     assert_eq!(metadata.epoch, 7);
     assert_eq!(metadata.removed_by, 1);
     assert!(node2.storage.is_expunged().unwrap());
     assert!(node2.storage.load_share(1).unwrap().is_none());
+}
+
+#[cfg(feature = "trust")]
+#[tokio::test]
+async fn test_probe_for_peer_expungement_requires_peer_quorum_before_healthy() {
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+    let cluster_name = "peer-expungement-probe-quorum";
+    let cluster_id = cluster_name.as_bytes().to_vec();
+
+    let mut node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node3 = create_test_redb_node(3, router.clone(), failure_injector, cluster_name).await;
+
+    let endpoint1 = endpoint_addr_for_node(1);
+    let endpoint2 = endpoint_addr_for_node(2);
+    let endpoint3 = endpoint_addr_for_node(3);
+    let immediate_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
+        Arc::new(TestTrustShareClient::immediate(BTreeMap::new()));
+    let mut responses = BTreeMap::new();
+    responses.insert(endpoint1.id.to_string(), ScriptedProbeResponse::Share(node1.storage.clone()));
+    let probe_client: Arc<dyn crate::trust_share_client::TrustShareClient> = Arc::new(ScriptedProbeTrustShareClient {
+        responses_by_endpoint: responses,
+    });
+
+    Arc::get_mut(&mut node1.node)
+        .unwrap()
+        .set_trust_share_client(immediate_client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(probe_client, cluster_id.clone());
+    Arc::get_mut(&mut node3.node).unwrap().set_trust_share_client(immediate_client, cluster_id);
+
+    ClusterController::init(&node1.node, InitRequest {
+        initial_members: vec![
+            cluster_node_with_endpoint(1, endpoint1),
+            cluster_node_with_endpoint(2, endpoint2),
+            cluster_node_with_endpoint(3, endpoint3),
+        ],
+        trust: aspen_cluster_types::TrustConfig::enabled(),
+    })
+    .await
+    .expect("init trust cluster");
+    wait_for_leader(&node1.node, 1, Duration::from_secs(10)).await;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let ready = [node1.storage.as_ref(), node2.storage.as_ref(), node3.storage.as_ref()]
+                .iter()
+                .all(|storage| storage.load_share(1).unwrap().is_some() && storage.load_digests(1).unwrap().len() == 3);
+            if ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("all nodes should persist epoch 1 trust state");
+
+    let outcome = node2.node.probe_for_peer_expungement().await.expect("probe should complete");
+    assert_eq!(outcome, super::PeerExpungementProbeOutcome::RetryNeeded);
+    assert!(!node2.storage.is_expunged().unwrap());
+}
+
+#[cfg(feature = "trust")]
+#[tokio::test]
+async fn test_probe_for_peer_expungement_prefers_expunged_peer_over_earlier_share() {
+    let router = Arc::new(MadsimRaftRouter::new());
+    let failure_injector = Arc::new(FailureInjector::new());
+    let cluster_name = "peer-expungement-probe-precedence";
+    let cluster_id = cluster_name.as_bytes().to_vec();
+
+    let mut node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
+    let mut node3 = create_test_redb_node(3, router.clone(), failure_injector, cluster_name).await;
+
+    let endpoint1 = endpoint_addr_for_node(1);
+    let endpoint2 = endpoint_addr_for_node(2);
+    let endpoint3 = endpoint_addr_for_node(3);
+    let immediate_client: Arc<dyn crate::trust_share_client::TrustShareClient> =
+        Arc::new(TestTrustShareClient::immediate(BTreeMap::new()));
+    let mut responses = BTreeMap::new();
+    responses.insert(endpoint1.id.to_string(), ScriptedProbeResponse::Share(node1.storage.clone()));
+    responses.insert(endpoint3.id.to_string(), ScriptedProbeResponse::Expunged { epoch: 9 });
+    let probe_client: Arc<dyn crate::trust_share_client::TrustShareClient> = Arc::new(ScriptedProbeTrustShareClient {
+        responses_by_endpoint: responses,
+    });
+
+    Arc::get_mut(&mut node1.node)
+        .unwrap()
+        .set_trust_share_client(immediate_client.clone(), cluster_id.clone());
+    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(probe_client, cluster_id.clone());
+    Arc::get_mut(&mut node3.node).unwrap().set_trust_share_client(immediate_client, cluster_id);
+
+    ClusterController::init(&node1.node, InitRequest {
+        initial_members: vec![
+            cluster_node_with_endpoint(1, endpoint1),
+            cluster_node_with_endpoint(2, endpoint2),
+            cluster_node_with_endpoint(3, endpoint3),
+        ],
+        trust: aspen_cluster_types::TrustConfig::enabled(),
+    })
+    .await
+    .expect("init trust cluster");
+    wait_for_leader(&node1.node, 1, Duration::from_secs(10)).await;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let ready = [node1.storage.as_ref(), node2.storage.as_ref(), node3.storage.as_ref()]
+                .iter()
+                .all(|storage| storage.load_share(1).unwrap().is_some() && storage.load_digests(1).unwrap().len() == 3);
+            if ready {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("all nodes should persist epoch 1 trust state");
+
+    let outcome = node2.node.probe_for_peer_expungement().await.expect("probe should complete");
+    match outcome {
+        super::PeerExpungementProbeOutcome::Expunged { epoch } => assert_eq!(epoch, 9),
+        other => panic!("expected expunged outcome, got {other:?}"),
+    }
+    let metadata = node2.storage.load_expunged().unwrap().expect("expunged metadata should be stored");
+    assert_eq!(metadata.epoch, 9);
+    assert_eq!(metadata.removed_by, 3);
 }
 
 /// Test ensure_initialized returns error before init.

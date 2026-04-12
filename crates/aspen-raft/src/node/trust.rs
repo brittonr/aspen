@@ -64,6 +64,7 @@ struct ShareCollectionPlan {
     timeout: Duration,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PeerExpungementProbeOutcome {
     NotApplicable,
     Healthy,
@@ -374,12 +375,27 @@ impl RaftNode {
             return Ok(PeerExpungementProbeOutcome::NotApplicable);
         }
 
+        let expected_digests = storage.load_digests(current_epoch).map_err(|e| e.to_string())?;
+        let threshold_override = storage.load_trust_threshold_override().map_err(|e| e.to_string())?;
+        let local_member_count = peers.len().saturating_add(1);
+        let threshold = resolve_trust_threshold(local_member_count, threshold_override)?.value();
+        let required_peer_confirmations = usize::min(peers.len(), usize::from(threshold));
+        let mut confirmed_peer_count = 0usize;
         let mut saw_retryable_error = false;
+
         for (node_id, endpoint) in peers {
             match client.get_share(endpoint, current_epoch).await {
-                Ok(_share) => {
-                    info!(node_id, epoch = current_epoch, "peer expungement probe confirmed local membership");
-                    return Ok(PeerExpungementProbeOutcome::Healthy);
+                Ok(response) => {
+                    if validate_share_response(node_id, current_epoch, response, &expected_digests).is_some() {
+                        confirmed_peer_count = confirmed_peer_count.saturating_add(1);
+                        continue;
+                    }
+                    saw_retryable_error = true;
+                    warn!(
+                        node_id,
+                        epoch = current_epoch,
+                        "peer expungement probe rejected non-authoritative share response"
+                    );
                 }
                 Err(error) => {
                     if let Some(expunged) = error.downcast_ref::<ExpungedByPeer>() {
@@ -392,11 +408,15 @@ impl RaftNode {
             }
         }
 
-        if saw_retryable_error {
-            Ok(PeerExpungementProbeOutcome::RetryNeeded)
-        } else {
-            Ok(PeerExpungementProbeOutcome::NotApplicable)
+        if confirmed_peer_count >= required_peer_confirmations && !saw_retryable_error {
+            info!(
+                epoch = current_epoch,
+                confirmed_peer_count, required_peer_confirmations, "peer expungement probe confirmed local membership"
+            );
+            return Ok(PeerExpungementProbeOutcome::Healthy);
         }
+
+        Ok(PeerExpungementProbeOutcome::RetryNeeded)
     }
 
     pub(crate) async fn rotate_trust_after_membership_change(

@@ -554,7 +554,7 @@ async fn init_consensus(
     // Write batching provides ~10x throughput improvement at ~2ms added latency.
     // Write forwarding is set up before Arc wrapping so follower nodes can
     // transparently forward writes to the leader after elections.
-    let raft_node = create_raft_node(config, raft, state_machine_variant, iroh_manager);
+    let raft_node = create_raft_node(config, raft, state_machine_variant, iroh_manager).await?;
 
     let supervisor = Supervisor::new(format!("raft-node-{}", config.node_id));
     let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
@@ -572,55 +572,59 @@ async fn init_consensus(
 
 #[cfg(all(test, feature = "trust"))]
 #[derive(Default)]
-struct TrustPeerProbeSpawnObserver {
-    notify: Option<Arc<tokio::sync::Notify>>,
-    cancel: Option<CancellationToken>,
+struct TrustPeerProbeGateObserver {
+    entered: Option<Arc<tokio::sync::Notify>>,
+    release: Option<Arc<tokio::sync::Notify>>,
 }
 
 #[cfg(all(test, feature = "trust"))]
-fn trust_peer_probe_spawn_observer() -> &'static std::sync::Mutex<TrustPeerProbeSpawnObserver> {
-    static OBSERVER: std::sync::OnceLock<std::sync::Mutex<TrustPeerProbeSpawnObserver>> = std::sync::OnceLock::new();
-    OBSERVER.get_or_init(|| std::sync::Mutex::new(TrustPeerProbeSpawnObserver::default()))
+fn trust_peer_probe_gate_observer() -> &'static std::sync::Mutex<TrustPeerProbeGateObserver> {
+    static OBSERVER: std::sync::OnceLock<std::sync::Mutex<TrustPeerProbeGateObserver>> = std::sync::OnceLock::new();
+    OBSERVER.get_or_init(|| std::sync::Mutex::new(TrustPeerProbeGateObserver::default()))
 }
 
 #[cfg(all(test, feature = "trust"))]
-fn set_test_trust_peer_probe_spawn_notify(notify: Arc<tokio::sync::Notify>) {
-    let mut observer = trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned");
-    observer.notify = Some(notify);
-    observer.cancel = None;
+fn set_test_trust_peer_probe_gate(entered: Arc<tokio::sync::Notify>, release: Arc<tokio::sync::Notify>) {
+    let mut observer = trust_peer_probe_gate_observer().lock().expect("trust peer probe gate observer poisoned");
+    observer.entered = Some(entered);
+    observer.release = Some(release);
 }
 
 #[cfg(all(test, feature = "trust"))]
-fn record_test_trust_peer_probe_spawn(cancel: CancellationToken) {
-    let notify = {
-        let mut observer = trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned");
-        observer.cancel = Some(cancel);
-        observer.notify.clone()
-    };
-    if let Some(notify) = notify {
-        notify.notify_waiters();
+fn clear_test_trust_peer_probe_gate() {
+    let mut observer = trust_peer_probe_gate_observer().lock().expect("trust peer probe gate observer poisoned");
+    observer.entered = None;
+    observer.release = None;
+}
+
+#[cfg(feature = "trust")]
+async fn await_startup_trust_peer_probe(node: Arc<RaftNode>) -> Result<()> {
+    #[cfg(all(test, feature = "trust"))]
+    {
+        let gate = {
+            let observer = trust_peer_probe_gate_observer().lock().expect("trust peer probe gate observer poisoned");
+            (observer.entered.clone(), observer.release.clone())
+        };
+        if let Some(entered) = gate.0 {
+            entered.notify_waiters();
+        }
+        if let Some(release) = gate.1 {
+            release.notified().await;
+        }
     }
-}
 
-#[cfg(all(test, feature = "trust"))]
-fn take_test_trust_peer_probe_cancel() -> Option<CancellationToken> {
-    trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned").cancel.take()
-}
-
-#[cfg(all(test, feature = "trust"))]
-fn clear_test_trust_peer_probe_spawn_observer() {
-    let mut observer = trust_peer_probe_spawn_observer().lock().expect("trust peer probe observer poisoned");
-    observer.notify = None;
-    observer.cancel = None;
+    aspen_raft::trust_peer_probe::ensure_startup_trust_peer_probe(node)
+        .await
+        .map_err(anyhow::Error::msg)
 }
 
 /// Create a `RaftNode`, optionally with write batching, and with write forwarding.
-fn create_raft_node(
+async fn create_raft_node(
     config: &NodeConfig,
     raft: Arc<openraft::Raft<aspen_raft::types::AppTypeConfig>>,
     state_machine_variant: StateMachineVariant,
     iroh_manager: &Arc<IrohEndpointManager>,
-) -> Arc<RaftNode> {
+) -> Result<Arc<RaftNode>> {
     let mut node = if let Some(batch_config) = config.batch_config.clone() {
         RaftNode::with_write_batching(config.node_id.into(), raft, state_machine_variant, batch_config.finalize())
     } else {
@@ -653,14 +657,11 @@ fn create_raft_node(
 
     #[cfg(feature = "trust")]
     {
+        await_startup_trust_peer_probe(node.clone()).await?;
         let _cancel = aspen_raft::trust_reconfig_watcher::spawn_trust_reconfig_watcher(node.clone());
-        let peer_probe_cancel = aspen_raft::trust_peer_probe::spawn_trust_peer_probe(node.clone());
-        #[cfg(all(test, feature = "trust"))]
-        record_test_trust_peer_probe_spawn(peer_probe_cancel.clone());
-        let _cancel = peer_probe_cancel;
     }
 
-    node
+    Ok(node)
 }
 
 /// Intermediate result for event broadcast channels.
@@ -962,10 +963,11 @@ mod tests {
 
     #[cfg(feature = "trust")]
     #[tokio::test]
-    async fn test_create_raft_node_spawns_trust_peer_probe_during_bootstrap() {
-        let notify = Arc::new(tokio::sync::Notify::new());
-        let spawned = notify.notified();
-        set_test_trust_peer_probe_spawn_notify(notify.clone());
+    async fn test_create_raft_node_waits_for_startup_trust_peer_probe_before_returning() {
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let entered_wait = entered.notified();
+        set_test_trust_peer_probe_gate(entered.clone(), release.clone());
 
         let temp_dir = TempDir::new().expect("temp dir");
         let key_path = temp_dir.path().join("iroh.key");
@@ -995,15 +997,24 @@ mod tests {
         config.cookie = "bootstrap-trust-peer-probe-test".to_string();
         config.batch_config = None;
 
-        let node = create_raft_node(&config, raft, StateMachineVariant::InMemory(state_machine), &iroh_manager);
+        let create_task = tokio::spawn({
+            let iroh_manager = iroh_manager.clone();
+            async move { create_raft_node(&config, raft, StateMachineVariant::InMemory(state_machine), &iroh_manager).await }
+        });
 
-        tokio::time::timeout(Duration::from_secs(2), spawned)
+        tokio::time::timeout(Duration::from_secs(2), entered_wait)
             .await
-            .expect("bootstrap path should spawn trust peer probe");
+            .expect("bootstrap path should wait on startup trust peer probe");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(!create_task.is_finished(), "create_raft_node returned before startup trust peer probe finished");
 
-        let cancel = take_test_trust_peer_probe_cancel().expect("bootstrap path should retain probe cancel token");
-        cancel.cancel();
-        clear_test_trust_peer_probe_spawn_observer();
+        release.notify_waiters();
+        let node = create_task
+            .await
+            .expect("create task should join")
+            .expect("create_raft_node should succeed once startup trust peer probe clears");
+
+        clear_test_trust_peer_probe_gate();
         node.raft().shutdown().await.expect("shutdown raft");
         iroh_manager.shutdown().await.expect("shutdown iroh manager");
     }

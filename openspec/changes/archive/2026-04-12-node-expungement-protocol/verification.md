@@ -3,21 +3,12 @@
 ## Implementation Evidence
 
 - Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/verification.md`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/archive-status.txt`
 - Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-handler-expunge-tests.txt`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-expungement-tests.txt`
 - Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-trust-share-client-test.txt`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-rpc-handlers-bootstrap-tests.txt`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-trust-expunged-tests.txt`
 - Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/bash-n-openspec-preflight.txt`
 - Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation-history.txt`
 - Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/openspec-preflight.txt`
 - Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`
-- Changed file: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test-full.log`
 
 ## Task Coverage
 
@@ -42,9 +33,9 @@
 - [x] 3.1 Add expungement check to Raft RPC handlers: reject `AppendEntries`, `RequestVote`, `InstallSnapshot` if `is_expunged()` is true
   - Evidence: `crates/aspen-transport/src/raft_authenticated.rs`, `crates/aspen-raft/src/server.rs`, `crates/aspen-raft/src/node/mod.rs`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`
 - [x] 3.2 On membership removal (via `change_membership`): if trust feature is enabled, send `Expunged(new_epoch)` to removed node via Iroh
-  - Evidence: `crates/aspen-raft/src/node/trust.rs`, `crates/aspen-raft/src/trust_share_client.rs`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-trust-share-client-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test-full.log`
+  - Evidence: `crates/aspen-raft/src/node/trust.rs`, `crates/aspen-raft/src/trust_share_client.rs`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-trust-share-client-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`
 - [x] 3.3 On node startup: check `is_expunged()` before initializing Raft — if expunged, log error and refuse to start (exit with clear message)
-  - Evidence: `crates/aspen-cluster/src/bootstrap/node/storage_init.rs`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test-full.log`
+  - Evidence: `crates/aspen-cluster/src/bootstrap/node/storage_init.rs`, `crates/aspen-cluster/src/bootstrap/node/mod.rs`, `crates/aspen-raft/src/trust_peer_probe.rs`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`
 
 - [x] 4.1 Implement secure share deletion: overwrite each share value in `trust_shares` with zeros before deleting the key
   - Evidence: `crates/aspen-raft/src/storage_shared/trust.rs`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`
@@ -69,9 +60,9 @@
 - [x] 6.3 Unit test: peer sends `Expunged` when receiving GetShare from non-member
   - Evidence: `crates/aspen-raft/src/node/trust.rs`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-trust-share-client-test.txt`
 - [x] 6.4 Integration test: 3-node cluster → expunge node 3 → verify node 3 can't rejoin → wipe data_dir → re-add as fresh member
-  - Evidence: `nix/tests/trust-expungement.nix`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test-full.log`
+  - Evidence: `nix/tests/trust-expungement.nix`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`
 - [x] 6.5 Test: expunged node that never received the message gets expunged via peer enforcement on next communication attempt
-  - Evidence: `crates/aspen-raft/src/node/trust.rs`, `crates/aspen-raft/src/trust_peer_probe.rs`, `crates/aspen-cluster/src/bootstrap/node/mod.rs`, `nix/tests/trust-expungement.nix`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test-full.log`
+  - Evidence: `crates/aspen-raft/src/node/trust.rs`, `crates/aspen-raft/src/trust_peer_probe.rs`, `crates/aspen-cluster/src/bootstrap/node/mod.rs`, `nix/tests/trust-expungement.nix`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/source-locations.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation.diff`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt`, `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`
 
 ## Review Scope Snapshot
 
@@ -92,7 +83,7 @@
 - Status: pass
 - Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-trust-expunged-tests.txt`
 
-### `cargo test -p aspen-cluster --features blob,docs,jobs,hooks,trust test_create_raft_node_spawns_trust_peer_probe_during_bootstrap -- --nocapture`
+### `cargo test -p aspen-cluster --features blob,docs,jobs,hooks,trust test_create_raft_node_waits_for_startup_trust_peer_probe_before_returning -- --nocapture`
 
 - Status: pass
 - Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt`
@@ -107,7 +98,17 @@
 - Status: pass
 - Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-trust-share-client-test.txt`
 
-### `cargo test -p aspen-raft --features trust,testing spawn_trust_peer_probe_marks_removed_node -- --nocapture`
+### `cargo test -p aspen-raft --features trust,testing test_startup_trust_peer_probe_persists_expungement_before_returning -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`
+
+### `cargo test -p aspen-raft --features trust,testing test_probe_for_peer_expungement_requires_peer_quorum_before_healthy -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`
+
+### `cargo test -p aspen-raft --features trust,testing test_probe_for_peer_expungement_prefers_expunged_peer_over_earlier_share -- --nocapture`
 
 - Status: pass
 - Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`
@@ -121,7 +122,6 @@
 
 - Status: pass
 - Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test.txt`
-- Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/trust-expungement-vm-test-full.log`
 
 ### `bash -n scripts/openspec-preflight.sh`
 
@@ -138,6 +138,6 @@
 - Commit history for the implementation is captured in `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation-history.txt`; the main code landed across `70840a989` (`Implement node expungement core types and storage`), `c4eb0d86b` (`feat(trust): implement node expungement protocol`), and `05eaf75f4` (`Add NixOS VM integration test for node expungement`).
 - Follow-up verification work fixed three gaps the original transcript missed: trust bootstrap requests are now classified as bootstrap RPCs, direct expungement now waits for an explicit peer acknowledgement after `on_expunged()` finishes, and startup now probes peers for `Expunged` when a node comes back with stale trust metadata.
 - `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-trust-share-client-test.txt` covers the strict return-time contract by blocking `on_expunged()` on the peer and asserting `send_expunged().await` does not complete until that peer-side processing is released.
-- `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt` exercises `spawn_trust_peer_probe()` itself rather than calling `probe_for_peer_expungement()` directly.
-- `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt` covers the bootstrap wiring in `crates/aspen-cluster/src/bootstrap/node/mod.rs` by proving `create_raft_node()` starts the peer probe during node creation.
+- `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt` now covers three probe invariants: startup does not return before expungement is persisted, a single peer share is not enough to clear boot without peer quorum, and a stale early share cannot hide a later `ExpungedByPeer` response.
+- `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt` covers the bootstrap wiring in `crates/aspen-cluster/src/bootstrap/node/mod.rs` by proving `create_raft_node()` waits for the startup trust probe before returning the node.
 - `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/archive-status.txt` records that `openspec/changes/node-expungement-protocol` no longer exists after archiving.

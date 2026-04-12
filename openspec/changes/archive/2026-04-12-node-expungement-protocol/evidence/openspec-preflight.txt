@@ -1,4 +1,4 @@
 OK: openspec/changes/archive/2026-04-12-node-expungement-protocol
   tasks: 23 total / 23 checked
-  changed files listed: 16
-  verification artifacts: 11
+  changed files listed: 7
+  verification artifacts: 12
