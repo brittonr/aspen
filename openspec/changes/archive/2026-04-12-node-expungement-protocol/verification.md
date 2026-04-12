@@ -108,6 +108,11 @@
 - Status: pass
 - Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`
 
+### `cargo test -p aspen-raft --features trust,testing test_probe_for_peer_expungement_rejects_stale_local_epoch_when_peers_report_newer_current_epoch -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt`
+
 ### `cargo test -p aspen-raft --features trust,testing test_probe_for_peer_expungement_prefers_expunged_peer_over_earlier_share -- --nocapture`
 
 - Status: pass
@@ -138,6 +143,6 @@
 - Commit history for the implementation is captured in `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/implementation-history.txt`; the main code landed across `70840a989` (`Implement node expungement core types and storage`), `c4eb0d86b` (`feat(trust): implement node expungement protocol`), and `05eaf75f4` (`Add NixOS VM integration test for node expungement`).
 - Follow-up verification work fixed three gaps the original transcript missed: trust bootstrap requests are now classified as bootstrap RPCs, direct expungement now waits for an explicit peer acknowledgement after `on_expunged()` finishes, and startup now probes peers for `Expunged` when a node comes back with stale trust metadata.
 - `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-trust-share-client-test.txt` covers the strict return-time contract by blocking `on_expunged()` on the peer and asserting `send_expunged().await` does not complete until that peer-side processing is released.
-- `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt` now covers three probe invariants: startup does not return before expungement is persisted, a single peer share is not enough to clear boot without peer quorum, and a stale early share cannot hide a later `ExpungedByPeer` response.
+- `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-raft-peer-expungement-probe-test.txt` now covers four probe invariants: startup does not return before expungement is persisted, a single peer share is not enough to clear boot without peer quorum, peer-advertised `current_epoch` must match the local epoch before health can be inferred, and a stale early share cannot hide a later `ExpungedByPeer` response.
 - `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/aspen-cluster-bootstrap-peer-probe-test.txt` covers the bootstrap wiring in `crates/aspen-cluster/src/bootstrap/node/mod.rs` by proving `create_raft_node()` waits for the startup trust probe before returning the node.
 - `openspec/changes/archive/2026-04-12-node-expungement-protocol/evidence/archive-status.txt` records that `openspec/changes/node-expungement-protocol` no longer exists after archiving.

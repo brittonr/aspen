@@ -23,6 +23,8 @@ pub struct GetShareRequest {
 pub struct ShareResponse {
     /// Epoch the returned share belongs to.
     pub epoch: u64,
+    /// Current trust epoch according to the responding peer.
+    pub current_epoch: u64,
     /// The requested share.
     pub share: Share,
 }
@@ -68,7 +70,11 @@ mod tests {
             x: 7,
             y: [3; crate::shamir::SECRET_SIZE],
         };
-        let message = TrustResponse::Share(ShareResponse { epoch: 11, share });
+        let message = TrustResponse::Share(ShareResponse {
+            epoch: 11,
+            current_epoch: 11,
+            share,
+        });
         let bytes = postcard::to_allocvec(&message).unwrap();
         let decoded: TrustResponse = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(decoded, message);

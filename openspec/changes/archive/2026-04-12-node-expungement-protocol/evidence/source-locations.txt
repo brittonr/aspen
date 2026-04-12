@@ -1,16 +1,23 @@
 crates/aspen-rpc-handlers/src/client.rs:242:            | ClientRpcRequest::InitClusterWithTrust { .. }
 crates/aspen-rpc-handlers/src/client.rs:515:        let request = ClientRpcRequest::InitClusterWithTrust { threshold: None };
-crates/aspen-raft/src/trust_share_client.rs:178:    async fn send_expunged_waits_for_peer_processing() {
+crates/aspen-trust/src/protocol.rs:27:    pub current_epoch: u64,
+crates/aspen-trust/src/protocol.rs:75:            current_epoch: 11,
 crates/aspen-raft/src/trust_peer_probe.rs:22:pub async fn ensure_startup_trust_peer_probe(node: Arc<RaftNode>) -> Result<(), String> {
-crates/aspen-raft/src/trust_peer_probe.rs:24:        match node.probe_for_peer_expungement().await {
-crates/aspen-raft/src/node/trust.rs:350:    pub(crate) async fn probe_for_peer_expungement(&self) -> Result<PeerExpungementProbeOutcome, String> {
-crates/aspen-raft/src/node/tests.rs:1358:async fn test_startup_trust_peer_probe_persists_expungement_before_returning() {
-crates/aspen-raft/src/node/tests.rs:1410:    let probe_task = tokio::spawn(crate::trust_peer_probe::ensure_startup_trust_peer_probe(node2.node.clone()));
-crates/aspen-raft/src/node/tests.rs:1437:async fn test_probe_for_peer_expungement_requires_peer_quorum_before_healthy() {
-crates/aspen-raft/src/node/tests.rs:1489:    let outcome = node2.node.probe_for_peer_expungement().await.expect("probe should complete");
-crates/aspen-raft/src/node/tests.rs:1496:async fn test_probe_for_peer_expungement_prefers_expunged_peer_over_earlier_share() {
-crates/aspen-raft/src/node/tests.rs:1549:    let outcome = node2.node.probe_for_peer_expungement().await.expect("probe should complete");
 crates/aspen-cluster/src/bootstrap/node/mod.rs:601:async fn await_startup_trust_peer_probe(node: Arc<RaftNode>) -> Result<()> {
 crates/aspen-cluster/src/bootstrap/node/mod.rs:616:    aspen_raft::trust_peer_probe::ensure_startup_trust_peer_probe(node)
 crates/aspen-cluster/src/bootstrap/node/mod.rs:660:        await_startup_trust_peer_probe(node.clone()).await?;
 crates/aspen-cluster/src/bootstrap/node/mod.rs:966:    async fn test_create_raft_node_waits_for_startup_trust_peer_probe_before_returning() {
+crates/aspen-raft/src/node/tests.rs:286:            current_epoch: epoch,
+crates/aspen-raft/src/node/tests.rs:316:                    current_epoch: epoch,
+crates/aspen-raft/src/node/tests.rs:1368:async fn test_startup_trust_peer_probe_persists_expungement_before_returning() {
+crates/aspen-raft/src/node/tests.rs:1420:    let probe_task = tokio::spawn(crate::trust_peer_probe::ensure_startup_trust_peer_probe(node2.node.clone()));
+crates/aspen-raft/src/node/tests.rs:1447:async fn test_probe_for_peer_expungement_requires_peer_quorum_before_healthy() {
+crates/aspen-raft/src/node/tests.rs:1506:async fn test_probe_for_peer_expungement_rejects_stale_local_epoch_when_peers_report_newer_current_epoch() {
+crates/aspen-raft/src/node/tests.rs:1559:            current_epoch: 2,
+crates/aspen-raft/src/node/tests.rs:1567:            current_epoch: 2,
+crates/aspen-raft/src/node/tests.rs:1583:async fn test_probe_for_peer_expungement_prefers_expunged_peer_over_earlier_share() {
+crates/aspen-raft/src/node/trust.rs:238:fn response_reports_current_epoch(response: &ShareResponse, expected_current_epoch: u64) -> bool {
+crates/aspen-raft/src/node/trust.rs:393:                    if !response_reports_current_epoch(&response, current_epoch) {
+crates/aspen-raft/src/node/trust.rs:907:                        current_epoch: 1,
+crates/aspen-raft/src/node/trust.rs:958:            current_epoch: 1,
+crates/aspen-raft/src/node/trust.rs:963:            current_epoch: 1,

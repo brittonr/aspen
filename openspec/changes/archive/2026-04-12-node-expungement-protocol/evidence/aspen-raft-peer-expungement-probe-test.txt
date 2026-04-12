@@ -5,46 +5,45 @@ workspace: /home/brittonr/git/aspen/Cargo.toml
 warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
 package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
 workspace: /home/brittonr/git/aspen/Cargo.toml
-   Compiling aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
 warning: struct `KeyValueStoreReencryptionAdapter` is never constructed
-   --> crates/aspen-raft/src/node/tests.rs:205:8
+   --> crates/aspen-raft/src/node/tests.rs:206:8
     |
-205 | struct KeyValueStoreReencryptionAdapter {
+206 | struct KeyValueStoreReencryptionAdapter {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: associated items `new` and `arm_pause` are never used
-   --> crates/aspen-raft/src/node/tests.rs:249:8
+   --> crates/aspen-raft/src/node/tests.rs:250:8
     |
-248 | impl KeyValueStoreReencryptionAdapter {
+249 | impl KeyValueStoreReencryptionAdapter {
     | ------------------------------------- associated items in this implementation
-249 |     fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
+250 |     fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
     |        ^^^
 ...
-257 |     fn arm_pause(&self) {
+258 |     fn arm_pause(&self) {
     |        ^^^^^^^^^
 
 warning: function `secret_storage_key` is never used
-   --> crates/aspen-raft/src/node/tests.rs:451:4
+   --> crates/aspen-raft/src/node/tests.rs:461:4
     |
-451 | fn secret_storage_key(mount: &str, path: &str) -> String {
+461 | fn secret_storage_key(mount: &str, path: &str) -> String {
     |    ^^^^^^^^^^^^^^^^^^
 
 warning: function `load_secret_storage_epoch` is never used
-   --> crates/aspen-raft/src/node/tests.rs:456:4
+   --> crates/aspen-raft/src/node/tests.rs:466:4
     |
-456 | fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
+466 | fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `aspen-raft` (lib test) generated 4 warnings
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.79s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
      Running unittests src/lib.rs (target/debug/deps/aspen_raft-f860825abeda9650)
 
 running 1 test
 test node::tests::test_startup_trust_peer_probe_persists_expungement_before_returning ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 804 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 0.40s
 
      Running tests/write_batcher_metrics.rs (target/debug/deps/write_batcher_metrics-2ab9eedac2372f85)
 
@@ -61,44 +60,98 @@ warning: resolver for the non root package will be ignored, specify resolver at 
 package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
 workspace: /home/brittonr/git/aspen/Cargo.toml
 warning: struct `KeyValueStoreReencryptionAdapter` is never constructed
-   --> crates/aspen-raft/src/node/tests.rs:205:8
+   --> crates/aspen-raft/src/node/tests.rs:206:8
     |
-205 | struct KeyValueStoreReencryptionAdapter {
+206 | struct KeyValueStoreReencryptionAdapter {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: associated items `new` and `arm_pause` are never used
-   --> crates/aspen-raft/src/node/tests.rs:249:8
+   --> crates/aspen-raft/src/node/tests.rs:250:8
     |
-248 | impl KeyValueStoreReencryptionAdapter {
+249 | impl KeyValueStoreReencryptionAdapter {
     | ------------------------------------- associated items in this implementation
-249 |     fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
+250 |     fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
     |        ^^^
 ...
-257 |     fn arm_pause(&self) {
+258 |     fn arm_pause(&self) {
     |        ^^^^^^^^^
 
 warning: function `secret_storage_key` is never used
-   --> crates/aspen-raft/src/node/tests.rs:451:4
+   --> crates/aspen-raft/src/node/tests.rs:461:4
     |
-451 | fn secret_storage_key(mount: &str, path: &str) -> String {
+461 | fn secret_storage_key(mount: &str, path: &str) -> String {
     |    ^^^^^^^^^^^^^^^^^^
 
 warning: function `load_secret_storage_epoch` is never used
-   --> crates/aspen-raft/src/node/tests.rs:456:4
+   --> crates/aspen-raft/src/node/tests.rs:466:4
     |
-456 | fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
+466 | fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `aspen-raft` (lib test) generated 4 warnings
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
      Running unittests src/lib.rs (target/debug/deps/aspen_raft-f860825abeda9650)
 
 running 1 test
 test node::tests::test_probe_for_peer_expungement_requires_peer_quorum_before_healthy ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 804 filtered out; finished in 0.29s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 0.29s
+
+     Running tests/write_batcher_metrics.rs (target/debug/deps/write_batcher_metrics-2ab9eedac2372f85)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+$ cargo test -p aspen-raft --features trust,testing test_probe_for_peer_expungement_rejects_stale_local_epoch_when_peers_report_newer_current_epoch -- --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: struct `KeyValueStoreReencryptionAdapter` is never constructed
+   --> crates/aspen-raft/src/node/tests.rs:206:8
+    |
+206 | struct KeyValueStoreReencryptionAdapter {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated items `new` and `arm_pause` are never used
+   --> crates/aspen-raft/src/node/tests.rs:250:8
+    |
+249 | impl KeyValueStoreReencryptionAdapter {
+    | ------------------------------------- associated items in this implementation
+250 |     fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
+    |        ^^^
+...
+258 |     fn arm_pause(&self) {
+    |        ^^^^^^^^^
+
+warning: function `secret_storage_key` is never used
+   --> crates/aspen-raft/src/node/tests.rs:461:4
+    |
+461 | fn secret_storage_key(mount: &str, path: &str) -> String {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `load_secret_storage_epoch` is never used
+   --> crates/aspen-raft/src/node/tests.rs:466:4
+    |
+466 | fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `aspen-raft` (lib test) generated 4 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+     Running unittests src/lib.rs (target/debug/deps/aspen_raft-f860825abeda9650)
+
+running 1 test
+test node::tests::test_probe_for_peer_expungement_rejects_stale_local_epoch_when_peers_report_newer_current_epoch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 0.29s
 
      Running tests/write_batcher_metrics.rs (target/debug/deps/write_batcher_metrics-2ab9eedac2372f85)
 
@@ -115,44 +168,44 @@ warning: resolver for the non root package will be ignored, specify resolver at 
 package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
 workspace: /home/brittonr/git/aspen/Cargo.toml
 warning: struct `KeyValueStoreReencryptionAdapter` is never constructed
-   --> crates/aspen-raft/src/node/tests.rs:205:8
+   --> crates/aspen-raft/src/node/tests.rs:206:8
     |
-205 | struct KeyValueStoreReencryptionAdapter {
+206 | struct KeyValueStoreReencryptionAdapter {
     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: associated items `new` and `arm_pause` are never used
-   --> crates/aspen-raft/src/node/tests.rs:249:8
+   --> crates/aspen-raft/src/node/tests.rs:250:8
     |
-248 | impl KeyValueStoreReencryptionAdapter {
+249 | impl KeyValueStoreReencryptionAdapter {
     | ------------------------------------- associated items in this implementation
-249 |     fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
+250 |     fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
     |        ^^^
 ...
-257 |     fn arm_pause(&self) {
+258 |     fn arm_pause(&self) {
     |        ^^^^^^^^^
 
 warning: function `secret_storage_key` is never used
-   --> crates/aspen-raft/src/node/tests.rs:451:4
+   --> crates/aspen-raft/src/node/tests.rs:461:4
     |
-451 | fn secret_storage_key(mount: &str, path: &str) -> String {
+461 | fn secret_storage_key(mount: &str, path: &str) -> String {
     |    ^^^^^^^^^^^^^^^^^^
 
 warning: function `load_secret_storage_epoch` is never used
-   --> crates/aspen-raft/src/node/tests.rs:456:4
+   --> crates/aspen-raft/src/node/tests.rs:466:4
     |
-456 | fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
+466 | fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
     |    ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 warning: `aspen-raft` (lib test) generated 4 warnings
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
      Running unittests src/lib.rs (target/debug/deps/aspen_raft-f860825abeda9650)
 
 running 1 test
 test node::tests::test_probe_for_peer_expungement_prefers_expunged_peer_over_earlier_share ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 804 filtered out; finished in 0.29s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 805 filtered out; finished in 0.29s
 
      Running tests/write_batcher_metrics.rs (target/debug/deps/write_batcher_metrics-2ab9eedac2372f85)
 

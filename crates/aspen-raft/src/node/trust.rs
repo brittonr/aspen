@@ -235,6 +235,10 @@ fn validate_share_response(
     Some(response.share)
 }
 
+fn response_reports_current_epoch(response: &ShareResponse, expected_current_epoch: u64) -> bool {
+    response.current_epoch == expected_current_epoch
+}
+
 async fn collect_old_shares_for_reconfiguration(
     plan: ShareCollectionPlan,
 ) -> Result<BTreeMap<u64, shamir::Share>, String> {
@@ -386,6 +390,16 @@ impl RaftNode {
         for (node_id, endpoint) in peers {
             match client.get_share(endpoint, current_epoch).await {
                 Ok(response) => {
+                    if !response_reports_current_epoch(&response, current_epoch) {
+                        saw_retryable_error = true;
+                        warn!(
+                            node_id,
+                            requested_epoch = current_epoch,
+                            peer_current_epoch = response.current_epoch,
+                            "peer expungement probe rejected share from non-current epoch source"
+                        );
+                        continue;
+                    }
                     if validate_share_response(node_id, current_epoch, response, &expected_digests).is_some() {
                         confirmed_peer_count = confirmed_peer_count.saturating_add(1);
                         continue;
@@ -670,7 +684,12 @@ impl TrustShareProvider for RaftNode {
             return Ok(None);
         };
 
-        Ok(Some(TrustResponse::Share(ShareResponse { epoch, share })))
+        let current_epoch = storage.load_current_trust_epoch()?.unwrap_or(1);
+        Ok(Some(TrustResponse::Share(ShareResponse {
+            epoch,
+            current_epoch,
+            share,
+        })))
     }
 
     fn is_expunged(&self) -> bool {
@@ -885,6 +904,7 @@ mod tests {
                     remote_addr.id.to_string(),
                     MockResponse::Share(ShareResponse {
                         epoch: 1,
+                        current_epoch: 1,
                         share: shares[1].clone(),
                     }),
                 )])),
@@ -935,10 +955,12 @@ mod tests {
         let (shares, digests) = setup_reconfig_shares();
         let valid = ShareResponse {
             epoch: 1,
+            current_epoch: 1,
             share: shares[0].clone(),
         };
         let invalid = ShareResponse {
             epoch: 1,
+            current_epoch: 1,
             share: shares[1].clone(),
         };
 
