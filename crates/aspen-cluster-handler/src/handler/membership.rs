@@ -5,6 +5,7 @@
 use aspen_client_api::AddLearnerResultResponse;
 use aspen_client_api::ChangeMembershipResultResponse;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::ExpungeNodeResultResponse;
 use aspen_client_api::PromoteLearnerResultResponse;
 use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
@@ -89,6 +90,45 @@ pub(crate) async fn handle_change_membership(
         is_success: result.is_ok(),
         error: result.err().map(|e| sanitize_control_error(&e)),
     }))
+}
+
+pub(crate) async fn handle_expunge_node(
+    ctx: &ClientProtocolContext,
+    node_id: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    // Get current membership
+    let cluster_state = ctx
+        .controller
+        .current_state()
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to get cluster state: {}", e))?;
+
+    // Build new membership without the expunged node
+    let new_members: Vec<u64> = cluster_state.members.iter().copied().filter(|&id| id != node_id).collect();
+
+    if new_members.len() == cluster_state.members.len() {
+        return Ok(ClientRpcResponse::ExpungeNodeResult(ExpungeNodeResultResponse {
+            is_success: false,
+            node_id,
+            error: Some(format!("node {} is not a current voter", node_id)),
+        }));
+    }
+
+    // Remove from Raft membership (this triggers trust reconfiguration via the watcher)
+    let result = ctx.controller.change_membership(ChangeMembershipRequest { members: new_members }).await;
+
+    match result {
+        Ok(_state) => Ok(ClientRpcResponse::ExpungeNodeResult(ExpungeNodeResultResponse {
+            is_success: true,
+            node_id,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ExpungeNodeResult(ExpungeNodeResultResponse {
+            is_success: false,
+            node_id,
+            error: Some(sanitize_control_error(&e)),
+        })),
+    }
 }
 
 pub(crate) async fn handle_promote_learner(

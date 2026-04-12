@@ -148,6 +148,7 @@ pub use cluster::ClusterStateResponse;
 pub use cluster::ClusterTicketResponse;
 pub use cluster::CompareAndSwapResultResponse;
 pub use cluster::ErrorResponse;
+pub use cluster::ExpungeNodeResultResponse;
 pub use cluster::HashCheckResultResponse;
 pub use cluster::HealthResponse;
 pub use cluster::InitResultResponse;
@@ -614,6 +615,15 @@ pub enum ClientRpcRequest {
     ChangeMembership {
         /// New set of voting member IDs.
         members: Vec<u64>,
+    },
+
+    /// Permanently expunge a node from the cluster.
+    ///
+    /// Removes from Raft membership, triggers trust reconfiguration,
+    /// and sends expungement notification. Requires `--confirm` on CLI.
+    ExpungeNode {
+        /// ID of the node to expunge.
+        node_id: u64,
     },
 
     /// Ping for connection health check.
@@ -3981,6 +3991,7 @@ impl ClientRpcRequest {
             Self::CalendarUpdateEvent { .. } => "CalendarUpdateEvent",
             Self::ChangeMembership { .. } => "ChangeMembership",
             Self::CheckpointWal => "CheckpointWal",
+            Self::ExpungeNode { .. } => "ExpungeNode",
             Self::CiCancelRun { .. } => "CiCancelRun",
             Self::CiGetArtifact { .. } => "CiGetArtifact",
             Self::CiGetJobLogs { .. } => "CiGetJobLogs",
@@ -4307,6 +4318,7 @@ impl ClientRpcRequest {
             | Self::TriggerSnapshot
             | Self::AddLearner { .. }
             | Self::ChangeMembership { .. }
+            | Self::ExpungeNode { .. }
             | Self::Ping
             | Self::GetClusterState
             | Self::DeleteKey { .. }
@@ -4725,6 +4737,9 @@ pub enum ClientRpcResponse {
 
     /// Change membership response.
     ChangeMembershipResult(ChangeMembershipResultResponse),
+
+    /// Node expungement response.
+    ExpungeNodeResult(cluster::ExpungeNodeResultResponse),
 
     /// Pong response for ping.
     Pong,

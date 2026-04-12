@@ -74,6 +74,12 @@ pub enum ClusterCommand {
 
     /// Show network metrics (connection pool, snapshot transfers).
     Network,
+
+    /// Permanently expunge a node from the cluster.
+    ///
+    /// Removes from Raft membership, triggers trust reconfiguration, and sends
+    /// expungement notification. The target node will need a factory reset to rejoin.
+    Expunge(ExpungeArgs),
 }
 
 #[derive(Args)]
@@ -85,6 +91,16 @@ pub struct UpdatePeerArgs {
     /// JSON endpoint address: {"id":"<hex>","addrs":[{"Ip":"host:port"}]}.
     #[arg(long)]
     pub addr: String,
+}
+
+#[derive(Args)]
+pub struct ExpungeArgs {
+    /// Node ID of the node to expunge.
+    pub node_id: u64,
+
+    /// Required: confirm that you understand the node will need a factory reset.
+    #[arg(long)]
+    pub confirm: bool,
 }
 
 #[derive(Args)]
@@ -166,6 +182,7 @@ impl ClusterCommand {
             ClusterCommand::Rollback => rollback(client, json).await,
             ClusterCommand::UpdatePeer(args) => update_peer(client, args, json).await,
             ClusterCommand::Network => network_metrics(client, json).await,
+            ClusterCommand::Expunge(args) => expunge_node(client, args, json).await,
         }
     }
 }
@@ -346,6 +363,40 @@ async fn network_metrics(client: &AspenClient, json: bool) -> Result<()> {
                 if let Some(err) = &m.error {
                     println!("Note: {}", err);
                 }
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn expunge_node(client: &AspenClient, args: ExpungeArgs, json: bool) -> Result<()> {
+    if !args.confirm {
+        anyhow::bail!(
+            "This will permanently remove node {} from the cluster. \
+             The node will need a factory reset to rejoin. \
+             Pass --confirm to proceed.",
+            args.node_id
+        );
+    }
+
+    eprintln!(
+        "WARNING: Permanently expunging node {} from the cluster. \
+         The node will need a factory reset to rejoin.",
+        args.node_id
+    );
+
+    let response = client.send(ClientRpcRequest::ExpungeNode { node_id: args.node_id }).await?;
+
+    match response {
+        ClientRpcResponse::ExpungeNodeResult(result) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else if result.is_success {
+                println!("Node {} has been permanently expunged from the cluster.", result.node_id);
+            } else {
+                anyhow::bail!("Failed to expunge node {}: {}", result.node_id, result.error.unwrap_or_default());
             }
             Ok(())
         }

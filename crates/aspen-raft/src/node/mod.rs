@@ -124,6 +124,14 @@ pub struct RaftNode {
     /// Cluster identifier used when deriving trust epoch keys.
     #[cfg(feature = "trust")]
     trust_cluster_id: Option<Vec<u8>>,
+
+    /// Shared expungement flag for Raft RPC rejection.
+    ///
+    /// When set to `true`, the `AuthenticatedRaftProtocolHandler` will reject
+    /// all incoming Raft connections. Flipped by `handle_peer_expungement()`
+    /// and `on_expunged()`.
+    #[cfg(feature = "trust")]
+    expunged_flag: Arc<AtomicBool>,
 }
 
 impl RaftNode {
@@ -143,6 +151,8 @@ impl RaftNode {
             trust_share_client: None,
             #[cfg(feature = "trust")]
             trust_cluster_id: None,
+            #[cfg(feature = "trust")]
+            expunged_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -180,6 +190,8 @@ impl RaftNode {
             trust_share_client: None,
             #[cfg(feature = "trust")]
             trust_cluster_id: None,
+            #[cfg(feature = "trust")]
+            expunged_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -218,6 +230,15 @@ impl RaftNode {
     #[cfg(feature = "trust")]
     pub(crate) fn trust_cluster_id(&self) -> Option<&[u8]> {
         self.trust_cluster_id.as_deref()
+    }
+
+    /// Get the shared expungement flag.
+    ///
+    /// Share this with `AuthenticatedRaftProtocolHandler` so it can reject
+    /// Raft connections once this node is expunged.
+    #[cfg(feature = "trust")]
+    pub fn expunged_flag(&self) -> &Arc<AtomicBool> {
+        &self.expunged_flag
     }
 
     /// Get current leader's NodeId and EndpointAddr from Raft membership.

@@ -32,6 +32,14 @@ pub struct ShareResponse {
 pub enum TrustRequest {
     /// Request a share for an epoch.
     GetShare(GetShareRequest),
+    /// Notify a node that it has been expunged at the given epoch.
+    ///
+    /// Fire-and-forget: the receiver records expungement and zeroizes its
+    /// shares. No response is expected (the sender closes the stream).
+    Expunged {
+        /// The epoch at which the recipient was removed.
+        epoch: u64,
+    },
 }
 
 /// Trust protocol responses sent over QUIC.
@@ -39,6 +47,14 @@ pub enum TrustRequest {
 pub enum TrustResponse {
     /// Share reply for a successful GetShare request.
     Share(ShareResponse),
+    /// The requesting node has been expunged from the cluster at the given epoch.
+    ///
+    /// Sent instead of a share when the requester is not in the current
+    /// trust configuration. The receiver should record its expungement.
+    Expunged {
+        /// The epoch at which the requester was removed.
+        epoch: u64,
+    },
 }
 
 #[cfg(test)]
@@ -63,5 +79,21 @@ mod tests {
         let bytes = postcard::to_allocvec(&request).unwrap();
         let decoded: TrustRequest = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(decoded, request);
+    }
+
+    #[test]
+    fn test_expunged_request_serde() {
+        let request = TrustRequest::Expunged { epoch: 7 };
+        let bytes = postcard::to_allocvec(&request).unwrap();
+        let decoded: TrustRequest = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(decoded, request);
+    }
+
+    #[test]
+    fn test_expunged_response_serde() {
+        let message = TrustResponse::Expunged { epoch: 5 };
+        let bytes = postcard::to_allocvec(&message).unwrap();
+        let decoded: TrustResponse = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(decoded, message);
     }
 }

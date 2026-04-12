@@ -156,6 +156,23 @@ pub(super) async fn create_raft_instance(
                 "created shared redb storage (single-fsync mode)"
             );
 
+            // Check if this node has been permanently expunged from the cluster.
+            // Expunged nodes must not start Raft — a factory reset (data_dir wipe) is required.
+            #[cfg(feature = "trust")]
+            if shared_storage.is_expunged().map_err(|e| anyhow::anyhow!("failed to check expungement: {e}"))? {
+                let metadata = shared_storage
+                    .load_expunged()
+                    .map_err(|e| anyhow::anyhow!("failed to load expungement metadata: {e}"))?
+                    .expect("is_expunged returned true but load_expunged returned None");
+                return Err(anyhow::anyhow!(
+                    "THIS NODE HAS BEEN PERMANENTLY EXPUNGED from the cluster at epoch {}. \
+                     Removed by node {}. To rejoin, wipe the data directory ({}) and restart.",
+                    metadata.epoch,
+                    metadata.removed_by,
+                    db_path.parent().unwrap_or(&db_path).display()
+                ));
+            }
+
             let raft = Arc::new(
                 Raft::new(
                     config.node_id.into(),

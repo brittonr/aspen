@@ -76,6 +76,16 @@ pub enum ClusterRequest {
         /// Priority level (0 = highest).
         priority: u32,
     },
+    /// Permanently expunge a node from the cluster.
+    ///
+    /// Removes the node from Raft membership, triggers trust reconfiguration,
+    /// and sends an expungement notification. The target node will need a
+    /// factory reset to rejoin.
+    ExpungeNode {
+        /// ID of the node to expunge.
+        node_id: u64,
+    },
+
     /// Get the current shard topology.
     GetTopology {
         /// Client's current topology version (for conditional fetch).
@@ -93,6 +103,7 @@ impl ClusterRequest {
             | Self::InitClusterWithTrust { .. }
             | Self::AddLearner { .. }
             | Self::ChangeMembership { .. }
+            | Self::ExpungeNode { .. }
             | Self::TriggerSnapshot
             | Self::PromoteLearner { .. }
             | Self::AddPeer { .. }
@@ -255,6 +266,17 @@ pub struct AddLearnerResultResponse {
 pub struct ChangeMembershipResultResponse {
     /// Whether membership change succeeded.
     pub is_success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Node expungement result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExpungeNodeResultResponse {
+    /// Whether the expungement succeeded.
+    pub is_success: bool,
+    /// The node ID that was expunged.
+    pub node_id: u64,
     /// Error message if failed.
     pub error: Option<String>,
 }

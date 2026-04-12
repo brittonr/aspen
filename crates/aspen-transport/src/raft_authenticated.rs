@@ -10,6 +10,7 @@
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
@@ -137,6 +138,8 @@ pub struct AuthenticatedRaftProtocolHandler {
     trusted_peers: TrustedPeersRegistry,
     connection_semaphore: Arc<Semaphore>,
     snapshot_history: Option<Arc<crate::snapshot_history::SnapshotTransferHistory>>,
+    /// Expungement flag: when true, all incoming Raft RPCs are rejected.
+    is_expunged: Arc<AtomicBool>,
 }
 
 impl AuthenticatedRaftProtocolHandler {
@@ -155,7 +158,18 @@ impl AuthenticatedRaftProtocolHandler {
             trusted_peers,
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize)),
             snapshot_history: None,
+            is_expunged: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Share an external expungement flag.
+    ///
+    /// When set to `true`, `accept()` rejects all incoming Raft RPCs.
+    /// Wire this to `RaftNode::expunged_flag()` so that storage-layer
+    /// expungement propagates to the transport layer.
+    pub fn with_expunged_flag(mut self, flag: Arc<AtomicBool>) -> Self {
+        self.is_expunged = flag;
+        self
     }
 
     /// Set the snapshot transfer history buffer.
@@ -175,12 +189,29 @@ impl AuthenticatedRaftProtocolHandler {
     pub fn trusted_peers(&self) -> &TrustedPeersRegistry {
         &self.trusted_peers
     }
+
+    /// Get the expungement flag.
+    ///
+    /// Share this with the node's storage layer so that `mark_expunged()`
+    /// can set it to reject all future Raft RPCs.
+    pub fn expunged_flag(&self) -> &Arc<AtomicBool> {
+        &self.is_expunged
+    }
 }
 
 impl ProtocolHandler for AuthenticatedRaftProtocolHandler {
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
         // Get remote PublicKey (verified by QUIC TLS handshake)
         let remote_id = connection.remote_id();
+
+        // Expunged nodes reject all Raft RPCs
+        if self.is_expunged.load(Ordering::Acquire) {
+            warn!(
+                remote_node = %remote_id,
+                "rejecting Raft connection: this node has been expunged"
+            );
+            return Err(AcceptError::from_err(std::io::Error::other("node expunged")));
+        }
 
         // IROH-NATIVE: Check if PublicKey is in trusted peers
         if !self.trusted_peers.is_trusted(&remote_id).await {

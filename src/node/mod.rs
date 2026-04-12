@@ -623,7 +623,11 @@ impl Node {
                 spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
-            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers);
+            let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers);
+            #[cfg(feature = "trust")]
+            {
+                auth_handler = auth_handler.with_expunged_flag(self.handle.storage.raft_node.expunged_flag().clone());
+            }
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
             tracing::info!(
                 our_public_key = %our_public_key,
@@ -803,7 +807,11 @@ impl Node {
                 spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
-            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
+            let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
+            #[cfg(feature = "trust")]
+            {
+                auth_handler = auth_handler.with_expunged_flag(self.handle.storage.raft_node.expunged_flag().clone());
+            }
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
             tracing::info!(
                 our_public_key = %our_public_key,

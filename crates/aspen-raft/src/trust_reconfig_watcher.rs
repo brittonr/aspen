@@ -65,7 +65,15 @@ async fn trust_reconfig_watcher_task(node: Arc<RaftNode>, cancel: CancellationTo
                             .rotate_trust_after_membership_change(old_members, new_members, target_epoch)
                             .await
                         {
-                            warn!(epoch = target_epoch, error, "failed to restart pending trust reconfiguration");
+                            // Check if failure was due to peer-enforced expungement
+                            if error.contains("node expunged by peer at epoch") {
+                                warn!(epoch = target_epoch, "this node has been expunged by a peer during share collection");
+                                if let Err(e) = node.handle_peer_expungement(target_epoch, 0) {
+                                    warn!(error = %e, "failed to process peer expungement");
+                                }
+                            } else {
+                                warn!(epoch = target_epoch, error, "failed to restart pending trust reconfiguration");
+                            }
                         }
                     }
                     Err(_) => {

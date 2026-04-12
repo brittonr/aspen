@@ -249,6 +249,7 @@ fn handle_client_request_is_rate_limit_exempt(request: &ClientRpcRequest) -> boo
             request,
             ClientRpcRequest::AddLearner { .. }
                 | ClientRpcRequest::ChangeMembership { .. }
+                | ClientRpcRequest::ExpungeNode { .. }
                 | ClientRpcRequest::TriggerSnapshot
                 | ClientRpcRequest::GetClusterState
                 | ClientRpcRequest::GetLeader

@@ -726,4 +726,109 @@ mod tests {
         assert_eq!(storage.load_members(8).unwrap().len(), 3);
         assert_eq!(storage.load_encrypted_chain(8).unwrap(), Some(payload.encrypted_chain));
     }
+
+    #[test]
+    fn test_mark_expunged_sets_flag_and_zeroizes_shares() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("trust-expunge.redb");
+        let storage = SharedRedbStorage::new(&db_path, "2").unwrap();
+
+        // Store shares for two epochs
+        let secret = [8u8; SECRET_SIZE];
+        let mut rng = rand::rng();
+        let shares = aspen_trust::shamir::split_secret(&secret, 2, 3, &mut rng).unwrap();
+        storage.store_share(1, &shares[0]).unwrap();
+        storage.store_share(2, &shares[1]).unwrap();
+
+        // Verify shares exist
+        assert!(storage.load_share(1).unwrap().is_some());
+        assert!(storage.load_share(2).unwrap().is_some());
+        assert!(!storage.is_expunged().unwrap());
+
+        // Expunge the node
+        let metadata = aspen_cluster_types::ExpungedMetadata {
+            epoch: 5,
+            removed_by: 1,
+            timestamp_ms: 1234567890,
+        };
+        storage.mark_expunged(metadata.clone()).unwrap();
+
+        // Verify expungement
+        assert!(storage.is_expunged().unwrap());
+        let loaded = storage.load_expunged().unwrap().unwrap();
+        assert_eq!(loaded.epoch, 5);
+        assert_eq!(loaded.removed_by, 1);
+
+        // Verify all shares are gone
+        assert_eq!(storage.load_share(1).unwrap(), None);
+        assert_eq!(storage.load_share(2).unwrap(), None);
+    }
+
+    #[test]
+    fn test_expunged_node_rejects_share_load() {
+        // After expungement, load_share returns None for all epochs,
+        // and is_expunged() returns true.
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("trust-expunge-rejects.redb");
+        let storage = SharedRedbStorage::new(&db_path, "2").unwrap();
+
+        let secret = [2u8; SECRET_SIZE];
+        let mut rng = rand::rng();
+        let shares = aspen_trust::shamir::split_secret(&secret, 2, 3, &mut rng).unwrap();
+        storage.store_share(1, &shares[0]).unwrap();
+        storage.store_share(5, &shares[1]).unwrap();
+        storage.store_share(10, &shares[2]).unwrap();
+
+        // All shares accessible before expungement
+        assert!(storage.load_share(1).unwrap().is_some());
+        assert!(storage.load_share(5).unwrap().is_some());
+        assert!(storage.load_share(10).unwrap().is_some());
+
+        storage
+            .mark_expunged(aspen_cluster_types::ExpungedMetadata {
+                epoch: 11,
+                removed_by: 1,
+                timestamp_ms: 0,
+            })
+            .unwrap();
+
+        // All shares gone after expungement
+        assert!(storage.is_expunged().unwrap());
+        assert_eq!(storage.load_share(1).unwrap(), None);
+        assert_eq!(storage.load_share(5).unwrap(), None);
+        assert_eq!(storage.load_share(10).unwrap(), None);
+    }
+
+    #[test]
+    fn test_expungement_survives_reload() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("trust-expunge-reload.redb");
+
+        // Phase 1: mark expunged
+        {
+            let storage = SharedRedbStorage::new(&db_path, "2").unwrap();
+            let secret = [1u8; SECRET_SIZE];
+            let mut rng = rand::rng();
+            let shares = aspen_trust::shamir::split_secret(&secret, 2, 3, &mut rng).unwrap();
+            storage.store_share(1, &shares[0]).unwrap();
+
+            storage
+                .mark_expunged(aspen_cluster_types::ExpungedMetadata {
+                    epoch: 3,
+                    removed_by: 1,
+                    timestamp_ms: 999,
+                })
+                .unwrap();
+        }
+
+        // Phase 2: reopen and check
+        {
+            let storage = SharedRedbStorage::new(&db_path, "2").unwrap();
+            assert!(storage.is_expunged().unwrap());
+            let metadata = storage.load_expunged().unwrap().unwrap();
+            assert_eq!(metadata.epoch, 3);
+            assert_eq!(metadata.removed_by, 1);
+            assert_eq!(storage.load_share(1).unwrap(), None);
+        }
+    }
 }

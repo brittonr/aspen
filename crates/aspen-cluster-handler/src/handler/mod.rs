@@ -39,6 +39,7 @@ impl RequestHandler for ClusterHandler {
                 | ClientRpcRequest::InitClusterWithTrust { .. }
                 | ClientRpcRequest::AddLearner { .. }
                 | ClientRpcRequest::ChangeMembership { .. }
+                | ClientRpcRequest::ExpungeNode { .. }
                 | ClientRpcRequest::PromoteLearner { .. }
                 | ClientRpcRequest::TriggerSnapshot
                 | ClientRpcRequest::GetClusterState
@@ -70,6 +71,8 @@ impl RequestHandler for ClusterHandler {
             ClientRpcRequest::AddLearner { node_id, addr } => membership::handle_add_learner(ctx, node_id, addr).await,
 
             ClientRpcRequest::ChangeMembership { members } => membership::handle_change_membership(ctx, members).await,
+
+            ClientRpcRequest::ExpungeNode { node_id } => membership::handle_expunge_node(ctx, node_id).await,
 
             ClientRpcRequest::PromoteLearner {
                 learner_id,
@@ -273,6 +276,12 @@ mod tests {
     fn test_can_handle_change_membership() {
         let handler = ClusterHandler;
         assert!(handler.can_handle(&ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] }));
+    }
+
+    #[test]
+    fn test_can_handle_expunge_node() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ExpungeNode { node_id: 3 }));
     }
 
     #[test]

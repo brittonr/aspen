@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use aspen_trust::protocol::ShareResponse;
 use aspen_trust::protocol::TrustRequest;
 use aspen_trust::protocol::TrustResponse;
 use async_trait::async_trait;
@@ -30,8 +29,22 @@ const MAX_TRUST_MESSAGE_SIZE: usize = 4096;
 /// Source of trust shares for incoming `GetShare` requests.
 #[async_trait]
 pub trait TrustShareProvider: Send + Sync {
-    /// Return the local share for `epoch` if `requester` is authorized.
-    async fn get_share(&self, requester: EndpointId, epoch: u64) -> anyhow::Result<Option<ShareResponse>>;
+    /// Handle a `GetShare` request from `requester` for `epoch`.
+    ///
+    /// Returns:
+    /// - `Some(TrustResponse::Share(..))` if the share is available
+    /// - `Some(TrustResponse::Expunged { .. })` if the requester is no longer a member
+    /// - `None` if the request is rejected (connection will be closed)
+    async fn get_share(&self, requester: EndpointId, epoch: u64) -> anyhow::Result<Option<TrustResponse>>;
+
+    /// Check if this node has been expunged.
+    fn is_expunged(&self) -> bool;
+
+    /// Handle an incoming expungement notification.
+    ///
+    /// Called when a peer tells us we've been removed at the given epoch.
+    /// The implementation should validate the epoch and call `mark_expunged()`.
+    async fn on_expunged(&self, from: EndpointId, epoch: u64) -> anyhow::Result<()>;
 }
 
 /// Protocol handler for trust share collection over Iroh QUIC.
@@ -100,16 +113,27 @@ async fn handle_trust_stream(
     let buffer = recv.read_to_end(MAX_TRUST_MESSAGE_SIZE).await.context("failed to read trust request")?;
     let request: TrustRequest = postcard::from_bytes(&buffer).context("failed to deserialize trust request")?;
 
+    // Expunged nodes drop all trust protocol messages.
+    if provider.is_expunged() {
+        warn!(remote = %remote, "dropping trust message: this node has been expunged");
+        return Ok(());
+    }
+
     match request {
         TrustRequest::GetShare(request) => {
             let Some(response) = provider.get_share(remote, request.epoch).await? else {
                 warn!(remote = %remote, epoch = request.epoch, "trust share request rejected");
                 anyhow::bail!("trust share request rejected");
             };
-            let bytes =
-                postcard::to_stdvec(&TrustResponse::Share(response)).context("failed to serialize trust response")?;
+            let bytes = postcard::to_stdvec(&response).context("failed to serialize trust response")?;
             send.write_all(&bytes).await.context("failed to write trust response")?;
             send.finish().context("failed to finish trust response")?;
+            Ok(())
+        }
+        TrustRequest::Expunged { epoch } => {
+            info!(remote = %remote, epoch, "received expungement notification from peer");
+            provider.on_expunged(remote, epoch).await?;
+            // No response — fire and forget.
             Ok(())
         }
     }

@@ -12,6 +12,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::InitClusterWithTrust { .. }
         | ClientRpcRequest::AddLearner { .. }
         | ClientRpcRequest::ChangeMembership { .. }
+        | ClientRpcRequest::ExpungeNode { .. }
         | ClientRpcRequest::TriggerSnapshot
         | ClientRpcRequest::PromoteLearner { .. }
         | ClientRpcRequest::AddPeer { .. }

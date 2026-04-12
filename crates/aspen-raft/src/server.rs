@@ -29,6 +29,7 @@
 
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
@@ -65,6 +66,8 @@ pub struct RaftRpcServer {
     join_handle: JoinHandle<()>,
     cancel_token: CancellationToken,
     task_tracker: TaskTracker,
+    /// Expungement flag: when true, all incoming Raft RPCs are rejected.
+    is_expunged: Arc<AtomicBool>,
 }
 
 impl RaftRpcServer {
@@ -81,9 +84,12 @@ impl RaftRpcServer {
         let cancel_clone = cancel_token.clone();
         let task_tracker = TaskTracker::new();
         let task_tracker_clone = task_tracker.clone();
+        let is_expunged = Arc::new(AtomicBool::new(false));
+        let is_expunged_clone = is_expunged.clone();
 
         let join_handle = tokio::spawn(async move {
-            if let Err(err) = run_server(endpoint, raft_core, cancel_clone, task_tracker_clone).await {
+            if let Err(err) = run_server(endpoint, raft_core, cancel_clone, task_tracker_clone, is_expunged_clone).await
+            {
                 error!(error = %err, "IRPC server task failed");
             }
         });
@@ -92,7 +98,13 @@ impl RaftRpcServer {
             join_handle,
             cancel_token,
             task_tracker,
+            is_expunged,
         }
+    }
+
+    /// Get the expungement flag.
+    pub fn expunged_flag(&self) -> &Arc<AtomicBool> {
+        &self.is_expunged
     }
 
     /// Shutdown the server gracefully.
@@ -114,6 +126,7 @@ async fn run_server(
     raft_core: Raft<AppTypeConfig>,
     cancel: CancellationToken,
     task_tracker: TaskTracker,
+    is_expunged: Arc<AtomicBool>,
 ) -> Result<()> {
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
     let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));
@@ -132,14 +145,16 @@ async fn run_server(
                     break;
                 };
 
+                // Expunged nodes reject all Raft RPCs
+                if is_expunged.load(Ordering::Acquire) {
+                    warn!("rejecting Raft connection: this node has been expunged");
+                    continue;
+                }
+
                 info!(
                     remote_addr = ?incoming.remote_addr(),
                     "received incoming connection"
                 );
-
-                // We'll check ALPN after accepting the connection
-                // Note: In Iroh, connections are already filtered by ALPN at the endpoint level,
-                // but we should handle this gracefully if there's a race condition
 
                 // Try to acquire a connection permit
                 let permit = match connection_semaphore.clone().try_acquire_owned() {

@@ -17,6 +17,7 @@ use aspen_cluster_types::InitRequest;
 use aspen_transport::TrustShareProvider;
 use aspen_trust::chain;
 use aspen_trust::protocol::ShareResponse;
+use aspen_trust::protocol::TrustResponse;
 use aspen_trust::reconfig::ReconfigAction;
 use aspen_trust::reconfig::ReconfigCoordinator;
 use aspen_trust::secret::ClusterSecret;
@@ -26,11 +27,13 @@ use async_trait::async_trait;
 use iroh::EndpointId;
 use rand::rngs::ThreadRng;
 use tokio::task::JoinSet;
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 
 use super::RaftNode;
 use crate::StateMachineVariant;
+use crate::trust_share_client::ExpungedByPeer;
 use crate::trust_share_client::TrustShareClient;
 use crate::types::AppRequest;
 use crate::types::TrustInitializePayload;
@@ -278,6 +281,10 @@ async fn collect_old_shares_for_reconfiguration(
                 let response = match response {
                     Ok(response) => response,
                     Err(error) => {
+                        // If a peer told us we've been expunged, propagate immediately
+                        if let Some(expunged) = error.downcast_ref::<ExpungedByPeer>() {
+                            return Err(format!("node expunged by peer at epoch {}", expunged.epoch));
+                        }
                         warn!(node_id, error = %error, "failed to collect trust share");
                         continue;
                     }
@@ -378,7 +385,7 @@ impl RaftNode {
             old_epoch,
             old_threshold,
             old_members: old_members.clone(),
-            old_member_addresses,
+            old_member_addresses: old_member_addresses.clone(),
             local_node_id: self.node_id().0,
             local_share,
             expected_digests: expected_digests.clone(),
@@ -438,11 +445,81 @@ impl RaftNode {
         let payload = proposal_from_actions(actions, threshold_override, new_member_addresses)
             .ok_or_else(|| "reconfiguration coordinator produced no proposal".to_string())?;
 
+        let new_epoch = payload.epoch;
         self.raft()
             .client_write(AppRequest::TrustReconfiguration(payload))
             .await
             .map_err(|e| format!("failed to commit trust reconfiguration: {e}"))?;
 
+        // Notify removed nodes that they have been expunged
+        let removed_nodes: BTreeSet<u64> = old_members.difference(&new_members).copied().collect();
+        if !removed_nodes.is_empty() {
+            let leader_id = self.node_id().0;
+            for removed_id in &removed_nodes {
+                if let Some(endpoint) = old_member_addresses.get(removed_id) {
+                    let client = self.trust_share_client().cloned().expect("trust share client checked above");
+                    let endpoint = endpoint.clone();
+                    let epoch = new_epoch;
+                    let node_id = *removed_id;
+                    // Fire-and-forget: peer enforcement handles the case where this message is lost
+                    tokio::spawn(async move {
+                        info!(node_id, epoch, "sending expungement notification to removed node");
+                        if let Err(e) = client.send_expunged(endpoint, epoch).await {
+                            warn!(node_id, epoch, error = %e, "failed to send expungement notification (peer enforcement will handle)");
+                        }
+                    });
+                } else {
+                    warn!(
+                        node_id = *removed_id,
+                        "no stored address for removed node; relying on peer enforcement for expungement"
+                    );
+                }
+            }
+            info!(
+                removed_count = removed_nodes.len(),
+                leader_id, new_epoch, "expungement notifications sent to removed nodes"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Handle notification that this node has been expunged from the cluster.
+    ///
+    /// Validates that the epoch is >= our latest known config epoch,
+    /// then permanently marks the node as expunged and zeroizes all shares.
+    pub(crate) fn handle_peer_expungement(&self, epoch: u64, from: u64) -> Result<(), String> {
+        let StateMachineVariant::Redb(storage) = self.state_machine() else {
+            return Err("trust requires redb storage".to_string());
+        };
+
+        // Already expunged — nothing to do
+        if storage.is_expunged().map_err(|e| e.to_string())? {
+            return Ok(());
+        }
+
+        let current_epoch = storage.load_current_trust_epoch().map_err(|e| e.to_string())?.unwrap_or(0);
+        if epoch < current_epoch {
+            warn!(expunge_epoch = epoch, current_epoch, "ignoring stale expungement notification");
+            return Ok(());
+        }
+
+        let timestamp_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+        let metadata = aspen_cluster_types::ExpungedMetadata {
+            epoch,
+            removed_by: from,
+            timestamp_ms,
+        };
+
+        storage.mark_expunged(metadata).map_err(|e| e.to_string())?;
+        self.expunged_flag.store(true, std::sync::atomic::Ordering::Release);
+        error!(
+            epoch,
+            removed_by = from,
+            "THIS NODE HAS BEEN PERMANENTLY EXPUNGED — factory reset required to rejoin"
+        );
         Ok(())
     }
 
@@ -490,14 +567,22 @@ impl RaftNode {
 
 #[async_trait]
 impl TrustShareProvider for RaftNode {
-    async fn get_share(&self, requester: EndpointId, epoch: u64) -> anyhow::Result<Option<ShareResponse>> {
+    async fn get_share(&self, requester: EndpointId, epoch: u64) -> anyhow::Result<Option<TrustResponse>> {
         let StateMachineVariant::Redb(storage) = self.state_machine() else {
             return Ok(None);
         };
 
-        if !self.is_trust_share_requester_authorized(requester) {
-            warn!(requester = %requester, epoch, "rejecting trust share request from non-member");
+        // Expunged nodes reject all trust protocol messages
+        if storage.is_expunged()? {
+            warn!(requester = %requester, epoch, "expunged node rejecting trust share request");
             return Ok(None);
+        }
+
+        // If requester is not in current membership, notify them they've been expunged
+        if !self.is_trust_share_requester_authorized(requester) {
+            warn!(requester = %requester, epoch, "trust share request from non-member, sending expungement notification");
+            let current_epoch = storage.load_current_trust_epoch()?.unwrap_or(1);
+            return Ok(Some(TrustResponse::Expunged { epoch: current_epoch }));
         }
 
         let Some(share) = storage.load_share(epoch)? else {
@@ -505,7 +590,50 @@ impl TrustShareProvider for RaftNode {
             return Ok(None);
         };
 
-        Ok(Some(ShareResponse { epoch, share }))
+        Ok(Some(TrustResponse::Share(ShareResponse { epoch, share })))
+    }
+
+    fn is_expunged(&self) -> bool {
+        let StateMachineVariant::Redb(storage) = self.state_machine() else {
+            return false;
+        };
+        storage.is_expunged().unwrap_or(false)
+    }
+
+    async fn on_expunged(&self, from: EndpointId, epoch: u64) -> anyhow::Result<()> {
+        let StateMachineVariant::Redb(storage) = self.state_machine() else {
+            return Ok(());
+        };
+
+        // Only accept expungement if the epoch is >= our latest known trust epoch.
+        let current_epoch = storage.load_current_trust_epoch()?.unwrap_or(0);
+        if epoch < current_epoch {
+            warn!(
+                from = %from,
+                their_epoch = epoch,
+                our_epoch = current_epoch,
+                "ignoring stale expungement notification"
+            );
+            return Ok(());
+        }
+
+        let now_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+
+        let metadata = aspen_cluster_types::ExpungedMetadata {
+            epoch,
+            removed_by: 0, // We don't know which node initiated it from a peer notification
+            timestamp_ms: now_ms,
+        };
+
+        storage.mark_expunged(metadata)?;
+        self.expunged_flag.store(true, std::sync::atomic::Ordering::Release);
+        error!(
+            from = %from,
+            epoch,
+            "node has been expunged by peer — all trust shares zeroized"
+        );
+        Ok(())
     }
 }
 
@@ -618,6 +746,10 @@ mod tests {
 
     #[async_trait]
     impl TrustShareClient for MockTrustShareClient {
+        async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
+            Ok(())
+        }
+
         async fn get_share(&self, target: EndpointAddr, _epoch: u64) -> anyhow::Result<ShareResponse> {
             let response = self
                 .responses
