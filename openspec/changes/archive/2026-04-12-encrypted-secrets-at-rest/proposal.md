@@ -7,6 +7,7 @@ Aspen's secrets engine (Transit keys, PKI private keys, KV secrets) stores all s
 - Derive a secrets-at-rest encryption key from the cluster root secret via HKDF with context `b"aspen-v1-secrets-at-rest"`
 - Encrypt all values in the secrets engine (KV, Transit, PKI) before writing to redb
 - Decrypt on read, using the derived key cached in memory after quorum reconstruction
+- Allow a startup-only reconstruction exception to resume an interrupted secrets re-encryption checkpoint after epoch rotation
 - Use ChaCha20Poly1305 for authenticated encryption (same as trust-quorum's chain encryption)
 - Each secret value gets a unique nonce (counter-based per node, or random)
 - On secret rotation (membership change from `secret-rotation-on-membership-change`), re-encrypt all secrets with the new epoch's derived key

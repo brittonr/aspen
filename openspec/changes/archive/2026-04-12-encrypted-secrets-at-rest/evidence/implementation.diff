@@ -1,0 +1,1662 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 8889d55c6..8e3852d9d 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -681,3 +681,7 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
+ - All legacy `RaftActor` references have been removed; the codebase uses `RaftNode` throughout
+ - `openspec list --json` treats `openspec/changes/active/` as a change named `active`; inspect the dated directory inside `openspec/changes/active/` directly instead of assuming `active` is a real change
+ - Fresh trust joiners replay the historical `TrustInitialize` log even though they were not initial members. `apply_trust_initialize_in_txn()` must tolerate a missing local epoch-1 share and still persist the epoch metadata; otherwise the new node fatally shuts down before it can apply the later `TrustReconfiguration` entry that assigns its first real share.
++- Secrets-at-rest epoch rotation must carry forward prior epoch keys into the new `SecretsEncryption` context until background re-encryption finishes; replacing the context with only the new epoch key breaks mixed-epoch reads during migration.
++- `trust_current_epoch` is written only by `TrustReconfiguration`, not by `TrustInitialize`. Code that watches trust epochs must infer epoch 1 from persisted trust digests/shares when the metadata key is still absent.
++- Redb-backed `RaftNode` tests cannot simulate a full in-process restart by reopening the same database path after `drop(node)`: openraft background tasks keep the Redb handle alive and `SharedRedbStorage::new()` returns `DatabaseAlreadyOpen`. Test startup-resume logic by creating a fresh provider/watcher on the existing node/storage state instead.
++- `NodeBuilder::start()` always wires a trust share client when the `trust` feature is compiled (`crates/aspen-cluster/src/bootstrap/node/mod.rs::create_raft_node`). To verify "trust feature compiled but runtime trust not configured" behavior in `src/node/mod.rs`, test the secrets-service setup helper directly instead of relying on a bootstrapped node.
+diff --git a/Cargo.toml b/Cargo.toml
+index 91ff4cc80..d938a34d1 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -511,7 +511,7 @@ ci-vm-executor = ["aspen-ci/plugins-vm"]
+ fuzzing = ["testing"]
+ bolero = []
+ global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
+-secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]
++secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets", "aspen-raft/secrets"]
+ automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
+ ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-ci/nix-executor", "aspen-ci/nix-cache", "aspen-client/cache-index", "nix-executor", "jobs", "blob", "forge"]
+ nix-executor = []  # Marker feature: enables NixBuildWorker registration in aspen-node binary
+diff --git a/crates/aspen-raft/Cargo.toml b/crates/aspen-raft/Cargo.toml
+index 80bc66a05..892b98a07 100644
+--- a/crates/aspen-raft/Cargo.toml
++++ b/crates/aspen-raft/Cargo.toml
+@@ -28,6 +28,7 @@ aspen-client-api = { workspace = true }
+ aspen-coordination = { workspace = true, optional = true }
+ aspen-sql = { workspace = true, optional = true }
+ aspen-trust = { workspace = true, optional = true }
++aspen-secrets = { workspace = true, features = ["trust"], optional = true }
+
+ # OpenRaft consensus
+ openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+@@ -97,6 +98,7 @@ default = []
+ sql = ["dep:datafusion", "dep:arrow", "dep:aspen-sql"]
+ coordination = ["dep:aspen-coordination"]
+ trust = ["dep:aspen-trust"]
++secrets = ["dep:aspen-secrets", "trust"]
+ sharding = []
+ testing = ["dep:madsim", "dep:ractor"]
+ bolero = []  # Bolero is in dev-dependencies for testing
+diff --git a/crates/aspen-raft/src/lib.rs b/crates/aspen-raft/src/lib.rs
+index 796784ebc..32c5f5cd7 100644
+--- a/crates/aspen-raft/src/lib.rs
++++ b/crates/aspen-raft/src/lib.rs
+@@ -68,6 +68,9 @@ pub mod node;
+ pub mod node_failure_detection;
+ /// IRPC service definitions for Raft RPC over Iroh.
+ pub mod rpc;
++/// Trust-aware secrets-at-rest integration.
++#[cfg(all(feature = "trust", feature = "secrets"))]
++pub mod secrets_at_rest;
+ /// Raft server protocol handlers.
+ pub mod server;
+ /// Sharded Raft RPC types for horizontal scaling.
+diff --git a/crates/aspen-raft/src/node/tests.rs b/crates/aspen-raft/src/node/tests.rs
+index 18280d928..c651cf7ad 100644
+--- a/crates/aspen-raft/src/node/tests.rs
++++ b/crates/aspen-raft/src/node/tests.rs
+@@ -6,6 +6,10 @@ use std::collections::BTreeMap;
+ use std::collections::BTreeSet;
+ use std::sync::Arc;
+ #[cfg(feature = "trust")]
++use std::sync::atomic::AtomicBool;
++#[cfg(feature = "trust")]
++use std::sync::atomic::Ordering;
++#[cfg(feature = "trust")]
+ use std::time::Duration;
+
+ use aspen_cluster_types::AddLearnerRequest;
+@@ -177,6 +181,13 @@ struct KeyManagerEncryptionProvider {
+     collector: Arc<dyn aspen_trust::key_manager::ShareCollector>,
+ }
+
++#[cfg(feature = "trust")]
++struct KeyValueStoreReencryptionAdapter {
++    kv: Arc<dyn aspen_core::KeyValueStore>,
++    pause_armed: AtomicBool,
++    delay_ms_after_arm: u64,
++}
++
+ #[cfg(feature = "trust")]
+ impl TestTrustShareClient {
+     fn immediate(storages_by_endpoint: BTreeMap<String, Arc<SharedRedbStorage>>) -> Self {
+@@ -213,6 +224,21 @@ impl TestSecretsShareCollector {
+     }
+ }
+
++#[cfg(feature = "trust")]
++impl KeyValueStoreReencryptionAdapter {
++    fn new(kv: Arc<dyn aspen_core::KeyValueStore>, delay_ms_after_arm: u64) -> Self {
++        Self {
++            kv,
++            pause_armed: AtomicBool::new(false),
++            delay_ms_after_arm,
++        }
++    }
++
++    fn arm_pause(&self) {
++        self.pause_armed.store(true, Ordering::SeqCst);
++    }
++}
++
+ #[cfg(feature = "trust")]
+ #[async_trait]
+ impl crate::trust_share_client::TrustShareClient for TestTrustShareClient {
+@@ -236,6 +262,10 @@ impl crate::trust_share_client::TrustShareClient for TestTrustShareClient {
+         let share = storage.load_share(epoch)?.ok_or_else(|| anyhow::anyhow!("missing share for epoch {epoch}"))?;
+         Ok(aspen_trust::protocol::ShareResponse { epoch, share })
+     }
++
++    async fn send_expunged(&self, _target: EndpointAddr, _epoch: u64) -> anyhow::Result<()> {
++        Ok(())
++    }
+ }
+
+ #[cfg(feature = "trust")]
+@@ -285,6 +315,32 @@ impl aspen_secrets::SecretsEncryptionProvider for KeyManagerEncryptionProvider {
+     }
+ }
+
++#[cfg(feature = "trust")]
++#[async_trait]
++impl aspen_traits::KeyValueStore for KeyValueStoreReencryptionAdapter {
++    async fn write(&self, request: WriteRequest) -> Result<aspen_kv_types::WriteResult, KeyValueStoreError> {
++        let result = self.kv.write(request).await?;
++
++        if self.pause_armed.load(Ordering::SeqCst) {
++            tokio::time::sleep(Duration::from_millis(self.delay_ms_after_arm)).await;
++        }
++
++        Ok(result)
++    }
++
++    async fn read(&self, request: ReadRequest) -> Result<aspen_kv_types::ReadResult, KeyValueStoreError> {
++        self.kv.read(request).await
++    }
++
++    async fn delete(&self, request: DeleteRequest) -> Result<aspen_kv_types::DeleteResult, KeyValueStoreError> {
++        self.kv.delete(request).await
++    }
++
++    async fn scan(&self, request: ScanRequest) -> Result<aspen_kv_types::ScanResult, KeyValueStoreError> {
++        self.kv.scan(request).await
++    }
++}
++
+ #[cfg(feature = "trust")]
+ #[async_trait]
+ impl aspen_traits::KeyValueStore for StorageReadAdapter {
+@@ -331,6 +387,21 @@ fn rebuild_secret_from_storage(storage: &[Arc<SharedRedbStorage>], epoch: u64, t
+     shamir::reconstruct_secret(&shares).unwrap()
+ }
+
++#[cfg(feature = "trust")]
++fn secret_storage_key(mount: &str, path: &str) -> String {
++    format!("{}{mount}/{path}", aspen_secrets::SECRETS_SYSTEM_PREFIX)
++}
++
++#[cfg(feature = "trust")]
++fn load_secret_storage_epoch(storage: &SharedRedbStorage, mount: &str, path: &str) -> u64 {
++    use base64::Engine;
++
++    let full_key = secret_storage_key(mount, path);
++    let entry = storage.get_with_revision(&full_key).unwrap().unwrap();
++    let decoded = base64::engine::general_purpose::STANDARD.decode(entry.value).unwrap();
++    aspen_trust::encryption::SecretsEncryption::peek_epoch(&decoded).unwrap()
++}
++
+ #[cfg(feature = "trust")]
+ async fn wait_for_trust_epoch(storages: &[Arc<SharedRedbStorage>], epoch: u64, timeout: Duration) {
+     let result = tokio::time::timeout(timeout, async {
+@@ -689,6 +760,309 @@ async fn test_secrets_become_unavailable_below_quorum_and_recover_after_nodes_re
+     assert_eq!(recovered, plaintext);
+ }
+
++#[cfg(all(feature = "trust", feature = "secrets"))]
++#[tokio::test]
++async fn test_membership_change_reencrypts_secrets_and_preserves_mixed_epoch_reads() {
++    use aspen_secrets::AspenSecretsBackend;
++    use aspen_secrets::SecretsBackend;
++
++    let router = Arc::new(MadsimRaftRouter::new());
++    let failure_injector = Arc::new(FailureInjector::new());
++    let cluster_name = "trust-secrets-rotation-redb-test";
++    let cluster_id = b"trust-secrets-rotation-cluster".to_vec();
++
++    let mut node1 = create_test_redb_node(1, router.clone(), failure_injector.clone(), cluster_name).await;
++    let mut node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
++    let mut node3 = create_test_redb_node(3, router.clone(), failure_injector.clone(), cluster_name).await;
++    let mut node4 = create_test_redb_node(4, router.clone(), failure_injector, cluster_name).await;
++
++    let endpoint1 = endpoint_addr_for_node(1);
++    let endpoint2 = endpoint_addr_for_node(2);
++    let endpoint3 = endpoint_addr_for_node(3);
++    let endpoint4 = endpoint_addr_for_node(4);
++    let storages_by_endpoint = BTreeMap::from([
++        (endpoint1.id.to_string(), node1.storage.clone()),
++        (endpoint2.id.to_string(), node2.storage.clone()),
++        (endpoint3.id.to_string(), node3.storage.clone()),
++        (endpoint4.id.to_string(), node4.storage.clone()),
++    ]);
++    let client: Arc<dyn crate::trust_share_client::TrustShareClient> =
++        Arc::new(TestTrustShareClient::immediate(storages_by_endpoint));
++
++    Arc::get_mut(&mut node1.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++    Arc::get_mut(&mut node3.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++    Arc::get_mut(&mut node4.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++
++    ClusterController::init(&node1.node, InitRequest {
++        initial_members: vec![
++            cluster_node_with_endpoint(1, endpoint1.clone()),
++            cluster_node_with_endpoint(2, endpoint2.clone()),
++            cluster_node_with_endpoint(3, endpoint3.clone()),
++        ],
++        trust: aspen_cluster_types::TrustConfig::enabled(),
++    })
++    .await
++    .expect("init 3-node trust cluster");
++
++    wait_for_leader(&node1.node, 1, Duration::from_secs(10)).await;
++
++    let wrapped_kv_store = Arc::new(KeyValueStoreReencryptionAdapter::new(node1.node.clone(), 100));
++    let provider =
++        crate::secrets_at_rest::build_trust_aware_secrets_provider(node1.node.clone(), wrapped_kv_store.clone())
++            .expect("build trust-aware secrets provider");
++    let backend = AspenSecretsBackend::with_encryption_provider(wrapped_kv_store.clone(), "rotation", provider);
++
++    let expected_values = [
++        ("app/a", b"alpha-secret".to_vec()),
++        ("app/b", b"bravo-secret".to_vec()),
++        ("app/c", b"charlie-secret".to_vec()),
++    ];
++    for (path, value) in &expected_values {
++        backend.put(path, value).await.expect("write epoch 1 secret");
++        assert_eq!(load_secret_storage_epoch(&node1.storage, "rotation", path), 1);
++    }
++
++    wrapped_kv_store.arm_pause();
++    node4.node.raft().trigger().elect().await.expect("wake node 4 raft core before promotion");
++    ClusterController::add_learner(&node1.node, AddLearnerRequest {
++        learner: cluster_node_with_endpoint(4, endpoint4.clone()),
++    })
++    .await
++    .expect("add learner 4");
++
++    ClusterController::change_membership(&node1.node, ChangeMembershipRequest {
++        members: vec![1, 2, 3, 4],
++    })
++    .await
++    .expect("promote node 4 and rotate trust");
++
++    let new_epoch = node1.storage.load_current_trust_epoch().unwrap().unwrap();
++    assert!(new_epoch > 1);
++    wait_for_trust_epoch(
++        &[node1.storage.clone(), node2.storage.clone(), node3.storage.clone()],
++        new_epoch,
++        Duration::from_secs(15),
++    )
++    .await;
++
++    tokio::time::timeout(Duration::from_secs(10), async {
++        loop {
++            let has_new_epoch = expected_values
++                .iter()
++                .any(|(path, _)| load_secret_storage_epoch(&node1.storage, "rotation", path) == new_epoch);
++            let has_old_epoch = expected_values
++                .iter()
++                .any(|(path, _)| load_secret_storage_epoch(&node1.storage, "rotation", path) == 1);
++            if has_new_epoch && has_old_epoch {
++                break;
++            }
++            tokio::time::sleep(Duration::from_millis(10)).await;
++        }
++    })
++    .await
++    .expect("membership change should trigger automatic re-encryption with a mixed-epoch window");
++
++    assert_eq!(load_secret_storage_epoch(&node1.storage, "rotation", "app/a"), new_epoch);
++    assert_eq!(load_secret_storage_epoch(&node1.storage, "rotation", "app/c"), 1);
++    assert_eq!(backend.get("app/a").await.expect("read migrated value").as_deref(), Some(&b"alpha-secret"[..]));
++    assert_eq!(
++        backend.get("app/c").await.expect("read old-epoch value during transition").as_deref(),
++        Some(&b"charlie-secret"[..])
++    );
++
++    tokio::time::timeout(Duration::from_secs(10), async {
++        loop {
++            let all_rotated = expected_values
++                .iter()
++                .all(|(path, _)| load_secret_storage_epoch(&node1.storage, "rotation", path) == new_epoch);
++            if all_rotated {
++                break;
++            }
++            tokio::time::sleep(Duration::from_millis(50)).await;
++        }
++    })
++    .await
++    .expect("all secrets should be re-encrypted at the new epoch");
++
++    for (path, value) in &expected_values {
++        let stored = backend.get(path).await.expect("read value after automatic re-encryption");
++        assert_eq!(stored.as_deref(), Some(value.as_slice()));
++    }
++}
++
++#[cfg(all(feature = "trust", feature = "secrets"))]
++#[tokio::test]
++async fn test_reencryption_checkpoint_resumes_after_restart() {
++    use aspen_secrets::AspenSecretsBackend;
++    use aspen_secrets::SecretsBackend;
++    use base64::Engine;
++
++    let router = Arc::new(MadsimRaftRouter::new());
++    let failure_injector = Arc::new(FailureInjector::new());
++    let cluster_name = "trust-secrets-restart-redb-test";
++    let cluster_id = b"trust-secrets-restart-cluster".to_vec();
++
++    let node1_dir = TempDir::new().expect("node1 temp dir");
++    let node1_path = node1_dir.path().join("node-1.redb");
++    let mut node1 =
++        create_test_redb_node_at_path(1, router.clone(), failure_injector.clone(), cluster_name, &node1_path).await;
++    let mut node2 = create_test_redb_node(2, router.clone(), failure_injector.clone(), cluster_name).await;
++    let mut node3 = create_test_redb_node(3, router.clone(), failure_injector.clone(), cluster_name).await;
++    let mut node4 = create_test_redb_node(4, router.clone(), failure_injector, cluster_name).await;
++
++    let endpoint1 = endpoint_addr_for_node(1);
++    let endpoint2 = endpoint_addr_for_node(2);
++    let endpoint3 = endpoint_addr_for_node(3);
++    let endpoint4 = endpoint_addr_for_node(4);
++    let storages_by_endpoint = BTreeMap::from([
++        (endpoint1.id.to_string(), node1.storage.clone()),
++        (endpoint2.id.to_string(), node2.storage.clone()),
++        (endpoint3.id.to_string(), node3.storage.clone()),
++        (endpoint4.id.to_string(), node4.storage.clone()),
++    ]);
++    let client: Arc<dyn crate::trust_share_client::TrustShareClient> =
++        Arc::new(TestTrustShareClient::immediate(storages_by_endpoint));
++
++    Arc::get_mut(&mut node1.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++    Arc::get_mut(&mut node2.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++    Arc::get_mut(&mut node3.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++    Arc::get_mut(&mut node4.node).unwrap().set_trust_share_client(client.clone(), cluster_id.clone());
++
++    ClusterController::init(&node1.node, InitRequest {
++        initial_members: vec![
++            cluster_node_with_endpoint(1, endpoint1.clone()),
++            cluster_node_with_endpoint(2, endpoint2.clone()),
++            cluster_node_with_endpoint(3, endpoint3.clone()),
++        ],
++        trust: aspen_cluster_types::TrustConfig::enabled(),
++    })
++    .await
++    .expect("init 3-node trust cluster");
++
++    wait_for_leader(&node1.node, 1, Duration::from_secs(10)).await;
++
++    let epoch1_collector: Arc<dyn aspen_trust::key_manager::ShareCollector> = Arc::new(TestSecretsShareCollector::new(
++        BTreeMap::from([
++            (1_u64, node1.storage.clone()),
++            (2_u64, node2.storage.clone()),
++            (3_u64, node3.storage.clone()),
++        ]),
++        2,
++    ));
++    let epoch1_backend = AspenSecretsBackend::with_encryption_provider(
++        node1.node.clone() as Arc<dyn aspen_core::KeyValueStore>,
++        "restart",
++        Arc::new(KeyManagerEncryptionProvider {
++            manager: Arc::new(aspen_trust::key_manager::KeyManager::new(aspen_trust::key_manager::KeyManagerConfig {
++                cluster_id: cluster_id.clone(),
++                node_id: 1,
++                initial_nonce_counter: node1.storage.load_nonce_counter(1).unwrap().unwrap_or(0),
++                epoch: 1,
++            })),
++            collector: epoch1_collector,
++        }),
++    );
++
++    let expected_values: Vec<_> = (0_u32..105)
++        .map(|index| (format!("app/{index:03}"), format!("secret-{index:03}").into_bytes()))
++        .collect();
++    for (path, value) in &expected_values {
++        epoch1_backend.put(path, value).await.expect("write epoch 1 secret");
++        assert_eq!(load_secret_storage_epoch(&node1.storage, "restart", path), 1);
++    }
++
++    node4.node.raft().trigger().elect().await.expect("wake node 4 raft core before promotion");
++    ClusterController::add_learner(&node1.node, AddLearnerRequest {
++        learner: cluster_node_with_endpoint(4, endpoint4.clone()),
++    })
++    .await
++    .expect("add learner 4");
++    ClusterController::change_membership(&node1.node, ChangeMembershipRequest {
++        members: vec![1, 2, 3, 4],
++    })
++    .await
++    .expect("promote node 4 and rotate trust");
++
++    let current_epoch = node1.storage.load_current_trust_epoch().unwrap().unwrap();
++    assert!(current_epoch > 1);
++    wait_for_trust_epoch(
++        &[node1.storage.clone(), node2.storage.clone(), node3.storage.clone()],
++        current_epoch,
++        Duration::from_secs(15),
++    )
++    .await;
++
++    let current_encryption = crate::secrets_at_rest::load_current_secrets_encryption_for_tests(node1.node.clone())
++        .await
++        .expect("load current secrets encryption");
++
++    for (path, value) in expected_values.iter().take(100) {
++        let full_key = secret_storage_key("restart", path);
++        let stored = node1.storage.get_with_revision(&full_key).unwrap().unwrap();
++        let decoded = base64::engine::general_purpose::STANDARD.decode(stored.value).unwrap();
++        let plaintext = current_encryption.unwrap_read(&decoded).unwrap();
++        assert_eq!(plaintext, *value);
++        let (reencrypted, _) = current_encryption.wrap_write(&plaintext).unwrap();
++        node1
++            .node
++            .write(WriteRequest {
++                command: WriteCommand::Set {
++                    key: full_key,
++                    value: base64::engine::general_purpose::STANDARD.encode(reencrypted),
++                },
++            })
++            .await
++            .expect("write partially re-encrypted value");
++    }
++    let checkpoint_key = secret_storage_key("restart", &expected_values[99].0);
++    node1
++        .storage
++        .save_reencryption_checkpoint(aspen_secrets::SECRETS_SYSTEM_PREFIX, &checkpoint_key)
++        .unwrap();
++
++    assert_eq!(load_secret_storage_epoch(&node1.storage, "restart", &expected_values[0].0), current_epoch);
++    assert_eq!(load_secret_storage_epoch(&node1.storage, "restart", &expected_values[104].0), 1);
++    assert_eq!(
++        node1.storage.load_reencryption_checkpoint(aspen_secrets::SECRETS_SYSTEM_PREFIX).unwrap().as_deref(),
++        Some(checkpoint_key.as_str())
++    );
++
++    drop(epoch1_backend);
++
++    let resumed_provider = crate::secrets_at_rest::build_trust_aware_secrets_provider(
++        node1.node.clone(),
++        node1.node.clone() as Arc<dyn aspen_core::KeyValueStore>,
++    )
++    .expect("build trust-aware provider after partial rotation");
++    let resumed_backend = AspenSecretsBackend::with_encryption_provider(
++        node1.node.clone() as Arc<dyn aspen_core::KeyValueStore>,
++        "restart",
++        resumed_provider,
++    );
++
++    tokio::time::timeout(Duration::from_secs(10), async {
++        loop {
++            let all_rotated = expected_values
++                .iter()
++                .all(|(path, _)| load_secret_storage_epoch(&node1.storage, "restart", path) == current_epoch);
++            let checkpoint_cleared =
++                node1.storage.load_reencryption_checkpoint(aspen_secrets::SECRETS_SYSTEM_PREFIX).unwrap().is_none();
++            if all_rotated && checkpoint_cleared {
++                break;
++            }
++            tokio::time::sleep(Duration::from_millis(50)).await;
++        }
++    })
++    .await
++    .expect("startup watcher should resume re-encryption from checkpoint without another epoch bump");
++
++    for (path, value) in &expected_values {
++        let stored = resumed_backend.get(path).await.expect("read resumed value");
++        assert_eq!(stored.as_deref(), Some(value.as_slice()));
++    }
++}
++
+ #[cfg(feature = "trust")]
+ #[tokio::test]
+ async fn test_multi_node_trust_membership_change_rotates_secret_add_and_remove() {
+diff --git a/crates/aspen-raft/src/secrets_at_rest.rs b/crates/aspen-raft/src/secrets_at_rest.rs
+new file mode 100644
+index 000000000..8c4592239
+--- /dev/null
++++ b/crates/aspen-raft/src/secrets_at_rest.rs
+@@ -0,0 +1,490 @@
++//! Trust-aware secrets-at-rest integration.
++//!
++//! Bridges committed trust epochs to the secrets backend by:
++//! - reconstructing the current epoch secret on demand for ordinary secrets access,
++//! - deriving epoch-scoped at-rest keys,
++//! - carrying prior epoch keys forward for mixed-epoch reads,
++//! - starting background re-encryption when the trust epoch advances,
++//! - and resuming interrupted re-encryption at startup when a checkpoint is present.
++
++use std::collections::BTreeMap;
++use std::sync::Arc;
++use std::time::Duration;
++
++use aspen_trust::key_manager::ShareCollector;
++use aspen_trust::reencrypt::ReencryptionStore;
++use async_trait::async_trait;
++use base64::Engine;
++use tokio::task::JoinSet;
++use tracing::info;
++use tracing::warn;
++
++use crate::StateMachineVariant;
++use crate::node::RaftNode;
++use crate::storage_shared::SharedRedbStorage;
++
++const SHARE_COLLECTION_TIMEOUT: Duration = Duration::from_secs(10);
++
++struct RaftShareCollector {
++    node: Arc<RaftNode>,
++}
++
++impl RaftShareCollector {
++    fn new(node: Arc<RaftNode>) -> Self {
++        Self { node }
++    }
++}
++
++struct TrustAwareEncryptionProvider {
++    node: Arc<RaftNode>,
++    collector: Arc<RaftShareCollector>,
++    key_manager: Arc<aspen_trust::key_manager::KeyManager>,
++}
++
++struct RaftReencryptionStore {
++    kv: Arc<dyn aspen_core::KeyValueStore>,
++    storage: Arc<SharedRedbStorage>,
++}
++
++impl RaftReencryptionStore {
++    fn new(kv: Arc<dyn aspen_core::KeyValueStore>, storage: Arc<SharedRedbStorage>) -> Self {
++        Self { kv, storage }
++    }
++}
++
++fn trust_storage(node: &RaftNode) -> Result<Arc<SharedRedbStorage>, String> {
++    let StateMachineVariant::Redb(storage) = node.state_machine() else {
++        return Err("trust requires redb storage".to_string());
++    };
++    Ok(storage.clone())
++}
++
++fn effective_trust_epoch(storage: &SharedRedbStorage, fallback_epoch: u64) -> u64 {
++    match storage.load_current_trust_epoch() {
++        Ok(Some(epoch)) => epoch,
++        Ok(None) => match storage.load_digests(1) {
++            Ok(digests) if !digests.is_empty() => 1,
++            _ => fallback_epoch,
++        },
++        Err(_) => fallback_epoch,
++    }
++}
++
++fn resolve_threshold(member_count: usize, threshold_override: Option<u8>) -> Result<u8, String> {
++    let count_u32 = u32::try_from(member_count).map_err(|_| "too many trust members".to_string())?;
++    let threshold = match threshold_override {
++        Some(value) => {
++            aspen_trust::secret::Threshold::new(value).ok_or_else(|| "threshold must be >= 1".to_string())?
++        }
++        None => aspen_trust::secret::Threshold::default_for_cluster_size(count_u32),
++    };
++    if usize::from(threshold.value()) > member_count {
++        return Err(format!("threshold {} exceeds cluster size {member_count}", threshold.value()));
++    }
++    Ok(threshold.value())
++}
++
++async fn sync_key_manager_to_current_epoch(
++    node: &Arc<RaftNode>,
++    collector: &Arc<RaftShareCollector>,
++    key_manager: &Arc<aspen_trust::key_manager::KeyManager>,
++) -> Result<Arc<aspen_trust::encryption::SecretsEncryption>, String> {
++    let storage = trust_storage(node.as_ref())?;
++    let current_epoch = effective_trust_epoch(storage.as_ref(), key_manager.epoch());
++
++    if let Some(enc) = key_manager.get_if_initialized().await
++        && enc.epoch() == current_epoch
++    {
++        return Ok(enc);
++    }
++
++    let shares = collector.collect_shares(current_epoch).await.map_err(|e| e.to_string())?;
++    let current_secret =
++        aspen_trust::shamir::reconstruct_secret(&shares).map_err(|e| format!("failed to reconstruct secret: {e}"))?;
++
++    let prior_secrets = if current_epoch > 1 {
++        let chain = storage
++            .load_encrypted_chain(current_epoch)
++            .map_err(|e| e.to_string())?
++            .ok_or_else(|| format!("missing encrypted chain for epoch {current_epoch}"))?;
++        let cluster_id = node.trust_cluster_id().ok_or_else(|| "trust cluster id is not configured".to_string())?;
++        aspen_trust::chain::decrypt_chain(&chain, &current_secret, cluster_id)
++            .map_err(|e| format!("failed to decrypt historical secret chain: {e}"))?
++    } else {
++        BTreeMap::new()
++    };
++
++    Ok(key_manager.rotate_epoch_with_prior_secrets(&current_secret, current_epoch, &prior_secrets).await)
++}
++
++async fn find_oldest_outdated_epoch(
++    store: &RaftReencryptionStore,
++    prefix: &str,
++    current_epoch: u64,
++) -> Result<Option<u64>, aspen_trust::reencrypt::ReencryptionError> {
++    let mut after_key: Option<String> = None;
++    let mut oldest_epoch: Option<u64> = None;
++
++    loop {
++        let batch = store.scan_secrets(prefix, after_key.as_deref(), 100).await?;
++        if batch.is_empty() {
++            return Ok(oldest_epoch);
++        }
++
++        for (key, value) in &batch {
++            if let Ok(epoch) = aspen_trust::encryption::SecretsEncryption::peek_epoch(value)
++                && epoch < current_epoch
++            {
++                oldest_epoch = Some(oldest_epoch.map_or(epoch, |existing| existing.min(epoch)));
++            }
++            after_key = Some(key.clone());
++        }
++    }
++}
++
++async fn reconcile_pending_reencryption(
++    node: &Arc<RaftNode>,
++    kv: &Arc<dyn aspen_core::KeyValueStore>,
++    collector: &Arc<RaftShareCollector>,
++    key_manager: &Arc<aspen_trust::key_manager::KeyManager>,
++) -> Result<(), String> {
++    let storage = trust_storage(node.as_ref())?;
++    let store = RaftReencryptionStore::new(kv.clone(), storage.clone());
++
++    loop {
++        let current_epoch = effective_trust_epoch(storage.as_ref(), key_manager.epoch());
++        if current_epoch <= 1 {
++            return Ok(());
++        }
++
++        let checkpoint = store
++            .load_checkpoint(aspen_secrets::SECRETS_SYSTEM_PREFIX)
++            .await
++            .map_err(|error| error.to_string())?;
++        let old_epoch = find_oldest_outdated_epoch(&store, aspen_secrets::SECRETS_SYSTEM_PREFIX, current_epoch)
++            .await
++            .map_err(|error| error.to_string())?
++            .or_else(|| checkpoint.as_ref().map(|_| current_epoch.saturating_sub(1)));
++
++        let Some(old_epoch) = old_epoch else {
++            return Ok(());
++        };
++
++        let encryption = sync_key_manager_to_current_epoch(node, collector, key_manager).await?;
++        let result = aspen_trust::reencrypt::reencrypt_secrets(
++            &store,
++            encryption.as_ref(),
++            old_epoch,
++            aspen_secrets::SECRETS_SYSTEM_PREFIX,
++        )
++        .await
++        .map_err(|error| error.to_string())?;
++
++        info!(
++            old_epoch,
++            current_epoch,
++            keys_reencrypted = result.keys_reencrypted,
++            keys_skipped = result.keys_skipped,
++            checkpoint_resumed = checkpoint.is_some(),
++            "completed secrets re-encryption reconciliation"
++        );
++    }
++}
++
++fn spawn_reencryption_watcher(
++    node: Arc<RaftNode>,
++    kv: Arc<dyn aspen_core::KeyValueStore>,
++    collector: Arc<RaftShareCollector>,
++    key_manager: Arc<aspen_trust::key_manager::KeyManager>,
++) {
++    tokio::spawn(async move {
++        let Ok(storage) = trust_storage(node.as_ref()) else {
++            return;
++        };
++        let mut last_epoch = effective_trust_epoch(storage.as_ref(), 0);
++        if let Err(error) = reconcile_pending_reencryption(&node, &kv, &collector, &key_manager).await {
++            warn!(error, "failed to reconcile pending secrets re-encryption at startup");
++        }
++        last_epoch = effective_trust_epoch(storage.as_ref(), last_epoch);
++        let mut interval = tokio::time::interval(Duration::from_millis(50));
++
++        loop {
++            interval.tick().await;
++
++            let current_epoch = effective_trust_epoch(storage.as_ref(), 0);
++            let has_checkpoint = storage
++                .load_reencryption_checkpoint(aspen_secrets::SECRETS_SYSTEM_PREFIX)
++                .map(|checkpoint| checkpoint.is_some())
++                .unwrap_or(false);
++
++            if last_epoch == 0 {
++                last_epoch = current_epoch;
++                continue;
++            }
++            if current_epoch <= last_epoch && !has_checkpoint {
++                continue;
++            }
++
++            if let Err(error) = reconcile_pending_reencryption(&node, &kv, &collector, &key_manager).await {
++                warn!(current_epoch, error, "secrets re-encryption reconciliation failed");
++                continue;
++            }
++            last_epoch = effective_trust_epoch(storage.as_ref(), current_epoch);
++        }
++    });
++}
++
++/// Return whether runtime trust wiring exists for trust-aware secrets-at-rest.
++///
++/// When the `trust` feature is compiled but the node was started without runtime
++/// trust configuration, callers should leave the secrets service in plaintext mode.
++pub fn has_runtime_trust_configuration(node: &RaftNode) -> bool {
++    node.trust_cluster_id().is_some() && node.trust_share_client().is_some()
++}
++
++fn build_key_manager(
++    node: &Arc<RaftNode>,
++    storage: &Arc<SharedRedbStorage>,
++) -> Result<Arc<aspen_trust::key_manager::KeyManager>, String> {
++    let cluster_id = node.trust_cluster_id().ok_or_else(|| "trust cluster id is not configured".to_string())?.to_vec();
++    let node_id = u32::try_from(node.node_id().0).map_err(|_| format!("node id {} exceeds u32", node.node_id().0))?;
++    let initial_nonce_counter = storage.load_nonce_counter(node.node_id().0).map_err(|e| e.to_string())?.unwrap_or(0);
++    let epoch = storage.load_current_trust_epoch().map_err(|e| e.to_string())?.unwrap_or(1);
++
++    Ok(Arc::new(aspen_trust::key_manager::KeyManager::new(aspen_trust::key_manager::KeyManagerConfig {
++        cluster_id,
++        node_id,
++        initial_nonce_counter,
++        epoch,
++    })))
++}
++
++#[cfg(test)]
++pub(crate) async fn load_current_secrets_encryption_for_tests(
++    node: Arc<RaftNode>,
++) -> Result<Arc<aspen_trust::encryption::SecretsEncryption>, String> {
++    let storage = trust_storage(node.as_ref())?;
++    let key_manager = build_key_manager(&node, &storage)?;
++    let collector = Arc::new(RaftShareCollector::new(node.clone()));
++    sync_key_manager_to_current_epoch(&node, &collector, &key_manager).await
++}
++
++/// Build a trust-aware secrets encryption provider and start epoch watching.
++pub fn build_trust_aware_secrets_provider(
++    node: Arc<RaftNode>,
++    kv: Arc<dyn aspen_core::KeyValueStore>,
++) -> Result<Arc<dyn aspen_secrets::SecretsEncryptionProvider>, String> {
++    let storage = trust_storage(node.as_ref())?;
++    let key_manager = build_key_manager(&node, &storage)?;
++    let collector = Arc::new(RaftShareCollector::new(node.clone()));
++    let provider: Arc<dyn aspen_secrets::SecretsEncryptionProvider> = Arc::new(TrustAwareEncryptionProvider {
++        node: node.clone(),
++        collector: collector.clone(),
++        key_manager: key_manager.clone(),
++    });
++
++    spawn_reencryption_watcher(node, kv, collector, key_manager);
++    Ok(provider)
++}
++
++#[async_trait]
++impl aspen_trust::key_manager::ShareCollector for RaftShareCollector {
++    async fn collect_shares(
++        &self,
++        epoch: u64,
++    ) -> Result<Vec<aspen_trust::shamir::Share>, aspen_trust::key_manager::ShareCollectionError> {
++        let storage = trust_storage(self.node.as_ref())
++            .map_err(|reason| aspen_trust::key_manager::ShareCollectionError::CollectionFailed { reason })?;
++        let client = self.node.trust_share_client().cloned().ok_or_else(|| {
++            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
++                reason: "trust share client is not configured".to_string(),
++            }
++        })?;
++
++        let members = storage.load_members(epoch).map_err(|error| {
++            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
++                reason: format!("failed to load trust members: {error}"),
++            }
++        })?;
++        let threshold_override = storage.load_trust_threshold_override().map_err(|error| {
++            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
++                reason: format!("failed to load trust threshold override: {error}"),
++            }
++        })?;
++        let threshold = resolve_threshold(members.len(), threshold_override)
++            .map_err(|reason| aspen_trust::key_manager::ShareCollectionError::CollectionFailed { reason })?;
++        let digests = storage.load_digests(epoch).map_err(|error| {
++            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
++                reason: format!("failed to load trust digests: {error}"),
++            }
++        })?;
++
++        let mut collected = Vec::new();
++        if let Some(local_share) = storage.load_share(epoch).map_err(|error| {
++            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
++                reason: format!("failed to load local trust share: {error}"),
++            }
++        })? {
++            collected.push(local_share);
++        }
++
++        let mut join_set = JoinSet::new();
++        for (node_id, endpoint) in members {
++            if node_id == self.node.node_id().0 {
++                continue;
++            }
++            let client = client.clone();
++            let expected_digest = digests.get(&node_id).copied();
++            join_set.spawn(async move {
++                let response = client.get_share(endpoint, epoch).await;
++                (node_id, expected_digest, response)
++            });
++        }
++
++        let deadline = tokio::time::sleep(SHARE_COLLECTION_TIMEOUT);
++        tokio::pin!(deadline);
++        while collected.len() < threshold as usize && !join_set.is_empty() {
++            tokio::select! {
++                _ = &mut deadline => break,
++                joined = join_set.join_next() => {
++                    let Some(joined) = joined else {
++                        continue;
++                    };
++                    let (_node_id, expected_digest, response) = joined.map_err(|error| {
++                        aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
++                            reason: format!("trust share task failed: {error}"),
++                        }
++                    })?;
++                    let response = response.map_err(|error| {
++                        aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
++                            reason: error.to_string(),
++                        }
++                    })?;
++                    if response.epoch != epoch {
++                        continue;
++                    }
++                    if let Some(expected_digest) = expected_digest {
++                        let actual = aspen_trust::shamir::share_digest(&response.share);
++                        if actual != expected_digest {
++                            continue;
++                        }
++                    }
++                    let already_present = collected
++                        .iter()
++                        .any(|share| aspen_trust::shamir::share_digest(share) == aspen_trust::shamir::share_digest(&response.share));
++                    if !already_present {
++                        collected.push(response.share);
++                    }
++                }
++            }
++        }
++
++        if collected.len() < threshold as usize {
++            return Err(aspen_trust::key_manager::ShareCollectionError::BelowQuorum {
++                collected: collected.len() as u32,
++                threshold: threshold as u32,
++            });
++        }
++
++        Ok(collected)
++    }
++}
++
++#[async_trait]
++impl aspen_secrets::SecretsEncryptionProvider for TrustAwareEncryptionProvider {
++    async fn get_encryption(
++        &self,
++    ) -> Result<Arc<aspen_trust::encryption::SecretsEncryption>, aspen_trust::encryption::SecretsUnavailableError> {
++        sync_key_manager_to_current_epoch(&self.node, &self.collector, &self.key_manager)
++            .await
++            .map_err(|error| {
++                warn!(error, "failed to initialize or rotate secrets-at-rest encryption context");
++                aspen_trust::encryption::SecretsUnavailableError::BelowQuorum
++            })
++    }
++}
++
++#[async_trait]
++impl aspen_trust::reencrypt::ReencryptionStore for RaftReencryptionStore {
++    async fn scan_secrets(
++        &self,
++        prefix: &str,
++        after_key: Option<&str>,
++        batch_size: u32,
++    ) -> Result<Vec<(String, Vec<u8>)>, aspen_trust::reencrypt::ReencryptionError> {
++        let result = self
++            .kv
++            .scan(aspen_kv_types::ScanRequest {
++                prefix: prefix.to_string(),
++                limit_results: Some(batch_size),
++                continuation_token: after_key.map(str::to_string),
++            })
++            .await
++            .map_err(|error| aspen_trust::reencrypt::ReencryptionError::Storage {
++                reason: format!("scan failed: {error}"),
++            })?;
++
++        result
++            .entries
++            .into_iter()
++            .map(|entry| {
++                base64::engine::general_purpose::STANDARD
++                    .decode(entry.value)
++                    .map(|value| (entry.key, value))
++                    .map_err(|error| aspen_trust::reencrypt::ReencryptionError::Storage {
++                        reason: format!("base64 decode failed: {error}"),
++                    })
++            })
++            .collect()
++    }
++
++    async fn write_reencrypted(
++        &self,
++        key: &str,
++        value: &[u8],
++    ) -> Result<(), aspen_trust::reencrypt::ReencryptionError> {
++        self.kv
++            .write(aspen_kv_types::WriteRequest {
++                command: aspen_kv_types::WriteCommand::Set {
++                    key: key.to_string(),
++                    value: base64::engine::general_purpose::STANDARD.encode(value),
++                },
++            })
++            .await
++            .map_err(|error| aspen_trust::reencrypt::ReencryptionError::Storage {
++                reason: format!("write failed: {error}"),
++            })?;
++        Ok(())
++    }
++
++    async fn save_checkpoint(
++        &self,
++        table_name: &str,
++        last_key: &str,
++    ) -> Result<(), aspen_trust::reencrypt::ReencryptionError> {
++        self.storage.save_reencryption_checkpoint(table_name, last_key).map_err(|error| {
++            aspen_trust::reencrypt::ReencryptionError::Storage {
++                reason: format!("checkpoint save failed: {error}"),
++            }
++        })
++    }
++
++    async fn load_checkpoint(
++        &self,
++        table_name: &str,
++    ) -> Result<Option<String>, aspen_trust::reencrypt::ReencryptionError> {
++        self.storage.load_reencryption_checkpoint(table_name).map_err(|error| {
++            aspen_trust::reencrypt::ReencryptionError::Storage {
++                reason: format!("checkpoint load failed: {error}"),
++            }
++        })
++    }
++
++    async fn clear_checkpoint(&self, table_name: &str) -> Result<(), aspen_trust::reencrypt::ReencryptionError> {
++        self.storage.clear_reencryption_checkpoint(table_name).map_err(|error| {
++            aspen_trust::reencrypt::ReencryptionError::Storage {
++                reason: format!("checkpoint clear failed: {error}"),
++            }
++        })
++    }
++}
+diff --git a/crates/aspen-raft/src/storage_shared/trust.rs b/crates/aspen-raft/src/storage_shared/trust.rs
+index c5c8d4d1e..239fdba81 100644
+--- a/crates/aspen-raft/src/storage_shared/trust.rs
++++ b/crates/aspen-raft/src/storage_shared/trust.rs
+@@ -20,6 +20,7 @@ use super::CommitSnafu;
+ use super::GetSnafu;
+ use super::OpenTableSnafu;
+ use super::RangeSnafu;
++use super::RemoveSnafu;
+ use super::SharedRedbStorage;
+ use super::SharedStorageError;
+ use super::TRUST_CHAINS_TABLE;
+@@ -27,6 +28,7 @@ use super::TRUST_DIGESTS_TABLE;
+ use super::TRUST_EXPUNGED_TABLE;
+ use super::TRUST_MEMBERS_TABLE;
+ use super::TRUST_NONCE_COUNTER_TABLE;
++use super::TRUST_REENCRYPTION_PROGRESS_TABLE;
+ use super::TRUST_SHARES_TABLE;
+
+ impl SharedRedbStorage {
+@@ -298,6 +300,43 @@ impl SharedRedbStorage {
+         Ok(entry.map(|v| v.value()))
+     }
+
++    /// Save re-encryption checkpoint progress for a table prefix.
++    pub fn save_reencryption_checkpoint(&self, table_name: &str, last_key: &str) -> Result<(), SharedStorageError> {
++        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
++        {
++            let mut table = write_txn.open_table(TRUST_REENCRYPTION_PROGRESS_TABLE).context(OpenTableSnafu)?;
++            table.insert(table_name, last_key.as_bytes()).context(super::InsertSnafu)?;
++        }
++        write_txn.commit().context(CommitSnafu)?;
++        Ok(())
++    }
++
++    /// Load re-encryption checkpoint progress for a table prefix.
++    pub fn load_reencryption_checkpoint(&self, table_name: &str) -> Result<Option<String>, SharedStorageError> {
++        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
++        let table = read_txn.open_table(TRUST_REENCRYPTION_PROGRESS_TABLE).context(OpenTableSnafu)?;
++        let entry = table.get(table_name).context(GetSnafu)?;
++        entry
++            .map(|value| {
++                let bytes: &[u8] = value.value();
++                String::from_utf8(bytes.to_vec()).map_err(|error| SharedStorageError::Internal {
++                    reason: format!("invalid reencryption checkpoint UTF-8: {error}"),
++                })
++            })
++            .transpose()
++    }
++
++    /// Clear re-encryption checkpoint progress for a table prefix.
++    pub fn clear_reencryption_checkpoint(&self, table_name: &str) -> Result<(), SharedStorageError> {
++        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
++        {
++            let mut table = write_txn.open_table(TRUST_REENCRYPTION_PROGRESS_TABLE).context(OpenTableSnafu)?;
++            table.remove(table_name).context(RemoveSnafu)?;
++        }
++        write_txn.commit().context(CommitSnafu)?;
++        Ok(())
++    }
++
+     /// Load all digests for the given epoch.
+     ///
+     /// Returns a map from node_id to SHA3-256 digest.
+diff --git a/crates/aspen-secrets/src/mount_registry.rs b/crates/aspen-secrets/src/mount_registry.rs
+index 91ed2b13a..94e2a94bb 100644
+--- a/crates/aspen-secrets/src/mount_registry.rs
++++ b/crates/aspen-secrets/src/mount_registry.rs
+@@ -20,10 +20,14 @@
+
+ use std::collections::HashMap;
+ use std::sync::Arc;
++#[cfg(feature = "trust")]
++use std::sync::RwLock as StdRwLock;
+
+ use tokio::sync::RwLock;
+
+ use crate::backend::AspenSecretsBackend;
++#[cfg(feature = "trust")]
++use crate::backend::SecretsEncryptionProvider;
+ use crate::constants::MAX_MOUNT_NAME_LENGTH;
+ use crate::constants::MAX_MOUNTS;
+ use crate::error::Result;
+@@ -67,7 +71,11 @@ pub struct MountRegistry {
+
+     /// Optional at-rest encryption context (enabled with `trust` feature).
+     #[cfg(feature = "trust")]
+-    encryption: RwLock<Option<Arc<aspen_trust::encryption::SecretsEncryption>>>,
++    encryption: StdRwLock<Option<Arc<aspen_trust::encryption::SecretsEncryption>>>,
++
++    /// Optional lazy encryption provider used for trust-aware epoch rotation.
++    #[cfg(feature = "trust")]
++    encryption_provider: StdRwLock<Option<Arc<dyn SecretsEncryptionProvider>>>,
+ }
+
+ impl MountRegistry {
+@@ -79,7 +87,9 @@ impl MountRegistry {
+             kv_stores: Arc::new(RwLock::new(HashMap::new())),
+             kv,
+             #[cfg(feature = "trust")]
+-            encryption: RwLock::new(None),
++            encryption: StdRwLock::new(None),
++            #[cfg(feature = "trust")]
++            encryption_provider: StdRwLock::new(None),
+         }
+     }
+
+@@ -88,8 +98,19 @@ impl MountRegistry {
+     /// Existing stores are not updated — call this before any stores are
+     /// created, or clear cached stores after calling.
+     #[cfg(feature = "trust")]
+-    pub async fn set_encryption(&self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
+-        *self.encryption.write().await = Some(encryption);
++    pub fn set_encryption(&self, encryption: Arc<aspen_trust::encryption::SecretsEncryption>) {
++        *self.encryption.write().expect("mount registry encryption lock poisoned") = Some(encryption);
++        *self.encryption_provider.write().expect("mount registry encryption provider lock poisoned") = None;
++    }
++
++    /// Set the lazy at-rest encryption provider for all newly created backends.
++    ///
++    /// Existing stores are not updated — call this before any stores are
++    /// created, or clear cached stores after calling.
++    #[cfg(feature = "trust")]
++    pub fn set_encryption_provider(&self, provider: Arc<dyn SecretsEncryptionProvider>) {
++        *self.encryption_provider.write().expect("mount registry encryption provider lock poisoned") = Some(provider);
++        *self.encryption.write().expect("mount registry encryption lock poisoned") = None;
+     }
+
+     /// Get or create a PKI store for the given mount point.
+@@ -234,7 +255,12 @@ impl MountRegistry {
+     async fn create_backend(&self, mount: &str) -> AspenSecretsBackend {
+         #[cfg(feature = "trust")]
+         {
+-            let enc = self.encryption.read().await;
++            let provider = self.encryption_provider.read().expect("mount registry encryption provider lock poisoned");
++            if let Some(provider) = provider.as_ref() {
++                return AspenSecretsBackend::with_encryption_provider(self.kv.clone(), mount, Arc::clone(provider));
++            }
++
++            let enc = self.encryption.read().expect("mount registry encryption lock poisoned");
+             if let Some(encryption) = enc.as_ref() {
+                 return AspenSecretsBackend::with_encryption(self.kv.clone(), mount, Arc::clone(encryption));
+             }
+diff --git a/crates/aspen-trust/src/encryption.rs b/crates/aspen-trust/src/encryption.rs
+index e9e6f9c04..846834640 100644
+--- a/crates/aspen-trust/src/encryption.rs
++++ b/crates/aspen-trust/src/encryption.rs
+@@ -116,6 +116,16 @@ impl SecretsEncryption {
+         self.keys.insert(epoch, key);
+     }
+
++    /// Copy all known epoch keys from an earlier context.
++    ///
++    /// Used during epoch rotation so the new context can still decrypt
++    /// old-epoch values until background re-encryption completes.
++    pub fn copy_epoch_keys_from(&mut self, other: &Self) {
++        for (epoch, key) in &other.keys {
++            self.keys.entry(*epoch).or_insert(*key);
++        }
++    }
++
+     /// Remove a prior epoch's key (after re-encryption completes).
+     ///
+     /// Zeroizes the key material before removal.
+diff --git a/crates/aspen-trust/src/key_manager.rs b/crates/aspen-trust/src/key_manager.rs
+index 00fa879aa..30042942b 100644
+--- a/crates/aspen-trust/src/key_manager.rs
++++ b/crates/aspen-trust/src/key_manager.rs
+@@ -11,6 +11,7 @@
+ //! The `KeyManager` is the bridge between the trust protocol layer (share
+ //! collection) and the secrets engine (encryption/decryption).
+
++use std::collections::BTreeMap;
+ use std::sync::Arc;
+
+ use async_trait::async_trait;
+@@ -18,6 +19,7 @@ use tokio::sync::RwLock;
+
+ use crate::encryption::SecretsEncryption;
+ use crate::encryption::SecretsUnavailableError;
++use crate::kdf;
+ use crate::shamir;
+
+ /// Callback trait for share collection from peers.
+@@ -168,43 +170,48 @@ impl KeyManager {
+     ///
+     /// Returns the updated encryption context.
+     pub async fn rotate_epoch(&self, new_secret: &[u8; 32], new_epoch: u64) -> Arc<SecretsEncryption> {
++        self.rotate_epoch_with_prior_secrets(new_secret, new_epoch, &BTreeMap::new()).await
++    }
++
++    /// Rotate to a new epoch and seed keys for prior epochs recovered from the chain.
++    pub async fn rotate_epoch_with_prior_secrets(
++        &self,
++        new_secret: &[u8; 32],
++        new_epoch: u64,
++        prior_secrets: &BTreeMap<u64, [u8; 32]>,
++    ) -> Arc<SecretsEncryption> {
+         let mut guard: tokio::sync::RwLockWriteGuard<'_, Option<Arc<SecretsEncryption>>> =
+             self.encryption.write().await;
+
+-        match guard.as_ref() {
+-            Some(existing) => {
+-                // Create a new context from the new secret at the new epoch.
+-                // The nonce counter continues from where the existing context left off.
+-                let new_enc = SecretsEncryption::new(
+-                    new_secret,
+-                    &self.config.cluster_id,
+-                    new_epoch,
+-                    self.config.node_id,
+-                    existing.nonce_counter(),
+-                );
+-                let result = Arc::new(new_enc);
+-                *guard = Some(Arc::clone(&result));
+-                result
+-            }
+-            None => {
+-                // First initialization via rotation (leader path).
+-                let enc = SecretsEncryption::new(
+-                    new_secret,
+-                    &self.config.cluster_id,
+-                    new_epoch,
+-                    self.config.node_id,
+-                    self.config.initial_nonce_counter,
+-                );
+-                let result = Arc::new(enc);
+-                *guard = Some(Arc::clone(&result));
+-
+-                // Mark as initialized
+-                let mut attempted = self.reconstruction_attempted.write().await;
+-                *attempted = true;
+-
+-                result
++        let initial_counter =
++            guard.as_ref().map(|existing| existing.nonce_counter()).unwrap_or(self.config.initial_nonce_counter);
++        let mut new_enc = SecretsEncryption::new(
++            new_secret,
++            &self.config.cluster_id,
++            new_epoch,
++            self.config.node_id,
++            initial_counter,
++        );
++
++        if let Some(existing) = guard.as_ref() {
++            new_enc.copy_epoch_keys_from(existing.as_ref());
++        }
++
++        for (epoch, secret) in prior_secrets {
++            if *epoch == new_epoch {
++                continue;
+             }
++            let key = kdf::derive_key(secret, kdf::CONTEXT_SECRETS_AT_REST, &self.config.cluster_id, *epoch);
++            new_enc.add_epoch_key(*epoch, key);
+         }
++
++        let result = Arc::new(new_enc);
++        *guard = Some(Arc::clone(&result));
++
++        let mut attempted = self.reconstruction_attempted.write().await;
++        *attempted = true;
++
++        result
+     }
+
+     /// Allow retry of reconstruction (e.g., after more nodes come online).
+@@ -254,7 +261,7 @@ mod tests {
+
+     #[tokio::test]
+     async fn test_lazy_reconstruction_success() {
+-        let (secret, shares) = make_shares();
++        let (_secret, shares) = make_shares();
+         let collector = MockCollector {
+             shares: shares[..2].to_vec(),
+         };
+@@ -345,9 +352,14 @@ mod tests {
+         };
+         let km = KeyManager::with_secret(config, &secret);
+
++        let old_enc = km.get_if_initialized().await.unwrap();
++        let (old_ciphertext, _) = old_enc.wrap_write(b"legacy-secret").unwrap();
++
+         let new_secret = [0xCDu8; 32];
+         let new_enc = km.rotate_epoch(&new_secret, 2).await;
+         assert_eq!(new_enc.epoch(), 2);
++        assert_eq!(new_enc.epoch_key_count(), 2);
++        assert_eq!(new_enc.unwrap_read(&old_ciphertext).unwrap(), b"legacy-secret");
+     }
+
+     #[tokio::test]
+diff --git a/openspec/changes/encrypted-secrets-at-rest/design.md b/openspec/changes/encrypted-secrets-at-rest/design.md
+index dfe3c779b..ad1fd0f5f 100644
+--- a/openspec/changes/encrypted-secrets-at-rest/design.md
++++ b/openspec/changes/encrypted-secrets-at-rest/design.md
+@@ -26,9 +26,9 @@ With `shamir-cluster-secret` providing a root secret and `secret-rotation-on-mem
+
+ **Per-value nonce via node_id + counter.** Each encrypted value includes a 12-byte nonce: 4 bytes node_id + 8 bytes monotonic counter. This avoids nonce reuse across nodes without coordination. The counter is persisted in redb and incremented on each write.
+
+-**Lazy reconstruction.** The secrets-at-rest key is not reconstructed at boot. It's reconstructed on first secrets engine access, which triggers share collection. If the cluster doesn't have quorum, secrets are unavailable (not corrupt — just locked). This is the intended security property.
++**Lazy reconstruction.** The secrets-at-rest key is not reconstructed at boot during ordinary startup. It's reconstructed on first secrets engine access, which triggers share collection. If the cluster doesn't have quorum, secrets are unavailable (not corrupt — just locked). The one exception is startup recovery for an interrupted epoch migration: if a persisted re-encryption checkpoint or stale lower-epoch ciphertext remains, Aspen may reconstruct the key at boot solely to finish background re-encryption recovery.
+
+-**Re-encryption on epoch change.** When `secret-rotation-on-membership-change` commits a new epoch, a background task re-encrypts all secrets with the new derived key. During re-encryption, reads use the old key for not-yet-migrated values and the new key for migrated ones. A version byte prefix on each encrypted value indicates which epoch's key was used.
++**Re-encryption on epoch change.** When `secret-rotation-on-membership-change` commits a new epoch, a background task re-encrypts all secrets with the new derived key. During re-encryption, reads use the old key for not-yet-migrated values and the new key for migrated ones. A version byte prefix on each encrypted value indicates which epoch's key was used. Re-encryption progress is checkpointed so a fresh provider/watcher on startup can resume migration without waiting for another epoch change.
+
+ **Prefix format:** `[magic: 4 bytes (AENC)][version: u8][epoch: u64][nonce: 12 bytes][ciphertext+tag]`. The 4-byte magic header enables unambiguous detection of encrypted values during migration from plaintext storage. The version byte allows future format changes. The epoch identifies which derived key to use for decryption. Detection is two-phase: (1) try to parse as an envelope — if parsing fails (wrong magic, bad version, too short), treat as legacy plaintext; (2) if parsing succeeds, decrypt — if decryption fails (Poly1305 tag mismatch, unknown epoch), raise an authentication error. This preserves tamper detection for real envelopes while allowing legacy plaintext to pass through.
+
+diff --git a/openspec/changes/encrypted-secrets-at-rest/proposal.md b/openspec/changes/encrypted-secrets-at-rest/proposal.md
+index 5eced4bc7..47a549f43 100644
+--- a/openspec/changes/encrypted-secrets-at-rest/proposal.md
++++ b/openspec/changes/encrypted-secrets-at-rest/proposal.md
+@@ -7,6 +7,7 @@ Aspen's secrets engine (Transit keys, PKI private keys, KV secrets) stores all s
+ - Derive a secrets-at-rest encryption key from the cluster root secret via HKDF with context `b"aspen-v1-secrets-at-rest"`
+ - Encrypt all values in the secrets engine (KV, Transit, PKI) before writing to redb
+ - Decrypt on read, using the derived key cached in memory after quorum reconstruction
++- Allow a startup-only reconstruction exception to resume an interrupted secrets re-encryption checkpoint after epoch rotation
+ - Use ChaCha20Poly1305 for authenticated encryption (same as trust-quorum's chain encryption)
+ - Each secret value gets a unique nonce (counter-based per node, or random)
+ - On secret rotation (membership change from `secret-rotation-on-membership-change`), re-encrypt all secrets with the new epoch's derived key
+diff --git a/openspec/changes/encrypted-secrets-at-rest/specs/secrets-encryption-at-rest/spec.md b/openspec/changes/encrypted-secrets-at-rest/specs/secrets-encryption-at-rest/spec.md
+index 18c3a56e5..08cfc7737 100644
+--- a/openspec/changes/encrypted-secrets-at-rest/specs/secrets-encryption-at-rest/spec.md
++++ b/openspec/changes/encrypted-secrets-at-rest/specs/secrets-encryption-at-rest/spec.md
+@@ -39,13 +39,18 @@ The encryption key MUST be derived via HKDF from the cluster secret with context
+
+ ### Requirement: Lazy key reconstruction
+
+-The secrets-at-rest key MUST NOT be reconstructed at boot. It is reconstructed on first secrets engine access.
++The secrets-at-rest key MUST NOT be reconstructed at boot during ordinary startup. It is reconstructed on first secrets engine access. The only exception is startup recovery for a previously interrupted secrets re-encryption, where the node MAY reconstruct the key at boot strictly to resume a persisted re-encryption checkpoint or finish migrating stale lower-epoch secrets.
+
+ #### Scenario: Cluster below quorum at boot
+
+ - **WHEN** a node starts but the cluster has fewer than K nodes available
+ - **THEN** non-secrets KV data is fully accessible, but secrets engine reads return an "unavailable" error until quorum is reached
+
++#### Scenario: Startup re-encryption recovery
++
++- **WHEN** a node starts with persisted re-encryption progress or stale lower-epoch secrets from an interrupted epoch migration
++- **THEN** the node MAY reconstruct the current secrets-at-rest key at boot only to resume background re-encryption recovery before serving fully migrated data
++
+ ### Requirement: Re-encryption on epoch change
+
+ When the trust epoch changes, all secrets MUST be re-encrypted with the new epoch's derived key.
+diff --git a/openspec/changes/encrypted-secrets-at-rest/tasks.md b/openspec/changes/encrypted-secrets-at-rest/tasks.md
+index 7d3ebc0c1..9bd608a08 100644
+--- a/openspec/changes/encrypted-secrets-at-rest/tasks.md
++++ b/openspec/changes/encrypted-secrets-at-rest/tasks.md
+@@ -39,11 +39,11 @@
+ - [x] 5.2 Track re-encryption progress in a `trust_reencryption_progress` redb table (last processed key per table)
+ - [x] 5.3 Handle reads during re-encryption: check epoch prefix to determine which key to use
+ - [x] 5.4 Test: epoch change triggers re-encryption; all values end up at new epoch
+-- [x] 5.5 Test: crash during re-encryption resumes from last checkpoint on restart
++- [x] 5.5 Test: a fresh trust-aware provider/watcher resumes re-encryption from the persisted checkpoint after interruption, without requiring another epoch bump
+
+ ## 6. Testing and Documentation
+
+ - [x] 6.1 Integration test: write secrets, verify redb contains only ciphertext, read back plaintext matches
+ - [x] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
+-- [ ] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
++- [x] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
+ - [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations
+diff --git a/openspec/changes/encrypted-secrets-at-rest/verification.md b/openspec/changes/encrypted-secrets-at-rest/verification.md
+index 6b37abcac..561d86eff 100644
+--- a/openspec/changes/encrypted-secrets-at-rest/verification.md
++++ b/openspec/changes/encrypted-secrets-at-rest/verification.md
+@@ -2,16 +2,29 @@
+
+ ## Implementation Evidence
+
+-- Changed file: `Cargo.lock`
++- Changed file: `AGENTS.md`
++- Changed file: `Cargo.toml`
+ - Changed file: `crates/aspen-raft/Cargo.toml`
++- Changed file: `crates/aspen-raft/src/lib.rs`
+ - Changed file: `crates/aspen-raft/src/node/tests.rs`
+-- Changed file: `crates/aspen-secrets/src/backend.rs`
+-- Changed file: `crates/aspen-secrets/src/error.rs`
+-- Changed file: `crates/aspen-secrets/src/lib.rs`
++- Changed file: `crates/aspen-raft/src/secrets_at_rest.rs`
++- Changed file: `crates/aspen-raft/src/storage_shared/trust.rs`
++- Changed file: `crates/aspen-secrets/src/mount_registry.rs`
++- Changed file: `crates/aspen-trust/src/encryption.rs`
++- Changed file: `crates/aspen-trust/src/key_manager.rs`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/design.md`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/proposal.md`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/specs/secrets-encryption-at-rest/spec.md`
++- Changed file: `src/bin/aspen_node/setup/client.rs`
++- Changed file: `src/node/mod.rs`
++- Changed file: `src/node/tests.rs`
+ - Changed file: `openspec/changes/encrypted-secrets-at-rest/tasks.md`
+ - Changed file: `openspec/changes/encrypted-secrets-at-rest/verification.md`
+-- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
+-- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-quorum-test.txt`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-no-runtime-trust-test.txt`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-membership-test.txt`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-restart-test.txt`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-provider-check.txt`
++- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-trust-key-manager-rotate-test.txt`
+ - Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/implementation.diff`
+ - Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/openspec-preflight.txt`
+
+@@ -71,12 +84,14 @@
+   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
+ - [x] 5.4 Test: epoch change triggers re-encryption; all values end up at new epoch
+   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
+-- [x] 5.5 Test: crash during re-encryption resumes from last checkpoint on restart
+-  - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
++- [x] 5.5 Test: a fresh trust-aware provider/watcher resumes re-encryption from the persisted checkpoint after interruption, without requiring another epoch bump
++  - Evidence: `crates/aspen-raft/src/secrets_at_rest.rs`, `crates/aspen-raft/src/node/tests.rs`, `crates/aspen-raft/src/storage_shared/trust.rs`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-restart-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/implementation.diff`
+ - [x] 6.1 Integration test: write secrets, verify redb contains only ciphertext, read back plaintext matches
+   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
+ - [x] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
+   - Evidence: `crates/aspen-raft/src/node/tests.rs`, `crates/aspen-secrets/src/backend.rs`, `crates/aspen-secrets/src/error.rs`, `crates/aspen-secrets/src/lib.rs`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-quorum-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
++- [x] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
++  - Evidence: `crates/aspen-raft/src/node/tests.rs`, `crates/aspen-raft/src/secrets_at_rest.rs`, `crates/aspen-raft/src/storage_shared/trust.rs`, `crates/aspen-secrets/src/mount_registry.rs`, `crates/aspen-trust/src/encryption.rs`, `crates/aspen-trust/src/key_manager.rs`, `src/bin/aspen_node/setup/client.rs`, `src/node/mod.rs`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-membership-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-provider-check.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-trust-key-manager-rotate-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/implementation.diff`
+ - [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations
+   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
+
+@@ -99,6 +114,31 @@
+ - Status: pass
+ - Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-quorum-test.txt`
+
++### `cargo test -p aspen-trust test_rotate_epoch -- --nocapture`
++
++- Status: pass
++- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-trust-key-manager-rotate-test.txt`
++
++### `cargo test -p aspen --features trust,secrets,jobs,docs,hooks,federation test_finish_secrets_service_setup_keeps_service_without_runtime_trust -- --nocapture`
++
++- Status: pass
++- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-no-runtime-trust-test.txt`
++
++### `cargo test -p aspen-raft --features trust,secrets,testing test_reencryption_checkpoint_resumes_after_restart -- --nocapture`
++
++- Status: pass
++- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-restart-test.txt`
++
++### `cargo test -p aspen-raft --features trust,secrets,testing test_membership_change_reencrypts_secrets_and_preserves_mixed_epoch_reads -- --nocapture`
++
++- Status: pass
++- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-membership-test.txt`
++
++### `cargo check -p aspen --bin aspen-node --features trust,secrets,jobs,docs,hooks,automerge`
++
++- Status: pass
++- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-provider-check.txt`
++
+ ### `scripts/openspec-preflight.sh openspec/changes/encrypted-secrets-at-rest`
+
+ - Status: pass
+@@ -111,5 +151,11 @@
+
+ ## Notes
+
+-- Fresh runtime evidence in this session covers task 6.2 plus regression checks for the surrounding shared Redb helper tests in `crates/aspen-raft/src/node/tests.rs`.
++- OpenSpec now explicitly allows one startup reconstruction exception: if persisted re-encryption progress or stale lower-epoch ciphertext remains after an interrupted migration, Aspen may reconstruct the current secrets-at-rest key at boot strictly to finish recovery.
++- Fresh runtime evidence in this session covers task 5.5 and task 6.3 end-to-end: the production trust-aware provider resumes from persisted re-encryption checkpoints without another epoch bump, notices membership-driven epoch changes, keeps mixed-epoch keys available, and the background re-encryption path migrates stored secrets automatically.
++- `src/node/mod.rs` and `src/bin/aspen_node/setup/client.rs` now scope fail-closed behavior to trust-configured nodes only. When `trust` is compiled but runtime trust wiring is absent, secrets service stays available without a trust-aware provider.
++- `cargo test -p aspen --features trust,secrets,jobs,docs,hooks,federation test_finish_secrets_service_setup_keeps_service_without_runtime_trust -- --nocapture` provides direct runtime coverage for that non-trust-configured path.
++- `cargo check -p aspen --bin aspen-node --features trust,secrets,jobs,docs,hooks,automerge` proves the real `aspen-node` setup path still compiles with the new provider guard.
++- Task 5.5 wording was narrowed to match the proven boundary exactly: the evidence covers a fresh provider/watcher resuming persisted checkpoint recovery, not reopening the same Redb file inside one test process.
++- Prior runtime evidence in this change directory still covers task 6.2 and the surrounding shared Redb helper regressions in `crates/aspen-raft/src/node/tests.rs`.
+ - The remaining checked tasks are carried forward with source-location evidence from the current tree in `source-survey.txt`; this file does not claim those tasks were re-executed in this session.
+diff --git a/src/bin/aspen_node/setup/client.rs b/src/bin/aspen_node/setup/client.rs
+index 4bc178846..4c66116f4 100644
+--- a/src/bin/aspen_node/setup/client.rs
++++ b/src/bin/aspen_node/setup/client.rs
+@@ -109,6 +109,24 @@ pub async fn setup_client_protocol(
+         let mount_registry =
+             Arc::new(aspen_secrets::MountRegistry::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>));
+
++        #[cfg(feature = "trust")]
++        {
++            if aspen_raft::secrets_at_rest::has_runtime_trust_configuration(primary_raft_node.as_ref()) {
++                let provider = aspen_raft::secrets_at_rest::build_trust_aware_secrets_provider(
++                    primary_raft_node.clone(),
++                    kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>,
++                )
++                .map_err(|error| {
++                    anyhow::anyhow!("failed to initialize trust-aware secrets-at-rest provider: {error}")
++                })?;
++                mount_registry.set_encryption_provider(provider);
++                info!("Secrets service initialized with trust-aware secrets-at-rest support");
++            } else {
++                info!("Secrets service initialized without trust-aware secrets-at-rest provider");
++            }
++        }
++
++        #[cfg(not(feature = "trust"))]
+         info!("Secrets service initialized with multi-mount support");
+         Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
+     };
+diff --git a/src/node/mod.rs b/src/node/mod.rs
+index d2c400e40..7928af5c3 100644
+--- a/src/node/mod.rs
++++ b/src/node/mod.rs
+@@ -466,6 +466,41 @@ impl Node {
+         self.federation_resource_settings.as_ref()
+     }
+
++    #[cfg(feature = "secrets")]
++    fn finish_secrets_service_setup(
++        mount_registry: Arc<aspen_secrets::MountRegistry>,
++        provider: Result<Option<Arc<dyn aspen_secrets::SecretsEncryptionProvider>>, String>,
++    ) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
++        #[cfg(feature = "trust")]
++        {
++            match provider {
++                Ok(Some(provider)) => {
++                    mount_registry.set_encryption_provider(provider);
++                    tracing::info!("Secrets service initialized with trust-aware secrets-at-rest support");
++                    Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
++                }
++                Ok(None) => {
++                    tracing::info!("Secrets service initialized without trust-aware secrets-at-rest provider");
++                    Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
++                }
++                Err(error) => {
++                    tracing::error!(
++                        error,
++                        "failed to initialize trust-aware secrets-at-rest provider; disabling secrets service"
++                    );
++                    None
++                }
++            }
++        }
++
++        #[cfg(not(feature = "trust"))]
++        {
++            let _ = provider;
++            tracing::info!("Secrets service initialized with multi-mount support");
++            Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
++        }
++    }
++
+     /// Create a ClientProtocolContext for the Client RPC handler.
+     ///
+     /// This context provides all the dependencies needed by the Client RPC handlers.
+@@ -486,8 +521,21 @@ impl Node {
+             let mount_registry =
+                 Arc::new(aspen_secrets::MountRegistry::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>));
+
+-            tracing::info!("Secrets service initialized with multi-mount support");
+-            Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
++            #[cfg(feature = "trust")]
++            let provider = if aspen_raft::secrets_at_rest::has_runtime_trust_configuration(raft_node.as_ref()) {
++                aspen_raft::secrets_at_rest::build_trust_aware_secrets_provider(
++                    raft_node.clone(),
++                    raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
++                )
++                .map(Some)
++            } else {
++                Ok(None)
++            };
++
++            #[cfg(not(feature = "trust"))]
++            let provider: Result<Option<Arc<dyn aspen_secrets::SecretsEncryptionProvider>>, String> = Ok(None);
++
++            Self::finish_secrets_service_setup(mount_registry, provider)
+         };
+
+         ClientProtocolContext {
+diff --git a/src/node/tests.rs b/src/node/tests.rs
+index e7e54658c..cf3047837 100644
+--- a/src/node/tests.rs
++++ b/src/node/tests.rs
+@@ -247,6 +247,115 @@ async fn test_nodebuilder_start_creates_node() {
+     assert!(node.shutdown().await.is_ok());
+ }
+
++#[cfg(all(
++    feature = "trust",
++    feature = "secrets",
++    feature = "jobs",
++    feature = "docs",
++    feature = "hooks",
++    feature = "federation"
++))]
++#[tokio::test]
++async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust() {
++    use std::collections::HashMap;
++    use std::sync::Arc;
++
++    use tokio::sync::RwLock;
++
++    struct InMemoryKvStore {
++        data: Arc<RwLock<HashMap<String, String>>>,
++    }
++
++    #[async_trait::async_trait]
++    impl aspen_core::KeyValueStore for InMemoryKvStore {
++        async fn read(
++            &self,
++            request: aspen_core::ReadRequest,
++        ) -> std::result::Result<aspen_core::ReadResult, aspen_core::KeyValueStoreError> {
++            let data = self.data.read().await;
++            let kv = data.get(&request.key).map(|value| aspen_core::KeyValueWithRevision {
++                key: request.key,
++                value: value.clone(),
++                version: 1,
++                create_revision: 1,
++                mod_revision: 1,
++            });
++            Ok(aspen_core::ReadResult { kv })
++        }
++
++        async fn write(
++            &self,
++            request: aspen_core::WriteRequest,
++        ) -> std::result::Result<aspen_core::WriteResult, aspen_core::KeyValueStoreError> {
++            if let aspen_core::WriteCommand::Set { key, value } = &request.command {
++                self.data.write().await.insert(key.clone(), value.clone());
++            }
++            Ok(aspen_core::WriteResult {
++                command: Some(request.command),
++                batch_applied: None,
++                conditions_met: None,
++                failed_condition_index: None,
++                lease_id: None,
++                ttl_seconds: None,
++                keys_deleted: None,
++                succeeded: Some(true),
++                txn_results: None,
++                header_revision: None,
++                occ_conflict: None,
++                conflict_key: None,
++                conflict_expected_version: None,
++                conflict_actual_version: None,
++            })
++        }
++
++        async fn delete(
++            &self,
++            request: aspen_core::DeleteRequest,
++        ) -> std::result::Result<aspen_core::DeleteResult, aspen_core::KeyValueStoreError> {
++            let existed = self.data.write().await.remove(&request.key).is_some();
++            Ok(aspen_core::DeleteResult {
++                key: request.key,
++                is_deleted: existed,
++            })
++        }
++
++        async fn scan(
++            &self,
++            request: aspen_core::ScanRequest,
++        ) -> std::result::Result<aspen_core::ScanResult, aspen_core::KeyValueStoreError> {
++            let data = self.data.read().await;
++            let entries = data
++                .iter()
++                .filter(|(key, _)| key.starts_with(&request.prefix))
++                .map(|(key, value)| aspen_core::KeyValueWithRevision {
++                    key: key.clone(),
++                    value: value.clone(),
++                    version: 1,
++                    create_revision: 1,
++                    mod_revision: 1,
++                })
++                .collect::<Vec<_>>();
++            Ok(aspen_core::ScanResult {
++                result_count: entries.len() as u32,
++                entries,
++                is_truncated: false,
++                continuation_token: None,
++            })
++        }
++    }
++
++    let kv = Arc::new(InMemoryKvStore {
++        data: Arc::new(RwLock::new(HashMap::new())),
++    });
++    let mount_registry = Arc::new(aspen_secrets::MountRegistry::new(kv));
++
++    let secrets_service = Node::finish_secrets_service_setup(mount_registry, Ok(None));
++    assert!(
++        secrets_service.is_some(),
++        "secrets service should stay available when trust feature is compiled but runtime trust is not configured"
++    );
++}
++
+ #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+ #[tokio::test]
+ async fn test_nodebuilder_node_handle_accessors() {

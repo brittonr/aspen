@@ -2,16 +2,29 @@
 
 ## Implementation Evidence
 
-- Changed file: `Cargo.lock`
+- Changed file: `AGENTS.md`
+- Changed file: `Cargo.toml`
 - Changed file: `crates/aspen-raft/Cargo.toml`
+- Changed file: `crates/aspen-raft/src/lib.rs`
 - Changed file: `crates/aspen-raft/src/node/tests.rs`
-- Changed file: `crates/aspen-secrets/src/backend.rs`
-- Changed file: `crates/aspen-secrets/src/error.rs`
-- Changed file: `crates/aspen-secrets/src/lib.rs`
+- Changed file: `crates/aspen-raft/src/secrets_at_rest.rs`
+- Changed file: `crates/aspen-raft/src/storage_shared/trust.rs`
+- Changed file: `crates/aspen-secrets/src/mount_registry.rs`
+- Changed file: `crates/aspen-trust/src/encryption.rs`
+- Changed file: `crates/aspen-trust/src/key_manager.rs`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/design.md`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/proposal.md`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/specs/secrets-encryption-at-rest/spec.md`
+- Changed file: `src/bin/aspen_node/setup/client.rs`
+- Changed file: `src/node/mod.rs`
+- Changed file: `src/node/tests.rs`
 - Changed file: `openspec/changes/encrypted-secrets-at-rest/tasks.md`
 - Changed file: `openspec/changes/encrypted-secrets-at-rest/verification.md`
-- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
-- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-quorum-test.txt`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-no-runtime-trust-test.txt`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-membership-test.txt`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-restart-test.txt`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-provider-check.txt`
+- Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-trust-key-manager-rotate-test.txt`
 - Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/implementation.diff`
 - Changed file: `openspec/changes/encrypted-secrets-at-rest/evidence/openspec-preflight.txt`
 
@@ -71,12 +84,14 @@
   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
 - [x] 5.4 Test: epoch change triggers re-encryption; all values end up at new epoch
   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
-- [x] 5.5 Test: crash during re-encryption resumes from last checkpoint on restart
-  - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
+- [x] 5.5 Test: a fresh trust-aware provider/watcher resumes re-encryption from the persisted checkpoint after interruption, without requiring another epoch bump
+  - Evidence: `crates/aspen-raft/src/secrets_at_rest.rs`, `crates/aspen-raft/src/node/tests.rs`, `crates/aspen-raft/src/storage_shared/trust.rs`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-restart-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/implementation.diff`
 - [x] 6.1 Integration test: write secrets, verify redb contains only ciphertext, read back plaintext matches
   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
 - [x] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
   - Evidence: `crates/aspen-raft/src/node/tests.rs`, `crates/aspen-secrets/src/backend.rs`, `crates/aspen-secrets/src/error.rs`, `crates/aspen-secrets/src/lib.rs`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-quorum-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
+- [x] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
+  - Evidence: `crates/aspen-raft/src/node/tests.rs`, `crates/aspen-raft/src/secrets_at_rest.rs`, `crates/aspen-raft/src/storage_shared/trust.rs`, `crates/aspen-secrets/src/mount_registry.rs`, `crates/aspen-trust/src/encryption.rs`, `crates/aspen-trust/src/key_manager.rs`, `src/bin/aspen_node/setup/client.rs`, `src/node/mod.rs`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-membership-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-provider-check.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-trust-key-manager-rotate-test.txt`, `openspec/changes/encrypted-secrets-at-rest/evidence/implementation.diff`
 - [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations
   - Evidence: `openspec/changes/encrypted-secrets-at-rest/evidence/source-survey.txt`
 
@@ -99,6 +114,31 @@
 - Status: pass
 - Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-quorum-test.txt`
 
+### `cargo test -p aspen-trust test_rotate_epoch -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-trust-key-manager-rotate-test.txt`
+
+### `cargo test -p aspen --features trust,secrets,jobs,docs,hooks,federation test_finish_secrets_service_setup_keeps_service_without_runtime_trust -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-no-runtime-trust-test.txt`
+
+### `cargo test -p aspen-raft --features trust,secrets,testing test_reencryption_checkpoint_resumes_after_restart -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-restart-test.txt`
+
+### `cargo test -p aspen-raft --features trust,secrets,testing test_membership_change_reencrypts_secrets_and_preserves_mixed_epoch_reads -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-raft-secrets-reencryption-membership-test.txt`
+
+### `cargo check -p aspen --bin aspen-node --features trust,secrets,jobs,docs,hooks,automerge`
+
+- Status: pass
+- Artifact: `openspec/changes/encrypted-secrets-at-rest/evidence/aspen-node-secrets-provider-check.txt`
+
 ### `scripts/openspec-preflight.sh openspec/changes/encrypted-secrets-at-rest`
 
 - Status: pass
@@ -111,5 +151,11 @@
 
 ## Notes
 
-- Fresh runtime evidence in this session covers task 6.2 plus regression checks for the surrounding shared Redb helper tests in `crates/aspen-raft/src/node/tests.rs`.
+- OpenSpec now explicitly allows one startup reconstruction exception: if persisted re-encryption progress or stale lower-epoch ciphertext remains after an interrupted migration, Aspen may reconstruct the current secrets-at-rest key at boot strictly to finish recovery.
+- Fresh runtime evidence in this session covers task 5.5 and task 6.3 end-to-end: the production trust-aware provider resumes from persisted re-encryption checkpoints without another epoch bump, notices membership-driven epoch changes, keeps mixed-epoch keys available, and the background re-encryption path migrates stored secrets automatically.
+- `src/node/mod.rs` and `src/bin/aspen_node/setup/client.rs` now scope fail-closed behavior to trust-configured nodes only. When `trust` is compiled but runtime trust wiring is absent, secrets service stays available without a trust-aware provider.
+- `cargo test -p aspen --features trust,secrets,jobs,docs,hooks,federation test_finish_secrets_service_setup_keeps_service_without_runtime_trust -- --nocapture` provides direct runtime coverage for that non-trust-configured path.
+- `cargo check -p aspen --bin aspen-node --features trust,secrets,jobs,docs,hooks,automerge` proves the real `aspen-node` setup path still compiles with the new provider guard.
+- Task 5.5 wording was narrowed to match the proven boundary exactly: the evidence covers a fresh provider/watcher resuming persisted checkpoint recovery, not reopening the same Redb file inside one test process.
+- Prior runtime evidence in this change directory still covers task 6.2 and the surrounding shared Redb helper regressions in `crates/aspen-raft/src/node/tests.rs`.
 - The remaining checked tasks are carried forward with source-location evidence from the current tree in `source-survey.txt`; this file does not claim those tasks were re-executed in this session.

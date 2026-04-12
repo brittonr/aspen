@@ -39,11 +39,11 @@
 - [x] 5.2 Track re-encryption progress in a `trust_reencryption_progress` redb table (last processed key per table)
 - [x] 5.3 Handle reads during re-encryption: check epoch prefix to determine which key to use
 - [x] 5.4 Test: epoch change triggers re-encryption; all values end up at new epoch
-- [x] 5.5 Test: crash during re-encryption resumes from last checkpoint on restart
+- [x] 5.5 Test: a fresh trust-aware provider/watcher resumes re-encryption from the persisted checkpoint after interruption, without requiring another epoch bump
 
 ## 6. Testing and Documentation
 
 - [x] 6.1 Integration test: write secrets, verify redb contains only ciphertext, read back plaintext matches
 - [x] 6.2 Integration test: 3-node cluster, stop 2 nodes, secrets become unavailable, restart nodes, secrets available again
-- [ ] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
+- [x] 6.3 Integration test: trigger membership change, verify re-encryption runs, verify old-epoch values still readable during transition
 - [x] 6.4 Document operational requirements in `docs/trust-quorum.md`: quorum needed for secrets access, backup considerations

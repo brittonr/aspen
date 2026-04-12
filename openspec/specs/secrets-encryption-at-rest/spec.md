@@ -39,12 +39,17 @@ The encryption key MUST be derived via HKDF from the cluster secret with context
 
 ### Requirement: Lazy key reconstruction
 
-The secrets-at-rest key MUST NOT be reconstructed at boot. It is reconstructed on first secrets engine access.
+The secrets-at-rest key MUST NOT be reconstructed at boot during ordinary startup. It is reconstructed on first secrets engine access. The only exception is startup recovery for a previously interrupted secrets re-encryption, where the node MAY reconstruct the key at boot strictly to resume a persisted re-encryption checkpoint or finish migrating stale lower-epoch secrets.
 
 #### Scenario: Cluster below quorum at boot
 
 - **WHEN** a node starts but the cluster has fewer than K nodes available
 - **THEN** non-secrets KV data is fully accessible, but secrets engine reads return an "unavailable" error until quorum is reached
+
+#### Scenario: Startup re-encryption recovery
+
+- **WHEN** a node starts with persisted re-encryption progress or stale lower-epoch secrets from an interrupted epoch migration
+- **THEN** the node MAY reconstruct the current secrets-at-rest key at boot only to resume background re-encryption recovery before serving fully migrated data
 
 ### Requirement: Re-encryption on epoch change
 
