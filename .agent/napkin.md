@@ -75,6 +75,8 @@
 | 2026-03-06 | Nix sandbox tmpfs disk full kills redb tests | `ci-nix` nextest profile excludes `test(/test_redb/)`. `writableStoreUseTmpfs = false` + large `diskSize` for builds |
 | 2026-03-06 | `build-plan.json` stale after adding workspace members | Always `nix run .#generate-build-plan` after changes. Now using auto mode (IFD) |
 | general | New files can be invisible to nix eval/build when the flake source filter only includes git-tracked paths | Always `git add` newly created source files before `nix eval`/`nix build`/`nix run`, not just new `.nix` files |
+| 2026-04-12 | `lib.fileset.toSource` included `./crates` recursively without filtering nested `target/` dirs, so `direnv`/`nix develop` tried to copy ~422GB of crate-local build artifacts into the store during eval | Wrap recursive source dirs in a filter that drops `.git`/`.direnv`/`target`/`result` directories before passing them to `fileset.toSource` |
+| 2026-04-12 | `lib.fileset.fileFilter` on a directory does NOT prune descendants under excluded directory names; `target/foo` still leaks through via child files | For recursive directory pruning, use `lib.fileset.fromSource (lib.sources.cleanSourceWith { ... })` instead of `fileFilter` |
 | general | `nix-collect-garbage -d` freed only 3.8GB — `.direnv/` GC roots | `find ~ -name '.direnv' -type d -exec rm -rf {} +` first, then GC |
 | general | Nix SQLite cache corrupts when disk fills | `rm -f ~/.cache/nix/fetcher-cache-v4*` to recover |
 

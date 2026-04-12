@@ -677,6 +677,7 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 
 - Rust 2024 edition
 - Backwards compatibility is not a concern; prioritize clean solutions
+- Recursive `lib.fileset.toSource` entries must prune nested `.git`/`.direnv`/`target`/`result` directories before conversion. `lib.fileset.fileFilter` is not enough for this because descendants under excluded directory names still appear; use `lib.fileset.fromSource (lib.sources.cleanSourceWith { ... })`. Several crates accumulate their own `target/` trees; if `./crates` is included raw, `direnv`/`nix develop` can spend ages copying tens or hundreds of GB into the store during eval.
 - All legacy `RaftActor` references have been removed; the codebase uses `RaftNode` throughout
 - `openspec list --json` treats `openspec/changes/active/` as a change named `active`; inspect the dated directory inside `openspec/changes/active/` directly instead of assuming `active` is a real change
 - Fresh trust joiners replay the historical `TrustInitialize` log even though they were not initial members. `apply_trust_initialize_in_txn()` must tolerate a missing local epoch-1 share and still persist the epoch metadata; otherwise the new node fatally shuts down before it can apply the later `TrustReconfiguration` entry that assigns its first real share.

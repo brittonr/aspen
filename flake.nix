@@ -237,6 +237,18 @@
           }
         );
 
+        filteredTree = dir:
+          lib.fileset.fromSource (
+            lib.sources.cleanSourceWith {
+              src = dir;
+              filter = path: type: let
+                name = builtins.baseNameOf path;
+              in
+                !(builtins.elem name [".git" ".direnv" "target" "result"]
+                  && (type == "directory" || type == "symlink"));
+            }
+          );
+
         # Use lib.fileset for precise source inclusion — only Rust/Cargo files
         # and vendored sources. Changes to docs, scripts, .agent/, etc. won't
         # trigger rebuilds.
@@ -253,13 +265,13 @@
             ./rustfmt.toml
             ./rust-toolchain.toml
             ./.config
-            ./src
+            (filteredTree ./src)
             # ./crates  # Included via fullRawSrc for full builds; stubs used for lightweight builds
             # ./openraft  # Included via fullRawSrc for full builds
-            ./vendor
-            ./tests
-            ./benches
-            ./examples
+            (filteredTree ./vendor)
+            (filteredTree ./tests)
+            (filteredTree ./benches)
+            (filteredTree ./examples)
             # ./scripts/tutorial-verify  # Extracted to ~/git/aspen-tutorial-verify
           ];
         };
@@ -675,13 +687,13 @@
             ./rust-toolchain.toml
             ./flake.nix
             ./flake.lock
-            ./src
-            ./crates
-            ./openraft
-            ./vendor
-            ./tests
-            ./benches
-            ./examples
+            (filteredTree ./src)
+            (filteredTree ./crates)
+            (filteredTree ./openraft)
+            (filteredTree ./vendor)
+            (filteredTree ./tests)
+            (filteredTree ./benches)
+            (filteredTree ./examples)
           ];
         };
 
@@ -1686,12 +1698,12 @@
             ./Cargo.lock
             ./crate-hashes.json
             ./build.rs
-            ./src
-            ./crates
-            ./openraft
-            ./tests
-            ./benches
-            ./vendor
+            (filteredTree ./src)
+            (filteredTree ./crates)
+            (filteredTree ./openraft)
+            (filteredTree ./tests)
+            (filteredTree ./benches)
+            (filteredTree ./vendor)
           ];
         };
 
