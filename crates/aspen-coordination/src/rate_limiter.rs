@@ -29,8 +29,8 @@ enum TryAcquireResult {
     Exhausted(RateLimitError),
     /// Storage error.
     StorageError(RateLimitError),
-    /// CAS conflict, retry.
-    Retry,
+    /// CAS conflict, retry after backoff.
+    RetryAfterMs(u64),
 }
 
 /// Configuration for distributed rate limiter.
@@ -47,10 +47,8 @@ pub struct RateLimiterConfig {
 impl RateLimiterConfig {
     /// Create a config with the given rate per second and burst capacity.
     pub fn new(rate_per_second: f64, burst: u64) -> Self {
-        // Tiger Style: rate must be positive
-        debug_assert!(rate_per_second > 0.0, "rate_per_second must be positive, got {}", rate_per_second);
-        // Tiger Style: burst capacity must be positive
-        debug_assert!(burst > 0, "burst capacity must be positive, got {}", burst);
+        assert!(rate_per_second > 0.0, "rate_per_second must be positive, got {}", rate_per_second);
+        assert!(burst > 0, "burst capacity must be positive, got {}", burst);
 
         Self {
             capacity_tokens: burst,
@@ -61,10 +59,8 @@ impl RateLimiterConfig {
 
     /// Create a config with rate specified per minute.
     pub fn per_minute(rate_per_minute: u32, burst: u64) -> Self {
-        // Tiger Style: rate must be positive
-        debug_assert!(rate_per_minute > 0, "rate_per_minute must be positive, got {}", rate_per_minute);
-        // Tiger Style: burst capacity must be positive
-        debug_assert!(burst > 0, "burst capacity must be positive, got {}", burst);
+        assert!(rate_per_minute > 0, "rate_per_minute must be positive, got {}", rate_per_minute);
+        assert!(burst > 0, "burst capacity must be positive, got {}", burst);
 
         Self {
             capacity_tokens: burst,
@@ -88,10 +84,25 @@ pub struct DistributedRateLimiter<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
     /// Create a new rate limiter.
     pub fn new(store: Arc<S>, key: impl Into<String>, config: RateLimiterConfig) -> Self {
-        Self {
-            store,
-            key: key.into(),
-            config,
+        Self::assert_valid_config(&config);
+
+        let key = key.into();
+        assert!(!key.is_empty(), "rate limiter key must not be empty");
+
+        Self { store, key, config }
+    }
+
+    fn assert_valid_config(config: &RateLimiterConfig) {
+        assert!(config.capacity_tokens > 0, "capacity_tokens must be positive, got {}", config.capacity_tokens);
+        assert!(config.refill_rate > 0.0, "refill_rate must be positive, got {}", config.refill_rate);
+
+        if let Some(initial_tokens) = config.initial_tokens {
+            assert!(
+                initial_tokens <= config.capacity_tokens,
+                "initial_tokens {} cannot exceed capacity_tokens {}",
+                initial_tokens,
+                config.capacity_tokens
+            );
         }
     }
 
@@ -106,10 +117,8 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
     ///
     /// Returns `Ok(remaining)` if allowed, `Err(RateLimitError)` if rate limited.
     pub async fn try_acquire_n(&self, n: u64) -> Result<u64, RateLimitError> {
-        // Tiger Style: token count must be positive
-        debug_assert!(n > 0, "token count must be positive, got {}", n);
-        // Tiger Style: token count cannot exceed capacity
-        debug_assert!(
+        assert!(n > 0, "token count must be positive, got {}", n);
+        assert!(
             n <= self.config.capacity_tokens,
             "token count {} cannot exceed capacity {}",
             n,
@@ -148,7 +157,10 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                 TryAcquireResult::Success(remaining) => return Ok(remaining),
                 TryAcquireResult::Exhausted(err) => return Err(err),
                 TryAcquireResult::StorageError(err) => return Err(err),
-                TryAcquireResult::Retry => continue,
+                TryAcquireResult::RetryAfterMs(sleep_ms) => {
+                    tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
+                    continue;
+                }
             }
         }
     }
@@ -163,13 +175,30 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
 
     /// Build error for tokens exhausted case.
     fn try_acquire_n_exhausted_error(&self, requested: u64, available: f64) -> RateLimitError {
+        assert!(self.config.refill_rate > 0.0, "refill_rate must be positive");
+
         let deficit = (requested as f64) - available;
         let wait_secs = deficit / self.config.refill_rate;
+        let retry_after_ms = self.try_acquire_n_retry_after_ms(wait_secs);
+
         RateLimitError::TokensExhausted {
             requested,
             available: available as u64,
-            retry_after_ms: (wait_secs * 1000.0).ceil() as u64,
+            retry_after_ms,
         }
+    }
+
+    fn try_acquire_n_retry_after_ms(&self, wait_secs: f64) -> u64 {
+        assert!(wait_secs >= 0.0, "wait_secs must not be negative, got {}", wait_secs);
+
+        let retry_after_ms = wait_secs * 1000.0;
+        if !retry_after_ms.is_finite() {
+            return u64::MAX;
+        }
+        if retry_after_ms >= u64::MAX as f64 {
+            return u64::MAX;
+        }
+        retry_after_ms.ceil() as u64
     }
 
     /// Attempt CAS update and handle result.
@@ -200,11 +229,9 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                         retry_after_ms: 1000,
                     });
                 }
-                // Sleep happens in caller after returning Retry
                 let sleep_ms = *backoff_ms;
                 *backoff_ms = (*backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
-                tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
-                TryAcquireResult::Retry
+                TryAcquireResult::RetryAfterMs(sleep_ms)
             }
             Err(CoordinationError::Storage { source }) => self.try_acquire_n_handle_storage_error(n, new_state, source),
             Err(e) => TryAcquireResult::StorageError(RateLimitError::StorageUnavailable { reason: e.to_string() }),
@@ -245,10 +272,8 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
 
     /// Block until N tokens are available (with timeout).
     pub async fn acquire_n(&self, n: u64, timeout: Duration) -> Result<u64, RateLimitError> {
-        // Tiger Style: token count must be positive
-        debug_assert!(n > 0, "token count must be positive, got {}", n);
-        // Tiger Style: timeout must not be zero
-        debug_assert!(!timeout.is_zero(), "timeout must not be zero");
+        assert!(n > 0, "token count must be positive, got {}", n);
+        assert!(!timeout.is_zero(), "timeout must not be zero");
 
         let deadline = Instant::now() + timeout;
 
@@ -391,9 +416,96 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
+    use aspen_kv_types::DeleteRequest;
+    use aspen_kv_types::DeleteResult;
+    use aspen_kv_types::KeyValueStoreError;
+    use aspen_kv_types::KeyValueWithRevision;
+    use aspen_kv_types::ReadRequest;
+    use aspen_kv_types::ReadResult;
+    use aspen_kv_types::ScanRequest;
+    use aspen_kv_types::ScanResult;
+    use aspen_kv_types::WriteCommand;
+    use aspen_kv_types::WriteRequest;
+    use aspen_kv_types::WriteResult;
     use aspen_testing::DeterministicKeyValueStore;
+    use async_trait::async_trait;
 
     use super::*;
+
+    struct ConflictThenSuccessStore {
+        state: Mutex<ConflictThenSuccessState>,
+    }
+
+    struct ConflictThenSuccessState {
+        bucket_json: String,
+        remaining_conflicts: u32,
+        write_calls: u32,
+    }
+
+    impl ConflictThenSuccessStore {
+        fn new(bucket_state: BucketState, remaining_conflicts: u32) -> Self {
+            let bucket_json = serde_json::to_string(&bucket_state).expect("serialize bucket state");
+            Self {
+                state: Mutex::new(ConflictThenSuccessState {
+                    bucket_json,
+                    remaining_conflicts,
+                    write_calls: 0,
+                }),
+            }
+        }
+
+        fn write_calls(&self) -> u32 {
+            self.state.lock().expect("lock conflict store").write_calls
+        }
+    }
+
+    #[async_trait]
+    impl KeyValueStore for ConflictThenSuccessStore {
+        async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+            let mut state = self.state.lock().expect("lock conflict store");
+            state.write_calls = state.write_calls.saturating_add(1);
+
+            match request.command {
+                WriteCommand::CompareAndSwap { key, new_value, .. } => {
+                    if state.remaining_conflicts > 0 {
+                        state.remaining_conflicts -= 1;
+                        return Err(KeyValueStoreError::CompareAndSwapFailed {
+                            key,
+                            expected: None,
+                            actual: Some(state.bucket_json.clone()),
+                        });
+                    }
+
+                    state.bucket_json = new_value;
+                    Ok(WriteResult::default())
+                }
+                other => panic!("unexpected write command: {other:?}"),
+            }
+        }
+
+        async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+            let state = self.state.lock().expect("lock conflict store");
+            Ok(ReadResult {
+                kv: Some(KeyValueWithRevision {
+                    key: request.key,
+                    value: state.bucket_json.clone(),
+                    version: 1,
+                    create_revision: 1,
+                    mod_revision: 1,
+                }),
+            })
+        }
+
+        async fn delete(&self, _request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+            panic!("delete must not be called in rate limiter test");
+        }
+
+        async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+            panic!("scan must not be called in rate limiter test");
+        }
+    }
 
     #[tokio::test]
     async fn test_rate_limiter_basic() {
@@ -504,6 +616,52 @@ mod tests {
         assert!(limiter.try_acquire().await.is_err());
     }
 
+    #[test]
+    #[should_panic(expected = "rate limiter key must not be empty")]
+    fn test_rate_limiter_rejects_empty_key() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let _ = DistributedRateLimiter::new(store, "", RateLimiterConfig::new(10.0, 5));
+    }
+
+    #[test]
+    #[should_panic(expected = "capacity_tokens must be positive")]
+    fn test_rate_limiter_rejects_zero_capacity() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let config = RateLimiterConfig {
+            capacity_tokens: 0,
+            refill_rate: 1.0,
+            initial_tokens: Some(0),
+        };
+
+        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+    }
+
+    #[test]
+    #[should_panic(expected = "refill_rate must be positive")]
+    fn test_rate_limiter_rejects_zero_refill_rate() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let config = RateLimiterConfig {
+            capacity_tokens: 5,
+            refill_rate: 0.0,
+            initial_tokens: Some(5),
+        };
+
+        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+    }
+
+    #[test]
+    #[should_panic(expected = "initial_tokens 6 cannot exceed capacity_tokens 5")]
+    fn test_rate_limiter_rejects_initial_tokens_above_capacity() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let config = RateLimiterConfig {
+            capacity_tokens: 5,
+            refill_rate: 1.0,
+            initial_tokens: Some(6),
+        };
+
+        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+    }
+
     #[tokio::test]
     async fn test_rate_limiter_available() {
         let store = Arc::new(DeterministicKeyValueStore::new());
@@ -544,6 +702,39 @@ mod tests {
             }
             _ => panic!("Expected TokensExhausted error"),
         }
+    }
+
+    #[test]
+    fn test_rate_limiter_retry_after_ms_clamps_non_finite() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 5));
+
+        let retry_after_ms = limiter.try_acquire_n_retry_after_ms(f64::INFINITY);
+        assert_eq!(retry_after_ms, u64::MAX);
+    }
+
+    #[test]
+    fn test_rate_limiter_retry_after_ms_clamps_large_finite_value() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 5));
+
+        let retry_after_ms = limiter.try_acquire_n_retry_after_ms(f64::MAX);
+        assert_eq!(retry_after_ms, u64::MAX);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_try_acquire_sleeps_before_retrying_cas_conflict() {
+        let initial_state = BucketState::new(1, 1.0);
+        let store = Arc::new(ConflictThenSuccessStore::new(initial_state, 3));
+        let limiter = DistributedRateLimiter::new(store.clone(), "retry_limiter", RateLimiterConfig::new(1.0, 1));
+
+        let start = Instant::now();
+        let remaining = limiter.try_acquire_n(1).await.unwrap();
+        let elapsed = start.elapsed();
+
+        assert_eq!(remaining, 0);
+        assert_eq!(store.write_calls(), 4);
+        assert!(elapsed >= Duration::from_millis(7), "expected at least 7ms of retry backoff, got {:?}", elapsed);
     }
 
     #[tokio::test]

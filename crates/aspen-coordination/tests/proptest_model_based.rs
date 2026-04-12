@@ -859,6 +859,7 @@ proptest! {
     /// No refill happens because all requests occur without time advancing.
     #[test]
     fn test_rate_limiter_burst_capacity(
+        // Tiger Style: constructor requires positive burst capacity.
         capacity in 5u64..20,
         requests in prop::collection::vec(1u64..5, 1..30),
     ) {
@@ -869,43 +870,27 @@ proptest! {
 
         rt.block_on(async {
             let store = DeterministicKeyValueStore::new();
-            // No refill: this property models a single burst with no time advance.
-            // Using a positive refill rate here makes the test depend on wall-clock
-            // scheduling between awaits, which can make the real limiter drift away
-            // from the zero-time model and fail nondeterministically.
-            let config = RateLimiterConfig {
-                capacity_tokens: capacity,
-                refill_rate: 0.0,
-                initial_tokens: Some(capacity),
-            };
-            let limiter = DistributedRateLimiter::new(store, "test-limiter", config);
+            // Tiger Style: keep the production invariant (positive refill_rate)
+            // while making refill practically unreachable during this short test.
+            let limiter = DistributedRateLimiter::new(
+                store,
+                "test-limiter",
+                RateLimiterConfig::new(1e-9, capacity),
+            );
             let mut model = RateLimiterModel::new(capacity);
 
             for req_count in &requests {
-                // Clamp to capacity — requesting more than capacity is a debug_assert panic
+                // Clamp to capacity: requests above capacity are invalid input.
                 let n = (*req_count).min(capacity);
-                let real = limiter.try_acquire_n(n).await;
+                let real_allowed = limiter.try_acquire_n(n).await.is_ok();
                 let model_allowed = model.try_acquire_n(n);
 
-                match (real.is_ok(), model_allowed) {
-                    (true, true) => {
-                        // Both agree: allowed
-                    }
-                    (false, false) => {
-                        // Both agree: denied
-                    }
-                    (real_ok, model_ok) => {
-                        // Mismatch is acceptable if the real limiter refilled
-                        // between calls (time-based). Only assert if model says
-                        // yes but real says no (would mean a bug).
-                        if model_ok && !real_ok {
-                            panic!(
-                                "model allowed {} tokens but real limiter denied",
-                                req_count
-                            );
-                        }
-                    }
-                }
+                assert_eq!(
+                    real_allowed,
+                    model_allowed,
+                    "burst decision mismatch for request size {}",
+                    n
+                );
             }
         });
     }
