@@ -77,8 +77,8 @@
 //! guard.release().await?;
 //! ```
 
-// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
-// while suppressing noisier families until Aspen has cleanup bandwidth.
+// Phase 2 Tiger Style rollout: keep the starter lint set visible in the default
+// pilot while suppressing noisier families until Aspen has cleanup bandwidth.
 #![allow(unknown_lints)]
 #![allow(no_panic)]
 #![warn(ambient_clock, compound_assertion, contradictory_time)]
@@ -115,6 +115,7 @@ mod lockset;
 mod queue;
 mod rate_limiter;
 mod registry;
+mod runtime_clock;
 mod rwlock;
 mod semaphore;
 mod sequence;

@@ -22,6 +22,7 @@ use serde::Serialize;
 use tracing::debug;
 
 use crate::error::CoordinationError;
+use crate::runtime_clock;
 use crate::types::now_unix_ms;
 use crate::verified;
 
@@ -120,13 +121,11 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         debug_assert!(capacity > 0, "SEMAPHORE: capacity must be positive");
         debug_assert!(permits <= capacity, "SEMAPHORE: permits ({}) must not exceed capacity ({})", permits, capacity);
 
-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
+        let deadline = runtime_clock::optional_deadline(timeout);
 
         loop {
             // Check timeout
-            if let Some(d) = deadline
-                && std::time::Instant::now() >= d
-            {
+            if runtime_clock::timeout_elapsed(deadline) {
                 bail!("semaphore acquire timeout");
             }
 

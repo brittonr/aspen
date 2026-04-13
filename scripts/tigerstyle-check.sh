@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run Aspen's phase-1 Tiger Style starter lints through Dylint.
+# Run Aspen's current Tiger Style starter-lint pilot through Dylint.
 #
 # Requirements:
 #   - `cargo-dylint` and `dylint-link` installed in PATH
@@ -27,9 +27,9 @@ usage() {
 Usage: scripts/tigerstyle-check.sh [cargo-dylint options] [package scope] [-- cargo-check args]
 
 Default scope (when no package/workspace is passed):
-  -p aspen-time -p aspen-hlc -p aspen-core
+  -p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination
 
-Starter lints enabled in phase 1:
+Starter lints enabled in phase 2 default pilot:
   - tigerstyle::compound_assertion
   - tigerstyle::ambient_clock
   - tigerstyle::contradictory_time
@@ -221,6 +221,7 @@ if (( ! saw_scope )); then
     -p aspen-time
     -p aspen-hlc
     -p aspen-core
+    -p aspen-coordination
   )
 fi
 

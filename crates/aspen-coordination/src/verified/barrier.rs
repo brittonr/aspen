@@ -547,8 +547,8 @@ mod property_tests {
             // With 1 participant (the creator), should match ready check
             let is_ready = is_barrier_ready(1, *required);
             match phase {
-                BarrierPhase::Ready => assert!(is_ready || *required <= 1),
-                BarrierPhase::Waiting => assert!(!is_ready || *required <= 1),
+                BarrierPhase::Ready => assert!(*required <= 1),
+                BarrierPhase::Waiting => assert!(*required > 1),
                 BarrierPhase::Leaving => unreachable!("Initial phase cannot be Leaving"),
             }
         });

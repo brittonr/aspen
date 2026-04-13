@@ -17,6 +17,7 @@ use super::types::RWLockState;
 use super::types::ReaderEntry;
 use super::types::WriterEntry;
 use crate::error::CoordinationError;
+use crate::runtime_clock;
 use crate::types::now_unix_ms;
 use crate::verified;
 
@@ -48,13 +49,11 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         debug_assert!(!holder_id.is_empty(), "RWLOCK: holder_id must not be empty");
         debug_assert!(ttl_ms > 0, "RWLOCK: ttl_ms must be positive");
 
-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
+        let deadline = runtime_clock::optional_deadline(timeout);
 
         loop {
             // Check timeout
-            if let Some(d) = deadline
-                && std::time::Instant::now() >= d
-            {
+            if runtime_clock::timeout_elapsed(deadline) {
                 bail!("read lock acquire timeout");
             }
 
@@ -247,7 +246,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         debug_assert!(ttl_ms > 0, "RWLOCK: ttl_ms must be positive for write");
 
         let key = verified::rwlock_key(name);
-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
+        let deadline = runtime_clock::optional_deadline(timeout);
 
         // First, register as pending writer (for fairness)
         self.increment_pending_writers(&key, name).await?;
@@ -273,9 +272,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ) -> Result<(u64, u64)> {
         loop {
             // Check timeout
-            if let Some(d) = deadline
-                && std::time::Instant::now() >= d
-            {
+            if runtime_clock::timeout_elapsed(deadline) {
                 bail!("write lock acquire timeout");
             }
 

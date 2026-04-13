@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
+use crate::runtime_clock;
 use crate::verified::strategies::SelectionResult;
 use crate::verified::strategies::calculate_load_score;
 use crate::verified::strategies::compute_running_average;
@@ -105,7 +106,7 @@ impl RoundRobinStrategy {
 
 impl LoadBalancer for RoundRobinStrategy {
     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, _context: &RoutingContext) -> Result<Option<usize>> {
-        let start = std::time::Instant::now();
+        let start = runtime_clock::measurement_start();
 
         // Filter eligible workers
         let eligible_indices: Vec<_> =
@@ -190,7 +191,7 @@ impl LeastLoadedStrategy {
 
 impl LoadBalancer for LeastLoadedStrategy {
     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
-        let start = std::time::Instant::now();
+        let start = runtime_clock::measurement_start();
 
         // Filter and score workers using pure functions
         let mut eligible: Vec<(usize, f32)> = workers
@@ -277,7 +278,7 @@ impl AffinityStrategy {
 
 impl LoadBalancer for AffinityStrategy {
     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
-        let start = std::time::Instant::now();
+        let start = runtime_clock::measurement_start();
 
         // Clean up periodically
         if self.affinity_map.len() > self.max_affinity_entries as usize {
@@ -382,7 +383,7 @@ impl ConsistentHashStrategy {
 
 impl LoadBalancer for ConsistentHashStrategy {
     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
-        let start = std::time::Instant::now();
+        let start = runtime_clock::measurement_start();
 
         // Filter eligible workers
         let eligible: Vec<_> = workers.iter().enumerate().filter(|(_, w)| w.can_handle(job_type)).collect();
@@ -483,7 +484,7 @@ impl WorkStealingStrategy {
 
 impl LoadBalancer for WorkStealingStrategy {
     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
-        let start = std::time::Instant::now();
+        let start = runtime_clock::measurement_start();
 
         // First, try to find idle or low-load workers using pure function
         let idle_workers: Vec<_> = workers

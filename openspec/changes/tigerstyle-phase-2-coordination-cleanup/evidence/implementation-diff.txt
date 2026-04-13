@@ -1,0 +1,718 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 8cfc45534..2bf2f73ab 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -196,8 +196,8 @@ cargo clippy --all-targets -- --deny warnings
+ nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)
+ # Tiger Style rollout path (current equivalent check path, not a flake check yet):
+ # `scripts/tigerstyle-check.sh` wraps `rustup`/`cargo`/`dylint-link`, patches
+-# `dylint_driver`, and defaults to the low-noise pilot scope
+-# `-p aspen-time -p aspen-hlc -p aspen-core -- --lib`.
++# `dylint_driver`, and defaults to the current pilot scope
++# `-p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination -- --lib`.
+ # Note: the rustfmt hook runs repo-wide `nix run .#rustfmt`, not file-scoped formatting.
+ # Stash or restore unrelated unstaged Rust edits before making a focused commit.
+
+diff --git a/crates/aspen-coordination/src/barrier.rs b/crates/aspen-coordination/src/barrier.rs
+index 07067a9f6..7a6a9af46 100644
+--- a/crates/aspen-coordination/src/barrier.rs
++++ b/crates/aspen-coordination/src/barrier.rs
+@@ -24,6 +24,8 @@ use serde::Deserialize;
+ use serde::Serialize;
+ use tracing::debug;
+
++use crate::runtime_clock;
++
+ /// Barrier key prefix.
+ const BARRIER_PREFIX: &str = "__barrier:";
+
+@@ -116,13 +118,11 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
+         debug_assert!(required_count > 0, "BARRIER: required_count must be positive");
+
+         let key = format!("{}{}", BARRIER_PREFIX, name);
+-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
++        let deadline = runtime_clock::optional_deadline(timeout);
+
+         loop {
+             // Check timeout
+-            if let Some(d) = deadline
+-                && std::time::Instant::now() >= d
+-            {
++            if runtime_clock::timeout_elapsed(deadline) {
+                 bail!("barrier enter timeout");
+             }
+
+@@ -134,7 +134,10 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
+                     EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
+                     EnterResult::Waiting => return Ok((1, BarrierPhase::Waiting.as_str().to_string())),
+                     EnterResult::RetryRequired => continue,
+-                    EnterResult::InLeavingPhase => unreachable!(),
++                    EnterResult::InLeavingPhase => {
++                        debug_assert!(false, "BARRIER: newly created barrier must not start in leaving phase");
++                        continue;
++                    }
+                 },
+                 Some(state) => match self.enter_join(name, participant_id, required_count, &key, &state).await? {
+                     EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
+@@ -269,13 +272,11 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
+         debug_assert!(!participant_id.is_empty(), "BARRIER: participant_id must not be empty for leave");
+
+         let key = format!("{}{}", BARRIER_PREFIX, name);
+-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
++        let deadline = runtime_clock::optional_deadline(timeout);
+
+         loop {
+             // Check timeout
+-            if let Some(d) = deadline
+-                && std::time::Instant::now() >= d
+-            {
++            if runtime_clock::timeout_elapsed(deadline) {
+                 bail!("barrier leave timeout");
+             }
+
+diff --git a/crates/aspen-coordination/src/lib.rs b/crates/aspen-coordination/src/lib.rs
+index 774bde415..1908873e0 100644
+--- a/crates/aspen-coordination/src/lib.rs
++++ b/crates/aspen-coordination/src/lib.rs
+@@ -77,8 +77,8 @@
+ //! guard.release().await?;
+ //! ```
+
+-// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
+-// while suppressing noisier families until Aspen has cleanup bandwidth.
++// Phase 2 Tiger Style rollout: keep the starter lint set visible in the default
++// pilot while suppressing noisier families until Aspen has cleanup bandwidth.
+ #![allow(unknown_lints)]
+ #![allow(no_panic)]
+ #![warn(ambient_clock, compound_assertion, contradictory_time)]
+@@ -115,6 +115,7 @@ mod lockset;
+ mod queue;
+ mod rate_limiter;
+ mod registry;
++mod runtime_clock;
+ mod rwlock;
+ mod semaphore;
+ mod sequence;
+diff --git a/crates/aspen-coordination/src/lock.rs b/crates/aspen-coordination/src/lock.rs
+index 2dd1d9f0d..98513ee26 100644
+--- a/crates/aspen-coordination/src/lock.rs
++++ b/crates/aspen-coordination/src/lock.rs
+@@ -18,7 +18,6 @@
+
+ use std::sync::Arc;
+ use std::time::Duration;
+-use std::time::Instant;
+
+ use aspen_kv_types::KeyValueStoreError;
+ use aspen_kv_types::ReadRequest;
+@@ -33,6 +32,7 @@ use crate::error::CoordinationError;
+ use crate::error::LockHeldSnafu;
+ use crate::error::LockLostSnafu;
+ use crate::error::TimeoutSnafu;
++use crate::runtime_clock;
+ use crate::spec::verus_shim::*;
+ use crate::types::FencingToken;
+ use crate::types::LockEntry;
+@@ -109,14 +109,14 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
+         debug_assert!(!self.key.is_empty(), "LOCK: lock key must not be empty");
+         debug_assert!(!self.holder_id.is_empty(), "LOCK: holder_id must not be empty");
+
+-        let deadline = Instant::now() + Duration::from_millis(self.config.acquire_timeout_ms);
++        let deadline = runtime_clock::deadline_after(Duration::from_millis(self.config.acquire_timeout_ms));
+         let mut backoff_ms = self.config.initial_backoff_ms;
+
+         loop {
+             match self.try_acquire().await {
+                 Ok(guard) => return Ok(guard),
+                 Err(CoordinationError::LockHeld { holder, deadline_ms }) => {
+-                    if Instant::now() >= deadline {
++                    if runtime_clock::deadline_reached(deadline) {
+                         return TimeoutSnafu {
+                             operation: format!("lock acquisition for '{}'", self.key),
+                         }
+diff --git a/crates/aspen-coordination/src/lockset.rs b/crates/aspen-coordination/src/lockset.rs
+index 1160d2d1d..cfea0f3cd 100644
+--- a/crates/aspen-coordination/src/lockset.rs
++++ b/crates/aspen-coordination/src/lockset.rs
+@@ -682,10 +682,7 @@ mod tests {
+         let second = test_lockset(store.clone(), "holder-b", &["repo:a", "deploy:prod"]);
+
+         let _guard = first.try_acquire().await.unwrap();
+-        let error = match second.try_acquire().await {
+-            Ok(_) => panic!("expected lockset contention"),
+-            Err(error) => error,
+-        };
++        let error = second.try_acquire().await.expect_err("expected lockset contention");
+         assert!(matches!(error, CoordinationError::LockSetHeld { member, .. } if member == "repo:a"));
+         assert!(store.read(ReadRequest::new("deploy:prod".to_string())).await.is_err());
+     }
+diff --git a/crates/aspen-coordination/src/queue/dequeue.rs b/crates/aspen-coordination/src/queue/dequeue.rs
+index 0b2844bf2..0e5565d66 100644
+--- a/crates/aspen-coordination/src/queue/dequeue.rs
++++ b/crates/aspen-coordination/src/queue/dequeue.rs
+@@ -21,6 +21,7 @@ use super::DequeuedItem;
+ use super::PendingItem;
+ use super::QueueItem;
+ use super::QueueManager;
++use crate::runtime_clock;
+ use crate::types::now_unix_ms;
+ use crate::verified;
+
+@@ -327,7 +328,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+         visibility_timeout_ms: u64,
+         wait_timeout_ms: u64,
+     ) -> Result<Vec<DequeuedItem>> {
+-        let deadline = std::time::Instant::now() + Duration::from_millis(wait_timeout_ms);
++        let deadline = runtime_clock::deadline_after(Duration::from_millis(wait_timeout_ms));
+         let mut poll_interval = DEFAULT_QUEUE_POLL_INTERVAL_MS;
+
+         loop {
+@@ -337,7 +338,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+                 return Ok(items);
+             }
+
+-            if std::time::Instant::now() >= deadline {
++            if runtime_clock::deadline_reached(deadline) {
+                 return Ok(vec![]);
+             }
+
+diff --git a/crates/aspen-coordination/src/rate_limiter.rs b/crates/aspen-coordination/src/rate_limiter.rs
+index c4db7525f..59df07e71 100644
+--- a/crates/aspen-coordination/src/rate_limiter.rs
++++ b/crates/aspen-coordination/src/rate_limiter.rs
+@@ -4,7 +4,6 @@
+
+ use std::sync::Arc;
+ use std::time::Duration;
+-use std::time::Instant;
+
+ use aspen_constants::coordination::CAS_RETRY_INITIAL_BACKOFF_MS;
+ use aspen_constants::coordination::CAS_RETRY_MAX_BACKOFF_MS;
+@@ -18,6 +17,7 @@ use tracing::debug;
+
+ use crate::error::CoordinationError;
+ use crate::error::RateLimitError;
++use crate::runtime_clock;
+ use crate::types::BucketState;
+ use crate::types::now_unix_ms;
+
+@@ -275,7 +275,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
+         assert!(n > 0, "token count must be positive, got {}", n);
+         assert!(!timeout.is_zero(), "timeout must not be zero");
+
+-        let deadline = Instant::now() + timeout;
++        let deadline = runtime_clock::deadline_after(timeout);
+
+         loop {
+             match self.try_acquire_n(n).await {
+@@ -288,7 +288,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
+                         None => return Err(e.clone()), // StorageUnavailable - no point retrying
+                     };
+                     let wait = Duration::from_millis(retry_ms.min(100));
+-                    if Instant::now() + wait > deadline {
++                    if runtime_clock::wait_would_exceed_deadline(deadline, wait) {
+                         return Err(e.clone());
+                     }
+                     tokio::time::sleep(wait).await;
+@@ -481,7 +481,9 @@ mod tests {
+                     state.bucket_json = new_value;
+                     Ok(WriteResult::default())
+                 }
+-                other => panic!("unexpected write command: {other:?}"),
++                other => Err(KeyValueStoreError::Failed {
++                    reason: format!("unexpected write command in rate limiter test: {other:?}"),
++                }),
+             }
+         }
+
+@@ -499,11 +501,15 @@ mod tests {
+         }
+
+         async fn delete(&self, _request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+-            panic!("delete must not be called in rate limiter test");
++            Err(KeyValueStoreError::Failed {
++                reason: "delete must not be called in rate limiter test".to_string(),
++            })
+         }
+
+         async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+-            panic!("scan must not be called in rate limiter test");
++            Err(KeyValueStoreError::Failed {
++                reason: "scan must not be called in rate limiter test".to_string(),
++            })
+         }
+     }
+
+@@ -689,18 +695,17 @@ mod tests {
+         }
+
+         // Should get TokensExhausted error
+-        let result = limiter.try_acquire().await;
+-        match result {
+-            Err(RateLimitError::TokensExhausted {
+-                requested,
+-                available,
+-                retry_after_ms,
+-            }) => {
+-                assert_eq!(requested, 1);
+-                assert_eq!(available, 0);
+-                assert!(retry_after_ms > 0);
+-            }
+-            _ => panic!("Expected TokensExhausted error"),
++        let error = limiter.try_acquire().await.expect_err("expected TokensExhausted error");
++        assert!(matches!(&error, RateLimitError::TokensExhausted { .. }));
++        if let RateLimitError::TokensExhausted {
++            requested,
++            available,
++            retry_after_ms,
++        } = error
++        {
++            assert_eq!(requested, 1);
++            assert_eq!(available, 0);
++            assert!(retry_after_ms > 0);
+         }
+     }
+
+@@ -728,7 +733,7 @@ mod tests {
+         let store = Arc::new(ConflictThenSuccessStore::new(initial_state, 3));
+         let limiter = DistributedRateLimiter::new(store.clone(), "retry_limiter", RateLimiterConfig::new(1.0, 1));
+
+-        let start = Instant::now();
++        let start = std::time::Instant::now();
+         let remaining = limiter.try_acquire_n(1).await.unwrap();
+         let elapsed = start.elapsed();
+
+diff --git a/crates/aspen-coordination/src/runtime_clock.rs b/crates/aspen-coordination/src/runtime_clock.rs
+new file mode 100644
+index 000000000..086f0ccc5
+--- /dev/null
++++ b/crates/aspen-coordination/src/runtime_clock.rs
+@@ -0,0 +1,42 @@
++//! Runtime clock boundary helpers for coordination shell code.
++//!
++//! Coordination primitives own timeout and measurement boundaries here so the
++//! state-transition code can stay deterministic everywhere else.
++
++#![allow(
++    ambient_clock,
++    reason = "coordination shell code owns runtime timeout and measurement boundaries"
++)]
++
++use std::time::Duration;
++use std::time::Instant;
++
++#[inline]
++pub(crate) fn optional_deadline(timeout: Option<Duration>) -> Option<Instant> {
++    timeout.map(|duration| Instant::now() + duration)
++}
++
++#[inline]
++pub(crate) fn deadline_after(timeout: Duration) -> Instant {
++    Instant::now() + timeout
++}
++
++#[inline]
++pub(crate) fn deadline_reached(deadline: Instant) -> bool {
++    Instant::now() >= deadline
++}
++
++#[inline]
++pub(crate) fn timeout_elapsed(deadline: Option<Instant>) -> bool {
++    deadline.is_some_and(deadline_reached)
++}
++
++#[inline]
++pub(crate) fn wait_would_exceed_deadline(deadline: Instant, wait: Duration) -> bool {
++    Instant::now() + wait > deadline
++}
++
++#[inline]
++pub(crate) fn measurement_start() -> Instant {
++    Instant::now()
++}
+diff --git a/crates/aspen-coordination/src/rwlock/acquisition.rs b/crates/aspen-coordination/src/rwlock/acquisition.rs
+index a32a91b2f..02b735b40 100644
+--- a/crates/aspen-coordination/src/rwlock/acquisition.rs
++++ b/crates/aspen-coordination/src/rwlock/acquisition.rs
+@@ -17,6 +17,7 @@ use super::types::RWLockState;
+ use super::types::ReaderEntry;
+ use super::types::WriterEntry;
+ use crate::error::CoordinationError;
++use crate::runtime_clock;
+ use crate::types::now_unix_ms;
+ use crate::verified;
+
+@@ -48,13 +49,11 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+         debug_assert!(!holder_id.is_empty(), "RWLOCK: holder_id must not be empty");
+         debug_assert!(ttl_ms > 0, "RWLOCK: ttl_ms must be positive");
+
+-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
++        let deadline = runtime_clock::optional_deadline(timeout);
+
+         loop {
+             // Check timeout
+-            if let Some(d) = deadline
+-                && std::time::Instant::now() >= d
+-            {
++            if runtime_clock::timeout_elapsed(deadline) {
+                 bail!("read lock acquire timeout");
+             }
+
+@@ -247,7 +246,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+         debug_assert!(ttl_ms > 0, "RWLOCK: ttl_ms must be positive for write");
+
+         let key = verified::rwlock_key(name);
+-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
++        let deadline = runtime_clock::optional_deadline(timeout);
+
+         // First, register as pending writer (for fairness)
+         self.increment_pending_writers(&key, name).await?;
+@@ -273,9 +272,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+     ) -> Result<(u64, u64)> {
+         loop {
+             // Check timeout
+-            if let Some(d) = deadline
+-                && std::time::Instant::now() >= d
+-            {
++            if runtime_clock::timeout_elapsed(deadline) {
+                 bail!("write lock acquire timeout");
+             }
+
+diff --git a/crates/aspen-coordination/src/semaphore.rs b/crates/aspen-coordination/src/semaphore.rs
+index 6fdaa0efb..9f970eca3 100644
+--- a/crates/aspen-coordination/src/semaphore.rs
++++ b/crates/aspen-coordination/src/semaphore.rs
+@@ -22,6 +22,7 @@ use serde::Serialize;
+ use tracing::debug;
+
+ use crate::error::CoordinationError;
++use crate::runtime_clock;
+ use crate::types::now_unix_ms;
+ use crate::verified;
+
+@@ -120,13 +121,11 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
+         debug_assert!(capacity > 0, "SEMAPHORE: capacity must be positive");
+         debug_assert!(permits <= capacity, "SEMAPHORE: permits ({}) must not exceed capacity ({})", permits, capacity);
+
+-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
++        let deadline = runtime_clock::optional_deadline(timeout);
+
+         loop {
+             // Check timeout
+-            if let Some(d) = deadline
+-                && std::time::Instant::now() >= d
+-            {
++            if runtime_clock::timeout_elapsed(deadline) {
+                 bail!("semaphore acquire timeout");
+             }
+
+diff --git a/crates/aspen-coordination/src/verified/barrier.rs b/crates/aspen-coordination/src/verified/barrier.rs
+index aa54724fc..bd388df9d 100644
+--- a/crates/aspen-coordination/src/verified/barrier.rs
++++ b/crates/aspen-coordination/src/verified/barrier.rs
+@@ -547,8 +547,8 @@ mod property_tests {
+             // With 1 participant (the creator), should match ready check
+             let is_ready = is_barrier_ready(1, *required);
+             match phase {
+-                BarrierPhase::Ready => assert!(is_ready || *required <= 1),
+-                BarrierPhase::Waiting => assert!(!is_ready || *required <= 1),
++                BarrierPhase::Ready => assert!(*required <= 1),
++                BarrierPhase::Waiting => assert!(*required > 1),
+                 BarrierPhase::Leaving => unreachable!("Initial phase cannot be Leaving"),
+             }
+         });
+diff --git a/crates/aspen-coordination/src/worker_strategies.rs b/crates/aspen-coordination/src/worker_strategies.rs
+index 1683bbcdf..24080a1b4 100644
+--- a/crates/aspen-coordination/src/worker_strategies.rs
++++ b/crates/aspen-coordination/src/worker_strategies.rs
+@@ -12,6 +12,7 @@ use serde::Deserialize;
+ use serde::Serialize;
+ use tracing::debug;
+
++use crate::runtime_clock;
+ use crate::verified::strategies::SelectionResult;
+ use crate::verified::strategies::calculate_load_score;
+ use crate::verified::strategies::compute_running_average;
+@@ -105,7 +106,7 @@ impl RoundRobinStrategy {
+
+ impl LoadBalancer for RoundRobinStrategy {
+     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, _context: &RoutingContext) -> Result<Option<usize>> {
+-        let start = std::time::Instant::now();
++        let start = runtime_clock::measurement_start();
+
+         // Filter eligible workers
+         let eligible_indices: Vec<_> =
+@@ -190,7 +191,7 @@ impl LeastLoadedStrategy {
+
+ impl LoadBalancer for LeastLoadedStrategy {
+     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
+-        let start = std::time::Instant::now();
++        let start = runtime_clock::measurement_start();
+
+         // Filter and score workers using pure functions
+         let mut eligible: Vec<(usize, f32)> = workers
+@@ -277,7 +278,7 @@ impl AffinityStrategy {
+
+ impl LoadBalancer for AffinityStrategy {
+     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
+-        let start = std::time::Instant::now();
++        let start = runtime_clock::measurement_start();
+
+         // Clean up periodically
+         if self.affinity_map.len() > self.max_affinity_entries as usize {
+@@ -382,7 +383,7 @@ impl ConsistentHashStrategy {
+
+ impl LoadBalancer for ConsistentHashStrategy {
+     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
+-        let start = std::time::Instant::now();
++        let start = runtime_clock::measurement_start();
+
+         // Filter eligible workers
+         let eligible: Vec<_> = workers.iter().enumerate().filter(|(_, w)| w.can_handle(job_type)).collect();
+@@ -483,7 +484,7 @@ impl WorkStealingStrategy {
+
+ impl LoadBalancer for WorkStealingStrategy {
+     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
+-        let start = std::time::Instant::now();
++        let start = runtime_clock::measurement_start();
+
+         // First, try to find idle or low-load workers using pure function
+         let idle_workers: Vec<_> = workers
+diff --git a/openspec/changes/tigerstyle-phase-2-coordination-cleanup/rollout-notes.md b/openspec/changes/tigerstyle-phase-2-coordination-cleanup/rollout-notes.md
+new file mode 100644
+index 000000000..f2d291a27
+--- /dev/null
++++ b/openspec/changes/tigerstyle-phase-2-coordination-cleanup/rollout-notes.md
+@@ -0,0 +1,90 @@
++# Coordination Tiger Style Phase 2 Notes
++
++## Baseline Inventory
++
++Baseline command:
++
++```bash
++scripts/tigerstyle-check.sh -p aspen-coordination -- --lib
++```
++
++Baseline findings from `evidence/aspen-coordination-baseline.txt`:
++
++- `ambient_clock`: 21 warnings
++- `compound_assertion`: 2 warnings
++- `no_panic`: 4 warnings
++
++### Ambient-clock findings by file
++
++Boundary-owned timeout or measurement reads:
++
++- `crates/aspen-coordination/src/barrier.rs` — 4
++- `crates/aspen-coordination/src/lock.rs` — 2
++- `crates/aspen-coordination/src/queue/dequeue.rs` — 2
++- `crates/aspen-coordination/src/rate_limiter.rs` — 2
++- `crates/aspen-coordination/src/rwlock/acquisition.rs` — 4
++- `crates/aspen-coordination/src/semaphore.rs` — 2
++- `crates/aspen-coordination/src/worker_strategies.rs` — 5
++
++Disposition: isolate these clock reads into one explicit shell boundary helper,
++`crates/aspen-coordination/src/runtime_clock.rs`, instead of scattering raw
++`Instant::now()` calls across coordination code.
++
++### Compound-assertion findings
++
++- `crates/aspen-coordination/src/verified/barrier.rs` — 2 assertions in
++  `prop_initial_phase_matches_ready`
++
++Disposition: split them into direct single-condition assertions.
++
++### Panic-family findings
++
++- `crates/aspen-coordination/src/barrier.rs` — 1 `unreachable!()` in the create
++  path for `EnterResult::InLeavingPhase`
++- `crates/aspen-coordination/src/lockset.rs` — 1 test panic for expected
++  contention
++- `crates/aspen-coordination/src/rate_limiter.rs` — 2 test/helper panics
++
++Disposition:
++
++- replace the barrier `unreachable!()` with `debug_assert!()` plus retry
++- replace test panic branches with `expect_err(...)` or explicit error returns
++
++## Cleanup Applied
++
++- added `crates/aspen-coordination/src/runtime_clock.rs` to own timeout and
++  measurement boundaries
++- rewired barrier, lock, queue dequeue, rate limiter, rwlock acquisition,
++  semaphore, and worker strategies to use that helper
++- replaced the barrier create-path `unreachable!()` with a defensive
++  `debug_assert!()` path
++- removed panic-based test/helper branches in `lockset.rs` and `rate_limiter.rs`
++- simplified the verified barrier property assertions to single-condition
++  checks
++- promoted `aspen-coordination` into the default package scope of
++  `scripts/tigerstyle-check.sh`
++
++## Post-cleanup Result
++
++Targeted rerun command:
++
++```bash
++scripts/tigerstyle-check.sh -p aspen-coordination -- --lib
++```
++
++Result from `evidence/aspen-coordination-after.txt`:
++
++- no coordination starter-lint findings remain
++- only Dylint/toolchain infrastructure warnings remain (`resolver` and
++  `patch ... was not used in the crate graph`)
++
++Default pilot command:
++
++```bash
++scripts/tigerstyle-check.sh
++```
++
++Result from `evidence/aspen-default-pilot.txt`:
++
++- default pilot now includes `aspen-coordination`
++- starter-lint run completes with the expanded default scope
+diff --git a/openspec/changes/tigerstyle-phase-2-coordination-cleanup/tasks.md b/openspec/changes/tigerstyle-phase-2-coordination-cleanup/tasks.md
+index 224f0a7b8..9d1895a16 100644
+--- a/openspec/changes/tigerstyle-phase-2-coordination-cleanup/tasks.md
++++ b/openspec/changes/tigerstyle-phase-2-coordination-cleanup/tasks.md
+@@ -1,8 +1,8 @@
+ # Tasks: Promote Aspen Coordination Into Tigerstyle Phase 2
+
+-- [ ] Inventory the current coordination tigerstyle findings by file and category
+-- [ ] Refactor or explicitly isolate ambient clock reads in coordination shell code
+-- [ ] Split the verified barrier compound assertions into independent checks
+-- [ ] Remove or justify production panic-family sites that block the phase-2 rollout
+-- [ ] Re-run `scripts/tigerstyle-check.sh -p aspen-coordination -- --lib` and record the new baseline
+-- [ ] Add `aspen-coordination` back to Aspen's default tigerstyle pilot once the warning set is bounded
++- [x] Inventory the current coordination tigerstyle findings by file and category
++- [x] Refactor or explicitly isolate ambient clock reads in coordination shell code
++- [x] Split the verified barrier compound assertions into independent checks
++- [x] Remove or justify production panic-family sites that block the phase-2 rollout
++- [x] Re-run `scripts/tigerstyle-check.sh -p aspen-coordination -- --lib` and record the new baseline
++- [x] Add `aspen-coordination` back to Aspen's default tigerstyle pilot once the warning set is bounded
+diff --git a/openspec/changes/tigerstyle-phase-2-coordination-cleanup/verification.md b/openspec/changes/tigerstyle-phase-2-coordination-cleanup/verification.md
+new file mode 100644
+index 000000000..df8999111
+--- /dev/null
++++ b/openspec/changes/tigerstyle-phase-2-coordination-cleanup/verification.md
+@@ -0,0 +1,87 @@
++# Verification Evidence
++
++## Implementation Evidence
++
++- Changed file: `AGENTS.md`
++- Changed file: `crates/aspen-coordination/src/barrier.rs`
++- Changed file: `crates/aspen-coordination/src/lib.rs`
++- Changed file: `crates/aspen-coordination/src/lock.rs`
++- Changed file: `crates/aspen-coordination/src/lockset.rs`
++- Changed file: `crates/aspen-coordination/src/queue/dequeue.rs`
++- Changed file: `crates/aspen-coordination/src/rate_limiter.rs`
++- Changed file: `crates/aspen-coordination/src/runtime_clock.rs`
++- Changed file: `crates/aspen-coordination/src/rwlock/acquisition.rs`
++- Changed file: `crates/aspen-coordination/src/semaphore.rs`
++- Changed file: `crates/aspen-coordination/src/verified/barrier.rs`
++- Changed file: `crates/aspen-coordination/src/worker_strategies.rs`
++- Changed file: `scripts/tigerstyle-check.sh`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/tasks.md`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/rollout-notes.md`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/verification.md`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-baseline.txt`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-after.txt`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-default-pilot.txt`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/cargo-clippy-aspen-coordination.txt`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/validation-counts.txt`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/implementation-diff.txt`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/openspec-validate.txt`
++- Changed file: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/openspec-preflight.txt`
++
++## Task Coverage
++
++- [x] Inventory the current coordination tigerstyle findings by file and category
++  - Evidence: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/rollout-notes.md`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-baseline.txt`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/validation-counts.txt`
++- [x] Refactor or explicitly isolate ambient clock reads in coordination shell code
++  - Evidence: `crates/aspen-coordination/src/runtime_clock.rs`, `crates/aspen-coordination/src/barrier.rs`, `crates/aspen-coordination/src/lock.rs`, `crates/aspen-coordination/src/queue/dequeue.rs`, `crates/aspen-coordination/src/rate_limiter.rs`, `crates/aspen-coordination/src/rwlock/acquisition.rs`, `crates/aspen-coordination/src/semaphore.rs`, `crates/aspen-coordination/src/worker_strategies.rs`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-after.txt`
++- [x] Split the verified barrier compound assertions into independent checks
++  - Evidence: `crates/aspen-coordination/src/verified/barrier.rs`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-after.txt`
++- [x] Remove or justify production panic-family sites that block the phase-2 rollout
++  - Evidence: `crates/aspen-coordination/src/barrier.rs`, `crates/aspen-coordination/src/lockset.rs`, `crates/aspen-coordination/src/rate_limiter.rs`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-after.txt`
++- [x] Re-run `scripts/tigerstyle-check.sh -p aspen-coordination -- --lib` and record the new baseline
++  - Evidence: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-after.txt`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/validation-counts.txt`
++- [x] Add `aspen-coordination` back to Aspen's default tigerstyle pilot once the warning set is bounded
++  - Evidence: `scripts/tigerstyle-check.sh`, `AGENTS.md`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-default-pilot.txt`, `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/validation-counts.txt`
++
++## Review Scope Snapshot
++
++### `git diff -- AGENTS.md crates/aspen-coordination/src/barrier.rs crates/aspen-coordination/src/lib.rs crates/aspen-coordination/src/lock.rs crates/aspen-coordination/src/lockset.rs crates/aspen-coordination/src/queue/dequeue.rs crates/aspen-coordination/src/rate_limiter.rs crates/aspen-coordination/src/runtime_clock.rs crates/aspen-coordination/src/rwlock/acquisition.rs crates/aspen-coordination/src/semaphore.rs crates/aspen-coordination/src/verified/barrier.rs crates/aspen-coordination/src/worker_strategies.rs scripts/tigerstyle-check.sh openspec/changes/tigerstyle-phase-2-coordination-cleanup/tasks.md openspec/changes/tigerstyle-phase-2-coordination-cleanup/rollout-notes.md openspec/changes/tigerstyle-phase-2-coordination-cleanup/verification.md`
++
++- Status: captured
++- Artifact: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/implementation-diff.txt`
++
++## Verification Commands
++
++### `scripts/tigerstyle-check.sh -p aspen-coordination -- --lib`
++
++- Status: pass (baseline before cleanup saved)
++- Artifact: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-baseline.txt`
++
++### `scripts/tigerstyle-check.sh -p aspen-coordination -- --lib`
++
++- Status: pass (post-cleanup, no coordination starter-lint findings)
++- Artifact: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-coordination-after.txt`
++
++### `scripts/tigerstyle-check.sh`
++
++- Status: pass (default pilot now includes `aspen-coordination`)
++- Artifact: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/aspen-default-pilot.txt`
++
++### `cargo clippy -p aspen-coordination --lib -- -D warnings`
++
++- Status: pass
++- Artifact: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/cargo-clippy-aspen-coordination.txt`
++
++### `openspec validate tigerstyle-phase-2-coordination-cleanup`
++
++- Status: pass
++- Artifact: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/openspec-validate.txt`
++
++### `scripts/openspec-preflight.sh tigerstyle-phase-2-coordination-cleanup`
++
++- Status: pass
++- Artifact: `openspec/changes/tigerstyle-phase-2-coordination-cleanup/evidence/openspec-preflight.txt`
++
++## Notes
++
++- `runtime_clock.rs` is the explicit shell boundary for timeout and measurement reads that used to be scattered across coordination code.
++- `rollout-notes.md` records both the baseline inventory and the post-cleanup default-pilot promotion decision.
+diff --git a/scripts/tigerstyle-check.sh b/scripts/tigerstyle-check.sh
+index 0bfdbb215..700604e31 100755
+--- a/scripts/tigerstyle-check.sh
++++ b/scripts/tigerstyle-check.sh
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env bash
+-# Run Aspen's phase-1 Tiger Style starter lints through Dylint.
++# Run Aspen's current Tiger Style starter-lint pilot through Dylint.
+ #
+ # Requirements:
+ #   - `cargo-dylint` and `dylint-link` installed in PATH
+@@ -27,9 +27,9 @@ usage() {
+ Usage: scripts/tigerstyle-check.sh [cargo-dylint options] [package scope] [-- cargo-check args]
+
+ Default scope (when no package/workspace is passed):
+-  -p aspen-time -p aspen-hlc -p aspen-core
++  -p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination
+
+-Starter lints enabled in phase 1:
++Starter lints enabled in phase 2 default pilot:
+   - tigerstyle::compound_assertion
+   - tigerstyle::ambient_clock
+   - tigerstyle::contradictory_time
+@@ -221,6 +221,7 @@ if (( ! saw_scope )); then
+     -p aspen-time
+     -p aspen-hlc
+     -p aspen-core
++    -p aspen-coordination
+   )
+ fi

@@ -21,6 +21,7 @@ use super::DequeuedItem;
 use super::PendingItem;
 use super::QueueItem;
 use super::QueueManager;
+use crate::runtime_clock;
 use crate::types::now_unix_ms;
 use crate::verified;
 
@@ -327,7 +328,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         visibility_timeout_ms: u64,
         wait_timeout_ms: u64,
     ) -> Result<Vec<DequeuedItem>> {
-        let deadline = std::time::Instant::now() + Duration::from_millis(wait_timeout_ms);
+        let deadline = runtime_clock::deadline_after(Duration::from_millis(wait_timeout_ms));
         let mut poll_interval = DEFAULT_QUEUE_POLL_INTERVAL_MS;
 
         loop {
@@ -337,7 +338,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 return Ok(items);
             }
 
-            if std::time::Instant::now() >= deadline {
+            if runtime_clock::deadline_reached(deadline) {
                 return Ok(vec![]);
             }
 

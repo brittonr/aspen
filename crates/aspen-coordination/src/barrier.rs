@@ -24,6 +24,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
+use crate::runtime_clock;
+
 /// Barrier key prefix.
 const BARRIER_PREFIX: &str = "__barrier:";
 
@@ -116,13 +118,11 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
         debug_assert!(required_count > 0, "BARRIER: required_count must be positive");
 
         let key = format!("{}{}", BARRIER_PREFIX, name);
-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
+        let deadline = runtime_clock::optional_deadline(timeout);
 
         loop {
             // Check timeout
-            if let Some(d) = deadline
-                && std::time::Instant::now() >= d
-            {
+            if runtime_clock::timeout_elapsed(deadline) {
                 bail!("barrier enter timeout");
             }
 
@@ -134,7 +134,10 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
                     EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
                     EnterResult::Waiting => return Ok((1, BarrierPhase::Waiting.as_str().to_string())),
                     EnterResult::RetryRequired => continue,
-                    EnterResult::InLeavingPhase => unreachable!(),
+                    EnterResult::InLeavingPhase => {
+                        debug_assert!(false, "BARRIER: newly created barrier must not start in leaving phase");
+                        continue;
+                    }
                 },
                 Some(state) => match self.enter_join(name, participant_id, required_count, &key, &state).await? {
                     EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
@@ -269,13 +272,11 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
         debug_assert!(!participant_id.is_empty(), "BARRIER: participant_id must not be empty for leave");
 
         let key = format!("{}{}", BARRIER_PREFIX, name);
-        let deadline = timeout.map(|t| std::time::Instant::now() + t);
+        let deadline = runtime_clock::optional_deadline(timeout);
 
         loop {
             // Check timeout
-            if let Some(d) = deadline
-                && std::time::Instant::now() >= d
-            {
+            if runtime_clock::timeout_elapsed(deadline) {
                 bail!("barrier leave timeout");
             }
 

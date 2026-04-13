@@ -18,7 +18,6 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use aspen_kv_types::KeyValueStoreError;
 use aspen_kv_types::ReadRequest;
@@ -33,6 +32,7 @@ use crate::error::CoordinationError;
 use crate::error::LockHeldSnafu;
 use crate::error::LockLostSnafu;
 use crate::error::TimeoutSnafu;
+use crate::runtime_clock;
 use crate::spec::verus_shim::*;
 use crate::types::FencingToken;
 use crate::types::LockEntry;
@@ -109,14 +109,14 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
         debug_assert!(!self.key.is_empty(), "LOCK: lock key must not be empty");
         debug_assert!(!self.holder_id.is_empty(), "LOCK: holder_id must not be empty");
 
-        let deadline = Instant::now() + Duration::from_millis(self.config.acquire_timeout_ms);
+        let deadline = runtime_clock::deadline_after(Duration::from_millis(self.config.acquire_timeout_ms));
         let mut backoff_ms = self.config.initial_backoff_ms;
 
         loop {
             match self.try_acquire().await {
                 Ok(guard) => return Ok(guard),
                 Err(CoordinationError::LockHeld { holder, deadline_ms }) => {
-                    if Instant::now() >= deadline {
+                    if runtime_clock::deadline_reached(deadline) {
                         return TimeoutSnafu {
                             operation: format!("lock acquisition for '{}'", self.key),
                         }

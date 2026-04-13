@@ -1,0 +1,3 @@
+baseline_coordination: ambient_clock=21, compound_assertion=2, no_panic=4, total=27
+post_cleanup_coordination: ambient_clock=0, compound_assertion=0, no_panic=0, total=0
+default_pilot_scope: aspen-time=2 ambient_clock, aspen-core=4 ambient_clock, aspen-hlc=0 starter findings, aspen-coordination=0 starter findings

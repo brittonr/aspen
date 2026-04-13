@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use aspen_constants::coordination::CAS_RETRY_INITIAL_BACKOFF_MS;
 use aspen_constants::coordination::CAS_RETRY_MAX_BACKOFF_MS;
@@ -18,6 +17,7 @@ use tracing::debug;
 
 use crate::error::CoordinationError;
 use crate::error::RateLimitError;
+use crate::runtime_clock;
 use crate::types::BucketState;
 use crate::types::now_unix_ms;
 
@@ -275,7 +275,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         assert!(n > 0, "token count must be positive, got {}", n);
         assert!(!timeout.is_zero(), "timeout must not be zero");
 
-        let deadline = Instant::now() + timeout;
+        let deadline = runtime_clock::deadline_after(timeout);
 
         loop {
             match self.try_acquire_n(n).await {
@@ -288,7 +288,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                         None => return Err(e.clone()), // StorageUnavailable - no point retrying
                     };
                     let wait = Duration::from_millis(retry_ms.min(100));
-                    if Instant::now() + wait > deadline {
+                    if runtime_clock::wait_would_exceed_deadline(deadline, wait) {
                         return Err(e.clone());
                     }
                     tokio::time::sleep(wait).await;
@@ -481,7 +481,9 @@ mod tests {
                     state.bucket_json = new_value;
                     Ok(WriteResult::default())
                 }
-                other => panic!("unexpected write command: {other:?}"),
+                other => Err(KeyValueStoreError::Failed {
+                    reason: format!("unexpected write command in rate limiter test: {other:?}"),
+                }),
             }
         }
 
@@ -499,11 +501,15 @@ mod tests {
         }
 
         async fn delete(&self, _request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
-            panic!("delete must not be called in rate limiter test");
+            Err(KeyValueStoreError::Failed {
+                reason: "delete must not be called in rate limiter test".to_string(),
+            })
         }
 
         async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-            panic!("scan must not be called in rate limiter test");
+            Err(KeyValueStoreError::Failed {
+                reason: "scan must not be called in rate limiter test".to_string(),
+            })
         }
     }
 
@@ -689,18 +695,17 @@ mod tests {
         }
 
         // Should get TokensExhausted error
-        let result = limiter.try_acquire().await;
-        match result {
-            Err(RateLimitError::TokensExhausted {
-                requested,
-                available,
-                retry_after_ms,
-            }) => {
-                assert_eq!(requested, 1);
-                assert_eq!(available, 0);
-                assert!(retry_after_ms > 0);
-            }
-            _ => panic!("Expected TokensExhausted error"),
+        let error = limiter.try_acquire().await.expect_err("expected TokensExhausted error");
+        assert!(matches!(&error, RateLimitError::TokensExhausted { .. }));
+        if let RateLimitError::TokensExhausted {
+            requested,
+            available,
+            retry_after_ms,
+        } = error
+        {
+            assert_eq!(requested, 1);
+            assert_eq!(available, 0);
+            assert!(retry_after_ms > 0);
         }
     }
 
@@ -728,7 +733,7 @@ mod tests {
         let store = Arc::new(ConflictThenSuccessStore::new(initial_state, 3));
         let limiter = DistributedRateLimiter::new(store.clone(), "retry_limiter", RateLimiterConfig::new(1.0, 1));
 
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         let remaining = limiter.try_acquire_n(1).await.unwrap();
         let elapsed = start.elapsed();
 
