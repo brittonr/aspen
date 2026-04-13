@@ -1,6 +1,7 @@
 //! Rate limiting for gossip messages to prevent abuse.
 
 use std::collections::HashMap;
+use std::time::Duration;
 use std::time::Instant;
 
 use iroh::PublicKey;
@@ -30,33 +31,47 @@ pub struct TokenBucket {
 impl TokenBucket {
     /// Create a new token bucket with the specified rate and burst capacity.
     pub fn new(rate_per_minute: u32, burst: u32) -> Self {
+        Self::new_at(rate_per_minute, burst, Instant::now())
+    }
+
+    /// Create a new token bucket with an injected clock value.
+    pub fn new_at(rate_per_minute: u32, burst: u32, now: Instant) -> Self {
         let capacity = f64::from(burst);
+        let rate_per_sec = f64::from(rate_per_minute) / 60.0;
+
         Self {
-            tokens: capacity, // Start full
+            tokens: capacity,
             capacity,
-            rate_per_sec: f64::from(rate_per_minute) / 60.0,
-            last_update: Instant::now(),
+            rate_per_sec,
+            last_update: now,
         }
     }
 
-    /// Try to consume one token. Returns true if allowed, false if rate limited.
+    /// Try to consume one token using the system clock.
+    pub fn try_consume(&mut self) -> bool {
+        self.try_consume_at(Instant::now())
+    }
+
+    /// Try to consume one token with an injected clock value.
     ///
     /// Replenishes tokens based on elapsed time before checking.
-    pub fn try_consume(&mut self) -> bool {
-        let now = Instant::now();
-        let elapsed = now.duration_since(self.last_update).as_secs_f64();
+    pub fn try_consume_at(&mut self, now: Instant) -> bool {
+        debug_assert!(self.tokens >= 0.0, "gossip token bucket tokens must stay non-negative");
+        debug_assert!(self.capacity >= 0.0, "gossip token bucket capacity must stay non-negative");
 
-        // Replenish tokens based on elapsed time
-        self.tokens = (self.tokens + elapsed * self.rate_per_sec).min(self.capacity);
-        self.last_update = now;
+        let effective_now = now.max(self.last_update);
+        let elapsed = effective_now.duration_since(self.last_update).as_secs_f64();
+        let replenished_tokens = self.tokens + elapsed * self.rate_per_sec;
+        self.tokens = replenished_tokens.min(self.capacity);
+        self.last_update = effective_now;
 
-        // Try to consume one token
-        if self.tokens >= 1.0 {
-            self.tokens -= 1.0;
-            true
-        } else {
-            false
+        if self.tokens < 1.0 {
+            return false;
         }
+
+        self.tokens -= 1.0;
+        debug_assert!(self.tokens >= 0.0, "gossip token bucket must not go negative after consume");
+        true
     }
 }
 
@@ -94,9 +109,14 @@ pub struct GossipRateLimiter {
 impl GossipRateLimiter {
     /// Create a new rate limiter with configured limits.
     pub fn new() -> Self {
+        Self::new_at(Instant::now())
+    }
+
+    /// Create a new rate limiter with an injected clock value.
+    pub fn new_at(now: Instant) -> Self {
         Self {
             per_peer: HashMap::with_capacity(GOSSIP_MAX_TRACKED_PEERS),
-            global: TokenBucket::new(GOSSIP_GLOBAL_RATE_PER_MINUTE, GOSSIP_GLOBAL_BURST),
+            global: TokenBucket::new_at(GOSSIP_GLOBAL_RATE_PER_MINUTE, GOSSIP_GLOBAL_BURST, now),
         }
     }
 
@@ -106,35 +126,36 @@ impl GossipRateLimiter {
     ///
     /// Tiger Style: Check global limit first (cheaper), then per-peer.
     pub fn check(&mut self, peer_id: &PublicKey) -> std::result::Result<(), RateLimitReason> {
-        // Check global limit first (single bucket, cheaper)
-        if !self.global.try_consume() {
+        self.check_at(peer_id, Instant::now())
+    }
+
+    /// Check if a message from the given peer should be allowed with an injected clock value.
+    pub fn check_at(&mut self, peer_id: &PublicKey, now: Instant) -> std::result::Result<(), RateLimitReason> {
+        if !self.global.try_consume_at(now) {
             return Err(RateLimitReason::Global);
         }
 
-        // Check per-peer limit
-        let now = Instant::now();
-
-        // Get or create per-peer entry
         if let Some(entry) = self.per_peer.get_mut(peer_id) {
-            entry.last_access = now;
-            if !entry.bucket.try_consume() {
+            entry.last_access = entry.last_access.max(now);
+            if !entry.bucket.try_consume_at(now) {
                 return Err(RateLimitReason::PerPeer);
             }
-        } else {
-            // New peer - enforce LRU eviction if at capacity
-            if self.per_peer.len() >= GOSSIP_MAX_TRACKED_PEERS {
-                self.evict_oldest();
-            }
-
-            // Create new entry (starts with full bucket, so first message always allowed)
-            let mut bucket = TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST);
-            bucket.try_consume(); // Consume token for this message
-            self.per_peer.insert(*peer_id, PeerRateEntry {
-                bucket,
-                last_access: now,
-            });
+            return Ok(());
         }
 
+        if self.per_peer.len() >= GOSSIP_MAX_TRACKED_PEERS {
+            self.evict_oldest();
+        }
+
+        let mut bucket = TokenBucket::new_at(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST, now);
+        if !bucket.try_consume_at(now) {
+            return Err(RateLimitReason::PerPeer);
+        }
+
+        self.per_peer.insert(*peer_id, PeerRateEntry {
+            bucket,
+            last_access: now,
+        });
         Ok(())
     }
 
@@ -171,161 +192,200 @@ mod tests {
 
     #[test]
     fn test_token_bucket_allows_burst() {
-        let mut bucket = TokenBucket::new(12, 3); // 12/min, burst 3
+        let now = Instant::now();
+        let mut bucket = TokenBucket::new_at(12, 3, now); // 12/min, burst 3
 
-        // Should allow burst capacity
-        assert!(bucket.try_consume());
-        assert!(bucket.try_consume());
-        assert!(bucket.try_consume());
-
-        // Fourth should fail (burst exhausted)
-        assert!(!bucket.try_consume());
+        assert!(bucket.try_consume_at(now));
+        assert!(bucket.try_consume_at(now));
+        assert!(bucket.try_consume_at(now));
+        assert!(!bucket.try_consume_at(now));
     }
 
     #[test]
-    fn test_token_bucket_replenishes() {
-        let mut bucket = TokenBucket::new(60, 1); // 1 per second, burst 1
+    fn test_token_bucket_replenishes_without_sleep() {
+        let now = Instant::now();
+        let mut bucket = TokenBucket::new_at(60, 1, now); // 1 per second, burst 1
 
-        // Exhaust the bucket
-        assert!(bucket.try_consume());
-        assert!(!bucket.try_consume());
+        assert!(bucket.try_consume_at(now));
+        assert!(!bucket.try_consume_at(now));
+        assert!(bucket.try_consume_at(now + Duration::from_millis(1100)));
+    }
 
-        // Wait for replenishment (1+ second)
-        std::thread::sleep(std::time::Duration::from_millis(1100));
+    #[test]
+    fn test_token_bucket_ignores_backward_time() {
+        let now = Instant::now();
+        let later = now + Duration::from_secs(1);
+        let mut bucket = TokenBucket::new_at(60, 1, now);
 
-        // Should have replenished
-        assert!(bucket.try_consume());
+        assert!(bucket.try_consume_at(now));
+        assert!(bucket.try_consume_at(later));
+        assert!(!bucket.try_consume_at(now));
+    }
+
+    #[test]
+    fn test_token_bucket_backward_time_does_not_double_replenish() {
+        let t0 = Instant::now();
+        let t1 = t0 + Duration::from_secs(1);
+        let t2 = t1 + Duration::from_millis(100);
+        let mut bucket = TokenBucket::new_at(60, 1, t0);
+
+        assert!(bucket.try_consume_at(t0));
+        assert!(bucket.try_consume_at(t1));
+        assert!(!bucket.try_consume_at(t0));
+        assert!(!bucket.try_consume_at(t2));
     }
 
     #[test]
     fn test_rate_limiter_allows_first_messages() {
-        let mut limiter = GossipRateLimiter::new();
+        let now = Instant::now();
+        let mut limiter = GossipRateLimiter::new_at(now);
         let peer1 = SecretKey::from([1u8; 32]).public();
         let peer2 = SecretKey::from([2u8; 32]).public();
 
-        // First message from each peer should be allowed
-        assert!(limiter.check(&peer1).is_ok());
-        assert!(limiter.check(&peer2).is_ok());
+        assert!(limiter.check_at(&peer1, now).is_ok());
+        assert!(limiter.check_at(&peer2, now).is_ok());
     }
 
     #[test]
     fn test_rate_limiter_per_peer_limit() {
-        let mut limiter = GossipRateLimiter::new();
+        let now = Instant::now();
+        let mut limiter = GossipRateLimiter::new_at(now);
         let peer = SecretKey::from([3u8; 32]).public();
 
-        // Exhaust per-peer burst (3 messages)
-        assert!(limiter.check(&peer).is_ok());
-        assert!(limiter.check(&peer).is_ok());
-        assert!(limiter.check(&peer).is_ok());
+        assert!(limiter.check_at(&peer, now).is_ok());
+        assert!(limiter.check_at(&peer, now).is_ok());
+        assert!(limiter.check_at(&peer, now).is_ok());
 
-        // Fourth should be rate limited
-        let result = limiter.check(&peer);
+        let result = limiter.check_at(&peer, now);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), RateLimitReason::PerPeer));
     }
 
     #[test]
     fn test_rate_limiter_per_peer_independent() {
-        let mut limiter = GossipRateLimiter::new();
+        let now = Instant::now();
+        let mut limiter = GossipRateLimiter::new_at(now);
         let peer1 = SecretKey::from([4u8; 32]).public();
         let peer2 = SecretKey::from([5u8; 32]).public();
 
-        // Exhaust peer1's burst
         for _ in 0..3 {
-            assert!(limiter.check(&peer1).is_ok());
+            assert!(limiter.check_at(&peer1, now).is_ok());
         }
-        assert!(limiter.check(&peer1).is_err());
+        assert!(limiter.check_at(&peer1, now).is_err());
 
-        // peer2 should still have full burst
-        assert!(limiter.check(&peer2).is_ok());
-        assert!(limiter.check(&peer2).is_ok());
-        assert!(limiter.check(&peer2).is_ok());
+        assert!(limiter.check_at(&peer2, now).is_ok());
+        assert!(limiter.check_at(&peer2, now).is_ok());
+        assert!(limiter.check_at(&peer2, now).is_ok());
     }
 
     #[test]
     fn test_rate_limiter_lru_eviction() {
-        // Test eviction logic directly without rate limiting interference
-        let mut limiter = GossipRateLimiter::new();
-
-        // Manually insert entries up to capacity
         let now = Instant::now();
+        let mut limiter = GossipRateLimiter::new_at(now);
+
         for i in 0..GOSSIP_MAX_TRACKED_PEERS {
             let mut key_bytes = [0u8; 32];
             key_bytes[0] = (i & 0xFF) as u8;
             key_bytes[1] = ((i >> 8) & 0xFF) as u8;
             let peer = SecretKey::from(key_bytes).public();
 
-            // Directly insert entries to avoid rate limiting
             limiter.per_peer.insert(peer, PeerRateEntry {
-                bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
+                bucket: TokenBucket::new_at(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST, now),
                 last_access: now,
             });
         }
 
         assert_eq!(limiter.per_peer.len(), GOSSIP_MAX_TRACKED_PEERS);
 
-        // Trigger eviction by adding one more
         limiter.evict_oldest();
         let new_peer = SecretKey::from([0xFF; 32]).public();
         limiter.per_peer.insert(new_peer, PeerRateEntry {
-            bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
+            bucket: TokenBucket::new_at(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST, now),
             last_access: now,
         });
 
-        // Should still be at capacity (not over)
         assert_eq!(limiter.per_peer.len(), GOSSIP_MAX_TRACKED_PEERS);
     }
 
     #[test]
     fn test_rate_limiter_global_limit() {
-        // Test with a custom bucket that has zero replenishment rate
-        // to avoid time-based replenishment affecting the test
+        let now = Instant::now();
         let mut limiter = GossipRateLimiter {
             per_peer: HashMap::with_capacity(GOSSIP_MAX_TRACKED_PEERS),
-            // Use 0 rate per minute so no replenishment during test
-            global: TokenBucket::new(0, GOSSIP_GLOBAL_BURST),
+            global: TokenBucket::new_at(0, GOSSIP_GLOBAL_BURST, now),
         };
 
-        // Exhaust global burst (100 messages from different peers)
         for i in 0..GOSSIP_GLOBAL_BURST {
             let mut key_bytes = [0u8; 32];
             key_bytes[0] = (i & 0xFF) as u8;
             key_bytes[1] = ((i >> 8) & 0xFF) as u8;
             let peer = SecretKey::from(key_bytes).public();
-            assert!(limiter.check(&peer).is_ok(), "message {} should be allowed", i);
+            assert!(limiter.check_at(&peer, now).is_ok(), "message {} should be allowed", i);
         }
 
-        // Next message should hit global limit
         let extra_peer = SecretKey::from([0xFE; 32]).public();
-        let result = limiter.check(&extra_peer);
+        let result = limiter.check_at(&extra_peer, now);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), RateLimitReason::Global));
     }
 
     #[test]
     fn test_evict_oldest_removes_least_recent() {
-        let mut limiter = GossipRateLimiter::new();
         let now = Instant::now();
+        let mut limiter = GossipRateLimiter::new_at(now);
 
-        // Insert peer A with older timestamp
         let peer_a = SecretKey::from([0xAA; 32]).public();
         limiter.per_peer.insert(peer_a, PeerRateEntry {
-            bucket: TokenBucket::new(12, 3),
-            last_access: now - std::time::Duration::from_secs(100),
+            bucket: TokenBucket::new_at(12, 3, now),
+            last_access: now - Duration::from_secs(100),
         });
 
-        // Insert peer B with newer timestamp
         let peer_b = SecretKey::from([0xBB; 32]).public();
         limiter.per_peer.insert(peer_b, PeerRateEntry {
-            bucket: TokenBucket::new(12, 3),
+            bucket: TokenBucket::new_at(12, 3, now),
             last_access: now,
         });
 
-        // Evict oldest
         limiter.evict_oldest();
 
-        // peer_a (older) should be evicted, peer_b should remain
         assert!(!limiter.per_peer.contains_key(&peer_a));
         assert!(limiter.per_peer.contains_key(&peer_b));
+    }
+
+    #[test]
+    fn test_check_at_updates_lru_access_time() {
+        let now = Instant::now();
+        let mut limiter = GossipRateLimiter::new_at(now);
+        let peer_a = SecretKey::from([0x0A; 32]).public();
+        let peer_b = SecretKey::from([0x0B; 32]).public();
+
+        assert!(limiter.check_at(&peer_a, now).is_ok());
+        assert!(limiter.check_at(&peer_b, now + Duration::from_secs(1)).is_ok());
+        assert!(limiter.check_at(&peer_a, now + Duration::from_secs(2)).is_ok());
+
+        limiter.evict_oldest();
+
+        assert!(limiter.per_peer.contains_key(&peer_a));
+        assert!(!limiter.per_peer.contains_key(&peer_b));
+    }
+
+    #[test]
+    fn test_check_at_backward_time_does_not_rewind_lru() {
+        let t0 = Instant::now();
+        let t1 = t0 + Duration::from_secs(1);
+        let t2 = t1 + Duration::from_secs(1);
+        let mut limiter = GossipRateLimiter::new_at(t0);
+        let peer_a = SecretKey::from([0x1A; 32]).public();
+        let peer_b = SecretKey::from([0x1B; 32]).public();
+
+        assert!(limiter.check_at(&peer_a, t0).is_ok());
+        assert!(limiter.check_at(&peer_b, t1).is_ok());
+        assert!(limiter.check_at(&peer_a, t2).is_ok());
+        assert!(limiter.check_at(&peer_a, t0).is_ok());
+
+        limiter.evict_oldest();
+
+        assert!(limiter.per_peer.contains_key(&peer_a));
+        assert!(!limiter.per_peer.contains_key(&peer_b));
     }
 }

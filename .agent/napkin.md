@@ -193,6 +193,7 @@
 - Check trait definitions for `#[async_trait]` annotation before implementing
 - `Path::starts_with()` matches whole components — use `.to_string_lossy().starts_with()` for prefix matching
 - `age::secrecy::ExposeSecret` + `.expose_secret()` for age identity strings
+- Gossip rate limiter tests: use injected-time helpers (`TokenBucket::new_at` / `try_consume_at`, `GossipRateLimiter::new_at` / `check_at`) instead of `sleep` or hidden `Instant::now()` calls
 
 **Nix Build:**
 
