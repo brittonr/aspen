@@ -26,6 +26,7 @@ run_exact_test aspen-rpc-handlers registry::tests::handler_registry_new_with_min
 run_exact_test aspen-rpc-handlers registry::tests::handler_registry_declared_blob_plan_requires_context_capability --features blob
 cargo check -p aspen --all-targets --no-default-features
 cargo check -p aspen --all-targets --no-default-features --features node-runtime
+cargo check -p aspen --all-targets --no-default-features --features node-runtime-apps
 run_exact_test aspen node::tests::test_nodebuilder_start_creates_node --features node-runtime
 cargo check -p aspen-rpc-core --all-targets --features forge,hooks,git-bridge
 cargo check -p aspen-rpc-handlers --all-targets --features blob,docs,forge,jobs,ci,secrets,net,snix

@@ -1,0 +1,232 @@
++ cargo check -p aspen --all-targets --no-default-features
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s
++ cargo check -p aspen --all-targets --no-default-features --features node-runtime
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s
++ cargo check -p aspen --all-targets --no-default-features --features node-runtime-apps
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.46s
++ cargo test -p aspen --features node-runtime node::tests::test_nodebuilder_start_creates_node -- --exact --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.42s
+     Running unittests src/lib.rs (target/debug/deps/aspen-dafad8454faec145)
+
+running 1 test
+test node::tests::test_nodebuilder_start_creates_node ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 3.15s
+
+     Running unittests src/bin/aspen-token.rs (target/debug/deps/aspen_token-0a22c0c603154ef9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api_validation_proptest.rs (target/debug/deps/api_validation_proptest-955753eb4935eb37)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 79 filtered out; finished in 0.00s
+
+     Running tests/auth_integration.rs (target/debug/deps/auth_integration-a3832a97777eaf7e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+     Running tests/cluster_proptest.rs (target/debug/deps/cluster_proptest-7b1dab95a8b2e6d7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+     Running tests/connection_pool_test.rs (target/debug/deps/connection_pool_test-37457fd91ec5ac08)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/forge_git_wire_test.rs (target/debug/deps/forge_git_wire_test-e156422647aa111c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fuse_raft_cluster_test.rs (target/debug/deps/fuse_raft_cluster_test-ed0ad3a70e3cc7e1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gossip_e2e_integration.rs (target/debug/deps/gossip_e2e_integration-8855e3b4c0382373)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/gossip_integration_test.rs (target/debug/deps/gossip_integration_test-d82781d85b855413)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 0.00s
+
+     Running tests/inmemory_proptest.rs (target/debug/deps/inmemory_proptest-44e1a51b1f81a46e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s
+
+     Running tests/log_subscriber_test.rs (target/debug/deps/log_subscriber_test-05a24108a91fd97f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.00s
+
+     Running tests/madsim_buggify_faults_test.rs (target/debug/deps/madsim_buggify_faults_test-5cba76f938aaca4c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mock_gossip_test.rs (target/debug/deps/mock_gossip_test-54da3d59dcae182c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.00s
+
+     Running tests/multi_node_cluster_test.rs (target/debug/deps/multi_node_cluster_test-eb4c8f98d356f7e2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/network_proptest.rs (target/debug/deps/network_proptest-f95195f8de6b9a29)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.00s
+
+     Running tests/node_builder_integration.rs (target/debug/deps/node_builder_integration-35bc1e7f3cadc7b2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests/node_failure_detection_test.rs (target/debug/deps/node_failure_detection_test-5251a49858926c9d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/protocol_handlers_test.rs (target/debug/deps/protocol_handlers_test-19bc1c3983aaf8d6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 0.00s
+
+     Running tests/raft_node_direct_api_test.rs (target/debug/deps/raft_node_direct_api_test-0b571df865f8bf74)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+
+     Running tests/raft_server_integration_test.rs (target/debug/deps/raft_server_integration_test-077e83de9f6bdcfd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.00s
+
+     Running tests/redb_corruption_scenarios_test.rs (target/debug/deps/redb_corruption_scenarios_test-0a53d01669629b5b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/relay_status_test.rs (target/debug/deps/relay_status_test-adcc50e8197ac4a4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/rpc_serialization_test.rs (target/debug/deps/rpc_serialization_test-0798ca49d702a42a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.00s
+
+     Running tests/server_rpc_test.rs (target/debug/deps/server_rpc_test-43e2c2c369a530a0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 0.00s
+
+     Running tests/storage_redb_proptest.rs (target/debug/deps/storage_redb_proptest-afcf41e9d3f805ac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.00s
+
+     Running tests/supervisor_test.rs (target/debug/deps/supervisor_test-22eae5b769f8eb25)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/types_proptest.rs (target/debug/deps/types_proptest-f1af1926f29e778f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 56 filtered out; finished in 0.00s
+
+     Running tests/write_batching_integration.rs (target/debug/deps/write_batching_integration-27bddff52d35f7b9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
++ cargo check -p aspen-client-api --test wire_format_golden
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.81s
++ cargo check -p aspen-rpc-core --all-targets --features forge,hooks,git-bridge
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s
++ cargo check -p aspen-rpc-handlers --all-targets --features blob,docs,forge,jobs,ci,secrets,net,snix
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.47s

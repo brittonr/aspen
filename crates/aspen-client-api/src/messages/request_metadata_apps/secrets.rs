@@ -1,0 +1,38 @@
+pub(super) fn required_app(variant_name: &str) -> Option<&'static str> {
+    match variant_name {
+        "SecretsKvDelete"
+        | "SecretsKvDeleteMetadata"
+        | "SecretsKvDestroy"
+        | "SecretsKvList"
+        | "SecretsKvMetadata"
+        | "SecretsKvRead"
+        | "SecretsKvUndelete"
+        | "SecretsKvUpdateMetadata"
+        | "SecretsKvWrite"
+        | "SecretsNixCacheCreateKey"
+        | "SecretsNixCacheDeleteKey"
+        | "SecretsNixCacheGetPublicKey"
+        | "SecretsNixCacheListKeys"
+        | "SecretsNixCacheRotateKey"
+        | "SecretsPkiCreateRole"
+        | "SecretsPkiGenerateIntermediate"
+        | "SecretsPkiGenerateRoot"
+        | "SecretsPkiGetCrl"
+        | "SecretsPkiGetRole"
+        | "SecretsPkiIssue"
+        | "SecretsPkiListCerts"
+        | "SecretsPkiListRoles"
+        | "SecretsPkiRevoke"
+        | "SecretsPkiSetSignedIntermediate"
+        | "SecretsTransitCreateKey"
+        | "SecretsTransitDatakey"
+        | "SecretsTransitDecrypt"
+        | "SecretsTransitEncrypt"
+        | "SecretsTransitListKeys"
+        | "SecretsTransitRewrap"
+        | "SecretsTransitRotateKey"
+        | "SecretsTransitSign"
+        | "SecretsTransitVerify" => Some("secrets"),
+        _ => None,
+    }
+}

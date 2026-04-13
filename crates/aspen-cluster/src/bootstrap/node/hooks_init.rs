@@ -33,12 +33,13 @@ use crate::config::NodeConfig;
 /// - Docs bridge: Converts docs sync events (sync started/completed, import/export)
 /// - System events bridge: Monitors Raft metrics for LeaderElected and HealthChanged events
 /// - Snapshot events bridge: Monitors snapshot creation and installation events
+#[cfg(feature = "hooks")]
 pub(super) async fn initialize_hook_service(
     config: &NodeConfig,
     log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
     snapshot_broadcast: Option<&broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>>,
-    blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
-    docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
+    #[cfg(feature = "blob")] blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
+    #[cfg(feature = "docs")] docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
     raft_node: &Arc<RaftNode>,
     state_machine: &StateMachineVariant,
 ) -> Result<HookResources> {
@@ -192,4 +193,22 @@ pub(super) async fn initialize_hook_service(
         snapshot_events_bridge_cancel,
         snapshot_events_bridge_task,
     })
+}
+
+#[cfg(not(feature = "hooks"))]
+pub(super) async fn initialize_hook_service(
+    config: &NodeConfig,
+    log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
+    snapshot_broadcast: Option<&broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>>,
+    #[cfg(feature = "blob")] blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
+    #[cfg(feature = "docs")] docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
+    raft_node: &Arc<RaftNode>,
+    state_machine: &StateMachineVariant,
+) -> Result<HookResources> {
+    let _ = (config, log_broadcast, snapshot_broadcast, raft_node, state_machine);
+    #[cfg(feature = "blob")]
+    let _ = blob_broadcast;
+    #[cfg(feature = "docs")]
+    let _ = docs_broadcast;
+    Ok(HookResources::disabled())
 }

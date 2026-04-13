@@ -1,4 +1,4 @@
 OK: openspec/changes/decouple-cross-crate-boundaries
   tasks: 10 total / 10 checked
-  changed files listed: 78
+  changed files listed: 34
   verification artifacts: 6

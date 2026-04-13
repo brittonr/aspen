@@ -26,6 +26,7 @@ use crate::config::NodeConfig;
 /// Creates a PeerManager for cluster-to-cluster synchronization using iroh-docs.
 /// The peer manager coordinates connections to peer clusters and routes
 /// incoming entries through the DocsImporter for conflict resolution.
+#[cfg(feature = "docs")]
 pub(super) fn initialize_peer_manager(
     config: &NodeConfig,
     raft_node: &Arc<RaftNode>,
@@ -44,6 +45,12 @@ pub(super) fn initialize_peer_manager(
     Some(manager)
 }
 
+#[cfg(not(feature = "docs"))]
+pub(super) fn initialize_peer_manager(config: &NodeConfig, raft_node: &Arc<RaftNode>) -> Option<Arc<()>> {
+    let _ = (config, raft_node);
+    None
+}
+
 /// Initialize DocsExporter and P2P sync if enabled.
 ///
 /// Returns (docs_exporter_cancel, docs_sync).
@@ -51,6 +58,7 @@ pub(super) fn initialize_peer_manager(
 /// If no namespace_secret is configured, derives one from the cluster cookie.
 /// This ensures all nodes with the same cookie share the same docs namespace,
 /// enabling automatic cross-node replication without explicit configuration.
+#[cfg(feature = "docs")]
 pub(super) async fn initialize_docs_export(
     config: &NodeConfig,
     data_dir: &std::path::Path,
@@ -192,6 +200,19 @@ pub(super) async fn initialize_docs_export(
     Ok((Some(cancel_token), Some(Arc::new(docs_sync))))
 }
 
+#[cfg(not(feature = "docs"))]
+pub(super) async fn initialize_docs_export(
+    config: &NodeConfig,
+    data_dir: &std::path::Path,
+    log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
+    #[cfg(feature = "blob")] blob_store: Option<&Arc<IrohBlobStore>>,
+) -> anyhow::Result<(Option<CancellationToken>, Option<Arc<()>>)> {
+    let _ = (config, data_dir, log_broadcast);
+    #[cfg(feature = "blob")]
+    let _ = blob_store;
+    Ok((None, None))
+}
+
 /// Wire up docs sync services (sync event listener and DocsSyncService).
 ///
 /// This function starts the background services that enable full P2P docs sync:
@@ -210,6 +231,7 @@ pub(super) async fn initialize_docs_export(
 ///
 /// # Returns
 /// Tuple of (sync_event_listener_cancel, docs_sync_service_cancel)
+#[cfg(feature = "docs")]
 pub(super) async fn wire_docs_sync_services(
     config: &NodeConfig,
     docs_sync: &Option<Arc<aspen_docs::DocsSyncResources>>,
@@ -303,4 +325,18 @@ pub(super) async fn wire_docs_sync_services(
 
         (sync_event_listener_cancel, Some(docs_sync_service_cancel))
     }
+}
+
+#[cfg(not(feature = "docs"))]
+pub(super) async fn wire_docs_sync_services(
+    config: &NodeConfig,
+    docs_sync: &Option<Arc<()>>,
+    #[cfg(feature = "blob")] blob_store: &Option<Arc<IrohBlobStore>>,
+    peer_manager: &Option<Arc<()>>,
+    iroh_manager: &Arc<IrohEndpointManager>,
+) -> (Option<CancellationToken>, Option<CancellationToken>) {
+    let _ = (config, docs_sync, peer_manager, iroh_manager);
+    #[cfg(feature = "blob")]
+    let _ = blob_store;
+    (None, None)
 }

@@ -41,20 +41,28 @@
 
 mod node;
 pub mod resources;
+#[cfg(feature = "bootstrap-apps")]
 pub mod traits;
 
 // Re-export main types from resources for convenience
+#[cfg(feature = "bootstrap-apps")]
 pub use node::BaseDiscoveryResources;
+#[cfg(feature = "bootstrap-apps")]
 pub use node::BaseNodeResources;
 #[cfg(feature = "federation")]
 pub use node::FederationInitResult;
 pub use node::NodeHandle;
+#[cfg(feature = "bootstrap-apps")]
 pub use node::ShardedNodeHandle;
+#[cfg(feature = "bootstrap-apps")]
 pub use node::ShardingResources;
 // Re-export main bootstrap functions and types from node module
+#[cfg(feature = "blob")]
 pub use node::auto_announce_local_blobs;
 pub use node::bootstrap_node;
+#[cfg(feature = "bootstrap-apps")]
 pub use node::bootstrap_sharded_node;
+#[cfg(feature = "blob")]
 pub use node::initialize_blob_replication;
 pub use node::load_config;
 #[cfg(feature = "federation")]
@@ -68,10 +76,17 @@ pub use resources::StorageResources;
 pub use resources::SyncResources;
 pub use resources::WorkerResources;
 // Re-export traits
+#[cfg(feature = "bootstrap-apps")]
 pub use traits::DiscoveryDependencies;
+#[cfg(feature = "bootstrap-apps")]
 pub use traits::HookDependencies;
+#[cfg(feature = "bootstrap-apps")]
 pub use traits::NetworkDependencies;
+#[cfg(feature = "bootstrap-apps")]
 pub use traits::ResourceBuilder;
+#[cfg(feature = "bootstrap-apps")]
 pub use traits::StorageDependencies;
+#[cfg(feature = "bootstrap-apps")]
 pub use traits::SyncDependencies;
+#[cfg(feature = "bootstrap-apps")]
 pub use traits::WorkerDependencies;

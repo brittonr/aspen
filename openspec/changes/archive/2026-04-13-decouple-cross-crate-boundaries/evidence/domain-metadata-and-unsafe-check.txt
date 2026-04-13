@@ -1,0 +1,18 @@
+# request metadata domains
+crates/aspen-client-api/src/messages/request_metadata_apps/automerge.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/calendar.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/ci.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/contacts.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/deploy.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/forge.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/hooks.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/jobs.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/secrets.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/snix.rs
+crates/aspen-client-api/src/messages/request_metadata_apps/sql.rs
+
+# unsafe bridge check
+src/node/mod.rs
+
+crates/aspen-cluster/src/bootstrap/node/sharding_init.rs
+886:    // can cross this boundary without any unsafe conversion.

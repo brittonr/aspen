@@ -18,8 +18,8 @@ required-features = ["git-bridge"]
 [[bin]]
 name = "aspen-node"
 path = "src/bin/aspen_node/main.rs"
-# Full node binary needs runtime bootstrap plus blob/automerge subsystems.
-required-features = ["node-runtime", "blob", "automerge"]
+# Full node binary needs the app bundle runtime plus blob/automerge subsystems.
+required-features = ["node-runtime-apps", "blob", "automerge"]
 
 [[bin]]
 name = "aspen-generate-schema"
@@ -493,7 +493,7 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "node-runtime", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp", "trust"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "node-runtime-apps", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp", "trust"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
@@ -535,7 +535,8 @@ commit-dag = ["kv-branch", "dep:aspen-commit-dag", "aspen-kv-branch/commit-dag"]
 exec-cache = ["dep:aspen-exec-cache"]
 nostr-relay = ["dep:aspen-nostr-relay", "hooks", "aspen-cluster/nostr-relay"]
 federation = ["aspen-cluster/federation"]
-node-runtime = ["jobs", "docs", "hooks", "federation", "aspen-cluster/bootstrap-apps"]
+node-runtime = ["aspen-cluster/bootstrap"]
+node-runtime-apps = ["node-runtime", "jobs", "docs", "hooks", "federation", "aspen-cluster/bootstrap-apps"]
 otlp = ["aspen-cluster/otlp"]
 relay-server = ["aspen-cluster/relay-server"]
 snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]
@@ -548,7 +549,7 @@ trust = ["aspen-raft/trust", "aspen-cluster/trust"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge-core\", \"forge-runtime\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci-core\", \"ci-runtime\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"nix-cli-fallback\", \"hooks-core\", \"hooks\", \"jobs-core\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"node-runtime\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge-core\", \"forge-runtime\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci-core\", \"ci-runtime\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"nix-cli-fallback\", \"hooks-core\", \"hooks\", \"jobs-core\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"node-runtime\", \"node-runtime-apps\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
@@ -598,7 +599,7 @@ required-features = ["sql", "simulation", "testing"]
 # Integration tests requiring CI feature (Nickel + Simulation)
 [[test]]
 name = "ci_integration_test"
-required-features = ["ci", "testing"]
+required-features = ["ci", "testing", "node-runtime-apps"]
 
 [[test]]
 name = "madsim_ci_pipeline_test"
@@ -810,7 +811,7 @@ required-features = ["forge"]
 
 [[test]]
 name = "forge_real_cluster_integration_test"
-required-features = ["forge", "blob", "node-runtime"]
+required-features = ["forge", "blob", "node-runtime-apps"]
 
 [[test]]
 name = "forge_sync_integration_test"
@@ -826,35 +827,35 @@ required-features = ["federation"]
 
 [[test]]
 name = "consumer_group_integration_test"
-required-features = ["node-runtime"]
+required-features = ["node-runtime-apps"]
 
 [[test]]
 name = "pubsub_integration_test"
-required-features = ["node-runtime"]
+required-features = ["node-runtime-apps"]
 
 [[test]]
 name = "hooks_integration_test"
-required-features = ["hooks"]
+required-features = ["node-runtime-apps"]
 
 [[test]]
 name = "blob_gc_integration_test"
-required-features = ["blob", "node-runtime"]
+required-features = ["blob", "node-runtime-apps"]
 
 [[test]]
 name = "blob_replication_integration_test"
-required-features = ["blob", "node-runtime"]
+required-features = ["blob", "node-runtime-apps"]
 
 [[test]]
 name = "job_integration_test"
-required-features = ["node-runtime"]
+required-features = ["node-runtime-apps"]
 
 [[test]]
 name = "shell_command_worker_test"
-required-features = ["shell-worker"]
+required-features = ["shell-worker", "node-runtime-apps"]
 
 [[test]]
 name = "secrets_integration_test"
-required-features = ["secrets"]
+required-features = ["secrets", "node-runtime-apps"]
 
 [[test]]
 name = "fuse_raft_cluster_test"

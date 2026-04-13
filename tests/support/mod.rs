@@ -14,6 +14,6 @@ pub mod mock_gossip;
 pub mod mock_iroh;
 
 pub mod proptest_generators;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime-apps")]
 pub mod real_cluster;
 pub mod rpc_handler_generators;

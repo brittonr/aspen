@@ -59,7 +59,7 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "node-runtime")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use std::collections::HashMap;
 use std::path::PathBuf;
 #[cfg(feature = "node-runtime")]
@@ -316,9 +316,13 @@ impl NodeBuilder {
             handle,
             router: None,
             membership_watcher_cancel: None,
+            #[cfg(feature = "federation")]
             federation_identity: None,
+            #[cfg(feature = "federation")]
             federation_trust_manager: None,
+            #[cfg(feature = "federation")]
             federation_resource_settings: None,
+            #[cfg(feature = "hooks")]
             ephemeral_broker: None,
         })
     }
@@ -342,14 +346,18 @@ pub struct Node {
     /// Used to gracefully shut down the watcher when the node shuts down.
     membership_watcher_cancel: Option<CancellationToken>,
     /// Federation cluster identity (if federation is enabled).
+    #[cfg(feature = "federation")]
     federation_identity: Option<ClusterIdentity>,
     /// Federation trust manager (if federation is enabled).
+    #[cfg(feature = "federation")]
     federation_trust_manager: Option<Arc<TrustManager>>,
     /// Federation resource settings (if federation is enabled).
     /// Uses tokio::sync::RwLock for async compatibility with FederationResourceResolver.
+    #[cfg(feature = "federation")]
     federation_resource_settings: Option<Arc<tokio::sync::RwLock<HashMap<FederatedId, FederationSettings>>>>,
     /// Ephemeral pub/sub broker for fire-and-forget event streaming.
     /// Created during router spawn, shared with EphemeralProtocolHandler.
+    #[cfg(feature = "hooks")]
     ephemeral_broker: Option<Arc<aspen_hooks::pubsub::EphemeralBroker>>,
 }
 
@@ -401,21 +409,25 @@ impl Node {
     /// Available after `spawn_router()` or `spawn_router_with_blobs()` is called.
     /// Use this to publish ephemeral events that are streamed to connected subscribers
     /// without Raft consensus.
+    #[cfg(feature = "hooks")]
     pub fn ephemeral_broker(&self) -> Option<&Arc<aspen_hooks::pubsub::EphemeralBroker>> {
         self.ephemeral_broker.as_ref()
     }
 
     /// Get the federation cluster identity (if federation is enabled).
+    #[cfg(feature = "federation")]
     pub fn federation_identity(&self) -> Option<&ClusterIdentity> {
         self.federation_identity.as_ref()
     }
 
     /// Get the federation trust manager (if federation is enabled).
+    #[cfg(feature = "federation")]
     pub fn federation_trust_manager(&self) -> Option<&Arc<TrustManager>> {
         self.federation_trust_manager.as_ref()
     }
 
     /// Get the federation resource settings (if federation is enabled).
+    #[cfg(feature = "federation")]
     pub fn federation_resource_settings(
         &self,
     ) -> Option<&Arc<tokio::sync::RwLock<HashMap<FederatedId, FederationSettings>>>> {
@@ -467,7 +479,10 @@ impl Node {
         plan.set_net_enabled(true);
         plan.set_blob_enabled(false);
         plan.set_docs_enabled(false);
+        #[cfg(feature = "federation")]
         plan.set_forge_enabled(self.federation_identity.is_some());
+        #[cfg(not(feature = "federation"))]
+        plan.set_forge_enabled(false);
         plan.set_jobs_enabled(false);
         plan.set_ci_enabled(false);
         plan.set_cache_enabled(false);
@@ -549,12 +564,18 @@ impl Node {
             secrets_service,
             #[cfg(not(feature = "secrets"))]
             secrets_service: None,
-            #[cfg(feature = "forge")]
+            #[cfg(all(feature = "forge", feature = "federation"))]
             federation_identity: self.federation_identity.as_ref().map(|id| Arc::new(id.to_signed())),
-            #[cfg(feature = "forge")]
+            #[cfg(all(feature = "forge", not(feature = "federation")))]
+            federation_identity: None,
+            #[cfg(all(feature = "forge", feature = "federation"))]
             federation_trust_manager: self.federation_trust_manager.clone(),
-            #[cfg(feature = "forge")]
+            #[cfg(all(feature = "forge", not(feature = "federation")))]
+            federation_trust_manager: None,
+            #[cfg(all(feature = "forge", feature = "federation"))]
             federation_cluster_identity: self.federation_identity.as_ref().map(|id| Arc::new(id.clone())),
+            #[cfg(all(feature = "forge", not(feature = "federation")))]
+            federation_cluster_identity: None,
             #[cfg(feature = "forge")]
             iroh_endpoint: Some(Arc::new(self.handle.network.iroh_manager.endpoint().clone())),
             #[cfg(all(feature = "forge", feature = "global-discovery"))]
@@ -640,11 +661,11 @@ impl Node {
                 spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
-            let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers);
             #[cfg(feature = "trust")]
-            {
-                auth_handler = auth_handler.with_expunged_flag(self.handle.storage.raft_node.expunged_flag().clone());
-            }
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers)
+                .with_expunged_flag(self.handle.storage.raft_node.expunged_flag().clone());
+            #[cfg(not(feature = "trust"))]
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers);
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
             tracing::info!(
                 our_public_key = %our_public_key,
@@ -663,6 +684,7 @@ impl Node {
         // Add federation handler if enabled.
         // IMPORTANT: Must run before creating the client protocol context so
         // that self.federation_identity is populated when the context is built.
+        #[cfg(feature = "federation")]
         if self.handle.config.federation.is_enabled {
             let fed_config = &self.handle.config.federation;
 
@@ -757,6 +779,7 @@ impl Node {
 
         // Add ephemeral pub/sub protocol handler
         // Enables fire-and-forget event streaming without Raft consensus
+        #[cfg(feature = "hooks")]
         {
             use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
             use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;
@@ -825,11 +848,11 @@ impl Node {
                 spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
-            let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
             #[cfg(feature = "trust")]
-            {
-                auth_handler = auth_handler.with_expunged_flag(self.handle.storage.raft_node.expunged_flag().clone());
-            }
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers)
+                .with_expunged_flag(self.handle.storage.raft_node.expunged_flag().clone());
+            #[cfg(not(feature = "trust"))]
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
             tracing::info!(
                 our_public_key = %our_public_key,
@@ -902,6 +925,7 @@ impl Node {
         tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
 
         // Add ephemeral pub/sub protocol handler
+        #[cfg(feature = "hooks")]
         {
             use aspen_hooks::pubsub::ephemeral::handler::EPHEMERAL_ALPN;
             use aspen_hooks::pubsub::ephemeral::handler::EphemeralProtocolHandler;

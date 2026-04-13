@@ -34,6 +34,7 @@ mod discovery_init;
 mod federation_init;
 mod hooks_init;
 mod network_init;
+#[cfg(feature = "bootstrap-apps")]
 mod sharding_init;
 mod storage_init;
 mod sync_init;
@@ -59,7 +60,9 @@ use aspen_raft::node::RaftNode;
 use aspen_raft::node::RaftNodeHealth;
 use aspen_raft::supervisor::Supervisor;
 // Re-export public items from sub-modules
+#[cfg(feature = "blob")]
 pub use blob_init::auto_announce_local_blobs;
+#[cfg(feature = "blob")]
 pub use blob_init::initialize_blob_replication;
 pub use discovery_init::derive_topic_id_from_cookie;
 #[cfg(feature = "federation")]
@@ -68,10 +71,15 @@ pub use federation_init::FederationInitResult;
 pub use federation_init::setup_federation;
 use iroh_gossip::proto::TopicId;
 pub use network_init::parse_peer_addresses;
+#[cfg(feature = "bootstrap-apps")]
 pub use sharding_init::BaseDiscoveryResources;
+#[cfg(feature = "bootstrap-apps")]
 pub use sharding_init::BaseNodeResources;
+#[cfg(feature = "bootstrap-apps")]
 pub use sharding_init::ShardedNodeHandle;
+#[cfg(feature = "bootstrap-apps")]
 pub use sharding_init::ShardingResources;
+#[cfg(feature = "bootstrap-apps")]
 pub use sharding_init::bootstrap_sharded_node;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -94,6 +102,11 @@ use crate::bootstrap::resources::WorkerResources;
 use crate::config::NodeConfig;
 use crate::metadata::MetadataStore;
 use crate::metadata::NodeStatus;
+
+#[cfg(feature = "blob")]
+type ContentDiscoveryServiceHandle = crate::content_discovery::ContentDiscoveryService;
+#[cfg(not(feature = "blob"))]
+type ContentDiscoveryServiceHandle = ();
 
 // ============================================================================
 // NodeHandle - Main handle to a running cluster node
@@ -394,7 +407,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     }
 
     // Phase 5: Event broadcast channels for hook integration
-    let event_channels = create_event_channels(&config);
+    let _event_channels = create_event_channels(&config);
 
     // Phase 6: Data services (blob store, docs sync, content discovery)
     let data = init_data_services(
@@ -405,9 +418,9 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         &consensus.raft_node,
         &consensus.shutdown_token,
         #[cfg(feature = "blob")]
-        event_channels.blob_broadcaster,
+        _event_channels.blob_broadcaster,
         #[cfg(feature = "docs")]
-        event_channels.docs_broadcaster,
+        _event_channels.docs_broadcaster,
     )
     .await?;
 
@@ -417,9 +430,9 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         broadcasts.log.as_ref(),
         broadcasts.snapshot.as_ref(),
         #[cfg(feature = "blob")]
-        event_channels.blob_event_sender.as_ref(),
+        _event_channels.blob_event_sender.as_ref(),
         #[cfg(feature = "docs")]
-        event_channels.docs_event_sender.as_ref(),
+        _event_channels.docs_event_sender.as_ref(),
         &consensus.raft_node,
         &consensus.state_machine,
     )
@@ -680,9 +693,9 @@ struct EventChannels {
 ///
 /// Creates blob and docs event channels only when hooks are enabled
 /// and the respective feature is active.
-fn create_event_channels(config: &NodeConfig) -> EventChannels {
+fn create_event_channels(_config: &NodeConfig) -> EventChannels {
     #[cfg(feature = "blob")]
-    let (blob_event_sender, blob_broadcaster) = if config.hooks.is_enabled && config.blobs.is_enabled {
+    let (blob_event_sender, blob_broadcaster) = if _config.hooks.is_enabled && _config.blobs.is_enabled {
         let (sender, _receiver) = create_blob_event_channel();
         let broadcaster = BlobEventBroadcaster::new(sender.clone());
         (Some(sender), Some(broadcaster))
@@ -691,7 +704,7 @@ fn create_event_channels(config: &NodeConfig) -> EventChannels {
     };
 
     #[cfg(feature = "docs")]
-    let (docs_event_sender, docs_broadcaster) = if config.hooks.is_enabled && config.docs.is_enabled {
+    let (docs_event_sender, docs_broadcaster) = if _config.hooks.is_enabled && _config.docs.is_enabled {
         let (sender, _receiver) = create_docs_event_channel();
         let broadcaster = Arc::new(DocsEventBroadcaster::new(sender.clone()));
         (Some(sender), Some(broadcaster))
@@ -722,7 +735,7 @@ struct DataServicesResult {
     docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
     sync_event_listener_cancel: Option<CancellationToken>,
     docs_sync_service_cancel: Option<CancellationToken>,
-    content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
+    content_discovery: Option<ContentDiscoveryServiceHandle>,
     content_discovery_cancel: Option<CancellationToken>,
 }
 

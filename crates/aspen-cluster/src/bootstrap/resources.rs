@@ -26,6 +26,11 @@ use crate::IrohEndpointManager;
 use crate::IrpcRaftNetworkFactory;
 use crate::gossip_discovery::GossipPeerDiscovery;
 
+#[cfg(feature = "blob")]
+type ContentDiscoveryServiceHandle = crate::content_discovery::ContentDiscoveryService;
+#[cfg(not(feature = "blob"))]
+type ContentDiscoveryServiceHandle = ();
+
 // ============================================================================
 // Storage Resources
 // ============================================================================
@@ -119,7 +124,7 @@ pub struct DiscoveryResources {
     /// Gossip topic ID for peer discovery and cluster tickets.
     pub gossip_topic_id: TopicId,
     /// Global content discovery service (optional).
-    pub content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
+    pub content_discovery: Option<ContentDiscoveryServiceHandle>,
     /// Content discovery service cancellation token.
     pub content_discovery_cancel: Option<CancellationToken>,
 }
@@ -227,6 +232,7 @@ impl WorkerResources {
 /// domain awareness.
 pub struct BlobReplicationResources {
     /// Blob replication manager (None if replication disabled or replication_factor=1).
+    #[cfg(feature = "blob")]
     pub replication_manager: Option<aspen_blob::BlobReplicationManager>,
     /// Cancellation token for the replication manager background task.
     pub replication_cancel: Option<CancellationToken>,
@@ -240,6 +246,7 @@ impl BlobReplicationResources {
     /// Create disabled replication resources.
     pub fn disabled() -> Self {
         Self {
+            #[cfg(feature = "blob")]
             replication_manager: None,
             replication_cancel: None,
             replication_task: None,
@@ -262,6 +269,7 @@ impl BlobReplicationResources {
     ///
     /// Returns true if the watcher was successfully started, false if
     /// replication is disabled.
+    #[cfg(feature = "blob")]
     pub fn wire_topology_watcher<M>(
         &mut self,
         metrics_rx: tokio::sync::watch::Receiver<M>,
@@ -279,6 +287,15 @@ impl BlobReplicationResources {
         self.topology_cancel = Some(cancel);
         info!("blob topology watcher started");
         true
+    }
+
+    #[cfg(not(feature = "blob"))]
+    pub fn wire_topology_watcher<M, F>(&mut self, _metrics_rx: tokio::sync::watch::Receiver<M>, _extractor: F) -> bool
+    where
+        M: Send + Sync + 'static,
+        F: Send + 'static,
+    {
+        false
     }
 
     /// Shutdown blob replication resources.

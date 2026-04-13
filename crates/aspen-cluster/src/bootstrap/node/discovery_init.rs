@@ -139,6 +139,7 @@ pub(super) async fn setup_gossip_discovery(
 /// # Returns
 /// Tuple of (content_discovery_service, cancellation_token)
 /// Both are None when content discovery is disabled.
+#[cfg(feature = "blob")]
 pub(super) async fn initialize_content_discovery(
     config: &NodeConfig,
     iroh_manager: &Arc<IrohEndpointManager>,
@@ -177,4 +178,14 @@ pub(super) async fn initialize_content_discovery(
     );
 
     Ok((Some(service), Some(cancel)))
+}
+
+#[cfg(not(feature = "blob"))]
+pub(super) async fn initialize_content_discovery(
+    config: &NodeConfig,
+    iroh_manager: &Arc<IrohEndpointManager>,
+    shutdown: &CancellationToken,
+) -> Result<(Option<()>, Option<CancellationToken>)> {
+    let _ = (config, iroh_manager, shutdown);
+    Ok((None, None))
 }

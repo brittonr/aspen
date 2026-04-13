@@ -123,8 +123,9 @@
 //!          └─────────► HTTP Control Plane
 //! ```
 
-// Bootstrap module requires blob, docs, jobs, and hooks features for full functionality
-#[cfg(feature = "bootstrap-apps")]
+// Bootstrap core stays available without app bundles. App-specific phases remain
+// gated inside the bootstrap module behind their own feature flags.
+#[cfg(feature = "bootstrap")]
 pub mod bootstrap;
 pub mod cluster_discovery;
 pub mod config;

@@ -1,0 +1,60 @@
++ cargo check -p aspen-rpc-handlers -p aspen-rpc-core -p aspen-blob-handler -p aspen-docs-handler -p aspen-forge-handler -p aspen-ci-handler -p aspen-job-handler -p aspen-secrets-handler -p aspen-transport -p aspen-raft-types -p aspen-raft -p aspen-nix-handler -p aspen-cluster --all-targets
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-types)
+    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+    Checking aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport)
+    Checking aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network)
+    Checking aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+    Checking aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+    Checking aspen-client v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client)
+    Checking aspen-deploy v0.1.0 (/home/brittonr/git/aspen/crates/aspen-deploy)
+    Checking aspen-jobs-worker-maintenance v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-worker-maintenance)
+    Checking aspen-ci-executor-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-executor-shell)
+    Checking aspen-jobs-worker-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-worker-shell)
+    Checking aspen-cache v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cache)
+    Checking aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster)
+    Checking aspen-forge v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge)
+    Checking aspen-ci v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci)
+    Checking aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-rpc-core)
+    Checking aspen-cluster-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-handler)
+    Checking aspen-core-essentials-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-essentials-handler)
+    Checking aspen-ci-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-handler)
+    Checking aspen-forge-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-handler)
+    Checking aspen-job-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-job-handler)
+    Checking aspen-nix-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-nix-handler)
+    Checking aspen-secrets-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-secrets-handler)
+    Checking aspen-blob-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob-handler)
+    Checking aspen-docs-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-docs-handler)
+warning: unused import: `super::*`
+   --> crates/aspen-docs-handler/src/executor.rs:633:9
+    |
+633 |     use super::*;
+    |         ^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `aspen_core::EndpointProvider`
+    --> crates/aspen-forge-handler/src/executor.rs:2391:9
+     |
+2391 |     use aspen_core::EndpointProvider;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `aspen-docs-handler` (lib test) generated 1 warning (run `cargo fix --lib -p aspen-docs-handler --tests` to apply 1 suggestion)
+warning: function `test_executor_does_not_handle_migrated_ops` is never used
+  --> crates/aspen-forge-handler/src/handler/mod.rs:64:8
+   |
+64 |     fn test_executor_does_not_handle_migrated_ops() {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `aspen-forge-handler` (lib test) generated 2 warnings (run `cargo fix --lib -p aspen-forge-handler --tests` to apply 1 suggestion)
+    Checking aspen-rpc-handlers v0.1.0 (/home/brittonr/git/aspen/crates/aspen-rpc-handlers)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.91s
