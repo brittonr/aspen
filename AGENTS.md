@@ -200,9 +200,11 @@ nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not
 # `-p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination -- --lib`.
 # Current pilot lints: `ambient_clock`, `compound_assertion`,
 # `contradictory_time`, `ignored_result`, and `no_unwrap`.
-# The remaining default-pilot noise is still the known `ambient_clock`
-# warnings in `crates/aspen-time/src/lib.rs` and
-# `crates/aspen-core/src/simulation.rs`.
+# Default pilot should now run clean for those crates. `aspen-time` owns the
+# wall-clock boundary, so direct clock reads there use item-scoped
+# `#[allow(ambient_clock, reason = "...")]`. Elsewhere, route wall-clock reads
+# through explicit boundary helpers like `aspen_time::current_time_ms()` or a
+# local helper with the same justification.
 # Running `scripts/tigerstyle-check.sh` can append a temporary
 # `[[patch.unused]] dylint_driver` stanza to `Cargo.lock`; if that is the only
 # lockfile delta, restore it before review with `git checkout -- Cargo.lock`.

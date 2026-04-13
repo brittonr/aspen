@@ -3,6 +3,7 @@
 //! Provides traits and types for tracking active watch subscriptions
 //! across the system.
 
+use aspen_time::current_time_ms;
 use async_trait::async_trait;
 
 /// Key origin information.
@@ -129,8 +130,7 @@ impl WatchRegistry for InMemoryWatchRegistry {
     fn register_watch(&self, prefix: String, should_include_prev_value: bool) -> u64 {
         let watch_id = self.next_watch_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        let now_ms =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let now_ms = current_time_ms();
 
         let info = WatchInfo {
             watch_id,

@@ -16,6 +16,16 @@ use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 
+#[allow(ambient_clock, reason = "simulation artifact capture owns the wall-clock timestamp boundary")]
+fn artifact_wall_clock_now() -> DateTime<Utc> {
+    Utc::now()
+}
+
+fn artifact_elapsed_ms_since(start: DateTime<Utc>) -> u64 {
+    let elapsed = artifact_wall_clock_now().signed_duration_since(start);
+    elapsed.num_milliseconds().max(0) as u64
+}
+
 /// Complete snapshot of a simulation run, including seed, events, and metrics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimulationArtifact {
@@ -61,7 +71,7 @@ impl SimulationArtifact {
     /// Create a new simulation artifact with the given parameters.
     pub fn new(test_name: impl Into<String>, seed: u64, events: Vec<String>, metrics: String) -> Self {
         let test_name_str = test_name.into();
-        let timestamp = Utc::now();
+        let timestamp = artifact_wall_clock_now();
         let run_id = format!("{}-seed{}-{}", test_name_str, seed, timestamp.format("%Y%m%d-%H%M%S"));
         Self {
             run_id,
@@ -173,7 +183,7 @@ impl SimulationArtifactBuilder {
 
     /// Record the start time (call this at the beginning of the simulation).
     pub fn start(mut self) -> Self {
-        self.start_time = Some(Utc::now());
+        self.start_time = Some(artifact_wall_clock_now());
         self
     }
 
@@ -204,15 +214,10 @@ impl SimulationArtifactBuilder {
 
     /// Build the final artifact.
     pub fn build(self) -> SimulationArtifact {
-        let timestamp = self.start_time.unwrap_or_else(Utc::now);
+        let timestamp = self.start_time.unwrap_or_else(artifact_wall_clock_now);
         let run_id = format!("{}-seed{}-{}", self.test_name, self.seed, timestamp.format("%Y%m%d-%H%M%S"));
 
-        let duration_ms = if let Some(start) = self.start_time {
-            let elapsed = Utc::now().signed_duration_since(start);
-            elapsed.num_milliseconds().max(0) as u64
-        } else {
-            0
-        };
+        let duration_ms = self.start_time.map_or(0, artifact_elapsed_ms_since);
 
         SimulationArtifact {
             run_id,
