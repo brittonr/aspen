@@ -22,6 +22,7 @@ use rand::Rng;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::debug;
+use tracing::warn;
 
 use crate::error::CoordinationError;
 use crate::error::MaxRetriesExceededSnafu;
@@ -407,23 +408,38 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
         }
     }
 
+    fn restore_local_count(local: &AtomicU64, amount: u64) {
+        let mut current = local.load(Ordering::Acquire);
+        loop {
+            let new_value = current.saturating_add(amount);
+            match local.compare_exchange(current, new_value, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => return,
+                Err(actual) => current = actual,
+            }
+        }
+    }
+
+    fn spawn_background_flush(store: Arc<S>, key: String, local: Arc<AtomicU64>) {
+        tokio::spawn(async move {
+            let to_flush = local.swap(0, Ordering::AcqRel);
+            if to_flush == 0 {
+                return;
+            }
+
+            let counter = AtomicCounter::new(store, key.clone(), CounterConfig::default());
+            if let Err(error) = counter.add(to_flush).await {
+                Self::restore_local_count(local.as_ref(), to_flush);
+                warn!(key = %key, amount = to_flush, error = %error, "buffered counter flush failed; restored local count");
+            }
+        });
+    }
+
     /// Increment locally (fast, no network).
     pub fn increment(&self) {
         let prev = self.local.fetch_add(1, Ordering::Relaxed);
         let new_value = prev.saturating_add(1);
         if should_flush_buffer(new_value, self.flush_threshold) {
-            // Trigger flush in background
-            let counter = self.counter.store.clone();
-            let key = self.counter.key.clone();
-            let local = self.local.clone();
-
-            tokio::spawn(async move {
-                let to_flush = local.swap(0, Ordering::AcqRel);
-                if to_flush > 0 {
-                    let c = AtomicCounter::new(counter, key, CounterConfig::default());
-                    let _ = c.add(to_flush).await;
-                }
-            });
+            Self::spawn_background_flush(self.counter.store.clone(), self.counter.key.clone(), self.local.clone());
         }
     }
 
@@ -432,27 +448,23 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
         let prev = self.local.fetch_add(amount, Ordering::Relaxed);
         let new_value = prev.saturating_add(amount);
         if should_flush_buffer(new_value, self.flush_threshold) {
-            let counter = self.counter.store.clone();
-            let key = self.counter.key.clone();
-            let local = self.local.clone();
-
-            tokio::spawn(async move {
-                let to_flush = local.swap(0, Ordering::AcqRel);
-                if to_flush > 0 {
-                    let c = AtomicCounter::new(counter, key, CounterConfig::default());
-                    let _ = c.add(to_flush).await;
-                }
-            });
+            Self::spawn_background_flush(self.counter.store.clone(), self.counter.key.clone(), self.local.clone());
         }
     }
 
     /// Flush accumulated count to storage.
     pub async fn flush(&self) -> Result<u64, CoordinationError> {
         let to_flush = self.local.swap(0, Ordering::AcqRel);
-        if to_flush > 0 {
-            self.counter.add(to_flush).await
-        } else {
-            self.counter.get().await
+        if to_flush == 0 {
+            return self.counter.get().await;
+        }
+
+        match self.counter.add(to_flush).await {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                Self::restore_local_count(self.local.as_ref(), to_flush);
+                Err(error)
+            }
         }
     }
 
@@ -472,6 +484,7 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
 #[cfg(test)]
 mod tests {
     use aspen_testing::DeterministicKeyValueStore;
+    use aspen_testing::FailingKeyValueStore;
 
     use super::*;
 
@@ -626,5 +639,42 @@ mod tests {
         }
 
         assert_eq!(counter.get().await.unwrap(), 10);
+    }
+
+    #[tokio::test]
+    async fn test_buffered_counter_flush_failure_restores_local_count() {
+        let inner = DeterministicKeyValueStore::new();
+        let failing = FailingKeyValueStore::new(inner);
+        failing.fail_all_writes().await;
+        failing.set_write_error("counter flush failed").await;
+
+        let counter =
+            BufferedCounter::new(failing.clone() as Arc<_>, "buffered_counter_failure", 1, Duration::from_millis(1));
+
+        counter.increment();
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+
+        assert_eq!(counter.local.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn test_buffered_counter_flush_method_restores_local_count() {
+        let inner = DeterministicKeyValueStore::new();
+        let failing = FailingKeyValueStore::new(inner);
+        let counter = BufferedCounter::new(
+            failing.clone() as Arc<_>,
+            "buffered_counter_flush_method",
+            10,
+            Duration::from_millis(1),
+        );
+
+        counter.add(3);
+        failing.fail_all_writes().await;
+        failing.set_write_error("counter flush failed").await;
+
+        let result = counter.flush().await;
+        assert!(result.is_err());
+        assert_eq!(counter.local.load(Ordering::Relaxed), 3);
     }
 }

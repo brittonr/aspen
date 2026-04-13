@@ -29,10 +29,12 @@ Usage: scripts/tigerstyle-check.sh [cargo-dylint options] [package scope] [-- ca
 Default scope (when no package/workspace is passed):
   -p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination
 
-Starter lints enabled in phase 2 default pilot:
-  - tigerstyle::compound_assertion
+Pilot lints enabled in the current default path:
   - tigerstyle::ambient_clock
+  - tigerstyle::compound_assertion
   - tigerstyle::contradictory_time
+  - tigerstyle::ignored_result
+  - tigerstyle::no_unwrap
 
 Examples:
   scripts/tigerstyle-check.sh
@@ -176,6 +178,8 @@ starter_lints=(
   ambient_clock
   compound_assertion
   contradictory_time
+  ignored_result
+  no_unwrap
 )
 
 scope_args=()

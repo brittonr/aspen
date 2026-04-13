@@ -9,6 +9,7 @@ use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_traits::KeyValueStore;
 use serde::Deserialize;
+use tracing::warn;
 
 use super::ServiceRegistry;
 use super::types::ServiceInstance;
@@ -29,8 +30,12 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             if let Some(instance) = self.read_json::<ServiceInstance>(&key).await?
                 && instance.is_expired()
             {
-                let _ = self.delete_key(&key).await;
-                cleaned += 1;
+                match self.delete_key(&key).await {
+                    Ok(()) => cleaned += 1,
+                    Err(error) => {
+                        self.log_delete_failure(service_name, &key, "remove expired service instance", &error);
+                    }
+                }
             }
         }
 
@@ -80,6 +85,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             Ok(result) => Ok(result.entries.iter().map(|e| e.key.clone()).collect()),
             Err(e) => bail!("failed to scan {}: {}", prefix, e),
         }
+    }
+
+    pub(super) fn log_delete_failure(&self, service_name: &str, key: &str, action: &str, error: &anyhow::Error) {
+        warn!(service_name, key, action, error = %error, "service registry best-effort delete failed");
     }
 
     /// Delete a key.

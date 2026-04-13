@@ -33,11 +33,11 @@
 //! - No panics in production code (infallible operations)
 //! - Pure functions for testability
 
-// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
-// while suppressing noisier families until Aspen has cleanup bandwidth.
+// Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
+// crates while suppressing noisier families until Aspen has cleanup bandwidth.
 #![allow(unknown_lints)]
 #![allow(no_panic)]
-#![warn(ambient_clock, compound_assertion, contradictory_time)]
+#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
 #![allow(
     acronym_style,
     ambiguous_params,
@@ -47,11 +47,9 @@
     compound_condition,
     float_for_currency,
     function_length,
-    ignored_result,
     multi_lock_ordering,
     nested_conditionals,
     no_recursion,
-    no_unwrap,
     numeric_units,
     platform_dependent_cast,
     raw_arithmetic_overflow,
@@ -94,7 +92,7 @@ pub fn create_hlc(node_id: &str) -> HLC {
     let hash = blake3::hash(node_id.as_bytes());
     let bytes = hash.as_bytes();
     // Safety: blake3 hash is always 32 bytes, extracting first 16 via explicit indexing
-    // is infallible. Using explicit array construction avoids try_into().unwrap().
+    // is infallible. Using explicit array construction avoids a fallible array conversion.
     let id_bytes: [u8; 16] = [
         bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10],
         bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],

@@ -137,15 +137,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 expires_at_ms: now + DEFAULT_QUEUE_DEDUP_TTL_MS,
             };
             let dedup_json = serde_json::to_string(&dedup_entry)?;
-            let _ = self
-                .store
-                .write(WriteRequest {
-                    command: WriteCommand::Set {
-                        key: dedup_key,
-                        value: dedup_json,
-                    },
-                })
-                .await;
+            self.set_key_best_effort(name, &dedup_key, dedup_json, "record dedup entry").await;
         }
         Ok(())
     }

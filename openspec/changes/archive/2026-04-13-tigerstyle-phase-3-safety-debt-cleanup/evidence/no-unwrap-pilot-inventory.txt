@@ -1,0 +1,5 @@
+$ python3 <no_unwrap pilot inventory classifier>
+[crates/aspen-time/src] raw=0 prod=0 test_only=0 doc_only=0 comment_only=0
+[crates/aspen-hlc/src] raw=6 prod=0 test_only=6 doc_only=0 comment_only=0
+[crates/aspen-core/src] raw=173 prod=0 test_only=173 doc_only=0 comment_only=0
+[crates/aspen-coordination/src] raw=248 prod=0 test_only=248 doc_only=0 comment_only=0

@@ -1,0 +1,24 @@
+$ git status --short
+ M .agent/napkin.md
+ M AGENTS.md
+ M crates/aspen-coordination/src/counter.rs
+ M crates/aspen-coordination/src/election.rs
+ M crates/aspen-coordination/src/lib.rs
+ M crates/aspen-coordination/src/lockset.rs
+ M crates/aspen-coordination/src/queue/create_delete.rs
+ M crates/aspen-coordination/src/queue/dequeue.rs
+ M crates/aspen-coordination/src/queue/enqueue.rs
+ M crates/aspen-coordination/src/queue/helpers.rs
+ M crates/aspen-coordination/src/registry/discovery.rs
+ M crates/aspen-coordination/src/registry/helpers.rs
+ M crates/aspen-coordination/src/rwlock/acquisition.rs
+ M crates/aspen-coordination/src/worker_coordinator/failover.rs
+ M crates/aspen-coordination/src/worker_coordinator/work_stealing.rs
+ M crates/aspen-core/src/lib.rs
+ M crates/aspen-hlc/src/lib.rs
+ M crates/aspen-time/src/lib.rs
+ M openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/tasks.md
+ M scripts/tigerstyle-check.sh
+?? openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/evidence/
+?? openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/rollout-notes.md
+?? openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/verification.md

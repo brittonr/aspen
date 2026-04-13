@@ -47,7 +47,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         let mut tasks = self.tasks.write().await;
         for handle in tasks.drain(..) {
-            let _ = handle.await;
+            if let Err(error) = handle.await {
+                warn!(error = %error, "worker coordinator background task join failed during stop");
+            }
         }
 
         info!("distributed worker coordinator stopped");

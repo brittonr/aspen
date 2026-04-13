@@ -15,6 +15,7 @@ use aspen_kv_types::WriteRequest;
 use aspen_traits::KeyValueStore;
 use tracing::debug;
 use tracing::info;
+use tracing::warn;
 
 use super::DLQReason;
 use super::DequeuedItem;
@@ -207,7 +208,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         // Skip expired items
         if item.is_expired() {
-            let _ = self.delete_key(item_key).await;
+            self.delete_key(item_key).await?;
             return Ok(DequeueItemResult::Skip);
         }
 
@@ -234,7 +235,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         if queue_state.max_delivery_attempts > 0 && item.delivery_attempts >= queue_state.max_delivery_attempts {
             // Move to DLQ
             self.move_to_dlq(name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None).await?;
-            let _ = self.delete_key(item_key).await;
+            self.delete_key_best_effort(name, item_key, "remove item after DLQ move").await;
             return Ok(DequeueItemResult::MovedToDlq);
         }
 
@@ -284,8 +285,24 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             .await
         {
             Ok(_) => {
-                // Successfully claimed - delete from items
-                let _ = self.delete_key(item_key).await;
+                // Successfully claimed - delete from items.
+                if let Err(error) = self.delete_key(item_key).await {
+                    warn!(
+                        queue = name,
+                        item_id = item.item_id,
+                        item_key,
+                        pending_key = %pend_key,
+                        error = %error,
+                        "failed to remove claimed item from ready queue; rolling back pending claim"
+                    );
+                    self.delete_key_best_effort(
+                        name,
+                        &pend_key,
+                        "rollback pending claim after ready-queue delete failure",
+                    )
+                    .await;
+                    bail!("failed to remove claimed item {} from ready queue: {}", item.item_id, error);
+                }
 
                 debug_assert!(
                     pending.visibility_deadline_ms > 0,
@@ -366,18 +383,38 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 let item_json = serde_json::to_string(&item)?;
 
                 // Try to return item - may fail if already processed
-                let _ = self
+                if let Err(error) = self
                     .store
                     .write(WriteRequest {
                         command: WriteCommand::Set {
-                            key: i_key,
+                            key: i_key.clone(),
                             value: item_json,
                         },
                     })
-                    .await;
+                    .await
+                {
+                    warn!(
+                        queue = name,
+                        item_id = pending.item_id,
+                        pending_key = %key,
+                        item_key = %i_key,
+                        error = %error,
+                        "failed to restore expired pending item"
+                    );
+                    continue;
+                }
 
-                // Delete pending entry
-                let _ = self.delete_key(&key).await;
+                // Delete pending entry after the item is visible again.
+                if let Err(error) = self.delete_key(&key).await {
+                    warn!(
+                        queue = name,
+                        item_id = pending.item_id,
+                        pending_key = %key,
+                        error = %error,
+                        "failed to remove expired pending entry after restore"
+                    );
+                    continue;
+                }
                 cleaned += 1;
             }
         }

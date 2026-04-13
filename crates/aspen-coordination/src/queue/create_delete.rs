@@ -119,10 +119,10 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         }
 
         // Delete sequence
-        let _ = self.delete_key(&seq_key).await;
+        self.delete_key(&seq_key).await?;
 
         // Delete queue metadata
-        let _ = self.delete_key(&queue_key).await;
+        self.delete_key(&queue_key).await?;
 
         debug!(name, deleted, "queue deleted");
         Ok(deleted)

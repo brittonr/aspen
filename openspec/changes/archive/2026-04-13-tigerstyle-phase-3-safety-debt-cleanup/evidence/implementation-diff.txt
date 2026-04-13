@@ -1,0 +1,901 @@
+$ git diff -- .agent/napkin.md AGENTS.md crates/aspen-time/src/lib.rs crates/aspen-hlc/src/lib.rs crates/aspen-core/src/lib.rs crates/aspen-coordination/src/counter.rs crates/aspen-coordination/src/election.rs crates/aspen-coordination/src/lib.rs crates/aspen-coordination/src/lockset.rs crates/aspen-coordination/src/queue/create_delete.rs crates/aspen-coordination/src/queue/dequeue.rs crates/aspen-coordination/src/queue/enqueue.rs crates/aspen-coordination/src/queue/helpers.rs crates/aspen-coordination/src/registry/discovery.rs crates/aspen-coordination/src/registry/helpers.rs crates/aspen-coordination/src/rwlock/acquisition.rs crates/aspen-coordination/src/worker_coordinator/failover.rs crates/aspen-coordination/src/worker_coordinator/work_stealing.rs scripts/tigerstyle-check.sh openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/tasks.md openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/rollout-notes.md openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/verification.md
+diff --git a/.agent/napkin.md b/.agent/napkin.md
+index b5ba7443b..b4dec3926 100644
+--- a/.agent/napkin.md
++++ b/.agent/napkin.md
+@@ -142,6 +142,9 @@
+ | 2026-04-12 | I claimed "working tree clean" right after a `--no-verify` commit without capturing post-commit `git status` | After any commit used as evidence, run and record `git status --short` (and ideally let hooks pass normally). Don't claim clean/hook-verified state without the output |
+ | 2026-04-13 | Plain `cargo dylint` under Aspen's nix-managed nightly failed because Dylint wanted a real toolchain triple, `dylint-link` needed `RUSTUP_TOOLCHAIN`, and `dylint_driver` needed a crates-io patch to the fixed git rev | Use `scripts/tigerstyle-check.sh` for Aspen Tiger Style rollout. It wraps `rustup`/`cargo`/`dylint-link`, patches `dylint_driver` through a temporary `CARGO_HOME`, and defaults to a low-noise `--lib --no-deps` pilot scope |
+ | 2026-04-13 | I first tried crate attrs and rustflags with `tigerstyle::...` names; source attrs want bare Dylint lint names and command-line tool-lint flags are parsed before the Dylint library loads | In Aspen crates, use bare lint names like `#![warn(ambient_clock)]` plus `#![allow(unknown_lints)]`. Avoid command-line `tigerstyle::...` level flags for rollout control |
++| 2026-04-13 | I used `.expect_err(...)` in an `aspen-coordination` test where the `Ok` type (`LockSetGuard<_>`) does not implement `Debug`, so the test crate failed to compile | When the success type is not `Debug`, use an explicit `match` to extract the error instead of `expect_err(...)` |
++| 2026-04-13 | The Tiger Style `no_panic` pre-expansion lint still surfaced a `panic!` inside `crates/aspen-coordination/src/lockset.rs`'s `#[cfg(test)]` module during `scripts/tigerstyle-check.sh -p aspen-coordination -- --lib` | For pilot-clean reruns, remember pre-expansion lints can still see test-only macro calls in the same source file; avoid panic-family macros there too |
++| 2026-04-13 | Running `scripts/tigerstyle-check.sh` dirtied `Cargo.lock` with a trailing `[[patch.unused]] dylint_driver` entry from the temporary Dylint patch config | After Tiger Style pilot runs, check `git diff -- Cargo.lock`; if only `[[patch.unused]] dylint_driver` changed, restore it with `git checkout -- Cargo.lock` |
+ | 2026-04-13 | Full-workspace pre-commit `cargo clippy` currently dies in `hyperlight-wasm`'s build script (`could not run cargo build wasm_runtime: Failed to prepare sysroot`), even though the Tiger Style rollout only touches `aspen-time`, `aspen-hlc`, `aspen-core`, and `aspen-coordination` | For Tiger Style rollout validation, run targeted clippy on the touched crates (`cargo clippy -p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination --lib -- -D warnings`) and do not treat the unrelated Hyperlight sysroot failure as signal about these changes |
+ | 2026-04-13 | `aspen-coordination` had 21 ambient-clock hits spread across barriers, locks, queues, rate limiting, rwlocks, semaphores, and worker routing; fixing them one-by-one would duplicate the same boundary justification everywhere | Isolate coordination timeout/measurement reads in one helper like `crates/aspen-coordination/src/runtime_clock.rs`, then route shell-code `Instant::now()` calls through that boundary and keep the state-transition logic pure |
+ | 2026-04-13 | `scripts/tigerstyle-audit.py` exited with status 1 on parse errors, but still wrote valid JSON with a populated `parse_errors` list | For Tiger Style audits, always save stdout and inspect the JSON before treating non-zero exit as total failure. The exit code signals parser trouble, not necessarily missing hotspot data |
+diff --git a/AGENTS.md b/AGENTS.md
+index 2bf2f73ab..f0964edb5 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -198,6 +198,17 @@ nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not
+ # `scripts/tigerstyle-check.sh` wraps `rustup`/`cargo`/`dylint-link`, patches
+ # `dylint_driver`, and defaults to the current pilot scope
+ # `-p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination -- --lib`.
++# Current pilot lints: `ambient_clock`, `compound_assertion`,
++# `contradictory_time`, `ignored_result`, and `no_unwrap`.
++# The remaining default-pilot noise is still the known `ambient_clock`
++# warnings in `crates/aspen-time/src/lib.rs` and
++# `crates/aspen-core/src/simulation.rs`.
++# Running `scripts/tigerstyle-check.sh` can append a temporary
++# `[[patch.unused]] dylint_driver` stanza to `Cargo.lock`; if that is the only
++# lockfile delta, restore it before review with `git checkout -- Cargo.lock`.
++# First-pass `no_unwrap` inventory over the current pilot lib targets
++# (`aspen-time`, `aspen-hlc`, `aspen-core`, `aspen-coordination`) found zero
++# production call sites; the raw `.unwrap()` / `.expect()` hits there are test-only.
+ # Note: the rustfmt hook runs repo-wide `nix run .#rustfmt`, not file-scoped formatting.
+ # Stash or restore unrelated unstaged Rust edits before making a focused commit.
+
+diff --git a/crates/aspen-coordination/src/counter.rs b/crates/aspen-coordination/src/counter.rs
+index 2e38b76ca..f619be118 100644
+--- a/crates/aspen-coordination/src/counter.rs
++++ b/crates/aspen-coordination/src/counter.rs
+@@ -22,6 +22,7 @@ use rand::Rng;
+ use tokio::sync::Mutex;
+ use tokio::task::JoinHandle;
+ use tracing::debug;
++use tracing::warn;
+
+ use crate::error::CoordinationError;
+ use crate::error::MaxRetriesExceededSnafu;
+@@ -407,23 +408,42 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
+         }
+     }
+
++    fn restore_local_count(local: &AtomicU64, amount: u64) {
++        let mut current = local.load(Ordering::Acquire);
++        loop {
++            let new_value = current.saturating_add(amount);
++            match local.compare_exchange(current, new_value, Ordering::AcqRel, Ordering::Acquire) {
++                Ok(_) => return,
++                Err(actual) => current = actual,
++            }
++        }
++    }
++
++    fn spawn_background_flush(store: Arc<S>, key: String, local: Arc<AtomicU64>) {
++        tokio::spawn(async move {
++            let to_flush = local.swap(0, Ordering::AcqRel);
++            if to_flush == 0 {
++                return;
++            }
++
++            let counter = AtomicCounter::new(store, key.clone(), CounterConfig::default());
++            if let Err(error) = counter.add(to_flush).await {
++                Self::restore_local_count(local.as_ref(), to_flush);
++                warn!(key = %key, amount = to_flush, error = %error, "buffered counter flush failed; restored local count");
++            }
++        });
++    }
++
+     /// Increment locally (fast, no network).
+     pub fn increment(&self) {
+         let prev = self.local.fetch_add(1, Ordering::Relaxed);
+         let new_value = prev.saturating_add(1);
+         if should_flush_buffer(new_value, self.flush_threshold) {
+-            // Trigger flush in background
+-            let counter = self.counter.store.clone();
+-            let key = self.counter.key.clone();
+-            let local = self.local.clone();
+-
+-            tokio::spawn(async move {
+-                let to_flush = local.swap(0, Ordering::AcqRel);
+-                if to_flush > 0 {
+-                    let c = AtomicCounter::new(counter, key, CounterConfig::default());
+-                    let _ = c.add(to_flush).await;
+-                }
+-            });
++            Self::spawn_background_flush(
++                self.counter.store.clone(),
++                self.counter.key.clone(),
++                self.local.clone(),
++            );
+         }
+     }
+
+@@ -432,27 +452,27 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
+         let prev = self.local.fetch_add(amount, Ordering::Relaxed);
+         let new_value = prev.saturating_add(amount);
+         if should_flush_buffer(new_value, self.flush_threshold) {
+-            let counter = self.counter.store.clone();
+-            let key = self.counter.key.clone();
+-            let local = self.local.clone();
+-
+-            tokio::spawn(async move {
+-                let to_flush = local.swap(0, Ordering::AcqRel);
+-                if to_flush > 0 {
+-                    let c = AtomicCounter::new(counter, key, CounterConfig::default());
+-                    let _ = c.add(to_flush).await;
+-                }
+-            });
++            Self::spawn_background_flush(
++                self.counter.store.clone(),
++                self.counter.key.clone(),
++                self.local.clone(),
++            );
+         }
+     }
+
+     /// Flush accumulated count to storage.
+     pub async fn flush(&self) -> Result<u64, CoordinationError> {
+         let to_flush = self.local.swap(0, Ordering::AcqRel);
+-        if to_flush > 0 {
+-            self.counter.add(to_flush).await
+-        } else {
+-            self.counter.get().await
++        if to_flush == 0 {
++            return self.counter.get().await;
++        }
++
++        match self.counter.add(to_flush).await {
++            Ok(value) => Ok(value),
++            Err(error) => {
++                Self::restore_local_count(self.local.as_ref(), to_flush);
++                Err(error)
++            }
+         }
+     }
+
+@@ -472,6 +492,7 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
+ #[cfg(test)]
+ mod tests {
+     use aspen_testing::DeterministicKeyValueStore;
++    use aspen_testing::FailingKeyValueStore;
+
+     use super::*;
+
+@@ -627,4 +648,45 @@ mod tests {
+
+         assert_eq!(counter.get().await.unwrap(), 10);
+     }
++
++    #[tokio::test]
++    async fn test_buffered_counter_flush_failure_restores_local_count() {
++        let inner = DeterministicKeyValueStore::new();
++        let failing = FailingKeyValueStore::new(inner);
++        failing.fail_all_writes().await;
++        failing.set_write_error("counter flush failed").await;
++
++        let counter = BufferedCounter::new(
++            failing.clone() as Arc<_>,
++            "buffered_counter_failure",
++            1,
++            Duration::from_millis(1),
++        );
++
++        counter.increment();
++        tokio::task::yield_now().await;
++        tokio::task::yield_now().await;
++
++        assert_eq!(counter.local.load(Ordering::Relaxed), 1);
++    }
++
++    #[tokio::test]
++    async fn test_buffered_counter_flush_method_restores_local_count() {
++        let inner = DeterministicKeyValueStore::new();
++        let failing = FailingKeyValueStore::new(inner);
++        let counter = BufferedCounter::new(
++            failing.clone() as Arc<_>,
++            "buffered_counter_flush_method",
++            10,
++            Duration::from_millis(1),
++        );
++
++        counter.add(3);
++        failing.fail_all_writes().await;
++        failing.set_write_error("counter flush failed").await;
++
++        let result = counter.flush().await;
++        assert!(result.is_err());
++        assert_eq!(counter.local.load(Ordering::Relaxed), 3);
++    }
+ }
+diff --git a/crates/aspen-coordination/src/election.rs b/crates/aspen-coordination/src/election.rs
+index 9cbb0684e..bf0375984 100644
+--- a/crates/aspen-coordination/src/election.rs
++++ b/crates/aspen-coordination/src/election.rs
+@@ -84,6 +84,20 @@ impl LeadershipState {
+     }
+ }
+
++fn publish_state(
++    state_tx: &watch::Sender<LeadershipState>,
++    candidate_id: &str,
++    state: LeadershipState,
++) -> bool {
++    match state_tx.send(state) {
++        Ok(()) => true,
++        Err(_error) => {
++            debug!(candidate = %candidate_id, "leadership state receiver dropped; stopping election loop");
++            false
++        }
++    }
++}
++
+ /// Leader election coordinator.
+ ///
+ /// Manages leader election using a distributed lock. Only one node
+@@ -209,7 +223,9 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
+     async fn election_loop(self, state_tx: watch::Sender<LeadershipState>, running: Arc<AtomicBool>) {
+         while running.load(Ordering::SeqCst) {
+             // Try to become leader
+-            let _ = state_tx.send(LeadershipState::Transitioning);
++            if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Transitioning) {
++                return;
++            }
+
+             match self.lock.try_acquire().await {
+                 Ok(guard) => {
+@@ -221,13 +237,17 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
+                         "acquired leadership"
+                     );
+
+-                    let _ = state_tx.send(LeadershipState::Leader { fencing_token: token });
++                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Leader { fencing_token: token }) {
++                        return;
++                    }
+
+                     // Maintain leadership through renewal
+                     self.maintain_leadership(guard, &state_tx, &running).await;
+
+                     info!(candidate = %self.candidate_id, "lost leadership");
+-                    let _ = state_tx.send(LeadershipState::Follower);
++                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
++                        return;
++                    }
+                     debug_assert!(!state_tx.borrow().is_leader(), "leadership loss must update state to non-leader");
+                 }
+                 Err(CoordinationError::LockHeld { holder, .. }) => {
+@@ -236,15 +256,21 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
+                         current_leader = %holder,
+                         "election lost, current leader exists"
+                     );
+-                    let _ = state_tx.send(LeadershipState::Follower);
++                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
++                        return;
++                    }
+                 }
+                 Err(CoordinationError::Timeout { .. }) => {
+                     debug!(candidate = %self.candidate_id, "election timeout");
+-                    let _ = state_tx.send(LeadershipState::Follower);
++                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
++                        return;
++                    }
+                 }
+                 Err(e) => {
+                     warn!(candidate = %self.candidate_id, error = %e, "election error");
+-                    let _ = state_tx.send(LeadershipState::Follower);
++                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
++                        return;
++                    }
+                 }
+             }
+
+@@ -304,9 +330,15 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
+             }
+
+             // Update state with current token (in case it was somehow updated)
+-            let _ = state_tx.send(LeadershipState::Leader {
+-                fencing_token: guard.fencing_token(),
+-            });
++            if !publish_state(
++                state_tx,
++                &self.candidate_id,
++                LeadershipState::Leader {
++                    fencing_token: guard.fencing_token(),
++                },
++            ) {
++                return;
++            }
+         }
+     }
+ }
+@@ -363,8 +395,10 @@ impl ElectionHandle {
+     /// This will stepdown if leader and stop the election loop.
+     pub async fn stop(mut self) {
+         self.running.store(false, Ordering::SeqCst);
+-        if let Some(task) = self.task.take() {
+-            let _ = task.await;
++        if let Some(task) = self.task.take()
++            && let Err(error) = task.await
++        {
++            warn!(candidate = %self.candidate_id, error = %error, "election task join failed during stop");
+         }
+     }
+ }
+diff --git a/crates/aspen-coordination/src/lib.rs b/crates/aspen-coordination/src/lib.rs
+index 1908873e0..1b772d27a 100644
+--- a/crates/aspen-coordination/src/lib.rs
++++ b/crates/aspen-coordination/src/lib.rs
+@@ -29,8 +29,7 @@
+ //! let handle = election.start().await?;
+ //!
+ //! // Check leadership state
+-//! if handle.is_leader() {
+-//!     let token = handle.fencing_token().unwrap();
++//! if let Some(token) = handle.fencing_token() {
+ //!     // Perform leader-only operations with fencing token
+ //! }
+ //!
+@@ -70,18 +69,22 @@
+ //! )?;
+ //! let guard = lockset.acquire().await?;
+ //!
+-//! let repo_token = guard.fencing_token_for("repo:a").unwrap();
+-//! let pipeline_token = guard.fencing_token_for("pipeline:42").unwrap();
+-//! // Use both fencing tokens while coordinating the compound operation.
++//! if let (Some(repo_token), Some(pipeline_token)) = (
++//!     guard.fencing_token_for("repo:a"),
++//!     guard.fencing_token_for("pipeline:42"),
++//! ) {
++//!     // Use both fencing tokens while coordinating the compound operation.
++//! }
+ //!
+ //! guard.release().await?;
+ //! ```
+
+-// Phase 2 Tiger Style rollout: keep the starter lint set visible in the default
+-// pilot while suppressing noisier families until Aspen has cleanup bandwidth.
++// Phase 3 Tiger Style rollout: keep the current pilot families visible in the
++// default pilot while suppressing noisier families until Aspen has cleanup
++// bandwidth.
+ #![allow(unknown_lints)]
+ #![allow(no_panic)]
+-#![warn(ambient_clock, compound_assertion, contradictory_time)]
++#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
+ #![allow(
+     acronym_style,
+     ambiguous_params,
+@@ -91,11 +94,9 @@
+     compound_condition,
+     float_for_currency,
+     function_length,
+-    ignored_result,
+     multi_lock_ordering,
+     nested_conditionals,
+     no_recursion,
+-    no_unwrap,
+     numeric_units,
+     platform_dependent_cast,
+     raw_arithmetic_overflow,
+diff --git a/crates/aspen-coordination/src/lockset.rs b/crates/aspen-coordination/src/lockset.rs
+index cfea0f3cd..a0289beae 100644
+--- a/crates/aspen-coordination/src/lockset.rs
++++ b/crates/aspen-coordination/src/lockset.rs
+@@ -682,8 +682,8 @@ mod tests {
+         let second = test_lockset(store.clone(), "holder-b", &["repo:a", "deploy:prod"]);
+
+         let _guard = first.try_acquire().await.unwrap();
+-        let error = second.try_acquire().await.expect_err("expected lockset contention");
+-        assert!(matches!(error, CoordinationError::LockSetHeld { member, .. } if member == "repo:a"));
++        let result = second.try_acquire().await;
++        assert!(matches!(result, Err(CoordinationError::LockSetHeld { member, .. }) if member == "repo:a"));
+         assert!(store.read(ReadRequest::new("deploy:prod".to_string())).await.is_err());
+     }
+
+diff --git a/crates/aspen-coordination/src/queue/create_delete.rs b/crates/aspen-coordination/src/queue/create_delete.rs
+index 0bd44b557..598144937 100644
+--- a/crates/aspen-coordination/src/queue/create_delete.rs
++++ b/crates/aspen-coordination/src/queue/create_delete.rs
+@@ -119,10 +119,10 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+         }
+
+         // Delete sequence
+-        let _ = self.delete_key(&seq_key).await;
++        self.delete_key(&seq_key).await?;
+
+         // Delete queue metadata
+-        let _ = self.delete_key(&queue_key).await;
++        self.delete_key(&queue_key).await?;
+
+         debug!(name, deleted, "queue deleted");
+         Ok(deleted)
+diff --git a/crates/aspen-coordination/src/queue/dequeue.rs b/crates/aspen-coordination/src/queue/dequeue.rs
+index 0e5565d66..53a97c220 100644
+--- a/crates/aspen-coordination/src/queue/dequeue.rs
++++ b/crates/aspen-coordination/src/queue/dequeue.rs
+@@ -15,6 +15,7 @@ use aspen_kv_types::WriteRequest;
+ use aspen_traits::KeyValueStore;
+ use tracing::debug;
+ use tracing::info;
++use tracing::warn;
+
+ use super::DLQReason;
+ use super::DequeuedItem;
+@@ -207,7 +208,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+
+         // Skip expired items
+         if item.is_expired() {
+-            let _ = self.delete_key(item_key).await;
++            self.delete_key(item_key).await?;
+             return Ok(DequeueItemResult::Skip);
+         }
+
+@@ -234,7 +235,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+         if queue_state.max_delivery_attempts > 0 && item.delivery_attempts >= queue_state.max_delivery_attempts {
+             // Move to DLQ
+             self.move_to_dlq(name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None).await?;
+-            let _ = self.delete_key(item_key).await;
++            self.delete_key_best_effort(name, item_key, "remove item after DLQ move")
++                .await;
+             return Ok(DequeueItemResult::MovedToDlq);
+         }
+
+@@ -284,8 +286,24 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+             .await
+         {
+             Ok(_) => {
+-                // Successfully claimed - delete from items
+-                let _ = self.delete_key(item_key).await;
++                // Successfully claimed - delete from items.
++                if let Err(error) = self.delete_key(item_key).await {
++                    warn!(
++                        queue = name,
++                        item_id = item.item_id,
++                        item_key,
++                        pending_key = %pend_key,
++                        error = %error,
++                        "failed to remove claimed item from ready queue; rolling back pending claim"
++                    );
++                    self.delete_key_best_effort(
++                        name,
++                        &pend_key,
++                        "rollback pending claim after ready-queue delete failure",
++                    )
++                    .await;
++                    bail!("failed to remove claimed item {} from ready queue: {}", item.item_id, error);
++                }
+
+                 debug_assert!(
+                     pending.visibility_deadline_ms > 0,
+@@ -366,18 +384,38 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+                 let item_json = serde_json::to_string(&item)?;
+
+                 // Try to return item - may fail if already processed
+-                let _ = self
++                if let Err(error) = self
+                     .store
+                     .write(WriteRequest {
+                         command: WriteCommand::Set {
+-                            key: i_key,
++                            key: i_key.clone(),
+                             value: item_json,
+                         },
+                     })
+-                    .await;
+-
+-                // Delete pending entry
+-                let _ = self.delete_key(&key).await;
++                    .await
++                {
++                    warn!(
++                        queue = name,
++                        item_id = pending.item_id,
++                        pending_key = %key,
++                        item_key = %i_key,
++                        error = %error,
++                        "failed to restore expired pending item"
++                    );
++                    continue;
++                }
++
++                // Delete pending entry after the item is visible again.
++                if let Err(error) = self.delete_key(&key).await {
++                    warn!(
++                        queue = name,
++                        item_id = pending.item_id,
++                        pending_key = %key,
++                        error = %error,
++                        "failed to remove expired pending entry after restore"
++                    );
++                    continue;
++                }
+                 cleaned += 1;
+             }
+         }
+diff --git a/crates/aspen-coordination/src/queue/enqueue.rs b/crates/aspen-coordination/src/queue/enqueue.rs
+index fcf7020d7..6f9565703 100644
+--- a/crates/aspen-coordination/src/queue/enqueue.rs
++++ b/crates/aspen-coordination/src/queue/enqueue.rs
+@@ -137,14 +137,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+                 expires_at_ms: now + DEFAULT_QUEUE_DEDUP_TTL_MS,
+             };
+             let dedup_json = serde_json::to_string(&dedup_entry)?;
+-            let _ = self
+-                .store
+-                .write(WriteRequest {
+-                    command: WriteCommand::Set {
+-                        key: dedup_key,
+-                        value: dedup_json,
+-                    },
+-                })
++            self.set_key_best_effort(name, &dedup_key, dedup_json, "record dedup entry")
+                 .await;
+         }
+         Ok(())
+diff --git a/crates/aspen-coordination/src/queue/helpers.rs b/crates/aspen-coordination/src/queue/helpers.rs
+index 4c48b03d7..9550ad7c7 100644
+--- a/crates/aspen-coordination/src/queue/helpers.rs
++++ b/crates/aspen-coordination/src/queue/helpers.rs
+@@ -9,6 +9,7 @@ use aspen_kv_types::WriteCommand;
+ use aspen_kv_types::WriteRequest;
+ use aspen_traits::KeyValueStore;
+ use serde::Deserialize;
++use tracing::warn;
+
+ use super::QueueManager;
+ use super::QueueState;
+@@ -79,4 +80,25 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+             Err(e) => bail!("delete failed: {}", e),
+         }
+     }
++
++    pub(super) async fn delete_key_best_effort(&self, queue_name: &str, key: &str, action: &str) {
++        if let Err(error) = self.delete_key(key).await {
++            warn!(queue = queue_name, key, action, error = %error, "queue best-effort delete failed");
++        }
++    }
++
++    pub(super) async fn set_key_best_effort(&self, queue_name: &str, key: &str, value: String, action: &str) {
++        if let Err(error) = self
++            .store
++            .write(WriteRequest {
++                command: WriteCommand::Set {
++                    key: key.to_string(),
++                    value,
++                },
++            })
++            .await
++        {
++            warn!(queue = queue_name, key, action, error = %error, "queue best-effort write failed");
++        }
++    }
+ }
+diff --git a/crates/aspen-coordination/src/registry/discovery.rs b/crates/aspen-coordination/src/registry/discovery.rs
+index 0362f3354..c1b205ea8 100644
+--- a/crates/aspen-coordination/src/registry/discovery.rs
++++ b/crates/aspen-coordination/src/registry/discovery.rs
+@@ -3,6 +3,7 @@
+ use anyhow::Result;
+ use aspen_constants::coordination::MAX_SERVICE_DISCOVERY_RESULTS;
+ use aspen_traits::KeyValueStore;
++use tracing::warn;
+
+ use super::ServiceRegistry;
+ use super::types::DiscoveryFilter;
+@@ -14,8 +15,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+     ///
+     /// Automatically cleans up expired instances during discovery.
+     pub async fn discover(&self, service_name: &str, filter: DiscoveryFilter) -> Result<Vec<ServiceInstance>> {
+-        // Cleanup expired instances first
+-        let _ = self.cleanup_expired(service_name).await;
++        // Cleanup expired instances first.
++        if let Err(error) = self.cleanup_expired(service_name).await {
++            warn!(service_name, error = %error, "failed to clean up expired service instances before discovery");
++        }
+
+         let prefix = verified::service_instances_prefix(service_name);
+         let limit = filter.limit.unwrap_or(MAX_SERVICE_DISCOVERY_RESULTS).min(MAX_SERVICE_DISCOVERY_RESULTS);
+@@ -89,8 +92,15 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+
+         if let Some(instance) = self.read_json::<ServiceInstance>(&key).await? {
+             if instance.is_expired() {
+-                // Lazily delete expired instance
+-                let _ = self.delete_key(&key).await;
++                // Lazily delete expired instance.
++                if let Err(error) = self.delete_key(&key).await {
++                    self.log_delete_failure(
++                        service_name,
++                        &key,
++                        "remove expired service instance during discovery",
++                        &error,
++                    );
++                }
+                 return Ok(None);
+             }
+             return Ok(Some(instance));
+diff --git a/crates/aspen-coordination/src/registry/helpers.rs b/crates/aspen-coordination/src/registry/helpers.rs
+index c92d9a610..ae78b31aa 100644
+--- a/crates/aspen-coordination/src/registry/helpers.rs
++++ b/crates/aspen-coordination/src/registry/helpers.rs
+@@ -9,6 +9,7 @@ use aspen_kv_types::WriteCommand;
+ use aspen_kv_types::WriteRequest;
+ use aspen_traits::KeyValueStore;
+ use serde::Deserialize;
++use tracing::warn;
+
+ use super::ServiceRegistry;
+ use super::types::ServiceInstance;
+@@ -29,8 +30,12 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+             if let Some(instance) = self.read_json::<ServiceInstance>(&key).await?
+                 && instance.is_expired()
+             {
+-                let _ = self.delete_key(&key).await;
+-                cleaned += 1;
++                match self.delete_key(&key).await {
++                    Ok(()) => cleaned += 1,
++                    Err(error) => {
++                        self.log_delete_failure(service_name, &key, "remove expired service instance", &error);
++                    }
++                }
+             }
+         }
+
+@@ -82,6 +87,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+         }
+     }
+
++    pub(super) fn log_delete_failure(&self, service_name: &str, key: &str, action: &str, error: &anyhow::Error) {
++        warn!(service_name, key, action, error = %error, "service registry best-effort delete failed");
++    }
++
+     /// Delete a key.
+     pub(super) async fn delete_key(&self, key: &str) -> Result<()> {
+         self.store
+diff --git a/crates/aspen-coordination/src/rwlock/acquisition.rs b/crates/aspen-coordination/src/rwlock/acquisition.rs
+index 02b735b40..098166595 100644
+--- a/crates/aspen-coordination/src/rwlock/acquisition.rs
++++ b/crates/aspen-coordination/src/rwlock/acquisition.rs
+@@ -10,6 +10,7 @@ use aspen_kv_types::WriteCommand;
+ use aspen_kv_types::WriteRequest;
+ use aspen_traits::KeyValueStore;
+ use tracing::debug;
++use tracing::warn;
+
+ use super::RWLockManager;
+ use super::types::RWLockMode;
+@@ -255,8 +256,10 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+         let result = self.acquire_write_inner(&key, name, holder_id, ttl_ms, deadline).await;
+
+         // Decrement pending writers if we failed
+-        if result.is_err() {
+-            let _ = self.decrement_pending_writers(&key).await;
++        if result.is_err()
++            && let Err(error) = self.decrement_pending_writers(&key).await
++        {
++            warn!(name, key = %key, error = %error, "RWLOCK: failed to clear pending writer after acquire failure");
+         }
+
+         result
+diff --git a/crates/aspen-coordination/src/worker_coordinator/failover.rs b/crates/aspen-coordination/src/worker_coordinator/failover.rs
+index a6d326426..90f411d02 100644
+--- a/crates/aspen-coordination/src/worker_coordinator/failover.rs
++++ b/crates/aspen-coordination/src/worker_coordinator/failover.rs
+@@ -47,7 +47,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+
+         let mut tasks = self.tasks.write().await;
+         for handle in tasks.drain(..) {
+-            let _ = handle.await;
++            if let Err(error) = handle.await {
++                warn!(error = %error, "worker coordinator background task join failed during stop");
++            }
+         }
+
+         info!("distributed worker coordinator stopped");
+diff --git a/crates/aspen-coordination/src/worker_coordinator/work_stealing.rs b/crates/aspen-coordination/src/worker_coordinator/work_stealing.rs
+index 94c74eca3..53d59f295 100644
+--- a/crates/aspen-coordination/src/worker_coordinator/work_stealing.rs
++++ b/crates/aspen-coordination/src/worker_coordinator/work_stealing.rs
+@@ -208,12 +208,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+         let key = verified::steal_hint_key(target_id, source_id);
+
+         // Delete is idempotent - succeeds even if key doesn't exist
+-        let _ = self
+-            .store
++        self.store
+             .write(WriteRequest {
+                 command: WriteCommand::Delete { key },
+             })
+-            .await;
++            .await?;
+
+         debug!(target = target_id, source = source_id, "steal hint consumed");
+
+@@ -266,12 +265,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+             };
+
+             if should_delete {
+-                let _ = self
+-                    .store
++                self.store
+                     .write(WriteRequest {
+                         command: WriteCommand::Delete { key: entry.key },
+                     })
+-                    .await;
++                    .await?;
+                 deleted += 1;
+             }
+         }
+@@ -293,12 +291,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+         let mut deleted = 0usize;
+
+         for entry in scan_result.entries {
+-            let _ = self
+-                .store
++            self.store
+                 .write(WriteRequest {
+                     command: WriteCommand::Delete { key: entry.key },
+                 })
+-                .await;
++                .await?;
+             deleted += 1;
+         }
+
+diff --git a/crates/aspen-core/src/lib.rs b/crates/aspen-core/src/lib.rs
+index d195c32b9..570bfb46c 100644
+--- a/crates/aspen-core/src/lib.rs
++++ b/crates/aspen-core/src/lib.rs
+@@ -15,11 +15,11 @@
+ //!
+ //! - `sql` (default): Include SQL query types and traits
+
+-// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
+-// while suppressing noisier families until Aspen has cleanup bandwidth.
++// Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
++// crates while suppressing noisier families until Aspen has cleanup bandwidth.
+ #![allow(unknown_lints)]
+ #![allow(no_panic)]
+-#![warn(ambient_clock, compound_assertion, contradictory_time)]
++#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
+ #![allow(
+     acronym_style,
+     ambiguous_params,
+@@ -29,11 +29,9 @@
+     compound_condition,
+     float_for_currency,
+     function_length,
+-    ignored_result,
+     multi_lock_ordering,
+     nested_conditionals,
+     no_recursion,
+-    no_unwrap,
+     numeric_units,
+     platform_dependent_cast,
+     raw_arithmetic_overflow,
+diff --git a/crates/aspen-hlc/src/lib.rs b/crates/aspen-hlc/src/lib.rs
+index e627a9d59..c6eb45ad7 100644
+--- a/crates/aspen-hlc/src/lib.rs
++++ b/crates/aspen-hlc/src/lib.rs
+@@ -33,11 +33,11 @@
+ //! - No panics in production code (infallible operations)
+ //! - Pure functions for testability
+
+-// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
+-// while suppressing noisier families until Aspen has cleanup bandwidth.
++// Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
++// crates while suppressing noisier families until Aspen has cleanup bandwidth.
+ #![allow(unknown_lints)]
+ #![allow(no_panic)]
+-#![warn(ambient_clock, compound_assertion, contradictory_time)]
++#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
+ #![allow(
+     acronym_style,
+     ambiguous_params,
+@@ -47,11 +47,9 @@
+     compound_condition,
+     float_for_currency,
+     function_length,
+-    ignored_result,
+     multi_lock_ordering,
+     nested_conditionals,
+     no_recursion,
+-    no_unwrap,
+     numeric_units,
+     platform_dependent_cast,
+     raw_arithmetic_overflow,
+@@ -94,7 +92,7 @@ pub fn create_hlc(node_id: &str) -> HLC {
+     let hash = blake3::hash(node_id.as_bytes());
+     let bytes = hash.as_bytes();
+     // Safety: blake3 hash is always 32 bytes, extracting first 16 via explicit indexing
+-    // is infallible. Using explicit array construction avoids try_into().unwrap().
++    // is infallible. Using explicit array construction avoids a fallible array conversion.
+     let id_bytes: [u8; 16] = [
+         bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10],
+         bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+diff --git a/crates/aspen-time/src/lib.rs b/crates/aspen-time/src/lib.rs
+index d19cac9bb..fcb2cb773 100644
+--- a/crates/aspen-time/src/lib.rs
++++ b/crates/aspen-time/src/lib.rs
+@@ -11,15 +11,15 @@
+ //!
+ //! # Tiger Style
+ //!
+-//! - No `.expect()` or `.unwrap()` - safe fallback to 0
++//! - No panic-on-time-conversion paths - safe fallback to 0
+ //! - Inline for hot path performance
+ //! - Pure functions with no external dependencies
+
+-// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
+-// while suppressing noisier families until Aspen has cleanup bandwidth.
++// Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
++// crates while suppressing noisier families until Aspen has cleanup bandwidth.
+ #![allow(unknown_lints)]
+ #![allow(no_panic)]
+-#![warn(ambient_clock, compound_assertion, contradictory_time)]
++#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
+ #![allow(
+     acronym_style,
+     ambiguous_params,
+@@ -29,11 +29,9 @@
+     compound_condition,
+     float_for_currency,
+     function_length,
+-    ignored_result,
+     multi_lock_ordering,
+     nested_conditionals,
+     no_recursion,
+-    no_unwrap,
+     numeric_units,
+     platform_dependent_cast,
+     raw_arithmetic_overflow,
+@@ -64,7 +62,7 @@ use std::time::UNIX_EPOCH;
+ ///
+ /// # Tiger Style
+ ///
+-/// - No `.expect()` or `.unwrap()` - safe fallback to 0
++/// - No panic-on-time-conversion paths - safe fallback to 0
+ /// - Inline for hot path performance
+ #[inline]
+ pub fn current_time_ms() -> u64 {
+@@ -78,7 +76,7 @@ pub fn current_time_ms() -> u64 {
+ ///
+ /// # Tiger Style
+ ///
+-/// - No `.expect()` or `.unwrap()` - safe fallback to 0
++/// - No panic-on-time-conversion paths - safe fallback to 0
+ /// - Inline for hot path performance
+ #[inline]
+ pub fn current_time_secs() -> u64 {
+diff --git a/openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/tasks.md b/openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/tasks.md
+index 29cbe20e9..512d296fa 100644
+--- a/openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/tasks.md
++++ b/openspec/changes/tigerstyle-phase-3-safety-debt-cleanup/tasks.md
+@@ -1,7 +1,7 @@
+ # Tasks: Reduce Aspen Tigerstyle Safety-Debt Noise
+
+-- [ ] Confirm the rollout order for `ignored_result`, `no_unwrap`, `no_panic`, `unchecked_narrowing`, and `unbounded_loop`
+-- [ ] Build a per-crate inventory for the first promoted family
+-- [ ] Fix or justify the highest-risk findings in that family without blanket allows
+-- [ ] Re-run the targeted tigerstyle check and capture the reduced baseline
++- [x] Confirm the rollout order for `ignored_result`, `no_unwrap`, `no_panic`, `unchecked_narrowing`, and `unbounded_loop`
++- [x] Build a per-crate inventory for the first promoted family
++- [x] Fix or justify the highest-risk findings in that family without blanket allows
++- [x] Re-run the targeted tigerstyle check and capture the reduced baseline
+ - [ ] Repeat for the next family only after the current one has a bounded warning set
+diff --git a/scripts/tigerstyle-check.sh b/scripts/tigerstyle-check.sh
+index 700604e31..8f5fe6e78 100755
+--- a/scripts/tigerstyle-check.sh
++++ b/scripts/tigerstyle-check.sh
+@@ -29,10 +29,12 @@ Usage: scripts/tigerstyle-check.sh [cargo-dylint options] [package scope] [-- ca
+ Default scope (when no package/workspace is passed):
+   -p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination
+
+-Starter lints enabled in phase 2 default pilot:
+-  - tigerstyle::compound_assertion
++Pilot lints enabled in the current default path:
+   - tigerstyle::ambient_clock
++  - tigerstyle::compound_assertion
+   - tigerstyle::contradictory_time
++  - tigerstyle::ignored_result
++  - tigerstyle::no_unwrap
+
+ Examples:
+   scripts/tigerstyle-check.sh
+@@ -176,6 +178,8 @@ starter_lints=(
+   ambient_clock
+   compound_assertion
+   contradictory_time
++  ignored_result
++  no_unwrap
+ )
+
+ scope_args=()

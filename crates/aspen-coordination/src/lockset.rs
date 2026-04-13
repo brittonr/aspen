@@ -682,8 +682,8 @@ mod tests {
         let second = test_lockset(store.clone(), "holder-b", &["repo:a", "deploy:prod"]);
 
         let _guard = first.try_acquire().await.unwrap();
-        let error = second.try_acquire().await.expect_err("expected lockset contention");
-        assert!(matches!(error, CoordinationError::LockSetHeld { member, .. } if member == "repo:a"));
+        let result = second.try_acquire().await;
+        assert!(matches!(result, Err(CoordinationError::LockSetHeld { member, .. }) if member == "repo:a"));
         assert!(store.read(ReadRequest::new("deploy:prod".to_string())).await.is_err());
     }
 

@@ -1,0 +1,2 @@
+$ openspec validate tigerstyle-phase-3-safety-debt-cleanup
+Change 'tigerstyle-phase-3-safety-debt-cleanup' is valid

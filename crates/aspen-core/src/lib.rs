@@ -15,11 +15,11 @@
 //!
 //! - `sql` (default): Include SQL query types and traits
 
-// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
-// while suppressing noisier families until Aspen has cleanup bandwidth.
+// Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
+// crates while suppressing noisier families until Aspen has cleanup bandwidth.
 #![allow(unknown_lints)]
 #![allow(no_panic)]
-#![warn(ambient_clock, compound_assertion, contradictory_time)]
+#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
 #![allow(
     acronym_style,
     ambiguous_params,
@@ -29,11 +29,9 @@
     compound_condition,
     float_for_currency,
     function_length,
-    ignored_result,
     multi_lock_ordering,
     nested_conditionals,
     no_recursion,
-    no_unwrap,
     numeric_units,
     platform_dependent_cast,
     raw_arithmetic_overflow,

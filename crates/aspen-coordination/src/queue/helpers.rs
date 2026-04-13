@@ -9,6 +9,7 @@ use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_traits::KeyValueStore;
 use serde::Deserialize;
+use tracing::warn;
 
 use super::QueueManager;
 use super::QueueState;
@@ -77,6 +78,27 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             Ok(_) => Ok(true),
             Err(KeyValueStoreError::NotFound { .. }) => Ok(false),
             Err(e) => bail!("delete failed: {}", e),
+        }
+    }
+
+    pub(super) async fn delete_key_best_effort(&self, queue_name: &str, key: &str, action: &str) {
+        if let Err(error) = self.delete_key(key).await {
+            warn!(queue = queue_name, key, action, error = %error, "queue best-effort delete failed");
+        }
+    }
+
+    pub(super) async fn set_key_best_effort(&self, queue_name: &str, key: &str, value: String, action: &str) {
+        if let Err(error) = self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: key.to_string(),
+                    value,
+                },
+            })
+            .await
+        {
+            warn!(queue = queue_name, key, action, error = %error, "queue best-effort write failed");
         }
     }
 }

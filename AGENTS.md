@@ -198,6 +198,17 @@ nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not
 # `scripts/tigerstyle-check.sh` wraps `rustup`/`cargo`/`dylint-link`, patches
 # `dylint_driver`, and defaults to the current pilot scope
 # `-p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination -- --lib`.
+# Current pilot lints: `ambient_clock`, `compound_assertion`,
+# `contradictory_time`, `ignored_result`, and `no_unwrap`.
+# The remaining default-pilot noise is still the known `ambient_clock`
+# warnings in `crates/aspen-time/src/lib.rs` and
+# `crates/aspen-core/src/simulation.rs`.
+# Running `scripts/tigerstyle-check.sh` can append a temporary
+# `[[patch.unused]] dylint_driver` stanza to `Cargo.lock`; if that is the only
+# lockfile delta, restore it before review with `git checkout -- Cargo.lock`.
+# First-pass `no_unwrap` inventory over the current pilot lib targets
+# (`aspen-time`, `aspen-hlc`, `aspen-core`, `aspen-coordination`) found zero
+# production call sites; the raw `.unwrap()` / `.expect()` hits there are test-only.
 # Note: the rustfmt hook runs repo-wide `nix run .#rustfmt`, not file-scoped formatting.
 # Stash or restore unrelated unstaged Rust edits before making a focused commit.
 

@@ -10,6 +10,7 @@ use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_traits::KeyValueStore;
 use tracing::debug;
+use tracing::warn;
 
 use super::RWLockManager;
 use super::types::RWLockMode;
@@ -255,8 +256,10 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         let result = self.acquire_write_inner(&key, name, holder_id, ttl_ms, deadline).await;
 
         // Decrement pending writers if we failed
-        if result.is_err() {
-            let _ = self.decrement_pending_writers(&key).await;
+        if result.is_err()
+            && let Err(error) = self.decrement_pending_writers(&key).await
+        {
+            warn!(name, key = %key, error = %error, "RWLOCK: failed to clear pending writer after acquire failure");
         }
 
         result

@@ -84,6 +84,16 @@ impl LeadershipState {
     }
 }
 
+fn publish_state(state_tx: &watch::Sender<LeadershipState>, candidate_id: &str, state: LeadershipState) -> bool {
+    match state_tx.send(state) {
+        Ok(()) => true,
+        Err(_error) => {
+            debug!(candidate = %candidate_id, "leadership state receiver dropped; stopping election loop");
+            false
+        }
+    }
+}
+
 /// Leader election coordinator.
 ///
 /// Manages leader election using a distributed lock. Only one node
@@ -209,7 +219,9 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
     async fn election_loop(self, state_tx: watch::Sender<LeadershipState>, running: Arc<AtomicBool>) {
         while running.load(Ordering::SeqCst) {
             // Try to become leader
-            let _ = state_tx.send(LeadershipState::Transitioning);
+            if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Transitioning) {
+                return;
+            }
 
             match self.lock.try_acquire().await {
                 Ok(guard) => {
@@ -221,13 +233,17 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
                         "acquired leadership"
                     );
 
-                    let _ = state_tx.send(LeadershipState::Leader { fencing_token: token });
+                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Leader { fencing_token: token }) {
+                        return;
+                    }
 
                     // Maintain leadership through renewal
                     self.maintain_leadership(guard, &state_tx, &running).await;
 
                     info!(candidate = %self.candidate_id, "lost leadership");
-                    let _ = state_tx.send(LeadershipState::Follower);
+                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
+                        return;
+                    }
                     debug_assert!(!state_tx.borrow().is_leader(), "leadership loss must update state to non-leader");
                 }
                 Err(CoordinationError::LockHeld { holder, .. }) => {
@@ -236,15 +252,21 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
                         current_leader = %holder,
                         "election lost, current leader exists"
                     );
-                    let _ = state_tx.send(LeadershipState::Follower);
+                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
+                        return;
+                    }
                 }
                 Err(CoordinationError::Timeout { .. }) => {
                     debug!(candidate = %self.candidate_id, "election timeout");
-                    let _ = state_tx.send(LeadershipState::Follower);
+                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
+                        return;
+                    }
                 }
                 Err(e) => {
                     warn!(candidate = %self.candidate_id, error = %e, "election error");
-                    let _ = state_tx.send(LeadershipState::Follower);
+                    if !publish_state(&state_tx, &self.candidate_id, LeadershipState::Follower) {
+                        return;
+                    }
                 }
             }
 
@@ -304,9 +326,11 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
             }
 
             // Update state with current token (in case it was somehow updated)
-            let _ = state_tx.send(LeadershipState::Leader {
+            if !publish_state(state_tx, &self.candidate_id, LeadershipState::Leader {
                 fencing_token: guard.fencing_token(),
-            });
+            }) {
+                return;
+            }
         }
     }
 }
@@ -363,8 +387,10 @@ impl ElectionHandle {
     /// This will stepdown if leader and stop the election loop.
     pub async fn stop(mut self) {
         self.running.store(false, Ordering::SeqCst);
-        if let Some(task) = self.task.take() {
-            let _ = task.await;
+        if let Some(task) = self.task.take()
+            && let Err(error) = task.await
+        {
+            warn!(candidate = %self.candidate_id, error = %error, "election task join failed during stop");
         }
     }
 }

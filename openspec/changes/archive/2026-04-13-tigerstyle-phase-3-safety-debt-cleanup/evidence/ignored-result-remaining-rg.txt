@@ -1,0 +1,14 @@
+$ rg -n "let _ =" crates/aspen-time/src crates/aspen-hlc/src crates/aspen-core/src crates/aspen-coordination/src -g '*.rs' | sort
+crates/aspen-coordination/src/rate_limiter.rs:629:        let _ = DistributedRateLimiter::new(store, "", RateLimiterConfig::new(10.0, 5));
+crates/aspen-coordination/src/rate_limiter.rs:642:        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+crates/aspen-coordination/src/rate_limiter.rs:655:        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+crates/aspen-coordination/src/rate_limiter.rs:668:        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+crates/aspen-coordination/src/verified/counter.rs:510:            let _ = apply_signed_add(*current, *amount);
+crates/aspen-coordination/src/verified/sequence.rs:434:            let _ = compute_batch_end(*start, *size);
+crates/aspen-coordination/src/verified/sequence.rs:442:            let _ = compute_new_sequence_value(*current, *count);
+crates/aspen-coordination/src/verified/strategies.rs:1089:            let _ = compute_running_average(*avg, *count, *new);
+crates/aspen-core/src/simulation.rs:362:        let _ = fs::remove_dir_all(&temp_dir); // Clean up any previous run
+crates/aspen-core/src/simulation.rs:382:        let _ = fs::remove_dir_all(&temp_dir);
+crates/aspen-core/src/simulation.rs:392:        let _ = fs::remove_dir_all(temp_dir.parent().unwrap().parent().unwrap());
+crates/aspen-core/src/simulation.rs:400:        let _ = fs::remove_dir_all(temp_dir.parent().unwrap().parent().unwrap());
+crates/aspen-time/src/lib.rs:374:        let _ = time.now_unix_ms();

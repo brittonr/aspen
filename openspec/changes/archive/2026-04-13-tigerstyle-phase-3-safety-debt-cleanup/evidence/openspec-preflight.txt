@@ -1,0 +1,5 @@
+$ scripts/openspec-preflight.sh tigerstyle-phase-3-safety-debt-cleanup
+OK: openspec/changes/tigerstyle-phase-3-safety-debt-cleanup
+  tasks: 5 total / 5 checked
+  changed files listed: 35
+  verification artifacts: 5

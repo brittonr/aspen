@@ -29,8 +29,7 @@
 //! let handle = election.start().await?;
 //!
 //! // Check leadership state
-//! if handle.is_leader() {
-//!     let token = handle.fencing_token().unwrap();
+//! if let Some(token) = handle.fencing_token() {
 //!     // Perform leader-only operations with fencing token
 //! }
 //!
@@ -70,18 +69,22 @@
 //! )?;
 //! let guard = lockset.acquire().await?;
 //!
-//! let repo_token = guard.fencing_token_for("repo:a").unwrap();
-//! let pipeline_token = guard.fencing_token_for("pipeline:42").unwrap();
-//! // Use both fencing tokens while coordinating the compound operation.
+//! if let (Some(repo_token), Some(pipeline_token)) = (
+//!     guard.fencing_token_for("repo:a"),
+//!     guard.fencing_token_for("pipeline:42"),
+//! ) {
+//!     // Use both fencing tokens while coordinating the compound operation.
+//! }
 //!
 //! guard.release().await?;
 //! ```
 
-// Phase 2 Tiger Style rollout: keep the starter lint set visible in the default
-// pilot while suppressing noisier families until Aspen has cleanup bandwidth.
+// Phase 3 Tiger Style rollout: keep the current pilot families visible in the
+// default pilot while suppressing noisier families until Aspen has cleanup
+// bandwidth.
 #![allow(unknown_lints)]
 #![allow(no_panic)]
-#![warn(ambient_clock, compound_assertion, contradictory_time)]
+#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
 #![allow(
     acronym_style,
     ambiguous_params,
@@ -91,11 +94,9 @@
     compound_condition,
     float_for_currency,
     function_length,
-    ignored_result,
     multi_lock_ordering,
     nested_conditionals,
     no_recursion,
-    no_unwrap,
     numeric_units,
     platform_dependent_cast,
     raw_arithmetic_overflow,

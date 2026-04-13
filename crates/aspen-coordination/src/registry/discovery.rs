@@ -3,6 +3,7 @@
 use anyhow::Result;
 use aspen_constants::coordination::MAX_SERVICE_DISCOVERY_RESULTS;
 use aspen_traits::KeyValueStore;
+use tracing::warn;
 
 use super::ServiceRegistry;
 use super::types::DiscoveryFilter;
@@ -14,8 +15,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     ///
     /// Automatically cleans up expired instances during discovery.
     pub async fn discover(&self, service_name: &str, filter: DiscoveryFilter) -> Result<Vec<ServiceInstance>> {
-        // Cleanup expired instances first
-        let _ = self.cleanup_expired(service_name).await;
+        // Cleanup expired instances first.
+        if let Err(error) = self.cleanup_expired(service_name).await {
+            warn!(service_name, error = %error, "failed to clean up expired service instances before discovery");
+        }
 
         let prefix = verified::service_instances_prefix(service_name);
         let limit = filter.limit.unwrap_or(MAX_SERVICE_DISCOVERY_RESULTS).min(MAX_SERVICE_DISCOVERY_RESULTS);
@@ -89,8 +92,15 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
         if let Some(instance) = self.read_json::<ServiceInstance>(&key).await? {
             if instance.is_expired() {
-                // Lazily delete expired instance
-                let _ = self.delete_key(&key).await;
+                // Lazily delete expired instance.
+                if let Err(error) = self.delete_key(&key).await {
+                    self.log_delete_failure(
+                        service_name,
+                        &key,
+                        "remove expired service instance during discovery",
+                        &error,
+                    );
+                }
                 return Ok(None);
             }
             return Ok(Some(instance));

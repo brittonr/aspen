@@ -1,0 +1,12 @@
+$ python3 <diff-count ignored_result removals>
+ 2 crates/aspen-coordination/src/counter.rs
+ 8 crates/aspen-coordination/src/election.rs
+ 2 crates/aspen-coordination/src/queue/create_delete.rs
+ 5 crates/aspen-coordination/src/queue/dequeue.rs
+ 1 crates/aspen-coordination/src/queue/enqueue.rs
+ 2 crates/aspen-coordination/src/registry/discovery.rs
+ 1 crates/aspen-coordination/src/registry/helpers.rs
+ 1 crates/aspen-coordination/src/rwlock/acquisition.rs
+ 1 crates/aspen-coordination/src/worker_coordinator/failover.rs
+ 3 crates/aspen-coordination/src/worker_coordinator/work_stealing.rs
+TOTAL 26

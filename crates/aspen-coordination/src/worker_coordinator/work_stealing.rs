@@ -208,12 +208,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let key = verified::steal_hint_key(target_id, source_id);
 
         // Delete is idempotent - succeeds even if key doesn't exist
-        let _ = self
-            .store
+        self.store
             .write(WriteRequest {
                 command: WriteCommand::Delete { key },
             })
-            .await;
+            .await?;
 
         debug!(target = target_id, source = source_id, "steal hint consumed");
 
@@ -266,12 +265,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             };
 
             if should_delete {
-                let _ = self
-                    .store
+                self.store
                     .write(WriteRequest {
                         command: WriteCommand::Delete { key: entry.key },
                     })
-                    .await;
+                    .await?;
                 deleted += 1;
             }
         }
@@ -293,12 +291,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let mut deleted = 0usize;
 
         for entry in scan_result.entries {
-            let _ = self
-                .store
+            self.store
                 .write(WriteRequest {
                     command: WriteCommand::Delete { key: entry.key },
                 })
-                .await;
+                .await?;
             deleted += 1;
         }
 
