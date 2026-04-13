@@ -652,10 +652,23 @@ mod tests {
             BufferedCounter::new(failing.clone() as Arc<_>, "buffered_counter_failure", 1, Duration::from_millis(1));
 
         counter.increment();
-        tokio::task::yield_now().await;
-        tokio::task::yield_now().await;
 
-        assert_eq!(counter.local.load(Ordering::Relaxed), 1);
+        let wait_result = tokio::time::timeout(Duration::from_millis(100), async {
+            loop {
+                if counter.local.load(Ordering::Acquire) == 1 {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+
+        assert!(
+            wait_result.is_ok(),
+            "buffered counter background flush did not restore local count in time; local={}",
+            counter.local.load(Ordering::Acquire)
+        );
+        assert_eq!(counter.local.load(Ordering::Acquire), 1);
     }
 
     #[tokio::test]
