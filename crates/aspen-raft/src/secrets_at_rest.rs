@@ -84,6 +84,130 @@ fn resolve_threshold(member_count: usize, threshold_override: Option<u8>) -> Res
     Ok(threshold.value())
 }
 
+fn collection_failed(reason: impl Into<String>) -> aspen_trust::key_manager::ShareCollectionError {
+    aspen_trust::key_manager::ShareCollectionError::CollectionFailed { reason: reason.into() }
+}
+
+struct ShareCollectionContext {
+    members: BTreeMap<u64, iroh::EndpointAddr>,
+    digests: BTreeMap<u64, aspen_trust::shamir::ShareDigest>,
+    threshold: u8,
+    local_share: Option<aspen_trust::shamir::Share>,
+}
+
+type RemoteShareResponse =
+    (u64, Option<aspen_trust::shamir::ShareDigest>, anyhow::Result<aspen_trust::protocol::ShareResponse>);
+
+fn load_share_collection_context(
+    storage: &SharedRedbStorage,
+    epoch: u64,
+) -> Result<ShareCollectionContext, aspen_trust::key_manager::ShareCollectionError> {
+    let members = storage
+        .load_members(epoch)
+        .map_err(|error| collection_failed(format!("failed to load trust members: {error}")))?;
+    let threshold_override = storage
+        .load_trust_threshold_override()
+        .map_err(|error| collection_failed(format!("failed to load trust threshold override: {error}")))?;
+    let threshold = resolve_threshold(members.len(), threshold_override).map_err(collection_failed)?;
+    let digests = storage
+        .load_digests(epoch)
+        .map_err(|error| collection_failed(format!("failed to load trust digests: {error}")))?;
+    let local_share = storage
+        .load_share(epoch)
+        .map_err(|error| collection_failed(format!("failed to load local trust share: {error}")))?;
+
+    Ok(ShareCollectionContext {
+        members,
+        digests,
+        threshold,
+        local_share,
+    })
+}
+
+fn spawn_remote_share_requests(
+    join_set: &mut JoinSet<RemoteShareResponse>,
+    client: Arc<dyn crate::trust_share_client::TrustShareClient>,
+    members: BTreeMap<u64, iroh::EndpointAddr>,
+    digests: &BTreeMap<u64, aspen_trust::shamir::ShareDigest>,
+    local_node_id: u64,
+    epoch: u64,
+) {
+    for (node_id, endpoint) in members {
+        if node_id == local_node_id {
+            continue;
+        }
+        let client = client.clone();
+        let expected_digest = digests.get(&node_id).copied();
+        join_set.spawn(async move {
+            let response = client.get_share(endpoint, epoch).await;
+            (node_id, expected_digest, response)
+        });
+    }
+}
+
+fn try_collect_remote_share(
+    collected: &[aspen_trust::shamir::Share],
+    expected_digest: Option<aspen_trust::shamir::ShareDigest>,
+    response: aspen_trust::protocol::ShareResponse,
+    epoch: u64,
+) -> Option<aspen_trust::shamir::Share> {
+    if response.epoch != epoch {
+        return None;
+    }
+    if let Some(expected_digest) = expected_digest {
+        let actual = aspen_trust::shamir::share_digest(&response.share);
+        if actual != expected_digest {
+            return None;
+        }
+    }
+    let share_digest = aspen_trust::shamir::share_digest(&response.share);
+    if collected.iter().any(|share| aspen_trust::shamir::share_digest(share) == share_digest) {
+        return None;
+    }
+    Some(response.share)
+}
+
+async fn collect_remote_shares_until_quorum(
+    join_set: &mut JoinSet<RemoteShareResponse>,
+    collected: &mut Vec<aspen_trust::shamir::Share>,
+    threshold: u8,
+    epoch: u64,
+) -> Result<(), aspen_trust::key_manager::ShareCollectionError> {
+    let deadline = tokio::time::sleep(SHARE_COLLECTION_TIMEOUT);
+    tokio::pin!(deadline);
+    while collected.len() < usize::from(threshold) && !join_set.is_empty() {
+        tokio::select! {
+            _ = &mut deadline => break,
+            joined = join_set.join_next() => {
+                let Some(joined) = joined else {
+                    continue;
+                };
+                let (_node_id, expected_digest, response) = joined
+                    .map_err(|error| collection_failed(format!("trust share task failed: {error}")))?;
+                let response = response.map_err(|error| collection_failed(error.to_string()))?;
+                if let Some(share) = try_collect_remote_share(collected, expected_digest, response, epoch) {
+                    collected.push(share);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn ensure_share_quorum(
+    collected: &[aspen_trust::shamir::Share],
+    threshold: u8,
+) -> Result<(), aspen_trust::key_manager::ShareCollectionError> {
+    if collected.len() >= usize::from(threshold) {
+        return Ok(());
+    }
+
+    Err(aspen_trust::key_manager::ShareCollectionError::BelowQuorum {
+        collected: u32::try_from(collected.len()).unwrap_or(u32::MAX),
+        threshold: u32::from(threshold),
+    })
+}
+
 async fn sync_key_manager_to_current_epoch(
     node: &Arc<RaftNode>,
     collector: &Arc<RaftShareCollector>,
@@ -293,99 +417,30 @@ impl aspen_trust::key_manager::ShareCollector for RaftShareCollector {
         &self,
         epoch: u64,
     ) -> Result<Vec<aspen_trust::shamir::Share>, aspen_trust::key_manager::ShareCollectionError> {
-        let storage = trust_storage(self.node.as_ref())
-            .map_err(|reason| aspen_trust::key_manager::ShareCollectionError::CollectionFailed { reason })?;
-        let client = self.node.trust_share_client().cloned().ok_or_else(|| {
-            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
-                reason: "trust share client is not configured".to_string(),
-            }
-        })?;
-
-        let members = storage.load_members(epoch).map_err(|error| {
-            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
-                reason: format!("failed to load trust members: {error}"),
-            }
-        })?;
-        let threshold_override = storage.load_trust_threshold_override().map_err(|error| {
-            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
-                reason: format!("failed to load trust threshold override: {error}"),
-            }
-        })?;
-        let threshold = resolve_threshold(members.len(), threshold_override)
-            .map_err(|reason| aspen_trust::key_manager::ShareCollectionError::CollectionFailed { reason })?;
-        let digests = storage.load_digests(epoch).map_err(|error| {
-            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
-                reason: format!("failed to load trust digests: {error}"),
-            }
-        })?;
+        let storage = trust_storage(self.node.as_ref()).map_err(collection_failed)?;
+        let client = self
+            .node
+            .trust_share_client()
+            .cloned()
+            .ok_or_else(|| collection_failed("trust share client is not configured"))?;
+        let context = load_share_collection_context(storage.as_ref(), epoch)?;
 
         let mut collected = Vec::new();
-        if let Some(local_share) = storage.load_share(epoch).map_err(|error| {
-            aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
-                reason: format!("failed to load local trust share: {error}"),
-            }
-        })? {
+        if let Some(local_share) = context.local_share {
             collected.push(local_share);
         }
 
         let mut join_set = JoinSet::new();
-        for (node_id, endpoint) in members {
-            if node_id == self.node.node_id().0 {
-                continue;
-            }
-            let client = client.clone();
-            let expected_digest = digests.get(&node_id).copied();
-            join_set.spawn(async move {
-                let response = client.get_share(endpoint, epoch).await;
-                (node_id, expected_digest, response)
-            });
-        }
-
-        let deadline = tokio::time::sleep(SHARE_COLLECTION_TIMEOUT);
-        tokio::pin!(deadline);
-        while collected.len() < threshold as usize && !join_set.is_empty() {
-            tokio::select! {
-                _ = &mut deadline => break,
-                joined = join_set.join_next() => {
-                    let Some(joined) = joined else {
-                        continue;
-                    };
-                    let (_node_id, expected_digest, response) = joined.map_err(|error| {
-                        aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
-                            reason: format!("trust share task failed: {error}"),
-                        }
-                    })?;
-                    let response = response.map_err(|error| {
-                        aspen_trust::key_manager::ShareCollectionError::CollectionFailed {
-                            reason: error.to_string(),
-                        }
-                    })?;
-                    if response.epoch != epoch {
-                        continue;
-                    }
-                    if let Some(expected_digest) = expected_digest {
-                        let actual = aspen_trust::shamir::share_digest(&response.share);
-                        if actual != expected_digest {
-                            continue;
-                        }
-                    }
-                    let already_present = collected
-                        .iter()
-                        .any(|share| aspen_trust::shamir::share_digest(share) == aspen_trust::shamir::share_digest(&response.share));
-                    if !already_present {
-                        collected.push(response.share);
-                    }
-                }
-            }
-        }
-
-        if collected.len() < threshold as usize {
-            return Err(aspen_trust::key_manager::ShareCollectionError::BelowQuorum {
-                collected: collected.len() as u32,
-                threshold: threshold as u32,
-            });
-        }
-
+        spawn_remote_share_requests(
+            &mut join_set,
+            client,
+            context.members,
+            &context.digests,
+            self.node.node_id().0,
+            epoch,
+        );
+        collect_remote_shares_until_quorum(&mut join_set, &mut collected, context.threshold, epoch).await?;
+        ensure_share_quorum(&collected, context.threshold)?;
         Ok(collected)
     }
 }
@@ -486,5 +541,63 @@ impl aspen_trust::reencrypt::ReencryptionStore for RaftReencryptionStore {
                 reason: format!("checkpoint clear failed: {error}"),
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_share(x: u8, fill: u8) -> aspen_trust::shamir::Share {
+        aspen_trust::shamir::Share {
+            x,
+            y: [fill; aspen_trust::shamir::SECRET_SIZE],
+        }
+    }
+
+    #[test]
+    fn test_try_collect_remote_share_rejects_wrong_epoch() {
+        let share = test_share(1, 0x11);
+        let response = aspen_trust::protocol::ShareResponse {
+            epoch: 3,
+            current_epoch: 3,
+            share,
+        };
+        assert!(try_collect_remote_share(&[], None, response, 4).is_none());
+    }
+
+    #[test]
+    fn test_try_collect_remote_share_rejects_duplicate_digest() {
+        let share = test_share(2, 0x22);
+        let response = aspen_trust::protocol::ShareResponse {
+            epoch: 7,
+            current_epoch: 7,
+            share: share.clone(),
+        };
+        let collected = vec![share];
+        assert!(try_collect_remote_share(&collected, None, response, 7).is_none());
+    }
+
+    #[test]
+    fn test_try_collect_remote_share_accepts_matching_digest() {
+        let share = test_share(3, 0x33);
+        let digest = aspen_trust::shamir::share_digest(&share);
+        let response = aspen_trust::protocol::ShareResponse {
+            epoch: 9,
+            current_epoch: 9,
+            share: share.clone(),
+        };
+        let collected = Vec::new();
+        assert_eq!(try_collect_remote_share(&collected, Some(digest), response, 9), Some(share));
+    }
+
+    #[test]
+    fn test_ensure_share_quorum_reports_below_quorum() {
+        let error = ensure_share_quorum(&[test_share(1, 0x44)], 2).expect_err("quorum check must fail");
+        let aspen_trust::key_manager::ShareCollectionError::BelowQuorum { collected, threshold } = error else {
+            panic!("expected BelowQuorum error");
+        };
+        assert_eq!(collected, 1);
+        assert_eq!(threshold, 2);
     }
 }

@@ -9,6 +9,8 @@ import unittest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "tigerstyle-audit.py"
 FIXTURE_PATH = REPO_ROOT / "tools" / "tigerstyle" / "fixtures" / "trait_declaration_false_positive.rs"
+KEY_MANAGER_PATH = REPO_ROOT / "crates" / "aspen-trust" / "src" / "key_manager.rs"
+FORGE_VERIFIED_PATH = REPO_ROOT / "crates" / "aspen-forge" / "src" / "verified" / "mod.rs"
 
 
 spec = importlib.util.spec_from_file_location("tigerstyle_audit", SCRIPT_PATH)
@@ -44,6 +46,14 @@ class TigerStyleAuditRegressionTest(unittest.TestCase):
         self.assertIn(("declaration_only", "function_length"), functions)
         self.assertIn(("regular_function", "usize_api"), functions)
         self.assertNotIn((None, "function_length"), functions)
+
+    def test_key_manager_file_no_longer_reports_parse_error(self) -> None:
+        result = module.scan([KEY_MANAGER_PATH], line_limit=70)
+        self.assertEqual(result["parse_errors"], [])
+
+    def test_verified_time_hotspots_ignore_doc_comments(self) -> None:
+        hotspots = module.verified_time_hotspots([FORGE_VERIFIED_PATH])
+        self.assertEqual(hotspots, [])
 
 
 if __name__ == "__main__":

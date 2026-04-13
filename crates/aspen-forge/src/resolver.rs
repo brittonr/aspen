@@ -171,7 +171,7 @@ pub trait GitObjectExporter: Send + Sync {
         repo_id: &RepoId,
         commit_blake3: blake3::Hash,
         known_blake3: &HashSet<[u8; 32]>,
-        limit: usize,
+        limit: u32,
     ) -> Result<FederationExportResult, String>;
 }
 
@@ -188,7 +188,7 @@ where
         repo_id: &RepoId,
         commit_blake3: blake3::Hash,
         known_blake3: &HashSet<[u8; 32]>,
-        limit: usize,
+        limit: u32,
     ) -> Result<FederationExportResult, String> {
         self.export_commit_dag_blake3(repo_id, commit_blake3, known_blake3, limit)
             .await
@@ -341,7 +341,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         repo_id: &RepoId,
         ref_heads: &[(String, [u8; 32])],
         have_set: &HashSet<[u8; 32]>,
-        limit: usize,
+        limit: u32,
     ) -> Vec<SyncObject> {
         let mut objects = Vec::new();
         // Track envelope hashes for cross-ref dedup in the DAG walk.
@@ -423,12 +423,13 @@ impl<K: KeyValueStore + ?Sized + 'static> ForgeResourceResolver<K> {
         }
 
         for (_ref_name, head_hash) in ref_heads {
-            if objects.len() >= limit {
+            if objects.len() >= usize::try_from(limit).unwrap_or(usize::MAX) {
                 break;
             }
 
             let commit_blake3 = blake3::Hash::from_bytes(*head_hash);
-            let remaining = limit.saturating_sub(objects.len());
+            let exported_count = u32::try_from(objects.len()).unwrap_or(u32::MAX);
+            let remaining = limit.saturating_sub(exported_count);
 
             // BFS dedup: all_known_envelopes already contains envelope BLAKE3
             // hashes converted from have_set via the mapping store scan above.
@@ -673,7 +674,7 @@ impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolv
 
                 if remaining > 0 {
                     let git_objects =
-                        self.export_git_objects(exporter, &repo_id, &ref_heads, &have_set, remaining).await;
+                        self.export_git_objects(exporter, &repo_id, &ref_heads, &have_set, remaining as u32).await;
                     objects.extend(git_objects);
                 }
             } else {

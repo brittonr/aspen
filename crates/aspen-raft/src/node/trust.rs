@@ -64,6 +64,26 @@ struct ShareCollectionPlan {
     timeout: Duration,
 }
 
+struct PeerExpungementProbePlan {
+    current_epoch: u64,
+    peers: BTreeMap<u64, iroh::EndpointAddr>,
+    expected_digests: BTreeMap<u64, shamir::ShareDigest>,
+    required_peer_confirmations: usize,
+}
+
+struct TrustRotationContext {
+    client: Arc<dyn TrustShareClient>,
+    cluster_id: Vec<u8>,
+    old_epoch: u64,
+    local_share: Option<shamir::Share>,
+    expected_digests: BTreeMap<u64, shamir::ShareDigest>,
+    threshold_override: Option<u8>,
+    old_threshold: u8,
+    new_threshold: u8,
+    old_member_addresses: BTreeMap<u64, iroh::EndpointAddr>,
+    timeout_context: TimeoutContext,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PeerExpungementProbeOutcome {
     NotApplicable,
@@ -156,6 +176,22 @@ fn resolve_trust_threshold(member_count: usize, threshold_override: Option<u8>) 
     Ok(threshold)
 }
 
+fn validate_threshold_invariant(member_count: usize, threshold: u8, label: &str) -> Result<(), String> {
+    if usize::from(threshold) > member_count {
+        return Err(format!("{label} threshold {threshold} exceeds cluster size {member_count}"));
+    }
+    Ok(())
+}
+
+fn share_collection_target(plan: &ShareCollectionPlan) -> Result<usize, String> {
+    validate_threshold_invariant(plan.old_members.len(), plan.old_threshold, "old")?;
+    Ok(usize::from(plan.old_threshold))
+}
+
+fn required_peer_confirmations(peer_count: usize, threshold: u8) -> usize {
+    usize::min(peer_count, usize::from(threshold))
+}
+
 fn proposal_from_actions(
     actions: Vec<ReconfigAction>,
     threshold_override: Option<u8>,
@@ -239,45 +275,57 @@ fn response_reports_current_epoch(response: &ShareResponse, expected_current_epo
     response.current_epoch == expected_current_epoch
 }
 
-async fn collect_old_shares_for_reconfiguration(
-    plan: ShareCollectionPlan,
-) -> Result<BTreeMap<u64, shamir::Share>, String> {
-    let mut collected = BTreeMap::new();
-    let mut pending_requests = JoinSet::new();
-
+/// Spawn async tasks to request shares from all non-local old members.
+///
+/// Skips members with missing stored endpoints (logs a warning instead).
+fn spawn_peer_share_requests(
+    plan: &ShareCollectionPlan,
+    pending_requests: &mut JoinSet<(u64, anyhow::Result<ShareResponse>)>,
+) {
+    let old_epoch = plan.old_epoch;
     for old_member in &plan.old_members {
         if *old_member == plan.local_node_id {
-            let share = plan
-                .local_share
-                .clone()
-                .ok_or_else(|| format!("local share for epoch {} is missing", plan.old_epoch))?;
-            collected.insert(*old_member, share);
             continue;
         }
-
         let Some(endpoint) = plan.old_member_addresses.get(old_member).cloned() else {
             warn!(
                 node_id = *old_member,
-                epoch = plan.old_epoch,
+                epoch = old_epoch,
                 "missing stored endpoint for trust share request; waiting for timeout"
             );
             continue;
         };
-
         let client = plan.client.clone();
         let target_node = *old_member;
         pending_requests.spawn(async move {
             let response = client
-                .get_share(endpoint, plan.old_epoch)
+                .get_share(endpoint, old_epoch)
                 .await
                 .with_context(|| format!("failed to fetch share from node {target_node}"));
             (target_node, response)
         });
     }
+}
+
+async fn collect_old_shares_for_reconfiguration(
+    plan: ShareCollectionPlan,
+) -> Result<BTreeMap<u64, shamir::Share>, String> {
+    let target_share_count = share_collection_target(&plan)?;
+    let mut collected = BTreeMap::new();
+    let mut pending_requests = JoinSet::new();
+
+    if plan.old_members.contains(&plan.local_node_id) {
+        let share = plan
+            .local_share
+            .clone()
+            .ok_or_else(|| format!("local share for epoch {} is missing", plan.old_epoch))?;
+        collected.insert(plan.local_node_id, share);
+    }
+    spawn_peer_share_requests(&plan, &mut pending_requests);
 
     let share_deadline = tokio::time::sleep(plan.timeout);
     tokio::pin!(share_deadline);
-    while collected.len() < usize::from(plan.old_threshold) {
+    while collected.len() < target_share_count {
         if pending_requests.is_empty() {
             (&mut share_deadline).await;
             break;
@@ -310,6 +358,169 @@ async fn collect_old_shares_for_reconfiguration(
     }
 
     Ok(collected)
+}
+
+fn build_peer_expungement_probe_plan(
+    storage: &crate::storage_shared::SharedRedbStorage,
+    local_node_id: u64,
+) -> Result<Option<PeerExpungementProbePlan>, String> {
+    let current_epoch = match storage.load_current_trust_epoch().map_err(|e| e.to_string())? {
+        Some(epoch) => epoch,
+        None => {
+            if storage.load_digests(1).map_err(|e| e.to_string())?.is_empty() {
+                return Ok(None);
+            }
+            1
+        }
+    };
+
+    let mut peers = storage.load_members(current_epoch).map_err(|e| e.to_string())?;
+    peers.remove(&local_node_id);
+    if peers.is_empty() {
+        return Ok(None);
+    }
+
+    let expected_digests = storage.load_digests(current_epoch).map_err(|e| e.to_string())?;
+    let threshold_override = storage.load_trust_threshold_override().map_err(|e| e.to_string())?;
+    let threshold = resolve_trust_threshold(peers.len().saturating_add(1), threshold_override)?.value();
+    validate_threshold_invariant(peers.len().saturating_add(1), threshold, "probe")?;
+
+    Ok(Some(PeerExpungementProbePlan {
+        current_epoch,
+        required_peer_confirmations: required_peer_confirmations(peers.len(), threshold),
+        peers,
+        expected_digests,
+    }))
+}
+
+fn build_trust_rotation_context(
+    node: &RaftNode,
+    storage: &crate::storage_shared::SharedRedbStorage,
+    old_members: &BTreeSet<u64>,
+    new_members: &BTreeSet<u64>,
+    membership_epoch: u64,
+) -> Result<TrustRotationContext, String> {
+    let client = node
+        .trust_share_client()
+        .cloned()
+        .ok_or_else(|| "trust share client is not configured".to_string())?;
+    let cluster_id = node.trust_cluster_id().ok_or_else(|| "trust cluster id is not configured".to_string())?.to_vec();
+    let old_epoch = storage.load_current_trust_epoch().map_err(|e| e.to_string())?.unwrap_or(1);
+    let local_share = if old_members.contains(&node.node_id().0) {
+        let Some(share) = storage.load_share(old_epoch).map_err(|e| e.to_string())? else {
+            return Err(format!("local share for epoch {old_epoch} is missing"));
+        };
+        Some(share)
+    } else {
+        None
+    };
+    let expected_digests = storage.load_digests(old_epoch).map_err(|e| e.to_string())?;
+    let threshold_override = storage.load_trust_threshold_override().map_err(|e| e.to_string())?;
+    let old_threshold = resolve_trust_threshold(old_members.len(), threshold_override)?.value();
+    let new_threshold = resolve_trust_threshold(new_members.len(), threshold_override)?.value();
+    validate_threshold_invariant(old_members.len(), old_threshold, "old")?;
+    validate_threshold_invariant(new_members.len(), new_threshold, "new")?;
+    let old_member_addresses = storage.load_members(old_epoch).map_err(|e| e.to_string())?;
+    let timeout_context = TimeoutContext {
+        old_epoch,
+        membership_epoch,
+        old_threshold,
+        new_threshold,
+        old_members: old_members.clone(),
+        new_members: new_members.clone(),
+        expected_digests: expected_digests.clone(),
+        cluster_id: cluster_id.clone(),
+    };
+
+    Ok(TrustRotationContext {
+        client,
+        cluster_id,
+        old_epoch,
+        local_share,
+        expected_digests,
+        threshold_override,
+        old_threshold,
+        new_threshold,
+        old_member_addresses,
+        timeout_context,
+    })
+}
+
+/// Build a `ShareCollectionPlan` from a trust rotation context.
+fn build_share_collection_plan(
+    context: &TrustRotationContext,
+    local_node_id: u64,
+    old_members: BTreeSet<u64>,
+) -> ShareCollectionPlan {
+    ShareCollectionPlan {
+        client: context.client.clone(),
+        old_epoch: context.old_epoch,
+        old_threshold: context.old_threshold,
+        old_members,
+        old_member_addresses: context.old_member_addresses.clone(),
+        local_node_id,
+        local_share: context.local_share.clone(),
+        expected_digests: context.expected_digests.clone(),
+        timeout: TRUST_SHARE_COLLECTION_TIMEOUT,
+    }
+}
+
+/// Resolve endpoint addresses for each new cluster member from Raft membership.
+fn collect_new_member_addresses(
+    membership: &openraft::Membership<crate::types::AppTypeConfig>,
+    new_members: &BTreeSet<u64>,
+) -> Result<Vec<(u64, iroh::EndpointAddr)>, String> {
+    new_members
+        .iter()
+        .map(|node_id| {
+            let endpoint = membership
+                .get_node(&(*node_id).into())
+                .map(|node| node.iroh_addr.clone())
+                .ok_or_else(|| format!("missing endpoint for new member {node_id}"))?;
+            Ok((*node_id, endpoint))
+        })
+        .collect()
+}
+
+fn removed_nodes(old_members: &BTreeSet<u64>, new_members: &BTreeSet<u64>) -> BTreeSet<u64> {
+    old_members.difference(new_members).copied().collect()
+}
+
+fn spawn_expungement_notification(
+    client: Arc<dyn TrustShareClient>,
+    endpoint: iroh::EndpointAddr,
+    epoch: u64,
+    node_id: u64,
+) {
+    tokio::spawn(async move {
+        info!(node_id, epoch, "sending expungement notification to removed node");
+        if let Err(error) = client.send_expunged(endpoint, epoch).await {
+            warn!(node_id, epoch, error = %error, "failed to send expungement notification (peer enforcement will handle)");
+        }
+    });
+}
+
+fn notify_removed_nodes(
+    client: Arc<dyn TrustShareClient>,
+    old_member_addresses: &BTreeMap<u64, iroh::EndpointAddr>,
+    removed_nodes: &BTreeSet<u64>,
+    new_epoch: u64,
+    leader_id: u64,
+) {
+    for removed_id in removed_nodes {
+        if let Some(endpoint) = old_member_addresses.get(removed_id) {
+            spawn_expungement_notification(client.clone(), endpoint.clone(), new_epoch, *removed_id);
+        } else {
+            warn!(
+                node_id = *removed_id,
+                "no stored address for removed node; relying on peer enforcement for expungement"
+            );
+        }
+    }
+    info!(
+        removed_count = removed_nodes.len(),
+        leader_id, new_epoch, "expungement notifications sent to removed nodes"
+    );
 }
 
 impl RaftNode {
@@ -363,51 +574,34 @@ impl RaftNode {
         let Some(client) = self.trust_share_client().cloned() else {
             return Ok(PeerExpungementProbeOutcome::NotApplicable);
         };
-        let current_epoch = match storage.load_current_trust_epoch().map_err(|e| e.to_string())? {
-            Some(epoch) => epoch,
-            None => {
-                if storage.load_digests(1).map_err(|e| e.to_string())?.is_empty() {
-                    return Ok(PeerExpungementProbeOutcome::NotApplicable);
-                }
-                1
-            }
+        let Some(plan) = build_peer_expungement_probe_plan(storage.as_ref(), self.node_id().0)? else {
+            return Ok(PeerExpungementProbeOutcome::NotApplicable);
         };
 
-        let mut peers = storage.load_members(current_epoch).map_err(|e| e.to_string())?;
-        peers.remove(&self.node_id().0);
-        if peers.is_empty() {
-            return Ok(PeerExpungementProbeOutcome::NotApplicable);
-        }
-
-        let expected_digests = storage.load_digests(current_epoch).map_err(|e| e.to_string())?;
-        let threshold_override = storage.load_trust_threshold_override().map_err(|e| e.to_string())?;
-        let local_member_count = peers.len().saturating_add(1);
-        let threshold = resolve_trust_threshold(local_member_count, threshold_override)?.value();
-        let required_peer_confirmations = usize::min(peers.len(), usize::from(threshold));
         let mut confirmed_peer_count = 0usize;
         let mut saw_retryable_error = false;
-
-        for (node_id, endpoint) in peers {
-            match client.get_share(endpoint, current_epoch).await {
+        for (node_id, endpoint) in plan.peers {
+            match client.get_share(endpoint, plan.current_epoch).await {
                 Ok(response) => {
-                    if !response_reports_current_epoch(&response, current_epoch) {
+                    if !response_reports_current_epoch(&response, plan.current_epoch) {
                         saw_retryable_error = true;
                         warn!(
                             node_id,
-                            requested_epoch = current_epoch,
+                            requested_epoch = plan.current_epoch,
                             peer_current_epoch = response.current_epoch,
                             "peer expungement probe rejected share from non-current epoch source"
                         );
                         continue;
                     }
-                    if validate_share_response(node_id, current_epoch, response, &expected_digests).is_some() {
+                    if validate_share_response(node_id, plan.current_epoch, response, &plan.expected_digests).is_some()
+                    {
                         confirmed_peer_count = confirmed_peer_count.saturating_add(1);
                         continue;
                     }
                     saw_retryable_error = true;
                     warn!(
                         node_id,
-                        epoch = current_epoch,
+                        epoch = plan.current_epoch,
                         "peer expungement probe rejected non-authoritative share response"
                     );
                 }
@@ -417,19 +611,20 @@ impl RaftNode {
                         return Ok(PeerExpungementProbeOutcome::Expunged { epoch: expunged.epoch });
                     }
                     saw_retryable_error = true;
-                    warn!(node_id, epoch = current_epoch, error = %error, "peer expungement probe failed");
+                    warn!(node_id, epoch = plan.current_epoch, error = %error, "peer expungement probe failed");
                 }
             }
         }
 
-        if confirmed_peer_count >= required_peer_confirmations && !saw_retryable_error {
+        if confirmed_peer_count >= plan.required_peer_confirmations && !saw_retryable_error {
             info!(
-                epoch = current_epoch,
-                confirmed_peer_count, required_peer_confirmations, "peer expungement probe confirmed local membership"
+                epoch = plan.current_epoch,
+                confirmed_peer_count,
+                required_peer_confirmations = plan.required_peer_confirmations,
+                "peer expungement probe confirmed local membership"
             );
             return Ok(PeerExpungementProbeOutcome::Healthy);
         }
-
         Ok(PeerExpungementProbeOutcome::RetryNeeded)
     }
 
@@ -442,81 +637,40 @@ impl RaftNode {
         let StateMachineVariant::Redb(storage) = self.state_machine() else {
             return Ok(());
         };
+        let context =
+            build_trust_rotation_context(self, storage.as_ref(), &old_members, &new_members, membership_epoch)?;
 
-        let client = self
-            .trust_share_client()
-            .cloned()
-            .ok_or_else(|| "trust share client is not configured".to_string())?;
-        let cluster_id =
-            self.trust_cluster_id().ok_or_else(|| "trust cluster id is not configured".to_string())?.to_vec();
-        let old_epoch = storage.load_current_trust_epoch().map_err(|e| e.to_string())?.unwrap_or(1);
-        let local_share = if old_members.contains(&self.node_id().0) {
-            let Some(share) = storage.load_share(old_epoch).map_err(|e| e.to_string())? else {
-                return Err(format!("local share for epoch {old_epoch} is missing"));
-            };
-            Some(share)
-        } else {
-            None
-        };
-        let expected_digests = storage.load_digests(old_epoch).map_err(|e| e.to_string())?;
-        let threshold_override = storage.load_trust_threshold_override().map_err(|e| e.to_string())?;
-        let old_threshold = resolve_trust_threshold(old_members.len(), threshold_override)?.value();
-        let new_threshold = resolve_trust_threshold(new_members.len(), threshold_override)?.value();
-        let old_member_addresses = storage.load_members(old_epoch).map_err(|e| e.to_string())?;
-        let timeout_context = TimeoutContext {
-            old_epoch,
-            membership_epoch,
-            old_threshold,
-            new_threshold,
-            old_members: old_members.clone(),
-            new_members: new_members.clone(),
-            expected_digests: expected_digests.clone(),
-            cluster_id: cluster_id.clone(),
-        };
-
-        let old_shares = collect_old_shares_for_reconfiguration(ShareCollectionPlan {
-            client,
-            old_epoch,
-            old_threshold,
-            old_members: old_members.clone(),
-            old_member_addresses: old_member_addresses.clone(),
-            local_node_id: self.node_id().0,
-            local_share,
-            expected_digests: expected_digests.clone(),
-            timeout: TRUST_SHARE_COLLECTION_TIMEOUT,
-        })
-        .await?;
-
-        if old_shares.len() < usize::from(old_threshold) {
-            return Err(build_timeout_error(&timeout_context, &old_shares));
+        let plan = build_share_collection_plan(&context, self.node_id().0, old_members.clone());
+        let old_shares = collect_old_shares_for_reconfiguration(plan).await?;
+        if old_shares.len() < usize::from(context.old_threshold) {
+            return Err(build_timeout_error(&context.timeout_context, &old_shares));
         }
 
-        let collected_shares: Vec<_> = old_shares.values().take(usize::from(old_threshold)).cloned().collect();
-        let current_secret = shamir::reconstruct_secret(&collected_shares)
-            .map_err(|e| format!("failed to reconstruct current secret: {e}"))?;
-        let prior_secrets = if old_epoch > 1 {
+        let collected: Vec<_> = old_shares.values().take(usize::from(context.old_threshold)).cloned().collect();
+        let current_secret =
+            shamir::reconstruct_secret(&collected).map_err(|e| format!("failed to reconstruct current secret: {e}"))?;
+        let prior_secrets = if context.old_epoch > 1 {
             let chain = storage
-                .load_encrypted_chain(old_epoch)
+                .load_encrypted_chain(context.old_epoch)
                 .map_err(|e| e.to_string())?
-                .ok_or_else(|| format!("missing encrypted chain for epoch {old_epoch}"))?;
-            chain::decrypt_chain(&chain, &current_secret, &cluster_id)
+                .ok_or_else(|| format!("missing encrypted chain for epoch {}", context.old_epoch))?;
+            chain::decrypt_chain(&chain, &current_secret, &context.cluster_id)
                 .map_err(|e| format!("failed to decrypt historical secret chain: {e}"))?
         } else {
             BTreeMap::new()
         };
 
         let mut coordinator = ReconfigCoordinator::new(
-            old_epoch,
+            context.old_epoch,
             membership_epoch,
-            old_threshold,
-            new_threshold,
+            context.old_threshold,
+            context.new_threshold,
             old_members.clone(),
             new_members.clone(),
-            expected_digests,
-            cluster_id,
+            context.expected_digests.clone(),
+            context.cluster_id.clone(),
             prior_secrets,
         );
-
         let mut actions = Vec::new();
         for (node_id, share) in old_shares {
             let new_actions = coordinator.on_share_received(node_id, share).map_err(|e| e.to_string())?;
@@ -525,18 +679,8 @@ impl RaftNode {
 
         let metrics = self.raft().metrics().borrow().clone();
         let membership = metrics.membership_config.membership();
-        let new_member_addresses = new_members
-            .iter()
-            .map(|node_id| {
-                let endpoint = membership
-                    .get_node(&(*node_id).into())
-                    .map(|node| node.iroh_addr.clone())
-                    .ok_or_else(|| format!("missing endpoint for new member {node_id}"))?;
-                Ok((*node_id, endpoint))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-
-        let payload = proposal_from_actions(actions, threshold_override, new_member_addresses)
+        let new_member_addresses = collect_new_member_addresses(membership, &new_members)?;
+        let payload = proposal_from_actions(actions, context.threshold_override, new_member_addresses)
             .ok_or_else(|| "reconfiguration coordinator produced no proposal".to_string())?;
 
         let new_epoch = payload.epoch;
@@ -545,36 +689,10 @@ impl RaftNode {
             .await
             .map_err(|e| format!("failed to commit trust reconfiguration: {e}"))?;
 
-        // Notify removed nodes that they have been expunged
-        let removed_nodes: BTreeSet<u64> = old_members.difference(&new_members).copied().collect();
-        if !removed_nodes.is_empty() {
-            let leader_id = self.node_id().0;
-            for removed_id in &removed_nodes {
-                if let Some(endpoint) = old_member_addresses.get(removed_id) {
-                    let client = self.trust_share_client().cloned().expect("trust share client checked above");
-                    let endpoint = endpoint.clone();
-                    let epoch = new_epoch;
-                    let node_id = *removed_id;
-                    // Fire-and-forget: peer enforcement handles the case where this message is lost
-                    tokio::spawn(async move {
-                        info!(node_id, epoch, "sending expungement notification to removed node");
-                        if let Err(e) = client.send_expunged(endpoint, epoch).await {
-                            warn!(node_id, epoch, error = %e, "failed to send expungement notification (peer enforcement will handle)");
-                        }
-                    });
-                } else {
-                    warn!(
-                        node_id = *removed_id,
-                        "no stored address for removed node; relying on peer enforcement for expungement"
-                    );
-                }
-            }
-            info!(
-                removed_count = removed_nodes.len(),
-                leader_id, new_epoch, "expungement notifications sent to removed nodes"
-            );
+        let removed = removed_nodes(&old_members, &new_members);
+        if !removed.is_empty() {
+            notify_removed_nodes(context.client, &context.old_member_addresses, &removed, new_epoch, self.node_id().0);
         }
-
         Ok(())
     }
 
@@ -797,6 +915,33 @@ mod tests {
             assert_eq!(shamir::share_digest(&share), *digest);
             assert!([1u64, 2, 3].contains(node_id));
         }
+    }
+
+    #[test]
+    fn test_required_peer_confirmations_caps_at_peer_count() {
+        assert_eq!(required_peer_confirmations(1, 3), 1);
+        assert_eq!(required_peer_confirmations(2, 2), 2);
+        assert_eq!(required_peer_confirmations(5, 2), 2);
+    }
+
+    #[test]
+    fn test_share_collection_target_rejects_threshold_above_membership() {
+        let plan = ShareCollectionPlan {
+            client: Arc::new(MockTrustShareClient {
+                responses: Mutex::new(BTreeMap::new()),
+            }),
+            old_epoch: 1,
+            old_threshold: 3,
+            old_members: [1u64, 2].into(),
+            old_member_addresses: BTreeMap::new(),
+            local_node_id: 1,
+            local_share: None,
+            expected_digests: BTreeMap::new(),
+            timeout: Duration::from_millis(1),
+        };
+
+        let error = share_collection_target(&plan).unwrap_err();
+        assert!(error.contains("old threshold 3 exceeds cluster size 2"));
     }
 
     #[test]

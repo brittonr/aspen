@@ -1,0 +1,4 @@
+OK: openspec/changes/coordination-primitives-spec
+  tasks: 7 total / 7 checked
+  changed files listed: 10
+  verification artifacts: 2

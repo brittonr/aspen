@@ -1,0 +1,34 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running unittests src/lib.rs (target/debug/deps/aspen_ci_executor_nix-09605574f466ea61)
+
+running 4 tests
+test executor::tests::test_find_missing_store_paths_empty_input ... ok
+test executor::tests::test_find_missing_store_paths_short_path_ignored ... ok
+test executor::tests::test_find_missing_store_paths_existing_path_omitted ... ok
+test executor::tests::test_find_missing_store_paths_nonexistent_returns_store_root ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.00s
+
+     Running tests/snix_only_integration_test.rs (target/debug/deps/snix_only_integration_test-ee077ad0915c665b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/snix_only_proptest.rs (target/debug/deps/snix_only_proptest-99e43fbaf39d56c2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/snix_only_unit_test.rs (target/debug/deps/snix_only_unit_test-68637b63f384b592)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

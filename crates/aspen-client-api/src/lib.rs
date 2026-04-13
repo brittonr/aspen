@@ -463,6 +463,87 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_request_metadata_lookup_table_has_unique_variant_names() {
+        let mut seen = std::collections::HashSet::new();
+        for (name, _app) in messages::request_metadata::REQUEST_REQUIRED_APP {
+            assert!(seen.insert(*name), "duplicate request metadata entry for {name}");
+        }
+        assert_eq!(seen.len(), messages::request_metadata::REQUEST_REQUIRED_APP.len());
+        assert!(seen.contains("ClusterDeploy"));
+        assert!(seen.contains("SecretsKvRead"));
+        assert!(seen.contains("AutomergeCreate"));
+    }
+
+    #[test]
+    fn test_request_metadata_lookup_matches_sample_requests() {
+        let mut cases = vec![
+            (ClientRpcRequest::GetHealth, "GetHealth", None),
+            (ClientRpcRequest::Ping, "Ping", None),
+            (
+                ClientRpcRequest::ClusterDeploy {
+                    artifact: String::new(),
+                    strategy: "rolling".into(),
+                    max_concurrent: 1,
+                    health_timeout_secs: 120,
+                    expected_binary: None,
+                },
+                "ClusterDeploy",
+                Some("deploy"),
+            ),
+            (
+                ClientRpcRequest::SecretsKvRead {
+                    mount: "secret".into(),
+                    path: "db/password".into(),
+                    version: None,
+                },
+                "SecretsKvRead",
+                Some("secrets"),
+            ),
+            (ClientRpcRequest::HookList, "HookList", Some("hooks")),
+            (
+                ClientRpcRequest::NetLookup {
+                    name: "alice-service".into(),
+                },
+                "NetLookup",
+                Some("contacts"),
+            ),
+            (
+                ClientRpcRequest::FederationGitListRefs {
+                    origin_key: "a".repeat(52),
+                    repo_id: "bb".repeat(32),
+                    origin_addr_hint: None,
+                },
+                "FederationGitListRefs",
+                Some("forge"),
+            ),
+        ];
+        #[cfg(feature = "ci")]
+        cases.push((ClientRpcRequest::CacheMigrationStatus, "CacheMigrationStatus", Some("snix")));
+        #[cfg(feature = "automerge")]
+        cases.push((
+            ClientRpcRequest::AutomergeCreate {
+                document_id: Some("doc-1".into()),
+                namespace: None,
+                title: None,
+                description: None,
+                tags: Vec::new(),
+            },
+            "AutomergeCreate",
+            Some("automerge"),
+        ));
+
+        for (request, expected_name, expected_app) in cases {
+            assert_eq!(request.variant_name(), expected_name);
+            assert_eq!(request.required_app(), expected_app);
+            let table_app = messages::request_metadata::REQUEST_REQUIRED_APP
+                .iter()
+                .find_map(|(name, app)| (*name == expected_name).then_some(*app))
+                .flatten();
+            assert_eq!(table_app, expected_app, "table mismatch for {expected_name}");
+        }
+    }
+
     /// Verify deploy variants have correct variant_name.
     #[test]
     fn test_deploy_variant_names() {

@@ -434,12 +434,16 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         &self,
         group_id: String,
         required_capabilities: Vec<String>,
-        min_members: usize,
+        min_members: u32,
     ) -> Result<WorkerGroupHandle> {
         // Tiger Style: group ID must not be empty
         assert!(!group_id.is_empty(), "group_id must not be empty");
         // Tiger Style: min_members must be positive
         assert!(min_members > 0, "min_members must be positive, got 0");
+
+        let required_members = usize::try_from(min_members).map_err(|_| JobError::InvalidJobSpec {
+            reason: format!("min_members {min_members} exceeds platform worker-group limit"),
+        })?;
 
         // Find eligible workers
         let filter = WorkerFilter {
@@ -452,14 +456,14 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
 
         let workers = self.coordinator.get_workers(filter).await?;
 
-        if workers.len() < min_members {
+        if workers.len() < required_members {
             return Err(JobError::WorkerRegistrationFailed {
                 reason: format!("insufficient workers: need {}, have {}", min_members, workers.len()),
             });
         }
 
         // Create group in coordinator
-        let members: HashSet<_> = workers.iter().take(min_members).map(|w| w.worker_id.clone()).collect();
+        let members: HashSet<_> = workers.iter().take(required_members).map(|w| w.worker_id.clone()).collect();
 
         let group = WorkerGroup {
             group_id: group_id.clone(),
@@ -467,8 +471,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
             members: members.clone(),
             leader: members.iter().next().cloned(),
             required_capabilities,
-            min_members: min_members as u32,
-            max_members: (min_members * 2) as u32,
+            min_members,
+            max_members: min_members.saturating_mul(2),
             created_at_ms: aspen_coordination::now_unix_ms(),
             state: GroupState::Active,
         };
@@ -480,7 +484,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         let handle = WorkerGroupHandle {
             group_id: group_id.clone(),
             members,
-            barrier: Arc::new(tokio::sync::Barrier::new(min_members)),
+            barrier: Arc::new(tokio::sync::Barrier::new(required_members)),
             broadcast: tx,
         };
 

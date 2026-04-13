@@ -120,6 +120,30 @@ mod tests {
         assert!(is_running.load(Ordering::SeqCst));
     }
 
+    #[tokio::test]
+    async fn test_start_internal_rejects_duplicate_start() {
+        let secret_key = secret_key_from_seed(99);
+        let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key.clone())
+            .bind()
+            .await
+            .expect("bind test endpoint");
+        let gossip = Arc::new(iroh_gossip::net::Gossip::builder().spawn(endpoint.clone()));
+        let discovery = GossipPeerDiscovery::new(
+            TopicId::from_bytes([0x55; 32]),
+            NodeId::from(99u64),
+            gossip,
+            endpoint_addr_from_secret_key(&secret_key),
+            secret_key,
+        );
+        discovery.is_running.store(true, Ordering::SeqCst);
+
+        let error = discovery.start_internal(None).await.expect_err("duplicate start must fail");
+        assert!(error.to_string().contains("already running"));
+
+        endpoint.close().await;
+    }
+
     #[test]
     fn test_topology_version_atomic_operations() {
         let version = Arc::new(AtomicU64::new(0));

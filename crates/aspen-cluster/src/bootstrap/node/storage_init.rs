@@ -111,6 +111,103 @@ pub(super) fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<Raft
     })
 }
 
+async fn create_in_memory_raft_instance(
+    config: &NodeConfig,
+    raft_config: Arc<RaftConfig>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> Result<(Arc<Raft<AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
+    let log_store = Arc::new(InMemoryLogStore::default());
+    let state_machine = InMemoryStateMachine::new();
+    let raft = Arc::new(
+        Raft::new(
+            config.node_id.into(),
+            raft_config,
+            network_factory.as_ref().clone(),
+            log_store.as_ref().clone(),
+            state_machine.clone(),
+        )
+        .await
+        .context("failed to create in-memory Raft instance")?,
+    );
+    Ok((raft, StateMachineVariant::InMemory(state_machine), None))
+}
+
+fn open_shared_redb_storage(
+    config: &NodeConfig,
+    data_dir: &std::path::Path,
+    broadcasts: &StorageBroadcasts,
+) -> Result<(std::path::PathBuf, Arc<SharedRedbStorage>)> {
+    let db_path = data_dir.join(format!("node_{}_shared.redb", config.node_id));
+    let shared_storage = Arc::new(
+        SharedRedbStorage::with_broadcasts(
+            &db_path,
+            broadcasts.log.clone(),
+            broadcasts.snapshot.clone(),
+            &config.node_id.to_string(),
+        )
+        .map_err(|e| anyhow::anyhow!("failed to open shared redb storage: {}", e))?,
+    );
+
+    info!(
+        node_id = config.node_id,
+        path = %db_path.display(),
+        "created shared redb storage (single-fsync mode)"
+    );
+
+    Ok((db_path, shared_storage))
+}
+
+#[cfg(feature = "trust")]
+fn ensure_storage_not_expunged(storage: &SharedRedbStorage, db_path: &std::path::Path) -> Result<()> {
+    if !storage.is_expunged().map_err(|e| anyhow::anyhow!("failed to check expungement: {e}"))? {
+        return Ok(());
+    }
+
+    let metadata = storage
+        .load_expunged()
+        .map_err(|e| anyhow::anyhow!("failed to load expungement metadata: {e}"))?
+        .ok_or_else(|| anyhow::anyhow!("is_expunged returned true but load_expunged returned None"))?;
+    Err(anyhow::anyhow!(
+        "THIS NODE HAS BEEN PERMANENTLY EXPUNGED from the cluster at epoch {}. \
+         Removed by node {}. To rejoin, wipe the data directory ({}) and restart.",
+        metadata.epoch,
+        metadata.removed_by,
+        db_path.parent().unwrap_or(db_path).display()
+    ))
+}
+
+#[cfg(not(feature = "trust"))]
+fn ensure_storage_not_expunged(_storage: &SharedRedbStorage, _db_path: &std::path::Path) -> Result<()> {
+    Ok(())
+}
+
+async fn create_redb_raft_instance(
+    config: &NodeConfig,
+    raft_config: Arc<RaftConfig>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+    data_dir: &std::path::Path,
+    broadcasts: &StorageBroadcasts,
+) -> Result<(Arc<Raft<AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
+    let (db_path, shared_storage) = open_shared_redb_storage(config, data_dir, broadcasts)?;
+    ensure_storage_not_expunged(shared_storage.as_ref(), &db_path)?;
+
+    let raft = Arc::new(
+        Raft::new(
+            config.node_id.into(),
+            raft_config,
+            network_factory.as_ref().clone(),
+            shared_storage.as_ref().clone(),
+            shared_storage.as_ref().clone(),
+        )
+        .await
+        .context("failed to create Redb-backed Raft instance")?,
+    );
+
+    let ttl_cancel = spawn_redb_ttl_cleanup_task(shared_storage.clone(), TtlCleanupConfig::default());
+    info!(node_id = config.node_id, "Redb TTL cleanup task started");
+    Ok((raft, StateMachineVariant::Redb(shared_storage), Some(ttl_cancel)))
+}
+
 /// Create Raft instance with appropriate storage backend.
 ///
 /// Returns (raft, state_machine_variant, ttl_cleanup_cancel).
@@ -122,72 +219,9 @@ pub(super) async fn create_raft_instance(
     broadcasts: &StorageBroadcasts,
 ) -> Result<(Arc<Raft<AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
     match config.storage_backend {
-        StorageBackend::InMemory => {
-            let log_store = Arc::new(InMemoryLogStore::default());
-            let state_machine = InMemoryStateMachine::new();
-            let raft = Arc::new(
-                Raft::new(
-                    config.node_id.into(),
-                    raft_config,
-                    network_factory.as_ref().clone(),
-                    log_store.as_ref().clone(),
-                    state_machine.clone(),
-                )
-                .await
-                .context("failed to create in-memory Raft instance")?,
-            );
-            Ok((raft, StateMachineVariant::InMemory(state_machine), None))
-        }
+        StorageBackend::InMemory => create_in_memory_raft_instance(config, raft_config, network_factory).await,
         StorageBackend::Redb => {
-            let db_path = data_dir.join(format!("node_{}_shared.redb", config.node_id));
-            let shared_storage = Arc::new(
-                SharedRedbStorage::with_broadcasts(
-                    &db_path,
-                    broadcasts.log.clone(),
-                    broadcasts.snapshot.clone(),
-                    &config.node_id.to_string(),
-                )
-                .map_err(|e| anyhow::anyhow!("failed to open shared redb storage: {}", e))?,
-            );
-
-            info!(
-                node_id = config.node_id,
-                path = %db_path.display(),
-                "created shared redb storage (single-fsync mode)"
-            );
-
-            // Check if this node has been permanently expunged from the cluster.
-            // Expunged nodes must not start Raft — a factory reset (data_dir wipe) is required.
-            #[cfg(feature = "trust")]
-            if shared_storage.is_expunged().map_err(|e| anyhow::anyhow!("failed to check expungement: {e}"))? {
-                let metadata = shared_storage
-                    .load_expunged()
-                    .map_err(|e| anyhow::anyhow!("failed to load expungement metadata: {e}"))?
-                    .expect("is_expunged returned true but load_expunged returned None");
-                return Err(anyhow::anyhow!(
-                    "THIS NODE HAS BEEN PERMANENTLY EXPUNGED from the cluster at epoch {}. \
-                     Removed by node {}. To rejoin, wipe the data directory ({}) and restart.",
-                    metadata.epoch,
-                    metadata.removed_by,
-                    db_path.parent().unwrap_or(&db_path).display()
-                ));
-            }
-
-            let raft = Arc::new(
-                Raft::new(
-                    config.node_id.into(),
-                    raft_config,
-                    network_factory.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                )
-                .await
-                .context("failed to create Redb-backed Raft instance")?,
-            );
-
-            let ttl_cancel = spawn_redb_ttl_cleanup_task(shared_storage.clone(), TtlCleanupConfig::default());
-            info!(node_id = config.node_id, "Redb TTL cleanup task started");
-            Ok((raft, StateMachineVariant::Redb(shared_storage), Some(ttl_cancel)))
+            create_redb_raft_instance(config, raft_config, network_factory, data_dir, broadcasts).await
         }
     }
 }

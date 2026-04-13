@@ -1,0 +1,1428 @@
+crates/aspen-client-api/src/lib.rs:1106:    let req = ClientRpcRequest::CounterIncrement { key: "cnt".into() };
+crates/aspen-client-api/src/lib.rs:1112:    let req = ClientRpcRequest::SequenceNext { key: "seq".into() };
+crates/aspen-coordination/src/rwlock/downgrade.rs:11:use super::RWLockManager;
+crates/aspen-coordination/src/rwlock/downgrade.rs:12:use super::types::RWLockMode;
+crates/aspen-coordination/src/rwlock/downgrade.rs:25:impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+crates/aspen-coordination/src/rwlock/downgrade.rs:61:        state: &super::types::RWLockState,
+crates/aspen-coordination/src/rwlock/downgrade.rs:70:        new_state.mode = RWLockMode::Read;
+crates/aspen-coordination/src/rwlock/downgrade.rs:113:        state: &super::types::RWLockState,
+crates/aspen-coordination/src/rwlock/release.rs:11:use super::RWLockManager;
+crates/aspen-coordination/src/rwlock/release.rs:12:use super::types::RWLockMode;
+crates/aspen-coordination/src/rwlock/release.rs:15:impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+crates/aspen-coordination/src/rwlock/release.rs:51:                    if new_state.readers.is_empty() && new_state.mode == RWLockMode::Read {
+crates/aspen-coordination/src/rwlock/release.rs:52:                        new_state.mode = RWLockMode::Free;
+crates/aspen-coordination/src/rwlock/release.rs:115:                    new_state.mode = RWLockMode::Free;
+crates/aspen-coordination/src/rwlock/types.rs:1://! RWLock types: mode, reader/writer entries, and lock state.
+crates/aspen-coordination/src/rwlock/types.rs:10:pub enum RWLockMode {
+crates/aspen-coordination/src/rwlock/types.rs:19:impl RWLockMode {
+crates/aspen-coordination/src/rwlock/types.rs:23:            RWLockMode::Free => "free",
+crates/aspen-coordination/src/rwlock/types.rs:24:            RWLockMode::Read => "read",
+crates/aspen-coordination/src/rwlock/types.rs:25:            RWLockMode::Write => "write",
+crates/aspen-coordination/src/rwlock/types.rs:64:/// RWLock state stored in the key-value store.
+crates/aspen-coordination/src/rwlock/types.rs:66:pub struct RWLockState {
+crates/aspen-coordination/src/rwlock/types.rs:70:    pub mode: RWLockMode,
+crates/aspen-coordination/src/rwlock/types.rs:83:impl RWLockState {
+crates/aspen-coordination/src/rwlock/types.rs:88:            mode: RWLockMode::Free,
+crates/aspen-coordination/src/rwlock/types.rs:106:        if self.readers.is_empty() && self.mode == RWLockMode::Read {
+crates/aspen-coordination/src/rwlock/types.rs:107:            self.mode = RWLockMode::Free;
+crates/aspen-coordination/src/rwlock/types.rs:117:            if self.mode == RWLockMode::Write {
+crates/aspen-coordination/src/rwlock/types.rs:118:                self.mode = RWLockMode::Free;
+crates/aspen-coordination/src/rwlock/fairness.rs:11:use super::RWLockManager;
+crates/aspen-coordination/src/rwlock/fairness.rs:12:use super::types::RWLockState;
+crates/aspen-coordination/src/rwlock/fairness.rs:15:impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+crates/aspen-coordination/src/rwlock/fairness.rs:24:                    let mut state = RWLockState::new(name);
+crates/aspen-coordination/src/rwlock/acquisition.rs:14:use super::RWLockManager;
+crates/aspen-coordination/src/rwlock/acquisition.rs:15:use super::types::RWLockMode;
+crates/aspen-coordination/src/rwlock/acquisition.rs:16:use super::types::RWLockState;
+crates/aspen-coordination/src/rwlock/acquisition.rs:35:impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+crates/aspen-coordination/src/rwlock/acquisition.rs:122:        let state = RWLockState {
+crates/aspen-coordination/src/rwlock/acquisition.rs:124:            mode: RWLockMode::Read,
+crates/aspen-coordination/src/rwlock/acquisition.rs:150:        state: &RWLockState,
+crates/aspen-coordination/src/rwlock/acquisition.rs:175:    fn try_acquire_read_check_blocked(&self, state: &RWLockState, name: &str) -> Result<Option<BlockingResult>> {
+crates/aspen-coordination/src/rwlock/acquisition.rs:177:        if state.mode == RWLockMode::Write || state.writer.as_ref().is_some_and(|w| !w.is_expired()) {
+crates/aspen-coordination/src/rwlock/acquisition.rs:203:        state: &RWLockState,
+crates/aspen-coordination/src/rwlock/acquisition.rs:214:        new_state.mode = RWLockMode::Read;
+crates/aspen-coordination/src/rwlock/acquisition.rs:353:        let state = RWLockState {
+crates/aspen-coordination/src/rwlock/acquisition.rs:355:            mode: RWLockMode::Write,
+crates/aspen-coordination/src/rwlock/acquisition.rs:382:        state: &RWLockState,
+crates/aspen-coordination/src/rwlock/acquisition.rs:405:    fn try_acquire_write_is_blocked(&self, state: &RWLockState) -> bool {
+crates/aspen-coordination/src/rwlock/acquisition.rs:407:        if state.mode != RWLockMode::Free && state.active_reader_count() > 0 {
+crates/aspen-coordination/src/rwlock/acquisition.rs:411:        state.mode == RWLockMode::Write
+crates/aspen-coordination/src/rwlock/acquisition.rs:418:        state: &RWLockState,
+crates/aspen-coordination/src/rwlock/acquisition.rs:426:        new_state.mode = RWLockMode::Write;
+crates/aspen-coordination/src/rwlock/acquisition.rs:451:                    new_state.mode == RWLockMode::Write,
+crates/aspen-client-api/src/messages/batch.rs:104:/// Queue enqueue item (re-exported from aspen-coordination-protocol).
+crates/aspen-client-api/src/messages/batch.rs:105:pub use aspen_coordination_protocol::QueueEnqueueItem;
+crates/aspen-coordination/src/rwlock/mod.rs:43:pub use types::RWLockMode;
+crates/aspen-coordination/src/rwlock/mod.rs:44:pub use types::RWLockState;
+crates/aspen-coordination/src/rwlock/mod.rs:51:pub struct RWLockManager<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/rwlock/mod.rs:55:impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
+crates/aspen-coordination/src/rwlock/mod.rs:56:    /// Create a new RWLock manager.
+crates/aspen-coordination/src/rwlock/mod.rs:84:    pub(crate) async fn read_state(&self, key: &str) -> Result<Option<RWLockState>> {
+crates/aspen-coordination/src/rwlock/mod.rs:93:                    let state: RWLockState = serde_json::from_str(&value)
+crates/aspen-coordination/src/rwlock/mod.rs:113:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:135:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:154:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:177:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:197:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:219:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:240:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:257:        let manager = RWLockManager::new(store);
+crates/aspen-coordination/src/rwlock/mod.rs:277:        let manager = Arc::new(RWLockManager::new(store));
+crates/aspen-coordination/src/semaphore.rs:40:/// Semaphore state stored in the key-value store.
+crates/aspen-coordination/src/semaphore.rs:42:pub struct SemaphoreState {
+crates/aspen-coordination/src/semaphore.rs:43:    /// Semaphore name.
+crates/aspen-coordination/src/semaphore.rs:48:    pub holders: Vec<SemaphoreHolder>,
+crates/aspen-coordination/src/semaphore.rs:53:pub struct SemaphoreHolder {
+crates/aspen-coordination/src/semaphore.rs:64:impl SemaphoreState {
+crates/aspen-coordination/src/semaphore.rs:82:    fn find_holder(&self, holder_id: &str) -> Option<&SemaphoreHolder> {
+crates/aspen-coordination/src/semaphore.rs:87:    fn find_holder_mut(&mut self, holder_id: &str) -> Option<&mut SemaphoreHolder> {
+crates/aspen-coordination/src/semaphore.rs:93:pub struct SemaphoreManager<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/semaphore.rs:97:impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
+crates/aspen-coordination/src/semaphore.rs:213:        let state = SemaphoreState {
+crates/aspen-coordination/src/semaphore.rs:216:            holders: vec![SemaphoreHolder {
+crates/aspen-coordination/src/semaphore.rs:252:        state: &SemaphoreState,
+crates/aspen-coordination/src/semaphore.rs:294:        state: &SemaphoreState,
+crates/aspen-coordination/src/semaphore.rs:305:            return Err(CoordinationError::TooManySemaphoreHolders {
+crates/aspen-coordination/src/semaphore.rs:316:        new_state.holders.push(SemaphoreHolder {
+crates/aspen-coordination/src/semaphore.rs:436:    async fn read_state(&self, key: &str) -> Result<Option<SemaphoreState>> {
+crates/aspen-coordination/src/semaphore.rs:443:                    let state: SemaphoreState = serde_json::from_str(&value)
+crates/aspen-coordination/src/semaphore.rs:463:        let manager = SemaphoreManager::new(store);
+crates/aspen-coordination/src/semaphore.rs:479:        let manager = SemaphoreManager::new(store);
+crates/aspen-coordination/src/semaphore.rs:496:        let manager = SemaphoreManager::new(store);
+crates/aspen-coordination/src/semaphore.rs:514:        let manager = SemaphoreManager::new(store);
+crates/aspen-coordination/src/semaphore.rs:535:        let manager = SemaphoreManager::new(store);
+crates/aspen-coordination/src/semaphore.rs:546:        // One more holder should fail with TooManySemaphoreHolders error
+crates/aspen-coordination/src/semaphore.rs:558:        let manager = Arc::new(SemaphoreManager::new(store));
+crates/aspen-core-essentials-handler/src/coordination.rs:26:use aspen_coordination::AtomicCounter;
+crates/aspen-core-essentials-handler/src/coordination.rs:30:use aspen_coordination::DistributedRateLimiter;
+crates/aspen-core-essentials-handler/src/coordination.rs:36:use aspen_coordination::SequenceGenerator;
+crates/aspen-core-essentials-handler/src/coordination.rs:37:use aspen_coordination::SignedAtomicCounter;
+crates/aspen-core-essentials-handler/src/coordination.rs:76:            ClientRpcRequest::CounterGet { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:77:            | ClientRpcRequest::CounterIncrement { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:78:            | ClientRpcRequest::CounterDecrement { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:79:            | ClientRpcRequest::CounterAdd { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:80:            | ClientRpcRequest::CounterSubtract { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:81:            | ClientRpcRequest::CounterSet { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:82:            | ClientRpcRequest::CounterCompareAndSet { .. } => Ok(CoordinationRequestFamily::Counter),
+crates/aspen-core-essentials-handler/src/coordination.rs:83:            ClientRpcRequest::SignedCounterGet { .. } | ClientRpcRequest::SignedCounterAdd { .. } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:86:            ClientRpcRequest::SequenceNext { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:87:            | ClientRpcRequest::SequenceReserve { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:88:            | ClientRpcRequest::SequenceCurrent { .. } => Ok(CoordinationRequestFamily::Sequence),
+crates/aspen-core-essentials-handler/src/coordination.rs:97:            ClientRpcRequest::RateLimiterTryAcquire { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:98:            | ClientRpcRequest::RateLimiterAcquire { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:99:            | ClientRpcRequest::RateLimiterAvailable { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:100:            | ClientRpcRequest::RateLimiterReset { .. } => Ok(CoordinationRequestFamily::RateLimiter),
+crates/aspen-core-essentials-handler/src/coordination.rs:195:                | ClientRpcRequest::CounterGet { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:196:                | ClientRpcRequest::CounterIncrement { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:197:                | ClientRpcRequest::CounterDecrement { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:198:                | ClientRpcRequest::CounterAdd { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:199:                | ClientRpcRequest::CounterSubtract { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:200:                | ClientRpcRequest::CounterSet { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:201:                | ClientRpcRequest::CounterCompareAndSet { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:203:                | ClientRpcRequest::SignedCounterGet { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:204:                | ClientRpcRequest::SignedCounterAdd { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:206:                | ClientRpcRequest::SequenceNext { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:207:                | ClientRpcRequest::SequenceReserve { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:208:                | ClientRpcRequest::SequenceCurrent { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:210:                | ClientRpcRequest::RateLimiterTryAcquire { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:211:                | ClientRpcRequest::RateLimiterAcquire { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:212:                | ClientRpcRequest::RateLimiterAvailable { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:213:                | ClientRpcRequest::RateLimiterReset { .. }
+crates/aspen-core-essentials-handler/src/coordination.rs:244:            ClientRpcRequest::CounterGet { key } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:251:            ClientRpcRequest::CounterIncrement { key } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:258:            ClientRpcRequest::CounterDecrement { key } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:265:            ClientRpcRequest::CounterAdd { key, amount } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:272:            ClientRpcRequest::CounterSubtract { key, amount } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:279:            ClientRpcRequest::CounterSet { key, value } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:286:            ClientRpcRequest::CounterCompareAndSet {
+crates/aspen-core-essentials-handler/src/coordination.rs:311:            ClientRpcRequest::SignedCounterGet { key } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:318:            ClientRpcRequest::SignedCounterAdd { key, amount } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:335:            ClientRpcRequest::SequenceNext { key } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:342:            ClientRpcRequest::SequenceReserve { key, count } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:349:            ClientRpcRequest::SequenceCurrent { key } => {
+crates/aspen-core-essentials-handler/src/coordination.rs:432:            ClientRpcRequest::RateLimiterTryAcquire {
+crates/aspen-core-essentials-handler/src/coordination.rs:447:            ClientRpcRequest::RateLimiterAcquire {
+crates/aspen-core-essentials-handler/src/coordination.rs:460:            ClientRpcRequest::RateLimiterAvailable {
+crates/aspen-core-essentials-handler/src/coordination.rs:471:            ClientRpcRequest::RateLimiterReset {
+crates/aspen-core-essentials-handler/src/coordination.rs:772:    fn make_counter(&self, store: &Arc<dyn KeyValueStore>, key: &str) -> AtomicCounter<dyn KeyValueStore> {
+crates/aspen-core-essentials-handler/src/coordination.rs:774:        AtomicCounter::new(Arc::clone(store), prefixed, CounterConfig::default())
+crates/aspen-core-essentials-handler/src/coordination.rs:777:    fn make_signed_counter(&self, store: &Arc<dyn KeyValueStore>, key: &str) -> SignedAtomicCounter<dyn KeyValueStore> {
+crates/aspen-core-essentials-handler/src/coordination.rs:779:        SignedAtomicCounter::new(Arc::clone(store), prefixed, CounterConfig::default())
+crates/aspen-core-essentials-handler/src/coordination.rs:782:    fn make_sequence(&self, store: &Arc<dyn KeyValueStore>, key: &str) -> SequenceGenerator<dyn KeyValueStore> {
+crates/aspen-core-essentials-handler/src/coordination.rs:784:        SequenceGenerator::new(Arc::clone(store), prefixed, SequenceConfig::default())
+crates/aspen-core-essentials-handler/src/coordination.rs:808:    ) -> DistributedRateLimiter<dyn KeyValueStore> {
+crates/aspen-core-essentials-handler/src/coordination.rs:811:        DistributedRateLimiter::new(Arc::clone(store), prefixed, config)
+crates/aspen-core-essentials-handler/src/coordination.rs:851:        assert!(h.can_handle(&ClientRpcRequest::CounterGet { key: "k".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:852:        assert!(h.can_handle(&ClientRpcRequest::CounterIncrement { key: "k".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:853:        assert!(h.can_handle(&ClientRpcRequest::CounterDecrement { key: "k".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:854:        assert!(h.can_handle(&ClientRpcRequest::CounterAdd {
+crates/aspen-core-essentials-handler/src/coordination.rs:858:        assert!(h.can_handle(&ClientRpcRequest::CounterSubtract {
+crates/aspen-core-essentials-handler/src/coordination.rs:862:        assert!(h.can_handle(&ClientRpcRequest::CounterSet {
+crates/aspen-core-essentials-handler/src/coordination.rs:866:        assert!(h.can_handle(&ClientRpcRequest::CounterCompareAndSet {
+crates/aspen-core-essentials-handler/src/coordination.rs:876:        assert!(h.can_handle(&ClientRpcRequest::SignedCounterGet { key: "k".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:877:        assert!(h.can_handle(&ClientRpcRequest::SignedCounterAdd {
+crates/aspen-core-essentials-handler/src/coordination.rs:886:        assert!(h.can_handle(&ClientRpcRequest::SequenceNext { key: "s".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:887:        assert!(h.can_handle(&ClientRpcRequest::SequenceReserve {
+crates/aspen-core-essentials-handler/src/coordination.rs:891:        assert!(h.can_handle(&ClientRpcRequest::SequenceCurrent { key: "s".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:950:        assert!(h.can_handle(&ClientRpcRequest::RateLimiterTryAcquire {
+crates/aspen-core-essentials-handler/src/coordination.rs:956:        assert!(h.can_handle(&ClientRpcRequest::RateLimiterAcquire {
+crates/aspen-core-essentials-handler/src/coordination.rs:963:        assert!(h.can_handle(&ClientRpcRequest::RateLimiterAvailable {
+crates/aspen-core-essentials-handler/src/coordination.rs:968:        assert!(h.can_handle(&ClientRpcRequest::RateLimiterReset {
+crates/aspen-core-essentials-handler/src/coordination.rs:982:        assert!(!h.can_handle(&ClientRpcRequest::BarrierEnter {
+crates/aspen-core-essentials-handler/src/coordination.rs:993:        assert!(!h.can_handle(&ClientRpcRequest::SemaphoreStatus { name: "s".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:999:        assert!(!h.can_handle(&ClientRpcRequest::RWLockStatus { name: "rw".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:1005:        assert!(!h.can_handle(&ClientRpcRequest::QueueCreate {
+crates/aspen-core-essentials-handler/src/coordination.rs:1011:        assert!(!h.can_handle(&ClientRpcRequest::QueueStatus { queue_name: "q".into() }));
+crates/aspen-core-essentials-handler/src/coordination.rs:1017:        assert!(!h.can_handle(&ClientRpcRequest::ServiceDiscover {
+crates/aspen-core-essentials-handler/src/coordination.rs:1037:            CoordinationHandler::request_family(&ClientRpcRequest::CounterGet { key: "k".into() })
+crates/aspen-core-essentials-handler/src/coordination.rs:1042:            CoordinationHandler::request_family(&ClientRpcRequest::SignedCounterAdd {
+crates/aspen-core-essentials-handler/src/coordination.rs:1050:            CoordinationHandler::request_family(&ClientRpcRequest::SequenceCurrent { key: "s".into() })
+crates/aspen-core-essentials-handler/src/coordination.rs:1064:            CoordinationHandler::request_family(&ClientRpcRequest::RateLimiterAvailable {
+crates/aspen-core-essentials-handler/src/coordination.rs:1088:            .handle(ClientRpcRequest::CounterIncrement { key: "ctr".into() }, &ctx)
+crates/aspen-core-essentials-handler/src/coordination.rs:1100:            .handle(ClientRpcRequest::CounterGet { key: "ctr".into() }, &ctx)
+crates/aspen-core-essentials-handler/src/coordination.rs:1117:                ClientRpcRequest::SequenceReserve {
+crates/aspen-core-essentials-handler/src/coordination.rs:1134:            .handle(ClientRpcRequest::SequenceCurrent { key: "seq".into() }, &ctx)
+crates/aspen-core-essentials-handler/src/coordination.rs:1367:                ClientRpcRequest::RateLimiterAvailable {
+crates/aspen-core-essentials-handler/src/coordination.rs:1386:                ClientRpcRequest::RateLimiterTryAcquire {
+crates/aspen-client-api/src/messages/request_metadata.rs:45:    ClientRpcRequest::BarrierEnter { .. } => "BarrierEnter",
+crates/aspen-client-api/src/messages/request_metadata.rs:46:    ClientRpcRequest::BarrierLeave { .. } => "BarrierLeave",
+crates/aspen-client-api/src/messages/request_metadata.rs:47:    ClientRpcRequest::BarrierStatus { .. } => "BarrierStatus",
+crates/aspen-client-api/src/messages/request_metadata.rs:113:    ClientRpcRequest::CounterAdd { .. } => "CounterAdd",
+crates/aspen-client-api/src/messages/request_metadata.rs:114:    ClientRpcRequest::CounterCompareAndSet { .. } => "CounterCompareAndSet",
+crates/aspen-client-api/src/messages/request_metadata.rs:115:    ClientRpcRequest::CounterDecrement { .. } => "CounterDecrement",
+crates/aspen-client-api/src/messages/request_metadata.rs:116:    ClientRpcRequest::CounterGet { .. } => "CounterGet",
+crates/aspen-client-api/src/messages/request_metadata.rs:117:    ClientRpcRequest::CounterIncrement { .. } => "CounterIncrement",
+crates/aspen-client-api/src/messages/request_metadata.rs:118:    ClientRpcRequest::CounterSet { .. } => "CounterSet",
+crates/aspen-client-api/src/messages/request_metadata.rs:119:    ClientRpcRequest::CounterSubtract { .. } => "CounterSubtract",
+crates/aspen-client-api/src/messages/request_metadata.rs:227:    ClientRpcRequest::JobQueueStats => "JobQueueStats",
+crates/aspen-client-api/src/messages/request_metadata.rs:251:    ClientRpcRequest::QueueAck { .. } => "QueueAck",
+crates/aspen-client-api/src/messages/request_metadata.rs:252:    ClientRpcRequest::QueueCreate { .. } => "QueueCreate",
+crates/aspen-client-api/src/messages/request_metadata.rs:253:    ClientRpcRequest::QueueDelete { .. } => "QueueDelete",
+crates/aspen-client-api/src/messages/request_metadata.rs:254:    ClientRpcRequest::QueueDequeue { .. } => "QueueDequeue",
+crates/aspen-client-api/src/messages/request_metadata.rs:255:    ClientRpcRequest::QueueDequeueWait { .. } => "QueueDequeueWait",
+crates/aspen-client-api/src/messages/request_metadata.rs:256:    ClientRpcRequest::QueueEnqueue { .. } => "QueueEnqueue",
+crates/aspen-client-api/src/messages/request_metadata.rs:257:    ClientRpcRequest::QueueEnqueueBatch { .. } => "QueueEnqueueBatch",
+crates/aspen-client-api/src/messages/request_metadata.rs:258:    ClientRpcRequest::QueueExtendVisibility { .. } => "QueueExtendVisibility",
+crates/aspen-client-api/src/messages/request_metadata.rs:259:    ClientRpcRequest::QueueGetDLQ { .. } => "QueueGetDLQ",
+crates/aspen-client-api/src/messages/request_metadata.rs:260:    ClientRpcRequest::QueueNack { .. } => "QueueNack",
+crates/aspen-client-api/src/messages/request_metadata.rs:261:    ClientRpcRequest::QueuePeek { .. } => "QueuePeek",
+crates/aspen-client-api/src/messages/request_metadata.rs:262:    ClientRpcRequest::QueueRedriveDLQ { .. } => "QueueRedriveDLQ",
+crates/aspen-client-api/src/messages/request_metadata.rs:263:    ClientRpcRequest::QueueStatus { .. } => "QueueStatus",
+crates/aspen-client-api/src/messages/request_metadata.rs:264:    ClientRpcRequest::RateLimiterAcquire { .. } => "RateLimiterAcquire",
+crates/aspen-client-api/src/messages/request_metadata.rs:265:    ClientRpcRequest::RateLimiterAvailable { .. } => "RateLimiterAvailable",
+crates/aspen-client-api/src/messages/request_metadata.rs:266:    ClientRpcRequest::RateLimiterReset { .. } => "RateLimiterReset",
+crates/aspen-client-api/src/messages/request_metadata.rs:267:    ClientRpcRequest::RateLimiterTryAcquire { .. } => "RateLimiterTryAcquire",
+crates/aspen-client-api/src/messages/request_metadata.rs:271:    ClientRpcRequest::RWLockAcquireRead { .. } => "RWLockAcquireRead",
+crates/aspen-client-api/src/messages/request_metadata.rs:272:    ClientRpcRequest::RWLockAcquireWrite { .. } => "RWLockAcquireWrite",
+crates/aspen-client-api/src/messages/request_metadata.rs:273:    ClientRpcRequest::RWLockDowngrade { .. } => "RWLockDowngrade",
+crates/aspen-client-api/src/messages/request_metadata.rs:274:    ClientRpcRequest::RWLockReleaseRead { .. } => "RWLockReleaseRead",
+crates/aspen-client-api/src/messages/request_metadata.rs:275:    ClientRpcRequest::RWLockReleaseWrite { .. } => "RWLockReleaseWrite",
+crates/aspen-client-api/src/messages/request_metadata.rs:276:    ClientRpcRequest::RWLockStatus { .. } => "RWLockStatus",
+crates/aspen-client-api/src/messages/request_metadata.rs:277:    ClientRpcRequest::RWLockTryAcquireRead { .. } => "RWLockTryAcquireRead",
+crates/aspen-client-api/src/messages/request_metadata.rs:278:    ClientRpcRequest::RWLockTryAcquireWrite { .. } => "RWLockTryAcquireWrite",
+crates/aspen-client-api/src/messages/request_metadata.rs:313:    ClientRpcRequest::SemaphoreAcquire { .. } => "SemaphoreAcquire",
+crates/aspen-client-api/src/messages/request_metadata.rs:314:    ClientRpcRequest::SemaphoreRelease { .. } => "SemaphoreRelease",
+crates/aspen-client-api/src/messages/request_metadata.rs:315:    ClientRpcRequest::SemaphoreStatus { .. } => "SemaphoreStatus",
+crates/aspen-client-api/src/messages/request_metadata.rs:316:    ClientRpcRequest::SemaphoreTryAcquire { .. } => "SemaphoreTryAcquire",
+crates/aspen-client-api/src/messages/request_metadata.rs:317:    ClientRpcRequest::SequenceCurrent { .. } => "SequenceCurrent",
+crates/aspen-client-api/src/messages/request_metadata.rs:318:    ClientRpcRequest::SequenceNext { .. } => "SequenceNext",
+crates/aspen-client-api/src/messages/request_metadata.rs:319:    ClientRpcRequest::SequenceReserve { .. } => "SequenceReserve",
+crates/aspen-client-api/src/messages/request_metadata.rs:320:    ClientRpcRequest::ServiceDeregister { .. } => "ServiceDeregister",
+crates/aspen-client-api/src/messages/request_metadata.rs:321:    ClientRpcRequest::ServiceDiscover { .. } => "ServiceDiscover",
+crates/aspen-client-api/src/messages/request_metadata.rs:322:    ClientRpcRequest::ServiceGetInstance { .. } => "ServiceGetInstance",
+crates/aspen-client-api/src/messages/request_metadata.rs:323:    ClientRpcRequest::ServiceHeartbeat { .. } => "ServiceHeartbeat",
+crates/aspen-client-api/src/messages/request_metadata.rs:324:    ClientRpcRequest::ServiceList { .. } => "ServiceList",
+crates/aspen-client-api/src/messages/request_metadata.rs:325:    ClientRpcRequest::ServiceRegister { .. } => "ServiceRegister",
+crates/aspen-client-api/src/messages/request_metadata.rs:326:    ClientRpcRequest::ServiceUpdateHealth { .. } => "ServiceUpdateHealth",
+crates/aspen-client-api/src/messages/request_metadata.rs:327:    ClientRpcRequest::ServiceUpdateMetadata { .. } => "ServiceUpdateMetadata",
+crates/aspen-client-api/src/messages/request_metadata.rs:329:    ClientRpcRequest::SignedCounterAdd { .. } => "SignedCounterAdd",
+crates/aspen-client-api/src/messages/request_metadata.rs:330:    ClientRpcRequest::SignedCounterGet { .. } => "SignedCounterGet",
+crates/aspen-client-api/src/messages/request_metadata.rs:345:    ClientRpcRequest::WorkerCompleteJob { .. } => "WorkerCompleteJob",
+crates/aspen-client-api/src/messages/request_metadata.rs:346:    ClientRpcRequest::WorkerDeregister { .. } => "WorkerDeregister",
+crates/aspen-client-api/src/messages/request_metadata.rs:347:    ClientRpcRequest::WorkerHeartbeat { .. } => "WorkerHeartbeat",
+crates/aspen-client-api/src/messages/request_metadata.rs:348:    ClientRpcRequest::WorkerPollJobs { .. } => "WorkerPollJobs",
+crates/aspen-client-api/src/messages/request_metadata.rs:349:    ClientRpcRequest::WorkerRegister { .. } => "WorkerRegister",
+crates/aspen-client-api/src/messages/request_metadata.rs:350:    ClientRpcRequest::WorkerStatus => "WorkerStatus",
+crates/aspen-client-api/src/messages/request_metadata.rs:398:    ("BarrierEnter", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:399:    ("BarrierLeave", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:400:    ("BarrierStatus", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:576:    ("JobQueueStats", Some("jobs")),
+crates/aspen-client-api/src/messages/request_metadata.rs:600:    ("QueueAck", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:601:    ("QueueCreate", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:602:    ("QueueDelete", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:603:    ("QueueDequeue", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:604:    ("QueueDequeueWait", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:605:    ("QueueEnqueue", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:606:    ("QueueEnqueueBatch", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:607:    ("QueueExtendVisibility", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:608:    ("QueueGetDLQ", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:609:    ("QueueNack", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:610:    ("QueuePeek", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:611:    ("QueueRedriveDLQ", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:612:    ("QueueStatus", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:620:    ("RWLockAcquireRead", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:621:    ("RWLockAcquireWrite", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:622:    ("RWLockDowngrade", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:623:    ("RWLockReleaseRead", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:624:    ("RWLockReleaseWrite", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:625:    ("RWLockStatus", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:626:    ("RWLockTryAcquireRead", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:627:    ("RWLockTryAcquireWrite", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:662:    ("SemaphoreAcquire", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:663:    ("SemaphoreRelease", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:664:    ("SemaphoreStatus", None),
+crates/aspen-client-api/src/messages/request_metadata.rs:665:    ("SemaphoreTryAcquire", None),
+crates/aspen-coordination/src/barrier.rs:27:/// Barrier key prefix.
+crates/aspen-coordination/src/barrier.rs:30:/// Barrier state stored in the key-value store.
+crates/aspen-coordination/src/barrier.rs:32:pub struct BarrierState {
+crates/aspen-coordination/src/barrier.rs:33:    /// Barrier name.
+crates/aspen-coordination/src/barrier.rs:40:    pub phase: BarrierPhase,
+crates/aspen-coordination/src/barrier.rs:45:/// Barrier phase.
+crates/aspen-coordination/src/barrier.rs:47:pub enum BarrierPhase {
+crates/aspen-coordination/src/barrier.rs:56:impl BarrierPhase {
+crates/aspen-coordination/src/barrier.rs:60:            BarrierPhase::Waiting => "waiting",
+crates/aspen-coordination/src/barrier.rs:61:            BarrierPhase::Ready => "ready",
+crates/aspen-coordination/src/barrier.rs:62:            BarrierPhase::Leaving => "leaving",
+crates/aspen-coordination/src/barrier.rs:69:    /// Barrier completed (all participants left).
+crates/aspen-coordination/src/barrier.rs:85:    /// Barrier is in leaving phase, need to wait.
+crates/aspen-coordination/src/barrier.rs:92:pub struct BarrierManager<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/barrier.rs:96:impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
+crates/aspen-coordination/src/barrier.rs:134:                    EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
+crates/aspen-coordination/src/barrier.rs:135:                    EnterResult::Waiting => return Ok((1, BarrierPhase::Waiting.as_str().to_string())),
+crates/aspen-coordination/src/barrier.rs:140:                    EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
+crates/aspen-coordination/src/barrier.rs:163:        let state = BarrierState {
+crates/aspen-coordination/src/barrier.rs:185:                if initial_phase == BarrierPhase::Ready {
+crates/aspen-coordination/src/barrier.rs:203:        state: &BarrierState,
+crates/aspen-coordination/src/barrier.rs:222:        if state.phase == BarrierPhase::Leaving {
+crates/aspen-coordination/src/barrier.rs:232:            new_state.phase = BarrierPhase::Ready;
+crates/aspen-coordination/src/barrier.rs:309:        state: BarrierState,
+crates/aspen-coordination/src/barrier.rs:323:        new_state.phase = BarrierPhase::Leaving;
+crates/aspen-coordination/src/barrier.rs:375:        new_state: &BarrierState,
+crates/aspen-coordination/src/barrier.rs:417:    async fn read_state(&self, key: &str) -> Result<Option<BarrierState>> {
+crates/aspen-coordination/src/barrier.rs:424:                    let state: BarrierState = serde_json::from_str(&value)
+crates/aspen-coordination/src/barrier.rs:444:        let manager = BarrierManager::new(store);
+crates/aspen-coordination/src/barrier.rs:462:        let manager = BarrierManager::new(store);
+crates/aspen-coordination/src/election.rs:102:/// let election = LeaderElection::new(
+crates/aspen-coordination/src/election.rs:121:pub struct LeaderElection<S: KeyValueStore + ?Sized + 'static> {
+crates/aspen-coordination/src/election.rs:127:impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
+crates/aspen-coordination/src/election.rs:391:        let election = LeaderElection::new(store, "test-election", "candidate-1", ElectionConfig {
+crates/aspen-coordination/src/election.rs:420:        let election1 = LeaderElection::new(store.clone(), "test-election", "candidate-1", config.clone());
+crates/aspen-coordination/src/election.rs:422:        let election2 = LeaderElection::new(store, "test-election", "candidate-2", config);
+crates/aspen-coordination/src/election.rs:450:        let election1 = LeaderElection::new(store.clone(), "test-election", "candidate-1", ElectionConfig {
+crates/aspen-coordination/src/election.rs:483:        let election1 = LeaderElection::new(store.clone(), "test-election", "candidate-1", config.clone());
+crates/aspen-coordination/src/election.rs:500:        let election2 = LeaderElection::new(store, "test-election", "candidate-1", config);
+crates/aspen-coordination/src/election.rs:527:        let election = LeaderElection::new(store, "test-election", "candidate-1", ElectionConfig {
+crates/aspen-client-api/src/messages/coordination.rs:151:    // Barrier operations
+crates/aspen-client-api/src/messages/coordination.rs:153:    BarrierEnter {
+crates/aspen-client-api/src/messages/coordination.rs:160:    BarrierLeave {
+crates/aspen-client-api/src/messages/coordination.rs:166:    BarrierStatus { name: String },
+crates/aspen-client-api/src/messages/coordination.rs:168:    // Semaphore operations
+crates/aspen-client-api/src/messages/coordination.rs:170:    SemaphoreAcquire {
+crates/aspen-client-api/src/messages/coordination.rs:179:    SemaphoreTryAcquire {
+crates/aspen-client-api/src/messages/coordination.rs:187:    SemaphoreRelease {
+crates/aspen-client-api/src/messages/coordination.rs:193:    SemaphoreStatus { name: String },
+crates/aspen-client-api/src/messages/coordination.rs:195:    // RWLock operations
+crates/aspen-client-api/src/messages/coordination.rs:197:    RWLockAcquireRead {
+crates/aspen-client-api/src/messages/coordination.rs:204:    RWLockTryAcquireRead {
+crates/aspen-client-api/src/messages/coordination.rs:210:    RWLockAcquireWrite {
+crates/aspen-client-api/src/messages/coordination.rs:217:    RWLockTryAcquireWrite {
+crates/aspen-client-api/src/messages/coordination.rs:223:    RWLockReleaseRead { name: String, holder_id: String },
+crates/aspen-client-api/src/messages/coordination.rs:225:    RWLockReleaseWrite {
+crates/aspen-client-api/src/messages/coordination.rs:231:    RWLockDowngrade {
+crates/aspen-client-api/src/messages/coordination.rs:237:    /// Query RWLock status.
+crates/aspen-client-api/src/messages/coordination.rs:238:    RWLockStatus { name: String },
+crates/aspen-client-api/src/messages/coordination.rs:240:    // Queue operations
+crates/aspen-client-api/src/messages/coordination.rs:242:    QueueCreate {
+crates/aspen-client-api/src/messages/coordination.rs:249:    QueueDelete { queue_name: String },
+crates/aspen-client-api/src/messages/coordination.rs:251:    QueueEnqueue {
+crates/aspen-client-api/src/messages/coordination.rs:259:    QueueEnqueueBatch {
+crates/aspen-client-api/src/messages/coordination.rs:261:        items: Vec<QueueEnqueueItem>,
+crates/aspen-client-api/src/messages/coordination.rs:264:    QueueDequeue {
+crates/aspen-client-api/src/messages/coordination.rs:271:    QueueDequeueWait {
+crates/aspen-client-api/src/messages/coordination.rs:279:    QueuePeek { queue_name: String, max_items: u32 },
+crates/aspen-client-api/src/messages/coordination.rs:281:    QueueAck { queue_name: String, receipt_handle: String },
+crates/aspen-client-api/src/messages/coordination.rs:283:    QueueNack {
+crates/aspen-client-api/src/messages/coordination.rs:290:    QueueExtendVisibility {
+crates/aspen-client-api/src/messages/coordination.rs:296:    QueueStatus { queue_name: String },
+crates/aspen-client-api/src/messages/coordination.rs:298:    QueueGetDLQ { queue_name: String, max_items: u32 },
+crates/aspen-client-api/src/messages/coordination.rs:300:    QueueRedriveDLQ { queue_name: String, item_id: u64 },
+crates/aspen-client-api/src/messages/coordination.rs:437:            Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => Some(Operation::Write {
+crates/aspen-client-api/src/messages/coordination.rs:441:            Self::BarrierStatus { name } => Some(Operation::Read {
+crates/aspen-client-api/src/messages/coordination.rs:452:            Self::SemaphoreAcquire { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:453:            | Self::SemaphoreTryAcquire { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:454:            | Self::SemaphoreRelease { name, .. } => Some(Operation::Write {
+crates/aspen-client-api/src/messages/coordination.rs:458:            Self::SemaphoreStatus { name } => Some(Operation::Read {
+crates/aspen-client-api/src/messages/coordination.rs:462:            Self::RWLockAcquireRead { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:463:            | Self::RWLockTryAcquireRead { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:464:            | Self::RWLockAcquireWrite { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:465:            | Self::RWLockTryAcquireWrite { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:466:            | Self::RWLockReleaseRead { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:467:            | Self::RWLockReleaseWrite { name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:468:            | Self::RWLockDowngrade { name, .. } => Some(Operation::Write {
+crates/aspen-client-api/src/messages/coordination.rs:472:            Self::RWLockStatus { name } => Some(Operation::Read {
+crates/aspen-client-api/src/messages/coordination.rs:483:            Self::QueueCreate { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:484:            | Self::QueueDelete { queue_name }
+crates/aspen-client-api/src/messages/coordination.rs:485:            | Self::QueueEnqueue { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:486:            | Self::QueueEnqueueBatch { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:487:            | Self::QueueDequeue { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:488:            | Self::QueueDequeueWait { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:489:            | Self::QueueAck { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:490:            | Self::QueueNack { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:491:            | Self::QueueExtendVisibility { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:492:            | Self::QueueRedriveDLQ { queue_name, .. } => Some(Operation::Write {
+crates/aspen-client-api/src/messages/coordination.rs:496:            Self::QueuePeek { queue_name, .. }
+crates/aspen-client-api/src/messages/coordination.rs:497:            | Self::QueueStatus { queue_name }
+crates/aspen-client-api/src/messages/coordination.rs:498:            | Self::QueueGetDLQ { queue_name, .. } => Some(Operation::Read {
+crates/aspen-coordination/src/queue/visibility.rs:1://! Queue visibility timeout operations.
+crates/aspen-coordination/src/queue/visibility.rs:18:use super::QueueManager;
+crates/aspen-coordination/src/queue/visibility.rs:22:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/helpers.rs:13:use super::QueueManager;
+crates/aspen-coordination/src/queue/helpers.rs:14:use super::QueueState;
+crates/aspen-coordination/src/queue/helpers.rs:17:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/helpers.rs:25:    pub(super) async fn read_queue_state(&self, key: &str) -> Result<Option<QueueState>> {
+crates/aspen-client-api/src/messages/jobs.rs:42:    JobQueueStats,
+crates/aspen-client-api/src/messages/jobs.rs:93:            Self::JobGet { .. } | Self::JobList { .. } | Self::JobQueueStats | Self::WorkerStatus => {
+crates/aspen-coordination/src/queue/types.rs:1://! Queue type definitions.
+crates/aspen-coordination/src/queue/types.rs:11:/// Queue metadata state stored at `__queue:{name}`.
+crates/aspen-coordination/src/queue/types.rs:13:pub struct QueueState {
+crates/aspen-coordination/src/queue/types.rs:14:    /// Queue name.
+crates/aspen-coordination/src/queue/types.rs:24:    /// Queue statistics.
+crates/aspen-coordination/src/queue/types.rs:25:    pub stats: QueueStats,
+crates/aspen-coordination/src/queue/types.rs:28:impl Default for QueueState {
+crates/aspen-coordination/src/queue/types.rs:37:            stats: QueueStats::default(),
+crates/aspen-coordination/src/queue/types.rs:42:/// Queue statistics.
+crates/aspen-coordination/src/queue/types.rs:44:pub struct QueueStats {
+crates/aspen-coordination/src/queue/types.rs:55:pub struct QueueItem {
+crates/aspen-coordination/src/queue/types.rs:72:impl QueueItem {
+crates/aspen-coordination/src/queue/types.rs:162:pub struct QueueConfig {
+crates/aspen-coordination/src/queue/types.rs:199:/// Queue status information.
+crates/aspen-coordination/src/queue/types.rs:201:pub struct QueueStatus {
+crates/aspen-coordination/src/queue/create_delete.rs:1://! Queue creation and deletion operations.
+crates/aspen-coordination/src/queue/create_delete.rs:20:use super::QueueConfig;
+crates/aspen-coordination/src/queue/create_delete.rs:21:use super::QueueManager;
+crates/aspen-coordination/src/queue/create_delete.rs:22:use super::QueueState;
+crates/aspen-coordination/src/queue/create_delete.rs:23:use super::QueueStats;
+crates/aspen-coordination/src/queue/create_delete.rs:27:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/create_delete.rs:31:    pub async fn create(&self, name: &str, config: QueueConfig) -> Result<(bool, QueueState)> {
+crates/aspen-coordination/src/queue/create_delete.rs:54:                    let state = QueueState {
+crates/aspen-coordination/src/queue/create_delete.rs:60:                        stats: QueueStats::default(),
+crates/aspen-coordination/src/queue/create_delete.rs:91:                    // Queue already exists
+crates/aspen-coordination/src/queue/ack_nack.rs:1://! Queue acknowledgment and rejection operations.
+crates/aspen-coordination/src/queue/ack_nack.rs:15:use super::QueueItem;
+crates/aspen-coordination/src/queue/ack_nack.rs:16:use super::QueueManager;
+crates/aspen-coordination/src/queue/ack_nack.rs:20:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/ack_nack.rs:199:        let verification: Option<QueueItem> = self.read_json(&i_key).await?;
+crates/aspen-coordination/src/queue/stats.rs:1://! Queue statistics and status operations.
+crates/aspen-coordination/src/queue/stats.rs:17:use super::QueueItem;
+crates/aspen-coordination/src/queue/stats.rs:18:use super::QueueManager;
+crates/aspen-coordination/src/queue/stats.rs:19:use super::QueueStats;
+crates/aspen-coordination/src/queue/stats.rs:20:use super::QueueStatus;
+crates/aspen-coordination/src/queue/stats.rs:23:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/stats.rs:25:    pub async fn status(&self, name: &str) -> Result<QueueStatus> {
+crates/aspen-coordination/src/queue/stats.rs:30:            None => return Ok(QueueStatus::default()),
+crates/aspen-coordination/src/queue/stats.rs:41:        Ok(QueueStatus {
+crates/aspen-coordination/src/queue/stats.rs:55:    pub async fn peek(&self, name: &str, max_items: u32) -> Result<Vec<QueueItem>> {
+crates/aspen-coordination/src/queue/stats.rs:63:            if let Some(item) = self.read_json::<QueueItem>(&key).await?
+crates/aspen-coordination/src/queue/stats.rs:90:    where F: Fn(&mut QueueStats) {
+crates/aspen-coordination/src/queue/stats.rs:98:                None => return Ok(()), // Queue doesn't exist
+crates/aspen-coordination/src/queue/mod.rs:33:pub use types::QueueConfig;
+crates/aspen-coordination/src/queue/mod.rs:34:pub use types::QueueItem;
+crates/aspen-coordination/src/queue/mod.rs:35:pub use types::QueueState;
+crates/aspen-coordination/src/queue/mod.rs:36:pub use types::QueueStats;
+crates/aspen-coordination/src/queue/mod.rs:37:pub use types::QueueStatus;
+crates/aspen-coordination/src/queue/mod.rs:40:pub struct QueueManager<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/queue/mod.rs:44:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/mod.rs:63:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:78:        // Queue should be empty
+crates/aspen-coordination/src/queue/mod.rs:86:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:107:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:129:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:144:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:160:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:164:            .create("test", QueueConfig {
+crates/aspen-coordination/src/queue/mod.rs:181:        // Queue should be empty
+crates/aspen-coordination/src/queue/mod.rs:194:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:214:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:243:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:271:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:287:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/mod.rs:304:        let manager = QueueManager::new(store);
+crates/aspen-coordination/src/queue/dequeue.rs:1://! Queue dequeue operations.
+crates/aspen-coordination/src/queue/dequeue.rs:22:use super::QueueItem;
+crates/aspen-coordination/src/queue/dequeue.rs:23:use super::QueueManager;
+crates/aspen-coordination/src/queue/dequeue.rs:39:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/dequeue.rs:195:        queue_state: &super::QueueState,
+crates/aspen-coordination/src/queue/dequeue.rs:202:        let item: QueueItem = match self.read_json(item_key).await? {
+crates/aspen-coordination/src/queue/dequeue.rs:250:        item: &QueueItem,
+crates/aspen-coordination/src/queue/dlq.rs:12:use super::QueueItem;
+crates/aspen-coordination/src/queue/dlq.rs:13:use super::QueueManager;
+crates/aspen-coordination/src/queue/dlq.rs:17:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/dlq.rs:51:        let item = QueueItem {
+crates/aspen-coordination/src/queue/dlq.rs:87:        item: &QueueItem,
+crates/aspen-coordination/src/queue/enqueue.rs:1://! Queue enqueue operations.
+crates/aspen-coordination/src/queue/enqueue.rs:15:use super::QueueConfig;
+crates/aspen-coordination/src/queue/enqueue.rs:16:use super::QueueManager;
+crates/aspen-coordination/src/queue/enqueue.rs:18:use super::types::QueueItem;
+crates/aspen-coordination/src/queue/enqueue.rs:19:use crate::sequence::SequenceGenerator;
+crates/aspen-coordination/src/queue/enqueue.rs:23:impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
+crates/aspen-coordination/src/queue/enqueue.rs:40:                let (_, state) = self.create(name, QueueConfig::default()).await?;
+crates/aspen-coordination/src/queue/enqueue.rs:89:        queue_state: &super::QueueState,
+crates/aspen-coordination/src/queue/enqueue.rs:90:    ) -> Result<(u64, QueueItem)> {
+crates/aspen-coordination/src/queue/enqueue.rs:92:        let seq_gen = SequenceGenerator::new(self.store.clone(), &seq_key, Default::default());
+crates/aspen-coordination/src/queue/enqueue.rs:99:        let item = QueueItem {
+crates/aspen-coordination/src/queue/enqueue.rs:113:    async fn enqueue_store_item(&self, name: &str, item_id: u64, item: &QueueItem) -> Result<()> {
+crates/aspen-client-api/src/messages/mod.rs:177:pub use coordination::BarrierResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:183:pub use coordination::QueueAckResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:184:pub use coordination::QueueCreateResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:185:pub use coordination::QueueDLQItemResponse;
+crates/aspen-client-api/src/messages/mod.rs:186:pub use coordination::QueueDeleteResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:187:pub use coordination::QueueDequeueResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:188:pub use coordination::QueueDequeuedItemResponse;
+crates/aspen-client-api/src/messages/mod.rs:189:pub use coordination::QueueEnqueueBatchResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:190:pub use coordination::QueueEnqueueItem;
+crates/aspen-client-api/src/messages/mod.rs:191:pub use coordination::QueueEnqueueResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:192:pub use coordination::QueueExtendVisibilityResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:193:pub use coordination::QueueGetDLQResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:194:pub use coordination::QueueItemResponse;
+crates/aspen-client-api/src/messages/mod.rs:195:pub use coordination::QueueNackResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:196:pub use coordination::QueuePeekResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:197:pub use coordination::QueueRedriveDLQResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:198:pub use coordination::QueueStatusResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:199:pub use coordination::RWLockResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:201:pub use coordination::SemaphoreResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:311:pub use jobs::JobQueueStatsResultResponse;
+crates/aspen-client-api/src/messages/mod.rs:1387:    // Distributed Barrier operations
+crates/aspen-client-api/src/messages/mod.rs:1393:    BarrierEnter {
+crates/aspen-client-api/src/messages/mod.rs:1394:        /// Barrier name (unique identifier).
+crates/aspen-client-api/src/messages/mod.rs:1407:    BarrierLeave {
+crates/aspen-client-api/src/messages/mod.rs:1408:        /// Barrier name.
+crates/aspen-client-api/src/messages/mod.rs:1417:    BarrierStatus {
+crates/aspen-client-api/src/messages/mod.rs:1418:        /// Barrier name.
+crates/aspen-client-api/src/messages/mod.rs:1423:    // Distributed Semaphore operations
+crates/aspen-client-api/src/messages/mod.rs:1426:    SemaphoreAcquire {
+crates/aspen-client-api/src/messages/mod.rs:1427:        /// Semaphore name.
+crates/aspen-client-api/src/messages/mod.rs:1442:    SemaphoreTryAcquire {
+crates/aspen-client-api/src/messages/mod.rs:1443:        /// Semaphore name.
+crates/aspen-client-api/src/messages/mod.rs:1456:    SemaphoreRelease {
+crates/aspen-client-api/src/messages/mod.rs:1457:        /// Semaphore name.
+crates/aspen-client-api/src/messages/mod.rs:1466:    SemaphoreStatus {
+crates/aspen-client-api/src/messages/mod.rs:1467:        /// Semaphore name.
+crates/aspen-client-api/src/messages/mod.rs:1475:    RWLockAcquireRead {
+crates/aspen-client-api/src/messages/mod.rs:1487:    RWLockTryAcquireRead {
+crates/aspen-client-api/src/messages/mod.rs:1497:    RWLockAcquireWrite {
+crates/aspen-client-api/src/messages/mod.rs:1509:    RWLockTryAcquireWrite {
+crates/aspen-client-api/src/messages/mod.rs:1519:    RWLockReleaseRead {
+crates/aspen-client-api/src/messages/mod.rs:1527:    RWLockReleaseWrite {
+crates/aspen-client-api/src/messages/mod.rs:1537:    RWLockDowngrade {
+crates/aspen-client-api/src/messages/mod.rs:1548:    /// Query RWLock status.
+crates/aspen-client-api/src/messages/mod.rs:1549:    RWLockStatus {
+crates/aspen-client-api/src/messages/mod.rs:1555:    // Queue operations
+crates/aspen-client-api/src/messages/mod.rs:1558:    QueueCreate {
+crates/aspen-client-api/src/messages/mod.rs:1559:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1570:    QueueDelete {
+crates/aspen-client-api/src/messages/mod.rs:1571:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1576:    QueueEnqueue {
+crates/aspen-client-api/src/messages/mod.rs:1577:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1590:    QueueEnqueueBatch {
+crates/aspen-client-api/src/messages/mod.rs:1591:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1594:        items: Vec<QueueEnqueueItem>,
+crates/aspen-client-api/src/messages/mod.rs:1598:    QueueDequeue {
+crates/aspen-client-api/src/messages/mod.rs:1599:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1610:    QueueDequeueWait {
+crates/aspen-client-api/src/messages/mod.rs:1611:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1624:    QueuePeek {
+crates/aspen-client-api/src/messages/mod.rs:1625:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1632:    QueueAck {
+crates/aspen-client-api/src/messages/mod.rs:1633:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1640:    QueueNack {
+crates/aspen-client-api/src/messages/mod.rs:1641:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1652:    QueueExtendVisibility {
+crates/aspen-client-api/src/messages/mod.rs:1653:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1662:    QueueStatus {
+crates/aspen-client-api/src/messages/mod.rs:1663:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1668:    QueueGetDLQ {
+crates/aspen-client-api/src/messages/mod.rs:1669:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:1676:    QueueRedriveDLQ {
+crates/aspen-client-api/src/messages/mod.rs:1677:        /// Queue name.
+crates/aspen-client-api/src/messages/mod.rs:2487:    JobQueueStats,
+crates/aspen-client-api/src/messages/mod.rs:4203:    /// Barrier enter result.
+crates/aspen-client-api/src/messages/mod.rs:4204:    BarrierEnterResult(BarrierResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4206:    /// Barrier leave result.
+crates/aspen-client-api/src/messages/mod.rs:4207:    BarrierLeaveResult(BarrierResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4209:    /// Barrier status result.
+crates/aspen-client-api/src/messages/mod.rs:4210:    BarrierStatusResult(BarrierResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4212:    /// Semaphore acquire result.
+crates/aspen-client-api/src/messages/mod.rs:4213:    SemaphoreAcquireResult(SemaphoreResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4215:    /// Semaphore try-acquire result.
+crates/aspen-client-api/src/messages/mod.rs:4216:    SemaphoreTryAcquireResult(SemaphoreResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4218:    /// Semaphore release result.
+crates/aspen-client-api/src/messages/mod.rs:4219:    SemaphoreReleaseResult(SemaphoreResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4221:    /// Semaphore status result.
+crates/aspen-client-api/src/messages/mod.rs:4222:    SemaphoreStatusResult(SemaphoreResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4227:    /// RWLock acquire read result.
+crates/aspen-client-api/src/messages/mod.rs:4228:    RWLockAcquireReadResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4230:    /// RWLock try-acquire read result.
+crates/aspen-client-api/src/messages/mod.rs:4231:    RWLockTryAcquireReadResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4233:    /// RWLock acquire write result.
+crates/aspen-client-api/src/messages/mod.rs:4234:    RWLockAcquireWriteResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4236:    /// RWLock try-acquire write result.
+crates/aspen-client-api/src/messages/mod.rs:4237:    RWLockTryAcquireWriteResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4239:    /// RWLock release read result.
+crates/aspen-client-api/src/messages/mod.rs:4240:    RWLockReleaseReadResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4242:    /// RWLock release write result.
+crates/aspen-client-api/src/messages/mod.rs:4243:    RWLockReleaseWriteResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4245:    /// RWLock downgrade result.
+crates/aspen-client-api/src/messages/mod.rs:4246:    RWLockDowngradeResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4248:    /// RWLock status result.
+crates/aspen-client-api/src/messages/mod.rs:4249:    RWLockStatusResult(RWLockResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4252:    // Queue responses
+crates/aspen-client-api/src/messages/mod.rs:4254:    /// Queue create result.
+crates/aspen-client-api/src/messages/mod.rs:4255:    QueueCreateResult(QueueCreateResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4257:    /// Queue delete result.
+crates/aspen-client-api/src/messages/mod.rs:4258:    QueueDeleteResult(QueueDeleteResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4260:    /// Queue enqueue result.
+crates/aspen-client-api/src/messages/mod.rs:4261:    QueueEnqueueResult(QueueEnqueueResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4263:    /// Queue enqueue batch result.
+crates/aspen-client-api/src/messages/mod.rs:4264:    QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4266:    /// Queue dequeue result.
+crates/aspen-client-api/src/messages/mod.rs:4267:    QueueDequeueResult(QueueDequeueResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4269:    /// Queue peek result.
+crates/aspen-client-api/src/messages/mod.rs:4270:    QueuePeekResult(QueuePeekResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4272:    /// Queue ack result.
+crates/aspen-client-api/src/messages/mod.rs:4273:    QueueAckResult(QueueAckResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4275:    /// Queue nack result.
+crates/aspen-client-api/src/messages/mod.rs:4276:    QueueNackResult(QueueNackResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4278:    /// Queue extend visibility result.
+crates/aspen-client-api/src/messages/mod.rs:4279:    QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4281:    /// Queue status result.
+crates/aspen-client-api/src/messages/mod.rs:4282:    QueueStatusResult(QueueStatusResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4284:    /// Queue get DLQ result.
+crates/aspen-client-api/src/messages/mod.rs:4285:    QueueGetDLQResult(QueueGetDLQResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4287:    /// Queue redrive DLQ result.
+crates/aspen-client-api/src/messages/mod.rs:4288:    QueueRedriveDLQResult(QueueRedriveDLQResultResponse),
+crates/aspen-client-api/src/messages/mod.rs:4465:    JobQueueStatsResult(JobQueueStatsResultResponse),
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:49:        ClientRpcRequest::CounterGet { key }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:50:        | ClientRpcRequest::SignedCounterGet { key }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:51:        | ClientRpcRequest::SequenceCurrent { key } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:55:        ClientRpcRequest::CounterIncrement { key }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:56:        | ClientRpcRequest::CounterDecrement { key }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:57:        | ClientRpcRequest::CounterAdd { key, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:58:        | ClientRpcRequest::CounterSubtract { key, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:59:        | ClientRpcRequest::CounterSet { key, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:60:        | ClientRpcRequest::CounterCompareAndSet { key, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:61:        | ClientRpcRequest::SignedCounterAdd { key, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:62:        | ClientRpcRequest::SequenceNext { key }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:63:        | ClientRpcRequest::SequenceReserve { key, .. } => Some(Some(Operation::Write {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:74:        ClientRpcRequest::RateLimiterTryAcquire { key, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:75:        | ClientRpcRequest::RateLimiterAcquire { key, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:76:        | ClientRpcRequest::RateLimiterReset { key, .. } => Some(Some(Operation::Write {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:80:        ClientRpcRequest::RateLimiterAvailable { key, .. } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:84:        ClientRpcRequest::BarrierEnter { name, .. } | ClientRpcRequest::BarrierLeave { name, .. } => {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:90:        ClientRpcRequest::BarrierStatus { name } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:100:        ClientRpcRequest::SemaphoreAcquire { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:101:        | ClientRpcRequest::SemaphoreTryAcquire { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:102:        | ClientRpcRequest::SemaphoreRelease { name, .. } => Some(Some(Operation::Write {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:106:        ClientRpcRequest::SemaphoreStatus { name } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:110:        ClientRpcRequest::RWLockAcquireRead { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:111:        | ClientRpcRequest::RWLockTryAcquireRead { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:112:        | ClientRpcRequest::RWLockAcquireWrite { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:113:        | ClientRpcRequest::RWLockTryAcquireWrite { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:114:        | ClientRpcRequest::RWLockReleaseRead { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:115:        | ClientRpcRequest::RWLockReleaseWrite { name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:116:        | ClientRpcRequest::RWLockDowngrade { name, .. } => Some(Some(Operation::Write {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:120:        ClientRpcRequest::RWLockStatus { name } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:130:        ClientRpcRequest::QueueCreate { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:131:        | ClientRpcRequest::QueueDelete { queue_name }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:132:        | ClientRpcRequest::QueueEnqueue { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:133:        | ClientRpcRequest::QueueEnqueueBatch { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:134:        | ClientRpcRequest::QueueDequeue { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:135:        | ClientRpcRequest::QueueDequeueWait { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:136:        | ClientRpcRequest::QueueAck { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:137:        | ClientRpcRequest::QueueNack { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:138:        | ClientRpcRequest::QueueExtendVisibility { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:139:        | ClientRpcRequest::QueueRedriveDLQ { queue_name, .. } => Some(Some(Operation::Write {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:143:        ClientRpcRequest::QueuePeek { queue_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:144:        | ClientRpcRequest::QueueStatus { queue_name }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:145:        | ClientRpcRequest::QueueGetDLQ { queue_name, .. } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:155:        ClientRpcRequest::ServiceRegister { service_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:156:        | ClientRpcRequest::ServiceDeregister { service_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:157:        | ClientRpcRequest::ServiceHeartbeat { service_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:158:        | ClientRpcRequest::ServiceUpdateHealth { service_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:159:        | ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => Some(Some(Operation::Write {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:163:        ClientRpcRequest::ServiceDiscover { service_name, .. }
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:164:        | ClientRpcRequest::ServiceGetInstance { service_name, .. } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:167:        ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {
+crates/aspen-coordination/src/counter.rs:59:pub struct AtomicCounter<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/counter.rs:65:impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
+crates/aspen-coordination/src/counter.rs:276:pub struct SignedAtomicCounter<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/counter.rs:282:impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
+crates/aspen-coordination/src/counter.rs:381:    counter: AtomicCounter<S>,
+crates/aspen-coordination/src/counter.rs:399:        let counter = AtomicCounter::new(store, key, CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:423:                    let c = AtomicCounter::new(counter, key, CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:442:                    let c = AtomicCounter::new(counter, key, CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:481:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:492:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:501:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:511:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:520:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:536:        let counter = SignedAtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:552:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:567:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:579:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:590:        let counter = AtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:602:        let counter = SignedAtomicCounter::new(store, "test_counter", CounterConfig::default());
+crates/aspen-coordination/src/counter.rs:615:        let counter = Arc::new(AtomicCounter::new(store, "test_counter", CounterConfig::default()));
+crates/aspen-coordination/src/worker_strategies.rs:168:            queue_weight: 0.3, // Queue depth is 30% of score
+crates/aspen-coordination/src/sequence.rs:71:pub struct SequenceGenerator<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/sequence.rs:79:impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
+crates/aspen-coordination/src/sequence.rs:317:        let seq = SequenceGenerator::new(store, "test_seq", SequenceConfig::default());
+crates/aspen-coordination/src/sequence.rs:331:        let seq = Arc::new(SequenceGenerator::new(store, "test_seq", SequenceConfig::default()));
+crates/aspen-coordination/src/sequence.rs:344:        let seq = SequenceGenerator::new(store, "test_seq", SequenceConfig::default());
+crates/aspen-coordination/src/sequence.rs:357:        let seq = SequenceGenerator::new(store, "test_seq", SequenceConfig::default());
+crates/aspen-coordination/src/sequence.rs:373:        let seq = SequenceGenerator::new(store.clone(), "test_seq", config);
+crates/aspen-coordination/src/sequence.rs:388:        let seq = Arc::new(SequenceGenerator::new(store, "test_seq", SequenceConfig {
+crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs:11:        | ClientRpcRequest::WorkerRegister { .. }
+crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs:12:        | ClientRpcRequest::WorkerHeartbeat { .. }
+crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs:13:        | ClientRpcRequest::WorkerDeregister { .. } => Some(Some(Operation::Write {
+crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs:21:        | ClientRpcRequest::JobQueueStats
+crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs:22:        | ClientRpcRequest::WorkerStatus => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs:27:        ClientRpcRequest::WorkerPollJobs { worker_id, .. } => Some(Some(Operation::Read {
+crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs:30:        ClientRpcRequest::WorkerCompleteJob { worker_id, .. } => Some(Some(Operation::Write {
+crates/aspen-coordination/src/worker_coordinator/work_stealing.rs:11:use super::DistributedWorkerCoordinator;
+crates/aspen-coordination/src/worker_coordinator/work_stealing.rs:20:impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+crates/aspen-coordination/src/verified/rwlock.rs:12:use crate::rwlock::RWLockMode;
+crates/aspen-coordination/src/verified/rwlock.rs:14:/// RWLock key prefix.
+crates/aspen-coordination/src/verified/rwlock.rs:21:/// Generate the key for a RWLock.
+crates/aspen-coordination/src/verified/rwlock.rs:172:pub fn can_acquire_read(mode: RWLockMode, pending_writers: u32, writer_expired: bool) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:174:    if mode == RWLockMode::Write && !writer_expired {
+crates/aspen-coordination/src/verified/rwlock.rs:202:pub fn can_acquire_write(mode: RWLockMode, active_readers: u32, writer_expired: bool) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:204:    if mode == RWLockMode::Read && active_readers > 0 {
+crates/aspen-coordination/src/verified/rwlock.rs:209:    if mode == RWLockMode::Write && !writer_expired {
+crates/aspen-coordination/src/verified/rwlock.rs:261:pub fn mode_after_read_acquire(current_mode: RWLockMode) -> RWLockMode {
+crates/aspen-coordination/src/verified/rwlock.rs:262:    RWLockMode::Read
+crates/aspen-coordination/src/verified/rwlock.rs:269:pub fn mode_after_read_release(reader_count_after: u32) -> RWLockMode {
+crates/aspen-coordination/src/verified/rwlock.rs:271:        RWLockMode::Free
+crates/aspen-coordination/src/verified/rwlock.rs:273:        RWLockMode::Read
+crates/aspen-coordination/src/verified/rwlock.rs:281:pub fn mode_after_write_release() -> RWLockMode {
+crates/aspen-coordination/src/verified/rwlock.rs:282:    RWLockMode::Free
+crates/aspen-coordination/src/verified/rwlock.rs:355:pub fn can_release_read_lock(mode: RWLockMode, reader_count: u32) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:356:    mode == RWLockMode::Read && reader_count > 0
+crates/aspen-coordination/src/verified/rwlock.rs:364:pub fn can_release_write_lock(mode: RWLockMode) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:365:    mode == RWLockMode::Write
+crates/aspen-coordination/src/verified/rwlock.rs:373:pub fn can_downgrade_lock(mode: RWLockMode) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:374:    mode == RWLockMode::Write
+crates/aspen-coordination/src/verified/rwlock.rs:383:pub fn check_mutual_exclusion(mode: RWLockMode, reader_count: u32, has_writer: bool) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:390:        RWLockMode::Free => reader_count == 0 && !has_writer,
+crates/aspen-coordination/src/verified/rwlock.rs:391:        RWLockMode::Read => reader_count > 0 && !has_writer,
+crates/aspen-coordination/src/verified/rwlock.rs:392:        RWLockMode::Write => reader_count == 0 && has_writer,
+crates/aspen-coordination/src/verified/rwlock.rs:414:pub fn compute_mode_after_cleanup(current_mode: RWLockMode, active_readers: u32, writer_active: bool) -> RWLockMode {
+crates/aspen-coordination/src/verified/rwlock.rs:416:        RWLockMode::Write => {
+crates/aspen-coordination/src/verified/rwlock.rs:418:                RWLockMode::Write
+crates/aspen-coordination/src/verified/rwlock.rs:420:                RWLockMode::Free
+crates/aspen-coordination/src/verified/rwlock.rs:423:        RWLockMode::Read => {
+crates/aspen-coordination/src/verified/rwlock.rs:425:                RWLockMode::Read
+crates/aspen-coordination/src/verified/rwlock.rs:427:                RWLockMode::Free
+crates/aspen-coordination/src/verified/rwlock.rs:430:        RWLockMode::Free => RWLockMode::Free,
+crates/aspen-coordination/src/verified/rwlock.rs:440:pub fn is_lock_free(mode: RWLockMode) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:441:    matches!(mode, RWLockMode::Free)
+crates/aspen-coordination/src/verified/rwlock.rs:446:pub fn is_lock_read_mode(mode: RWLockMode) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:447:    matches!(mode, RWLockMode::Read)
+crates/aspen-coordination/src/verified/rwlock.rs:452:pub fn is_lock_write_mode(mode: RWLockMode) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:453:    matches!(mode, RWLockMode::Write)
+crates/aspen-coordination/src/verified/rwlock.rs:465:    mode: RWLockMode,
+crates/aspen-coordination/src/verified/rwlock.rs:472:    let mode_allows_read = !matches!(mode, RWLockMode::Write);
+crates/aspen-coordination/src/verified/rwlock.rs:486:pub fn can_acquire_write_lock(mode: RWLockMode, fencing_token: u64) -> bool {
+crates/aspen-coordination/src/verified/rwlock.rs:487:    matches!(mode, RWLockMode::Free) && fencing_token < u64::MAX
+crates/aspen-coordination/src/verified/rwlock.rs:492:pub fn compute_mode_after_read_release(reader_count_after: u32) -> RWLockMode {
+crates/aspen-coordination/src/verified/rwlock.rs:494:        RWLockMode::Free
+crates/aspen-coordination/src/verified/rwlock.rs:496:        RWLockMode::Read
+crates/aspen-coordination/src/verified/rwlock.rs:617:        assert!(can_acquire_read(RWLockMode::Free, 0, false));
+crates/aspen-coordination/src/verified/rwlock.rs:622:        assert!(!can_acquire_read(RWLockMode::Write, 0, false));
+crates/aspen-coordination/src/verified/rwlock.rs:627:        assert!(can_acquire_read(RWLockMode::Write, 0, true));
+crates/aspen-coordination/src/verified/rwlock.rs:632:        assert!(!can_acquire_read(RWLockMode::Free, 1, false));
+crates/aspen-coordination/src/verified/rwlock.rs:633:        assert!(!can_acquire_read(RWLockMode::Read, 1, false));
+crates/aspen-coordination/src/verified/rwlock.rs:638:        assert!(can_acquire_read(RWLockMode::Read, 0, false));
+crates/aspen-coordination/src/verified/rwlock.rs:643:        assert!(can_acquire_write(RWLockMode::Free, 0, false));
+crates/aspen-coordination/src/verified/rwlock.rs:648:        assert!(!can_acquire_write(RWLockMode::Read, 1, false));
+crates/aspen-coordination/src/verified/rwlock.rs:649:        assert!(!can_acquire_write(RWLockMode::Read, 5, false));
+crates/aspen-coordination/src/verified/rwlock.rs:654:        assert!(can_acquire_write(RWLockMode::Read, 0, false));
+crates/aspen-coordination/src/verified/rwlock.rs:659:        assert!(!can_acquire_write(RWLockMode::Write, 0, false));
+crates/aspen-coordination/src/verified/rwlock.rs:664:        assert!(can_acquire_write(RWLockMode::Write, 0, true));
+crates/aspen-coordination/src/verified/rwlock.rs:676:        assert_eq!(compute_mode_after_cleanup(RWLockMode::Write, 0, true), RWLockMode::Write);
+crates/aspen-coordination/src/verified/rwlock.rs:681:        assert_eq!(compute_mode_after_cleanup(RWLockMode::Write, 0, false), RWLockMode::Free);
+crates/aspen-coordination/src/verified/rwlock.rs:686:        assert_eq!(compute_mode_after_cleanup(RWLockMode::Read, 3, false), RWLockMode::Read);
+crates/aspen-coordination/src/verified/rwlock.rs:691:        assert_eq!(compute_mode_after_cleanup(RWLockMode::Read, 0, false), RWLockMode::Free);
+crates/aspen-coordination/src/verified/rwlock.rs:696:        assert_eq!(compute_mode_after_cleanup(RWLockMode::Free, 0, false), RWLockMode::Free);
+crates/aspen-coordination/src/verified/rwlock.rs:727:                assert!(can_acquire_read(RWLockMode::Free, *pending, *expired));
+crates/aspen-coordination/src/verified/rwlock.rs:730:            assert!(can_acquire_write(RWLockMode::Free, 0, *expired));
+crates/aspen-coordination/src/worker_coordinator/registry.rs:13:use super::DistributedWorkerCoordinator;
+crates/aspen-coordination/src/worker_coordinator/registry.rs:22:impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+crates/aspen-coordination/src/verified/semaphore.rs:12:/// Semaphore key prefix.
+crates/aspen-coordination/src/worker_coordinator/group_coordination.rs:10:use super::DistributedWorkerCoordinator;
+crates/aspen-coordination/src/worker_coordinator/group_coordination.rs:15:impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+crates/aspen-coordination/src/worker_coordinator/types.rs:29:    /// Queue depth at this worker.
+crates/aspen-coordination/src/worker_coordinator/types.rs:210:    /// Queue depth threshold for stealing source.
+crates/aspen-coordination/src/worker_coordinator/types.rs:265:    /// Queue depth.
+crates/aspen-coordination/src/worker_coordinator/failover.rs:13:use super::DistributedWorkerCoordinator;
+crates/aspen-coordination/src/worker_coordinator/failover.rs:15:impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+crates/aspen-coordination/src/verified/barrier.rs:11:use crate::barrier::BarrierPhase;
+crates/aspen-coordination/src/verified/barrier.rs:24:/// The initial `BarrierPhase`.
+crates/aspen-coordination/src/verified/barrier.rs:29:/// assert_eq!(compute_initial_barrier_phase(1), BarrierPhase::Ready);
+crates/aspen-coordination/src/verified/barrier.rs:30:/// assert_eq!(compute_initial_barrier_phase(3), BarrierPhase::Waiting);
+crates/aspen-coordination/src/verified/barrier.rs:33:pub fn compute_initial_barrier_phase(required_count: u32) -> BarrierPhase {
+crates/aspen-coordination/src/verified/barrier.rs:35:        BarrierPhase::Ready
+crates/aspen-coordination/src/verified/barrier.rs:37:        BarrierPhase::Waiting
+crates/aspen-coordination/src/verified/barrier.rs:101:pub fn should_start_leave_phase(phase: BarrierPhase, leave_count: u32, required_count: u32) -> bool {
+crates/aspen-coordination/src/verified/barrier.rs:102:    matches!(phase, BarrierPhase::Ready) && leave_count >= required_count
+crates/aspen-coordination/src/verified/barrier.rs:120:pub fn is_valid_phase_transition(old_phase: BarrierPhase, new_phase: BarrierPhase) -> bool {
+crates/aspen-coordination/src/verified/barrier.rs:123:        (BarrierPhase::Waiting, BarrierPhase::Waiting) => true,
+crates/aspen-coordination/src/verified/barrier.rs:124:        (BarrierPhase::Waiting, BarrierPhase::Ready) => true,
+crates/aspen-coordination/src/verified/barrier.rs:125:        (BarrierPhase::Ready, BarrierPhase::Ready) => true,
+crates/aspen-coordination/src/verified/barrier.rs:126:        (BarrierPhase::Ready, BarrierPhase::Leaving) => true,
+crates/aspen-coordination/src/verified/barrier.rs:127:        (BarrierPhase::Leaving, BarrierPhase::Leaving) => true,
+crates/aspen-coordination/src/verified/barrier.rs:206:    phase: BarrierPhase,
+crates/aspen-coordination/src/verified/barrier.rs:221:    if phase == BarrierPhase::Leaving {
+crates/aspen-coordination/src/verified/barrier.rs:232:    if phase == BarrierPhase::Waiting {
+crates/aspen-coordination/src/verified/barrier.rs:291:// Additional Barrier Functions (Verus-aligned)
+crates/aspen-coordination/src/verified/barrier.rs:304:/// * `deadline_ms` - Barrier deadline in Unix milliseconds
+crates/aspen-coordination/src/verified/barrier.rs:321:        assert_eq!(compute_initial_barrier_phase(1), BarrierPhase::Ready);
+crates/aspen-coordination/src/verified/barrier.rs:327:        assert_eq!(compute_initial_barrier_phase(0), BarrierPhase::Ready);
+crates/aspen-coordination/src/verified/barrier.rs:332:        assert_eq!(compute_initial_barrier_phase(2), BarrierPhase::Waiting);
+crates/aspen-coordination/src/verified/barrier.rs:333:        assert_eq!(compute_initial_barrier_phase(10), BarrierPhase::Waiting);
+crates/aspen-coordination/src/verified/barrier.rs:371:        assert!(should_start_leave_phase(BarrierPhase::Ready, 3, 3));
+crates/aspen-coordination/src/verified/barrier.rs:372:        assert!(should_start_leave_phase(BarrierPhase::Ready, 5, 3));
+crates/aspen-coordination/src/verified/barrier.rs:373:        assert!(!should_start_leave_phase(BarrierPhase::Ready, 2, 3));
+crates/aspen-coordination/src/verified/barrier.rs:374:        assert!(!should_start_leave_phase(BarrierPhase::Waiting, 3, 3));
+crates/aspen-coordination/src/verified/barrier.rs:380:        assert!(is_valid_phase_transition(BarrierPhase::Waiting, BarrierPhase::Ready));
+crates/aspen-coordination/src/verified/barrier.rs:381:        assert!(is_valid_phase_transition(BarrierPhase::Ready, BarrierPhase::Leaving));
+crates/aspen-coordination/src/verified/barrier.rs:382:        assert!(is_valid_phase_transition(BarrierPhase::Waiting, BarrierPhase::Waiting));
+crates/aspen-coordination/src/verified/barrier.rs:383:        assert!(is_valid_phase_transition(BarrierPhase::Ready, BarrierPhase::Ready));
+crates/aspen-coordination/src/verified/barrier.rs:386:        assert!(!is_valid_phase_transition(BarrierPhase::Leaving, BarrierPhase::Waiting));
+crates/aspen-coordination/src/verified/barrier.rs:387:        assert!(!is_valid_phase_transition(BarrierPhase::Leaving, BarrierPhase::Ready));
+crates/aspen-coordination/src/verified/barrier.rs:388:        assert!(!is_valid_phase_transition(BarrierPhase::Waiting, BarrierPhase::Leaving));
+crates/aspen-coordination/src/verified/barrier.rs:433:        let result = check_barrier_deadlock(BarrierPhase::Waiting, 1, 3, &participants, 1000, 200);
+crates/aspen-coordination/src/verified/barrier.rs:443:        let result = check_barrier_deadlock(BarrierPhase::Waiting, 1, 3, &participants, 1000, 200);
+crates/aspen-coordination/src/verified/barrier.rs:467:        assert!(is_valid_phase_transition(BarrierPhase::Leaving, BarrierPhase::Leaving));
+crates/aspen-coordination/src/verified/barrier.rs:506:        let result = check_barrier_deadlock(BarrierPhase::Leaving, 1, 1, &participants, 1000, 200);
+crates/aspen-coordination/src/verified/barrier.rs:512:        let result = check_barrier_deadlock(BarrierPhase::Ready, 3, 3, &[], 1000, 200);
+crates/aspen-coordination/src/verified/barrier.rs:550:                BarrierPhase::Ready => assert!(is_ready || *required <= 1),
+crates/aspen-coordination/src/verified/barrier.rs:551:                BarrierPhase::Waiting => assert!(!is_ready || *required <= 1),
+crates/aspen-coordination/src/verified/barrier.rs:552:                BarrierPhase::Leaving => unreachable!("Initial phase cannot be Leaving"),
+crates/aspen-coordination/src/worker_coordinator/load_balancing.rs:6:use super::DistributedWorkerCoordinator;
+crates/aspen-coordination/src/worker_coordinator/load_balancing.rs:12:impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+crates/aspen-coordination/src/worker_coordinator/load_balancing.rs:93:    use super::super::DistributedWorkerCoordinator;
+crates/aspen-coordination/src/worker_coordinator/load_balancing.rs:147:        let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/src/worker_coordinator/load_balancing.rs:179:        let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/src/worker_coordinator/mod.rs:45:use crate::registry::ServiceRegistry;
+crates/aspen-coordination/src/worker_coordinator/mod.rs:49:pub struct DistributedWorkerCoordinator<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/worker_coordinator/mod.rs:53:    registry: ServiceRegistry<S>,
+crates/aspen-coordination/src/worker_coordinator/mod.rs:70:impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
+crates/aspen-coordination/src/worker_coordinator/mod.rs:78:        let registry = ServiceRegistry::new(store.clone());
+crates/aspen-coordination/src/verified/strategies.rs:340:    /// Queue depth (items waiting).
+crates/aspen-coordination/src/verified/strategies.rs:361:    HighestQueueDepth,
+crates/aspen-coordination/src/verified/strategies.rs:400:                StealStrategy::HighestQueueDepth => w.queue_depth as f32,
+crates/aspen-coordination/src/verified/strategies.rs:864:        let result = rank_steal_targets(&workers, 0.1, StealStrategy::HighestQueueDepth, 5);
+crates/aspen-coordination/src/verified/strategies.rs:893:        let result = rank_steal_targets(&workers, 0.1, StealStrategy::HighestQueueDepth, 5);
+crates/aspen-client-api/tests/wire_format_golden.rs:166:        ClientRpcResponse::BarrierEnterResult(_) => "BarrierEnterResult",
+crates/aspen-client-api/tests/wire_format_golden.rs:167:        ClientRpcResponse::SemaphoreAcquireResult(_) => "SemaphoreAcquireResult",
+crates/aspen-client-api/tests/wire_format_golden.rs:168:        ClientRpcResponse::RWLockAcquireReadResult(_) => "RWLockAcquireReadResult",
+crates/aspen-client-api/tests/wire_format_golden.rs:169:        ClientRpcResponse::QueueCreateResult(_) => "QueueCreateResult",
+crates/aspen-client-api/tests/wire_format_golden.rs:278:    assert_request_disc(&map, &ClientRpcRequest::CounterGet { key: s() });
+crates/aspen-client-api/tests/wire_format_golden.rs:279:    assert_request_disc(&map, &ClientRpcRequest::CounterIncrement { key: s() });
+crates/aspen-client-api/tests/wire_format_golden.rs:280:    assert_request_disc(&map, &ClientRpcRequest::SignedCounterAdd { key: s(), amount: 0 });
+crates/aspen-client-api/tests/wire_format_golden.rs:283:    assert_request_disc(&map, &ClientRpcRequest::SequenceNext { key: s() });
+crates/aspen-client-api/tests/wire_format_golden.rs:286:    assert_request_disc(&map, &ClientRpcRequest::RateLimiterTryAcquire {
+crates/aspen-client-api/tests/wire_format_golden.rs:315:    assert_request_disc(&map, &ClientRpcRequest::BarrierEnter {
+crates/aspen-client-api/tests/wire_format_golden.rs:323:    assert_request_disc(&map, &ClientRpcRequest::SemaphoreAcquire {
+crates/aspen-client-api/tests/wire_format_golden.rs:333:    assert_request_disc(&map, &ClientRpcRequest::RWLockAcquireRead {
+crates/aspen-client-api/tests/wire_format_golden.rs:339:    assert_request_disc(&map, &ClientRpcRequest::RWLockStatus { name: s() });
+crates/aspen-client-api/tests/wire_format_golden.rs:342:    assert_request_disc(&map, &ClientRpcRequest::QueueCreate {
+crates/aspen-client-api/tests/wire_format_golden.rs:348:    assert_request_disc(&map, &ClientRpcRequest::QueueRedriveDLQ {
+crates/aspen-client-api/tests/wire_format_golden.rs:354:    assert_request_disc(&map, &ClientRpcRequest::ServiceRegister {
+crates/aspen-client-api/tests/wire_format_golden.rs:434:    assert_request_disc(&map, &ClientRpcRequest::WorkerDeregister { worker_id: s() });
+crates/aspen-client-api/tests/wire_format_golden.rs:495:    assert_request_disc(&map, &ClientRpcRequest::WorkerPollJobs {
+crates/aspen-client-api/tests/wire_format_golden.rs:727:        &ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
+crates/aspen-client-api/tests/wire_format_golden.rs:739:        &ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+crates/aspen-client-api/tests/wire_format_golden.rs:752:        &ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+crates/aspen-client-api/tests/wire_format_golden.rs:766:        &ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
+crates/aspen-coordination/src/verified/queue/expiration.rs:58:/// * `default_ttl_ms` - Queue's default TTL (0 = no expiration)
+crates/aspen-client-api/tests/golden/response_discriminants.txt:80:74 BarrierEnterResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:81:75 BarrierLeaveResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:82:76 BarrierStatusResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:83:77 SemaphoreAcquireResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:84:78 SemaphoreTryAcquireResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:85:79 SemaphoreReleaseResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:86:80 SemaphoreStatusResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:87:81 RWLockAcquireReadResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:88:82 RWLockTryAcquireReadResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:89:83 RWLockAcquireWriteResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:90:84 RWLockTryAcquireWriteResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:91:85 RWLockReleaseReadResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:92:86 RWLockReleaseWriteResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:93:87 RWLockDowngradeResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:94:88 RWLockStatusResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:95:89 QueueCreateResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:96:90 QueueDeleteResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:97:91 QueueEnqueueResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:98:92 QueueEnqueueBatchResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:99:93 QueueDequeueResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:100:94 QueuePeekResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:101:95 QueueAckResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:102:96 QueueNackResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:103:97 QueueExtendVisibilityResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:104:98 QueueStatusResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:105:99 QueueGetDLQResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:106:100 QueueRedriveDLQResult
+crates/aspen-client-api/tests/golden/response_discriminants.txt:163:157 JobQueueStatsResult
+crates/aspen-coordination/src/verified/queue/mod.rs:15://! - [`key_generation`]: Queue key prefix and key/prefix generation functions
+crates/aspen-coordination/src/verified/queue/mod.rs:404:    // Pending to Queue Item Tests
+crates/aspen-client-api/tests/golden/request_discriminants.txt:100:94 BarrierEnter
+crates/aspen-client-api/tests/golden/request_discriminants.txt:101:95 BarrierLeave
+crates/aspen-client-api/tests/golden/request_discriminants.txt:102:96 BarrierStatus
+crates/aspen-client-api/tests/golden/request_discriminants.txt:103:97 SemaphoreAcquire
+crates/aspen-client-api/tests/golden/request_discriminants.txt:104:98 SemaphoreTryAcquire
+crates/aspen-client-api/tests/golden/request_discriminants.txt:105:99 SemaphoreRelease
+crates/aspen-client-api/tests/golden/request_discriminants.txt:106:100 SemaphoreStatus
+crates/aspen-client-api/tests/golden/request_discriminants.txt:107:101 RWLockAcquireRead
+crates/aspen-client-api/tests/golden/request_discriminants.txt:108:102 RWLockTryAcquireRead
+crates/aspen-client-api/tests/golden/request_discriminants.txt:109:103 RWLockAcquireWrite
+crates/aspen-client-api/tests/golden/request_discriminants.txt:110:104 RWLockTryAcquireWrite
+crates/aspen-client-api/tests/golden/request_discriminants.txt:111:105 RWLockReleaseRead
+crates/aspen-client-api/tests/golden/request_discriminants.txt:112:106 RWLockReleaseWrite
+crates/aspen-client-api/tests/golden/request_discriminants.txt:113:107 RWLockDowngrade
+crates/aspen-client-api/tests/golden/request_discriminants.txt:114:108 RWLockStatus
+crates/aspen-client-api/tests/golden/request_discriminants.txt:115:109 QueueCreate
+crates/aspen-client-api/tests/golden/request_discriminants.txt:116:110 QueueDelete
+crates/aspen-client-api/tests/golden/request_discriminants.txt:117:111 QueueEnqueue
+crates/aspen-client-api/tests/golden/request_discriminants.txt:118:112 QueueEnqueueBatch
+crates/aspen-client-api/tests/golden/request_discriminants.txt:119:113 QueueDequeue
+crates/aspen-client-api/tests/golden/request_discriminants.txt:120:114 QueueDequeueWait
+crates/aspen-client-api/tests/golden/request_discriminants.txt:121:115 QueuePeek
+crates/aspen-client-api/tests/golden/request_discriminants.txt:122:116 QueueAck
+crates/aspen-client-api/tests/golden/request_discriminants.txt:123:117 QueueNack
+crates/aspen-client-api/tests/golden/request_discriminants.txt:124:118 QueueExtendVisibility
+crates/aspen-client-api/tests/golden/request_discriminants.txt:125:119 QueueStatus
+crates/aspen-client-api/tests/golden/request_discriminants.txt:126:120 QueueGetDLQ
+crates/aspen-client-api/tests/golden/request_discriminants.txt:127:121 QueueRedriveDLQ
+crates/aspen-client-api/tests/golden/request_discriminants.txt:211:205 JobQueueStats
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:1://! RWLock Operation Specifications
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:3://! Proves that RWLock operations preserve all invariants.
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:28:    pub open spec fn acquire_read_pre(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:39:    pub open spec fn acquire_read_post(pre: RWLockStateSpec) -> RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:40:        RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:41:            mode: RWLockModeSpec::Read,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:72:    pub open spec fn acquire_write_pre(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:87:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:90:    ) -> RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:92:        RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:93:            mode: RWLockModeSpec::Write,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:115:    pub open spec fn release_read_pre(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:123:    pub open spec fn release_read_post(pre: RWLockStateSpec) -> RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:125:        RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:126:            mode: if new_count == 0 { RWLockModeSpec::Free } else { RWLockModeSpec::Read },
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:140:    pub open spec fn release_write_pre(state: RWLockStateSpec, token: u64) -> bool {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:150:    pub open spec fn release_write_post(pre: RWLockStateSpec) -> RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:151:        RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:152:            mode: RWLockModeSpec::Free,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:169:    pub open spec fn downgrade_pre(state: RWLockStateSpec, token: u64) -> bool {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:179:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:181:    ) -> RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:182:        RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:183:            mode: RWLockModeSpec::Read,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:199:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:214:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:225:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:245:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:262:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:278:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:302:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:318:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:337:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:351:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:367:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:387:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:404:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:416:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:463:        mode: super::rwlock_state_spec::RWLockModeSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:470:            !matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:476:        !matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:497:        mode: super::rwlock_state_spec::RWLockModeSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:501:            mode == super::rwlock_state_spec::RWLockModeSpec::Free &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:505:        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Free) &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:521:        mode: super::rwlock_state_spec::RWLockModeSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:525:            mode == super::rwlock_state_spec::RWLockModeSpec::Read &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:529:        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Read) &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:547:        mode: super::rwlock_state_spec::RWLockModeSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:553:            mode == super::rwlock_state_spec::RWLockModeSpec::Write &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:558:        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:581:        mode: super::rwlock_state_spec::RWLockModeSpec,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:588:            mode == super::rwlock_state_spec::RWLockModeSpec::Write &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:594:        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:645:    ) -> (result: super::rwlock_state_spec::RWLockModeSpec)
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:647:            reader_count_after == 0 ==> result == super::rwlock_state_spec::RWLockModeSpec::Free,
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:648:            reader_count_after > 0 ==> result == super::rwlock_state_spec::RWLockModeSpec::Read
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:651:            super::rwlock_state_spec::RWLockModeSpec::Free
+crates/aspen-coordination/verus/rwlock_ops_spec.rs:653:            super::rwlock_state_spec::RWLockModeSpec::Read
+crates/aspen-coordination/src/verified/queue/enqueue.rs:11:use crate::queue::QueueItem;
+crates/aspen-coordination/src/verified/queue/enqueue.rs:27:/// A new `QueueItem` ready to be re-enqueued.
+crates/aspen-coordination/src/verified/queue/enqueue.rs:34:pub fn create_queue_item_from_pending(pending: &PendingItem, decrement_attempts: bool) -> QueueItem {
+crates/aspen-coordination/src/verified/queue/enqueue.rs:50:    QueueItem {
+crates/aspen-coordination/src/verified/queue/key_generation.rs:6:/// Queue key prefix constant.
+crates/aspen-coordination/src/verified/worker.rs:843:        assert!(!is_steal_source(true, true, 5u32, 10u32)); // Queue too shallow
+crates/aspen-coordination/verus/barrier_spec.rs:1://! Barrier State Machine Model and Operations
+crates/aspen-coordination/verus/barrier_spec.rs:7://! The `BarrierState` captures:
+crates/aspen-coordination/verus/barrier_spec.rs:31:    /// Barrier phase enumeration
+crates/aspen-coordination/verus/barrier_spec.rs:32:    pub enum BarrierPhaseSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:42:    pub struct BarrierStateSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:48:        pub phase: BarrierPhaseSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:56:    pub open spec fn is_waiting(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:58:            BarrierPhaseSpec::Waiting => true,
+crates/aspen-coordination/verus/barrier_spec.rs:64:    pub open spec fn is_ready(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:66:            BarrierPhaseSpec::Ready => true,
+crates/aspen-coordination/verus/barrier_spec.rs:72:    pub open spec fn is_leaving(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:74:            BarrierPhaseSpec::Leaving => true,
+crates/aspen-coordination/verus/barrier_spec.rs:87:    pub open spec fn ready_condition_holds(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:96:    pub open spec fn phase_consistent(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:98:            BarrierPhaseSpec::Waiting => {
+crates/aspen-coordination/verus/barrier_spec.rs:101:            BarrierPhaseSpec::Ready => {
+crates/aspen-coordination/verus/barrier_spec.rs:104:            BarrierPhaseSpec::Leaving => {
+crates/aspen-coordination/verus/barrier_spec.rs:121:    pub open spec fn participant_bounded(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:134:    pub open spec fn barrier_invariant(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:147:    pub open spec fn initial_barrier_state(required_count: u32) -> BarrierStateSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:148:        BarrierStateSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:152:                BarrierPhaseSpec::Ready
+crates/aspen-coordination/verus/barrier_spec.rs:154:                BarrierPhaseSpec::Waiting
+crates/aspen-coordination/verus/barrier_spec.rs:177:    /// - Barrier is not in Leaving phase (participants cannot enter during leave)
+crates/aspen-coordination/verus/barrier_spec.rs:181:    pub open spec fn enter_pre(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:190:    pub open spec fn enter_post(pre: BarrierStateSpec) -> BarrierStateSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:193:            BarrierPhaseSpec::Ready
+crates/aspen-coordination/verus/barrier_spec.rs:195:            BarrierPhaseSpec::Waiting
+crates/aspen-coordination/verus/barrier_spec.rs:197:        BarrierStateSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:207:        pre: BarrierStateSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:236:        pre: BarrierStateSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:263:    pub open spec fn leave_pre(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:273:    pub open spec fn leave_post(pre: BarrierStateSpec) -> BarrierStateSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:275:        BarrierStateSpec {
+crates/aspen-coordination/verus/barrier_spec.rs:278:            phase: BarrierPhaseSpec::Leaving,
+crates/aspen-coordination/verus/barrier_spec.rs:285:        pre: BarrierStateSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:299:    pub open spec fn is_complete(state: BarrierStateSpec) -> bool {
+crates/aspen-coordination/verus/barrier_spec.rs:306:        pre: BarrierStateSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:323:        pre: BarrierPhaseSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:324:        post: BarrierPhaseSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:328:            (BarrierPhaseSpec::Waiting, BarrierPhaseSpec::Waiting) => true,
+crates/aspen-coordination/verus/barrier_spec.rs:329:            (BarrierPhaseSpec::Ready, BarrierPhaseSpec::Ready) => true,
+crates/aspen-coordination/verus/barrier_spec.rs:331:            (BarrierPhaseSpec::Waiting, BarrierPhaseSpec::Ready) => true,
+crates/aspen-coordination/verus/barrier_spec.rs:338:        pre: BarrierPhaseSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:339:        post: BarrierPhaseSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:343:            BarrierPhaseSpec::Leaving => true,
+crates/aspen-coordination/verus/barrier_spec.rs:351:        pre: BarrierStateSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:367:        pre: BarrierStateSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:389:        pre: BarrierStateSpec,
+crates/aspen-coordination/verus/barrier_spec.rs:410:    /// Barrier phase enumeration (exec version)
+crates/aspen-coordination/verus/barrier_spec.rs:412:    pub enum BarrierPhase {
+crates/aspen-coordination/verus/barrier_spec.rs:432:    /// The initial `BarrierPhase`.
+crates/aspen-coordination/verus/barrier_spec.rs:433:    pub fn compute_initial_barrier_phase(required_count: u32) -> (result: BarrierPhase)
+crates/aspen-coordination/verus/barrier_spec.rs:435:            required_count <= 1 ==> result == BarrierPhase::Ready,
+crates/aspen-coordination/verus/barrier_spec.rs:436:            required_count > 1 ==> result == BarrierPhase::Waiting
+crates/aspen-coordination/verus/barrier_spec.rs:439:            BarrierPhase::Ready
+crates/aspen-coordination/verus/barrier_spec.rs:441:            BarrierPhase::Waiting
+crates/aspen-coordination/verus/barrier_spec.rs:486:    pub fn should_start_leave_phase(phase: BarrierPhase, leave_count: u32, required_count: u32) -> (result: bool)
+crates/aspen-coordination/verus/barrier_spec.rs:487:        ensures result == (phase == BarrierPhase::Ready && leave_count >= required_count)
+crates/aspen-coordination/verus/barrier_spec.rs:489:        matches!(phase, BarrierPhase::Ready) && leave_count >= required_count
+crates/aspen-coordination/verus/barrier_spec.rs:507:    pub fn is_valid_phase_transition(old_phase: BarrierPhase, new_phase: BarrierPhase) -> (result: bool)
+crates/aspen-coordination/verus/barrier_spec.rs:509:            (old_phase == BarrierPhase::Waiting && new_phase == BarrierPhase::Waiting) ||
+crates/aspen-coordination/verus/barrier_spec.rs:510:            (old_phase == BarrierPhase::Waiting && new_phase == BarrierPhase::Ready) ||
+crates/aspen-coordination/verus/barrier_spec.rs:511:            (old_phase == BarrierPhase::Ready && new_phase == BarrierPhase::Ready) ||
+crates/aspen-coordination/verus/barrier_spec.rs:512:            (old_phase == BarrierPhase::Ready && new_phase == BarrierPhase::Leaving) ||
+crates/aspen-coordination/verus/barrier_spec.rs:513:            (old_phase == BarrierPhase::Leaving && new_phase == BarrierPhase::Leaving)
+crates/aspen-coordination/verus/barrier_spec.rs:518:            (BarrierPhase::Waiting, BarrierPhase::Waiting) => true,
+crates/aspen-coordination/verus/barrier_spec.rs:519:            (BarrierPhase::Waiting, BarrierPhase::Ready) => true,
+crates/aspen-coordination/verus/barrier_spec.rs:520:            (BarrierPhase::Ready, BarrierPhase::Ready) => true,
+crates/aspen-coordination/verus/barrier_spec.rs:521:            (BarrierPhase::Ready, BarrierPhase::Leaving) => true,
+crates/aspen-coordination/verus/barrier_spec.rs:522:            (BarrierPhase::Leaving, BarrierPhase::Leaving) => true,
+crates/aspen-coordination/src/verified/mod.rs:78:// Re-exports: Barrier
+crates/aspen-coordination/src/verified/mod.rs:86:// Barrier (Verus-aligned)
+crates/aspen-coordination/src/verified/mod.rs:211:// Re-exports: Queue
+crates/aspen-coordination/src/verified/mod.rs:336:// Re-exports: RWLock
+crates/aspen-coordination/src/verified/mod.rs:384:// Re-exports: Semaphore
+crates/aspen-coordination/verus/rwlock_state_spec.rs:1://! RWLock State Machine Model
+crates/aspen-coordination/verus/rwlock_state_spec.rs:7://! The `RWLockState` captures:
+crates/aspen-coordination/verus/rwlock_state_spec.rs:34:    pub enum RWLockModeSpec {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:61:    /// Complete RWLock state
+crates/aspen-coordination/verus/rwlock_state_spec.rs:62:    pub struct RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:64:        pub mode: RWLockModeSpec,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:82:    pub open spec fn is_free(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:84:            RWLockModeSpec::Free => true,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:90:    pub open spec fn is_read_mode(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:92:            RWLockModeSpec::Read => true,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:98:    pub open spec fn is_write_mode(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:100:            RWLockModeSpec::Write => true,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:106:    pub open spec fn has_writer(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:111:    pub open spec fn has_readers(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:125:    pub open spec fn mutual_exclusion_holds(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:127:            RWLockModeSpec::Free => {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:130:            RWLockModeSpec::Read => {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:133:            RWLockModeSpec::Write => {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:152:    pub open spec fn mode_consistent(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:166:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:167:        post: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:178:        pre: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:179:        post: RWLockStateSpec,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:188:    pub open spec fn writer_token_matches_global(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:200:    pub open spec fn readers_bounded(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:210:    pub open spec fn pending_writers_bounded(state: RWLockStateSpec, max_pending: u32) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:218:    /// Combined invariant for RWLock state
+crates/aspen-coordination/verus/rwlock_state_spec.rs:219:    pub open spec fn rwlock_invariant(state: RWLockStateSpec) -> bool {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:229:    /// Initial RWLock state (free)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:230:    pub open spec fn initial_rwlock_state(max_readers: u32) -> RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:231:        RWLockStateSpec {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:232:            mode: RWLockModeSpec::Free,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:266:    pub enum RWLockMode {
+crates/aspen-coordination/verus/rwlock_state_spec.rs:282:    pub fn is_lock_free(mode: RWLockMode) -> (result: bool)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:283:        ensures result == (mode == RWLockMode::Free)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:285:        matches!(mode, RWLockMode::Free)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:298:    pub fn is_lock_read_mode(mode: RWLockMode) -> (result: bool)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:299:        ensures result == (mode == RWLockMode::Read)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:301:        matches!(mode, RWLockMode::Read)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:314:    pub fn is_lock_write_mode(mode: RWLockMode) -> (result: bool)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:315:        ensures result == (mode == RWLockMode::Write)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:317:        matches!(mode, RWLockMode::Write)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:339:        mode: RWLockMode,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:345:            (mode == RWLockMode::Free) ||
+crates/aspen-coordination/verus/rwlock_state_spec.rs:346:            (mode == RWLockMode::Read && pending_writers == 0 && reader_count < max_readers)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:349:        matches!(mode, RWLockMode::Free) ||
+crates/aspen-coordination/verus/rwlock_state_spec.rs:350:        (matches!(mode, RWLockMode::Read) && pending_writers == 0 && reader_count < max_readers)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:365:    pub fn can_acquire_write(mode: RWLockMode) -> (result: bool)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:366:        ensures result == (mode == RWLockMode::Free)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:368:        matches!(mode, RWLockMode::Free)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:397:    pub fn mode_after_read_acquire(current_mode: RWLockMode) -> (result: RWLockMode)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:398:        ensures result == RWLockMode::Read
+crates/aspen-coordination/verus/rwlock_state_spec.rs:400:        RWLockMode::Read
+crates/aspen-coordination/verus/rwlock_state_spec.rs:412:    pub fn mode_after_read_release(reader_count_after: u32) -> (result: RWLockMode)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:414:            reader_count_after == 0 ==> result == RWLockMode::Free,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:415:            reader_count_after > 0 ==> result == RWLockMode::Read
+crates/aspen-coordination/verus/rwlock_state_spec.rs:418:            RWLockMode::Free
+crates/aspen-coordination/verus/rwlock_state_spec.rs:420:            RWLockMode::Read
+crates/aspen-coordination/verus/rwlock_state_spec.rs:429:    pub fn mode_after_write_release() -> (result: RWLockMode)
+crates/aspen-coordination/verus/rwlock_state_spec.rs:430:        ensures result == RWLockMode::Free
+crates/aspen-coordination/verus/rwlock_state_spec.rs:432:        RWLockMode::Free
+crates/aspen-coordination/verus/rwlock_state_spec.rs:515:        mode: RWLockMode,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:520:            RWLockMode::Free => reader_count == 0 && !has_writer,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:521:            RWLockMode::Read => reader_count > 0 && !has_writer,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:522:            RWLockMode::Write => reader_count == 0 && has_writer,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:526:            RWLockMode::Free => reader_count == 0 && !has_writer,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:527:            RWLockMode::Read => reader_count > 0 && !has_writer,
+crates/aspen-coordination/verus/rwlock_state_spec.rs:528:            RWLockMode::Write => reader_count == 0 && has_writer,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:1://! Queue Dequeue Operation Specification
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:28:        state: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:48:        state: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:49:        item: QueueItemSpec,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:69:    pub open spec fn can_dequeue_item_safely(item: QueueItemSpec) -> bool {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:88:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:93:    ) -> QueueState {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:106:        QueueState {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:130:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:157:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:177:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:200:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:222:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:254:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:256:    ) -> QueueState {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:260:        let queue_item = QueueItemSpec {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:263:            state: QueueItemStateSpec::Pending,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:275:        QueueState {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:292:    pub open spec fn find_insert_position(pending: Seq<QueueItemSpec>, id: u64) -> int
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:309:        seq: Seq<QueueItemSpec>,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:311:        item: QueueItemSpec,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:312:    ) -> Seq<QueueItemSpec> {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:319:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:343:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:366:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:390:        state: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:391:        item: QueueItemSpec,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:403:        pre: QueueState,
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:405:    ) -> QueueState {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:415:        QueueState {
+crates/aspen-coordination/verus/queue_dequeue_spec.rs:432:        pre: QueueState,
+crates/aspen-coordination/src/lib.rs:7://! - `LeaderElection` - Leader election with automatic lease renewal
+crates/aspen-coordination/src/lib.rs:8://! - `AtomicCounter` - Race-free increment/decrement
+crates/aspen-coordination/src/lib.rs:9://! - `SequenceGenerator` - Monotonically increasing unique IDs
+crates/aspen-coordination/src/lib.rs:10://! - `DistributedRateLimiter` - Token bucket rate limiting
+crates/aspen-coordination/src/lib.rs:11://! - `QueueManager` - Distributed FIFO queue with visibility timeout
+crates/aspen-coordination/src/lib.rs:12://! - `ServiceRegistry` - Service discovery with health checks
+crates/aspen-coordination/src/lib.rs:20://! use aspen_coordination::{LeaderElection, ElectionConfig};
+crates/aspen-coordination/src/lib.rs:22://! let election = LeaderElection::new(
+crates/aspen-coordination/src/lib.rs:98:pub use barrier::BarrierManager;
+crates/aspen-coordination/src/lib.rs:99:pub use barrier::BarrierPhase;
+crates/aspen-coordination/src/lib.rs:100:pub use barrier::BarrierState;
+crates/aspen-coordination/src/lib.rs:101:pub use counter::AtomicCounter;
+crates/aspen-coordination/src/lib.rs:104:pub use counter::SignedAtomicCounter;
+crates/aspen-coordination/src/lib.rs:107:pub use election::LeaderElection;
+crates/aspen-coordination/src/lib.rs:123:pub use queue::QueueConfig;
+crates/aspen-coordination/src/lib.rs:124:pub use queue::QueueItem;
+crates/aspen-coordination/src/lib.rs:125:pub use queue::QueueManager;
+crates/aspen-coordination/src/lib.rs:126:pub use queue::QueueState;
+crates/aspen-coordination/src/lib.rs:127:pub use queue::QueueStats;
+crates/aspen-coordination/src/lib.rs:128:pub use queue::QueueStatus;
+crates/aspen-coordination/src/lib.rs:129:pub use rate_limiter::DistributedRateLimiter;
+crates/aspen-coordination/src/lib.rs:137:pub use registry::ServiceRegistry;
+crates/aspen-coordination/src/lib.rs:138:pub use rwlock::RWLockManager;
+crates/aspen-coordination/src/lib.rs:139:pub use rwlock::RWLockMode;
+crates/aspen-coordination/src/lib.rs:140:pub use rwlock::RWLockState;
+crates/aspen-coordination/src/lib.rs:143:pub use semaphore::SemaphoreHolder;
+crates/aspen-coordination/src/lib.rs:144:pub use semaphore::SemaphoreManager;
+crates/aspen-coordination/src/lib.rs:145:pub use semaphore::SemaphoreState;
+crates/aspen-coordination/src/lib.rs:147:pub use sequence::SequenceGenerator;
+crates/aspen-coordination/src/lib.rs:153:pub use worker_coordinator::DistributedWorkerCoordinator;
+crates/aspen-coordination/src/error.rs:131:    /// Too many readers on RWLock.
+crates/aspen-coordination/src/error.rs:134:        /// RWLock name.
+crates/aspen-coordination/src/error.rs:142:    /// Too many pending writers on RWLock.
+crates/aspen-coordination/src/error.rs:145:        /// RWLock name.
+crates/aspen-coordination/src/error.rs:155:    TooManySemaphoreHolders {
+crates/aspen-coordination/src/error.rs:156:        /// Semaphore name.
+crates/aspen-coordination/verus/lib.rs:36://! - `rwlock_state_spec`: RWLock state model and invariants
+crates/aspen-coordination/verus/lib.rs:39://! ## Semaphore
+crates/aspen-coordination/verus/lib.rs:40://! - `semaphore_spec`: Semaphore state model and operations
+crates/aspen-coordination/verus/lib.rs:42://! ## Barrier
+crates/aspen-coordination/verus/lib.rs:43://! - `barrier_spec`: Barrier state model and operations
+crates/aspen-coordination/verus/lib.rs:45://! ## Distributed Queue
+crates/aspen-coordination/verus/lib.rs:46://! - `queue_state_spec`: Queue state model and invariants
+crates/aspen-coordination/verus/lib.rs:136://! ## Semaphore
+crates/aspen-coordination/verus/lib.rs:147://! ## Barrier
+crates/aspen-coordination/verus/lib.rs:158://! ## Distributed Queue
+crates/aspen-coordination/verus/lib.rs:418:    // RWLock exports
+crates/aspen-coordination/verus/lib.rs:419:    pub use rwlock_state_spec::RWLockStateSpec;
+crates/aspen-coordination/verus/lib.rs:420:    pub use rwlock_state_spec::RWLockModeSpec;
+crates/aspen-coordination/verus/lib.rs:429:    // Semaphore exports
+crates/aspen-coordination/verus/lib.rs:430:    pub use semaphore_spec::SemaphoreStateSpec;
+crates/aspen-coordination/verus/lib.rs:435:    // Semaphore exec functions (verified implementations)
+crates/aspen-coordination/verus/lib.rs:441:    // Barrier exports
+crates/aspen-coordination/verus/lib.rs:442:    pub use barrier_spec::BarrierStateSpec;
+crates/aspen-coordination/verus/lib.rs:443:    pub use barrier_spec::BarrierPhaseSpec;
+crates/aspen-coordination/verus/lib.rs:448:    // Barrier exec functions (verified implementations)
+crates/aspen-coordination/verus/lib.rs:449:    pub use barrier_spec::BarrierPhase;
+crates/aspen-coordination/verus/lib.rs:458:    // Queue exports
+crates/aspen-coordination/verus/lib.rs:459:    pub use queue_state_spec::QueueState;
+crates/aspen-coordination/verus/lib.rs:460:    pub use queue_state_spec::QueueItemSpec;
+crates/aspen-coordination/verus/lib.rs:461:    pub use queue_state_spec::QueueItemStateSpec;
+crates/aspen-coordination/verus/lib.rs:590:// Queue specifications
+crates/aspen-coordination/verus/queue_ack_spec.rs:1://! Queue Acknowledgment Operation Specification
+crates/aspen-coordination/verus/queue_ack_spec.rs:24:        state: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:38:    pub open spec fn ack_post(pre: QueueState, item_id: u64) -> QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:39:        QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:55:    pub proof fn ack_removes_item(pre: QueueState, item_id: u64, receipt_handle: Seq<u8>)
+crates/aspen-coordination/verus/queue_ack_spec.rs:74:    pub proof fn ack_preserves_exclusivity(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:85:    pub proof fn ack_not_repeatable(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:104:        state: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:121:    pub open spec fn nack_return_post(pre: QueueState, item_id: u64) -> QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:124:        let queue_item = QueueItemSpec {
+crates/aspen-coordination/verus/queue_ack_spec.rs:127:            state: QueueItemStateSpec::Pending,
+crates/aspen-coordination/verus/queue_ack_spec.rs:139:        QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:159:        pre: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:162:    ) -> QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:173:        QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:192:        state: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:203:    pub proof fn nack_return_preserves_count(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:224:    pub proof fn nack_return_preserves_fifo(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:240:        pre: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:258:        pre: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:278:        state: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:298:        pre: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:301:    ) -> QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:310:        QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:319:        pre: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:338:        pre: QueueState,
+crates/aspen-coordination/verus/queue_ack_spec.rs:369:    pub open spec fn release_unchanged_post(pre: QueueState, item_id: u64) -> QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:372:        let queue_item = QueueItemSpec {
+crates/aspen-coordination/verus/queue_ack_spec.rs:375:            state: QueueItemStateSpec::Pending,
+crates/aspen-coordination/verus/queue_ack_spec.rs:392:        QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:409:    pub proof fn release_unchanged_decrements_count(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:430:    pub open spec fn redrive_pre(state: QueueState, item_id: u64) -> bool {
+crates/aspen-coordination/verus/queue_ack_spec.rs:446:    pub open spec fn redrive_post(pre: QueueState, item_id: u64) -> QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:448:        let queue_item = QueueItemSpec {
+crates/aspen-coordination/verus/queue_ack_spec.rs:451:            state: QueueItemStateSpec::Pending,
+crates/aspen-coordination/verus/queue_ack_spec.rs:463:        QueueState {
+crates/aspen-coordination/verus/queue_ack_spec.rs:480:    pub proof fn redrive_moves_to_pending(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:497:    pub proof fn redrive_resets_count(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:513:    pub proof fn redrive_preserves_invariant(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:531:    pub proof fn redrive_preserves_fifo(pre: QueueState, item_id: u64)
+crates/aspen-coordination/verus/queue_ack_spec.rs:546:    pub proof fn release_unchanged_preserves_fifo(pre: QueueState, item_id: u64)
+crates/aspen-coordination/src/registry/helpers.rs:13:use super::ServiceRegistry;
+crates/aspen-coordination/src/registry/helpers.rs:17:impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+crates/aspen-coordination/verus/queue_state_spec.rs:1://! Queue State Machine Model
+crates/aspen-coordination/verus/queue_state_spec.rs:7://! The `QueueState` captures:
+crates/aspen-coordination/verus/queue_state_spec.rs:34:    pub enum QueueItemStateSpec {
+crates/aspen-coordination/verus/queue_state_spec.rs:46:    pub struct QueueItemSpec {
+crates/aspen-coordination/verus/queue_state_spec.rs:52:        pub state: QueueItemStateSpec,
+crates/aspen-coordination/verus/queue_state_spec.rs:116:    pub struct QueueState {
+crates/aspen-coordination/verus/queue_state_spec.rs:117:        /// Queue name
+crates/aspen-coordination/verus/queue_state_spec.rs:120:        pub pending: Seq<QueueItemSpec>,
+crates/aspen-coordination/verus/queue_state_spec.rs:146:    pub open spec fn fifo_ordering(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:153:    pub open spec fn first_is_oldest(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:166:    pub open spec fn id_monotonicity(pre: QueueState, post: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:171:    pub open spec fn ids_bounded_by_next(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:190:    pub open spec fn state_exclusivity(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:203:    pub open spec fn pending_ids_consistent(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:221:    pub open spec fn visibility_timeout_valid(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:243:    pub open spec fn dlq_threshold_respected(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:263:    pub open spec fn dedup_consistency(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:278:    pub open spec fn queue_invariant(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:297:    ) -> QueueState {
+crates/aspen-coordination/verus/queue_state_spec.rs:298:        QueueState {
+crates/aspen-coordination/verus/queue_state_spec.rs:330:    pub open spec fn is_empty(state: QueueState) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:336:    pub open spec fn pending_count(state: QueueState) -> int {
+crates/aspen-coordination/verus/queue_state_spec.rs:341:    pub open spec fn inflight_count(state: QueueState) -> int {
+crates/aspen-coordination/verus/queue_state_spec.rs:346:    pub open spec fn item_exists(state: QueueState, id: u64) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:362:        state: QueueState,
+crates/aspen-coordination/verus/queue_state_spec.rs:375:    pub open spec fn item_expired(item: QueueItemSpec, current_time_ms: u64) -> bool {
+crates/aspen-coordination/verus/queue_state_spec.rs:380:    pub open spec fn expired_pending_count(state: QueueState) -> int
+crates/aspen-coordination/verus/queue_state_spec.rs:387:            let rest = QueueState { pending: state.pending.skip(1), ..state };
+crates/aspen-coordination/verus/strategies_spec.rs:243:        HighestQueueDepth,
+crates/aspen-coordination/verus/strategies_spec.rs:438:        /// Queue depth
+crates/aspen-coordination/src/registry/health.rs:11:use super::ServiceRegistry;
+crates/aspen-coordination/src/registry/health.rs:17:impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:1://! Queue Enqueue Operation Specification
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:22:        state: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:46:        state: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:59:        state: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:76:        pre: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:82:    ) -> QueueState {
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:86:        let new_item = QueueItemSpec {
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:89:            state: QueueItemStateSpec::Pending,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:111:        QueueState {
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:128:        pre: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:161:        pre: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:184:        pre: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:210:        pre: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:238:        state: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:252:        pre: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:278:        state: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:294:        pre: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:317:        state: QueueState,
+crates/aspen-coordination/verus/queue_enqueue_spec.rs:330:        pre: QueueState,
+crates/aspen-coordination/src/registry/mod.rs:18://! use aspen::coordination::{ServiceRegistry, HealthStatus, RegisterOptions};
+crates/aspen-coordination/src/registry/mod.rs:20://! let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:62:pub struct ServiceRegistry<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/registry/mod.rs:66:impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+crates/aspen-coordination/src/registry/mod.rs:84:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:116:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:141:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:170:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:194:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:241:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:287:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:327:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:351:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/mod.rs:397:        let registry = ServiceRegistry::new(store);
+crates/aspen-coordination/src/registry/registration.rs:13:use super::ServiceRegistry;
+crates/aspen-coordination/src/registry/registration.rs:20:impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+crates/aspen-coordination/src/registry/discovery.rs:7:use super::ServiceRegistry;
+crates/aspen-coordination/src/registry/discovery.rs:12:impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
+crates/aspen-coordination/src/rate_limiter.rs:78:pub struct DistributedRateLimiter<S: KeyValueStore + ?Sized> {
+crates/aspen-coordination/src/rate_limiter.rs:84:impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
+crates/aspen-coordination/src/rate_limiter.rs:513:        let limiter = DistributedRateLimiter::new(
+crates/aspen-coordination/src/rate_limiter.rs:533:        let limiter = DistributedRateLimiter::new(
+crates/aspen-coordination/src/rate_limiter.rs:553:        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(100.0, 1));
+crates/aspen-coordination/src/rate_limiter.rs:566:        let limiter = DistributedRateLimiter::new(
+crates/aspen-coordination/src/rate_limiter.rs:583:        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 5));
+crates/aspen-coordination/src/rate_limiter.rs:609:        let limiter = DistributedRateLimiter::new(store, "fresh_limiter", RateLimiterConfig::new(10.0, 5));
+crates/aspen-coordination/src/rate_limiter.rs:623:        let _ = DistributedRateLimiter::new(store, "", RateLimiterConfig::new(10.0, 5));
+crates/aspen-coordination/src/rate_limiter.rs:636:        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+crates/aspen-coordination/src/rate_limiter.rs:649:        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+crates/aspen-coordination/src/rate_limiter.rs:662:        let _ = DistributedRateLimiter::new(store, "invalid_limiter", config);
+crates/aspen-coordination/src/rate_limiter.rs:668:        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 10));
+crates/aspen-coordination/src/rate_limiter.rs:680:        let limiter = DistributedRateLimiter::new(
+crates/aspen-coordination/src/rate_limiter.rs:710:        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 5));
+crates/aspen-coordination/src/rate_limiter.rs:719:        let limiter = DistributedRateLimiter::new(store, "test_limiter", RateLimiterConfig::new(10.0, 5));
+crates/aspen-coordination/src/rate_limiter.rs:729:        let limiter = DistributedRateLimiter::new(store.clone(), "retry_limiter", RateLimiterConfig::new(1.0, 1));
+crates/aspen-coordination/verus/semaphore_spec.rs:1://! Semaphore State Machine Model and Operations
+crates/aspen-coordination/verus/semaphore_spec.rs:7://! The `SemaphoreState` captures:
+crates/aspen-coordination/verus/semaphore_spec.rs:30:    /// Semaphore holder entry
+crates/aspen-coordination/verus/semaphore_spec.rs:31:    pub struct SemaphoreHolderSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:41:    pub struct SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:57:    pub open spec fn available_permits(state: SemaphoreStateSpec) -> u32 {
+crates/aspen-coordination/verus/semaphore_spec.rs:66:    pub open spec fn can_acquire(state: SemaphoreStateSpec, permits: u32) -> bool {
+crates/aspen-coordination/verus/semaphore_spec.rs:76:    pub open spec fn capacity_bound(state: SemaphoreStateSpec) -> bool {
+crates/aspen-coordination/verus/semaphore_spec.rs:85:    pub open spec fn holder_limit(state: SemaphoreStateSpec) -> bool {
+crates/aspen-coordination/verus/semaphore_spec.rs:94:    pub open spec fn semaphore_invariant(state: SemaphoreStateSpec) -> bool {
+crates/aspen-coordination/verus/semaphore_spec.rs:104:    pub open spec fn initial_semaphore_state(capacity: u32, max_holders: u32) -> SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:105:        SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:136:    pub open spec fn acquire_pre(state: SemaphoreStateSpec, permits: u32) -> bool {
+crates/aspen-coordination/verus/semaphore_spec.rs:150:    pub open spec fn acquire_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:151:        SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:162:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:179:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:195:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:211:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:230:    pub open spec fn release_pre(state: SemaphoreStateSpec, permits: u32) -> bool {
+crates/aspen-coordination/verus/semaphore_spec.rs:239:    pub open spec fn release_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:240:        SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:251:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:266:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:281:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:297:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:321:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/verus/semaphore_spec.rs:324:    ) -> SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:325:        SemaphoreStateSpec {
+crates/aspen-coordination/verus/semaphore_spec.rs:336:        pre: SemaphoreStateSpec,
+crates/aspen-coordination/tests/error_injection_test.rs:12:use aspen_coordination::AtomicCounter;
+crates/aspen-coordination/tests/error_injection_test.rs:15:use aspen_coordination::DistributedRateLimiter;
+crates/aspen-coordination/tests/error_injection_test.rs:19:use aspen_coordination::SequenceGenerator;
+crates/aspen-coordination/tests/error_injection_test.rs:40:    let seeder = DistributedRateLimiter::new(inner.clone(), "rate:test", config.clone());
+crates/aspen-coordination/tests/error_injection_test.rs:48:    let limiter = DistributedRateLimiter::new(failing.clone() as Arc<_>, "rate:test", config);
+crates/aspen-coordination/tests/error_injection_test.rs:64:    let seeder = DistributedRateLimiter::new(inner.clone(), "rate:test2", config.clone());
+crates/aspen-coordination/tests/error_injection_test.rs:72:    let limiter = DistributedRateLimiter::new(failing as Arc<_>, "rate:test2", config);
+crates/aspen-coordination/tests/error_injection_test.rs:97:    let counter = AtomicCounter::new(failing as Arc<_>, "cnt:err", CounterConfig::default());
+crates/aspen-coordination/tests/error_injection_test.rs:110:    let counter = AtomicCounter::new(failing as Arc<_>, "cnt:err2", CounterConfig::default());
+crates/aspen-coordination/tests/error_injection_test.rs:122:    let counter = AtomicCounter::new(failing.clone() as Arc<_>, "cnt:recover", CounterConfig::default());
+crates/aspen-coordination/tests/error_injection_test.rs:149:    let seq = SequenceGenerator::new(failing as Arc<_>, "seq:err", SequenceConfig {
+crates/aspen-coordination/tests/error_injection_test.rs:164:    let seq = SequenceGenerator::new(failing.clone() as Arc<_>, "seq:transient", SequenceConfig {
+crates/aspen-coordination/tests/error_injection_test.rs:236:    let counter = AtomicCounter::new(failing as Arc<_>, "cnt:flaky", CounterConfig::default());
+crates/aspen-coordination/tests/proptest_model_based.rs:12:use aspen_coordination::AtomicCounter;
+crates/aspen-coordination/tests/proptest_model_based.rs:13:use aspen_coordination::BarrierManager;
+crates/aspen-coordination/tests/proptest_model_based.rs:16:use aspen_coordination::DistributedRateLimiter;
+crates/aspen-coordination/tests/proptest_model_based.rs:19:use aspen_coordination::QueueConfig;
+crates/aspen-coordination/tests/proptest_model_based.rs:20:use aspen_coordination::QueueManager;
+crates/aspen-coordination/tests/proptest_model_based.rs:23:use aspen_coordination::SequenceGenerator;
+crates/aspen-coordination/tests/proptest_model_based.rs:24:use aspen_coordination::SignedAtomicCounter;
+crates/aspen-coordination/tests/proptest_model_based.rs:32:/// Reference model for AtomicCounter: just a u64 with saturating arithmetic.
+crates/aspen-coordination/tests/proptest_model_based.rs:110:            let counter = AtomicCounter::new(
+crates/aspen-coordination/tests/proptest_model_based.rs:209:            let counter = SignedAtomicCounter::new(
+crates/aspen-coordination/tests/proptest_model_based.rs:301:            let seq = SequenceGenerator::new(store.clone(), "test_seq", config);
+crates/aspen-coordination/tests/proptest_model_based.rs:372:            let seq_a = SequenceGenerator::new(store.clone(), "seq_a", config.clone());
+crates/aspen-coordination/tests/proptest_model_based.rs:373:            let seq_b = SequenceGenerator::new(store.clone(), "seq_b", config);
+crates/aspen-coordination/tests/proptest_model_based.rs:591:// Queue model
+crates/aspen-coordination/tests/proptest_model_based.rs:594:/// Reference model for DistributedQueue: tracks enqueued items in FIFO order.
+crates/aspen-coordination/tests/proptest_model_based.rs:596:struct QueueModel {
+crates/aspen-coordination/tests/proptest_model_based.rs:601:impl QueueModel {
+crates/aspen-coordination/tests/proptest_model_based.rs:628:enum QueueOp {
+crates/aspen-coordination/tests/proptest_model_based.rs:633:fn queue_op_strategy() -> impl Strategy<Value = QueueOp> {
+crates/aspen-coordination/tests/proptest_model_based.rs:635:        3 => prop::collection::vec(any::<u8>(), 1..32).prop_map(QueueOp::Enqueue),
+crates/aspen-coordination/tests/proptest_model_based.rs:636:        2 => Just(QueueOp::Dequeue),
+crates/aspen-coordination/tests/proptest_model_based.rs:643:    /// Queue: enqueue/dequeue/ack sequences produce FIFO ordering matching model.
+crates/aspen-coordination/tests/proptest_model_based.rs:655:            let qm = QueueManager::new(store);
+crates/aspen-coordination/tests/proptest_model_based.rs:659:            qm.create(queue_name, QueueConfig::default()).await.unwrap();
+crates/aspen-coordination/tests/proptest_model_based.rs:661:            let mut model = QueueModel::new();
+crates/aspen-coordination/tests/proptest_model_based.rs:665:                    QueueOp::Enqueue(payload) => {
+crates/aspen-coordination/tests/proptest_model_based.rs:673:                    QueueOp::Dequeue => {
+crates/aspen-coordination/tests/proptest_model_based.rs:726:        use aspen_coordination::LeaderElection;
+crates/aspen-coordination/tests/proptest_model_based.rs:742:            let election_a = LeaderElection::new(
+crates/aspen-coordination/tests/proptest_model_based.rs:745:            let election_b = LeaderElection::new(
+crates/aspen-coordination/tests/proptest_model_based.rs:787:// Barrier model
+crates/aspen-coordination/tests/proptest_model_based.rs:793:    /// Barrier: exactly N=1 participant enters immediately (no blocking).
+crates/aspen-coordination/tests/proptest_model_based.rs:806:            let barrier = BarrierManager::new(store);
+crates/aspen-coordination/tests/proptest_model_based.rs:875:            let limiter = DistributedRateLimiter::new(
+crates/aspen-coordination/tests/worker_coordinator_test.rs:6:use aspen_coordination::DistributedWorkerCoordinator;
+crates/aspen-coordination/tests/worker_coordinator_test.rs:52:    let coordinator = DistributedWorkerCoordinator::new(store);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:67:    let coordinator = DistributedWorkerCoordinator::new(store);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:105:    let coordinator = DistributedWorkerCoordinator::new(store);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:127:    let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:153:    let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:172:    let coordinator = DistributedWorkerCoordinator::new(store);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:230:    let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:259:    let coordinator = DistributedWorkerCoordinator::new(store);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:308:    let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:338:    let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:358:    let coordinator = DistributedWorkerCoordinator::with_config(store, config);
+crates/aspen-coordination/tests/worker_coordinator_test.rs:410:    let coordinator = DistributedWorkerCoordinator::new(store);

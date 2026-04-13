@@ -1,0 +1,44 @@
+Baseline: openspec/changes/archive/2026-04-09-durable-tigerstyle-audit/evidence/post-phase4-scan.json
+Current: openspec/changes/refresh-tigerstyle-audit/evidence/current-scan.json
+
+files_scanned old=1285 new=1297 delta=+12
+functions_scanned old=16990 new=17364 delta=+374
+function_length old=364 new=375 delta=+11
+recursion old=842 new=865 delta=+23
+usize_api old=171 new=172 delta=+1
+verified_ambient_time old=1 new=1 delta=+0
+zero_assert_hotspot old=364 new=375 delta=+11
+parse_errors old=5 new=6 delta=+1
+
+production_hotspots_added=29
+ADD zero_assert_hotspot crates/aspen-raft/src/node/trust.rs:436 rotate_trust_after_membership_change lines=144
+ADD zero_assert_hotspot crates/aspen-raft/src/secrets_at_rest.rs:292 collect_shares lines=99
+ADD zero_assert_hotspot crates/aspen-raft/src/node/trust.rs:354 probe_for_peer_expungement lines=81
+ADD zero_assert_hotspot crates/aspen-cluster/src/bootstrap/node/storage_init.rs:117 create_raft_instance lines=77
+ADD zero_assert_hotspot crates/aspen-raft/src/node/trust.rs:242 collect_old_shares_for_reconfiguration lines=72
+ADD function_length crates/aspen-raft/src/node/trust.rs:436 rotate_trust_after_membership_change lines=144
+ADD function_length crates/aspen-raft/src/secrets_at_rest.rs:292 collect_shares lines=99
+ADD function_length crates/aspen-raft/src/node/trust.rs:354 probe_for_peer_expungement lines=81
+ADD function_length crates/aspen-cluster/src/bootstrap/node/storage_init.rs:117 create_raft_instance lines=77
+ADD function_length crates/aspen-raft/src/node/trust.rs:242 collect_old_shares_for_reconfiguration lines=72
+ADD recursion crates/aspen-coordination/src/lockset.rs:79 new lines=15
+ADD recursion crates/aspen-coordination/src/rate_limiter.rs:448 new lines=10
+ADD recursion crates/aspen-coordination/src/lockset.rs:605 new lines=6
+ADD recursion crates/aspen-raft/src/node/trust.rs:695 is_expunged lines=6
+ADD recursion crates/aspen-transport/src/trust.rs:67 new lines=6
+ADD recursion crates/aspen-trust/src/reencrypt.rs:165 new lines=6
+ADD recursion crates/aspen-client/src/coordination/lockset.rs:262 new lines=5
+ADD recursion crates/aspen-coordination/src/lockset.rs:619 write lines=4
+ADD recursion crates/aspen-transport/src/trust.rs:101 shutdown lines=4
+ADD recursion crates/aspen-coordination/src/lockset.rs:628 delete lines=3
+
+production_hotspots_removed=1
+REM recursion crates/aspen-cluster/src/gossip/rate_limiter.rs:96 new lines=6
+
+current_parse_errors:
+- crates/aspen-ci/src/config/loader.rs: unterminated body for test_load_with_triggers in crates/aspen-ci/src/config/loader.rs
+- crates/aspen-forge/src/cob/review.rs: unterminated body for all_comments_chronological in crates/aspen-forge/src/cob/review.rs
+- crates/aspen-forge/src/git/bridge/tests.rs: unterminated body for test_federation_style_import_with_content_hash_correlation in crates/aspen-forge/src/git/bridge/tests.rs
+- crates/aspen-nostr-relay/src/connection.rs: unterminated body for handle_message in crates/aspen-nostr-relay/src/connection.rs
+- crates/aspen-rpc-handlers/src/registry.rs: unterminated body for dispatch_routes_to_matching_handler in crates/aspen-rpc-handlers/src/registry.rs
+- crates/aspen-trust/src/key_manager.rs: unterminated body for get_if_initialized in crates/aspen-trust/src/key_manager.rs

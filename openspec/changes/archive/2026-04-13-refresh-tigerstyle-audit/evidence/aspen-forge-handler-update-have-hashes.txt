@@ -1,0 +1,32 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unused import: `aspen_core::EndpointProvider`
+    --> crates/aspen-forge-handler/src/executor.rs:2391:9
+     |
+2391 |     use aspen_core::EndpointProvider;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `test_executor_does_not_handle_migrated_ops` is never used
+  --> crates/aspen-forge-handler/src/handler/mod.rs:64:8
+   |
+64 |     fn test_executor_does_not_handle_migrated_ops() {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `aspen-forge-handler` (lib test) generated 2 warnings (run `cargo fix --lib -p aspen-forge-handler --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.53s
+     Running unittests src/lib.rs (target/debug/deps/aspen_forge_handler-ef842727db959db3)
+
+running 3 tests
+test handler::handlers::federation_git::tests::test_update_have_hashes_envelope_preferred ... ok
+test handler::handlers::federation_git::tests::test_update_have_hashes_fallback_to_sha1 ... ok
+test handler::handlers::federation_git::tests::test_update_have_hashes_mixed_batch ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.00s

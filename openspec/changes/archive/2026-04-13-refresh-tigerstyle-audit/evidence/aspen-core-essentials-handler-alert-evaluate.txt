@@ -1,0 +1,20 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+   Compiling aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+   Compiling aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-rpc-core)
+   Compiling aspen-core-essentials-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-essentials-handler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.34s
+     Running unittests src/lib.rs (target/debug/deps/aspen_core_essentials_handler-9cabb46f4af1863e)
+
+running 4 tests
+test core::tests::test_can_handle_alert_evaluate ... ok
+test core::tests::test_alert_evaluate_firing_to_ok ... ok
+test core::tests::test_alert_evaluate_ok_to_firing ... ok
+test core::tests::test_alert_evaluate_pending_with_for_duration ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 140 filtered out; finished in 0.03s

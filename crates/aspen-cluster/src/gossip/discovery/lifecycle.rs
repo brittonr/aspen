@@ -17,6 +17,9 @@ use aspen_raft_types::NodeId;
 use iroh::EndpointAddr;
 use iroh::SecretKey;
 use iroh_gossip::api::Event;
+use iroh_gossip::api::GossipReceiver;
+use iroh_gossip::api::GossipSender;
+use iroh_gossip::api::GossipTopic;
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
 use n0_future::StreamExt;
@@ -154,19 +157,7 @@ impl GossipPeerDiscovery {
         self.local_topology_version.load(Ordering::SeqCst)
     }
 
-    /// Internal implementation of start that spawns the tasks.
-    pub(super) async fn start_internal(
-        &self,
-        on_peer_discovered: Option<PeerDiscoveredCallback<EndpointAddr>>,
-    ) -> Result<()> {
-        // Check if already running
-        if self.is_running.load(Ordering::SeqCst) {
-            anyhow::bail!("discovery is already running");
-        }
-
-        // Subscribe to the topic with timeout
-        // Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
-        // If gossip is unavailable, the node should continue without it (non-fatal).
+    async fn subscribe_gossip_topic(&self) -> Result<GossipTopic> {
         if self.bootstrap_peers.is_empty() {
             tracing::debug!(node_id = %self.node_id, "gossip starting with no bootstrap peers");
         } else {
@@ -176,390 +167,85 @@ impl GossipPeerDiscovery {
                 "gossip starting with bootstrap peers from peer cache"
             );
         }
-        let gossip_topic = tokio::time::timeout(
+
+        tokio::time::timeout(
             GOSSIP_SUBSCRIBE_TIMEOUT,
             self.gossip.subscribe(self.topic_id, self.bootstrap_peers.clone()),
         )
         .await
         .context("timeout subscribing to gossip topic")?
-        .context("failed to subscribe to gossip topic")?;
+        .context("failed to subscribe to gossip topic")
+    }
 
-        // Split into sender and receiver
-        let (gossip_sender, mut gossip_receiver) = gossip_topic.split();
+    fn spawn_announcer_task(
+        endpoint_addr: EndpointAddr,
+        secret_key: SecretKey,
+        cancel: CancellationToken,
+        sender: GossipSender,
+        node_id: NodeId,
+    ) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            run_announcer_loop(endpoint_addr, secret_key, cancel, sender, node_id).await;
+        })
+    }
 
-        // Clone fields for the spawned tasks
-        let endpoint_addr = self.endpoint_addr.clone();
-        let secret_key = self.secret_key.clone();
+    fn spawn_receiver_task(
+        cancel: CancellationToken,
+        receiver: GossipReceiver,
+        receiver_node_id: NodeId,
+        receiver_callback: Option<PeerDiscoveredCallback<EndpointAddr>>,
+        local_topology_version: Arc<std::sync::atomic::AtomicU64>,
+        topology_stale_callback: Option<TopologyStaleCallback>,
+        blob_announced_callback: Option<BlobAnnouncedCallback>,
+    ) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            run_receiver_loop(
+                cancel,
+                receiver,
+                receiver_node_id,
+                receiver_callback,
+                local_topology_version,
+                topology_stale_callback,
+                blob_announced_callback,
+            )
+            .await;
+        })
+    }
 
-        // Spawn announcer task
-        let announcer_cancel = self.cancel_token.child_token();
-        let announcer_sender = gossip_sender.clone();
-        let announcer_node_id = self.node_id;
-        let announcer_task = tokio::spawn(async move {
-            // Adaptive interval tracking for sender-side rate limiting
-            let mut consecutive_failures: u32 = 0;
-            let mut current_interval_secs = GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
-            let mut ticker = interval(Duration::from_secs(current_interval_secs));
-            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    /// Internal implementation of start that spawns the tasks.
+    pub(super) async fn start_internal(
+        &self,
+        on_peer_discovered: Option<PeerDiscoveredCallback<EndpointAddr>>,
+    ) -> Result<()> {
+        if self.is_running.load(Ordering::SeqCst) {
+            anyhow::bail!("discovery is already running");
+        }
 
-            loop {
-                tokio::select! {
-                    _ = announcer_cancel.cancelled() => {
-                        tracing::debug!("gossip announcer shutting down");
-                        break;
-                    }
-                    _ = ticker.tick() => {
-                        let announcement =
-                            match PeerAnnouncement::new(announcer_node_id, endpoint_addr.clone()) {
-                                Ok(ann) => ann,
-                                Err(e) => {
-                                    tracing::error!("failed to create peer announcement: {}", e);
-                                    continue;
-                                }
-                            };
-
-                        // Sign the announcement with our secret key
-                        let signed = match SignedPeerAnnouncement::sign(announcement, &secret_key) {
-                            Ok(s) => s,
-                            Err(e) => {
-                                tracing::error!("failed to sign peer announcement: {}", e);
-                                continue;
-                            }
-                        };
-
-                        // Wrap in GossipMessage envelope for versioned message handling
-                        let gossip_msg = GossipMessage::PeerAnnouncement(signed);
-                        match gossip_msg.to_bytes() {
-                            Ok(bytes) => {
-                                match announcer_sender.broadcast(bytes.into()).await {
-                                    Ok(()) => {
-                                        tracing::trace!(
-                                            "broadcast signed peer announcement for node_id={}",
-                                            announcer_node_id
-                                        );
-                                        // Reset on success if we were in backoff mode
-                                        if consecutive_failures > 0 {
-                                            consecutive_failures = 0;
-                                            if current_interval_secs != GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS {
-                                                current_interval_secs = GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
-                                                ticker = interval(Duration::from_secs(current_interval_secs));
-                                                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                                                tracing::debug!(
-                                                    "announcement succeeded, resetting interval to {}s",
-                                                    current_interval_secs
-                                                );
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        consecutive_failures += 1;
-                                        tracing::warn!(
-                                            "failed to broadcast peer announcement (failure {}/{}): {}",
-                                            consecutive_failures,
-                                            GOSSIP_ANNOUNCE_FAILURE_THRESHOLD,
-                                            e
-                                        );
-
-                                        // Increase interval after threshold failures
-                                        if consecutive_failures >= GOSSIP_ANNOUNCE_FAILURE_THRESHOLD {
-                                            let new_interval = (current_interval_secs * 2)
-                                                .min(GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS);
-                                            if new_interval != current_interval_secs {
-                                                current_interval_secs = new_interval;
-                                                ticker = interval(Duration::from_secs(current_interval_secs));
-                                                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                                                tracing::info!(
-                                                    "increasing announcement interval to {}s due to failures",
-                                                    current_interval_secs
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                tracing::warn!("failed to serialize signed peer announcement: {}", e);
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        // Spawn receiver task
-        let receiver_cancel = self.cancel_token.child_token();
-        let receiver_node_id = self.node_id;
-        let receiver_callback = on_peer_discovered;
-        // Clone topology sync components for the receiver task
-        let local_topology_version = self.local_topology_version.clone();
+        let gossip_topic = self.subscribe_gossip_topic().await?;
+        let (gossip_sender, gossip_receiver) = gossip_topic.split();
         let topology_stale_callback = self.on_topology_stale.lock().await.take();
-        // Clone blob announcement callback for the receiver task
-        #[cfg(feature = "blob")]
         let blob_announced_callback = self.on_blob_announced.lock().await.take();
-        #[cfg(not(feature = "blob"))]
-        let _ = self.on_blob_announced.lock().await.take();
-        let receiver_task = tokio::spawn(async move {
-            // Rate limiter for incoming gossip messages (HIGH-6 security)
-            let mut rate_limiter = GossipRateLimiter::new();
 
-            // Error recovery state for transient stream errors
-            let mut consecutive_errors: u32 = 0;
-            let backoff_durations: Vec<Duration> =
-                GOSSIP_STREAM_BACKOFF_SECS.iter().map(|s| Duration::from_secs(*s)).collect();
+        let announcer_task = Self::spawn_announcer_task(
+            self.endpoint_addr.clone(),
+            self.secret_key.clone(),
+            self.cancel_token.child_token(),
+            gossip_sender.clone(),
+            self.node_id,
+        );
+        let receiver_task = Self::spawn_receiver_task(
+            self.cancel_token.child_token(),
+            gossip_receiver,
+            self.node_id,
+            on_peer_discovered,
+            self.local_topology_version.clone(),
+            topology_stale_callback,
+            blob_announced_callback,
+        );
 
-            loop {
-                tokio::select! {
-                    _ = receiver_cancel.cancelled() => {
-                        tracing::debug!("gossip receiver shutting down");
-                        break;
-                    }
-                    event = gossip_receiver.next() => match event {
-                    Some(Ok(Event::Received(msg))) => {
-                        // Reset error count on successful message
-                        consecutive_errors = 0;
-                        // Rate limit check BEFORE parsing/signature verification (save CPU)
-                        // Use delivered_from as the peer identifier
-                        if let Err(reason) = rate_limiter.check(&msg.delivered_from) {
-                            match reason {
-                                RateLimitReason::PerPeer => {
-                                    // Per-peer limit: drop silently (avoid log spam)
-                                    tracing::trace!(
-                                        "rate limited gossip message from peer={:?}",
-                                        msg.delivered_from
-                                    );
-                                }
-                                RateLimitReason::Global => {
-                                    // Global limit: log at warn level (indicates attack)
-                                    tracing::warn!(
-                                        "global gossip rate limit exceeded, dropping message from peer={:?}",
-                                        msg.delivered_from
-                                    );
-                                }
-                            }
-                            continue;
-                        }
-
-                        // Tiger Style: Check message size before parsing (DoS prevention)
-                        if msg.content.len() > MAX_GOSSIP_MESSAGE_SIZE {
-                            tracing::warn!(
-                                size = msg.content.len(),
-                                max = MAX_GOSSIP_MESSAGE_SIZE,
-                                peer = ?msg.delivered_from,
-                                "rejected oversized gossip message"
-                            );
-                            continue;
-                        }
-
-                        // Parse gossip message (supports both peer and topology announcements)
-                        let gossip_msg = match GossipMessage::from_bytes(&msg.content) {
-                            Some(m) => m,
-                            None => {
-                                tracing::warn!(
-                                    size = msg.content.len(),
-                                    peer = ?msg.delivered_from,
-                                    "failed to parse gossip message"
-                                );
-                                continue;
-                            }
-                        };
-
-                        match gossip_msg {
-                            GossipMessage::PeerAnnouncement(signed) => {
-                                // Verify signature - reject if invalid
-                                let announcement = match signed.verify() {
-                                    Some(ann) => ann,
-                                    None => {
-                                        tracing::warn!(
-                                            "rejected peer announcement with invalid signature from endpoint_id={:?}",
-                                            signed.announcement.endpoint_addr.id
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                // Filter out our own announcements
-                                if announcement.node_id == receiver_node_id {
-                                    tracing::trace!("ignoring self-announcement");
-                                    continue;
-                                }
-
-                                tracing::debug!(
-                                    "received verified peer announcement from node_id={}, endpoint_id={:?}",
-                                    announcement.node_id,
-                                    announcement.endpoint_addr.id
-                                );
-
-                                // Add peer to network factory's fallback cache.
-                                if let Some(ref callback) = receiver_callback {
-                                    let discovered = DiscoveredPeer {
-                                        node_id: announcement.node_id,
-                                        address: announcement.endpoint_addr.clone(),
-                                        timestamp_micros: announcement.timestamp_micros,
-                                    };
-                                    callback(discovered).await;
-                                }
-
-                                // Log the discovery details
-                                let relay_urls: Vec<_> =
-                                    announcement.endpoint_addr.relay_urls().collect();
-                                tracing::info!(
-                                    "discovered verified peer: node_id={}, endpoint_id={:?}, relay={:?}, direct_addresses={}",
-                                    announcement.node_id,
-                                    announcement.endpoint_addr.id,
-                                    relay_urls,
-                                    announcement.endpoint_addr.addrs.len()
-                                );
-                            }
-                            GossipMessage::TopologyAnnouncement(signed) => {
-                                // Verify signature - reject if invalid
-                                let announcement = match signed.verify() {
-                                    Some(ann) => ann,
-                                    None => {
-                                        tracing::warn!(
-                                            "rejected topology announcement with invalid signature from node_id={}",
-                                            signed.announcement.node_id
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                // Filter out our own announcements
-                                if announcement.node_id == u64::from(receiver_node_id) {
-                                    tracing::trace!("ignoring self-topology-announcement");
-                                    continue;
-                                }
-
-                                tracing::debug!(
-                                    "received verified topology announcement from node_id={}, version={}, hash={}",
-                                    announcement.node_id,
-                                    announcement.topology_version,
-                                    announcement.topology_hash
-                                );
-
-                                // Compare with local topology version and trigger sync if stale
-                                let local_version = local_topology_version.load(Ordering::SeqCst);
-                                if announcement.topology_version > local_version {
-                                    tracing::info!(
-                                        local_version,
-                                        remote_version = announcement.topology_version,
-                                        remote_node = announcement.node_id,
-                                        "detected stale topology, triggering sync"
-                                    );
-
-                                    // Invoke callback if registered
-                                    if let Some(ref callback) = topology_stale_callback {
-                                        let info = StaleTopologyInfo {
-                                            announcing_node_id: announcement.node_id,
-                                            remote_version: announcement.topology_version,
-                                            remote_hash: announcement.topology_hash,
-                                            remote_term: announcement.term,
-                                        };
-                                        callback(info).await;
-                                    }
-                                } else {
-                                    tracing::trace!(
-                                        local_version,
-                                        remote_version = announcement.topology_version,
-                                        "topology announcement: local version is current"
-                                    );
-                                }
-                            }
-                            #[cfg(feature = "blob")]
-                            GossipMessage::BlobAnnouncement(signed) => {
-                                // Verify signature - reject if invalid
-                                let announcement = match signed.verify() {
-                                    Some(ann) => ann,
-                                    None => {
-                                        tracing::warn!(
-                                            "rejected blob announcement with invalid signature from node_id={}",
-                                            u64::from(signed.announcement.node_id)
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                // Filter out our own announcements
-                                if u64::from(announcement.node_id) == u64::from(receiver_node_id) {
-                                    tracing::trace!("ignoring self-blob-announcement");
-                                    continue;
-                                }
-
-                                // Log the blob availability announcement
-                                tracing::info!(
-                                    hash = %announcement.blob_hash.fmt_short(),
-                                    size = announcement.blob_size,
-                                    format = ?announcement.blob_format,
-                                    node_id = u64::from(announcement.node_id),
-                                    tag = ?announcement.tag,
-                                    "discovered blob available from peer"
-                                );
-
-                                // Invoke callback for background blob download
-                                if let Some(ref callback) = blob_announced_callback {
-                                    let info = BlobAnnouncedInfo {
-                                        announcing_node_id: u64::from(announcement.node_id),
-                                        provider_public_key: announcement.endpoint_addr.id,
-                                        blob_hash_hex: announcement.blob_hash.to_hex().to_string(),
-                                        blob_size: announcement.blob_size,
-                                        is_raw_format: matches!(announcement.blob_format, iroh_blobs::BlobFormat::Raw),
-                                        tag: announcement.tag.clone(),
-                                    };
-                                    callback(info).await;
-                                }
-                            }
-                        }
-                    }
-                    Some(Ok(Event::NeighborUp(neighbor_id))) => {
-                        tracing::debug!("neighbor up: {:?}", neighbor_id);
-                    }
-                    Some(Ok(Event::NeighborDown(neighbor_id))) => {
-                        tracing::debug!("neighbor down: {:?}", neighbor_id);
-                    }
-                    Some(Ok(Event::Lagged)) => {
-                        tracing::warn!("gossip receiver lagged, messages may be lost");
-                    }
-                    Some(Err(e)) => {
-                        consecutive_errors += 1;
-
-                        // Check if we've exceeded max retries
-                        if consecutive_errors > GOSSIP_MAX_STREAM_RETRIES {
-                            tracing::error!(
-                                "gossip receiver exceeded max retries ({}), giving up: {}",
-                                GOSSIP_MAX_STREAM_RETRIES,
-                                e
-                            );
-                            break;
-                        }
-
-                        // Calculate backoff duration using existing pure function
-                        let backoff = calculate_backoff_duration(consecutive_errors.saturating_sub(1), &backoff_durations);
-
-                        tracing::warn!(
-                            "gossip receiver error (retry {}/{}), backing off for {:?}: {}",
-                            consecutive_errors,
-                            GOSSIP_MAX_STREAM_RETRIES,
-                            backoff,
-                            e
-                        );
-
-                        // Wait before retrying - stream may recover
-                        tokio::time::sleep(backoff).await;
-                        continue;
-                    }
-                    None => {
-                        tracing::info!("gossip receiver stream ended");
-                        break;
-                    }
-                    } // end of match event
-                } // end of tokio::select!
-            }
-        });
-
-        // Store tasks and mark as running
         *self.announcer_task.lock().await = Some(announcer_task);
         *self.receiver_task.lock().await = Some(receiver_task);
         self.is_running.store(true, Ordering::SeqCst);
-
         Ok(())
     }
 
@@ -657,6 +343,224 @@ impl GossipPeerDiscovery {
 
         tracing::debug!("broadcast immediate peer announcement for node_id={}", self.node_id);
         Ok(())
+    }
+}
+
+async fn run_announcer_loop(
+    endpoint_addr: EndpointAddr,
+    secret_key: SecretKey,
+    cancel: CancellationToken,
+    sender: GossipSender,
+    node_id: NodeId,
+) {
+    let mut consecutive_failures: u32 = 0;
+    let mut current_interval_secs = GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
+    let mut ticker = interval(Duration::from_secs(current_interval_secs));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                tracing::debug!("gossip announcer shutting down");
+                break;
+            }
+            _ = ticker.tick() => {
+                let announcement = match PeerAnnouncement::new(node_id, endpoint_addr.clone()) {
+                    Ok(announcement) => announcement,
+                    Err(error) => {
+                        tracing::error!("failed to create peer announcement: {}", error);
+                        continue;
+                    }
+                };
+                let signed = match SignedPeerAnnouncement::sign(announcement, &secret_key) {
+                    Ok(signed) => signed,
+                    Err(error) => {
+                        tracing::error!("failed to sign peer announcement: {}", error);
+                        continue;
+                    }
+                };
+                let gossip_msg = GossipMessage::PeerAnnouncement(signed);
+                let Ok(bytes) = gossip_msg.to_bytes() else {
+                    tracing::warn!("failed to serialize signed peer announcement");
+                    continue;
+                };
+                match sender.broadcast(bytes.into()).await {
+                    Ok(()) => {
+                        tracing::trace!("broadcast signed peer announcement for node_id={}", node_id);
+                        if consecutive_failures > 0 {
+                            consecutive_failures = 0;
+                            if current_interval_secs != GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS {
+                                current_interval_secs = GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS;
+                                ticker = interval(Duration::from_secs(current_interval_secs));
+                                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                                tracing::debug!("announcement succeeded, resetting interval to {}s", current_interval_secs);
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        consecutive_failures = consecutive_failures.saturating_add(1);
+                        tracing::warn!(
+                            "failed to broadcast peer announcement (failure {}/{}): {}",
+                            consecutive_failures,
+                            GOSSIP_ANNOUNCE_FAILURE_THRESHOLD,
+                            error
+                        );
+                        if consecutive_failures >= GOSSIP_ANNOUNCE_FAILURE_THRESHOLD {
+                            let new_interval = (current_interval_secs * 2).min(GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS);
+                            if new_interval != current_interval_secs {
+                                current_interval_secs = new_interval;
+                                ticker = interval(Duration::from_secs(current_interval_secs));
+                                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                                tracing::info!("increasing announcement interval to {}s due to failures", current_interval_secs);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn run_receiver_loop(
+    cancel: CancellationToken,
+    mut receiver: GossipReceiver,
+    receiver_node_id: NodeId,
+    receiver_callback: Option<PeerDiscoveredCallback<EndpointAddr>>,
+    local_topology_version: Arc<std::sync::atomic::AtomicU64>,
+    topology_stale_callback: Option<TopologyStaleCallback>,
+    blob_announced_callback: Option<BlobAnnouncedCallback>,
+) {
+    #[cfg(not(feature = "blob"))]
+    let _ = &blob_announced_callback;
+
+    let mut rate_limiter = GossipRateLimiter::new();
+    let mut consecutive_errors: u32 = 0;
+    let backoff_durations: Vec<Duration> = GOSSIP_STREAM_BACKOFF_SECS.iter().map(|s| Duration::from_secs(*s)).collect();
+
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                tracing::debug!("gossip receiver shutting down");
+                break;
+            }
+            event = receiver.next() => match event {
+                Some(Ok(Event::Received(msg))) => {
+                    consecutive_errors = 0;
+                    if let Err(reason) = rate_limiter.check(&msg.delivered_from) {
+                        match reason {
+                            RateLimitReason::PerPeer => tracing::trace!("rate limited gossip message from peer={:?}", msg.delivered_from),
+                            RateLimitReason::Global => tracing::warn!("global gossip rate limit exceeded, dropping message from peer={:?}", msg.delivered_from),
+                        }
+                        continue;
+                    }
+                    if msg.content.len() > MAX_GOSSIP_MESSAGE_SIZE {
+                        tracing::warn!(size = msg.content.len(), max = MAX_GOSSIP_MESSAGE_SIZE, peer = ?msg.delivered_from, "rejected oversized gossip message");
+                        continue;
+                    }
+                    let Some(gossip_msg) = GossipMessage::from_bytes(&msg.content) else {
+                        tracing::warn!(size = msg.content.len(), peer = ?msg.delivered_from, "failed to parse gossip message");
+                        continue;
+                    };
+                    match gossip_msg {
+                        GossipMessage::PeerAnnouncement(signed) => {
+                            let Some(announcement) = signed.verify() else {
+                                tracing::warn!("rejected peer announcement with invalid signature from endpoint_id={:?}", signed.announcement.endpoint_addr.id);
+                                continue;
+                            };
+                            if announcement.node_id == receiver_node_id {
+                                tracing::trace!("ignoring self-announcement");
+                                continue;
+                            }
+                            tracing::debug!("received verified peer announcement from node_id={}, endpoint_id={:?}", announcement.node_id, announcement.endpoint_addr.id);
+                            if let Some(ref callback) = receiver_callback {
+                                callback(DiscoveredPeer {
+                                    node_id: announcement.node_id,
+                                    address: announcement.endpoint_addr.clone(),
+                                    timestamp_micros: announcement.timestamp_micros,
+                                }).await;
+                            }
+                            let relay_urls: Vec<_> = announcement.endpoint_addr.relay_urls().collect();
+                            tracing::info!(
+                                "discovered verified peer: node_id={}, endpoint_id={:?}, relay={:?}, direct_addresses={}",
+                                announcement.node_id,
+                                announcement.endpoint_addr.id,
+                                relay_urls,
+                                announcement.endpoint_addr.addrs.len()
+                            );
+                        }
+                        GossipMessage::TopologyAnnouncement(signed) => {
+                            let Some(announcement) = signed.verify() else {
+                                tracing::warn!("rejected topology announcement with invalid signature from node_id={}", signed.announcement.node_id);
+                                continue;
+                            };
+                            if announcement.node_id == u64::from(receiver_node_id) {
+                                tracing::trace!("ignoring self-topology-announcement");
+                                continue;
+                            }
+                            tracing::debug!(
+                                "received verified topology announcement from node_id={}, version={}, hash={}",
+                                announcement.node_id,
+                                announcement.topology_version,
+                                announcement.topology_hash
+                            );
+                            let local_version = local_topology_version.load(Ordering::SeqCst);
+                            if announcement.topology_version > local_version {
+                                tracing::info!(local_version, remote_version = announcement.topology_version, remote_node = announcement.node_id, "detected stale topology, triggering sync");
+                                if let Some(ref callback) = topology_stale_callback {
+                                    callback(StaleTopologyInfo {
+                                        announcing_node_id: announcement.node_id,
+                                        remote_version: announcement.topology_version,
+                                        remote_hash: announcement.topology_hash,
+                                        remote_term: announcement.term,
+                                    }).await;
+                                }
+                            } else {
+                                tracing::trace!(local_version, remote_version = announcement.topology_version, "topology announcement: local version is current");
+                            }
+                        }
+                        #[cfg(feature = "blob")]
+                        GossipMessage::BlobAnnouncement(signed) => {
+                            let Some(announcement) = signed.verify() else {
+                                tracing::warn!("rejected blob announcement with invalid signature from node_id={}", u64::from(signed.announcement.node_id));
+                                continue;
+                            };
+                            if u64::from(announcement.node_id) == u64::from(receiver_node_id) {
+                                tracing::trace!("ignoring self-blob-announcement");
+                                continue;
+                            }
+                            tracing::info!(hash = %announcement.blob_hash.fmt_short(), size = announcement.blob_size, format = ?announcement.blob_format, node_id = u64::from(announcement.node_id), tag = ?announcement.tag, "discovered blob available from peer");
+                            if let Some(ref callback) = blob_announced_callback {
+                                callback(BlobAnnouncedInfo {
+                                    announcing_node_id: u64::from(announcement.node_id),
+                                    provider_public_key: announcement.endpoint_addr.id,
+                                    blob_hash_hex: announcement.blob_hash.to_hex().to_string(),
+                                    blob_size: announcement.blob_size,
+                                    is_raw_format: matches!(announcement.blob_format, iroh_blobs::BlobFormat::Raw),
+                                    tag: announcement.tag.clone(),
+                                }).await;
+                            }
+                        }
+                    }
+                }
+                Some(Ok(Event::NeighborUp(neighbor_id))) => tracing::debug!("neighbor up: {:?}", neighbor_id),
+                Some(Ok(Event::NeighborDown(neighbor_id))) => tracing::debug!("neighbor down: {:?}", neighbor_id),
+                Some(Ok(Event::Lagged)) => tracing::warn!("gossip receiver lagged, messages may be lost"),
+                Some(Err(error)) => {
+                    consecutive_errors = consecutive_errors.saturating_add(1);
+                    if consecutive_errors > GOSSIP_MAX_STREAM_RETRIES {
+                        tracing::error!("gossip receiver exceeded max retries ({}), giving up: {}", GOSSIP_MAX_STREAM_RETRIES, error);
+                        break;
+                    }
+                    let backoff = calculate_backoff_duration(consecutive_errors.saturating_sub(1), &backoff_durations);
+                    tracing::warn!("gossip receiver error (retry {}/{}), backing off for {:?}: {}", consecutive_errors, GOSSIP_MAX_STREAM_RETRIES, backoff, error);
+                    tokio::time::sleep(backoff).await;
+                }
+                None => {
+                    tracing::info!("gossip receiver stream ended");
+                    break;
+                }
+            }
+        }
     }
 }
 

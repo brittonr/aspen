@@ -1,0 +1,31 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.60s
+     Running unittests src/lib.rs (target/debug/deps/aspen_client_api-1f66d395de0c9714)
+
+running 1 test
+test tests::test_request_metadata_lookup_matches_sample_requests ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.00s
+
+     Running tests/serialization_snapshots.rs (target/debug/deps/serialization_snapshots-558c291e4164426d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/snapshot_redaction.rs (target/debug/deps/snapshot_redaction-f5df6b9dcc8b48f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/wire_format_golden.rs (target/debug/deps/wire_format_golden-b14e76705b877280)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s

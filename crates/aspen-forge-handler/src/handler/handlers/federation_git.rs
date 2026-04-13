@@ -139,6 +139,249 @@ async fn fetch_refs_from_origin(
     Ok(fetched_refs)
 }
 
+/// Update the have-hash set with hashes from a received batch of git objects.
+///
+/// Prefers envelope BLAKE3 hashes when present to avoid the lossy SHA-1 →
+/// envelope BLAKE3 conversion that breaks for trees/commits whose re-serialized
+/// bytes differ from the original import bytes.
+fn update_have_hashes_from_objects(
+    objects: &[aspen_cluster::federation::sync::SyncObject],
+    current_have: &mut Vec<[u8; 32]>,
+) {
+    for obj in objects {
+        if let Some(env_hash) = obj.envelope_hash {
+            current_have.push(env_hash);
+        } else {
+            use sha1::Digest as _;
+            let header = format!("{} {}\0", obj.object_type, obj.data.len());
+            let mut hasher = sha1::Sha1::new();
+            hasher.update(header.as_bytes());
+            hasher.update(&obj.data);
+            let sha1: [u8; 20] = hasher.finalize().into();
+            current_have.push(aspen_forge::resolver::sha1_to_have_hash(&sha1));
+        }
+    }
+}
+
+/// Verify DAG integrity for a mirror repo and log the result.
+///
+/// Logs a warning if objects are unreachable from ref heads (incomplete mirror),
+/// or info if the DAG is complete. Should be called after mirror refs are updated
+/// so the BFS walk can start from ref heads.
+async fn check_dag_integrity(
+    forge_node: &ForgeNodeRef,
+    mirror_repo_id: &aspen_forge::identity::RepoId,
+    transferred: u32,
+    origin_key: &str,
+) {
+    let result = aspen_forge::git::bridge::verify_dag_integrity(forge_node.kv().as_ref(), mirror_repo_id).await;
+    if !result.is_complete() {
+        tracing::warn!(
+            origin = %origin_key,
+            transferred = transferred,
+            stored_objects = result.total_stored,
+            reachable = result.reachable,
+            missing_count = result.missing.len(),
+            ref_heads_found = result.ref_heads.len(),
+            first_missing = ?result.missing.iter().take(10).collect::<Vec<_>>(),
+            "DAG integrity: mirror has unreachable objects"
+        );
+    } else {
+        tracing::info!(
+            origin = %origin_key,
+            transferred = transferred,
+            stored_objects = result.total_stored,
+            reachable = result.reachable,
+            "DAG integrity: all stored objects are reachable"
+        );
+    }
+}
+
+/// Fetch refs from the origin and open a sync session on the existing connection.
+///
+/// Phase 1 of `sync_from_origin`: performs the single-shot ref fetch over the
+/// already-established connection, then opens a persistent `SyncSession` for
+/// the subsequent object-transfer rounds.
+///
+/// Returns `(fetched_refs, session)` or an error string.
+async fn fetch_refs_and_init_session(
+    connection: &aspen_cluster::federation::sync::ConnectResult,
+    fed_id: &aspen_cluster::federation::FederatedId,
+    _origin_key: &str,
+) -> Result<(Vec<FetchedRef>, aspen_cluster::federation::sync::SyncSession), String> {
+    #[allow(deprecated)] // Single-shot ref fetch on existing connection
+    let (ref_objects, _has_more) = aspen_cluster::federation::sync::sync_remote_objects(
+        &connection.connection,
+        fed_id,
+        vec!["refs".to_string()],
+        Vec::new(),
+        1000,
+        None,
+    )
+    .await
+    .map_err(|e| format!("ref fetch failed: {e}"))?;
+
+    let mut fetched_refs: Vec<FetchedRef> = Vec::new();
+    for obj in &ref_objects {
+        if obj.object_type != "ref" {
+            continue;
+        }
+        if let Ok(entry) = postcard::from_bytes::<RefEntry>(&obj.data) {
+            fetched_refs.push((entry.ref_name, entry.head_hash, entry.commit_sha1));
+        }
+    }
+
+    let session = aspen_cluster::federation::sync::SyncSession::open(&connection.connection)
+        .await
+        .map_err(|e| format!("failed to open sync session: {e}"))?;
+
+    Ok((fetched_refs, session))
+}
+
+/// Paginate all git objects from the origin across multiple rounds.
+///
+/// Uses a persistent `SyncSession` (single QUIC bidirectional stream) for all
+/// rounds to avoid stream exhaustion. Reconnects up to `max_reconnects` times
+/// on connection-level errors.
+///
+/// Returns `(all_git_objects, errors)`.
+#[allow(clippy::too_many_arguments)]
+async fn paginate_all_git_objects(
+    mut session: aspen_cluster::federation::sync::SyncSession,
+    fed_id: &aspen_cluster::federation::FederatedId,
+    have_hashes: Vec<[u8; 32]>,
+    iroh_endpoint: &Arc<iroh::Endpoint>,
+    cluster_identity: &Arc<aspen_cluster::federation::ClusterIdentity>,
+    endpoint_addr: iroh::EndpointAddr,
+    credential: Option<aspen_auth::Credential>,
+    origin_key: &str,
+) -> (Vec<aspen_cluster::federation::sync::SyncObject>, Vec<String>) {
+    let mut all_git_objects = Vec::new();
+    let mut current_have = have_hashes;
+    let mut errors = Vec::new();
+    let max_rounds = 100u32;
+    let batch_size = 2000u32;
+    let mut reconnect_count = 0u32;
+    let max_reconnects = 3u32;
+
+    for round in 0..max_rounds {
+        let object_types = vec!["commit".to_string(), "tree".to_string(), "blob".to_string()];
+        let (objects, has_more) = match session
+            .sync_objects(fed_id, object_types.clone(), current_have.clone(), batch_size, None)
+            .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                if reconnect_count >= max_reconnects {
+                    tracing::warn!(origin = %origin_key, error = %e, round = round, "sync session failed (max reconnects exceeded)");
+                    errors.push(format!("git object fetch round {round}: {e}"));
+                    break;
+                }
+                reconnect_count += 1;
+                tracing::info!(origin = %origin_key, round = round, reconnect = reconnect_count, error = %e, "sync session error, reconnecting to origin");
+                match aspen_cluster::federation::sync::connect_to_cluster(
+                    iroh_endpoint,
+                    cluster_identity,
+                    endpoint_addr.clone(),
+                    credential.clone(),
+                )
+                .await
+                {
+                    Ok(reconnect_result) => {
+                        session = match aspen_cluster::federation::sync::SyncSession::open(&reconnect_result.connection)
+                            .await
+                        {
+                            Ok(s) => s,
+                            Err(e2) => {
+                                errors.push(format!("failed to reopen sync session: {e2}"));
+                                break;
+                            }
+                        };
+                        match session.sync_objects(fed_id, object_types, current_have.clone(), batch_size, None).await {
+                            Ok(result) => result,
+                            Err(e2) => {
+                                tracing::warn!(origin = %origin_key, error = %e2, round = round, "sync failed after reconnect");
+                                errors.push(format!("git object fetch round {round} (post-reconnect): {e2}"));
+                                break;
+                            }
+                        }
+                    }
+                    Err(reconn_err) => {
+                        tracing::warn!(origin = %origin_key, error = %reconn_err, "reconnect to origin failed");
+                        errors.push(format!("git object fetch round {round}: {e} (reconnect failed: {reconn_err})"));
+                        break;
+                    }
+                }
+            }
+        };
+
+        if objects.is_empty() {
+            debug!(origin = %origin_key, round = round, "sync returned empty git objects batch — stopping");
+            break;
+        }
+        debug!(origin = %origin_key, round = round, batch = objects.len(), has_more = has_more, "fetched git object batch, importing...");
+        update_have_hashes_from_objects(&objects, &mut current_have);
+        all_git_objects.extend(objects);
+        if !has_more {
+            info!(origin = %origin_key, round = round, "sync stopping: remote reported no more objects");
+            break;
+        }
+    }
+
+    if let Err(e) = session.finish().await {
+        debug!(origin = %origin_key, error = %e, "session finish failed (non-fatal)");
+    }
+
+    (all_git_objects, errors)
+}
+
+/// Import accumulated git objects and update the mirror repo state.
+///
+/// Runs the single-pass import (to avoid stale BLAKE3 references from partial
+/// imports), translates ref hashes, updates mirror refs and sync timestamp,
+/// and checks DAG integrity.
+///
+/// Returns `(objects_imported, errors)`.
+async fn import_and_update_mirror(
+    forge_node: &ForgeNodeRef,
+    mirror_repo_id: &aspen_forge::identity::RepoId,
+    all_git_objects: Vec<aspen_cluster::federation::sync::SyncObject>,
+    fetched_refs: &[FetchedRef],
+    fed_id_str: &str,
+    origin_key: &str,
+) -> (u32, Vec<String>) {
+    let mut errors = Vec::new();
+    let mut objects_imported = 0u32;
+    let mut stats = super::federation::FederationImportStats::default();
+
+    if !all_git_objects.is_empty() {
+        info!(origin = %origin_key, total_objects = all_git_objects.len(), "importing all accumulated federation objects in single pass");
+        let import_stats = federation_import_objects(forge_node, mirror_repo_id, &all_git_objects).await;
+        objects_imported = import_stats.commits + import_stats.trees + import_stats.blobs;
+        stats.commits = import_stats.commits;
+        stats.trees = import_stats.trees;
+        stats.blobs = import_stats.blobs;
+        stats.skipped = import_stats.skipped;
+        stats.total_bytes = import_stats.total_bytes;
+        for (k, v) in import_stats.sha1_to_local_blake3 {
+            stats.sha1_to_local_blake3.insert(k, v);
+        }
+        for err in &import_stats.errors {
+            debug!(origin = %origin_key, error = %err, "import error (non-fatal)");
+        }
+    }
+
+    let translated_refs = translate_ref_hashes(fetched_refs, &all_git_objects, &stats);
+    if let Err(e) = update_mirror_refs(forge_node, mirror_repo_id, &translated_refs).await {
+        errors.push(format!("mirror ref update: {e}"));
+    }
+    let _ = update_mirror_sync_timestamp(forge_node, fed_id_str).await;
+    check_dag_integrity(forge_node, mirror_repo_id, all_git_objects.len() as u32, origin_key).await;
+
+    info!(origin = %origin_key, objects = objects_imported, "federation git sync complete");
+    (objects_imported, errors)
+}
+
 /// Perform a full federation sync (refs + git objects) to populate a mirror repo.
 ///
 /// Connects to the origin cluster, fetches refs and git objects, imports
@@ -157,7 +400,6 @@ async fn sync_from_origin(
     let fed_id_str = build_fed_id_str(origin_key, upstream_repo_hex);
     let (fed_id, endpoint_addr) = build_origin_params(origin_key, upstream_repo_hex, origin_addr_hint)?;
 
-    // Load stored credential for the origin peer
     let origin_pubkey: iroh::PublicKey = origin_key.parse().map_err(|e| format!("invalid origin key: {e}"))?;
     let credential =
         aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &origin_pubkey).await;
@@ -171,274 +413,28 @@ async fn sync_from_origin(
     .await
     .map_err(|e| format!("connection to origin failed: {e}"))?;
 
-    let mut errors = Vec::new();
-
-    // Phase 1: Fetch refs
-    #[allow(deprecated)] // Single-shot ref fetch on existing connection
-    let (ref_objects, _has_more) = aspen_cluster::federation::sync::sync_remote_objects(
-        &connect_result.connection,
-        &fed_id,
-        vec!["refs".to_string()],
-        Vec::new(),
-        1000,
-        None,
-    )
-    .await
-    .map_err(|e| format!("ref fetch failed: {e}"))?;
-
-    let mut fetched_refs: Vec<FetchedRef> = Vec::new();
-    for obj in &ref_objects {
-        if obj.object_type != "ref" {
-            continue;
-        }
-        match postcard::from_bytes::<RefEntry>(&obj.data) {
-            Ok(entry) => fetched_refs.push((entry.ref_name, entry.head_hash, entry.commit_sha1)),
-            Err(e) => errors.push(format!("ref deserialize: {e}")),
-        }
-    }
-
+    let (fetched_refs, session) = fetch_refs_and_init_session(&connect_result, &fed_id, origin_key).await?;
     let refs_fetched = fetched_refs.len() as u32;
 
-    // Phase 2: Fetch and import git objects incrementally.
-    //
-    // Uses a single QUIC bidirectional stream (SyncSession) for the entire
-    // multi-round sync. Each round sends a request and reads a response on
-    // the same stream, avoiding stream exhaustion.
     let have_hashes = super::federation::collect_local_sha1_hashes(forge_node, mirror_repo_id, 50_000).await;
+    let (all_git_objects, errors) = paginate_all_git_objects(
+        session,
+        &fed_id,
+        have_hashes,
+        iroh_endpoint,
+        cluster_identity,
+        endpoint_addr,
+        credential,
+        origin_key,
+    )
+    .await;
 
-    let mut all_git_objects = Vec::new();
-    let mut current_have = have_hashes;
-    let max_rounds = 100u32;
-    let batch_size = 2000u32;
-    let mut total_imported = 0u32;
-    let mut combined_stats = super::federation::FederationImportStats::default();
+    let (objects_imported, mut all_errors) =
+        import_and_update_mirror(forge_node, mirror_repo_id, all_git_objects, &fetched_refs, &fed_id_str, origin_key)
+            .await;
+    all_errors.extend(errors);
 
-    // Open a persistent sync session on the connection.
-    // If the connection drops, reconnect and open a new session.
-    let mut session = aspen_cluster::federation::sync::SyncSession::open(&connect_result.connection)
-        .await
-        .map_err(|e| format!("failed to open sync session: {e}"))?;
-    let mut reconnect_count = 0u32;
-    let max_reconnects = 3u32;
-
-    for round in 0..max_rounds {
-        let (objects, has_more) = match session
-            .sync_objects(
-                &fed_id,
-                vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
-                current_have.clone(),
-                batch_size,
-                None,
-            )
-            .await
-        {
-            Ok(result) => result,
-            Err(e) => {
-                // Connection-level error — reconnect and open a new session
-                if reconnect_count < max_reconnects {
-                    reconnect_count += 1;
-                    tracing::info!(
-                        origin = %origin_key,
-                        round = round,
-                        reconnect = reconnect_count,
-                        error = %e,
-                        "sync session error, reconnecting to origin"
-                    );
-                    match aspen_cluster::federation::sync::connect_to_cluster(
-                        iroh_endpoint,
-                        cluster_identity,
-                        endpoint_addr.clone(),
-                        credential.clone(),
-                    )
-                    .await
-                    {
-                        Ok(reconnect_result) => {
-                            session = aspen_cluster::federation::sync::SyncSession::open(&reconnect_result.connection)
-                                .await
-                                .map_err(|e2| format!("failed to reopen sync session: {e2}"))?;
-                            // Retry this round on the new session
-                            match session
-                                .sync_objects(
-                                    &fed_id,
-                                    vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
-                                    current_have.clone(),
-                                    batch_size,
-                                    None,
-                                )
-                                .await
-                            {
-                                Ok(result) => result,
-                                Err(e2) => {
-                                    tracing::warn!(origin = %origin_key, error = %e2, round = round, "sync failed after reconnect");
-                                    errors.push(format!("git object fetch round {round} (post-reconnect): {e2}"));
-                                    break;
-                                }
-                            }
-                        }
-                        Err(reconn_err) => {
-                            tracing::warn!(origin = %origin_key, error = %reconn_err, "reconnect to origin failed");
-                            errors
-                                .push(format!("git object fetch round {round}: {e} (reconnect failed: {reconn_err})"));
-                            break;
-                        }
-                    }
-                } else {
-                    tracing::warn!(origin = %origin_key, error = %e, round = round, "sync session failed (max reconnects exceeded)");
-                    errors.push(format!("git object fetch round {round}: {e}"));
-                    break;
-                }
-            }
-        };
-
-        if objects.is_empty() {
-            debug!(
-                origin = %origin_key,
-                round = round,
-                total = total_imported,
-                "sync returned empty git objects batch — stopping"
-            );
-            break;
-        }
-
-        let batch_len = objects.len();
-        debug!(
-            origin = %origin_key,
-            round = round,
-            batch = batch_len,
-            has_more = has_more,
-            "fetched git object batch, importing..."
-        );
-
-        // Build have-set for next round. Prefer envelope BLAKE3 hashes
-        // (set by the Forge resolver on git SyncObjects) over SHA-1.
-        // Envelope hashes let the server skip objects in its BFS walk
-        // directly, without the lossy SHA-1 → envelope BLAKE3 conversion
-        // that breaks for trees/commits whose re-serialized bytes differ
-        // from the original import bytes.
-        for obj in &objects {
-            if let Some(env_hash) = obj.envelope_hash {
-                current_have.push(env_hash);
-            } else {
-                use sha1::Digest as _;
-                let header = format!("{} {}\0", obj.object_type, obj.data.len());
-                let mut hasher = sha1::Sha1::new();
-                hasher.update(header.as_bytes());
-                hasher.update(&obj.data);
-                let sha1: [u8; 20] = hasher.finalize().into();
-                current_have.push(aspen_forge::resolver::sha1_to_have_hash(&sha1));
-            }
-        }
-
-        // Accumulate objects — don't import per-round.
-        //
-        // Per-round imports create SHA-1→BLAKE3 mappings from partial state:
-        // trees imported early get BLAKE3 entry references based on whatever
-        // mappings exist at that point. Later rounds add more objects, but the
-        // already-imported trees keep their stale references. The result is a
-        // truncated DAG (HEAD reaches only ~7K of ~34K objects).
-        //
-        // Instead, collect everything, then import once at the end with the
-        // full set. The convergent loop in federation_import_objects handles
-        // dependency ordering (blobs → trees → commits).
-        all_git_objects.extend(objects);
-
-        if !has_more {
-            info!(
-                origin = %origin_key,
-                round = round,
-                total = total_imported,
-                "sync stopping: remote reported no more objects"
-            );
-            break;
-        }
-    }
-
-    // Finish the sync session (signals server that conversation is done)
-    if let Err(e) = session.finish().await {
-        debug!(origin = %origin_key, error = %e, "session finish failed (non-fatal)");
-    }
-
-    // Import ALL accumulated objects in one pass.
-    //
-    // Objects are NOT imported per-round to avoid stale BLAKE3 references.
-    // The convergent loop in federation_import_objects resolves dependencies
-    // in topological order: blobs (no deps) → trees → commits.
-    if !all_git_objects.is_empty() {
-        info!(
-            origin = %origin_key,
-            total_objects = all_git_objects.len(),
-            "importing all accumulated federation objects in single pass"
-        );
-        let import_stats = federation_import_objects(forge_node, mirror_repo_id, &all_git_objects).await;
-        total_imported = import_stats.commits + import_stats.trees + import_stats.blobs;
-        combined_stats.commits = import_stats.commits;
-        combined_stats.trees = import_stats.trees;
-        combined_stats.blobs = import_stats.blobs;
-        combined_stats.skipped = import_stats.skipped;
-        combined_stats.total_bytes = import_stats.total_bytes;
-        for (k, v) in import_stats.sha1_to_local_blake3 {
-            combined_stats.sha1_to_local_blake3.insert(k, v);
-        }
-        for err in &import_stats.errors {
-            debug!(origin = %origin_key, error = %err, "import error (non-fatal)");
-        }
-    }
-
-    let objects_imported = total_imported;
-    let stats = combined_stats;
-
-    // Translate remote ref hashes to local BLAKE3 hashes.
-    //
-    // Each ref carries commit_sha1 (deterministic git SHA1). We compute
-    // SHA1 from each commit SyncObject's content, match by SHA1, then
-    // look up the locally imported BLAKE3 via content_to_local_blake3.
-    let translated_refs = translate_ref_hashes(&fetched_refs, &all_git_objects, &stats);
-
-    // Update mirror refs with locally imported hashes
-    if let Err(e) = update_mirror_refs(forge_node, mirror_repo_id, &translated_refs).await {
-        errors.push(format!("mirror ref update: {e}"));
-    }
-
-    // Update sync timestamp
-    let _ = update_mirror_sync_timestamp(forge_node, &fed_id_str).await;
-
-    // DAG integrity diagnostic: verify all objects reachable from ref heads.
-    // Runs AFTER refs are set so the BFS walk can start from ref heads.
-    {
-        let result = aspen_forge::git::bridge::verify_dag_integrity(forge_node.kv().as_ref(), mirror_repo_id).await;
-
-        let transferred = all_git_objects.len() as u32;
-
-        if !result.is_complete() {
-            tracing::warn!(
-                origin = %origin_key,
-                transferred = transferred,
-                stored_objects = result.total_stored,
-                reachable = result.reachable,
-                missing_count = result.missing.len(),
-                ref_heads_found = result.ref_heads.len(),
-                first_missing = ?result.missing.iter().take(10).collect::<Vec<_>>(),
-                "DAG integrity: mirror has unreachable objects"
-            );
-        } else {
-            tracing::info!(
-                origin = %origin_key,
-                transferred = transferred,
-                stored_objects = result.total_stored,
-                reachable = result.reachable,
-                "DAG integrity: all stored objects are reachable"
-            );
-        }
-    }
-
-    info!(
-        origin = %origin_key,
-        refs = refs_fetched,
-        objects = objects_imported,
-        "federation git sync complete"
-    );
-
-    Ok((refs_fetched, objects_imported, errors))
+    Ok((refs_fetched, objects_imported, all_errors))
 }
 
 /// A fetched ref entry: (ref_name, head_hash, commit_sha1).
@@ -812,6 +808,93 @@ mod tests {
         let origin = "abc123";
         let repo = "def456";
         assert_eq!(build_fed_id_str(origin, repo), "abc123:def456");
+    }
+
+    // ====================================================================
+    // update_have_hashes_from_objects tests
+    // ====================================================================
+
+    #[test]
+    fn test_update_have_hashes_envelope_preferred() {
+        let env_hash = [0xABu8; 32];
+        let obj = aspen_cluster::federation::sync::SyncObject {
+            object_type: "blob".to_string(),
+            hash: [0x01u8; 32],
+            data: b"some blob".to_vec(),
+            signature: None,
+            signer: None,
+            envelope_hash: Some(env_hash),
+            origin_sha1: None,
+        };
+
+        let mut have = Vec::new();
+        update_have_hashes_from_objects(&[obj], &mut have);
+
+        assert_eq!(have.len(), 1);
+        assert_eq!(have[0], env_hash, "envelope hash should be used when present");
+    }
+
+    #[test]
+    fn test_update_have_hashes_fallback_to_sha1() {
+        let data = b"blob data here";
+        let obj = aspen_cluster::federation::sync::SyncObject {
+            object_type: "blob".to_string(),
+            hash: [0x02u8; 32],
+            data: data.to_vec(),
+            signature: None,
+            signer: None,
+            envelope_hash: None,
+            origin_sha1: None,
+        };
+
+        let mut have = Vec::new();
+        update_have_hashes_from_objects(&[obj], &mut have);
+
+        assert_eq!(have.len(), 1, "one entry should be added without envelope hash");
+
+        // Verify it matches sha1_to_have_hash of the git-formatted content
+        let header = format!("blob {}\0", data.len());
+        let expected = {
+            use sha1::Digest as _;
+            let mut h = sha1::Sha1::new();
+            h.update(header.as_bytes());
+            h.update(data);
+            let sha1: [u8; 20] = h.finalize().into();
+            aspen_forge::resolver::sha1_to_have_hash(&sha1)
+        };
+        assert_eq!(have[0], expected, "fallback hash should be sha1_to_have_hash of git content");
+    }
+
+    #[test]
+    fn test_update_have_hashes_mixed_batch() {
+        let env = [0xCCu8; 32];
+        let objs = vec![
+            aspen_cluster::federation::sync::SyncObject {
+                object_type: "commit".to_string(),
+                hash: [0x10u8; 32],
+                data: b"commit".to_vec(),
+                signature: None,
+                signer: None,
+                envelope_hash: Some(env),
+                origin_sha1: None,
+            },
+            aspen_cluster::federation::sync::SyncObject {
+                object_type: "blob".to_string(),
+                hash: [0x20u8; 32],
+                data: b"blob".to_vec(),
+                signature: None,
+                signer: None,
+                envelope_hash: None,
+                origin_sha1: None,
+            },
+        ];
+
+        let mut have = Vec::new();
+        update_have_hashes_from_objects(&objs, &mut have);
+
+        assert_eq!(have.len(), 2);
+        assert_eq!(have[0], env, "first entry uses envelope hash");
+        assert_ne!(have[1], [0u8; 32], "second entry uses computed sha1 hash");
     }
 
     /// Two refs pointing to different commits must produce different local

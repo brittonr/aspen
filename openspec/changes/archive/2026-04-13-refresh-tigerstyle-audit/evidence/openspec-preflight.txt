@@ -1,0 +1,4 @@
+OK: openspec/changes/refresh-tigerstyle-audit
+  tasks: 8 total / 8 checked
+  changed files listed: 47
+  verification artifacts: 18

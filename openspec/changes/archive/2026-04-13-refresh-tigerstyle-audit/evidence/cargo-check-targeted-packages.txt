@@ -1,0 +1,24 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling cargo-hyperlight v0.1.5 (/home/brittonr/git/aspen/vendor/cargo-hyperlight)
+    Checking aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+   Compiling hyperlight-wasm v0.12.0
+    Checking aspen-docs v0.1.0 (/home/brittonr/git/aspen/crates/aspen-docs)
+    Checking aspen-jobs v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs)
+    Checking aspen-hooks v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks)
+    Checking aspen-jobs-worker-maintenance v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-worker-maintenance)
+    Checking aspen-ci-executor-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-executor-shell)
+    Checking aspen-cluster-bridges v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-bridges)
+    Checking aspen-ci-executor-nix v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-executor-nix)
+    Checking aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster)
+    Checking aspen-forge v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge)
+    Checking aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-rpc-core)
+    Checking aspen-core-essentials-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-essentials-handler)
+    Checking aspen-forge-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-handler)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 35.30s

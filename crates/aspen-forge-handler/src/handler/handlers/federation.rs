@@ -648,81 +648,194 @@ pub(crate) async fn handle_federation_sync_peer(
     }))
 }
 
-/// Fetch ref objects from a remote federated repository and persist locally.
+/// Paginate git objects from an open sync session until exhausted or bounded.
 ///
-/// Connects to the remote peer, performs a federation handshake, then calls
-/// `SyncObjects` with `want_types: ["refs"]`. Received refs are written to
-/// local KV under `_fed:mirror:{origin_short}:{local_id_short}:refs/{name}`.
-pub(crate) async fn handle_federation_fetch_refs(
-    peer_node_id: &str,
-    peer_addr: Option<&str>,
-    fed_id_str: &str,
-    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
-    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+/// Drives `session.sync_objects` for up to `max_rounds`, accumulating all
+/// returned objects. Finishes the session when done. Returns accumulated
+/// objects and any per-round errors (non-fatal; the caller extends its own
+/// error list).
+#[cfg(feature = "git-bridge")]
+async fn paginate_git_objects_from_session(
+    mut session: aspen_cluster::federation::sync::SyncSession,
+    fed_id: &aspen_cluster::federation::FederatedId,
+    mut have_hashes: Vec<[u8; 32]>,
+    max_rounds: u32,
+) -> (Vec<aspen_cluster::federation::sync::SyncObject>, Vec<String>) {
+    let mut all_objects = Vec::new();
+    let mut errors = Vec::new();
+
+    for _round in 0..max_rounds {
+        let (objects, has_more) = match session
+            .sync_objects(
+                fed_id,
+                vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
+                have_hashes.clone(),
+                1000,
+                None,
+            )
+            .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                errors.push(format!("git object fetch: {e}"));
+                break;
+            }
+        };
+
+        if objects.is_empty() {
+            break;
+        }
+
+        for obj in &objects {
+            have_hashes.push(obj.hash);
+        }
+        all_objects.extend(objects);
+
+        if !has_more {
+            break;
+        }
+    }
+
+    if let Err(e) = session.finish().await {
+        tracing::debug!(error = %e, "sync session finish (non-fatal)");
+    }
+
+    (all_objects, errors)
+}
+
+/// Translate fetched ref hashes from source BLAKE3 to locally imported BLAKE3.
+///
+/// Uses the SHA-1 → BLAKE3 mapping store built during object import to remap
+/// each ref's `head_hash`. Updates `fetched_refs` in place. Refs whose SHA-1
+/// can't be resolved are left with the source hash and logged as warnings.
+#[cfg(feature = "git-bridge")]
+async fn translate_federation_refs_to_local(
     forge_node: &ForgeNodeRef,
-) -> anyhow::Result<ClientRpcResponse> {
+    mirror_repo_id: &aspen_forge::identity::RepoId,
+    fetched_ref_entries: &[aspen_cluster::federation::sync::RefEntry],
+    fetched_refs: &mut [(String, [u8; 32])],
+) {
+    use aspen_forge::git::bridge::HashMappingStore;
+    use aspen_forge::git::bridge::Sha1Hash;
+
+    let mapping = HashMappingStore::new(forge_node.kv().clone());
+    for (i, ref_entry) in fetched_ref_entries.iter().enumerate() {
+        if let Some(sha1_bytes) = &ref_entry.commit_sha1 {
+            let sha1 = Sha1Hash::from_bytes(*sha1_bytes);
+            match mapping.get_blake3(mirror_repo_id, &sha1).await {
+                Ok(Some((local_blake3, _obj_type))) => {
+                    tracing::debug!(
+                        ref_name = %ref_entry.ref_name,
+                        source_hash = %hex::encode(&ref_entry.head_hash[..8]),
+                        local_hash = %hex::encode(&local_blake3.as_bytes()[..8]),
+                        sha1 = %sha1.to_hex(),
+                        "translated federation ref to local BLAKE3"
+                    );
+                    fetched_refs[i].1 = *local_blake3.as_bytes();
+                }
+                Ok(None) => {
+                    tracing::warn!(
+                        ref_name = %ref_entry.ref_name,
+                        sha1 = %sha1.to_hex(),
+                        "no SHA1→BLAKE3 mapping for federation ref, using source hash"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        ref_name = %ref_entry.ref_name,
+                        error = %e,
+                        "failed to look up local BLAKE3 for federation ref"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Validates config for a federation fetch-refs call, returning the four
+/// extracted values or an early-exit error response.
+#[allow(clippy::result_large_err, clippy::type_complexity)]
+fn validate_fetch_refs_config<'a>(
+    cluster_identity: Option<&'a Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&'a Arc<iroh::Endpoint>>,
+    fed_id_str: &str,
+    peer_node_id: &str,
+) -> Result<
+    (
+        &'a Arc<aspen_cluster::federation::ClusterIdentity>,
+        &'a Arc<iroh::Endpoint>,
+        aspen_cluster::federation::FederatedId,
+        iroh::PublicKey,
+    ),
+    ClientRpcResponse,
+> {
     use aspen_client_api::FederationFetchRefsResponse;
     use aspen_cluster::federation::FederatedId;
-    use aspen_cluster::federation::sync::RefEntry;
+
+    let err = |msg: String| {
+        Err(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+            is_success: false,
+            fetched: 0,
+            already_present: 0,
+            errors: Vec::new(),
+            error: Some(msg),
+        }))
+    };
 
     let identity = match cluster_identity {
         Some(id) => id,
-        None => {
-            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                is_success: false,
-                fetched: 0,
-                already_present: 0,
-                errors: Vec::new(),
-                error: Some("federation not configured on this cluster".to_string()),
-            }));
-        }
+        None => return err("federation not configured on this cluster".to_string()),
     };
-
     let endpoint = match iroh_endpoint {
         Some(ep) => ep,
-        None => {
-            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                is_success: false,
-                fetched: 0,
-                already_present: 0,
-                errors: Vec::new(),
-                error: Some("iroh endpoint not available".to_string()),
-            }));
-        }
+        None => return err("iroh endpoint not available".to_string()),
     };
-
     let fed_id: FederatedId = match fed_id_str.parse() {
         Ok(id) => id,
-        Err(e) => {
-            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                is_success: false,
-                fetched: 0,
-                already_present: 0,
-                errors: Vec::new(),
-                error: Some(format!("invalid fed_id '{}': {}", fed_id_str, e)),
-            }));
-        }
+        Err(e) => return err(format!("invalid fed_id '{}': {}", fed_id_str, e)),
     };
-
     let peer_key: iroh::PublicKey = match peer_node_id.parse() {
         Ok(k) => k,
-        Err(e) => {
-            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                is_success: false,
-                fetched: 0,
-                already_present: 0,
-                errors: Vec::new(),
-                error: Some(format!("invalid peer node ID '{}': {}", peer_node_id, e)),
-            }));
-        }
+        Err(e) => return err(format!("invalid peer node ID '{}': {}", peer_node_id, e)),
     };
 
-    let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
+    Ok((identity, endpoint, fed_id, peer_key))
+}
 
-    // Load stored credential for this peer (if any)
-    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
+/// Connects to a remote federation peer, fetches the ref objects, and parses them.
+///
+/// Returns `(connect_result, fetched_ref_entries, fetched_refs, refs_fetched, errors)`
+/// or an early-exit error response.
+#[allow(clippy::result_large_err, clippy::type_complexity)]
+async fn connect_and_fetch_remote_refs(
+    endpoint: &Arc<iroh::Endpoint>,
+    identity: &Arc<aspen_cluster::federation::ClusterIdentity>,
+    endpoint_addr: iroh::EndpointAddr,
+    credential: Option<aspen_auth::Credential>,
+    fed_id: &aspen_cluster::federation::FederatedId,
+) -> Result<
+    (
+        aspen_cluster::federation::sync::ConnectResult,
+        Vec<aspen_cluster::federation::sync::RefEntry>,
+        Vec<(String, [u8; 32])>,
+        u32,
+        Vec<String>,
+    ),
+    ClientRpcResponse,
+> {
+    use aspen_client_api::FederationFetchRefsResponse;
+    use aspen_cluster::federation::sync::RefEntry;
 
-    // Connect and handshake
+    let err = |msg: String| {
+        Err(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+            is_success: false,
+            fetched: 0,
+            already_present: 0,
+            errors: Vec::new(),
+            error: Some(msg),
+        }))
+    };
+
     let connect_result = match aspen_cluster::federation::sync::connect_to_cluster(
         endpoint,
         identity,
@@ -732,25 +845,14 @@ pub(crate) async fn handle_federation_fetch_refs(
     .await
     {
         Ok(result) => result,
-        Err(e) => {
-            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                is_success: false,
-                fetched: 0,
-                already_present: 0,
-                errors: Vec::new(),
-                error: Some(format!("connection failed: {e}")),
-            }));
-        }
+        Err(e) => return err(format!("connection failed: {e}")),
     };
-    let connection = connect_result.connection;
 
-    // =========================================================================
     // Phase 1: Fetch refs
-    // =========================================================================
     #[allow(deprecated)] // Single-shot ref fetch; SyncSession not needed
     let (ref_objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
-        &connection,
-        &fed_id,
+        &connect_result.connection,
+        fed_id,
         vec!["refs".to_string()],
         Vec::new(),
         1000,
@@ -759,15 +861,7 @@ pub(crate) async fn handle_federation_fetch_refs(
     .await
     {
         Ok(result) => result,
-        Err(e) => {
-            return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                is_success: false,
-                fetched: 0,
-                already_present: 0,
-                errors: Vec::new(),
-                error: Some(format!("ref fetch failed: {e}")),
-            }));
-        }
+        Err(e) => return err(format!("ref fetch failed: {e}")),
     };
 
     // Parse ref entries.
@@ -789,151 +883,167 @@ pub(crate) async fn handle_federation_fetch_refs(
         }
     }
     // Initial refs with source hashes (translated to local after import)
-    #[allow(unused_mut)]
-    let mut fetched_refs: Vec<(String, [u8; 32])> =
+    let fetched_refs: Vec<(String, [u8; 32])> =
         fetched_ref_entries.iter().map(|e| (e.ref_name.clone(), e.head_hash)).collect();
-
     let refs_fetched = fetched_refs.len() as u32;
 
-    // =========================================================================
-    // Phase 2: Fetch git objects (if git-bridge enabled)
-    // =========================================================================
-    #[cfg(feature = "git-bridge")]
-    let git_stats = {
-        // Get or create mirror repo
-        let mirror_repo_id =
-            match get_or_create_mirror(forge_node, fed_id_str, &peer_key.to_string(), Some(peer_node_id), peer_addr)
-                .await
-            {
-                Ok(id) => id,
-                Err(e) => {
-                    errors.push(format!("mirror creation failed: {e}"));
-                    // Still return ref results even if mirror fails
-                    return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                        is_success: false,
-                        fetched: refs_fetched,
-                        already_present: 0,
-                        errors,
-                        error: Some(e),
-                    }));
-                }
-            };
+    Ok((connect_result, fetched_ref_entries, fetched_refs, refs_fetched, errors))
+}
 
-        // Collect have_hashes from existing mirror objects
-        let have_hashes = collect_local_blake3_hashes(forge_node, &mirror_repo_id, 10_000).await;
-        let already_present_objects = have_hashes.len() as u32;
+/// Persists fetched refs to the legacy KV path for backwards compatibility.
+async fn persist_refs_to_legacy_kv(
+    forge_node: &ForgeNodeRef,
+    fed_id: &aspen_cluster::federation::FederatedId,
+    fetched_refs: &[(String, [u8; 32])],
+) {
+    let origin_short = {
+        let full = fed_id.origin().to_string();
+        full[..16.min(full.len())].to_string()
+    };
+    let local_short = fed_id.short();
+    for (ref_name, hash) in fetched_refs {
+        let key = format!("_fed:mirror:{}:{}:refs/{}", origin_short, local_short, ref_name);
+        let _ = forge_node.write_kv(&key, &hex::encode(hash)).await;
+    }
+}
 
-        // Fetch git objects with pagination via SyncSession (single QUIC stream)
-        let mut all_git_objects = Vec::new();
-        let mut current_have = have_hashes;
-        let max_rounds = 10u32; // Tiger Style: bounded pagination
+/// Fetches and imports git objects into the local mirror repo for a federation peer.
+///
+/// Gets or creates the mirror repo, paginates git objects from the remote via
+/// `SyncSession`, imports them, and updates mirror refs. Returns
+/// `(import_stats, already_present_objects)` on success, or an early-exit
+/// response on failure.
+///
+/// Errors are appended in-place to the `errors` vec; the caller retains
+/// ownership and inspects it when building the final response.
+#[cfg(feature = "git-bridge")]
+#[allow(clippy::result_large_err, clippy::too_many_arguments)]
+async fn fetch_and_import_git_objects(
+    forge_node: &ForgeNodeRef,
+    connection: &iroh::endpoint::Connection,
+    fed_id: &aspen_cluster::federation::FederatedId,
+    fed_id_str: &str,
+    peer_key: &iroh::PublicKey,
+    peer_node_id: &str,
+    peer_addr: Option<&str>,
+    fetched_ref_entries: &[aspen_cluster::federation::sync::RefEntry],
+    fetched_refs: &mut [(String, [u8; 32])],
+    refs_fetched: u32,
+    errors: &mut Vec<String>,
+) -> Result<(FederationImportStats, u32), ClientRpcResponse> {
+    use aspen_client_api::FederationFetchRefsResponse;
 
-        let mut session = match aspen_cluster::federation::sync::SyncSession::open(&connection).await {
-            Ok(s) => s,
-            Err(e) => {
-                errors.push(format!("failed to open sync session: {e}"));
-                return Ok(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
-                    is_success: false,
-                    fetched: refs_fetched,
-                    already_present: already_present_objects,
-                    errors,
-                    error: Some(format!("sync session open failed: {e}")),
-                }));
-            }
+    let err_refs = |errs: Vec<String>, msg: String| {
+        Err(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+            is_success: false,
+            fetched: refs_fetched,
+            already_present: 0,
+            errors: errs,
+            error: Some(msg),
+        }))
+    };
+
+    let mirror_repo_id = match get_or_create_mirror(
+        forge_node,
+        fed_id_str,
+        &peer_key.to_string(),
+        Some(peer_node_id),
+        peer_addr,
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            errors.push(format!("mirror creation failed: {e}"));
+            return err_refs(errors.clone(), e);
+        }
+    };
+
+    let have_hashes = collect_local_blake3_hashes(forge_node, &mirror_repo_id, 10_000).await;
+    let already_present_objects = have_hashes.len() as u32;
+
+    let max_rounds = 10u32; // Tiger Style: bounded pagination
+    let session = match aspen_cluster::federation::sync::SyncSession::open(connection).await {
+        Ok(s) => s,
+        Err(e) => {
+            errors.push(format!("failed to open sync session: {e}"));
+            return Err(ClientRpcResponse::FederationFetchRefsResult(FederationFetchRefsResponse {
+                is_success: false,
+                fetched: refs_fetched,
+                already_present: already_present_objects,
+                errors: errors.clone(),
+                error: Some(format!("sync session open failed: {e}")),
+            }));
+        }
+    };
+
+    let (all_git_objects, session_errors) =
+        paginate_git_objects_from_session(session, fed_id, have_hashes, max_rounds).await;
+    errors.extend(session_errors);
+
+    let stats = federation_import_objects(forge_node, &mirror_repo_id, &all_git_objects).await;
+
+    translate_federation_refs_to_local(forge_node, &mirror_repo_id, fetched_ref_entries, fetched_refs).await;
+
+    if let Err(e) = update_mirror_refs(forge_node, &mirror_repo_id, fetched_refs).await {
+        errors.push(format!("mirror ref update: {e}"));
+    }
+    let _ = update_mirror_sync_timestamp(forge_node, fed_id_str).await;
+
+    Ok((stats, already_present_objects))
+}
+
+/// Fetch ref objects from a remote federated repository and persist locally.
+///
+/// Connects to the remote peer, performs a federation handshake, then calls
+/// `SyncObjects` with `want_types: ["refs"]`. Received refs are written to
+/// local KV under `_fed:mirror:{origin_short}:{local_id_short}:refs/{name}`.
+pub(crate) async fn handle_federation_fetch_refs(
+    peer_node_id: &str,
+    peer_addr: Option<&str>,
+    fed_id_str: &str,
+    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+    forge_node: &ForgeNodeRef,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::FederationFetchRefsResponse;
+
+    let (identity, endpoint, fed_id, peer_key) =
+        match validate_fetch_refs_config(cluster_identity, iroh_endpoint, fed_id_str, peer_node_id) {
+            Ok(v) => v,
+            Err(r) => return Ok(r),
         };
 
-        for _round in 0..max_rounds {
-            let (objects, has_more) = match session
-                .sync_objects(
-                    &fed_id,
-                    vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
-                    current_have.clone(),
-                    1000,
-                    None,
-                )
-                .await
-            {
-                Ok(result) => result,
-                Err(e) => {
-                    errors.push(format!("git object fetch: {e}"));
-                    break;
-                }
-            };
+    let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
+    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
 
-            if objects.is_empty() {
-                break;
-            }
+    #[allow(unused_mut, unused_variables)] // some bindings only consumed by git-bridge feature block
+    let (connect_result, fetched_ref_entries, mut fetched_refs, refs_fetched, mut errors) =
+        match connect_and_fetch_remote_refs(endpoint, identity, endpoint_addr, credential, &fed_id).await {
+            Ok(v) => v,
+            Err(r) => return Ok(r),
+        };
 
-            // Add received hashes to have_hashes for next round
-            for obj in &objects {
-                current_have.push(obj.hash);
-            }
-
-            all_git_objects.extend(objects);
-
-            if !has_more {
-                break;
-            }
+    #[cfg(feature = "git-bridge")]
+    let git_stats = {
+        let r = fetch_and_import_git_objects(
+            forge_node,
+            &connect_result.connection,
+            &fed_id,
+            fed_id_str,
+            &peer_key,
+            peer_node_id,
+            peer_addr,
+            &fetched_ref_entries,
+            &mut fetched_refs,
+            refs_fetched,
+            &mut errors,
+        )
+        .await;
+        match r {
+            Ok(v) => v,
+            Err(r) => return Ok(r),
         }
-
-        // Signal the server that the sync conversation is done
-        if let Err(e) = session.finish().await {
-            tracing::debug!(error = %e, "sync session finish (non-fatal)");
-        }
-
-        // Import git objects into mirror
-        let stats = federation_import_objects(forge_node, &mirror_repo_id, &all_git_objects).await;
-
-        // Translate ref hashes from source envelope BLAKE3 to local BLAKE3.
-        // The source's head_hash is its SignedObject BLAKE3 which differs from
-        // ours (different signature + HLC). Use commit_sha1 (deterministic) to
-        // look up the local BLAKE3 via the SHA1→BLAKE3 mapping created during import.
-        {
-            use aspen_forge::git::bridge::HashMappingStore;
-            use aspen_forge::git::bridge::Sha1Hash;
-            let mapping = HashMappingStore::new(forge_node.kv().clone());
-            for (i, ref_entry) in fetched_ref_entries.iter().enumerate() {
-                if let Some(sha1_bytes) = &ref_entry.commit_sha1 {
-                    let sha1 = Sha1Hash::from_bytes(*sha1_bytes);
-                    match mapping.get_blake3(&mirror_repo_id, &sha1).await {
-                        Ok(Some((local_blake3, _obj_type))) => {
-                            tracing::debug!(
-                                ref_name = %ref_entry.ref_name,
-                                source_hash = %hex::encode(&ref_entry.head_hash[..8]),
-                                local_hash = %hex::encode(&local_blake3.as_bytes()[..8]),
-                                sha1 = %sha1.to_hex(),
-                                "translated federation ref to local BLAKE3"
-                            );
-                            fetched_refs[i].1 = *local_blake3.as_bytes();
-                        }
-                        Ok(None) => {
-                            tracing::warn!(
-                                ref_name = %ref_entry.ref_name,
-                                sha1 = %sha1.to_hex(),
-                                "no SHA1→BLAKE3 mapping for federation ref, using source hash"
-                            );
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                ref_name = %ref_entry.ref_name,
-                                error = %e,
-                                "failed to look up local BLAKE3 for federation ref"
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        // Update mirror refs (now with local BLAKE3 hashes)
-        if let Err(e) = update_mirror_refs(forge_node, &mirror_repo_id, &fetched_refs).await {
-            errors.push(format!("mirror ref update: {e}"));
-        }
-
-        // Update sync timestamp
-        let _ = update_mirror_sync_timestamp(forge_node, fed_id_str).await;
-
-        (stats, already_present_objects)
     };
 
     #[cfg(not(feature = "git-bridge"))]
@@ -941,16 +1051,7 @@ pub(crate) async fn handle_federation_fetch_refs(
 
     let (import_stats, already_present_objects) = git_stats;
 
-    // Also persist refs to legacy KV path for backwards compat
-    let origin_short = {
-        let full = fed_id.origin().to_string();
-        full[..16.min(full.len())].to_string()
-    };
-    let local_short = fed_id.short();
-    for (ref_name, hash) in &fetched_refs {
-        let key = format!("_fed:mirror:{}:{}:refs/{}", origin_short, local_short, ref_name);
-        let _ = forge_node.write_kv(&key, &hex::encode(hash)).await;
-    }
+    persist_refs_to_legacy_kv(forge_node, &fed_id, &fetched_refs).await;
 
     let total_fetched = refs_fetched + import_stats.commits + import_stats.trees + import_stats.blobs;
 
@@ -1070,52 +1171,31 @@ pub struct FederationImportStats {
     pub sha1_to_local_blake3: std::collections::HashMap<[u8; 20], blake3::Hash>,
 }
 
-/// Import federation `SyncObject` entries into a forge repo via the git bridge.
-///
-/// Converts SyncObjects to the `(Sha1Hash, GitObjectType, Vec<u8>)` format
-/// expected by `import_objects()`, then runs a convergent retry loop:
-///
-/// 1. Each pass calls `import_objects` (wave-based parallel, partial-success)
-/// 2. Failed objects (missing cross-batch dependencies) are retried next pass
-/// 3. Loop terminates when no new objects are imported or after 10 passes
-///
-/// This handles cross-batch dependencies where trees reference blobs from
-/// a different sync batch. Typical convergence: 1-3 passes.
-///
-/// Returns import statistics including a `sha1_to_local_blake3` map for
-/// translating remote ref hashes to locally imported BLAKE3 hashes.
+/// Raw data prepared from SyncObjects for the convergent import loop.
 #[cfg(feature = "git-bridge")]
-pub(crate) async fn federation_import_objects(
-    forge_node: &ForgeNodeRef,
-    repo_id: &aspen_forge::identity::RepoId,
-    objects: &[aspen_cluster::federation::sync::SyncObject],
-) -> FederationImportStats {
-    use aspen_core::hlc::create_hlc;
-    use aspen_forge::git::bridge::GitImporter;
+struct PreparedImportData {
+    entries: Vec<(aspen_forge::git::bridge::Sha1Hash, aspen_forge::git::bridge::GitObjectType, Vec<u8>)>,
+    sha1_to_envelope: std::collections::HashMap<[u8; 20], blake3::Hash>,
+    re_sha1_to_origin: std::collections::HashMap<[u8; 20], ([u8; 20], aspen_forge::git::bridge::GitObjectType)>,
+    /// [blobs, trees, commits]
+    type_counts: [u32; 3],
+    total_bytes: u64,
+}
+
+/// Convert SyncObjects into the format expected by the convergent import loop.
+///
+/// Also builds SHA-1 → origin BLAKE3 index for remap entries and a
+/// re-serialized SHA-1 → origin SHA-1 map for cross-pass resolution.
+#[cfg(feature = "git-bridge")]
+fn prepare_objects_for_import(objects: &[aspen_cluster::federation::sync::SyncObject]) -> PreparedImportData {
     use aspen_forge::git::bridge::GitObjectType;
-    use aspen_forge::git::bridge::HashMappingStore;
     use aspen_forge::git::bridge::Sha1Hash;
 
-    let mut stats = FederationImportStats::default();
-
-    if objects.is_empty() {
-        return stats;
-    }
-
-    // Phase 1: Convert SyncObjects to import_objects() input format.
-    // Also build a SHA-1→origin BLAKE3 index for remap entries, and a
-    // re-serialized SHA-1 → origin SHA-1 map for cross-pass resolution.
-    let mut import_objects = Vec::with_capacity(objects.len());
-    let mut type_counts: [u32; 3] = [0; 3]; // [blobs, trees, commits]
-    let mut sha1_to_envelope: std::collections::HashMap<[u8; 20], blake3::Hash> =
-        std::collections::HashMap::with_capacity(objects.len());
-    // Map from re-serialized SHA-1 → (origin SHA-1 bytes, git type).
-    // Used after each convergent pass to store origin SHA-1 mappings so
-    // the NEXT pass can resolve tree entries that reference objects by
-    // their original SHA-1 (which may differ from re-serialized SHA-1
-    // for trees/commits due to entry ordering or mode formatting).
-    let mut re_sha1_to_origin: std::collections::HashMap<[u8; 20], ([u8; 20], GitObjectType)> =
-        std::collections::HashMap::with_capacity(objects.len());
+    let mut entries = Vec::with_capacity(objects.len());
+    let mut type_counts: [u32; 3] = [0; 3];
+    let mut sha1_to_envelope = std::collections::HashMap::with_capacity(objects.len());
+    let mut re_sha1_to_origin = std::collections::HashMap::with_capacity(objects.len());
+    let mut total_bytes = 0u64;
 
     for obj in objects {
         let (git_type, type_idx) = match obj.object_type.as_str() {
@@ -1125,21 +1205,18 @@ pub(crate) async fn federation_import_objects(
             _ => continue,
         };
 
-        // Reconstruct full git bytes (header + content)
         let type_str = obj.object_type.as_str();
         let header = format!("{} {}\0", type_str, obj.data.len());
         let mut git_bytes = Vec::with_capacity(header.len() + obj.data.len());
         git_bytes.extend_from_slice(header.as_bytes());
         git_bytes.extend_from_slice(&obj.data);
 
-        // Compute SHA-1 from full git bytes
         let sha1 = {
             use sha1::Digest;
             let digest: [u8; 20] = sha1::Sha1::digest(&git_bytes).into();
             Sha1Hash::from_bytes(digest)
         };
 
-        // Record envelope_hash (origin BLAKE3) for remap index
         if let Some(env_bytes) = obj.envelope_hash {
             sha1_to_envelope.insert(*sha1.as_bytes(), blake3::Hash::from_bytes(env_bytes));
         } else {
@@ -1150,60 +1227,42 @@ pub(crate) async fn federation_import_objects(
             );
         }
 
-        // Record origin SHA-1 for cross-pass resolution.
-        // Skip tracking for objects whose computed SHA-1 matches origin
-        // (no drift, no remap needed).
         if let Some(origin_sha1_bytes) = obj.origin_sha1
             && origin_sha1_bytes != *sha1.as_bytes()
         {
             re_sha1_to_origin.insert(*sha1.as_bytes(), (origin_sha1_bytes, git_type));
         }
 
-        stats.total_bytes += obj.data.len() as u64;
+        total_bytes += obj.data.len() as u64;
         type_counts[type_idx] += 1;
-
-        import_objects.push((sha1, git_type, git_bytes));
+        entries.push((sha1, git_type, git_bytes));
     }
 
-    stats.blobs = type_counts[0];
-    stats.trees = type_counts[1];
-    stats.commits = type_counts[2];
+    PreparedImportData {
+        entries,
+        sha1_to_envelope,
+        re_sha1_to_origin,
+        type_counts,
+        total_bytes,
+    }
+}
 
-    // Phase 2: Convergent import loop.
-    //
-    // Federation sync collects objects across multiple batches. Cross-batch
-    // dependencies (tree references blob from a different batch) cause
-    // single-pass imports to fail because the mapping doesn't exist yet.
-    //
-    // The convergent loop runs import passes until no new objects are imported
-    // (fixed-point). Each pass:
-    //   1. Filters to objects without SHA-1 mappings
-    //   2. Calls import_objects (wave-based parallel, partial-success)
-    //   3. Collects newly created mappings
-    //   4. Repeats if progress was made
-    //
-    // Blobs always import on pass 1 (no deps). Trees depending on those blobs
-    // import on pass 2. Commits depending on those trees import on pass 3.
-    // Typical convergence: 1-3 passes.
-    let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
-    let hlc = create_hlc(&forge_node.public_key().to_string());
-    let importer = GitImporter::new(
-        mapping.clone(),
-        forge_node.git.blobs().clone(),
-        std::sync::Arc::new(forge_node.refs.clone()),
-        forge_node.secret_key().clone(),
-        hlc,
-    );
+/// Pre-populate origin SHA-1 → BLAKE3 mappings from already-imported objects.
+///
+/// Trees reference sub-objects by the origin cluster's SHA-1. Pre-populating
+/// from previously imported objects gives the first convergent pass access to
+/// mappings that would otherwise require extra passes.
+///
+/// Returns the number of mappings pre-populated.
+#[cfg(feature = "git-bridge")]
+async fn pre_populate_origin_sha1_mappings(
+    mapping: &std::sync::Arc<aspen_forge::git::bridge::HashMappingStore<dyn aspen_core::KeyValueStore>>,
+    repo_id: &aspen_forge::identity::RepoId,
+    objects: &[aspen_cluster::federation::sync::SyncObject],
+) -> u32 {
+    use aspen_forge::git::bridge::GitObjectType;
+    use aspen_forge::git::bridge::Sha1Hash;
 
-    // Phase 1.5: Pre-populate origin SHA-1 → BLAKE3 mappings BEFORE the
-    // convergent loop. Trees reference sub-objects by the origin cluster's
-    // SHA-1. The convergent loop stores these mappings AFTER each pass via
-    // `re_sha1_to_origin`. Pre-populating from ALREADY-IMPORTED objects
-    // (from previous federation fetches) gives the first pass access to
-    // mappings that would otherwise require extra convergent passes.
-    //
-    // Only pre-populate for objects whose origin_sha1 is set and whose
-    // computed SHA-1 already has a mapping in the store (imported previously).
     let mut pre_populated = 0u32;
     for obj in objects {
         let Some(origin_sha1_bytes) = obj.origin_sha1 else {
@@ -1216,7 +1275,6 @@ pub(crate) async fn federation_import_objects(
             _ => continue,
         };
 
-        // Compute the SHA-1 from raw content (same as what import would produce)
         let type_str = obj.object_type.as_str();
         let header = format!("{} {}\0", type_str, obj.data.len());
         let computed_sha1 = {
@@ -1229,39 +1287,128 @@ pub(crate) async fn federation_import_objects(
         };
 
         let origin_sha1 = Sha1Hash::from_bytes(origin_sha1_bytes);
-
-        // Skip if origin matches computed (no drift, no remap needed)
         if origin_sha1_bytes == *computed_sha1.as_bytes() {
             continue;
         }
 
-        // Check if the computed SHA-1 already has a mapping (from a previous
-        // federation fetch or earlier import). If so, store origin_sha1 →
-        // same BLAKE3 so trees referencing this object by origin SHA-1 find it.
-        match mapping.get_blake3(repo_id, &computed_sha1).await {
-            Ok(Some((existing_blake3, _))) => {
-                if let Err(e) = mapping.store_batch(repo_id, &[(existing_blake3, origin_sha1, git_type)]).await {
-                    tracing::debug!(
-                        error = %e,
-                        origin_sha1 = %origin_sha1.to_hex(),
-                        "failed to pre-populate origin SHA-1 mapping (non-fatal)"
-                    );
-                } else {
-                    pre_populated += 1;
-                }
-            }
-            _ => {
-                // Object not yet imported — will be handled by the convergent
-                // loop's re_sha1_to_origin mechanism after import.
+        if let Ok(Some((existing_blake3, _))) = mapping.get_blake3(repo_id, &computed_sha1).await {
+            if let Err(e) = mapping.store_batch(repo_id, &[(existing_blake3, origin_sha1, git_type)]).await {
+                tracing::debug!(
+                    error = %e,
+                    origin_sha1 = %origin_sha1.to_hex(),
+                    "failed to pre-populate origin SHA-1 mapping (non-fatal)"
+                );
+            } else {
+                pre_populated += 1;
             }
         }
     }
-    if pre_populated > 0 {
-        tracing::info!(
-            pre_populated = pre_populated,
-            "pre-populated origin SHA-1 → BLAKE3 mappings from previously imported objects"
-        );
+    pre_populated
+}
+
+/// Store original SHA-1 → local BLAKE3 mappings for git client lookups.
+///
+/// The SHA-1 in import mappings is from re-serialized content, which may
+/// differ from the original git push SHA-1 for trees/commits. When SyncObjects
+/// carry `origin_sha1`, an additional mapping is stored so git clients can
+/// find objects by their original SHA-1.
+///
+/// Returns `(matched, stored, same, missed)` counters.
+#[cfg(feature = "git-bridge")]
+async fn store_origin_sha1_mappings(
+    forge_node: &ForgeNodeRef,
+    repo_id: &aspen_forge::identity::RepoId,
+    objects: &[aspen_cluster::federation::sync::SyncObject],
+    stats: &mut FederationImportStats,
+) -> (u32, u32, u32, u32) {
+    use aspen_forge::git::bridge::GitObjectType;
+    use aspen_forge::git::bridge::HashMappingStore;
+    use aspen_forge::git::bridge::Sha1Hash;
+
+    let mapping_store = HashMappingStore::new(forge_node.kv().clone());
+    let mut matched = 0u32;
+    let mut stored = 0u32;
+    let mut same = 0u32;
+    let mut missed = 0u32;
+
+    for obj in objects {
+        let Some(origin_sha1_bytes) = obj.origin_sha1 else {
+            continue;
+        };
+
+        let import_sha1 = {
+            use sha1::Digest;
+            let header = format!("{} {}\0", obj.object_type, obj.data.len());
+            let mut hasher = sha1::Sha1::new();
+            hasher.update(header.as_bytes());
+            hasher.update(&obj.data);
+            let digest: [u8; 20] = hasher.finalize().into();
+            digest
+        };
+
+        let local_blake3 = if let Some(b3) = stats.sha1_to_local_blake3.get(&import_sha1) {
+            Some(*b3)
+        } else {
+            let import_sha1_hash = Sha1Hash::from_bytes(import_sha1);
+            match mapping_store.get_blake3(repo_id, &import_sha1_hash).await {
+                Ok(Some((b3, _))) => Some(b3),
+                _ => None,
+            }
+        };
+
+        if let Some(local_blake3) = local_blake3 {
+            let origin_sha1 = Sha1Hash::from_bytes(origin_sha1_bytes);
+            let git_type = match obj.object_type.as_str() {
+                "blob" => GitObjectType::Blob,
+                "tree" => GitObjectType::Tree,
+                "commit" => GitObjectType::Commit,
+                _ => continue,
+            };
+
+            matched += 1;
+            if origin_sha1_bytes != import_sha1 {
+                if let Err(e) = mapping_store.store_batch(repo_id, &[(local_blake3, origin_sha1, git_type)]).await {
+                    tracing::debug!(error = %e, "failed to store origin SHA-1 mapping (non-fatal)");
+                } else {
+                    stored += 1;
+                }
+            } else {
+                same += 1;
+            }
+
+            stats.sha1_to_local_blake3.insert(origin_sha1_bytes, local_blake3);
+        } else {
+            missed += 1;
+        }
     }
+
+    (matched, stored, same, missed)
+}
+
+/// Runs the convergent import loop for federation git objects.
+///
+/// Each pass filters to unmapped objects, calls `import_objects`, and collects
+/// newly created SHA-1→BLAKE3 mappings. Repeats until fixed-point or
+/// `max_convergence_passes` is reached. Stalled objects are retried with a
+/// raw-bytes force-import to break circular mapping dependencies.
+///
+/// Returns `(all_mappings, total_skipped)`.
+#[cfg(feature = "git-bridge")]
+async fn run_convergent_import_loop<K, B>(
+    importer: &aspen_forge::git::bridge::GitImporter<K, B>,
+    mapping: &std::sync::Arc<aspen_forge::git::bridge::HashMappingStore<K>>,
+    repo_id: &aspen_forge::identity::RepoId,
+    import_objects: Vec<(aspen_forge::git::bridge::Sha1Hash, aspen_forge::git::bridge::GitObjectType, Vec<u8>)>,
+    sha1_to_envelope: &std::collections::HashMap<[u8; 20], blake3::Hash>,
+    re_sha1_to_origin: &std::collections::HashMap<[u8; 20], ([u8; 20], aspen_forge::git::bridge::GitObjectType)>,
+    stats: &mut FederationImportStats,
+) -> (Vec<(aspen_forge::git::bridge::Sha1Hash, blake3::Hash)>, u32)
+where
+    K: aspen_core::KeyValueStore + ?Sized,
+    B: aspen_blob::BlobStore,
+{
+    use aspen_forge::git::bridge::GitObjectType;
+    use aspen_forge::git::bridge::Sha1Hash;
 
     let mut all_mappings = Vec::new();
     let mut total_skipped = 0u32;
@@ -1485,6 +1632,19 @@ pub(crate) async fn federation_import_objects(
         }
     }
 
+    (all_mappings, total_skipped)
+}
+
+/// Builds `sha1_to_local_blake3` from mappings and stores origin SHA-1 entries (phases 3 and 4).
+#[cfg(feature = "git-bridge")]
+async fn finalize_import_stats(
+    forge_node: &ForgeNodeRef,
+    repo_id: &aspen_forge::identity::RepoId,
+    objects: &[aspen_cluster::federation::sync::SyncObject],
+    stats: &mut FederationImportStats,
+    all_mappings: Vec<(aspen_forge::git::bridge::Sha1Hash, blake3::Hash)>,
+    total_skipped: u32,
+) {
     stats.skipped = total_skipped;
 
     // Phase 3: Build sha1_to_local_blake3 from all mappings.
@@ -1495,73 +1655,9 @@ pub(crate) async fn federation_import_objects(
     }
 
     // Phase 4: Store ORIGINAL SHA-1 → local BLAKE3 mappings.
-    //
-    // The SHA-1 in `all_mappings` is from re-serialized content, which
-    // may differ from the original git push SHA-1 for trees/commits.
-    // When SyncObjects carry `origin_sha1` (the original SHA-1 from the
-    // source cluster), we store an additional mapping so git clients can
-    // find objects by their original SHA-1.
-    let mapping_store = aspen_forge::git::bridge::HashMappingStore::new(forge_node.kv().clone());
-    let mut origin_mappings_stored = 0u32;
-    let mut origin_sha1_matched = 0u32;
-    let mut origin_sha1_same = 0u32;
-    let mut origin_sha1_missed = 0u32;
     let origin_sha1_count = objects.iter().filter(|o| o.origin_sha1.is_some()).count();
-    for obj in objects {
-        if let Some(origin_sha1_bytes) = obj.origin_sha1 {
-            // Find the local BLAKE3 for this object using its re-serialized SHA-1.
-            let import_sha1 = {
-                use sha1::Digest;
-                let header = format!("{} {}\0", obj.object_type, obj.data.len());
-                let mut hasher = sha1::Sha1::new();
-                hasher.update(header.as_bytes());
-                hasher.update(&obj.data);
-                let digest: [u8; 20] = hasher.finalize().into();
-                digest
-            };
-
-            // Look up local BLAKE3 from import stats (newly imported objects)
-            // or from the mirror's mapping store (previously imported/skipped objects).
-            let local_blake3 = if let Some(b3) = stats.sha1_to_local_blake3.get(&import_sha1) {
-                Some(*b3)
-            } else {
-                // Object was skipped (already in mirror from a previous batch).
-                // Look up its BLAKE3 from the mirror's KV mapping store.
-                let import_sha1_hash = aspen_forge::git::bridge::Sha1Hash::from_bytes(import_sha1);
-                match mapping_store.get_blake3(repo_id, &import_sha1_hash).await {
-                    Ok(Some((b3, _))) => Some(b3),
-                    _ => None,
-                }
-            };
-            if let Some(local_blake3) = local_blake3 {
-                // Store mapping: original_sha1 → same local BLAKE3
-                let origin_sha1 = aspen_forge::git::bridge::Sha1Hash::from_bytes(origin_sha1_bytes);
-                let git_type = match obj.object_type.as_str() {
-                    "blob" => aspen_forge::git::bridge::GitObjectType::Blob,
-                    "tree" => aspen_forge::git::bridge::GitObjectType::Tree,
-                    "commit" => aspen_forge::git::bridge::GitObjectType::Commit,
-                    _ => continue,
-                };
-
-                origin_sha1_matched += 1;
-                // Only store if original differs from import SHA-1
-                if origin_sha1_bytes != import_sha1 {
-                    if let Err(e) = mapping_store.store_batch(repo_id, &[(local_blake3, origin_sha1, git_type)]).await {
-                        tracing::debug!(error = %e, "failed to store origin SHA-1 mapping (non-fatal)");
-                    } else {
-                        origin_mappings_stored += 1;
-                    }
-                } else {
-                    origin_sha1_same += 1;
-                }
-
-                // Also add to stats map for ref translation
-                stats.sha1_to_local_blake3.insert(origin_sha1_bytes, local_blake3);
-            } else {
-                origin_sha1_missed += 1;
-            }
-        }
-    }
+    let (origin_sha1_matched, origin_mappings_stored, origin_sha1_same, origin_sha1_missed) =
+        store_origin_sha1_mappings(forge_node, repo_id, objects, stats).await;
 
     tracing::info!(
         total = origin_sha1_count,
@@ -1586,6 +1682,78 @@ pub(crate) async fn federation_import_objects(
         errors = stats.errors.len(),
         "federation git object import complete"
     );
+}
+
+/// Import federation `SyncObject` entries into a forge repo via the git bridge.
+///
+/// Converts SyncObjects to the `(Sha1Hash, GitObjectType, Vec<u8>)` format
+/// expected by `import_objects()`, then runs a convergent retry loop:
+///
+/// 1. Each pass calls `import_objects` (wave-based parallel, partial-success)
+/// 2. Failed objects (missing cross-batch dependencies) are retried next pass
+/// 3. Loop terminates when no new objects are imported or after 10 passes
+///
+/// This handles cross-batch dependencies where trees reference blobs from
+/// a different sync batch. Typical convergence: 1-3 passes.
+///
+/// Returns import statistics including a `sha1_to_local_blake3` map for
+/// translating remote ref hashes to locally imported BLAKE3 hashes.
+#[cfg(feature = "git-bridge")]
+pub(crate) async fn federation_import_objects(
+    forge_node: &ForgeNodeRef,
+    repo_id: &aspen_forge::identity::RepoId,
+    objects: &[aspen_cluster::federation::sync::SyncObject],
+) -> FederationImportStats {
+    use aspen_core::hlc::create_hlc;
+    use aspen_forge::git::bridge::GitImporter;
+    use aspen_forge::git::bridge::HashMappingStore;
+
+    let mut stats = FederationImportStats::default();
+
+    if objects.is_empty() {
+        return stats;
+    }
+
+    // Phase 1: Prepare SyncObjects for the convergent import loop.
+    let prepared = prepare_objects_for_import(objects);
+    stats.blobs = prepared.type_counts[0];
+    stats.trees = prepared.type_counts[1];
+    stats.commits = prepared.type_counts[2];
+    stats.total_bytes = prepared.total_bytes;
+
+    // Phase 2: Convergent import loop — see run_convergent_import_loop for details.
+    let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
+    let hlc = create_hlc(&forge_node.public_key().to_string());
+    let importer = GitImporter::new(
+        mapping.clone(),
+        forge_node.git.blobs().clone(),
+        std::sync::Arc::new(forge_node.refs.clone()),
+        forge_node.secret_key().clone(),
+        hlc,
+    );
+
+    // Phase 1.5: Pre-populate origin SHA-1 → BLAKE3 mappings from previously
+    // imported objects to reduce convergent loop passes.
+    let pre_populated = pre_populate_origin_sha1_mappings(&mapping, repo_id, objects).await;
+    if pre_populated > 0 {
+        tracing::info!(
+            pre_populated = pre_populated,
+            "pre-populated origin SHA-1 → BLAKE3 mappings from previously imported objects"
+        );
+    }
+
+    let (all_mappings, total_skipped) = run_convergent_import_loop(
+        &importer,
+        &mapping,
+        repo_id,
+        prepared.entries,
+        &prepared.sha1_to_envelope,
+        &prepared.re_sha1_to_origin,
+        &mut stats,
+    )
+    .await;
+
+    finalize_import_stats(forge_node, repo_id, objects, &mut stats, all_mappings, total_skipped).await;
 
     stats
 }
@@ -1969,26 +2137,193 @@ pub(crate) async fn handle_federation_pull_remote(
     }
 }
 
-/// Bidirectional federation sync: compare refs, pull what remote has, push what local has.
+/// Execute the pull phase of a bidi sync: fetch objects the remote has and import them.
+///
+/// Returns `(pulled_objects, pull_refs_updated, errors)`.
 #[cfg(feature = "git-bridge")]
-pub(crate) async fn handle_federation_bidi_sync(
+#[allow(clippy::too_many_arguments)]
+async fn execute_bidi_pull(
+    forge_node: &ForgeNodeRef,
+    connection: &iroh::endpoint::Connection,
+    remote_fed_id: &aspen_cluster::federation::FederatedId,
+    remote_cluster_key: iroh::PublicKey,
     peer_node_id: &str,
     peer_addr: Option<&str>,
-    repo_id_hex: &str,
-    push_wins: bool,
-    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
-    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+    to_pull: &[String],
+    remote_heads: &std::collections::HashMap<String, [u8; 32]>,
+    repo_id_bytes: [u8; 32],
+) -> (u32, u32, Vec<String>) {
+    let mut errors = Vec::new();
+
+    // Ensure mirror repo exists before fetching
+    let _ = get_or_create_mirror(
+        forge_node,
+        &remote_fed_id.to_string(),
+        &remote_cluster_key.to_string(),
+        Some(peer_node_id),
+        peer_addr,
+    )
+    .await;
+
+    let have_hashes =
+        collect_local_blake3_hashes(forge_node, &aspen_forge::identity::RepoId(repo_id_bytes), 10_000).await;
+
+    #[allow(deprecated)] // Single-shot pull; SyncSession not needed
+    let (objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
+        connection,
+        remote_fed_id,
+        vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
+        have_hashes,
+        1000,
+        None,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            errors.push(format!("pull objects failed: {e}"));
+            (Vec::new(), false)
+        }
+    };
+
+    let mut pulled = objects.len() as u32;
+
+    if !objects.is_empty()
+        && let Ok(mirror_id) = get_or_create_mirror(
+            forge_node,
+            &remote_fed_id.to_string(),
+            &remote_cluster_key.to_string(),
+            Some(peer_node_id),
+            peer_addr,
+        )
+        .await
+    {
+        let stats = federation_import_objects(forge_node, &mirror_id, &objects).await;
+        pulled = stats.commits + stats.trees + stats.blobs;
+    }
+
+    let pull_ref_updates: Vec<(String, [u8; 32])> =
+        to_pull.iter().filter_map(|name| remote_heads.get(name).map(|h| (name.clone(), *h))).collect();
+    let pull_refs_updated = pull_ref_updates.len() as u32;
+
+    if let Ok(mirror_id) = get_or_create_mirror(
+        forge_node,
+        &remote_fed_id.to_string(),
+        &remote_cluster_key.to_string(),
+        Some(peer_node_id),
+        peer_addr,
+    )
+    .await
+        && let Err(e) = update_mirror_refs(forge_node, &mirror_id, &pull_ref_updates).await
+    {
+        errors.push(format!("pull ref update: {e}"));
+    }
+
+    (pulled, pull_refs_updated, errors)
+}
+
+/// Execute the push phase of a bidi sync: export local objects and send them to the remote.
+///
+/// Returns `(pushed_objects, push_refs_updated, errors)`.
+#[cfg(feature = "git-bridge")]
+async fn execute_bidi_push(
+    connection: &iroh::endpoint::Connection,
     forge_node: &ForgeNodeRef,
-) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_api::FederationBidiSyncResponse;
-    use aspen_cluster::federation::FederatedId;
+    local_fed_id: &aspen_cluster::federation::FederatedId,
+    to_push: &[String],
+    local_heads: &std::collections::HashMap<String, [u8; 32]>,
+) -> (u32, u32, Vec<String>) {
     use aspen_cluster::federation::FederationResourceResolver;
     use aspen_cluster::federation::sync::RefEntry;
     use aspen_cluster::federation::sync::SyncObject;
-    use aspen_cluster::federation::verified::ref_diff;
 
-    let err_response = |msg: String| {
-        Ok(ClientRpcResponse::FederationBidiSyncResult(FederationBidiSyncResponse {
+    let mut errors = Vec::new();
+    let mut pushed = 0u32;
+    let mut push_refs_updated = 0u32;
+
+    let resolver = aspen_forge::resolver::ForgeResourceResolver::new(forge_node.kv().clone());
+    let want_types = vec![
+        "refs".to_string(),
+        "commit".to_string(),
+        "tree".to_string(),
+        "blob".to_string(),
+    ];
+    let objects: Vec<SyncObject> = match resolver.sync_objects(local_fed_id, &want_types, &[], 1000).await {
+        Ok(objs) => objs,
+        Err(e) => {
+            errors.push(format!("push export failed: {e}"));
+            Vec::new()
+        }
+    };
+
+    let mut git_objects = Vec::new();
+    let mut ref_updates = Vec::new();
+    for obj in objects {
+        if obj.object_type == "ref" {
+            if let Ok(entry) = postcard::from_bytes::<RefEntry>(&obj.data)
+                && to_push.contains(&entry.ref_name)
+            {
+                ref_updates.push(entry);
+            }
+        } else {
+            git_objects.push(obj);
+        }
+    }
+
+    // Fallback: use local heads directly if resolver returned no ref objects
+    if ref_updates.is_empty() {
+        for ref_name in to_push {
+            if let Some(hash) = local_heads.get(ref_name) {
+                ref_updates.push(RefEntry {
+                    ref_name: ref_name.clone(),
+                    head_hash: *hash,
+                    commit_sha1: None,
+                });
+            }
+        }
+    }
+
+    match aspen_cluster::federation::sync::push_to_cluster(connection, local_fed_id, git_objects, ref_updates).await {
+        Ok(result) => {
+            pushed = result.imported;
+            push_refs_updated = result.refs_updated;
+            if !result.accepted {
+                errors.push("push not accepted by remote".to_string());
+            }
+            errors.extend(result.errors);
+        }
+        Err(e) => {
+            errors.push(format!("push failed: {e}"));
+        }
+    }
+
+    (pushed, push_refs_updated, errors)
+}
+
+/// Parses and validates the arguments for a bidi-sync call.
+///
+/// Returns `(identity, endpoint, peer_key, repo_id_bytes)` or an early-exit
+/// error response if any argument is missing or malformed.
+#[cfg(feature = "git-bridge")]
+#[allow(clippy::result_large_err, clippy::type_complexity)]
+fn parse_bidi_sync_args<'a>(
+    peer_node_id: &str,
+    repo_id_hex: &str,
+    cluster_identity: Option<&'a Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&'a Arc<iroh::Endpoint>>,
+) -> Result<
+    (
+        &'a Arc<aspen_cluster::federation::ClusterIdentity>,
+        &'a Arc<iroh::Endpoint>,
+        iroh::PublicKey,
+        [u8; 32],
+    ),
+    ClientRpcResponse,
+> {
+    use aspen_client_api::FederationBidiSyncResponse;
+
+    let err = |msg: String| {
+        Err(ClientRpcResponse::FederationBidiSyncResult(FederationBidiSyncResponse {
             is_success: false,
             pulled: 0,
             pushed: 0,
@@ -2002,35 +2337,85 @@ pub(crate) async fn handle_federation_bidi_sync(
 
     let identity = match cluster_identity {
         Some(id) => id,
-        None => return err_response("federation not configured on this cluster".to_string()),
+        None => return err("federation not configured on this cluster".to_string()),
     };
-
     let endpoint = match iroh_endpoint {
         Some(ep) => ep,
-        None => return err_response("iroh endpoint not available".to_string()),
+        None => return err("iroh endpoint not available".to_string()),
     };
-
     let peer_key: iroh::PublicKey = match peer_node_id.parse() {
         Ok(k) => k,
-        Err(e) => return err_response(format!("invalid peer node ID '{}': {}", peer_node_id, e)),
+        Err(e) => return err(format!("invalid peer node ID '{}': {}", peer_node_id, e)),
     };
-
     let repo_id_bytes: [u8; 32] = match hex::decode(repo_id_hex) {
         Ok(b) if b.len() == 32 => {
             let mut arr = [0u8; 32];
             arr.copy_from_slice(&b);
             arr
         }
-        Ok(b) => return err_response(format!("repo_id must be 32 bytes, got {}", b.len())),
-        Err(e) => return err_response(format!("invalid repo_id hex '{}': {}", repo_id_hex, e)),
+        Ok(b) => return err(format!("repo_id must be 32 bytes, got {}", b.len())),
+        Err(e) => return err(format!("invalid repo_id hex '{}': {}", repo_id_hex, e)),
     };
 
-    let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
+    Ok((identity, endpoint, peer_key, repo_id_bytes))
+}
 
-    // Load stored credential for this peer (if any)
-    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
+/// Builds the `FederationBidiSyncResult` response from sync outcome values.
+///
+/// Pass `error: Some(msg)` for top-level failures; `diff_empty` should be
+/// `true` only when both `to_pull` and `to_push` are empty (no work needed).
+#[cfg(feature = "git-bridge")]
+#[allow(clippy::too_many_arguments)]
+fn build_bidi_sync_response(
+    pulled: u32,
+    pushed: u32,
+    pull_refs_updated: u32,
+    push_refs_updated: u32,
+    conflicts: Vec<String>,
+    errors: Vec<String>,
+    diff_empty: bool,
+    error: Option<String>,
+) -> ClientRpcResponse {
+    use aspen_client_api::FederationBidiSyncResponse;
 
-    // Step 1: Connect and handshake
+    let is_success = error.is_none() && (pulled > 0 || pushed > 0 || diff_empty);
+    ClientRpcResponse::FederationBidiSyncResult(FederationBidiSyncResponse {
+        is_success,
+        pulled,
+        pushed,
+        pull_refs_updated,
+        push_refs_updated,
+        conflicts,
+        errors,
+        error,
+    })
+}
+
+/// Connects to a federation peer, fetches remote ref state, and gets local ref state.
+///
+/// Returns `(connect_result, remote_fed_id, remote_heads, local_fed_id, local_state)`
+/// or an error response on failure.
+#[cfg(feature = "git-bridge")]
+async fn bidi_connect_and_get_state(
+    endpoint: &Arc<iroh::Endpoint>,
+    identity: &Arc<aspen_cluster::federation::ClusterIdentity>,
+    endpoint_addr: iroh::EndpointAddr,
+    credential: Option<aspen_auth::Credential>,
+    repo_id_bytes: [u8; 32],
+    forge_node: &ForgeNodeRef,
+) -> Result<
+    (
+        aspen_cluster::federation::sync::ConnectResult,
+        aspen_cluster::federation::FederatedId,
+        std::collections::HashMap<String, [u8; 32]>,
+        aspen_cluster::federation::FederatedId,
+        aspen_cluster::federation::resolver::FederationResourceState,
+    ),
+    ClientRpcResponse,
+> {
+    use aspen_cluster::federation::FederatedId;
+    use aspen_cluster::federation::FederationResourceResolver;
+
     let connect_result = match aspen_cluster::federation::sync::connect_to_cluster(
         endpoint,
         identity,
@@ -2039,192 +2424,144 @@ pub(crate) async fn handle_federation_bidi_sync(
     )
     .await
     {
-        Ok(result) => result,
-        Err(e) => return err_response(format!("connection failed: {e}")),
+        Ok(r) => r,
+        Err(e) => {
+            return Err(build_bidi_sync_response(
+                0,
+                0,
+                0,
+                0,
+                Vec::new(),
+                Vec::new(),
+                false,
+                Some(format!("connection failed: {e}")),
+            ));
+        }
     };
 
     let remote_cluster_key = connect_result.identity.public_key();
-
-    // Step 2: Get remote ref state
     let remote_fed_id = FederatedId::new(remote_cluster_key, repo_id_bytes);
+
     let (remote_found, remote_heads, _) =
         match aspen_cluster::federation::sync::get_remote_resource_state(&connect_result.connection, &remote_fed_id)
             .await
         {
-            Ok(result) => result,
-            Err(e) => return err_response(format!("failed to get remote state: {e}")),
+            Ok(r) => r,
+            Err(e) => {
+                return Err(build_bidi_sync_response(
+                    0,
+                    0,
+                    0,
+                    0,
+                    Vec::new(),
+                    Vec::new(),
+                    false,
+                    Some(format!("failed to get remote state: {e}")),
+                ));
+            }
         };
 
     if !remote_found {
-        return err_response(format!("remote resource not found: {}", remote_fed_id.short()));
+        return Err(build_bidi_sync_response(
+            0,
+            0,
+            0,
+            0,
+            Vec::new(),
+            Vec::new(),
+            false,
+            Some(format!("remote resource not found: {}", remote_fed_id.short())),
+        ));
     }
 
-    // Step 3: Get local ref state
     let local_fed_id = FederatedId::new(identity.public_key(), repo_id_bytes);
     let resolver = aspen_forge::resolver::ForgeResourceResolver::new(forge_node.kv().clone());
-    let local_state: aspen_cluster::federation::resolver::FederationResourceState =
-        resolver.get_resource_state(&local_fed_id).await.unwrap_or_default();
+    let local_state = resolver.get_resource_state(&local_fed_id).await.unwrap_or_default();
 
-    // Step 4: Compute ref diff
+    Ok((connect_result, remote_fed_id, remote_heads, local_fed_id, local_state))
+}
+
+/// Bidirectional federation sync: compare refs, pull what remote has, push what local has.
+#[cfg(feature = "git-bridge")]
+pub(crate) async fn handle_federation_bidi_sync(
+    peer_node_id: &str,
+    peer_addr: Option<&str>,
+    repo_id_hex: &str,
+    push_wins: bool,
+    cluster_identity: Option<&Arc<aspen_cluster::federation::ClusterIdentity>>,
+    iroh_endpoint: Option<&Arc<iroh::Endpoint>>,
+    forge_node: &ForgeNodeRef,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_cluster::federation::verified::ref_diff;
+
+    let (identity, endpoint, peer_key, repo_id_bytes) =
+        match parse_bidi_sync_args(peer_node_id, repo_id_hex, cluster_identity, iroh_endpoint) {
+            Ok(v) => v,
+            Err(r) => return Ok(r),
+        };
+
+    let endpoint_addr = build_endpoint_addr(peer_key, peer_addr);
+    let credential = aspen_cluster::federation::token_store::load_credential_for_peer(forge_node.kv(), &peer_key).await;
+
+    let (connect_result, remote_fed_id, remote_heads, local_fed_id, local_state) = match bidi_connect_and_get_state(
+        endpoint,
+        identity,
+        endpoint_addr,
+        credential,
+        repo_id_bytes,
+        forge_node,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(r) => return Ok(r),
+    };
+
     let mut diff = ref_diff::compute_ref_diff(&local_state.heads, &remote_heads);
     let conflict_names = diff.conflicts.clone();
     ref_diff::resolve_conflicts(&mut diff, !push_wins); // pull_wins = !push_wins
 
-    let mut errors = Vec::new();
-    let mut pulled = 0u32;
-    let mut pushed = 0u32;
-    let mut pull_refs_updated = 0u32;
-    let mut push_refs_updated = 0u32;
+    let (mut errors, mut pulled, mut pushed) = (Vec::<String>::new(), 0u32, 0u32);
+    let (mut pull_refs_updated, mut push_refs_updated) = (0u32, 0u32);
 
-    // Step 5: Pull — fetch objects for refs we need from remote
     if !diff.to_pull.is_empty() {
-        // Ensure mirror exists
-        let _ = get_or_create_mirror(
+        let (p, rpu, errs) = execute_bidi_pull(
             forge_node,
-            &remote_fed_id.to_string(),
-            &remote_cluster_key.to_string(),
-            Some(peer_node_id),
-            peer_addr,
-        )
-        .await;
-
-        let have_hashes =
-            collect_local_blake3_hashes(forge_node, &aspen_forge::identity::RepoId(repo_id_bytes), 10_000).await;
-
-        // Fetch git objects from remote
-        #[allow(deprecated)] // Single-shot pull; SyncSession not needed
-        let (objects, _has_more) = match aspen_cluster::federation::sync::sync_remote_objects(
             &connect_result.connection,
             &remote_fed_id,
-            vec!["commit".to_string(), "tree".to_string(), "blob".to_string()],
-            have_hashes,
-            1000,
-            None,
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(e) => {
-                errors.push(format!("pull objects failed: {e}"));
-                (Vec::new(), false)
-            }
-        };
-
-        pulled = objects.len() as u32;
-
-        // Import into mirror
-        if !objects.is_empty()
-            && let Ok(mirror_id) = get_or_create_mirror(
-                forge_node,
-                &remote_fed_id.to_string(),
-                &remote_cluster_key.to_string(),
-                Some(peer_node_id),
-                peer_addr,
-            )
-            .await
-        {
-            let stats = federation_import_objects(forge_node, &mirror_id, &objects).await;
-            pulled = stats.commits + stats.trees + stats.blobs;
-        }
-
-        // Update mirror refs for pulled refs
-        let pull_ref_updates: Vec<(String, [u8; 32])> =
-            diff.to_pull.iter().filter_map(|name| remote_heads.get(name).map(|h| (name.clone(), *h))).collect();
-        pull_refs_updated = pull_ref_updates.len() as u32;
-
-        if let Ok(mirror_id) = get_or_create_mirror(
-            forge_node,
-            &remote_fed_id.to_string(),
-            &remote_cluster_key.to_string(),
-            Some(peer_node_id),
+            connect_result.identity.public_key(),
+            peer_node_id,
             peer_addr,
+            &diff.to_pull,
+            &remote_heads,
+            repo_id_bytes,
         )
-        .await
-            && let Err(e) = update_mirror_refs(forge_node, &mirror_id, &pull_ref_updates).await
-        {
-            errors.push(format!("pull ref update: {e}"));
-        }
+        .await;
+        pulled = p;
+        pull_refs_updated = rpu;
+        errors.extend(errs);
     }
 
-    // Step 6: Push — send local objects for refs remote needs
     if !diff.to_push.is_empty() {
-        let want_types = vec![
-            "refs".to_string(),
-            "commit".to_string(),
-            "tree".to_string(),
-            "blob".to_string(),
-        ];
-        let objects: Vec<SyncObject> = match resolver.sync_objects(&local_fed_id, &want_types, &[], 1000).await {
-            Ok(objs) => objs,
-            Err(e) => {
-                errors.push(format!("push export failed: {e}"));
-                Vec::new()
-            }
-        };
-
-        // Separate refs from git objects
-        let mut git_objects = Vec::new();
-        let mut ref_updates = Vec::new();
-        for obj in objects {
-            if obj.object_type == "ref" {
-                if let Ok(entry) = postcard::from_bytes::<RefEntry>(&obj.data) {
-                    // Only push refs that are in to_push set
-                    if diff.to_push.contains(&entry.ref_name) {
-                        ref_updates.push(entry);
-                    }
-                }
-            } else {
-                git_objects.push(obj);
-            }
-        }
-
-        // Also include refs from local heads as fallback
-        if ref_updates.is_empty() {
-            for ref_name in &diff.to_push {
-                if let Some(hash) = local_state.heads.get(ref_name) {
-                    ref_updates.push(RefEntry {
-                        ref_name: ref_name.clone(),
-                        head_hash: *hash,
-                        commit_sha1: None,
-                    });
-                }
-            }
-        }
-
-        match aspen_cluster::federation::sync::push_to_cluster(
-            &connect_result.connection,
-            &local_fed_id,
-            git_objects,
-            ref_updates,
-        )
-        .await
-        {
-            Ok(result) => {
-                pushed = result.imported;
-                push_refs_updated = result.refs_updated;
-                if !result.accepted {
-                    errors.push("push not accepted by remote".to_string());
-                }
-                errors.extend(result.errors);
-            }
-            Err(e) => {
-                errors.push(format!("push failed: {e}"));
-            }
-        }
+        let (p, pru, errs) =
+            execute_bidi_push(&connect_result.connection, forge_node, &local_fed_id, &diff.to_push, &local_state.heads)
+                .await;
+        pushed = p;
+        push_refs_updated = pru;
+        errors.extend(errs);
     }
 
-    let is_success = pulled > 0 || pushed > 0 || (diff.to_pull.is_empty() && diff.to_push.is_empty());
-
-    Ok(ClientRpcResponse::FederationBidiSyncResult(FederationBidiSyncResponse {
-        is_success,
+    let diff_empty = diff.to_pull.is_empty() && diff.to_push.is_empty();
+    Ok(build_bidi_sync_response(
         pulled,
         pushed,
         pull_refs_updated,
         push_refs_updated,
-        conflicts: conflict_names,
+        conflict_names,
         errors,
-        error: None,
-    }))
+        diff_empty,
+        None,
+    ))
 }
 
 /// Push a local repo's objects and refs to a remote cluster.
@@ -2853,5 +3190,120 @@ mod tests {
     #[test]
     fn test_mirror_prefix_format() {
         assert_eq!(super::MIRROR_PREFIX, "_fed:mirror:");
+    }
+
+    // ====================================================================
+    // prepare_objects_for_import characterization tests
+    // ====================================================================
+
+    #[cfg(feature = "git-bridge")]
+    mod prepare_import_tests {
+        use aspen_cluster::federation::sync::SyncObject;
+
+        fn make_sync_object(object_type: &str, data: &[u8]) -> SyncObject {
+            SyncObject {
+                object_type: object_type.to_string(),
+                hash: [0u8; 32],
+                data: data.to_vec(),
+                signature: None,
+                signer: None,
+                envelope_hash: None,
+                origin_sha1: None,
+            }
+        }
+
+        #[test]
+        fn test_prepare_objects_empty() {
+            let result = super::super::prepare_objects_for_import(&[]);
+            assert!(result.entries.is_empty());
+            assert!(result.sha1_to_envelope.is_empty());
+            assert!(result.re_sha1_to_origin.is_empty());
+            assert_eq!(result.type_counts, [0, 0, 0]);
+            assert_eq!(result.total_bytes, 0);
+        }
+
+        #[test]
+        fn test_prepare_objects_type_counts() {
+            let objects = vec![
+                make_sync_object("blob", b"blob content"),
+                make_sync_object("blob", b"blob2"),
+                make_sync_object("tree", b"tree data"),
+                make_sync_object("commit", b"commit data"),
+                make_sync_object("commit", b"commit2"),
+                make_sync_object("commit", b"commit3"),
+            ];
+            let result = super::super::prepare_objects_for_import(&objects);
+            // type_counts: [blobs, trees, commits]
+            assert_eq!(result.type_counts[0], 2, "blobs");
+            assert_eq!(result.type_counts[1], 1, "trees");
+            assert_eq!(result.type_counts[2], 3, "commits");
+            assert_eq!(result.entries.len(), 6);
+        }
+
+        #[test]
+        fn test_prepare_objects_total_bytes() {
+            let objects = vec![make_sync_object("blob", b"hello"), make_sync_object("tree", b"world!!")];
+            let result = super::super::prepare_objects_for_import(&objects);
+            // total_bytes counts obj.data.len(), not the git-formatted bytes
+            assert_eq!(result.total_bytes, 5 + 7);
+        }
+
+        #[test]
+        fn test_prepare_objects_skips_unknown_types() {
+            let objects = vec![
+                make_sync_object("ref", b"ref data"),
+                make_sync_object("cob", b"cob data"),
+                make_sync_object("blob", b"real blob"),
+            ];
+            let result = super::super::prepare_objects_for_import(&objects);
+            assert_eq!(result.entries.len(), 1, "only blob should be included");
+            assert_eq!(result.type_counts[0], 1);
+            // total_bytes only counts the accepted object
+            assert_eq!(result.total_bytes, 9);
+        }
+
+        #[test]
+        fn test_prepare_objects_envelope_hash_populated() {
+            let envelope = [0xabu8; 32];
+            let mut obj = make_sync_object("blob", b"content");
+            obj.envelope_hash = Some(envelope);
+
+            let result = super::super::prepare_objects_for_import(&[obj]);
+            assert_eq!(result.sha1_to_envelope.len(), 1);
+            let stored = result.sha1_to_envelope.values().next().unwrap();
+            assert_eq!(stored.as_bytes(), &envelope);
+        }
+
+        #[test]
+        fn test_prepare_objects_no_envelope_hash_not_inserted() {
+            let obj = make_sync_object("blob", b"content");
+            // envelope_hash is None
+            let result = super::super::prepare_objects_for_import(&[obj]);
+            assert!(result.sha1_to_envelope.is_empty());
+        }
+
+        #[test]
+        fn test_prepare_objects_origin_sha1_remap_when_differs() {
+            use sha1::Digest as _;
+            let data = b"tree content";
+            let header = format!("tree {}\0", data.len());
+            let mut hasher = sha1::Sha1::new();
+            hasher.update(header.as_bytes());
+            hasher.update(data);
+            let computed_sha1: [u8; 20] = hasher.finalize().into();
+
+            // origin_sha1 differs from computed sha1
+            let origin = [0x11u8; 20];
+            assert_ne!(computed_sha1, origin);
+
+            let mut obj = make_sync_object("tree", data);
+            obj.origin_sha1 = Some(origin);
+
+            let result = super::super::prepare_objects_for_import(&[obj]);
+            // re_sha1_to_origin should contain computed_sha1 -> (origin, Tree)
+            assert_eq!(result.re_sha1_to_origin.len(), 1);
+            let (stored_origin, _git_type) = result.re_sha1_to_origin.get(&computed_sha1).unwrap();
+            assert_eq!(stored_origin, &origin);
+        }
     }
 }

@@ -1,0 +1,5 @@
+Proposal warnings in proposal.md (non-blocking):
+  ⚠ Consider splitting changes with more than 10 deltas
+Task status: ✓ Complete
+Skipping spec updates (--skip-specs flag provided).
+Change 'coordination-primitives-spec' archived as '2026-04-13-coordination-primitives-spec'.

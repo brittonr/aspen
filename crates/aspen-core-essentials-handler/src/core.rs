@@ -1003,49 +1003,156 @@ async fn handle_alert_get(ctx: &ClientProtocolContext, name: String) -> anyhow::
     }))
 }
 
+fn alert_evaluate_error_response(name: String, threshold: f64, error: impl Into<String>) -> ClientRpcResponse {
+    ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
+        rule_name: name,
+        status: AlertStatus::Ok,
+        computed_value: None,
+        threshold,
+        did_transition: false,
+        previous_status: None,
+        error: Some(error.into()),
+    })
+}
+
+async fn load_alert_rule_for_evaluation(
+    ctx: &ClientProtocolContext,
+    name: &str,
+) -> Result<AlertRuleWire, ClientRpcResponse> {
+    let rule_key = format!("_sys:alerts:rule:{}", name);
+    let Some(rule_value) = kv_read_value(ctx, &rule_key).await else {
+        return Err(alert_evaluate_error_response(name.to_string(), 0.0, "rule not found"));
+    };
+    serde_json::from_str::<AlertRuleWire>(&rule_value)
+        .map_err(|error| alert_evaluate_error_response(name.to_string(), 0.0, format!("bad rule data: {}", error)))
+}
+
+async fn metric_values_for_rule(
+    ctx: &ClientProtocolContext,
+    rule: &AlertRuleWire,
+    now_us: u64,
+) -> Result<Vec<f64>, ClientRpcResponse> {
+    let start_us = now_us.saturating_sub(rule.window_duration_us);
+    let scan_req = ScanRequest {
+        prefix: format!("_sys:metrics:{}:", rule.metric_name),
+        limit_results: Some(aspen_constants::MAX_METRIC_QUERY_RESULTS),
+        continuation_token: None,
+    };
+    ctx.kv_store
+        .scan(scan_req)
+        .await
+        .map(|result| {
+            result
+                .entries
+                .iter()
+                .filter_map(|entry| serde_json::from_str::<MetricDataPoint>(&entry.value).ok())
+                .filter(|dp| dp.timestamp_us >= start_us && dp.timestamp_us <= now_us)
+                .filter(|dp| matches_label_filters(&dp.labels, &rule.label_filters))
+                .map(|dp| dp.value)
+                .collect()
+        })
+        .map_err(|error| {
+            alert_evaluate_error_response(rule.name.clone(), rule.threshold, format!("metric scan error: {}", error))
+        })
+}
+
+fn default_alert_state(rule_name: String) -> AlertStateWire {
+    AlertStateWire {
+        rule_name,
+        status: AlertStatus::Ok,
+        last_value: None,
+        last_evaluated_us: 0,
+        condition_since_us: None,
+        last_fired_us: None,
+        last_resolved_us: None,
+    }
+}
+
+async fn persist_alert_state(ctx: &ClientProtocolContext, rule_name: &str, state: &AlertStateWire) {
+    let state_key = format!("_sys:alerts:state:{}", rule_name);
+    let Ok(state_json) = serde_json::to_string(state) else {
+        return;
+    };
+    if let Err(error) = ctx.kv_store.write(WriteRequest::set(state_key, state_json)).await {
+        tracing::warn!(error = %error, rule = %rule_name, "failed to write alert state");
+    }
+}
+
+async fn persist_alert_history(
+    ctx: &ClientProtocolContext,
+    history_entry: &AlertHistoryEntry,
+    rule_name: &str,
+    now_us: u64,
+) {
+    let history_key = format!("_sys:alerts:history:{}:{:020}", rule_name, now_us);
+    let Ok(history_json) = serde_json::to_string(history_entry) else {
+        return;
+    };
+    let request = WriteRequest::set_with_ttl(history_key, history_json, aspen_constants::ALERT_HISTORY_TTL_SECONDS);
+    if let Err(error) = ctx.kv_store.write(request).await {
+        tracing::warn!(error = %error, rule = %rule_name, "failed to write alert history");
+    }
+}
+
+/// Update state fields on transition and persist both state and history.
+#[allow(clippy::too_many_arguments)]
+async fn apply_and_persist_alert_transition(
+    ctx: &ClientProtocolContext,
+    name: &str,
+    current_state: &mut AlertStateWire,
+    new_status: &AlertStatus,
+    previous_status: &AlertStatus,
+    did_transition: bool,
+    now_us: u64,
+    computed_value: f64,
+    threshold: f64,
+) {
+    if did_transition {
+        match new_status {
+            AlertStatus::Pending => current_state.condition_since_us = Some(now_us),
+            AlertStatus::Firing => current_state.last_fired_us = Some(now_us),
+            AlertStatus::Ok => {
+                if previous_status == &AlertStatus::Firing {
+                    current_state.last_resolved_us = Some(now_us);
+                }
+                current_state.condition_since_us = None;
+            }
+        }
+    }
+    current_state.status = new_status.clone();
+    current_state.last_value = Some(computed_value);
+    current_state.last_evaluated_us = now_us;
+    persist_alert_state(ctx, name, current_state).await;
+
+    if did_transition {
+        let history_entry = AlertHistoryEntry {
+            rule_name: name.to_string(),
+            from_status: previous_status.clone(),
+            to_status: new_status.clone(),
+            value: computed_value,
+            threshold,
+            timestamp_us: now_us,
+        };
+        persist_alert_history(ctx, &history_entry, name, now_us).await;
+    }
+}
+
 async fn handle_alert_evaluate(
     ctx: &ClientProtocolContext,
     name: String,
     now_us: u64,
 ) -> anyhow::Result<ClientRpcResponse> {
-    // Read rule
-    let rule_key = format!("_sys:alerts:rule:{}", name);
-    let rule_value = kv_read_value(ctx, &rule_key).await;
-    let rule = match rule_value {
-        Some(v) => match serde_json::from_str::<AlertRuleWire>(&v) {
-            Ok(r) => r,
-            Err(e) => {
-                return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
-                    rule_name: name,
-                    status: AlertStatus::Ok,
-                    computed_value: None,
-                    threshold: 0.0,
-                    did_transition: false,
-                    previous_status: None,
-                    error: Some(format!("bad rule data: {}", e)),
-                }));
-            }
-        },
-        None => {
-            return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
-                rule_name: name,
-                status: AlertStatus::Ok,
-                computed_value: None,
-                threshold: 0.0,
-                did_transition: false,
-                previous_status: None,
-                error: Some("rule not found".to_string()),
-            }));
-        }
+    let rule = match load_alert_rule_for_evaluation(ctx, &name).await {
+        Ok(rule) => rule,
+        Err(response) => return Ok(response),
     };
 
-    // If rule is disabled, return current state
     if !rule.is_enabled {
         let state_key = format!("_sys:alerts:state:{}", name);
         let status = kv_read_value(ctx, &state_key)
             .await
-            .and_then(|v| serde_json::from_str::<AlertStateWire>(&v).ok())
-            .map(|s| s.status)
+            .and_then(|value| serde_json::from_str::<AlertStateWire>(&value).ok())
+            .map(|state| state.status)
             .unwrap_or(AlertStatus::Ok);
         return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
             rule_name: name,
@@ -1058,37 +1165,10 @@ async fn handle_alert_evaluate(
         }));
     }
 
-    // Scan metric data for the evaluation window
-    let start_us = now_us.saturating_sub(rule.window_duration_us);
-    let scan_prefix = format!("_sys:metrics:{}:", rule.metric_name);
-    let scan_req = ScanRequest {
-        prefix: scan_prefix,
-        limit_results: Some(aspen_constants::MAX_METRIC_QUERY_RESULTS),
-        continuation_token: None,
+    let metric_values = match metric_values_for_rule(ctx, &rule, now_us).await {
+        Ok(values) => values,
+        Err(response) => return Ok(response),
     };
-    let metric_values: Vec<f64> = match ctx.kv_store.scan(scan_req).await {
-        Ok(result) => result
-            .entries
-            .iter()
-            .filter_map(|entry| serde_json::from_str::<MetricDataPoint>(&entry.value).ok())
-            .filter(|dp| dp.timestamp_us >= start_us && dp.timestamp_us <= now_us)
-            .filter(|dp| matches_label_filters(&dp.labels, &rule.label_filters))
-            .map(|dp| dp.value)
-            .collect(),
-        Err(e) => {
-            return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
-                rule_name: name,
-                status: AlertStatus::Ok,
-                computed_value: None,
-                threshold: rule.threshold,
-                did_transition: false,
-                previous_status: None,
-                error: Some(format!("metric scan error: {}", e)),
-            }));
-        }
-    };
-
-    // If no data, don't transition
     if metric_values.is_empty() {
         return Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
             rule_name: name,
@@ -1101,78 +1181,29 @@ async fn handle_alert_evaluate(
         }));
     }
 
-    // Compute aggregated value
     let computed_value = compute_aggregation(&metric_values, &rule.aggregation);
     let is_breached = evaluate_threshold(computed_value, &rule.comparison, rule.threshold);
-
-    // Read current state
     let state_key = format!("_sys:alerts:state:{}", name);
-    let default_state = || AlertStateWire {
-        rule_name: name.clone(),
-        status: AlertStatus::Ok,
-        last_value: None,
-        last_evaluated_us: 0,
-        condition_since_us: None,
-        last_fired_us: None,
-        last_resolved_us: None,
-    };
     let mut current_state = kv_read_value(ctx, &state_key)
         .await
-        .and_then(|v| serde_json::from_str::<AlertStateWire>(&v).ok())
-        .unwrap_or_else(default_state);
+        .and_then(|value| serde_json::from_str::<AlertStateWire>(&value).ok())
+        .unwrap_or_else(|| default_alert_state(name.clone()));
 
     let previous_status = current_state.status.clone();
     let new_status = compute_alert_transition(&current_state.status, is_breached, &current_state, &rule, now_us);
     let did_transition = new_status != previous_status;
-
-    // Update state
-    if did_transition {
-        match &new_status {
-            AlertStatus::Pending => {
-                current_state.condition_since_us = Some(now_us);
-            }
-            AlertStatus::Firing => {
-                current_state.last_fired_us = Some(now_us);
-            }
-            AlertStatus::Ok => {
-                if previous_status == AlertStatus::Firing {
-                    current_state.last_resolved_us = Some(now_us);
-                }
-                current_state.condition_since_us = None;
-            }
-        }
-    }
-    current_state.status = new_status.clone();
-    current_state.last_value = Some(computed_value);
-    current_state.last_evaluated_us = now_us;
-
-    // Write updated state
-    let state_json =
-        serde_json::to_string(&current_state).map_err(|e| anyhow::anyhow!("serialize alert state: {}", e))?;
-    let write_req = WriteRequest::set(state_key, state_json);
-    if let Err(e) = ctx.kv_store.write(write_req).await {
-        tracing::warn!(error = %e, rule = %name, "failed to write alert state");
-    }
-
-    // Record history if transition occurred
-    if did_transition {
-        let history_entry = AlertHistoryEntry {
-            rule_name: name.clone(),
-            from_status: previous_status.clone(),
-            to_status: new_status.clone(),
-            value: computed_value,
-            threshold: rule.threshold,
-            timestamp_us: now_us,
-        };
-        let history_key = format!("_sys:alerts:history:{}:{:020}", name, now_us);
-        let history_json =
-            serde_json::to_string(&history_entry).map_err(|e| anyhow::anyhow!("serialize history: {}", e))?;
-        let write_req =
-            WriteRequest::set_with_ttl(history_key, history_json, aspen_constants::ALERT_HISTORY_TTL_SECONDS);
-        if let Err(e) = ctx.kv_store.write(write_req).await {
-            tracing::warn!(error = %e, rule = %name, "failed to write alert history");
-        }
-    }
+    apply_and_persist_alert_transition(
+        ctx,
+        &name,
+        &mut current_state,
+        &new_status,
+        &previous_status,
+        did_transition,
+        now_us,
+        computed_value,
+        rule.threshold,
+    )
+    .await;
 
     Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
         rule_name: name,

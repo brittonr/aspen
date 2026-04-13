@@ -208,15 +208,40 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         }
     }
 
+    fn recover_schedule_from_value(value: &str, now: DateTime<Utc>) -> Option<ScheduledJob> {
+        let mut scheduled_job = serde_json::from_str::<ScheduledJob>(value).ok()?;
+        if scheduled_job.next_execution >= now {
+            return Some(scheduled_job);
+        }
+        match scheduled_job.catch_up_policy {
+            CatchUpPolicy::Skip => {
+                let next = scheduled_job.calculate_next_execution()?;
+                if next <= now {
+                    debug!(job_id = %scheduled_job.job_id, "skipping expired schedule with no future execution");
+                    return None;
+                }
+                scheduled_job.next_execution = next;
+                Some(scheduled_job)
+            }
+            CatchUpPolicy::RunImmediately | CatchUpPolicy::RunLatest | CatchUpPolicy::RunAll => Some(scheduled_job),
+        }
+    }
+
+    async fn insert_recovered_schedule(&self, scheduled_job: &ScheduledJob) {
+        let mut schedule_index = self.schedule_index.write().await;
+        let mut jobs = self.jobs.write().await;
+        schedule_index.entry(scheduled_job.next_execution).or_default().push(scheduled_job.job_id.clone());
+        jobs.insert(scheduled_job.job_id.clone(), scheduled_job.clone());
+    }
+
     /// Recover persisted schedules from KV store on startup.
     ///
     /// This should be called before starting the scheduler to restore
     /// any schedules that were persisted before a restart.
     ///
     /// Returns the number of schedules recovered.
-    pub async fn recover_schedules(&self) -> Result<usize> {
+    pub async fn recover_schedules(&self) -> Result<u32> {
         info!("Recovering persisted schedules from KV store");
-
         let scan_result = self
             .store
             .scan(aspen_core::ScanRequest {
@@ -227,77 +252,24 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             .await
             .map_err(|e| JobError::StorageError { source: e })?;
 
-        let mut recovered = 0;
         let now = Utc::now();
-
+        let mut recovered: u32 = 0;
         for entry in scan_result.entries {
-            match serde_json::from_str::<ScheduledJob>(&entry.value) {
-                Ok(mut scheduled_job) => {
-                    // Recalculate next execution if it's in the past
-                    if scheduled_job.next_execution < now {
-                        match scheduled_job.catch_up_policy {
-                            CatchUpPolicy::Skip => {
-                                // Skip to next future execution
-                                if let Some(next) = scheduled_job.calculate_next_execution() {
-                                    if next > now {
-                                        scheduled_job.next_execution = next;
-                                    } else {
-                                        // Schedule has no future executions, skip
-                                        debug!(
-                                            job_id = %scheduled_job.job_id,
-                                            "skipping expired schedule with no future execution"
-                                        );
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                            CatchUpPolicy::RunImmediately | CatchUpPolicy::RunLatest => {
-                                // Keep the past execution time - it will fire immediately
-                            }
-                            CatchUpPolicy::RunAll => {
-                                // Keep the past execution time - tick loop will handle catch-up
-                            }
-                        }
-                    }
-
-                    // Add to in-memory indices
-                    {
-                        let mut schedule_index = self.schedule_index.write().await;
-                        let mut jobs = self.jobs.write().await;
-
-                        schedule_index
-                            .entry(scheduled_job.next_execution)
-                            .or_default()
-                            .push(scheduled_job.job_id.clone());
-
-                        jobs.insert(scheduled_job.job_id.clone(), scheduled_job.clone());
-                    }
-
-                    recovered += 1;
-                    debug!(
-                        job_id = %scheduled_job.job_id,
-                        next_execution = %scheduled_job.next_execution,
-                        "recovered scheduled job"
-                    );
+            let Some(scheduled_job) = Self::recover_schedule_from_value(&entry.value, now) else {
+                if serde_json::from_str::<ScheduledJob>(&entry.value).is_err() {
+                    warn!(key = %entry.key, "failed to deserialize persisted schedule, skipping");
                 }
-                Err(e) => {
-                    warn!(
-                        key = %entry.key,
-                        error = %e,
-                        "failed to deserialize persisted schedule, skipping"
-                    );
-                }
-            }
+                continue;
+            };
+            self.insert_recovered_schedule(&scheduled_job).await;
+            recovered = recovered.saturating_add(1);
+            debug!(job_id = %scheduled_job.job_id, next_execution = %scheduled_job.next_execution, "recovered scheduled job");
         }
 
         info!(recovered, is_truncated = scan_result.is_truncated, "schedule recovery complete");
-
         if scan_result.is_truncated {
             warn!(max = MAX_SCHEDULES_TO_RECOVER, "schedule recovery hit limit, some schedules may not be recovered");
         }
-
         Ok(recovered)
     }
 

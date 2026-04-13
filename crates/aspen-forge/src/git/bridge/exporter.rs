@@ -619,12 +619,13 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         repo_id: &RepoId,
         commit_blake3: blake3::Hash,
         known_blake3: &HashSet<[u8; 32]>,
-        limit: usize,
-    ) -> BridgeResult<(Vec<(blake3::Hash, SignedObject<GitObject>, Vec<blake3::Hash>)>, usize, bool)> {
+        limit: u32,
+    ) -> BridgeResult<(Vec<(blake3::Hash, SignedObject<GitObject>, Vec<blake3::Hash>)>, u32, bool)> {
+        let limit_entries = usize::try_from(limit).unwrap_or(usize::MAX);
         let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>, Vec<blake3::Hash>)> = Vec::new();
         let mut visited: HashSet<blake3::Hash> = HashSet::new();
         let mut queue: VecDeque<blake3::Hash> = VecDeque::new();
-        let mut skipped = 0usize;
+        let mut skipped: u32 = 0;
         let mut depth = 0usize;
         let mut hit_limit = false;
 
@@ -661,13 +662,39 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
 
             to_export.push((blake3, signed, deps));
 
-            if to_export.len() >= limit {
+            if to_export.len() >= limit_entries {
                 hit_limit = true;
                 break;
             }
         }
 
         Ok((to_export, skipped, hit_limit))
+    }
+
+    async fn export_federation_object(
+        &self,
+        repo_id: &RepoId,
+        blake3_hash: blake3::Hash,
+        signed: &SignedObject<GitObject>,
+    ) -> BridgeResult<FederationExportedObject> {
+        let object_type = match &signed.payload {
+            GitObject::Blob(_) => GitObjectType::Blob,
+            GitObject::Tree(_) => GitObjectType::Tree,
+            GitObject::Commit(_) => GitObjectType::Commit,
+            GitObject::Tag(_) => GitObjectType::Tag,
+        };
+        let (content, sha1) = self.converter.export_object(repo_id, &signed.payload).await?;
+        let origin_sha1 = match self.mapping.get_sha1(repo_id, &blake3_hash).await {
+            Ok(Some((stored_sha1, _))) => Some(stored_sha1),
+            Ok(None) | Err(_) => None,
+        };
+        Ok(FederationExportedObject {
+            blake3: blake3_hash,
+            object_type,
+            content,
+            sha1,
+            origin_sha1,
+        })
     }
 
     /// Export reachable objects from a commit using BLAKE3-based dedup.
@@ -681,75 +708,22 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         repo_id: &RepoId,
         commit_blake3: blake3::Hash,
         known_blake3: &HashSet<[u8; 32]>,
-        limit: usize,
+        limit: u32,
     ) -> BridgeResult<FederationExportResult> {
         let (collected, skipped, has_more) =
             self.collect_dag_blake3(repo_id, commit_blake3, known_blake3, limit).await?;
-
-        // Strip the dependency tracking — only needed if ensure_closure is used.
-        // We rely on the importer to handle partial batches with retry instead.
         let mut to_export: Vec<(blake3::Hash, SignedObject<GitObject>)> =
-            collected.into_iter().map(|(h, obj, _deps)| (h, obj)).collect();
-
-        // Reverse to get dependency order (blobs first, then trees, then commits)
+            collected.into_iter().map(|(hash, object, _deps)| (hash, object)).collect();
         to_export.reverse();
 
         let mut objects = Vec::with_capacity(to_export.len());
-        for (b3, signed) in &to_export {
-            let object_type = match &signed.payload {
-                GitObject::Blob(_) => GitObjectType::Blob,
-                GitObject::Tree(_) => GitObjectType::Tree,
-                GitObject::Commit(_) => GitObjectType::Commit,
-                GitObject::Tag(_) => GitObjectType::Tag,
-            };
-
-            // Convert to git bytes (without header) for the receiver to import
-            let (content, sha1) = self.converter.export_object(repo_id, &signed.payload).await?;
-
-            // Look up the ORIGINAL SHA-1 from the mapping store. This is the
-            // SHA-1 from the initial git push, which may differ from `sha1`
-            // (computed from re-serialized content) for trees and commits.
-            let origin_sha1 = match self.mapping.get_sha1(repo_id, b3).await {
-                Ok(Some((stored_sha1, _))) => {
-                    if stored_sha1 != sha1 {
-                        tracing::debug!(
-                            blake3 = %hex::encode(b3.as_bytes()),
-                            origin = %stored_sha1.to_hex(),
-                            export = %sha1.to_hex(),
-                            "origin SHA-1 differs from export SHA-1"
-                        );
-                    }
-                    Some(stored_sha1)
-                }
-                Ok(None) => {
-                    tracing::info!(
-                        blake3 = %hex::encode(b3.as_bytes()),
-                        "no stored SHA-1 mapping for object"
-                    );
-                    None
-                }
-                Err(e) => {
-                    tracing::debug!(
-                        blake3 = %hex::encode(b3.as_bytes()),
-                        error = %e,
-                        "failed to look up stored SHA-1"
-                    );
-                    None
-                }
-            };
-
-            objects.push(FederationExportedObject {
-                blake3: *b3,
-                object_type,
-                content,
-                sha1,
-                origin_sha1,
-            });
+        for (blake3_hash, signed) in &to_export {
+            objects.push(self.export_federation_object(repo_id, *blake3_hash, signed).await?);
         }
 
         Ok(FederationExportResult {
             objects,
-            objects_skipped: skipped as u32,
+            objects_skipped: skipped,
             has_more,
         })
     }

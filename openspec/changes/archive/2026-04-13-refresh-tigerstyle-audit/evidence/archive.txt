@@ -1,0 +1,3 @@
+Task status: ✓ Complete
+Skipping spec updates (--skip-specs flag provided).
+Change 'refresh-tigerstyle-audit' archived as '2026-04-13-refresh-tigerstyle-audit'.

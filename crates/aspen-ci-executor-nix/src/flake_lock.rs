@@ -77,38 +77,40 @@ pub enum InputSpec {
     Follows(Vec<String>),
 }
 
+/// Serde visitor that deserializes [`InputSpec`] from a string or an array of strings.
+struct InputSpecVisitor;
+
+impl<'de> serde::de::Visitor<'de> for InputSpecVisitor {
+    type Value = InputSpec;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a string or array of strings")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where E: serde::de::Error {
+        Ok(InputSpec::Direct(value.to_string()))
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where A: serde::de::SeqAccess<'de> {
+        Ok(InputSpec::Follows(collect_string_seq(&mut seq)?))
+    }
+}
+
+/// Drain all string elements from a serde sequence access into a `Vec`.
+fn collect_string_seq<'de, A>(seq: &mut A) -> Result<Vec<String>, A::Error>
+where A: serde::de::SeqAccess<'de> {
+    let mut items = Vec::new();
+    while let Some(s) = seq.next_element::<String>()? {
+        items.push(s);
+    }
+    Ok(items)
+}
+
 impl<'de> Deserialize<'de> for InputSpec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        use std::fmt;
-
-        use serde::de::Visitor;
-        use serde::de::{self};
-
-        struct InputSpecVisitor;
-
-        impl<'de> Visitor<'de> for InputSpecVisitor {
-            type Value = InputSpec;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a string or array of strings")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where E: de::Error {
-                Ok(InputSpec::Direct(value.to_string()))
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where A: de::SeqAccess<'de> {
-                let mut path = Vec::new();
-                while let Some(segment) = seq.next_element::<String>()? {
-                    path.push(segment);
-                }
-                Ok(InputSpec::Follows(path))
-            }
-        }
-
         deserializer.deserialize_any(InputSpecVisitor)
     }
 }

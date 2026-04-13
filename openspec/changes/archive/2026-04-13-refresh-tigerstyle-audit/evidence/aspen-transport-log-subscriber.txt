@@ -1,0 +1,48 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.14s
+     Running unittests src/lib.rs (target/debug/deps/aspen_transport-1c2b663fae1af59b)
+
+running 36 tests
+test log_subscriber::handler::tests::test_multiple_sender_subscribers ... ok
+test log_subscriber::handler::tests::test_debug_includes_committed_index ... ok
+test log_subscriber::handler::tests::test_committed_index_handle_returns_shared_clone ... ok
+test log_subscriber::handler::tests::test_debug_includes_node_id ... ok
+test log_subscriber::handler::tests::test_committed_index_starts_at_zero ... ok
+test log_subscriber::handler::tests::test_new_returns_handler_sender_and_committed_index ... ok
+test log_subscriber::handler::tests::test_with_sender_creates_handler ... ok
+test log_subscriber::handler::tests::test_with_historical_reader_creates_handler ... ok
+test log_subscriber::handler::tests::test_new_sender_is_subscribable ... ok
+test log_subscriber::tests::test_end_of_stream_reason_display ... ok
+test log_subscriber::tests::test_kv_operation_key_count ... ok
+test log_subscriber::tests::test_kv_operation_matches_prefix ... ok
+test log_subscriber::handler::tests::test_with_watch_registry ... ok
+test log_subscriber::tests::test_kv_operation_primary_key ... ok
+test log_subscriber::tests::test_subscribe_reject_reason_display ... ok
+test log_subscriber::tests::test_subscribe_request_from_index ... ok
+test log_subscriber::tests::test_subscribe_request_latest_only ... ok
+test log_subscriber::tests::test_subscribe_request_with_prefix ... ok
+test log_subscriber::tests::test_subscriber_state_record_sent ... ok
+test log_subscriber::tests::test_subscriber_state_should_send ... ok
+test log_subscriber::types::tests::test_end_of_stream_reason_copy ... ok
+test log_subscriber::types::tests::test_end_of_stream_reason_display ... ok
+test log_subscriber::types::tests::test_end_of_stream_reason_equality ... ok
+test log_subscriber::types::tests::test_log_entry_message_end_of_stream_serde ... ok
+test log_subscriber::types::tests::test_log_entry_message_keepalive_serde ... ok
+test log_subscriber::types::tests::test_subscribe_reject_reason_copy ... ok
+test log_subscriber::types::tests::test_subscribe_reject_reason_display ... ok
+test log_subscriber::types::tests::test_subscribe_reject_reason_equality ... ok
+test log_subscriber::types::tests::test_subscribe_request_clone ... ok
+test log_subscriber::types::tests::test_subscribe_request_debug ... ok
+test log_subscriber::types::tests::test_subscribe_request_from_index ... ok
+test log_subscriber::types::tests::test_subscribe_request_latest_only ... ok
+test log_subscriber::types::tests::test_subscribe_request_serde_roundtrip ... ok
+test log_subscriber::types::tests::test_subscribe_request_with_prefix ... ok
+test log_subscriber::types::tests::test_subscribe_response_accepted_serde ... ok
+test log_subscriber::types::tests::test_subscribe_response_rejected_serde ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 56 filtered out; finished in 0.00s

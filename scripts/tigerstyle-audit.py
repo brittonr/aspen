@@ -33,6 +33,18 @@ ASSERT_RE = re.compile(r"\b(?:debug_assert|assert(?:_(?:eq|ne|matches))?)!\b")
 NOW_PATTERNS = ("SystemTime::now()", "Instant::now()")
 
 
+def is_char_literal_start(text: str, index: int) -> bool:
+    next_index = index + 1
+    if next_index >= len(text):
+        return False
+    next_char = text[next_index]
+    if next_char == "\\":
+        escape_end = index + 3
+        return escape_end < len(text) and text[escape_end] == "'"
+    char_end = index + 2
+    return char_end < len(text) and text[char_end] == "'"
+
+
 @dataclass
 class FunctionInfo:
     file: str
@@ -70,7 +82,8 @@ def strip_line_comments(line: str) -> str:
         elif ch == '"' and not in_char:
             in_string = not in_string
         elif ch == "'" and not in_string:
-            in_char = not in_char
+            if is_char_literal_start(line, i):
+                in_char = not in_char
         i += 1
     return "".join(chars)
 
@@ -161,7 +174,8 @@ class BodyScanner:
                 i += 1
                 continue
             if ch == "'":
-                self.in_char = True
+                if is_char_literal_start(text, i):
+                    self.in_char = True
                 i += 1
                 continue
             if ch == "{":
@@ -297,27 +311,102 @@ def recursive_hotspots(functions: list[FunctionInfo]) -> list[dict]:
     return hotspots
 
 
+def strip_comments_preserve_layout(text: str) -> str:
+    chars: list[str] = []
+    index = 0
+    in_block_comment = False
+    in_line_comment = False
+    in_string = False
+    in_char = False
+    escape = False
+    while index < len(text):
+        ch = text[index]
+        nxt = text[index + 1] if index + 1 < len(text) else ""
+        if in_line_comment:
+            if ch == "\n":
+                in_line_comment = False
+                chars.append(ch)
+            else:
+                chars.append(" ")
+            index += 1
+            continue
+        if in_block_comment:
+            if ch == "*" and nxt == "/":
+                chars.extend("  ")
+                in_block_comment = False
+                index += 2
+                continue
+            chars.append("\n" if ch == "\n" else " ")
+            index += 1
+            continue
+        if in_string:
+            chars.append(ch)
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            index += 1
+            continue
+        if in_char:
+            chars.append(ch)
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == "'":
+                in_char = False
+            index += 1
+            continue
+        if ch == "/" and nxt == "/":
+            chars.extend("  ")
+            in_line_comment = True
+            index += 2
+            continue
+        if ch == "/" and nxt == "*":
+            chars.extend("  ")
+            in_block_comment = True
+            index += 2
+            continue
+        if ch == '"':
+            in_string = True
+            chars.append(ch)
+            index += 1
+            continue
+        if ch == "'":
+            chars.append(ch)
+            if is_char_literal_start(text, index):
+                in_char = True
+            index += 1
+            continue
+        chars.append(ch)
+        index += 1
+    return "".join(chars)
+
+
 def verified_time_hotspots(files: list[Path]) -> list[dict]:
     hotspots: list[dict] = []
     for path in files:
         path_str = str(path)
         if f"{os.sep}src{os.sep}verified{os.sep}" not in path_str:
             continue
-        text = path.read_text(encoding="utf-8")
+        text = strip_comments_preserve_layout(path.read_text(encoding="utf-8"))
         for pattern in NOW_PATTERNS:
-            if pattern in text:
-                line = text[: text.index(pattern)].count("\n") + 1
-                hotspots.append(
-                    {
-                        "rule": "verified_ambient_time",
-                        "file": path_str,
-                        "function": None,
-                        "line": line,
-                        "line_count": 1,
-                        "assert_count": 0,
-                        "detail": f"verified code reads ambient time with {pattern}",
-                    }
-                )
+            if pattern not in text:
+                continue
+            line = text[: text.index(pattern)].count("\n") + 1
+            hotspots.append(
+                {
+                    "rule": "verified_ambient_time",
+                    "file": path_str,
+                    "function": None,
+                    "line": line,
+                    "line_count": 1,
+                    "assert_count": 0,
+                    "detail": f"verified code reads ambient time with {pattern}",
+                }
+            )
     return hotspots
 
 
