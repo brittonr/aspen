@@ -77,6 +77,35 @@
 //! guard.release().await?;
 //! ```
 
+// Phase 1 Tiger Style rollout: keep the starter lint set visible in pilot crates
+// while suppressing noisier families until Aspen has cleanup bandwidth.
+#![allow(unknown_lints)]
+#![allow(no_panic)]
+#![warn(ambient_clock, compound_assertion, contradictory_time)]
+#![allow(
+    acronym_style,
+    ambiguous_params,
+    assertion_density,
+    bool_naming,
+    catch_all_on_enum,
+    compound_condition,
+    float_for_currency,
+    function_length,
+    ignored_result,
+    multi_lock_ordering,
+    nested_conditionals,
+    no_recursion,
+    no_unwrap,
+    numeric_units,
+    platform_dependent_cast,
+    raw_arithmetic_overflow,
+    unbounded_loop,
+    unchecked_division,
+    unchecked_narrowing,
+    unjustified_allow,
+    verified_purity
+)]
+
 mod barrier;
 mod counter;
 mod election;

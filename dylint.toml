@@ -1,0 +1,24 @@
+# Aspen-specific Tiger Style tuning.
+#
+# `scripts/tigerstyle-check.sh` decides which tigerstyle lints are enabled in
+# the current rollout phase. This file keeps workspace thresholds and justified
+# allowlists in one place so later phases can tighten them without rediscovering
+# why Aspen differs from tigerstyle's defaults.
+
+[tigerstyle]
+# Aspen still has larger orchestration handlers. Start at 100 lines while the
+# first rollout proves the workflow, then tighten after the handler cleanup pass.
+function_length_max = 100
+
+# Several coordinator and RPC handlers still nest one level deeper than the
+# default tigerstyle threshold. Keep one extra level during phased adoption.
+nesting_max_depth = 4
+
+# Focus assertion-density checks on non-trivial functions. Thin shell wrappers
+# should not need placeholder assertions just to satisfy the lint.
+assertion_density_min_lines = 30
+assertion_density_min_assertions = 2
+
+# Transport and storage code use `IO` pervasively. Keep this single exception
+# explicit; add new acronym exceptions only with rollout-note rationale.
+acronym_allowlist = ["IO"]

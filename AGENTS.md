@@ -194,6 +194,10 @@ INSTA_UPDATE=always cargo test                     # Auto-accept new snapshots
 # Linting and formatting
 cargo clippy --all-targets -- --deny warnings
 nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)
+# Tiger Style rollout path (current equivalent check path, not a flake check yet):
+# `scripts/tigerstyle-check.sh` wraps `rustup`/`cargo`/`dylint-link`, patches
+# `dylint_driver`, and defaults to the low-noise pilot scope
+# `-p aspen-time -p aspen-hlc -p aspen-core -- --lib`.
 # Note: the rustfmt hook runs repo-wide `nix run .#rustfmt`, not file-scoped formatting.
 # Stash or restore unrelated unstaged Rust edits before making a focused commit.
 
