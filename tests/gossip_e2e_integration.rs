@@ -42,7 +42,7 @@ async fn start_node_with_gossip(node_id: NodeId, temp_dir: &TempDir) -> Result<a
 
     // Spawn the Router with RaftProtocolHandler to enable inter-node communication.
     // The Router handle is stored in the Node to keep it alive.
-    node.spawn_router();
+    node.spawn_router().unwrap();
 
     // Wait for the endpoint to be fully online and ready for connections
     node.handle().network.iroh_manager.endpoint().online().await;

@@ -241,6 +241,88 @@ pub struct ClientProtocolContext {
     pub drain_state: Option<Arc<aspen_cluster::upgrade::DrainState>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingContextCapabilityError {
+    capability: &'static str,
+}
+
+impl MissingContextCapabilityError {
+    fn new(capability: &'static str) -> Self {
+        Self { capability }
+    }
+}
+
+impl std::fmt::Display for MissingContextCapabilityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "missing client protocol capability: {}", self.capability)
+    }
+}
+
+impl std::error::Error for MissingContextCapabilityError {}
+
+pub type ContextCapabilityResult<T> = std::result::Result<T, MissingContextCapabilityError>;
+
+#[cfg(feature = "blob")]
+#[derive(Clone)]
+pub struct BlobHandlerContext {
+    pub controller: Arc<dyn ClusterController>,
+    pub kv_store: Arc<dyn KeyValueStore>,
+    pub endpoint_manager: Arc<dyn EndpointProvider>,
+    pub blob_store: Arc<aspen_blob::IrohBlobStore>,
+    pub blob_replication_manager: Option<aspen_blob::BlobReplicationManager>,
+    #[cfg(feature = "global-discovery")]
+    pub content_discovery: Option<Arc<dyn ContentDiscovery>>,
+}
+
+#[derive(Clone)]
+pub struct DocsHandlerContext {
+    pub docs_sync: Arc<dyn DocsSyncProvider>,
+    pub peer_manager: Option<Arc<dyn PeerManager>>,
+}
+
+#[cfg(feature = "forge")]
+#[derive(Clone)]
+pub struct ForgeHandlerContext {
+    pub node_id: u64,
+    pub forge_node: Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>,
+    #[cfg(feature = "global-discovery")]
+    pub content_discovery: Option<Arc<dyn ContentDiscovery>>,
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    pub federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+    pub federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
+    pub federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+    pub federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
+    pub iroh_endpoint: Option<Arc<iroh::Endpoint>>,
+    #[cfg(all(feature = "hooks", feature = "git-bridge"))]
+    pub hook_service: Option<Arc<aspen_hooks::HookService>>,
+}
+
+#[cfg(feature = "ci")]
+#[derive(Clone)]
+pub struct CiHandlerContext {
+    pub node_id: u64,
+    pub controller: Arc<dyn ClusterController>,
+    pub kv_store: Arc<dyn KeyValueStore>,
+    pub endpoint_manager: Arc<dyn EndpointProvider>,
+    pub ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    #[cfg(all(feature = "ci", feature = "nickel"))]
+    pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
+    #[cfg(all(feature = "forge", feature = "blob"))]
+    pub forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>>,
+    #[cfg(feature = "blob")]
+    pub blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
+}
+
+#[cfg(feature = "jobs")]
+#[derive(Clone)]
+pub struct JobsHandlerContext {
+    pub node_id: u64,
+    pub kv_store: Arc<dyn KeyValueStore>,
+    pub job_manager: Arc<aspen_jobs::JobManager<dyn KeyValueStore>>,
+    pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
+    pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+}
+
 impl std::fmt::Debug for ClientProtocolContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClientProtocolContext")
@@ -251,6 +333,10 @@ impl std::fmt::Debug for ClientProtocolContext {
 }
 
 impl ClientProtocolContext {
+    fn require_some<T: Clone>(value: &Option<T>, capability: &'static str) -> ContextCapabilityResult<T> {
+        value.clone().ok_or_else(|| MissingContextCapabilityError::new(capability))
+    }
+
     /// Log security warnings about authentication configuration.
     ///
     /// Call this during server initialization to alert operators about
@@ -281,6 +367,86 @@ impl ClientProtocolContext {
                 "Authentication configured: require_auth=true, token_verifier=enabled"
             );
         }
+    }
+
+    #[cfg(feature = "blob")]
+    pub fn blob_handler_context(&self) -> ContextCapabilityResult<BlobHandlerContext> {
+        Ok(BlobHandlerContext {
+            controller: Arc::clone(&self.controller),
+            kv_store: Arc::clone(&self.kv_store),
+            endpoint_manager: Arc::clone(&self.endpoint_manager),
+            blob_store: Self::require_some(&self.blob_store, "blob_store")?,
+            blob_replication_manager: self.blob_replication_manager.clone(),
+            #[cfg(feature = "global-discovery")]
+            content_discovery: self.content_discovery.clone(),
+        })
+    }
+
+    pub fn docs_handler_context(&self) -> ContextCapabilityResult<DocsHandlerContext> {
+        Ok(DocsHandlerContext {
+            docs_sync: Self::require_some(&self.docs_sync, "docs_sync")?,
+            peer_manager: self.peer_manager.clone(),
+        })
+    }
+
+    #[cfg(feature = "forge")]
+    pub fn forge_handler_context(&self) -> ContextCapabilityResult<ForgeHandlerContext> {
+        Ok(ForgeHandlerContext {
+            node_id: self.node_id,
+            forge_node: Self::require_some(&self.forge_node, "forge_node")?,
+            #[cfg(feature = "global-discovery")]
+            content_discovery: self.content_discovery.clone(),
+            #[cfg(all(feature = "forge", feature = "global-discovery"))]
+            federation_discovery: self.federation_discovery.clone(),
+            federation_identity: self.federation_identity.clone(),
+            federation_trust_manager: self.federation_trust_manager.clone(),
+            federation_cluster_identity: self.federation_cluster_identity.clone(),
+            iroh_endpoint: self.iroh_endpoint.clone(),
+            #[cfg(all(feature = "hooks", feature = "git-bridge"))]
+            hook_service: self.hook_service.clone(),
+        })
+    }
+
+    #[cfg(feature = "ci")]
+    pub fn ci_handler_context(&self) -> ContextCapabilityResult<CiHandlerContext> {
+        let has_ci = self.ci_orchestrator.is_some();
+        #[cfg(all(feature = "ci", feature = "nickel"))]
+        let has_ci = has_ci || self.ci_trigger_service.is_some();
+        if !has_ci {
+            return Err(MissingContextCapabilityError::new("ci_orchestrator_or_trigger"));
+        }
+
+        Ok(CiHandlerContext {
+            node_id: self.node_id,
+            controller: Arc::clone(&self.controller),
+            kv_store: Arc::clone(&self.kv_store),
+            endpoint_manager: Arc::clone(&self.endpoint_manager),
+            ci_orchestrator: self.ci_orchestrator.clone(),
+            #[cfg(all(feature = "ci", feature = "nickel"))]
+            ci_trigger_service: self.ci_trigger_service.clone(),
+            #[cfg(all(feature = "forge", feature = "blob"))]
+            forge_node: self.forge_node.clone(),
+            #[cfg(feature = "blob")]
+            blob_store: self.blob_store.clone(),
+        })
+    }
+
+    #[cfg(feature = "jobs")]
+    pub fn jobs_handler_context(&self) -> ContextCapabilityResult<JobsHandlerContext> {
+        Ok(JobsHandlerContext {
+            node_id: self.node_id,
+            kv_store: Arc::clone(&self.kv_store),
+            job_manager: Self::require_some(&self.job_manager, "job_manager")?,
+            worker_service: self.worker_service.clone(),
+            worker_coordinator: self.worker_coordinator.clone(),
+        })
+    }
+
+    pub fn required_typed_service<T>(&self, capability: &'static str) -> ContextCapabilityResult<Arc<T>>
+    where T: std::any::Any + Send + Sync + 'static {
+        let value =
+            self.secrets_service.as_ref().ok_or_else(|| MissingContextCapabilityError::new(capability))?.clone();
+        value.downcast::<T>().map_err(|_| MissingContextCapabilityError::new(capability))
     }
 }
 
@@ -436,10 +602,27 @@ pub mod test_support {
         cluster_cookie: String,
         watch_registry: Option<Arc<dyn WatchRegistry>>,
         hooks_config: Option<aspen_hooks_types::HooksConfig>,
+        docs_sync: Option<Arc<dyn DocsSyncProvider>>,
+        peer_manager: Option<Arc<dyn PeerManager>>,
+        #[cfg(feature = "blob")]
+        blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
+        #[cfg(feature = "blob")]
+        blob_replication_manager: Option<aspen_blob::BlobReplicationManager>,
         #[cfg(feature = "sql")]
         sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
         #[cfg(feature = "forge")]
         forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn KeyValueStore>>>,
+        #[cfg(feature = "jobs")]
+        job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
+        #[cfg(feature = "worker")]
+        worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
+        #[cfg(feature = "jobs")]
+        worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+        #[cfg(feature = "ci")]
+        ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+        #[cfg(all(feature = "ci", feature = "nickel"))]
+        ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
+        secrets_service: Option<Arc<dyn std::any::Any + Send + Sync>>,
     }
 
     impl Default for TestContextBuilder {
@@ -459,10 +642,27 @@ pub mod test_support {
                 cluster_cookie: "test-cookie".to_string(),
                 watch_registry: None,
                 hooks_config: None,
+                docs_sync: None,
+                peer_manager: None,
+                #[cfg(feature = "blob")]
+                blob_store: None,
+                #[cfg(feature = "blob")]
+                blob_replication_manager: None,
                 #[cfg(feature = "sql")]
                 sql_executor: None,
                 #[cfg(feature = "forge")]
                 forge_node: None,
+                #[cfg(feature = "jobs")]
+                job_manager: None,
+                #[cfg(feature = "worker")]
+                worker_service: None,
+                #[cfg(feature = "jobs")]
+                worker_coordinator: None,
+                #[cfg(feature = "ci")]
+                ci_orchestrator: None,
+                #[cfg(all(feature = "ci", feature = "nickel"))]
+                ci_trigger_service: None,
+                secrets_service: None,
             }
         }
 
@@ -508,6 +708,35 @@ pub mod test_support {
             self
         }
 
+        /// Set docs sync capabilities without unrelated app services.
+        pub fn with_docs_sync(mut self, docs_sync: Arc<dyn DocsSyncProvider>) -> Self {
+            self.docs_sync = Some(docs_sync);
+            self
+        }
+
+        /// Set peer manager capabilities without unrelated app services.
+        pub fn with_peer_manager(mut self, peer_manager: Arc<dyn PeerManager>) -> Self {
+            self.peer_manager = Some(peer_manager);
+            self
+        }
+
+        /// Set a custom blob store.
+        #[cfg(feature = "blob")]
+        pub fn with_blob_store(mut self, blob_store: Arc<aspen_blob::IrohBlobStore>) -> Self {
+            self.blob_store = Some(blob_store);
+            self
+        }
+
+        /// Set a blob replication manager.
+        #[cfg(feature = "blob")]
+        pub fn with_blob_replication_manager(
+            mut self,
+            blob_replication_manager: aspen_blob::BlobReplicationManager,
+        ) -> Self {
+            self.blob_replication_manager = Some(blob_replication_manager);
+            self
+        }
+
         /// Set a custom SQL executor.
         #[cfg(feature = "sql")]
         pub fn with_sql_executor(mut self, sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>) -> Self {
@@ -522,6 +751,56 @@ pub mod test_support {
             forge_node: Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn KeyValueStore>>,
         ) -> Self {
             self.forge_node = Some(forge_node);
+            self
+        }
+
+        /// Set a custom job manager.
+        #[cfg(feature = "jobs")]
+        pub fn with_job_manager(mut self, job_manager: Arc<aspen_jobs::JobManager<dyn KeyValueStore>>) -> Self {
+            self.job_manager = Some(job_manager);
+            self
+        }
+
+        /// Set a custom worker service.
+        #[cfg(feature = "worker")]
+        pub fn with_worker_service(
+            mut self,
+            worker_service: Arc<aspen_cluster::worker_service::WorkerService>,
+        ) -> Self {
+            self.worker_service = Some(worker_service);
+            self
+        }
+
+        /// Set a custom worker coordinator.
+        #[cfg(feature = "jobs")]
+        pub fn with_worker_coordinator(
+            mut self,
+            worker_coordinator: Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>,
+        ) -> Self {
+            self.worker_coordinator = Some(worker_coordinator);
+            self
+        }
+
+        /// Set a custom CI orchestrator.
+        #[cfg(feature = "ci")]
+        pub fn with_ci_orchestrator(
+            mut self,
+            ci_orchestrator: Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>,
+        ) -> Self {
+            self.ci_orchestrator = Some(ci_orchestrator);
+            self
+        }
+
+        /// Set a custom CI trigger service.
+        #[cfg(all(feature = "ci", feature = "nickel"))]
+        pub fn with_ci_trigger_service(mut self, ci_trigger_service: Arc<aspen_ci::TriggerService>) -> Self {
+            self.ci_trigger_service = Some(ci_trigger_service);
+            self
+        }
+
+        /// Set a typed secrets service payload.
+        pub fn with_secrets_service(mut self, secrets_service: Arc<dyn std::any::Any + Send + Sync>) -> Self {
+            self.secrets_service = Some(secrets_service);
             self
         }
 
@@ -549,11 +828,11 @@ pub mod test_support {
                 state_machine: None,
                 endpoint_manager,
                 #[cfg(feature = "blob")]
-                blob_store: None,
+                blob_store: self.blob_store,
                 #[cfg(feature = "blob")]
-                blob_replication_manager: None,
-                peer_manager: None,
-                docs_sync: None,
+                blob_replication_manager: self.blob_replication_manager,
+                peer_manager: self.peer_manager,
+                docs_sync: self.docs_sync,
                 cluster_cookie: self.cluster_cookie,
                 start_time: Instant::now(),
                 network_factory: None,
@@ -565,16 +844,16 @@ pub mod test_support {
                 #[cfg(feature = "forge")]
                 forge_node: self.forge_node,
                 #[cfg(feature = "jobs")]
-                job_manager: None,
+                job_manager: self.job_manager,
                 #[cfg(feature = "worker")]
-                worker_service: None,
+                worker_service: self.worker_service,
                 #[cfg(feature = "jobs")]
-                worker_coordinator: None,
+                worker_coordinator: self.worker_coordinator,
                 watch_registry: self.watch_registry,
                 #[cfg(feature = "hooks")]
                 hook_service: None,
                 hooks_config: self.hooks_config.unwrap_or_default(),
-                secrets_service: None,
+                secrets_service: self.secrets_service,
                 #[cfg(feature = "forge")]
                 federation_identity: None,
                 #[cfg(feature = "forge")]
@@ -586,9 +865,9 @@ pub mod test_support {
                 #[cfg(all(feature = "forge", feature = "global-discovery"))]
                 federation_discovery: None,
                 #[cfg(feature = "ci")]
-                ci_orchestrator: None,
+                ci_orchestrator: self.ci_orchestrator,
                 #[cfg(all(feature = "ci", feature = "nickel"))]
-                ci_trigger_service: None,
+                ci_trigger_service: self.ci_trigger_service,
 
                 service_executors: Vec::new(),
                 app_registry: aspen_core::shared_registry(),

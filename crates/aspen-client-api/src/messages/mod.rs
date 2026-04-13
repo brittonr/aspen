@@ -618,15 +618,6 @@ pub enum ClientRpcRequest {
         members: Vec<u64>,
     },
 
-    /// Permanently expunge a node from the cluster.
-    ///
-    /// Removes from Raft membership, triggers trust reconfiguration,
-    /// and sends expungement notification. Requires `--confirm` on CLI.
-    ExpungeNode {
-        /// ID of the node to expunge.
-        node_id: u64,
-    },
-
     /// Ping for connection health check.
     Ping,
 
@@ -3910,6 +3901,14 @@ pub enum ClientRpcRequest {
         /// Session ID from `GitBridgeFetchStartResponse`.
         session_id: String,
     },
+
+    /// Permanently expunge a node from the cluster.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    ExpungeNode {
+        /// ID of the node to expunge.
+        node_id: u64,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -3982,9 +3981,6 @@ pub enum ClientRpcResponse {
 
     /// Change membership response.
     ChangeMembershipResult(ChangeMembershipResultResponse),
-
-    /// Node expungement response.
-    ExpungeNodeResult(cluster::ExpungeNodeResultResponse),
 
     /// Pong response for ping.
     Pong,
@@ -4829,6 +4825,11 @@ pub enum ClientRpcResponse {
 
     /// Git bridge chunked fetch complete result.
     GitBridgeFetchComplete(GitBridgeFetchCompleteResponse),
+
+    /// Node expungement response.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    ExpungeNodeResult(cluster::ExpungeNodeResultResponse),
 }
 
 /// Result of a plugin reload operation.

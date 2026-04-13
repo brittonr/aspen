@@ -34,7 +34,7 @@ async fn create_raft_node(
 
     let network_factory = MadsimNetworkFactory::new(node_id, router, injector);
 
-    Raft::new(node_id, config, network_factory, log_store, state_machine)
+    Raft::new(node_id, config, network_factory, log_store, InMemoryStateMachine::store(state_machine))
         .await
         .expect("failed to create raft instance")
 }

@@ -1,19 +1,13 @@
-//! Request handler trait and factory for domain-specific RPC handlers.
+//! Request handler traits for domain-specific RPC handlers.
 //!
 //! This module defines the core `RequestHandler` trait that all domain-specific
-//! handlers must implement, and the `HandlerFactory` trait for self-registration
-//! using the inventory pattern.
+//! handlers must implement, plus the `HandlerFactory` trait used by explicit
+//! registry assembly in `aspen-rpc-handlers`.
 //!
-//! # Handler Plugin Architecture
-//!
-//! Handlers can self-register using the `inventory` crate, enabling a plugin-style
-//! architecture where new handlers don't require modification of the central registry.
-//!
-//! ## Example: Self-Registering Handler
+//! ## Example: Factory used by explicit registry wiring
 //!
 //! ```ignore
 //! use aspen_rpc_core::{HandlerFactory, RequestHandler, ClientProtocolContext};
-//! use aspen_rpc_core::submit_handler_factory;
 //! use std::sync::Arc;
 //!
 //! pub struct MyHandler;
@@ -28,16 +22,12 @@
 //! pub struct MyHandlerFactory;
 //!
 //! impl HandlerFactory for MyHandlerFactory {
-//!     fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-//!         // Return None if preconditions not met (e.g., optional service unavailable)
-//!         Some(Arc::new(MyHandler))
+//!     fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+//!         Ok(Arc::new(MyHandler))
 //!     }
 //!     fn name(&self) -> &'static str { "MyHandler" }
-//!     fn priority(&self) -> u32 { 500 } // Default priority
+//!     fn priority(&self) -> u32 { 500 }
 //! }
-//!
-//! // Self-register at startup
-//! submit_handler_factory!(MyHandlerFactory);
 //! ```
 
 use std::sync::Arc;
@@ -136,14 +126,13 @@ pub trait RequestHandler: Send + Sync {
 }
 
 // =============================================================================
-// Handler Factory (Plugin Registration)
+// Handler Factory
 // =============================================================================
 
 /// Factory trait for creating handlers with runtime context.
 ///
-/// This trait enables a plugin architecture where handlers can self-register
-/// using the `inventory` crate. Each handler crate implements this trait and
-/// calls `submit_handler_factory!` to register at link time.
+/// Each handler crate exposes one or more factory types. The concrete registry
+/// layer decides which factories to assemble for a given node slice.
 ///
 /// # Priority System
 ///
@@ -151,11 +140,11 @@ pub trait RequestHandler: Send + Sync {
 /// Core handlers (KV, Cluster) use lower priorities (100-200) to ensure they
 /// are checked first. Optional/extension handlers use higher priorities.
 ///
-/// # Conditional Registration
+/// # Assembly Contract
 ///
-/// The `create` method returns `Option<Arc<dyn RequestHandler>>`. Return `None`
-/// when preconditions are not met (e.g., required service not configured).
-/// This allows feature-gated handlers to skip registration cleanly.
+/// Assembly code decides which factories to include for a given node slice.
+/// Factories themselves return `Result` and fail loudly when a required
+/// capability bundle is incomplete or inconsistent.
 ///
 /// # Tiger Style
 ///
@@ -171,9 +160,9 @@ pub trait HandlerFactory: Send + Sync + 'static {
     ///
     /// # Returns
     ///
-    /// - `Some(handler)` if the handler should be registered
-    /// - `None` if preconditions not met (e.g., required service unavailable)
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>>;
+    /// - `Ok(handler)` when the handler is ready to register
+    /// - `Err(...)` when required capabilities are missing or inconsistent
+    fn create(&self, ctx: &ClientProtocolContext) -> Result<Arc<dyn RequestHandler>>;
 
     /// Returns the factory/handler name for logging.
     fn name(&self) -> &'static str;
@@ -227,47 +216,4 @@ pub trait HandlerFactory: Send + Sync + 'static {
     fn app_id(&self) -> Option<&'static str> {
         None
     }
-}
-
-// Inventory collection for handler factories
-inventory::collect!(&'static dyn HandlerFactory);
-
-/// Collect all registered handler factories.
-///
-/// Returns a vector of references to all factories registered via
-/// `submit_handler_factory!`. Factories are returned in registration order;
-/// callers should sort by priority before use.
-pub fn collect_handler_factories() -> Vec<&'static dyn HandlerFactory> {
-    inventory::iter::<&'static dyn HandlerFactory>.into_iter().copied().collect()
-}
-
-/// Macro to submit a handler factory for inventory collection.
-///
-/// This macro creates a static instance of the factory and registers it
-/// with the inventory system. The factory will be discovered at link time
-/// and included in the handler registry.
-///
-/// # Example
-///
-/// ```ignore
-/// use aspen_rpc_core::submit_handler_factory;
-///
-/// pub struct MyHandlerFactory;
-/// impl HandlerFactory for MyHandlerFactory { /* ... */ }
-///
-/// submit_handler_factory!(MyHandlerFactory);
-/// ```
-#[macro_export]
-macro_rules! submit_handler_factory {
-    ($factory:ty) => {
-        $crate::inventory::submit! {
-            &<$factory>::new() as &'static dyn $crate::HandlerFactory
-        }
-    };
-    // Variant for factories that don't have new()
-    ($factory:ty, $instance:expr) => {
-        $crate::inventory::submit! {
-            &$instance as &'static dyn $crate::HandlerFactory
-        }
-    };
 }

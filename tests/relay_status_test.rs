@@ -57,7 +57,7 @@ async fn create_node(node_id: u64, temp_dir: &TempDir, secret_key: &str) -> Resu
         .start()
         .await?;
 
-    node.spawn_router();
+    node.spawn_router().unwrap();
     Ok(node)
 }
 

@@ -50,8 +50,8 @@ impl Default for ClusterHandlerFactory {
 }
 
 impl HandlerFactory for ClusterHandlerFactory {
-    fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        Some(Arc::new(ClusterHandler))
+    fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        Ok(Arc::new(ClusterHandler))
     }
 
     fn name(&self) -> &'static str {
@@ -64,4 +64,3 @@ impl HandlerFactory for ClusterHandlerFactory {
 }
 
 // Self-register via inventory
-aspen_rpc_core::submit_handler_factory!(ClusterHandlerFactory);

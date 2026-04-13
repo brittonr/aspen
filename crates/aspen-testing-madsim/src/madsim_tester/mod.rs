@@ -340,9 +340,15 @@ async fn create_in_memory_node(
 
     let network_factory = MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
 
-    let raft = Raft::new(node_id, raft_config.clone(), network_factory, log_store, state_machine.clone())
-        .await
-        .expect("failed to create raft instance");
+    let raft = Raft::new(
+        node_id,
+        raft_config.clone(),
+        network_factory,
+        log_store,
+        InMemoryStateMachine::store(state_machine.clone()),
+    )
+    .await
+    .expect("failed to create raft instance");
 
     TestNode::InMemory {
         raft,

@@ -14,8 +14,6 @@ use bolero::check;
 use n0_future::stream;
 use openraft::LogId;
 use openraft::entry::RaftEntry;
-use openraft::storage::RaftSnapshotBuilder;
-use openraft::storage::RaftStateMachine;
 use openraft::testing::log_id;
 use support::bolero_generators::KeyValuePair;
 use support::bolero_generators::NumEntries;
@@ -34,7 +32,7 @@ fn test_applied_log_indices_are_monotonic() {
         // Property: After applying N entries, last_applied index increases monotonically
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = InMemoryStateMachine::new();
+            let sm = InMemoryStateMachine::new();
             let num_entries = num_entries.0;
 
             let mut last_index = 0u64;
@@ -78,7 +76,7 @@ fn test_snapshot_captures_all_applied_data() {
         // Property: Snapshot must contain all key-value pairs that were applied
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = InMemoryStateMachine::new();
+            let sm = InMemoryStateMachine::new();
 
             // Apply all entries
             for (i, (key, value)) in entries.iter().enumerate() {
@@ -129,7 +127,7 @@ fn test_applying_same_entry_twice_is_idempotent() {
         // Property: Applying same log entry twice should not corrupt state
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = InMemoryStateMachine::new();
+            let sm = InMemoryStateMachine::new();
 
             let entry =
                 <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
@@ -175,7 +173,7 @@ fn test_concurrent_reads_during_writes() {
         // Property: Concurrent reads should not block or see partial writes
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = InMemoryStateMachine::new();
+            let sm = InMemoryStateMachine::new();
 
             // Apply initial entries that we'll read during concurrent writes
             let initial_entries: Vec<(String, String)> =
@@ -254,7 +252,7 @@ fn test_large_value_storage() {
         // Property: InMemory storage should handle large values correctly
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = InMemoryStateMachine::new();
+            let sm = InMemoryStateMachine::new();
 
             let key = "large_key".to_string();
             let value = "x".repeat(value_size);
@@ -291,7 +289,7 @@ fn test_setmulti_applies_all_pairs() {
         // Property: SetMulti should atomically apply all key-value pairs
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let mut sm = InMemoryStateMachine::new();
+            let sm = InMemoryStateMachine::new();
 
             let pairs: Vec<(String, String)> =
                 (0..num_pairs).map(|i| (format!("multi_key_{}", i), format!("multi_value_{}", i))).collect();

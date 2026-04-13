@@ -124,7 +124,7 @@
 //! ```
 
 // Bootstrap module requires blob, docs, jobs, and hooks features for full functionality
-#[cfg(all(feature = "blob", feature = "docs", feature = "jobs", feature = "hooks"))]
+#[cfg(feature = "bootstrap-apps")]
 pub mod bootstrap;
 pub mod cluster_discovery;
 pub mod config;

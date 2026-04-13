@@ -108,6 +108,7 @@ pub use aspen_client_api::CLIENT_ALPN;
 pub use aspen_forge::GIT_BRIDGE_ALPN;
 pub use aspen_rpc_handlers::ClientProtocolContext;
 pub use aspen_rpc_handlers::ClientProtocolHandler;
+pub use aspen_rpc_handlers::NativeHandlerPlan;
 pub use aspen_transport::AuthenticatedRaftProtocolHandler;
 pub use aspen_transport::LOG_SUBSCRIBER_ALPN;
 pub use aspen_transport::LogSubscriberProtocolHandler;

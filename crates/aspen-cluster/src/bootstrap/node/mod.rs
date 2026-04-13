@@ -987,9 +987,15 @@ mod tests {
         let log_store = InMemoryLogStore::default();
         let state_machine = Arc::new(InMemoryStateMachine::default());
         let raft = Arc::new(
-            openraft::Raft::new(1_u64.into(), raft_config, network_factory, log_store, state_machine.clone())
-                .await
-                .expect("create raft"),
+            openraft::Raft::new(
+                1_u64.into(),
+                raft_config,
+                network_factory,
+                log_store,
+                InMemoryStateMachine::store(state_machine.clone()),
+            )
+            .await
+            .expect("create raft"),
         );
 
         let mut config = NodeConfig::default();

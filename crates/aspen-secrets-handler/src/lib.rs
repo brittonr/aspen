@@ -48,12 +48,10 @@ impl Default for SecretsHandlerFactory {
 }
 
 impl HandlerFactory for SecretsHandlerFactory {
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        let secrets_any = ctx.secrets_service.as_ref()?;
-        let secrets_service = secrets_any.clone().downcast::<SecretsService>().ok()?;
-        let kv_store = ctx.kv_store.clone();
-        let executor = Arc::new(SecretsServiceExecutor::new(secrets_service, kv_store));
-        Some(Arc::new(ServiceHandler::new(executor)))
+    fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        let secrets_service = ctx.required_typed_service::<SecretsService>("secrets_service")?;
+        let executor = Arc::new(SecretsServiceExecutor::new(secrets_service, ctx.kv_store.clone()));
+        Ok(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
@@ -70,4 +68,3 @@ impl HandlerFactory for SecretsHandlerFactory {
 }
 
 // Self-register via inventory
-aspen_rpc_core::submit_handler_factory!(SecretsHandlerFactory);

@@ -1,7 +1,7 @@
 //! Job queue RPC handler for Aspen.
 //!
-//! Provides `JobServiceExecutor` implementing the typed `ServiceExecutor`
-//! trait. Registered as a native handler via `submit_handler_factory!`.
+//! Provides `JobServiceExecutor` implementing the typed `ServiceExecutor`.
+//! Wired into the native handler registry explicitly.
 //!
 //! Handles 12 operations:
 //! - Job lifecycle: Submit, Get, List, Cancel, UpdateProgress, QueueStats
@@ -15,7 +15,6 @@ use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::HandlerFactory;
 use aspen_rpc_core::RequestHandler;
 use aspen_rpc_core::ServiceHandler;
-use aspen_rpc_core::submit_handler_factory;
 pub use executor::JobServiceExecutor;
 
 /// Handler factory for the job/worker service.
@@ -34,16 +33,16 @@ impl JobHandlerFactory {
 }
 
 impl HandlerFactory for JobHandlerFactory {
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        let job_manager = ctx.job_manager.as_ref()?.clone();
-        let kv_store = ctx.kv_store.clone();
-        let worker_service = ctx.worker_service.clone();
-        let worker_coordinator = ctx.worker_coordinator.clone();
-        let node_id = ctx.node_id;
-
-        let executor =
-            Arc::new(JobServiceExecutor::new(job_manager, kv_store, worker_service, worker_coordinator, node_id));
-        Some(Arc::new(ServiceHandler::new(executor)))
+    fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        let caps = ctx.jobs_handler_context()?;
+        let executor = Arc::new(JobServiceExecutor::new(
+            caps.job_manager,
+            caps.kv_store,
+            caps.worker_service,
+            caps.worker_coordinator,
+            caps.node_id,
+        ));
+        Ok(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
@@ -58,5 +57,3 @@ impl HandlerFactory for JobHandlerFactory {
         Some("jobs")
     }
 }
-
-submit_handler_factory!(JobHandlerFactory);

@@ -51,13 +51,7 @@ pub fn setup_router(
     match &node_mode {
         NodeMode::Single(handle) => {
             // Legacy mode: single Raft handler
-            // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
-            // structurally identical (both use the same types from aspen-raft-types: AppRequest,
-            // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
-            // by static_assertions in aspen_raft::types::_transmute_safety_static_checks.
-            let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
-                unsafe { std::mem::transmute(handle.storage.raft_node.raft().as_ref().clone()) };
-            let raft_handler = RaftProtocolHandler::new(transport_raft);
+            let raft_handler = RaftProtocolHandler::new(handle.storage.raft_node.raft().as_ref().clone());
             #[allow(deprecated)]
             {
                 builder = builder.accept(RAFT_ALPN, raft_handler);
@@ -69,10 +63,7 @@ pub fn setup_router(
 
             // Also register legacy ALPN routing to shard 0 for backward compatibility
             if let Some(shard_0) = handle.primary_shard() {
-                // SAFETY: Same transmute safety as above.
-                let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
-                    unsafe { std::mem::transmute(shard_0.raft().as_ref().clone()) };
-                let legacy_handler = RaftProtocolHandler::new(transport_raft);
+                let legacy_handler = RaftProtocolHandler::new(shard_0.raft().as_ref().clone());
                 #[allow(deprecated)]
                 {
                     builder = builder.accept(RAFT_ALPN, legacy_handler);

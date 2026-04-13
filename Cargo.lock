@@ -1609,7 +1609,6 @@ dependencies = [
  "aspen-core",
  "aspen-rpc-core",
  "async-trait",
- "inventory",
  "serde_json",
  "tracing",
 ]
@@ -1969,7 +1968,6 @@ dependencies = [
  "aspen-rpc-core",
  "async-trait",
  "chrono",
- "inventory",
  "serde_json",
  "tracing",
 ]
@@ -2468,7 +2466,6 @@ dependencies = [
  "aspen-testing",
  "aspen-transport",
  "async-trait",
- "inventory",
  "iroh",
  "metrics",
  "metrics-exporter-prometheus",

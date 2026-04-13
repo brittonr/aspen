@@ -77,10 +77,15 @@ async fn create_test_node(node_id: u64) -> RaftNode {
     let failure_injector = Arc::new(FailureInjector::new());
     let network_factory = MadsimNetworkFactory::new(NodeId(node_id), router.clone(), failure_injector);
 
-    let raft: openraft::Raft<AppTypeConfig> =
-        openraft::Raft::new(NodeId(node_id), config, network_factory, log_storage, state_machine.clone())
-            .await
-            .expect("Failed to create Raft instance");
+    let raft: openraft::Raft<AppTypeConfig> = openraft::Raft::new(
+        NodeId(node_id),
+        config,
+        network_factory,
+        log_storage,
+        InMemoryStateMachine::store(state_machine.clone()),
+    )
+    .await
+    .expect("Failed to create Raft instance");
 
     // Register node with router for RPC dispatch
     router
@@ -2163,9 +2168,10 @@ async fn test_transfer_leader_accepted_on_initialized_leader() {
     let state_machine = Arc::new(InMemoryStateMachine::default());
     let net = MadsimNetworkFactory::new(NodeId(1), router.clone(), failure_injector);
 
-    let raft = openraft::Raft::new(NodeId(1), config, net, log_storage, state_machine.clone())
-        .await
-        .expect("create raft");
+    let raft =
+        openraft::Raft::new(NodeId(1), config, net, log_storage, InMemoryStateMachine::store(state_machine.clone()))
+            .await
+            .expect("create raft");
 
     router.register_node(NodeId(1), "127.0.0.1:27001".to_string(), raft.clone()).expect("register node");
 

@@ -65,5 +65,5 @@ pub use handlers::*;
 pub use proxy::ProxyService;
 pub use registry::HandlerFactory;
 pub use registry::HandlerRegistry;
+pub use registry::NativeHandlerPlan;
 pub use registry::RequestHandler;
-pub use registry::collect_handler_factories;

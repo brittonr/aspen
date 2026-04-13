@@ -61,6 +61,7 @@ use std::path::PathBuf;
 
 pub use in_memory::InMemoryLogStore;
 pub use in_memory::InMemoryStateMachine;
+pub use in_memory::InMemoryStateMachineStore;
 use redb::TableDefinition;
 pub use redb_store::RedbLogStore;
 use serde::Deserialize;

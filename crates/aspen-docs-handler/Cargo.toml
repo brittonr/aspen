@@ -27,8 +27,5 @@ async-trait = "0.1"
 # Logging
 tracing = "0.1"
 
-# Factory registration
-inventory = "0.3"
-
 [features]
 default = []

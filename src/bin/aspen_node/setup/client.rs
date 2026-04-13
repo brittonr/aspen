@@ -27,6 +27,60 @@ use tracing::warn;
 use crate::args::Args;
 use crate::node_mode::NodeMode;
 
+struct ClientBasePhase {
+    docs_sync: Option<Arc<dyn aspen::api::DocsSyncProvider>>,
+    peer_manager: Option<Arc<dyn aspen::api::PeerManager>>,
+    endpoint_manager: Arc<dyn aspen::api::EndpointProvider>,
+    network_factory: Arc<dyn aspen::api::NetworkFactory>,
+}
+
+#[allow(unused_variables)]
+fn build_native_handler_plan(
+    node_mode: &NodeMode,
+    has_forge_runtime: bool,
+    has_ci_runtime: bool,
+    has_secrets_runtime: bool,
+) -> aspen::NativeHandlerPlan {
+    let mut plan = aspen::NativeHandlerPlan::core_only();
+    plan.set_net_enabled(true);
+    plan.set_blob_enabled(node_mode.blob_store().is_some());
+    plan.set_docs_enabled(node_mode.docs_sync().is_some());
+    plan.set_forge_enabled(has_forge_runtime);
+    plan.set_jobs_enabled(true);
+    plan.set_ci_enabled(has_ci_runtime);
+    plan.set_cache_enabled(has_ci_runtime);
+    plan.set_secrets_enabled(has_secrets_runtime);
+    plan.set_snix_enabled(true);
+    plan
+}
+
+fn build_client_base_phase(
+    node_mode: &NodeMode,
+    network_factory: &Arc<aspen::cluster::IrpcRaftNetworkFactory>,
+) -> ClientBasePhase {
+    let docs_sync = node_mode.docs_sync().map(|docs_sync| {
+        Arc::new(aspen::protocol_adapters::DocsSyncProviderAdapter::new(
+            docs_sync.clone(),
+            node_mode.blob_store().cloned(),
+        )) as Arc<dyn aspen::api::DocsSyncProvider>
+    });
+    let peer_manager = node_mode.peer_manager().map(|peer_manager| {
+        Arc::new(aspen::protocol_adapters::PeerManagerAdapter::new(peer_manager.clone()))
+            as Arc<dyn aspen::api::PeerManager>
+    });
+    let endpoint_manager =
+        Arc::new(aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone()))
+            as Arc<dyn aspen::api::EndpointProvider>;
+    let network_factory = network_factory.clone() as Arc<dyn aspen::api::NetworkFactory>;
+
+    ClientBasePhase {
+        docs_sync,
+        peer_manager,
+        endpoint_manager,
+        network_factory,
+    }
+}
+
 /// Setup client protocol context and handler.
 #[allow(clippy::type_complexity)]
 #[allow(clippy::too_many_arguments)]
@@ -42,6 +96,7 @@ pub async fn setup_client_protocol(
 ) -> Result<(
     Option<Arc<TokenVerifier>>,
     ClientProtocolContext,
+    aspen::NativeHandlerPlan,
     Option<Arc<aspen::cluster::worker_service::WorkerService>>,
     Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
 )> {
@@ -59,23 +114,7 @@ pub async fn setup_client_protocol(
     #[cfg(all(feature = "secrets", feature = "nix-cache-gateway"))]
     let nix_cache_signer = crate::config::load_nix_cache_signer(config, secrets_manager.as_ref(), kv_store).await?;
 
-    // Create adapter for docs_sync if available
-    let docs_sync_arc: Option<Arc<dyn aspen::api::DocsSyncProvider>> = node_mode.docs_sync().map(|ds| {
-        Arc::new(aspen::protocol_adapters::DocsSyncProviderAdapter::new(ds.clone(), node_mode.blob_store().cloned()))
-            as Arc<dyn aspen::api::DocsSyncProvider>
-    });
-    // Create adapter for peer_manager if available
-    let peer_manager_arc: Option<Arc<dyn aspen::api::PeerManager>> = node_mode.peer_manager().map(|pm| {
-        Arc::new(aspen::protocol_adapters::PeerManagerAdapter::new(pm.clone())) as Arc<dyn aspen::api::PeerManager>
-    });
-
-    // Create adapter for endpoint manager
-    let endpoint_manager_adapter =
-        Arc::new(aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone()))
-            as Arc<dyn aspen::api::EndpointProvider>;
-
-    // Use the real IrpcRaftNetworkFactory which implements aspen_core::NetworkFactory
-    let network_factory_arc: Arc<dyn aspen::api::NetworkFactory> = network_factory.clone();
+    let base_phase = build_client_base_phase(node_mode, network_factory);
 
     // Initialize ForgeNode if blob_store is available
     #[cfg(feature = "forge")]
@@ -333,16 +372,16 @@ pub async fn setup_client_protocol(
         #[cfg(feature = "sql")]
         sql_executor: primary_raft_node.clone(),
         state_machine: Some(primary_raft_node.state_machine().clone()),
-        endpoint_manager: endpoint_manager_adapter,
+        endpoint_manager: base_phase.endpoint_manager,
         #[cfg(feature = "blob")]
         blob_store: node_mode.blob_store().cloned(),
         #[cfg(feature = "blob")]
         blob_replication_manager: node_mode.blob_replication_manager(),
-        peer_manager: peer_manager_arc,
-        docs_sync: docs_sync_arc,
+        peer_manager: base_phase.peer_manager,
+        docs_sync: base_phase.docs_sync,
         cluster_cookie: config.cookie.clone(),
         start_time: std::time::Instant::now(),
-        network_factory: Some(network_factory_arc),
+        network_factory: Some(base_phase.network_factory),
         token_verifier: token_verifier_arc.clone(),
         require_auth: args.require_token_auth,
         topology: node_mode.topology().clone(),
@@ -407,7 +446,30 @@ pub async fn setup_client_protocol(
         drain_state: Some(aspen_cluster::upgrade::DrainState::new()),
     };
 
-    Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))
+    #[cfg(feature = "forge")]
+    let has_forge_runtime = client_context.forge_node.is_some();
+    #[cfg(not(feature = "forge"))]
+    let has_forge_runtime = false;
+
+    #[cfg(feature = "ci")]
+    let has_ci_runtime = client_context.ci_orchestrator.is_some() || client_context.ci_trigger_service.is_some();
+    #[cfg(not(feature = "ci"))]
+    let has_ci_runtime = false;
+
+    let native_handler_plan = build_native_handler_plan(
+        node_mode,
+        has_forge_runtime,
+        has_ci_runtime,
+        client_context.secrets_service.is_some(),
+    );
+
+    Ok((
+        token_verifier_arc,
+        client_context,
+        native_handler_plan,
+        worker_service_handle,
+        coordinator_for_shutdown,
+    ))
 }
 
 /// Load secrets from SOPS-encrypted file if configured.

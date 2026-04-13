@@ -385,6 +385,50 @@ impl InMemoryStateMachine {
         Arc::new(Self::default())
     }
 
+    /// Wrap an existing shared state machine for openraft storage traits.
+    pub fn store(inner: Arc<Self>) -> InMemoryStateMachineStore {
+        InMemoryStateMachineStore(inner)
+    }
+
+    /// Test/helper shim for the openraft `apply()` trait method.
+    pub async fn apply<Strm>(self: &Arc<Self>, entries: Strm) -> Result<(), io::Error>
+    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
+        let mut store = Self::store(self.clone());
+        RaftStateMachine::<AppTypeConfig>::apply(&mut store, entries).await
+    }
+
+    /// Test/helper shim for the openraft `applied_state()` trait method.
+    pub async fn applied_state(
+        self: &Arc<Self>,
+    ) -> Result<(Option<openraft::LogId<AppTypeConfig>>, StoredMembership<AppTypeConfig>), io::Error> {
+        let mut store = Self::store(self.clone());
+        RaftStateMachine::<AppTypeConfig>::applied_state(&mut store).await
+    }
+
+    /// Test/helper shim for the openraft `get_snapshot_builder()` trait method.
+    pub async fn get_snapshot_builder(self: &Arc<Self>) -> InMemoryStateMachineStore {
+        let mut store = Self::store(self.clone());
+        RaftStateMachine::<AppTypeConfig>::get_snapshot_builder(&mut store).await
+    }
+
+    /// Test/helper shim for the openraft `begin_receiving_snapshot()` trait method.
+    pub async fn begin_receiving_snapshot(self: &Arc<Self>) -> Result<SnapshotDataOf<AppTypeConfig>, io::Error> {
+        let mut store = Self::store(self.clone());
+        RaftStateMachine::<AppTypeConfig>::begin_receiving_snapshot(&mut store).await
+    }
+
+    /// Test/helper shim for the openraft `get_current_snapshot()` trait method.
+    pub async fn get_current_snapshot(self: &Arc<Self>) -> Result<Option<Snapshot<AppTypeConfig>>, io::Error> {
+        let mut store = Self::store(self.clone());
+        RaftStateMachine::<AppTypeConfig>::get_current_snapshot(&mut store).await
+    }
+
+    /// Test/helper shim for the openraft `build_snapshot()` trait method.
+    pub async fn build_snapshot(self: &Arc<Self>) -> Result<Snapshot<AppTypeConfig>, io::Error> {
+        let mut store = Self::store(self.clone());
+        RaftSnapshotBuilder::<AppTypeConfig>::build_snapshot(&mut store).await
+    }
+
     /// Get a value from the state machine by key.
     ///
     /// Returns `None` if the key does not exist.
@@ -430,7 +474,24 @@ impl InMemoryStateMachine {
     }
 }
 
-impl RaftSnapshotBuilder<AppTypeConfig> for Arc<InMemoryStateMachine> {
+#[derive(Clone, Debug)]
+pub struct InMemoryStateMachineStore(Arc<InMemoryStateMachine>);
+
+impl InMemoryStateMachineStore {
+    pub fn into_inner(self) -> Arc<InMemoryStateMachine> {
+        self.0
+    }
+}
+
+impl std::ops::Deref for InMemoryStateMachineStore {
+    type Target = InMemoryStateMachine;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl RaftSnapshotBuilder<AppTypeConfig> for InMemoryStateMachineStore {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
         let state_machine = self.state_machine.read().await;
@@ -472,7 +533,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<InMemoryStateMachine> {
     }
 }
 
-impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
+impl RaftStateMachine<AppTypeConfig> for InMemoryStateMachineStore {
     type SnapshotBuilder = Self;
 
     async fn applied_state(
@@ -645,8 +706,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_inmemory_state_machine_applied_state_initial() {
-        let mut sm = InMemoryStateMachine::new();
-        let (last_applied, membership) = sm.applied_state().await.unwrap();
+        let sm = InMemoryStateMachine::new();
+        let mut store = InMemoryStateMachine::store(sm);
+        let (last_applied, membership) = store.applied_state().await.unwrap();
 
         assert_eq!(last_applied, None);
         // Membership is an Option - check inner membership is empty
@@ -655,23 +717,26 @@ mod tests {
 
     #[tokio::test]
     async fn test_inmemory_state_machine_get_snapshot_builder() {
-        let mut sm = InMemoryStateMachine::new();
-        let _builder = sm.get_snapshot_builder().await;
+        let sm = InMemoryStateMachine::new();
+        let mut store = InMemoryStateMachine::store(sm);
+        let _builder = store.get_snapshot_builder().await;
         // Builder should be a clone of self
     }
 
     #[tokio::test]
     async fn test_inmemory_state_machine_begin_receiving_snapshot() {
-        let mut sm = InMemoryStateMachine::new();
-        let cursor = sm.begin_receiving_snapshot().await.unwrap();
+        let sm = InMemoryStateMachine::new();
+        let mut store = InMemoryStateMachine::store(sm);
+        let cursor = store.begin_receiving_snapshot().await.unwrap();
         // Should return empty cursor initially
         assert_eq!(cursor.get_ref().len(), 0);
     }
 
     #[tokio::test]
     async fn test_inmemory_state_machine_get_current_snapshot_none() {
-        let mut sm = InMemoryStateMachine::new();
-        let snapshot = sm.get_current_snapshot().await.unwrap();
+        let sm = InMemoryStateMachine::new();
+        let mut store = InMemoryStateMachine::store(sm);
+        let snapshot = store.get_current_snapshot().await.unwrap();
         assert!(snapshot.is_none());
     }
 

@@ -58,9 +58,9 @@ impl NetHandlerFactory {
 }
 
 impl HandlerFactory for NetHandlerFactory {
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
+    fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
         let registry = Arc::new(registry::ServiceRegistry::new(ctx.kv_store.clone()));
-        Some(Arc::new(handler::NetHandler::new(registry)))
+        Ok(Arc::new(handler::NetHandler::new(registry)))
     }
 
     fn name(&self) -> &'static str {
@@ -71,5 +71,3 @@ impl HandlerFactory for NetHandlerFactory {
         250
     }
 }
-
-aspen_rpc_core::submit_handler_factory!(NetHandlerFactory);

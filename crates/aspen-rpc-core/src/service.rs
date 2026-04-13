@@ -10,8 +10,8 @@
 //! ServiceExecutor (typed request → typed response)
 //!     ↕ wrapped by
 //! ServiceHandler<E> (implements RequestHandler)
-//!     ↕ registered via
-//! submit_handler_factory! (inventory collection)
+//!     ↕ assembled by
+//! HandlerRegistry factory wiring
 //! ```
 //!
 //! # Difference from RequestHandler
@@ -74,18 +74,16 @@
 //! }
 //!
 //! impl HandlerFactory for DocsHandlerFactory {
-//!     fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-//!         let docs_sync = ctx.docs_sync.as_ref()?.clone();
+//!     fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+//!         let docs_sync = ctx.docs_handler_context()?.docs_sync;
 //!         let executor = Arc::new(DocsServiceExecutor::new(docs_sync));
-//!         Some(Arc::new(ServiceHandler::new(executor)))
+//!         Ok(Arc::new(ServiceHandler::new(executor)))
 //!     }
 //!
 //!     fn name(&self) -> &'static str { "DocsHandler" }
 //!     fn priority(&self) -> u32 { 530 }
 //!     fn app_id(&self) -> Option<&'static str> { Some("docs") }
 //! }
-//!
-//! submit_handler_factory!(DocsHandlerFactory);
 //! ```
 
 use std::sync::Arc;

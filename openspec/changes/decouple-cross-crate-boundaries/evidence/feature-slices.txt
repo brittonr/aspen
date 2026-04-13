@@ -1,0 +1,512 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unused import: `openraft::storage::RaftSnapshotBuilder`
+  --> tests/inmemory_proptest.rs:17:5
+   |
+17 | use openraft::storage::RaftSnapshotBuilder;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `openraft::storage::RaftStateMachine`
+  --> tests/inmemory_proptest.rs:18:5
+   |
+18 | use openraft::storage::RaftStateMachine;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> tests/inmemory_proptest.rs:37:17
+   |
+37 |             let mut sm = InMemoryStateMachine::new();
+   |                 ----^^
+   |                 |
+   |                 help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> tests/inmemory_proptest.rs:81:17
+   |
+81 |             let mut sm = InMemoryStateMachine::new();
+   |                 ----^^
+   |                 |
+   |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:132:17
+    |
+132 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:178:17
+    |
+178 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:257:17
+    |
+257 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:294:17
+    |
+294 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: `aspen` (test "inmemory_proptest") generated 8 warnings (run `cargo fix --test "inmemory_proptest" -p aspen` to apply 6 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: variable does not need to be mutable
+   --> src/node/mod.rs:642:17
+    |
+642 |             let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers);
+    |                 ----^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/node/mod.rs:827:17
+    |
+827 |             let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
+    |                 ----^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: `aspen` (lib) generated 2 warnings (run `cargo fix --lib -p aspen` to apply 2 suggestions)
+warning: `aspen` (lib test) generated 2 warnings (2 duplicates)
+warning: unused import: `openraft::storage::RaftSnapshotBuilder`
+  --> tests/inmemory_proptest.rs:17:5
+   |
+17 | use openraft::storage::RaftSnapshotBuilder;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `openraft::storage::RaftStateMachine`
+  --> tests/inmemory_proptest.rs:18:5
+   |
+18 | use openraft::storage::RaftStateMachine;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> tests/inmemory_proptest.rs:37:17
+   |
+37 |             let mut sm = InMemoryStateMachine::new();
+   |                 ----^^
+   |                 |
+   |                 help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> tests/inmemory_proptest.rs:81:17
+   |
+81 |             let mut sm = InMemoryStateMachine::new();
+   |                 ----^^
+   |                 |
+   |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:132:17
+    |
+132 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:178:17
+    |
+178 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:257:17
+    |
+257 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:294:17
+    |
+294 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: `aspen` (test "inmemory_proptest") generated 8 warnings (run `cargo fix --test "inmemory_proptest" -p aspen` to apply 6 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.56s
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: variable does not need to be mutable
+   --> src/node/mod.rs:642:17
+    |
+642 |             let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers);
+    |                 ----^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src/node/mod.rs:827:17
+    |
+827 |             let mut auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
+    |                 ----^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: `aspen` (lib) generated 2 warnings (run `cargo fix --lib -p aspen` to apply 2 suggestions)
+warning: `aspen` (lib test) generated 2 warnings (2 duplicates)
+warning: unused import: `openraft::storage::RaftSnapshotBuilder`
+  --> tests/inmemory_proptest.rs:17:5
+   |
+17 | use openraft::storage::RaftSnapshotBuilder;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `openraft::storage::RaftStateMachine`
+  --> tests/inmemory_proptest.rs:18:5
+   |
+18 | use openraft::storage::RaftStateMachine;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> tests/inmemory_proptest.rs:37:17
+   |
+37 |             let mut sm = InMemoryStateMachine::new();
+   |                 ----^^
+   |                 |
+   |                 help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> tests/inmemory_proptest.rs:81:17
+   |
+81 |             let mut sm = InMemoryStateMachine::new();
+   |                 ----^^
+   |                 |
+   |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:132:17
+    |
+132 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:178:17
+    |
+178 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:257:17
+    |
+257 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> tests/inmemory_proptest.rs:294:17
+    |
+294 |             let mut sm = InMemoryStateMachine::new();
+    |                 ----^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: `aspen` (test "inmemory_proptest") generated 8 warnings (run `cargo fix --test "inmemory_proptest" -p aspen` to apply 6 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.56s
+     Running unittests src/lib.rs (target/debug/deps/aspen-ba6179480eb25104)
+
+running 1 test
+test node::tests::test_nodebuilder_start_creates_node ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 3.23s
+
+     Running unittests src/bin/aspen-token.rs (target/debug/deps/aspen_token-7bab93fba2fa7dc3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api_validation_proptest.rs (target/debug/deps/api_validation_proptest-241deab428ef53c1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 79 filtered out; finished in 0.00s
+
+     Running tests/auth_integration.rs (target/debug/deps/auth_integration-3b6654f6cc7ae1f1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+     Running tests/blob_gc_integration_test.rs (target/debug/deps/blob_gc_integration_test-d1d279632e8b1847)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.00s
+
+     Running tests/blob_replication_integration_test.rs (target/debug/deps/blob_replication_integration_test-fbcf5bd7cded4370)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+
+     Running tests/cluster_proptest.rs (target/debug/deps/cluster_proptest-c16e4c3a980f53d7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+     Running tests/connection_pool_test.rs (target/debug/deps/connection_pool_test-df55fd66f1548bc1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/consumer_group_integration_test.rs (target/debug/deps/consumer_group_integration_test-621e1d38791618a6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 0.00s
+
+     Running tests/docs_sync_integration_test.rs (target/debug/deps/docs_sync_integration_test-639ea2f428c7b685)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests/docs_sync_test.rs (target/debug/deps/docs_sync_test-c204093a2d17db67)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/federation_integration_test.rs (target/debug/deps/federation_integration_test-f65b2c3a035f5cdb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 63 filtered out; finished in 0.00s
+
+     Running tests/forge_federation_test.rs (target/debug/deps/forge_federation_test-14d154adf76cd4a5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.00s
+
+     Running tests/forge_git_wire_test.rs (target/debug/deps/forge_git_wire_test-ab6a005d68be8b17)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fuse_raft_cluster_test.rs (target/debug/deps/fuse_raft_cluster_test-ad07c71bb83d2449)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gossip_e2e_integration.rs (target/debug/deps/gossip_e2e_integration-23695f54561e2b1a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/gossip_integration_test.rs (target/debug/deps/gossip_integration_test-b3910fa1962f15cd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 0.00s
+
+     Running tests/hooks_integration_test.rs (target/debug/deps/hooks_integration_test-33aaee5ad0f2a195)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+     Running tests/inmemory_proptest.rs (target/debug/deps/inmemory_proptest-768eef7e48ecb87b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s
+
+     Running tests/job_integration_test.rs (target/debug/deps/job_integration_test-404e65921f35d727)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 45 filtered out; finished in 0.00s
+
+     Running tests/log_subscriber_test.rs (target/debug/deps/log_subscriber_test-169e51b7040a4733)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.00s
+
+     Running tests/madsim_buggify_faults_test.rs (target/debug/deps/madsim_buggify_faults_test-dd97a76b8855d0f1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mock_gossip_test.rs (target/debug/deps/mock_gossip_test-7d67ce482d4dd670)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.00s
+
+     Running tests/multi_node_cluster_test.rs (target/debug/deps/multi_node_cluster_test-051b889c2e75157e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/network_proptest.rs (target/debug/deps/network_proptest-c461d5a8c236a0b2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.00s
+
+     Running tests/node_builder_integration.rs (target/debug/deps/node_builder_integration-1e03690676d33907)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests/node_failure_detection_test.rs (target/debug/deps/node_failure_detection_test-685232e6c2f7d391)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/protocol_handlers_test.rs (target/debug/deps/protocol_handlers_test-84fa6d1b95479750)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 0.00s
+
+     Running tests/pubsub_integration_test.rs (target/debug/deps/pubsub_integration_test-199f346de6849284)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 0.00s
+
+     Running tests/raft_node_direct_api_test.rs (target/debug/deps/raft_node_direct_api_test-07979c1541a6b506)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+
+     Running tests/raft_server_integration_test.rs (target/debug/deps/raft_server_integration_test-2668c07046aaf009)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.00s
+
+     Running tests/redb_corruption_scenarios_test.rs (target/debug/deps/redb_corruption_scenarios_test-fc8e472ac9a20907)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/relay_status_test.rs (target/debug/deps/relay_status_test-c9678691b185324a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/rpc_serialization_test.rs (target/debug/deps/rpc_serialization_test-0530a9d7a3973858)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.00s
+
+     Running tests/server_rpc_test.rs (target/debug/deps/server_rpc_test-d917231d59214722)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 0.00s
+
+     Running tests/storage_redb_proptest.rs (target/debug/deps/storage_redb_proptest-93e538599e5d4dc9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.00s
+
+     Running tests/supervisor_test.rs (target/debug/deps/supervisor_test-e2158c7a3167a7b5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/types_proptest.rs (target/debug/deps/types_proptest-ce5b8ad42fe9cee2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 56 filtered out; finished in 0.00s
+
+     Running tests/write_batching_integration.rs (target/debug/deps/write_batching_integration-8f7a56c5686dd303)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.33s
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.50s

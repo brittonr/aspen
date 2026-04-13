@@ -268,7 +268,7 @@ impl RealClusterTester {
         let mut node = builder.start().await.context("failed to start node")?;
 
         // Spawn the router to enable inter-node communication
-        node.spawn_router();
+        node.spawn_router().unwrap();
 
         info!(
             node_id = node_id,

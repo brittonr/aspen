@@ -124,7 +124,7 @@ async fn create_in_memory_raft_instance(
             raft_config,
             network_factory.as_ref().clone(),
             log_store.as_ref().clone(),
-            state_machine.clone(),
+            InMemoryStateMachine::store(state_machine.clone()),
         )
         .await
         .context("failed to create in-memory Raft instance")?,

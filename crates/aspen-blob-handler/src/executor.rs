@@ -6,6 +6,7 @@
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::ServiceExecutor;
 use async_trait::async_trait;
 
@@ -15,14 +16,12 @@ use async_trait::async_trait;
 /// Delegates to the existing handler functions via a minimal context.
 pub struct BlobServiceExecutor {
     /// Minimal context holding only the deps blob operations need.
-    pub(crate) ctx: aspen_rpc_core::ClientProtocolContext,
+    pub(crate) ctx: ClientProtocolContext,
 }
 
 impl BlobServiceExecutor {
     /// Create a new blob service executor using a pre-built context.
-    ///
-    /// The context should have `blob_store` set; other fields may be None.
-    pub fn new(ctx: aspen_rpc_core::ClientProtocolContext) -> Self {
+    pub fn new(ctx: ClientProtocolContext) -> Self {
         Self { ctx }
     }
 }

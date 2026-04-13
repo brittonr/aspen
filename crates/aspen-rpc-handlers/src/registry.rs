@@ -3,18 +3,16 @@
 //! This module provides a modular handler architecture that decomposes the monolithic
 //! `process_client_request` function into focused, domain-specific handlers.
 //!
-//! # Plugin Architecture
+//! # Assembly
 //!
-//! All handlers self-register using the `inventory` crate via `HandlerFactory`.
-//! The registry collects all registered factories, checks runtime preconditions,
-//! and creates handler instances sorted by priority.
+//! Native handlers are wired here explicitly via `HandlerFactory` statics.
+//! Each factory validates its own capability slice before registration.
 //!
 //! # Hot-Reload
 //!
 //! The handler list is stored behind an [`arc_swap::ArcSwap`] so that WASM plugin
 //! handlers can be atomically replaced at runtime without restarting the node.
-//! Native handlers (registered via `inventory`) are fixed at startup; only the
-//! WASM plugin portion is swappable.
+//! Native handlers are fixed at startup; only the WASM plugin portion is swappable.
 
 use std::sync::Arc;
 
@@ -25,8 +23,6 @@ use aspen_client_api::ClientRpcResponse;
 use aspen_core::app_registry::AppManifest;
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
-// Re-export RequestHandler from aspen-rpc-core for handlers to implement
-pub use aspen_rpc_core::collect_handler_factories;
 use tracing::debug;
 use tracing::info;
 use tracing::trace;
@@ -51,6 +47,134 @@ use crate::proxy::ProxyService;
 /// - Clear error when no handler matches
 /// - Lock-free dispatch via ArcSwap (readers never block)
 /// - Clone-friendly for sharing across async tasks
+#[derive(Clone, Debug, Default)]
+pub struct NativeHandlerPlan {
+    #[cfg(feature = "net")]
+    pub enable_net: bool,
+    #[cfg(feature = "blob")]
+    pub enable_blob: bool,
+    #[cfg(feature = "docs")]
+    pub enable_docs: bool,
+    #[cfg(feature = "forge")]
+    pub enable_forge: bool,
+    #[cfg(feature = "jobs")]
+    pub enable_jobs: bool,
+    #[cfg(feature = "ci")]
+    pub enable_ci: bool,
+    #[cfg(feature = "ci")]
+    pub enable_cache: bool,
+    #[cfg(feature = "secrets")]
+    pub enable_secrets: bool,
+    #[cfg(feature = "snix")]
+    pub enable_snix: bool,
+}
+
+impl NativeHandlerPlan {
+    pub const fn core_only() -> Self {
+        Self {
+            #[cfg(feature = "net")]
+            enable_net: false,
+            #[cfg(feature = "blob")]
+            enable_blob: false,
+            #[cfg(feature = "docs")]
+            enable_docs: false,
+            #[cfg(feature = "forge")]
+            enable_forge: false,
+            #[cfg(feature = "jobs")]
+            enable_jobs: false,
+            #[cfg(feature = "ci")]
+            enable_ci: false,
+            #[cfg(feature = "ci")]
+            enable_cache: false,
+            #[cfg(feature = "secrets")]
+            enable_secrets: false,
+            #[cfg(feature = "snix")]
+            enable_snix: false,
+        }
+    }
+
+    pub fn set_net_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "net")]
+        {
+            self.enable_net = enabled;
+        }
+        #[cfg(not(feature = "net"))]
+        let _ = enabled;
+    }
+
+    pub fn set_blob_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "blob")]
+        {
+            self.enable_blob = enabled;
+        }
+        #[cfg(not(feature = "blob"))]
+        let _ = enabled;
+    }
+
+    pub fn set_docs_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "docs")]
+        {
+            self.enable_docs = enabled;
+        }
+        #[cfg(not(feature = "docs"))]
+        let _ = enabled;
+    }
+
+    pub fn set_forge_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "forge")]
+        {
+            self.enable_forge = enabled;
+        }
+        #[cfg(not(feature = "forge"))]
+        let _ = enabled;
+    }
+
+    pub fn set_jobs_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "jobs")]
+        {
+            self.enable_jobs = enabled;
+        }
+        #[cfg(not(feature = "jobs"))]
+        let _ = enabled;
+    }
+
+    pub fn set_ci_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "ci")]
+        {
+            self.enable_ci = enabled;
+        }
+        #[cfg(not(feature = "ci"))]
+        let _ = enabled;
+    }
+
+    pub fn set_cache_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "ci")]
+        {
+            self.enable_cache = enabled;
+        }
+        #[cfg(not(feature = "ci"))]
+        let _ = enabled;
+    }
+
+    pub fn set_secrets_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "secrets")]
+        {
+            self.enable_secrets = enabled;
+        }
+        #[cfg(not(feature = "secrets"))]
+        let _ = enabled;
+    }
+
+    pub fn set_snix_enabled(&mut self, enabled: bool) {
+        #[cfg(feature = "snix")]
+        {
+            self.enable_snix = enabled;
+        }
+        #[cfg(not(feature = "snix"))]
+        let _ = enabled;
+    }
+}
+
 #[derive(Clone)]
 pub struct HandlerRegistry {
     /// Combined handler list (native + plugin), atomically swappable.
@@ -67,37 +191,114 @@ pub struct HandlerRegistry {
     proxy_service: Option<Arc<ProxyService>>,
 }
 
+static CORE_HANDLER_FACTORY: aspen_core_essentials_handler::CoreHandlerFactory =
+    aspen_core_essentials_handler::CoreHandlerFactory;
+static KV_HANDLER_FACTORY: aspen_core_essentials_handler::KvHandlerFactory =
+    aspen_core_essentials_handler::KvHandlerFactory;
+static CLUSTER_HANDLER_FACTORY: aspen_cluster_handler::ClusterHandlerFactory =
+    aspen_cluster_handler::ClusterHandlerFactory;
+static LEASE_HANDLER_FACTORY: aspen_core_essentials_handler::LeaseHandlerFactory =
+    aspen_core_essentials_handler::LeaseHandlerFactory;
+static WATCH_HANDLER_FACTORY: aspen_core_essentials_handler::WatchHandlerFactory =
+    aspen_core_essentials_handler::WatchHandlerFactory;
+static COORDINATION_HANDLER_FACTORY: aspen_core_essentials_handler::CoordinationHandlerFactory =
+    aspen_core_essentials_handler::CoordinationHandlerFactory;
+#[cfg(feature = "net")]
+static NET_HANDLER_FACTORY: aspen_net::NetHandlerFactory = aspen_net::NetHandlerFactory;
+#[cfg(feature = "blob")]
+static BLOB_HANDLER_FACTORY: aspen_blob_handler::BlobHandlerFactory = aspen_blob_handler::BlobHandlerFactory;
+#[cfg(feature = "docs")]
+static DOCS_HANDLER_FACTORY: aspen_docs_handler::DocsHandlerFactory = aspen_docs_handler::DocsHandlerFactory;
+#[cfg(feature = "forge")]
+static FORGE_HANDLER_FACTORY: aspen_forge_handler::ForgeHandlerFactory = aspen_forge_handler::ForgeHandlerFactory;
+#[cfg(feature = "jobs")]
+static JOB_HANDLER_FACTORY: aspen_job_handler::JobHandlerFactory = aspen_job_handler::JobHandlerFactory;
+#[cfg(feature = "ci")]
+static CI_HANDLER_FACTORY: aspen_ci_handler::CiHandlerFactory = aspen_ci_handler::CiHandlerFactory;
+#[cfg(feature = "secrets")]
+static SECRETS_HANDLER_FACTORY: aspen_secrets_handler::SecretsHandlerFactory =
+    aspen_secrets_handler::SecretsHandlerFactory;
+#[cfg(feature = "snix")]
+static SNIX_HANDLER_FACTORY: aspen_nix_handler::snix_factory::SnixHandlerFactory =
+    aspen_nix_handler::snix_factory::SnixHandlerFactory;
+#[cfg(feature = "ci")]
+static CACHE_HANDLER_FACTORY: aspen_nix_handler::cache_factory::CacheHandlerFactory =
+    aspen_nix_handler::cache_factory::CacheHandlerFactory;
+#[cfg(feature = "ci")]
+static CACHE_MIGRATION_HANDLER_FACTORY: aspen_nix_handler::cache_factory::CacheMigrationHandlerFactory =
+    aspen_nix_handler::cache_factory::CacheMigrationHandlerFactory;
+
+#[allow(unused_mut)]
+fn builtin_handler_factories(_plan: &NativeHandlerPlan) -> Vec<&'static dyn HandlerFactory> {
+    let mut factories: Vec<&'static dyn HandlerFactory> = vec![
+        &CORE_HANDLER_FACTORY,
+        &KV_HANDLER_FACTORY,
+        &CLUSTER_HANDLER_FACTORY,
+        &LEASE_HANDLER_FACTORY,
+        &WATCH_HANDLER_FACTORY,
+        &COORDINATION_HANDLER_FACTORY,
+    ];
+
+    #[cfg(feature = "net")]
+    if _plan.enable_net {
+        factories.push(&NET_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "blob")]
+    if _plan.enable_blob {
+        factories.push(&BLOB_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "docs")]
+    if _plan.enable_docs {
+        factories.push(&DOCS_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "forge")]
+    if _plan.enable_forge {
+        factories.push(&FORGE_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "jobs")]
+    if _plan.enable_jobs {
+        factories.push(&JOB_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "ci")]
+    if _plan.enable_ci {
+        factories.push(&CI_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "ci")]
+    if _plan.enable_cache {
+        factories.push(&CACHE_HANDLER_FACTORY);
+        factories.push(&CACHE_MIGRATION_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "secrets")]
+    if _plan.enable_secrets {
+        factories.push(&SECRETS_HANDLER_FACTORY);
+    }
+    #[cfg(feature = "snix")]
+    if _plan.enable_snix {
+        factories.push(&SNIX_HANDLER_FACTORY);
+    }
+
+    factories
+}
+
 impl HandlerRegistry {
     /// Create a new handler registry with all domain handlers.
     ///
-    /// All handlers self-register via `HandlerFactory` + `submit_handler_factory!`
-    /// and are collected via `inventory`. Each factory's `create()` method checks
-    /// runtime preconditions (e.g., whether required services are available).
-    ///
-    /// Handlers are sorted by priority (lower = checked first) before being stored.
-    pub fn new(ctx: &ClientProtocolContext) -> Self {
+    /// Handler linking stays in `aspen-rpc-handlers`: this crate decides which
+    /// domain factories belong in a given node composition, then each factory
+    /// validates its own capability slice.
+    pub fn new(ctx: &ClientProtocolContext, plan: &NativeHandlerPlan) -> anyhow::Result<Self> {
         // Collect handlers with their priorities for sorting
         let mut handlers_with_priority: Vec<(Arc<dyn RequestHandler>, u32)> = Vec::new();
 
-        // All handlers self-register via submit_handler_factory! and are collected here.
-        // Each factory checks runtime preconditions in create() and returns None if
-        // the handler should not be registered (e.g., required service unavailable).
-        let plugin_factories = collect_handler_factories();
-        for factory in plugin_factories {
-            match factory.create(ctx) {
-                Some(handler) => {
-                    trace!(factory = factory.name(), priority = factory.priority(), "handler registered via inventory");
-                    handlers_with_priority.push((handler, factory.priority()));
+        for factory in builtin_handler_factories(plan) {
+            let handler = factory.create(ctx)?;
+            trace!(factory = factory.name(), priority = factory.priority(), "handler registered via explicit assembly");
+            handlers_with_priority.push((handler, factory.priority()));
 
-                    // Auto-register app capability when handler has an app_id
-                    if let Some(app_id) = factory.app_id() {
-                        let manifest = AppManifest::new(app_id, env!("CARGO_PKG_VERSION"));
-                        ctx.app_registry.register(manifest);
-                    }
-                }
-                None => {
-                    trace!(factory = factory.name(), "handler factory skipped (preconditions not met)");
-                }
+            // Auto-register app capability when handler has an app_id
+            if let Some(app_id) = factory.app_id() {
+                let manifest = AppManifest::new(app_id, env!("CARGO_PKG_VERSION"));
+                ctx.app_registry.register(manifest);
             }
         }
 
@@ -110,13 +311,13 @@ impl HandlerRegistry {
 
         debug!(handler_count = handlers.len(), "handler registry initialized");
 
-        Self {
+        Ok(Self {
             handlers: Arc::new(ArcSwap::from_pointee(handlers)),
             native_handlers: Arc::new(handlers_with_priority),
             #[cfg(feature = "plugins-rpc")]
             plugin_registry: None,
             proxy_service: None,
-        }
+        })
     }
 
     /// Create an empty registry with no handlers.
@@ -600,6 +801,59 @@ mod tests {
             }
             other => panic!("expected CapabilityUnavailable, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn handler_registry_new_with_minimal_context_registers_core_handlers() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(44).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+
+        let registry = HandlerRegistry::new(&ctx, &NativeHandlerPlan::core_only()).expect("core registry should build");
+        let handlers = registry.handlers.load();
+        let names: Vec<_> = handlers.iter().map(|handler| handler.name()).collect();
+
+        assert!(names.contains(&"CoreHandler"));
+        assert!(names.contains(&"KvHandler"));
+        assert!(names.contains(&"ClusterHandler"));
+        assert!(names.contains(&"LeaseHandler"));
+        assert!(names.contains(&"WatchHandler"));
+        assert!(names.contains(&"CoordinationHandler"));
+        assert!(!names.contains(&"ForgeHandler"));
+    }
+
+    #[cfg(feature = "blob")]
+    #[tokio::test]
+    async fn blob_factory_requires_blob_capabilities() {
+        use aspen_blob_handler::BlobHandlerFactory;
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(45).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+
+        let error = match BlobHandlerFactory.create(&ctx) {
+            Ok(_) => panic!("blob handler should require blob_store"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("blob_store"));
+    }
+
+    #[cfg(feature = "blob")]
+    #[tokio::test]
+    async fn handler_registry_declared_blob_plan_requires_context_capability() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(46).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+        let mut plan = NativeHandlerPlan::core_only();
+        plan.set_blob_enabled(true);
+
+        let error = HandlerRegistry::new(&ctx, &plan).expect_err("declared blob plan should require blob_store");
+        assert!(error.to_string().contains("blob_store"));
     }
 
     #[tokio::test]

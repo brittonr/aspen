@@ -8,6 +8,7 @@ mod state_machine;
 
 pub use log_store::InMemoryLogStore;
 pub use state_machine::InMemoryStateMachine;
+pub use state_machine::InMemoryStateMachineStore;
 
 // Re-export StoredSnapshot for use in state_machine submodule
 pub(crate) use super::StoredSnapshot;

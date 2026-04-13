@@ -80,7 +80,9 @@ async fn patchbay_forge_web_all_pages() {
             });
 
             let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
-            let handler = ClientProtocolHandler::new(ctx);
+            let mut plan = aspen::NativeHandlerPlan::core_only();
+            plan.set_forge_enabled(true);
+            let handler = ClientProtocolHandler::new(ctx, plan).expect("client handler should build");
 
             // Register on iroh Router
             let _router = iroh::protocol::Router::builder(ep.clone())
@@ -323,7 +325,9 @@ async fn patchbay_nostr_auth_and_backward_compat() {
                 addr: ep.addr(),
             });
             let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
-            let handler = ClientProtocolHandler::new(ctx);
+            let mut plan = aspen::NativeHandlerPlan::core_only();
+            plan.set_forge_enabled(true);
+            let handler = ClientProtocolHandler::new(ctx, plan).expect("client handler should build");
             let _router = iroh::protocol::Router::builder(ep.clone())
                 .accept(CLIENT_ALPN, handler)
                 .accept(iroh_blobs::ALPN, blobs.protocol_handler())
@@ -468,7 +472,9 @@ async fn patchbay_two_users_distinct_commits() {
                 addr: ep.addr(),
             });
             let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
-            let handler = ClientProtocolHandler::new(ctx);
+            let mut plan = aspen::NativeHandlerPlan::core_only();
+            plan.set_forge_enabled(true);
+            let handler = ClientProtocolHandler::new(ctx, plan).expect("client handler should build");
             let _router = iroh::protocol::Router::builder(ep.clone())
                 .accept(CLIENT_ALPN, handler)
                 .accept(iroh_blobs::ALPN, blobs.protocol_handler())

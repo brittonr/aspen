@@ -59,16 +59,17 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use std::collections::HashMap;
 use std::path::PathBuf;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use std::sync::Arc;
 
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use anyhow::Result;
 // Secrets support — used in create_client_protocol_context (requires full node feature set)
 #[cfg(all(
+    feature = "node-runtime",
     feature = "secrets",
     feature = "jobs",
     feature = "docs",
@@ -76,103 +77,58 @@ use anyhow::Result;
     feature = "federation"
 ))]
 use aspen_rpc_handlers::SecretsService;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use iroh::EndpointAddr;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use iroh::protocol::Router;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use tokio_util::sync::CancellationToken;
 
 pub use self::types::NodeId;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::AuthenticatedRaftProtocolHandler;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::CLIENT_ALPN;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::ClientProtocolContext;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::ClientProtocolHandler;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::RaftProtocolHandler;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::TrustedPeersRegistry;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::api::ClusterController;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::api::KeyValueStore;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::cluster::bootstrap::NodeHandle;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::cluster::bootstrap::bootstrap_node;
 use crate::cluster::config::NodeConfig;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::ClusterIdentity;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::DirectResourceResolver;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::FEDERATION_ALPN;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::FederatedId;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::FederationProtocolHandler;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::FederationResourceResolver;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::FederationSettings;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::TrustManager;
-#[cfg(feature = "federation")]
+#[cfg(all(feature = "node-runtime", feature = "federation"))]
 use crate::cluster::federation::sync::FederationProtocolContext;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::protocol_adapters::EndpointProviderAdapter;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
-
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
-/// Transmute Raft type configuration for transport layer.
-///
-/// # SAFETY
-///
-/// This function performs an unsafe transmute between two openraft::Raft types with
-/// different type configurations. This is safe because:
-///
-/// 1. `aspen_raft::types::AppTypeConfig` and `aspen_transport::rpc::AppTypeConfig` are structurally
-///    identical - both use the same underlying types from aspen-raft-types:
-///    - `AppRequest` for client requests
-///    - `AppResponse` for client responses
-///    - `NodeId` (u64) for node identification
-///    - `RaftMemberInfo` for membership information
-///
-/// 2. This transmute is verified safe at compile time by `static_assertions` in
-///    `aspen_raft::types::_transmute_safety_static_checks`. If the types ever diverge (e.g., due to
-///    a dependency update), compilation will fail immediately.
-///
-/// 3. The openraft::Raft<C> generic only uses C for type parameters in its API, not for any
-///    internal storage layout that would be affected by the type configuration.
-///
-/// # Why This Exists
-///
-/// The transport layer (aspen-transport) needs to send Raft RPCs but uses its own
-/// type configuration to avoid circular dependencies with aspen-raft. Since both
-/// configurations are structurally identical, we can safely transmute between them.
-///
-/// # Tiger Style
-///
-/// This helper consolidates what was duplicate unsafe code in spawn_router() and
-/// spawn_router_with_blobs(). By having a single well-documented transmute point:
-/// - We reduce the surface area for unsafe code
-/// - We ensure the safety justification is documented once, correctly
-/// - We make future audits easier by having one location to verify
-#[inline]
-fn transmute_raft_for_transport(
-    raft: &openraft::Raft<crate::raft::types::AppTypeConfig>,
-) -> openraft::Raft<aspen_transport::rpc::AppTypeConfig> {
-    // SAFETY: See function documentation above. The key guarantees are:
-    // 1. Types are structurally identical (verified by static_assertions)
-    // 2. This is compile-time verified in aspen_raft::types
-    unsafe { std::mem::transmute(raft.clone()) }
-}
 
 /// Builds an Aspen node with full cluster bootstrap.
 ///
@@ -348,7 +304,7 @@ impl NodeBuilder {
     /// # Feature Requirements
     ///
     /// This method requires the `jobs`, `docs`, and `hooks` features to be enabled.
-    #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+    #[cfg(feature = "node-runtime")]
     pub async fn start(self) -> Result<Node> {
         use anyhow::Context;
 
@@ -376,7 +332,7 @@ impl NodeBuilder {
 /// # Feature Requirements
 ///
 /// This struct requires the `jobs`, `docs`, `hooks`, and `federation` features to be enabled.
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 pub struct Node {
     handle: NodeHandle,
     /// Router for handling incoming protocol connections.
@@ -397,7 +353,7 @@ pub struct Node {
     ephemeral_broker: Option<Arc<aspen_hooks::pubsub::EphemeralBroker>>,
 }
 
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 impl Node {
     /// Get the node ID.
     pub fn node_id(&self) -> NodeId {
@@ -506,6 +462,20 @@ impl Node {
     /// This context provides all the dependencies needed by the Client RPC handlers.
     /// Many fields are optional and will be None when the corresponding feature
     /// is not enabled or configured.
+    fn create_native_handler_plan(&self) -> crate::NativeHandlerPlan {
+        let mut plan = crate::NativeHandlerPlan::core_only();
+        plan.set_net_enabled(true);
+        plan.set_blob_enabled(false);
+        plan.set_docs_enabled(false);
+        plan.set_forge_enabled(self.federation_identity.is_some());
+        plan.set_jobs_enabled(false);
+        plan.set_ci_enabled(false);
+        plan.set_cache_enabled(false);
+        plan.set_secrets_enabled(false);
+        plan.set_snix_enabled(true);
+        plan
+    }
+
     fn create_client_protocol_context(&self) -> ClientProtocolContext {
         let raft_node = self.handle.storage.raft_node.clone();
 
@@ -630,12 +600,11 @@ impl Node {
     /// node.spawn_router();
     /// ```
     #[allow(deprecated)] // Legacy method supports both auth and non-auth handlers
-    pub fn spawn_router(&mut self) {
+    pub fn spawn_router(&mut self) -> Result<()> {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;
 
-        // Use helper function to safely transmute Raft type configuration for transport
-        let raft_core_transport = transmute_raft_for_transport(self.handle.storage.raft_node.raft().as_ref());
+        let raft_core_transport = self.handle.storage.raft_node.raft().as_ref().clone();
 
         let mut builder = Router::builder(self.handle.network.iroh_manager.endpoint().clone());
 
@@ -686,7 +655,8 @@ impl Node {
         // Add gossip handler if enabled
         if let Some(gossip) = self.handle.network.iroh_manager.gossip() {
             use iroh_gossip::ALPN as GOSSIP_ALPN;
-            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+            let gossip_handler = gossip.clone();
+            builder = builder.accept(GOSSIP_ALPN, gossip_handler);
             tracing::info!("registered Gossip protocol handler");
         }
 
@@ -697,7 +667,7 @@ impl Node {
             let fed_config = &self.handle.config.federation;
 
             // Load or generate cluster identity
-            let cluster_identity = if let Some(ref key_hex) = fed_config.cluster_key {
+            let cluster_identity = if let Some(key_hex) = fed_config.cluster_key.as_ref() {
                 // Load from config
                 match ClusterIdentity::from_hex_key(key_hex, fed_config.cluster_name.clone()) {
                     Ok(identity) => identity,
@@ -707,7 +677,7 @@ impl Node {
                         // Skip federation registration
                         self.router = Some(builder.spawn());
                         tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
-                        return;
+                        return Ok(());
                     }
                 }
             } else {
@@ -781,7 +751,7 @@ impl Node {
         // Add Client RPC protocol handler.
         // Must come after federation setup so the context captures federation_identity.
         let client_context = self.create_client_protocol_context();
-        let client_handler = ClientProtocolHandler::new(client_context);
+        let client_handler = ClientProtocolHandler::new(client_context, self.create_native_handler_plan())?;
         builder = builder.accept(CLIENT_ALPN, client_handler);
         tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
 
@@ -802,6 +772,7 @@ impl Node {
         // Dropping the Router would shut down protocol handling!
         self.router = Some(builder.spawn());
         tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
+        Ok(())
     }
 
     /// Spawn the Iroh Router with Raft and Blobs protocol handlers.
@@ -822,12 +793,11 @@ impl Node {
     /// ```
     #[cfg(feature = "blob")]
     #[allow(deprecated)] // Legacy method supports both auth and non-auth handlers
-    pub fn spawn_router_with_blobs(&mut self, blobs_handler: iroh_blobs::BlobsProtocol) {
+    pub fn spawn_router_with_blobs(&mut self, blobs_handler: iroh_blobs::BlobsProtocol) -> Result<()> {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;
 
-        // Use helper function to safely transmute Raft type configuration for transport
-        let raft_core_transport = transmute_raft_for_transport(self.handle.storage.raft_node.raft().as_ref());
+        let raft_core_transport = self.handle.storage.raft_node.raft().as_ref().clone();
         let auth_enabled = self.handle.config.iroh.enable_raft_auth;
 
         // Tiger Style: Only clone when auth is enabled (we need raft_core_transport twice).
@@ -870,7 +840,8 @@ impl Node {
         // Add gossip handler if enabled
         if let Some(gossip) = self.handle.network.iroh_manager.gossip() {
             use iroh_gossip::ALPN as GOSSIP_ALPN;
-            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+            let gossip_handler = gossip.clone();
+            builder = builder.accept(GOSSIP_ALPN, gossip_handler);
             tracing::info!("registered Gossip protocol handler");
         }
 
@@ -926,7 +897,7 @@ impl Node {
         // Add Client RPC protocol handler.
         // Must come after federation setup so the context captures federation_identity.
         let client_context = self.create_client_protocol_context();
-        let client_handler = ClientProtocolHandler::new(client_context);
+        let client_handler = ClientProtocolHandler::new(client_context, self.create_native_handler_plan())?;
         builder = builder.accept(CLIENT_ALPN, client_handler);
         tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
 
@@ -949,6 +920,7 @@ impl Node {
         // Spawn the router and store the handle to keep it alive
         self.router = Some(builder.spawn());
         tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching (including blobs)");
+        Ok(())
     }
 
     /// Gracefully shutdown the node.

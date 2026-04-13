@@ -70,9 +70,9 @@ fn test_request_variant_count() {
     let golden = load_golden("request_discriminants.txt");
     assert_eq!(
         golden.len(),
-        345,
+        346,
         "ClientRpcRequest variant count changed! \
-         Expected 345, golden file has {}. \
+         Expected 346, golden file has {}. \
          Update the golden file AND this count.",
         golden.len()
     );
@@ -83,9 +83,9 @@ fn test_response_variant_count() {
     let golden = load_golden("response_discriminants.txt");
     assert_eq!(
         golden.len(),
-        273,
+        274,
         "ClientRpcResponse variant count changed! \
-         Expected 273, golden file has {}. \
+         Expected 274, golden file has {}. \
          Update the golden file AND this count.",
         golden.len()
     );

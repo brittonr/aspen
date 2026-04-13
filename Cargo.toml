@@ -18,8 +18,8 @@ required-features = ["git-bridge"]
 [[bin]]
 name = "aspen-node"
 path = "src/bin/aspen_node/main.rs"
-# Bootstrap module requires blob, docs, jobs, hooks for full cluster initialization
-required-features = ["jobs", "docs", "blob", "hooks", "automerge"]
+# Full node binary needs runtime bootstrap plus blob/automerge subsystems.
+required-features = ["node-runtime", "blob", "automerge"]
 
 [[bin]]
 name = "aspen-generate-schema"
@@ -39,7 +39,7 @@ required-features = ["jobs"]
 [[example]]
 name = "node_service"
 path = "examples/node_service.rs"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 [[example]]
 name = "test_vm_standalone"
@@ -493,12 +493,14 @@ cloud-hypervisor-client = "0.3"
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
 default = []
 
-full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp", "trust"]
+full = ["sql", "blob", "forge", "git-bridge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "node-runtime", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp", "trust"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 testing = ["dep:aspen-testing", "aspen-testing/router"]
-forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge", "blob"]
+forge-core = ["dep:aspen-forge", "aspen-rpc-handlers/forge-core"]
+forge-runtime = ["blob", "aspen-rpc-handlers/forge-runtime"]
+forge = ["forge-core", "forge-runtime"]
 git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql", "aspen-testing?/sql"]
 blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
@@ -513,12 +515,16 @@ bolero = []
 global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
 secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets", "aspen-raft/secrets"]
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
-ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-ci/nix-executor", "aspen-ci/nix-cache", "aspen-client/cache-index", "nix-executor", "jobs", "blob", "forge"]
+ci-core = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci-core", "aspen-client/cache-index", "nix-executor"]
+ci-runtime = ["ci-core", "aspen-rpc-handlers/ci-bundle", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-ci/nix-executor", "aspen-ci/nix-cache", "jobs", "blob", "forge"]
+ci-basic = ["ci-runtime"]
 nix-executor = []  # Marker feature: enables NixBuildWorker registration in aspen-node binary
 ci-vm = ["dep:aspen-ci", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/plugins-vm", "jobs", "blob", "forge"]
 ci = ["ci-basic", "aspen-testing?/ci"]
-hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "jobs"]
-jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs", "aspen-testing?/jobs"]
+hooks-core = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks-core"]
+hooks = ["hooks-core", "jobs"]
+jobs-core = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs-core", "aspen-cluster/jobs-core", "aspen-testing?/jobs"]
+jobs = ["jobs-core", "aspen-rpc-handlers/jobs-runtime", "aspen-cluster/jobs"]
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
 proxy = ["dep:aspen-proxy", "aspen-cluster/proxy"]
 net = ["dep:aspen-net", "proxy", "aspen-rpc-handlers/net"]
@@ -529,6 +535,7 @@ commit-dag = ["kv-branch", "dep:aspen-commit-dag", "aspen-kv-branch/commit-dag"]
 exec-cache = ["dep:aspen-exec-cache"]
 nostr-relay = ["dep:aspen-nostr-relay", "hooks", "aspen-cluster/nostr-relay"]
 federation = ["aspen-cluster/federation"]
+node-runtime = ["jobs", "docs", "hooks", "federation", "aspen-cluster/bootstrap-apps"]
 otlp = ["aspen-cluster/otlp"]
 relay-server = ["aspen-cluster/relay-server"]
 snix = ["dep:aspen-snix", "dep:aspen-castore", "dep:snix-castore", "dep:snix-store", "blob", "aspen-cluster/snix", "aspen-ci?/nix-executor-snix"]
@@ -541,7 +548,7 @@ trust = ["aspen-raft/trust", "aspen-cluster/trust"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"nix-cli-fallback\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge-core\", \"forge-runtime\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci-core\", \"ci-runtime\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"nix-cli-fallback\", \"hooks-core\", \"hooks\", \"jobs-core\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"node-runtime\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
@@ -763,26 +770,26 @@ required-features = ["testing", "simulation"]
 name = "soak_sustained_write_madsim"
 required-features = ["testing", "simulation"]
 
-# Tests using NodeBuilder::start() (needs jobs+docs+hooks+federation)
+# Tests using NodeBuilder::start() (needs runtime bootstrap composition)
 [[test]]
 name = "raft_node_direct_api_test"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "write_batching_integration"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "gossip_e2e_integration"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "multi_node_cluster_test"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "node_builder_integration"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 # Feature-gated crate imports
 [[test]]
@@ -803,7 +810,7 @@ required-features = ["forge"]
 
 [[test]]
 name = "forge_real_cluster_integration_test"
-required-features = ["forge", "blob", "jobs", "docs", "hooks", "federation"]
+required-features = ["forge", "blob", "node-runtime"]
 
 [[test]]
 name = "forge_sync_integration_test"
@@ -819,11 +826,11 @@ required-features = ["federation"]
 
 [[test]]
 name = "consumer_group_integration_test"
-required-features = ["hooks", "jobs", "docs", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "pubsub_integration_test"
-required-features = ["hooks", "jobs", "docs", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "hooks_integration_test"
@@ -831,15 +838,15 @@ required-features = ["hooks"]
 
 [[test]]
 name = "blob_gc_integration_test"
-required-features = ["blob", "jobs", "docs", "hooks", "federation"]
+required-features = ["blob", "node-runtime"]
 
 [[test]]
 name = "blob_replication_integration_test"
-required-features = ["blob", "jobs", "docs", "hooks", "federation"]
+required-features = ["blob", "node-runtime"]
 
 [[test]]
 name = "job_integration_test"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "shell_command_worker_test"
@@ -851,11 +858,11 @@ required-features = ["secrets"]
 
 [[test]]
 name = "fuse_raft_cluster_test"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 [[test]]
 name = "relay_status_test"
-required-features = ["jobs", "docs", "hooks", "federation"]
+required-features = ["node-runtime"]
 
 # Vendored patches: cargo-hyperlight patched to replace --build-plan
 # (removed in Cargo 1.93) with stable --message-format=json.

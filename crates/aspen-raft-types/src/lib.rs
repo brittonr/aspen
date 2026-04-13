@@ -15,9 +15,8 @@
 //!
 //! # AppTypeConfig
 //!
-//! Note: `AppTypeConfig` is NOT defined here due to Rust's orphan rules. The type configuration
-//! must be declared in the crate where openraft traits are implemented. See
-//! `aspen-raft/src/types.rs` for the canonical declaration.
+//! `AppTypeConfig` lives here as the shared leaf type configuration used by
+//! consensus, transport, and router layers.
 //!
 //! # Tiger Style
 //!
@@ -60,15 +59,20 @@ pub use network::ConnectionStatus;
 pub use network::DriftSeverity;
 pub use network::FailureType;
 pub use network::StreamPriority;
+use openraft::declare_raft_types;
 pub use request::AppRequest;
 pub use request::AppResponse;
 pub use request::TrustInitializePayload;
 pub use request::TrustReconfigurationPayload;
 
-// Note: AppTypeConfig is NOT defined here due to Rust's orphan rules.
-// The type configuration must be declared in the crate where openraft traits
-// are implemented. See aspen-raft/src/types.rs for the canonical declaration.
-//
-// aspen-transport has its own identical declaration to avoid circular dependencies
-// (aspen-raft depends on aspen-transport). Code that bridges between them uses
-// safe transmutes with documented SAFETY comments.
+declare_raft_types!(
+    /// Shared OpenRaft type configuration for Aspen.
+    ///
+    /// Kept in the leaf `aspen-raft-types` crate so consensus, transport, and
+    /// router layers all import one source of truth without `unsafe` bridging.
+    pub AppTypeConfig:
+        D = AppRequest,
+        R = AppResponse,
+        NodeId = NodeId,
+        Node = RaftMemberInfo,
+);

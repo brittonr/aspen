@@ -55,14 +55,10 @@ impl Default for BlobHandlerFactory {
 }
 
 impl HandlerFactory for BlobHandlerFactory {
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        // Only create handler if blob store is configured
-        if ctx.blob_store.is_some() {
-            let executor = Arc::new(BlobServiceExecutor::new(ctx.clone()));
-            Some(Arc::new(ServiceHandler::new(executor)))
-        } else {
-            None
-        }
+    fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        let _caps = ctx.blob_handler_context()?;
+        let executor = Arc::new(BlobServiceExecutor::new(ctx.clone()));
+        Ok(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
@@ -75,7 +71,6 @@ impl HandlerFactory for BlobHandlerFactory {
 }
 
 // Self-register via inventory
-aspen_rpc_core::submit_handler_factory!(BlobHandlerFactory);
 
 #[cfg(test)]
 mod tests {

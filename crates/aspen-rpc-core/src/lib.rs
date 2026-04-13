@@ -51,9 +51,6 @@ pub use context::SpanForwarder;
 pub use context::test_support;
 pub use handler::HandlerFactory;
 pub use handler::RequestHandler;
-pub use handler::collect_handler_factories;
-// Re-export inventory for use in submit_handler_factory! macro
-pub use inventory;
 pub use proxy::ProxyConfig;
 pub use service::ServiceExecutor;
 pub use service::ServiceHandler;

@@ -29,7 +29,7 @@ pub use snix::SnixHandler;
 // =============================================================================
 
 #[cfg(feature = "snix")]
-mod snix_factory {
+pub mod snix_factory {
     use std::sync::Arc;
 
     use super::*;
@@ -50,8 +50,8 @@ mod snix_factory {
     }
 
     impl HandlerFactory for SnixHandlerFactory {
-        fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-            Some(Arc::new(SnixHandler))
+        fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+            Ok(Arc::new(SnixHandler))
         }
 
         fn name(&self) -> &'static str {
@@ -66,12 +66,10 @@ mod snix_factory {
             Some("snix")
         }
     }
-
-    aspen_rpc_core::submit_handler_factory!(SnixHandlerFactory);
 }
 
 #[cfg(feature = "cache")]
-mod cache_factory {
+pub mod cache_factory {
     use std::sync::Arc;
 
     use super::*;
@@ -92,8 +90,8 @@ mod cache_factory {
     }
 
     impl HandlerFactory for CacheHandlerFactory {
-        fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-            Some(Arc::new(CacheHandler))
+        fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+            Ok(Arc::new(CacheHandler))
         }
 
         fn name(&self) -> &'static str {
@@ -125,8 +123,8 @@ mod cache_factory {
     }
 
     impl HandlerFactory for CacheMigrationHandlerFactory {
-        fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-            Some(Arc::new(CacheMigrationHandler))
+        fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+            Ok(Arc::new(CacheMigrationHandler))
         }
 
         fn name(&self) -> &'static str {
@@ -141,7 +139,4 @@ mod cache_factory {
             Some("snix")
         }
     }
-
-    aspen_rpc_core::submit_handler_factory!(CacheHandlerFactory);
-    aspen_rpc_core::submit_handler_factory!(CacheMigrationHandlerFactory);
 }

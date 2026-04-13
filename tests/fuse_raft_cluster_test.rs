@@ -74,7 +74,7 @@ async fn test_fuse_mount_with_raft_cluster() {
         .unwrap();
 
     // Register CLIENT_ALPN handler (required for FuseSyncClient)
-    node.spawn_router();
+    node.spawn_router().unwrap();
 
     // Initialize cluster
     let init_request = InitRequest {

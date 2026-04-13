@@ -40,8 +40,5 @@ async-trait = "0.1"
 # Logging
 tracing = "0.1"
 
-# Handler self-registration
-inventory = "0.3"
-
 [features]
 default = []

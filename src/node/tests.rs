@@ -1,6 +1,6 @@
 //! Unit tests for the NodeBuilder.
 
-#[cfg(all(test, feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(all(test, feature = "node-runtime"))]
 use tempfile::TempDir;
 
 #[cfg(test)]
@@ -219,7 +219,7 @@ fn test_nodebuilder_fluent_api_chaining() {
     assert_eq!(builder.config.election_timeout_max_ms, 2000);
 }
 
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 #[tokio::test]
 async fn test_nodebuilder_start_creates_node() {
     let node_id = NodeId::from(1);
@@ -248,6 +248,7 @@ async fn test_nodebuilder_start_creates_node() {
 }
 
 #[cfg(all(
+    feature = "node-runtime",
     feature = "trust",
     feature = "secrets",
     feature = "jobs",
@@ -356,7 +357,7 @@ async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust()
     );
 }
 
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
+#[cfg(feature = "node-runtime")]
 #[tokio::test]
 async fn test_nodebuilder_node_handle_accessors() {
     let node_id = NodeId::from(1);

@@ -62,7 +62,7 @@ async fn create_node(node_id: u64, temp_dir: &TempDir, secret_key: &str) -> Resu
         .await?;
 
     // Spawn the router to enable inter-node communication
-    node.spawn_router();
+    node.spawn_router().unwrap();
 
     Ok(node)
 }

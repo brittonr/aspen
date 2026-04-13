@@ -23,6 +23,8 @@
 | 2026-04-08 | Checked OpenSpec tasks and requested done review without durable repo-backed evidence for each checked box | Before claiming a change is done, add `verification.md` + `evidence/` under the change dir and run `scripts/openspec-preflight.sh <change>` so checked tasks, changed files, and saved transcripts line up |
 | 2026-04-08 | Claimed validation steps (`bash -n`, preflight) in the summary without saving durable artifacts, and the first preflight only checked paths named in `verification.md` | If a validation step is worth mentioning, capture it under `evidence/`. Preflight should also scan git directly for untracked files, not just trust `verification.md` |
 | 2026-04-13 | I assumed `openspec new change <name>` would scaffold proposal/design/tasks/spec placeholders in Aspen, but here it only created `.openspec.yaml` | After creating a change, immediately inspect the new directory. Write `proposal.md`, `design.md`, `tasks.md`, and `specs/.../spec.md` explicitly instead of assuming the CLI made them |
+| 2026-04-13 | I let `ExpungeNode` / `ExpungeNodeResult` land in the middle of `ClientRpcRequest` / `ClientRpcResponse` and "fixed" the fallout by updating goldens, which broke pinned `Pong`/`Error` postcard discriminants | Client RPC wire enums are append-only for new non-gated variants. Never shift existing postcard discriminants; move new variants to the end and keep fixed-value tests green |
+| 2026-04-13 | I added a `forge` slice check for `aspen-rpc-core` and found the crate's `forge` feature exposed `ForgeNode<aspen_blob::IrohBlobStore, ...>` without pulling in `blob` | When a feature-gated type mentions another optional crate in its public fields, make the feature dependency explicit in `[features]` (here `forge-core = ["dep:aspen-forge", "blob"]`) |
 
 ### Struct / API Gotchas
 
@@ -141,6 +143,7 @@
 | 2026-04-13 | Tiger Style scanner treated Rust lifetimes like char literals and counted doc comments as ambient-time code, so `key_manager.rs:get_if_initialized` looked unterminated and `verified/mod.rs` got a fake `Instant::now()` hit | In lightweight Rust scanners, distinguish `'a` / `'_` lifetimes from `'x'` char literals and strip comments before searching for semantic patterns like ambient time |
 | 2026-04-13 | Saved `cargo check -q` transcript for OpenSpec evidence and got an empty file, which looked like missing verification in review | For durable verification artifacts, avoid `-q` or prepend `set -x` so successful commands still leave reviewable output |
 | 2026-04-13 | Picked a secrets-at-rest integration test for direct evidence, but local disk-usage guard tripped before the target logic ran | For trust/secrets verification under tight local resource guards, prefer deterministic helper tests plus targeted hotspot scans over heavy Redb integration tests |
+| 2026-04-13 | Moved `AppTypeConfig` into leaf crate and hit orphan-rule failures only on impls for `Arc<InMemoryStateMachine>` | Shared openraft type configs can live in a leaf crate, but any trait impl whose `Self` type is external (like `Arc<T>`) still needs a local wrapper such as `InMemoryStateMachineStore` |
 
 ### Deploy / Dogfood
 

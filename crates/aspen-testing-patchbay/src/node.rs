@@ -198,9 +198,15 @@ pub async fn bootstrap_node(node_id: NodeId) -> Result<(NodeHandle, impl std::fu
     );
 
     // Create Raft instance
-    let raft = Raft::new(node_id, config, network_factory.clone(), log_store, state_machine.clone())
-        .await
-        .context("failed to create Raft instance")?;
+    let raft = Raft::new(
+        node_id,
+        config,
+        network_factory.clone(),
+        log_store,
+        InMemoryStateMachine::store(state_machine.clone()),
+    )
+    .await
+    .context("failed to create Raft instance")?;
 
     // Start Raft RPC server for incoming connections
     let raft_server = aspen_raft::server::RaftRpcServer::spawn(Arc::new(endpoint.clone()), raft.clone());

@@ -1,7 +1,7 @@
 //! Docs/Sync service for Aspen.
 //!
 //! Provides the `DocsServiceExecutor` for typed RPC dispatch and the
-//! `DocsHandlerFactory` for registering the handler with the RPC framework.
+//! `DocsHandlerFactory` for explicit registry wiring in `aspen-rpc-handlers`.
 //!
 //! Handles docs operations via ClientRpcRequest:
 //! - set/get/delete/list: Document CRUD
@@ -18,12 +18,11 @@ use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::HandlerFactory;
 use aspen_rpc_core::RequestHandler;
 use aspen_rpc_core::ServiceHandler;
-use aspen_rpc_core::submit_handler_factory;
 pub use executor::DocsServiceExecutor;
 
 /// Handler factory for docs service.
 ///
-/// Registers the docs handler with the RPC framework via inventory.
+/// Registered explicitly by `aspen-rpc-handlers::registry`.
 pub struct DocsHandlerFactory;
 
 impl Default for DocsHandlerFactory {
@@ -40,11 +39,10 @@ impl DocsHandlerFactory {
 }
 
 impl HandlerFactory for DocsHandlerFactory {
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        let docs_sync = ctx.docs_sync.as_ref()?.clone();
-        let peer_manager = ctx.peer_manager.clone();
-        let executor = Arc::new(DocsServiceExecutor::new(docs_sync, peer_manager));
-        Some(Arc::new(ServiceHandler::new(executor)))
+    fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        let caps = ctx.docs_handler_context()?;
+        let executor = Arc::new(DocsServiceExecutor::new(caps.docs_sync, caps.peer_manager));
+        Ok(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
@@ -59,5 +57,3 @@ impl HandlerFactory for DocsHandlerFactory {
         Some("docs")
     }
 }
-
-submit_handler_factory!(DocsHandlerFactory);

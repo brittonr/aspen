@@ -1,0 +1,75 @@
+Working tree hotspot line counts
+ 4855 crates/aspen-client-api/src/messages/mod.rs
+  786 crates/aspen-rpc-core/src/context.rs
+  844 crates/aspen-rpc-handlers/src/registry.rs
+  685 crates/aspen-cluster/src/lib.rs
+ 1071 src/bin/aspen_node/setup/client.rs
+  928 src/node/mod.rs
+
+Working tree modularity seams
+
+$ rg -n "transmute_raft_for_transport|unsafe \{ std::mem::transmute|cfg\(feature = "node-runtime"\)" src/node/mod.rs || true
+
+$ rg -n "bootstrap-apps|jobs-core|hooks-core|snix-core|deploy-core" crates/aspen-cluster/Cargo.toml crates/aspen-cluster/src/lib.rs || true
+crates/aspen-cluster/src/lib.rs:127:#[cfg(feature = "bootstrap-apps")]
+crates/aspen-cluster/Cargo.toml:119:jobs-core = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance"]
+crates/aspen-cluster/Cargo.toml:120:jobs = ["jobs-core"]
+crates/aspen-cluster/Cargo.toml:121:hooks-core = ["dep:aspen-hooks", "dep:aspen-cluster-bridges", "aspen-cluster-bridges?/hooks"]
+crates/aspen-cluster/Cargo.toml:122:hooks = ["hooks-core", "jobs"]
+crates/aspen-cluster/Cargo.toml:123:bootstrap-apps = ["blob", "docs", "jobs", "hooks"]
+crates/aspen-cluster/Cargo.toml:127:snix-core = ["dep:aspen-castore"]
+crates/aspen-cluster/Cargo.toml:128:snix = ["snix-core", "blob"]
+crates/aspen-cluster/Cargo.toml:129:deploy-core = ["dep:aspen-deploy"]
+crates/aspen-cluster/Cargo.toml:130:deploy = ["deploy-core", "dep:nix"]
+
+$ rg -n "forge-core|forge-runtime|ci-core|ci-runtime|jobs-core|node-runtime" Cargo.toml crates/aspen-rpc-core/Cargo.toml crates/aspen-rpc-handlers/Cargo.toml || true
+crates/aspen-rpc-core/Cargo.toml:50:forge-core = ["dep:aspen-forge"]
+crates/aspen-rpc-core/Cargo.toml:51:forge-runtime = ["dep:aspen-cluster"]
+crates/aspen-rpc-core/Cargo.toml:52:forge = ["forge-core", "forge-runtime"]
+crates/aspen-rpc-core/Cargo.toml:55:ci-core = ["dep:aspen-ci"]
+crates/aspen-rpc-core/Cargo.toml:56:ci-trigger = ["ci-core", "forge"]
+crates/aspen-rpc-core/Cargo.toml:57:ci = ["ci-core", "ci-trigger"]
+crates/aspen-rpc-core/Cargo.toml:65:jobs-core = ["dep:aspen-jobs"]
+crates/aspen-rpc-core/Cargo.toml:66:jobs = ["jobs-core"]
+crates/aspen-rpc-handlers/Cargo.toml:76:forge-core = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge-core"]
+crates/aspen-rpc-handlers/Cargo.toml:77:forge-runtime = ["aspen-rpc-core/forge-runtime"]
+crates/aspen-rpc-handlers/Cargo.toml:78:forge = ["forge-core", "forge-runtime"]
+crates/aspen-rpc-handlers/Cargo.toml:84:ci-core = ["dep:aspen-ci", "dep:aspen-ci-handler", "aspen-client-api/ci", "aspen-rpc-core/ci-core"]
+crates/aspen-rpc-handlers/Cargo.toml:86:ci-bundle = ["ci-core", "ci-cache", "forge", "aspen-ci-handler/forge", "aspen-ci-handler/blob", "aspen-rpc-core/ci-trigger", "aspen-rpc-core/nickel", "aspen-ci?/nickel"]
+crates/aspen-rpc-handlers/Cargo.toml:91:jobs-core = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs-core"]
+crates/aspen-rpc-handlers/Cargo.toml:93:jobs = ["jobs-core", "jobs-runtime"]
+Cargo.toml:148:    "crates/aspen-ci-core",
+Cargo.toml:310:aspen-ci-core = { path = "crates/aspen-ci-core" }
+Cargo.toml:501:forge-core = ["dep:aspen-forge", "aspen-rpc-handlers/forge-core"]
+Cargo.toml:502:forge-runtime = ["blob", "aspen-rpc-handlers/forge-runtime"]
+Cargo.toml:503:forge = ["forge-core", "forge-runtime"]
+Cargo.toml:518:ci-core = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci-core", "aspen-client/cache-index", "nix-executor"]
+Cargo.toml:519:ci-runtime = ["ci-core", "aspen-rpc-handlers/ci-bundle", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-ci/nix-executor", "aspen-ci/nix-cache", "jobs", "blob", "forge"]
+Cargo.toml:520:ci-basic = ["ci-runtime"]
+Cargo.toml:526:jobs-core = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs-core", "aspen-cluster/jobs-core", "aspen-testing?/jobs"]
+Cargo.toml:527:jobs = ["jobs-core", "aspen-rpc-handlers/jobs-runtime", "aspen-cluster/jobs"]
+Cargo.toml:538:node-runtime = ["jobs", "docs", "hooks", "federation", "aspen-cluster/bootstrap-apps"]
+Cargo.toml:551:unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"blob\", \"forge-core\", \"forge-runtime\", \"forge\", \"git-bridge\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"plugins\", \"plugins-vm\", \"plugins-wasm\", \"plugins-rpc\", \"shell-worker\", \"secrets\", \"automerge\", \"ci-core\", \"ci-runtime\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"snix-http\", \"snix-daemon\", \"snix-eval\", \"snix-build\", \"nix-cli-fallback\", \"hooks-core\", \"hooks\", \"jobs-core\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"node-runtime\", \"proxy\", \"net\", \"relay-server\", \"nix-executor\", \"ci-vm-executor\", \"fuse\", \"deploy\", \"kv-branch\", \"commit-dag\"))"] }
+
+$ rg -n "builtin_handler_factories|handler registered via explicit assembly|blob_handler_context|docs_handler_context|forge_handler_context|ci_handler_context|jobs_handler_context|required_typed_service" crates/aspen-rpc-handlers/src/registry.rs crates/aspen-rpc-core/src/context.rs crates/aspen-blob-handler/src/lib.rs crates/aspen-docs-handler/src/lib.rs crates/aspen-forge-handler/src/lib.rs crates/aspen-ci-handler/src/lib.rs crates/aspen-job-handler/src/lib.rs crates/aspen-secrets-handler/src/lib.rs || true
+crates/aspen-secrets-handler/src/lib.rs:52:        let secrets_service = ctx.required_typed_service::<SecretsService>("secrets_service")?;
+crates/aspen-job-handler/src/lib.rs:38:        let caps = ctx.jobs_handler_context()?;
+crates/aspen-ci-handler/src/lib.rs:74:        let caps = ctx.ci_handler_context()?;
+crates/aspen-forge-handler/src/lib.rs:75:        let caps = ctx.forge_handler_context()?;
+crates/aspen-docs-handler/src/lib.rs:44:        let caps = ctx.docs_handler_context()?;
+crates/aspen-blob-handler/src/lib.rs:59:        let _caps = ctx.blob_handler_context()?;
+crates/aspen-rpc-core/src/context.rs:373:    pub fn blob_handler_context(&self) -> ContextCapabilityResult<BlobHandlerContext> {
+crates/aspen-rpc-core/src/context.rs:385:    pub fn docs_handler_context(&self) -> ContextCapabilityResult<DocsHandlerContext> {
+crates/aspen-rpc-core/src/context.rs:393:    pub fn forge_handler_context(&self) -> ContextCapabilityResult<ForgeHandlerContext> {
+crates/aspen-rpc-core/src/context.rs:411:    pub fn ci_handler_context(&self) -> ContextCapabilityResult<CiHandlerContext> {
+crates/aspen-rpc-core/src/context.rs:435:    pub fn jobs_handler_context(&self) -> ContextCapabilityResult<JobsHandlerContext> {
+crates/aspen-rpc-core/src/context.rs:445:    pub fn required_typed_service<T>(&self, capability: &'static str) -> ContextCapabilityResult<Arc<T>>
+crates/aspen-rpc-handlers/src/registry.rs:106:fn builtin_handler_factories(ctx: &ClientProtocolContext) -> Vec<&'static dyn HandlerFactory> {
+crates/aspen-rpc-handlers/src/registry.rs:164:        for factory in builtin_handler_factories(ctx) {
+crates/aspen-rpc-handlers/src/registry.rs:166:            trace!(factory = factory.name(), priority = factory.priority(), "handler registered via explicit assembly");
+
+$ rg -n "check-cross-crate-boundaries.sh|handler_registry_new_with_minimal_context_registers_core_handlers|blob_factory_requires_blob_capabilities" scripts/check-cross-crate-boundaries.sh crates/aspen-rpc-handlers/src/registry.rs || true
+crates/aspen-rpc-handlers/src/registry.rs:678:    async fn handler_registry_new_with_minimal_context_registers_core_handlers() {
+crates/aspen-rpc-handlers/src/registry.rs:700:    async fn blob_factory_requires_blob_capabilities() {
+scripts/check-cross-crate-boundaries.sh:6:cargo test -p aspen-rpc-handlers handler_registry_new_with_minimal_context_registers_core_handlers -- --nocapture
+scripts/check-cross-crate-boundaries.sh:7:cargo test -p aspen-rpc-handlers --features blob blob_factory_requires_blob_capabilities -- --nocapture

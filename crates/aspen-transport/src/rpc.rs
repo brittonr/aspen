@@ -1,17 +1,12 @@
 //! RPC protocol types for Raft consensus over Iroh transport.
 //!
 //! This module defines the RPC protocol for Raft consensus communication
-//! using IRPC over Iroh QUIC connections. The AppTypeConfig here is identical
-//! to the one in aspen-raft/src/types.rs to avoid circular dependencies.
+//! using IRPC over Iroh QUIC connections.
 //!
-//! **IMPORTANT**: The AppTypeConfig declaration below MUST be kept in sync
-//! with the one in aspen-raft/src/types.rs. Any changes to the type parameters
-//! must be applied to both locations.
+//! Shared Raft type configuration comes from `aspen-raft-types`, so transport
+//! and consensus import one leaf definition.
 
-use aspen_raft_types::AppRequest;
-use aspen_raft_types::AppResponse;
-use aspen_raft_types::NodeId;
-use aspen_raft_types::RaftMemberInfo;
+pub use aspen_raft_types::AppTypeConfig;
 use irpc::channel::oneshot;
 use irpc::rpc_requests;
 use openraft::error::RaftError;
@@ -23,17 +18,6 @@ use openraft::raft::VoteResponse;
 use openraft::type_config::alias::VoteOf;
 use serde::Deserialize;
 use serde::Serialize;
-
-// Declare AppTypeConfig locally to avoid circular dependencies.
-// aspen-transport cannot depend on aspen-raft (would create a cycle).
-// This is structurally identical to aspen-raft/src/types.rs::AppTypeConfig.
-//
-// SAFETY: The transmutes between this AppTypeConfig and aspen_raft::AppTypeConfig
-// are safe because both declarations use identical type parameters from aspen-raft-types.
-// This is verified at compile time by the types in the RPC messages.
-openraft::declare_raft_types!(
-    pub AppTypeConfig: D = AppRequest, R = AppResponse, NodeId = NodeId, Node = RaftMemberInfo,
-);
 
 /// Vote request wrapper for IRPC.
 #[derive(Debug, Clone, Serialize, Deserialize)]

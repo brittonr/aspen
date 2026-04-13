@@ -172,7 +172,7 @@ impl ForgeClusterTester {
             .context("failed to start node")?;
 
         // Spawn the router to enable inter-node communication
-        node.spawn_router();
+        node.spawn_router().unwrap();
 
         info!(
             node_id,

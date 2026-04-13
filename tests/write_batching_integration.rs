@@ -51,7 +51,7 @@ async fn setup_node_with_batching(temp_dir: &TempDir, batch_config: BatchConfig)
         .start()
         .await?;
 
-    node.spawn_router();
+    node.spawn_router().unwrap();
 
     let raft_node = node.raft_node();
     let endpoint_addr = node.endpoint_addr();
@@ -86,7 +86,7 @@ async fn setup_node_without_batching(temp_dir: &TempDir) -> anyhow::Result<Node>
         .start()
         .await?;
 
-    node.spawn_router();
+    node.spawn_router().unwrap();
 
     let raft_node = node.raft_node();
     let endpoint_addr = node.endpoint_addr();

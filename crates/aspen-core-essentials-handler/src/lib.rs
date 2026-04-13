@@ -55,8 +55,8 @@ impl Default for CoreHandlerFactory {
 }
 
 impl HandlerFactory for CoreHandlerFactory {
-    fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        Some(Arc::new(CoreHandler))
+    fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        Ok(Arc::new(CoreHandler))
     }
 
     fn name(&self) -> &'static str {
@@ -87,8 +87,8 @@ impl Default for LeaseHandlerFactory {
 }
 
 impl HandlerFactory for LeaseHandlerFactory {
-    fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        Some(Arc::new(LeaseHandler))
+    fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        Ok(Arc::new(LeaseHandler))
     }
 
     fn name(&self) -> &'static str {
@@ -119,8 +119,8 @@ impl Default for WatchHandlerFactory {
 }
 
 impl HandlerFactory for WatchHandlerFactory {
-    fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        Some(Arc::new(WatchHandler))
+    fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        Ok(Arc::new(WatchHandler))
     }
 
     fn name(&self) -> &'static str {
@@ -153,8 +153,8 @@ impl Default for KvHandlerFactory {
 }
 
 impl HandlerFactory for KvHandlerFactory {
-    fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        Some(Arc::new(KvHandler))
+    fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        Ok(Arc::new(KvHandler))
     }
 
     fn name(&self) -> &'static str {
@@ -188,8 +188,8 @@ impl Default for CoordinationHandlerFactory {
 }
 
 impl HandlerFactory for CoordinationHandlerFactory {
-    fn create(&self, _ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        Some(Arc::new(CoordinationHandler))
+    fn create(&self, _ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        Ok(Arc::new(CoordinationHandler))
     }
 
     fn name(&self) -> &'static str {
@@ -202,8 +202,3 @@ impl HandlerFactory for CoordinationHandlerFactory {
 }
 
 // Self-register via inventory
-aspen_rpc_core::submit_handler_factory!(CoreHandlerFactory);
-aspen_rpc_core::submit_handler_factory!(KvHandlerFactory);
-aspen_rpc_core::submit_handler_factory!(LeaseHandlerFactory);
-aspen_rpc_core::submit_handler_factory!(WatchHandlerFactory);
-aspen_rpc_core::submit_handler_factory!(CoordinationHandlerFactory);

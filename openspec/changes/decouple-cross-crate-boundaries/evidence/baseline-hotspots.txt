@@ -1,0 +1,57 @@
+HEAD baseline hotspot line counts
+ 4855 crates/aspen-client-api/src/messages/mod.rs
+  617 crates/aspen-rpc-core/src/context.rs
+  737 crates/aspen-rpc-handlers/src/registry.rs
+  685 crates/aspen-cluster/src/lib.rs
+ 1071 src/bin/aspen_node/setup/client.rs
+  971 src/node/mod.rs
+
+HEAD unsafe/type-bridge seams
+
+$ git show HEAD:src/node/mod.rs | rg -n "transmute_raft_for_transport|unsafe \{ std::mem::transmute|cfg\(all\(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"\)\)" || true
+168:fn transmute_raft_for_transport(
+174:    unsafe { std::mem::transmute(raft.clone()) }
+638:        let raft_core_transport = transmute_raft_for_transport(self.handle.storage.raft_node.raft().as_ref());
+830:        let raft_core_transport = transmute_raft_for_transport(self.handle.storage.raft_node.raft().as_ref());
+
+$ git show HEAD:crates/aspen-cluster/src/lib.rs | rg -n "bootstrap|cfg\(all\(feature = "blob", feature = "docs", feature = "jobs", feature = "hooks"\)\)" || true
+50://! - **Cluster Tickets**: Compact bootstrap information for joining clusters
+75://!    - Query DNS service for initial bootstrap peers
+128:pub mod bootstrap;
+355:    /// Test relay server access control with empty set allows all (bootstrap mode).
+360:        // Empty set = bootstrap mode, should allow
+
+$ git show HEAD:Cargo.toml | rg -n "^forge|^ci-|^ci =|^jobs =|^hooks =|^node-runtime" || true
+497:forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
+498:ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
+499:ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
+501:forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge", "blob"]
+510:ci-vm-executor = ["aspen-ci/plugins-vm"]
+516:ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-ci/nix-executor", "aspen-ci/nix-cache", "aspen-client/cache-index", "nix-executor", "jobs", "blob", "forge"]
+518:ci-vm = ["dep:aspen-ci", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/plugins-vm", "jobs", "blob", "forge"]
+519:ci = ["ci-basic", "aspen-testing?/ci"]
+520:hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "jobs"]
+521:jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs", "aspen-testing?/jobs"]
+
+$ git show HEAD:crates/aspen-rpc-core/Cargo.toml | rg -n "^forge|^ci|^jobs|^worker|^deploy" || true
+50:forge = ["dep:aspen-forge", "dep:aspen-cluster"]
+52:ci = ["dep:aspen-ci", "forge"]
+56:worker = ["dep:aspen-cluster", "aspen-cluster/jobs"]
+57:deploy = ["dep:aspen-cluster", "aspen-cluster/deploy"]
+58:jobs = ["dep:aspen-jobs"]
+
+$ git show HEAD:crates/aspen-rpc-handlers/Cargo.toml | rg -n "^forge|^ci|^jobs|^deploy|^snix" || true
+76:forge = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge"]
+82:ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-nix-handler", "aspen-nix-handler?/cache", "forge", "aspen-ci-handler/forge", "aspen-ci-handler/blob", "aspen-client-api/ci", "aspen-rpc-core/ci", "aspen-rpc-core/nickel", "aspen-ci?/nickel"]
+83:snix = ["dep:aspen-nix-handler", "aspen-nix-handler?/snix"]
+85:jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]
+88:deploy = ["aspen-cluster-handler/deploy", "aspen-cluster-handler/blob", "aspen-rpc-core/deploy"]
+
+$ git show HEAD:crates/aspen-rpc-handlers/src/registry.rs | rg -n "collect_handler_factories|inventory|handler registered via inventory" || true
+8://! All handlers self-register using the `inventory` crate via `HandlerFactory`.
+16://! Native handlers (registered via `inventory`) are fixed at startup; only the
+29:pub use aspen_rpc_core::collect_handler_factories;
+74:    /// and are collected via `inventory`. Each factory's `create()` method checks
+85:        let plugin_factories = collect_handler_factories();
+89:                    trace!(factory = factory.name(), priority = factory.priority(), "handler registered via inventory");
+125:    /// inventory auto-discovery.

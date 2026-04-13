@@ -70,43 +70,38 @@ impl Default for CiHandlerFactory {
 }
 
 impl HandlerFactory for CiHandlerFactory {
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        // Only create handler if CI orchestrator or trigger service is configured
-        let has_orchestrator = ctx.ci_orchestrator.is_some();
-        let has_trigger = ctx.ci_trigger_service.is_some();
-        if has_orchestrator || has_trigger {
-            // Set up deploy dispatcher on the orchestrator so it can
-            // automatically spawn deploy monitors for both trigger paths
-            // (direct RPC and auto-trigger via gossip).
-            if let Some(ref orchestrator) = ctx.ci_orchestrator {
-                let deploy_dispatcher: Arc<dyn aspen_ci::DeployDispatcher> =
-                    Arc::new(handler::deploy::RpcDeployDispatcher::new(
-                        ctx.kv_store.clone(),
-                        ctx.controller.clone(),
-                        ctx.endpoint_manager.endpoint().clone(),
-                        ctx.node_id,
-                    ));
-                orchestrator.set_deploy_dispatcher(deploy_dispatcher);
+    fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        let caps = ctx.ci_handler_context()?;
 
-                // Set up status reporter so CI writes commit statuses back to Forge
-                let status_reporter: Arc<dyn aspen_ci::StatusReporter> =
-                    Arc::new(aspen_ci::ForgeStatusReporter::new(ctx.kv_store.clone()));
-                orchestrator.set_status_reporter(status_reporter);
-            }
+        // Set up deploy dispatcher on the orchestrator so it can
+        // automatically spawn deploy monitors for both trigger paths
+        // (direct RPC and auto-trigger via gossip).
+        if let Some(ref orchestrator) = caps.ci_orchestrator {
+            let deploy_dispatcher: Arc<dyn aspen_ci::DeployDispatcher> =
+                Arc::new(handler::deploy::RpcDeployDispatcher::new(
+                    caps.kv_store.clone(),
+                    caps.controller.clone(),
+                    caps.endpoint_manager.endpoint().clone(),
+                    caps.node_id,
+                ));
+            orchestrator.set_deploy_dispatcher(deploy_dispatcher);
 
-            let executor = Arc::new(CiServiceExecutor::new(
-                ctx.ci_orchestrator.clone(),
-                ctx.ci_trigger_service.clone(),
-                #[cfg(all(feature = "forge", feature = "blob"))]
-                ctx.forge_node.clone(),
-                #[cfg(feature = "blob")]
-                ctx.blob_store.clone(),
-                ctx.kv_store.clone(),
-            ));
-            Some(Arc::new(ServiceHandler::new(executor)))
-        } else {
-            None
+            // Set up status reporter so CI writes commit statuses back to Forge
+            let status_reporter: Arc<dyn aspen_ci::StatusReporter> =
+                Arc::new(aspen_ci::ForgeStatusReporter::new(caps.kv_store.clone()));
+            orchestrator.set_status_reporter(status_reporter);
         }
+
+        let executor = Arc::new(CiServiceExecutor::new(
+            caps.ci_orchestrator,
+            caps.ci_trigger_service,
+            #[cfg(all(feature = "forge", feature = "blob"))]
+            caps.forge_node,
+            #[cfg(feature = "blob")]
+            caps.blob_store,
+            caps.kv_store,
+        ));
+        Ok(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
@@ -123,7 +118,6 @@ impl HandlerFactory for CiHandlerFactory {
 }
 
 // Self-register via inventory
-aspen_rpc_core::submit_handler_factory!(CiHandlerFactory);
 
 #[cfg(test)]
 mod tests {

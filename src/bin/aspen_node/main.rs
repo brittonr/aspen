@@ -194,17 +194,18 @@ async fn async_main() -> Result<()> {
     // Create shared watch registry for tracking active subscriptions
     let watch_registry: Arc<dyn WatchRegistry> = Arc::new(InMemoryWatchRegistry::new());
 
-    let (_token_verifier, client_context, _worker_service_handle, worker_coordinator) = setup_client_protocol(
-        &args,
-        &config,
-        &node_mode,
-        &controller,
-        &kv_store,
-        &primary_raft_node,
-        &network_factory,
-        watch_registry.clone(),
-    )
-    .await?;
+    let (_token_verifier, client_context, native_handler_plan, _worker_service_handle, worker_coordinator) =
+        setup_client_protocol(
+            &args,
+            &config,
+            &node_mode,
+            &controller,
+            &kv_store,
+            &primary_raft_node,
+            &network_factory,
+            watch_registry.clone(),
+        )
+        .await?;
 
     // Spawn periodic alert evaluator (runs on leader only, skips on followers)
     let alert_eval_config = match args.alert_evaluation_interval {
@@ -292,9 +293,9 @@ async fn async_main() -> Result<()> {
     let dag_sync_handler = client_context.forge_node.as_ref().map(|forge| forge.dag_sync_handler());
 
     #[cfg(feature = "plugins-rpc")]
-    let mut client_handler = ClientProtocolHandler::new(client_context);
+    let mut client_handler = ClientProtocolHandler::new(client_context, native_handler_plan.clone())?;
     #[cfg(not(feature = "plugins-rpc"))]
-    let client_handler = ClientProtocolHandler::new(client_context);
+    let client_handler = ClientProtocolHandler::new(client_context, native_handler_plan)?;
 
     #[cfg(feature = "plugins-rpc")]
     client_handler.load_wasm_plugins().await;

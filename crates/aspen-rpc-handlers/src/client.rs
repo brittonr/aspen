@@ -41,6 +41,7 @@ use tracing::instrument;
 use tracing::warn;
 
 use crate::HandlerRegistry;
+use crate::NativeHandlerPlan;
 use crate::context::ClientProtocolContext;
 use crate::error_sanitization::sanitize_error_for_client;
 
@@ -103,17 +104,17 @@ impl ClientProtocolHandler {
     ///
     /// This constructor logs security warnings if authentication is not properly
     /// configured. Check logs for warnings with target `aspen_rpc::security`.
-    pub fn new(ctx: ClientProtocolContext) -> Self {
+    pub fn new(ctx: ClientProtocolContext, plan: NativeHandlerPlan) -> anyhow::Result<Self> {
         // Log security warnings about auth configuration
         ctx.log_auth_warnings();
 
-        let registry = HandlerRegistry::new(&ctx);
-        Self {
+        let registry = HandlerRegistry::new(&ctx, &plan)?;
+        Ok(Self {
             ctx: Arc::new(ctx),
             connection_semaphore: Arc::new(Semaphore::new(MAX_CLIENT_CONNECTIONS as usize)),
             registry,
             request_counter: AtomicU64::new(0),
-        }
+        })
     }
 
     /// Load WASM handler plugins from the cluster KV store.

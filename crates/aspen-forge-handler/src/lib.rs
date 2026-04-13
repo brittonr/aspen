@@ -14,7 +14,7 @@
 //!        ▼
 //!   HandlerRegistry
 //!        │
-//!        ├──► collect_handler_factories() <── inventory
+//!        ├──► explicit factory list
 //!        │
 //!        ▼
 //!   ForgeHandler (this crate, priority 540)
@@ -49,8 +49,7 @@ pub use executor::ForgeServiceExecutor;
 
 /// Factory for creating `ForgeHandler` instances.
 ///
-/// This factory enables plugin-style registration via the `inventory` crate.
-/// The handler is only created if the `forge_node` is available in the context.
+/// The handler is only created if the `forge_node` capability is available.
 ///
 /// # Priority
 ///
@@ -71,23 +70,23 @@ impl Default for ForgeHandlerFactory {
 }
 
 impl HandlerFactory for ForgeHandlerFactory {
-    fn create(&self, ctx: &ClientProtocolContext) -> Option<Arc<dyn RequestHandler>> {
-        let forge_node = ctx.forge_node.as_ref()?.clone();
+    fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
+        let caps = ctx.forge_handler_context()?;
         let executor = Arc::new(ForgeServiceExecutor::new(
-            forge_node,
+            caps.forge_node,
             #[cfg(feature = "global-discovery")]
-            ctx.content_discovery.clone(),
+            caps.content_discovery,
             #[cfg(feature = "global-discovery")]
-            ctx.federation_discovery.clone(),
-            ctx.federation_identity.clone(),
-            ctx.federation_trust_manager.clone(),
-            ctx.federation_cluster_identity.clone(),
-            ctx.iroh_endpoint.clone(),
+            caps.federation_discovery,
+            caps.federation_identity,
+            caps.federation_trust_manager,
+            caps.federation_cluster_identity,
+            caps.iroh_endpoint,
             #[cfg(all(feature = "hooks", feature = "git-bridge"))]
-            ctx.hook_service.clone(),
-            ctx.node_id,
+            caps.hook_service,
+            caps.node_id,
         ));
-        Some(Arc::new(ServiceHandler::new(executor)))
+        Ok(Arc::new(ServiceHandler::new(executor)))
     }
 
     fn name(&self) -> &'static str {
@@ -104,4 +103,3 @@ impl HandlerFactory for ForgeHandlerFactory {
 }
 
 // Self-register via inventory
-aspen_rpc_core::submit_handler_factory!(ForgeHandlerFactory);

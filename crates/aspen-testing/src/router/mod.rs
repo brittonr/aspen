@@ -113,7 +113,7 @@ impl AspenRouter {
     /// log_store.append([...]).await?;
     ///
     /// let state_machine = InMemoryStateMachine::new();
-    /// router.new_raft_node_with_storage(0, log_store, state_machine).await?;
+    /// router.new_raft_node_with_storage(0, log_store, InMemoryStateMachine::store(state_machine)).await?;
     /// ```
     pub async fn new_raft_node_with_storage(
         &mut self,
@@ -124,9 +124,15 @@ impl AspenRouter {
         let id = id.into();
         let network_factory = InMemoryNetworkFactory::new(id, self.inner.clone());
 
-        let raft = Raft::new(id, self.config.clone(), network_factory, log_store.clone(), state_machine.clone())
-            .await
-            .context("failed to create Raft node")?;
+        let raft = Raft::new(
+            id,
+            self.config.clone(),
+            network_factory,
+            log_store.clone(),
+            InMemoryStateMachine::store(state_machine.clone()),
+        )
+        .await
+        .context("failed to create Raft node")?;
 
         let node = TestNode {
             id,
