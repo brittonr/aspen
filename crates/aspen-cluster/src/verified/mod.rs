@@ -57,7 +57,18 @@ pub use peer::parse_peer_spec;
 // ============================================================================
 // Re-exports: Rate Limiter
 // ============================================================================
+pub use rate_limiter::BucketTransition;
+pub use rate_limiter::GossipAdmissionTransition;
+pub use rate_limiter::PeerRateState;
+pub use rate_limiter::TokenBucketConfig;
+pub use rate_limiter::TokenBucketState;
 pub use rate_limiter::TokenConsumptionResult;
+pub use rate_limiter::TwoTierRateLimitReason;
+pub use rate_limiter::advance_token_bucket;
 pub use rate_limiter::calculate_replenished_tokens;
 pub use rate_limiter::can_consume_token;
+pub use rate_limiter::evaluate_gossip_admission;
+pub use rate_limiter::monotonic_timestamp_ms;
 pub use rate_limiter::should_evict_oldest;
+pub use rate_limiter::try_consume_token_at;
+pub use rate_limiter::update_last_access_ms;

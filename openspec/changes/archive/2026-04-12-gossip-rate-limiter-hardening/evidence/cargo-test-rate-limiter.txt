@@ -1,0 +1,57 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.17s
+     Running unittests src/lib.rs (target/debug/deps/aspen_cluster-95ae1023d4fdbf16)
+
+running 41 tests
+test gossip::rate_limiter::tests::test_rate_limiter_allows_first_messages ... ok
+test gossip::rate_limiter::tests::test_check_at_backward_time_does_not_rewind_lru ... ok
+test gossip::rate_limiter::tests::test_check_at_updates_lru_access_time ... ok
+test gossip::rate_limiter::tests::test_per_peer_rejection_does_not_spend_global_budget ... ok
+test gossip::rate_limiter::tests::test_evict_oldest_removes_least_recent ... ok
+test gossip::rate_limiter::tests::test_rate_limiter_per_peer_independent ... ok
+test gossip::rate_limiter::tests::test_token_bucket_allows_burst ... ok
+test gossip::rate_limiter::tests::test_token_bucket_backward_time_does_not_double_replenish ... ok
+test gossip::rate_limiter::tests::test_rate_limiter_per_peer_limit ... ok
+test gossip::rate_limiter::tests::test_token_bucket_ignores_backward_time ... ok
+test gossip::rate_limiter::tests::test_runtime_wrapper_matches_verified_core_for_backward_timestamps ... ok
+test gossip::rate_limiter::tests::test_token_bucket_replenishes_without_sleep ... ok
+test verified::rate_limiter::tests::test_advance_token_bucket_ignores_backward_time ... ok
+test verified::rate_limiter::tests::test_consume_exact ... ok
+test gossip::rate_limiter::tests::test_runtime_wrapper_matches_verified_core_lru_monotonicity ... ok
+test verified::rate_limiter::tests::test_consume_insufficient ... ok
+test verified::rate_limiter::tests::test_consume_negative ... ok
+test verified::rate_limiter::tests::test_consume_sufficient ... ok
+test verified::rate_limiter::tests::test_consume_zero ... ok
+test verified::rate_limiter::tests::test_evaluate_gossip_admission_consumes_both_budgets_on_success ... ok
+test verified::rate_limiter::tests::test_evaluate_gossip_admission_global_denial_keeps_peer_state_unmodified ... ok
+test verified::rate_limiter::tests::test_evaluate_gossip_admission_preserves_global_budget_on_per_peer_denial ... ok
+test verified::rate_limiter::tests::test_evict_at_capacity ... ok
+test verified::rate_limiter::tests::test_evict_max_values ... ok
+test verified::rate_limiter::tests::test_evict_over_capacity ... ok
+test verified::rate_limiter::tests::test_evict_zero_capacity ... ok
+test verified::rate_limiter::tests::test_is_consumed_helper ... ok
+test verified::rate_limiter::tests::test_monotonic_timestamp_clamps_backward_time ... ok
+test verified::rate_limiter::tests::test_no_evict_empty ... ok
+test verified::rate_limiter::tests::test_no_evict_under_capacity ... ok
+test verified::rate_limiter::tests::test_replenish_caps_at_capacity ... ok
+test verified::rate_limiter::tests::test_replenish_fractional_tokens ... ok
+test verified::rate_limiter::tests::test_replenish_large_elapsed_time ... ok
+test verified::rate_limiter::tests::test_replenish_no_time_elapsed ... ok
+test verified::rate_limiter::tests::test_replenish_one_second ... ok
+test verified::rate_limiter::tests::test_replenish_partial_second ... ok
+test verified::rate_limiter::tests::test_replenish_zero_rate ... ok
+test verified::rate_limiter::tests::test_try_consume_token_at_updates_state ... ok
+test verified::rate_limiter::tests::test_update_last_access_ms_is_monotonic ... ok
+test gossip::rate_limiter::tests::test_rate_limiter_global_limit ... ok
+test gossip::rate_limiter::tests::test_rate_limiter_lru_eviction ... ok
+
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 168 filtered out; finished in 0.02s
