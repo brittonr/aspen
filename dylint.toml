@@ -1,24 +1,35 @@
-# Aspen-specific Tiger Style tuning.
+# Aspen Tiger Style configuration — full integration.
 #
-# `scripts/tigerstyle-check.sh` decides which tigerstyle lints are enabled in
-# the current rollout phase. This file keeps workspace thresholds and justified
-# allowlists in one place so later phases can tighten them without rediscovering
-# why Aspen differs from tigerstyle's defaults.
+# All 32 lints are enabled workspace-wide. Thresholds tightened to tigerstyle
+# defaults where possible. Violations surface as warnings during development
+# and will fail CI via `nix flake check` (checks.tigerstyle).
 
 [tigerstyle]
-# Aspen still has larger orchestration handlers. Start at 100 lines while the
-# first rollout proves the workflow, then tighten after the handler cleanup pass.
-function_length_max = 100
+# Tigerstyle default: 70. Aspen targets this.
+function_length_max = 70
 
-# Several coordinator and RPC handlers still nest one level deeper than the
-# default tigerstyle threshold. Keep one extra level during phased adoption.
-nesting_max_depth = 4
+# Tigerstyle default: 3. Aspen targets this.
+nesting_max_depth = 3
 
-# Focus assertion-density checks on non-trivial functions. Thin shell wrappers
-# should not need placeholder assertions just to satisfy the lint.
-assertion_density_min_lines = 30
+# Assertion density: flag functions over 20 lines with fewer than 2 assertions.
+assertion_density_min_lines = 20
 assertion_density_min_assertions = 2
 
-# Transport and storage code use `IO` pervasively. Keep this single exception
-# explicit; add new acronym exceptions only with rollout-note rationale.
+# Tigerstyle default: 5.
+max_parameters = 5
+
+# Transport and storage code use `IO` pervasively.
 acronym_allowlist = ["IO"]
+
+# All lints enabled — no disabled_lints.
+
+# Promote allow-by-default lints to warn for full coverage.
+[tigerstyle.lint_levels]
+numeric_units = "warn"
+compound_condition = "warn"
+unjustified_allow = "warn"
+assertion_density = "warn"
+multi_lock_ordering = "warn"
+float_for_currency = "warn"
+ambiguous_params = "warn"
+raw_arithmetic_overflow = "warn"

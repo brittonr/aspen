@@ -201,6 +201,12 @@ keywords = ["raft", "consensus"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/databendlabs/openraft"
 
+# cargo-tigerstyle first-class integration
+# Run: cargo tigerstyle check (or scripts/tigerstyle-check.sh)
+[workspace.metadata.tigerstyle]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets"]
+
 # Workspace dependencies shared across all crates
 [workspace.dependencies]
 # Base dependencies

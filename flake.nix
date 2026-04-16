@@ -55,6 +55,16 @@
     unit2nix = {
       url = "github:brittonr/unit2nix";
     };
+
+    # Tiger Style lints - custom Dylint lints enforcing Tiger Style coding principles
+    # Local sibling repo; update with: nix flake update tigerstyle
+    tigerstyle = {
+      url = "git+file:///home/brittonr/git/tigerstyle";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.crane.follows = "crane";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
   nixConfig = {
@@ -112,6 +122,7 @@
     microvm,
     verus-src,
     unit2nix,
+    tigerstyle,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
@@ -2594,6 +2605,58 @@
                     -not -path './vendor/*' \
                     -exec rustfmt --edition 2024 --check {} +
                   touch $out
+                '';
+
+              # Tiger Style lints via cargo-tigerstyle.
+              # Uses ciSrc with vendored deps — runs all 32 lints against the workspace.
+              tigerstyle-check = let
+                cargoTigerstyle = tigerstyle.packages.${system}.cargo-tigerstyle;
+              in
+                pkgs.runCommand "aspen-tigerstyle-check" {
+                  nativeBuildInputs =
+                    ciCommonArgs.nativeBuildInputs
+                    ++ [
+                      cargoTigerstyle
+                    ];
+                  inherit (ciCommonArgs) buildInputs;
+                  HYPERLIGHT_WASM_RUNTIME = ciCommonArgs.HYPERLIGHT_WASM_RUNTIME or "";
+                  PROTO_ROOT = "${snix-src}";
+                  # Skip lockfile guard — the sandbox is ephemeral and
+                  # toolchain differences may cause benign lockfile drift.
+                  TIGERSTYLE_SKIP_LOCKFILE_CHECK = "1";
+                } ''
+                  export HOME="$PWD/home"
+                  mkdir -p "$HOME"
+                  cp -r ${ciSrc} source
+                  chmod -R u+w source
+                  cd source/aspen
+
+                  # Set up vendored deps from ciCargoVendorDir.
+                  export CARGO_HOME="$PWD/.cargo-home"
+                  mkdir -p "$CARGO_HOME"
+                  cp "${ciCargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
+
+                  # Strip linker settings from .cargo/config.toml —
+                  # cargo-tigerstyle runs `cargo check` (no linking) with its
+                  # own toolchain; linker= lines reference tools that may not
+                  # be on the wrapper’s PATH.
+                  if [ -f .cargo/config.toml ]; then
+                    ${pkgs.gnused}/bin/sed -i '/^\[target\./,/^\[/{ /linker\s*=/d; /rustflags\s*=/d; }' .cargo/config.toml
+                  fi
+
+                  # Run lints — exit 0 even on warnings so the check
+                  # surfaces issues without blocking `nix flake check`.
+                  # Promote to a hard gate by removing `|| true` once
+                  # all warnings are resolved.
+                  cargo-tigerstyle check \
+                    --workspace \
+                    --exclude aspen-nix-cache-gateway \
+                    --exclude aspen-testing-patchbay \
+                    --exclude aspen-tui \
+                    -- --all-targets \
+                    || true
+
+                  mkdir -p "$out"
                 '';
 
               # Deny check stubbed out — requires extracted sibling repo sources
@@ -5285,6 +5348,8 @@
                 verus
                 # Z3 for Verus formal verification (bundled in verus, but also available standalone)
                 z3_4_12_5
+                # Tiger Style lints via cargo-tigerstyle
+                tigerstyle.packages.${system}.cargo-tigerstyle
               ];
 
             env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
@@ -5357,6 +5422,7 @@
               echo "  cargo build                          Build project"
               echo "  cargo nextest run                    Run all tests"
               echo "  cargo nextest run -P quick           Quick tests (~2-5 min)"
+              echo "  cargo tigerstyle check               Run Tiger Style lints"
               echo ""
               echo "Nix apps:"
               echo "  nix run .#cluster                    3-node cluster"

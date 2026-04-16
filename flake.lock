@@ -31,6 +31,23 @@
         "type": "github"
       }
     },
+    "dylint-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774225669,
+        "narHash": "sha256-3OkN9IX1ommW6JZlgOOalz8Zx8tQGNgjaM7LVMYFZVg=",
+        "owner": "trailofbits",
+        "repo": "dylint",
+        "rev": "0e0a71eefe6f01563d11acc6e1d7af1d505934a9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "trailofbits",
+        "repo": "dylint",
+        "rev": "0e0a71eefe6f01563d11acc6e1d7af1d505934a9",
+        "type": "github"
+      }
+    },
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
@@ -153,6 +170,7 @@
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay",
         "snix-src": "snix-src",
+        "tigerstyle": "tigerstyle",
         "unit2nix": "unit2nix",
         "verus-src": "verus-src"
       }
@@ -164,11 +182,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1770347142,
-        "narHash": "sha256-uz+ZSqXpXEPtdRPYwvgsum/CfNq7AUQ/0gZHqTigiPM=",
+        "lastModified": 1776350315,
+        "narHash": "sha256-ijD4bgb5Iyap9F3MX73vLAZF/SYu+q7Gd7Ux4cbfCWw=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "2859683cd9ef7858d324c5399b0d8d6652bf4044",
+        "rev": "62e3b8aedabc240e5b0cc9fae003bc9edfebbc9b",
         "type": "github"
       },
       "original": {
@@ -220,6 +238,36 @@
         "owner": "nix-systems",
         "repo": "default",
         "type": "github"
+      }
+    },
+    "tigerstyle": {
+      "inputs": {
+        "crane": [
+          "crane"
+        ],
+        "dylint-src": "dylint-src",
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": [
+          "rust-overlay"
+        ]
+      },
+      "locked": {
+        "lastModified": 1776361478,
+        "narHash": "sha256-vtHWaqyF0KhiGM6thrI5Qmqzwl4fNnWZvOJWK54KsVY=",
+        "ref": "refs/heads/main",
+        "rev": "6ecb71f0f1e6d36c264d4287469081c9e9d31fe7",
+        "revCount": 69,
+        "type": "git",
+        "url": "file:///home/brittonr/git/tigerstyle"
+      },
+      "original": {
+        "type": "git",
+        "url": "file:///home/brittonr/git/tigerstyle"
       }
     },
     "unit2nix": {

@@ -194,23 +194,16 @@ INSTA_UPDATE=always cargo test                     # Auto-accept new snapshots
 # Linting and formatting
 cargo clippy --all-targets -- --deny warnings
 nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)
-# Tiger Style rollout path (current equivalent check path, not a flake check yet):
-# `scripts/tigerstyle-check.sh` wraps `rustup`/`cargo`/`dylint-link`, patches
-# `dylint_driver`, and defaults to the current pilot scope
-# `-p aspen-time -p aspen-hlc -p aspen-core -p aspen-coordination -- --lib`.
-# Current pilot lints: `ambient_clock`, `compound_assertion`,
-# `contradictory_time`, `ignored_result`, and `no_unwrap`.
-# Default pilot should now run clean for those crates. `aspen-time` owns the
-# wall-clock boundary, so direct clock reads there use item-scoped
-# `#[allow(ambient_clock, reason = "...")]`. Elsewhere, route wall-clock reads
-# through explicit boundary helpers like `aspen_time::current_time_ms()` or a
-# local helper with the same justification.
-# Running `scripts/tigerstyle-check.sh` can append a temporary
-# `[[patch.unused]] dylint_driver` stanza to `Cargo.lock`; if that is the only
-# lockfile delta, restore it before review with `git checkout -- Cargo.lock`.
-# First-pass `no_unwrap` inventory over the current pilot lib targets
-# (`aspen-time`, `aspen-hlc`, `aspen-core`, `aspen-coordination`) found zero
-# production call sites; the raw `.unwrap()` / `.expect()` hits there are test-only.
+# Tiger Style: all 32 lints enabled workspace-wide via cargo-tigerstyle.
+# In devShell: `cargo tigerstyle check` runs all lints.
+# CI: `nix flake check` includes `checks.tigerstyle-check`.
+# Script: `scripts/tigerstyle-check.sh` wraps cargo-tigerstyle with fallback.
+# Lint levels and thresholds are configured in `dylint.toml`.
+# Allow-by-default lints are promoted to warn for full coverage.
+# `cargo-tigerstyle` first-class config is in `[workspace.metadata.tigerstyle]`.
+# `aspen-time` owns the wall-clock boundary, so direct clock reads there use
+# item-scoped `#[allow(ambient_clock, reason = "...")]`. Elsewhere, route
+# wall-clock reads through `aspen_time::current_time_ms()` or a local helper.
 # Note: the rustfmt hook runs repo-wide `nix run .#rustfmt`, not file-scoped formatting.
 # Stash or restore unrelated unstaged Rust edits before making a focused commit.
 
