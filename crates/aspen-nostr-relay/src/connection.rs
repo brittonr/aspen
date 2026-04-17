@@ -62,6 +62,7 @@ pub async fn handle_connection<S: NostrEventStore>(
     relay_url: Option<String>,
     rate_limit: Option<(Arc<RateLimiter>, IpAddr)>,
 ) {
+    debug_assert!(!cancel.is_cancelled(), "should not start a cancelled connection handler");
     let (mut ws_tx, mut ws_rx) = ws.split();
     let ctx = ConnectionContext {
         conn_id,

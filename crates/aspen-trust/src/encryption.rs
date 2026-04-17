@@ -94,7 +94,11 @@ impl SecretsEncryption {
         if stored.len() < 13 {
             return Err(EnvelopeError::TooShort { len: stored.len() });
         }
-        let epoch = u64::from_be_bytes(stored[5..13].try_into().expect("8 bytes for u64"));
+        // Safety: len >= 13 checked above, so [5..13] is exactly 8 bytes
+        let epoch_bytes: [u8; 8] = [
+            stored[5], stored[6], stored[7], stored[8], stored[9], stored[10], stored[11], stored[12],
+        ];
+        let epoch = u64::from_be_bytes(epoch_bytes);
         Ok(epoch)
     }
 

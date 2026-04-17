@@ -38,7 +38,7 @@ pub const CONTEXT_RACK_SECRETS: &[u8] = b"aspen-v1-rack-secrets";
 pub fn derive_key(secret: &[u8; 32], context: &[u8], cluster_id: &[u8], epoch: u64) -> [u8; 32] {
     // Build the info parameter: context || cluster_id || epoch (big-endian)
     let epoch_bytes = epoch.to_be_bytes();
-    let info_len = context.len() + cluster_id.len() + epoch_bytes.len();
+    let info_len = context.len().saturating_add(cluster_id.len()).saturating_add(epoch_bytes.len());
     let mut info = Vec::with_capacity(info_len);
     info.extend_from_slice(context);
     info.extend_from_slice(cluster_id);
