@@ -29,9 +29,9 @@ pub fn merge_scan(
     prefix: &str,
     limit_entries: u32,
 ) -> Vec<KeyValueWithRevision> {
-    let limit = usize::try_from(limit_entries).unwrap_or(usize::MAX);
+    let max_results = usize::try_from(limit_entries).unwrap_or(usize::MAX);
     let total_inputs = dirty_sorted.len().saturating_add(parent_entries.len());
-    let mut result = Vec::with_capacity(limit.min(total_inputs));
+    let mut result = Vec::with_capacity(max_results.min(total_inputs));
 
     // Collect tombstoned keys for quick lookup during parent iteration.
     // Also collect branch writes that match the prefix.
@@ -56,7 +56,7 @@ pub fn merge_scan(
     let mut bi = 0; // branch index
     let mut pi = 0; // parent index
 
-    while result.len() < limit && (bi < branch_writes.len() || pi < parent_entries.len()) {
+    while result.len() < max_results && (bi < branch_writes.len() || pi < parent_entries.len()) {
         let take_branch = match (branch_writes.get(bi), parent_entries.get(pi)) {
             (Some((bk, _)), Some(pe)) => {
                 if *bk == pe.key.as_str() {
