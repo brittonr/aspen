@@ -630,7 +630,7 @@ async fn handle_log_subscriber_replay_batch(input: ReplayBatchInput<'_>) -> anyh
         send,
     } = input;
     debug_assert!(subscriber_id > 0, "subscriber_id must be positive during replay batch");
-    debug_assert!(entries.len() <= MAX_HISTORICAL_BATCH_SIZE as usize, "historical replay batch must stay bounded");
+    debug_assert!(entries.len() <= MAX_HISTORICAL_BATCH_SIZE, "historical replay batch must stay bounded");
 
     for entry in entries {
         *current_start = entry.index.saturating_add(1);

@@ -126,15 +126,13 @@ impl KeyValueStore for RaftNode {
                 if let Some(forward_info) = err.forward_to_leader()
                     && let Some(forwarder) = self.write_forwarder()
                     && let Some(leader_id) = forward_info.leader_id
+                    && leader_id != self.node_id()
+                    && let Some(leader_node) = &forward_info.leader_node
                 {
-                    if leader_id != self.node_id()
-                        && let Some(leader_node) = &forward_info.leader_node
-                    {
-                        let leader_addr = leader_node.iroh_addr.clone();
-                        debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
-                        metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
-                        return forwarder.forward_write(leader_id, leader_addr, request).await;
-                    }
+                    let leader_addr = leader_node.iroh_addr.clone();
+                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
+                    metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
+                    return forwarder.forward_write(leader_id, leader_addr, request).await;
                 }
                 Err(map_raft_write_error(err))
             }
@@ -200,24 +198,22 @@ impl KeyValueStore for RaftNode {
                 if let Some(forward_info) = err.forward_to_leader()
                     && let Some(forwarder) = self.write_forwarder()
                     && let Some(leader_id) = forward_info.leader_id
+                    && leader_id != self.node_id()
+                    && let Some(leader_node) = &forward_info.leader_node
                 {
-                    if leader_id != self.node_id()
-                        && let Some(leader_node) = &forward_info.leader_node
-                    {
-                        let leader_addr = leader_node.iroh_addr.clone();
-                        debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding delete to leader");
-                        let write_request = WriteRequest {
-                            command: WriteCommand::Delete {
-                                key: request.key.clone(),
-                            },
-                        };
-                        let _forwarded_write_result =
-                            forwarder.forward_write(leader_id, leader_addr, write_request).await?;
-                        return Ok(DeleteResult {
-                            key: request.key,
-                            is_deleted: true,
-                        });
-                    }
+                    let leader_addr = leader_node.iroh_addr.clone();
+                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding delete to leader");
+                    let write_request = WriteRequest {
+                        command: WriteCommand::Delete {
+                            key: request.key.clone(),
+                        },
+                    };
+                    let _forwarded_write_result =
+                        forwarder.forward_write(leader_id, leader_addr, write_request).await?;
+                    return Ok(DeleteResult {
+                        key: request.key,
+                        is_deleted: true,
+                    });
                 }
                 Err(map_raft_write_error(err))
             }

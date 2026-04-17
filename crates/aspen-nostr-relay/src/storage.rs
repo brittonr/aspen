@@ -206,7 +206,7 @@ impl<S: KeyValueStore + ?Sized> NostrEventStore for KvEventStore<S> {
     }
 
     async fn query_events(&self, filters: &[Filter]) -> Result<Vec<Event>, StorageError> {
-        let mut all_events: Vec<Event> = Vec::new();
+        let mut all_events: Vec<Event> = Vec::with_capacity(filters.len().saturating_mul(16));
         let mut seen_ids: HashSet<String> = HashSet::with_capacity(filters.len().saturating_mul(16));
 
         for filter in filters {
@@ -407,7 +407,7 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
         let candidate_ids = self.scan_candidates(filter).await?;
 
         // Load events and apply full filter matching
-        let mut matched = Vec::new();
+        let mut matched = Vec::with_capacity(candidate_ids.len());
         for id in &candidate_ids {
             if let Some(event) = self.get_event(id).await?
                 && filter.match_event(&event, nostr::filter::MatchEventOptions::default())
@@ -444,7 +444,7 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
 
         // Kind-scoped scan (possibly time-bounded)
         if filter.kinds.is_some() {
-            let mut ids = Vec::new();
+            let mut ids = Vec::with_capacity(ranges.len().saturating_mul(64));
             for range in &ranges {
                 ids.extend(self.scan_index_range(range).await?);
             }
@@ -459,7 +459,7 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
 
         // Author-scoped scan (possibly time-bounded)
         if filter.authors.is_some() {
-            let mut ids = Vec::new();
+            let mut ids = Vec::with_capacity(ranges.len().saturating_mul(64));
             for range in &ranges {
                 ids.extend(self.scan_index_range(range).await?);
             }
@@ -502,7 +502,7 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
         let since_pad = filter.since.map(|t| format!("{:016}", t.as_secs()));
         let until_pad = filter.until.map(|t| format!("{:016}", t.as_secs()));
 
-        let mut ids = Vec::new();
+        let mut ids = Vec::with_capacity(authors.len().saturating_mul(64));
         for author in authors {
             let author_prefix = format!("{}{}:", KV_PREFIX_AUTHOR, author.to_hex());
             let range = crate::filters::bounded_range(&author_prefix, since_pad.as_deref(), until_pad.as_deref());
@@ -523,7 +523,7 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
         };
         let result = self.kv.scan(scan).await.map_err(|e| StorageError::Kv(e.to_string()))?;
 
-        let mut ids = Vec::new();
+        let mut ids = Vec::with_capacity(result.entries.len());
         for entry in &result.entries {
             // Apply end bound if present
             if let Some(ref end) = range.end

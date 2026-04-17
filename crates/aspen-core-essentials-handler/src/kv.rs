@@ -702,7 +702,7 @@ fn handle_index_scan(ctx: &ClientProtocolContext, args: IndexScanArgs) -> anyhow
         }
     };
 
-    debug_assert!(aspen_constants::DEFAULT_SCAN_LIMIT <= aspen_constants::MAX_SCAN_RESULTS);
+    const { assert!(aspen_constants::DEFAULT_SCAN_LIMIT <= aspen_constants::MAX_SCAN_RESULTS) };
     let value_bytes = decode_index_value_bytes(&args.value);
     let max_result_count = args
         .limit_results

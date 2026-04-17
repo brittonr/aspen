@@ -633,15 +633,11 @@ fn parse_narinfo(text: &str) -> Result<NarInfoResponse, String> {
             "FileSize" => {
                 file_size = Some(value.parse::<u64>().ok());
             }
-            "References" => {
-                if !value.is_empty() {
-                    references = value.split_whitespace().map(|s| s.to_string()).collect();
-                }
+            "References" if !value.is_empty() => {
+                references = value.split_whitespace().map(|s| s.to_string()).collect();
             }
-            "Deriver" => {
-                if value != "unknown-deriver" {
-                    deriver = Some(value.to_string());
-                }
+            "Deriver" if value != "unknown-deriver" => {
+                deriver = Some(value.to_string());
             }
             _ => {} // Ignore Sig, CA, System, etc.
         }

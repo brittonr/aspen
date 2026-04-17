@@ -157,18 +157,18 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                                             info
                                         );
                                         // Consume the peeked bytes
-                                        let _ = stream.read(&mut buf).await;
-                                        let _ = stream.write_all(response.as_bytes()).await;
-                                        let _ = stream.shutdown().await;
+                                        drop(stream.read(&mut buf).await);
+                                        drop(stream.write_all(response.as_bytes()).await);
+                                        drop(stream.shutdown().await);
                                         continue;
                                     }
                                     HttpAction::Reject => {
                                         let response = "HTTP/1.1 400 Bad Request\r\n\
                                              Content-Length: 0\r\n\
                                              Connection: close\r\n\r\n";
-                                        let _ = stream.read(&mut buf).await;
-                                        let _ = stream.write_all(response.as_bytes()).await;
-                                        let _ = stream.shutdown().await;
+                                        drop(stream.read(&mut buf).await);
+                                        drop(stream.write_all(response.as_bytes()).await);
+                                        drop(stream.shutdown().await);
                                         continue;
                                     }
                                     HttpAction::WebSocket => {

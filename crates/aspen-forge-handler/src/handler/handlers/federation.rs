@@ -103,6 +103,7 @@ async fn find_mirror_metadata_by_repo_id(forge_node: &ForgeNodeRef, mirror_repo_
     None
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_repo_id_bytes_or_error(repo_id_hex: &str) -> Result<[u8; 32], ClientRpcResponse> {
     let bytes = hex::decode(repo_id_hex)
         .map_err(|e| federation_pull_error(format!("invalid repo_id hex '{}': {}", repo_id_hex, e)))?;

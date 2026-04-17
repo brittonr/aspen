@@ -644,12 +644,12 @@ impl JobWorkerTester {
     }
 
     /// Disconnect a node from the network.
-    pub fn disconnect(&mut self, node_idx: usize) {
+    pub fn disconnect(&mut self, node_idx: u32) {
         self.raft.disconnect(node_idx);
     }
 
     /// Reconnect a node to the network.
-    pub fn connect(&mut self, node_idx: usize) {
+    pub fn connect(&mut self, node_idx: u32) {
         self.raft.connect(node_idx);
     }
 

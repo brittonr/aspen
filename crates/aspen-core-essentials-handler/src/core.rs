@@ -527,7 +527,7 @@ async fn handle_trace_list(
     limit: Option<u32>,
     _continuation_token: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug_assert!(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT <= aspen_constants::MAX_TRACE_QUERY_RESULTS);
+    const { assert!(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT <= aspen_constants::MAX_TRACE_QUERY_RESULTS) };
     let max_result_count = bounded_result_count(limit, ResultLimitBounds {
         default_limit: aspen_constants::DEFAULT_TRACE_QUERY_LIMIT,
         max_limit: aspen_constants::MAX_TRACE_QUERY_RESULTS,
@@ -587,7 +587,7 @@ async fn handle_trace_get(ctx: &ClientProtocolContext, trace_id: String) -> anyh
 }
 
 async fn handle_trace_search(ctx: &ClientProtocolContext, args: TraceSearchArgs) -> anyhow::Result<ClientRpcResponse> {
-    debug_assert!(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT <= aspen_constants::MAX_TRACE_QUERY_RESULTS);
+    const { assert!(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT <= aspen_constants::MAX_TRACE_QUERY_RESULTS) };
     let max_result_count = bounded_result_count(args.limit, ResultLimitBounds {
         default_limit: aspen_constants::DEFAULT_TRACE_QUERY_LIMIT,
         max_limit: aspen_constants::MAX_TRACE_QUERY_RESULTS,
@@ -759,7 +759,7 @@ async fn handle_metric_list(
 }
 
 async fn handle_metric_query(ctx: &ClientProtocolContext, args: MetricQueryArgs) -> anyhow::Result<ClientRpcResponse> {
-    debug_assert!(aspen_constants::DEFAULT_METRIC_QUERY_LIMIT <= aspen_constants::MAX_METRIC_QUERY_RESULTS);
+    const { assert!(aspen_constants::DEFAULT_METRIC_QUERY_LIMIT <= aspen_constants::MAX_METRIC_QUERY_RESULTS) };
     let scan_prefix = format!("_sys:metrics:{}:", args.name);
     let scan_req = ScanRequest {
         prefix: scan_prefix,

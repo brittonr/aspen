@@ -280,7 +280,7 @@ fn builtin_handler_factories(_plan: &NativeHandlerPlan) -> Vec<&'static dyn Hand
     }
 
     debug_assert!(factories.len() >= 6);
-    debug_assert!(factories.iter().all(|factory| factory.priority() <= u32::MAX));
+    debug_assert!(factories.iter().all(|factory| factory.priority() > 0));
     factories
 }
 

@@ -195,7 +195,7 @@ async fn handle_client_connection_inner(
 ) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
 
-    debug_assert!(MAX_CLIENT_STREAMS_PER_CONNECTION > 0);
+    const { assert!(MAX_CLIENT_STREAMS_PER_CONNECTION > 0) };
     debug_assert!(!remote_node_id.as_bytes().is_empty());
     let stream_semaphore = Arc::new(Semaphore::new(usize_from_u32(MAX_CLIENT_STREAMS_PER_CONNECTION)));
     let active_streams = Arc::new(AtomicU32::new(0));
@@ -319,7 +319,7 @@ async fn handle_client_request_check_rate_limit(
         RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
     );
     debug_assert!(!client_request_bucket_key.is_empty());
-    debug_assert!(CLIENT_RPC_BURST > 0);
+    const { assert!(CLIENT_RPC_BURST > 0) };
 
     match request_throttle.try_acquire().await {
         Ok(_) => Ok(true),

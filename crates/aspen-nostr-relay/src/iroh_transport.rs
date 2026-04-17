@@ -119,6 +119,7 @@ struct IrohConnectionContext<S: ?Sized> {
 
 /// Handle a single iroh connection: accept a bidirectional stream and
 /// process length-prefixed Nostr messages.
+#[allow(clippy::too_many_arguments)]
 async fn handle_iroh_connection<S: NostrEventStore>(
     connection: Connection,
     conn_id: u64,

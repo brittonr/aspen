@@ -335,7 +335,7 @@ fn convert_transaction(
     committed_at_ms: u64,
 ) -> Vec<WatchEvent> {
     let mut events = Vec::new();
-    for (op_type, key, value) in success.into_iter().chain(failure.into_iter()) {
+    for (op_type, key, value) in success.into_iter().chain(failure) {
         match op_type {
             0 => {
                 events.push(WatchEvent::Set {

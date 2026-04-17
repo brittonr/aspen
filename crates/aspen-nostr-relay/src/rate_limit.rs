@@ -21,11 +21,20 @@ struct TokenBucket {
     burst: f64,
 }
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "rate limiter measures monotonic elapsed time for token refill"
+)]
+fn monotonic_now() -> Instant {
+    Instant::now()
+}
+
 impl TokenBucket {
     fn new(rate: f64, burst: f64) -> Self {
         Self {
             tokens: burst,
-            last_refill: Instant::now(),
+            last_refill: monotonic_now(),
             rate,
             burst,
         }
@@ -33,7 +42,7 @@ impl TokenBucket {
 
     /// Try to consume one token. Returns `true` if allowed, `false` if rate limited.
     fn try_consume(&mut self) -> bool {
-        let now = Instant::now();
+        let now = monotonic_now();
         let elapsed = now.duration_since(self.last_refill).as_secs_f64();
         self.tokens = (self.tokens + elapsed * self.rate).min(self.burst);
         self.last_refill = now;
@@ -96,7 +105,7 @@ impl RateLimiter {
         if self.ip_rate == 0.0 {
             return true;
         }
-        let now = Instant::now();
+        let now = monotonic_now();
         let ip_rate = self.ip_rate;
         let ip_burst = self.ip_burst;
         let mut entry = self.ip_buckets.entry(addr).or_insert_with(|| BucketEntry {
@@ -112,7 +121,7 @@ impl RateLimiter {
         if self.pubkey_rate == 0.0 {
             return true;
         }
-        let now = Instant::now();
+        let now = monotonic_now();
         let pk_rate = self.pubkey_rate;
         let pk_burst = self.pubkey_burst;
         let mut entry = self.pubkey_buckets.entry(pubkey_hex.to_string()).or_insert_with(|| BucketEntry {
@@ -125,20 +134,20 @@ impl RateLimiter {
 
     /// Spawn a background task that periodically evicts stale buckets.
     pub fn start_cleanup_task(self: &Arc<Self>, cancel: CancellationToken) {
-        let rate_limiter_ref = Arc::clone(self);
+        let cleanup_handle = Arc::clone(self);
         tokio::spawn(async move {
             let sweep_period = std::time::Duration::from_secs(constants::RATE_LIMIT_CLEANUP_INTERVAL_SECS);
             let bucket_ttl = std::time::Duration::from_secs(constants::RATE_LIMIT_BUCKET_TTL_SECS);
             while !cancel.is_cancelled() {
                 tokio::select! {
                     _ = tokio::time::sleep(sweep_period) => {
-                        let now = Instant::now();
-                        let ip_before = rate_limiter_ref.ip_buckets.len();
-                        let pk_before = rate_limiter_ref.pubkey_buckets.len();
-                        rate_limiter_ref.ip_buckets.retain(|_, e| now.duration_since(e.last_access) < bucket_ttl);
-                        rate_limiter_ref.pubkey_buckets.retain(|_, e| now.duration_since(e.last_access) < bucket_ttl);
-                        let ip_evicted = ip_before.saturating_sub(rate_limiter_ref.ip_buckets.len());
-                        let pk_evicted = pk_before.saturating_sub(rate_limiter_ref.pubkey_buckets.len());
+                        let now = monotonic_now();
+                        let ip_before = cleanup_handle.ip_buckets.len();
+                        let pk_before = cleanup_handle.pubkey_buckets.len();
+                        cleanup_handle.ip_buckets.retain(|_, e| now.duration_since(e.last_access) < bucket_ttl);
+                        cleanup_handle.pubkey_buckets.retain(|_, e| now.duration_since(e.last_access) < bucket_ttl);
+                        let ip_evicted = ip_before.saturating_sub(cleanup_handle.ip_buckets.len());
+                        let pk_evicted = pk_before.saturating_sub(cleanup_handle.pubkey_buckets.len());
                         if ip_evicted > 0 || pk_evicted > 0 {
                             debug!(ip_evicted, pk_evicted, "rate limit bucket cleanup");
                         }
