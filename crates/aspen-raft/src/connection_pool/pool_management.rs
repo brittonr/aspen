@@ -23,6 +23,14 @@ use crate::constants::MAX_PEERS;
 use crate::node_failure_detection::ConnectionStatus;
 use crate::types::NodeId;
 
+#[inline]
+fn max_peers_usize() -> usize {
+    match usize::try_from(MAX_PEERS) {
+        Ok(max_peers) => max_peers,
+        Err(_) => usize::MAX,
+    }
+}
+
 impl<T> RaftConnectionPool<T>
 where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
@@ -75,9 +83,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// Check pool capacity before creating a new connection.
     async fn create_connection_check_pool_capacity(&self, node_id: NodeId) -> Result<()> {
         let connections = self.connections.read().await;
-        let is_at_capacity = connections.len() >= MAX_PEERS as usize;
+        let is_pool_full = connections.len() >= max_peers_usize();
         let is_new_key = !connections.contains_key(&node_id);
-        if is_at_capacity && is_new_key {
+        if is_pool_full && is_new_key {
             return Err(anyhow::anyhow!(
                 "connection pool full ({} connections), cannot add node {}",
                 MAX_PEERS,
@@ -192,7 +200,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 
         // Tiger Style: pool size must not exceed MAX_PEERS
         debug_assert!(
-            connections.len() <= MAX_PEERS as usize,
+            connections.len() <= max_peers_usize(),
             "POOL: pool size {} exceeds MAX_PEERS {}",
             connections.len(),
             MAX_PEERS
@@ -220,10 +228,11 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let failure_detector = Arc::clone(&self.failure_detector);
 
         let handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(30));
+            let mut cleanup_timer = tokio::time::interval(Duration::from_secs(30));
 
-            loop {
-                interval.tick().await;
+            for cleanup_iteration in 0..u32::MAX {
+                debug_assert!(cleanup_iteration < u32::MAX, "POOL: cleanup iteration must stay bounded");
+                cleanup_timer.tick().await;
 
                 // Phase 1: Collect connection Arcs under read lock (no awaits)
                 // Tiger Style: Minimize lock hold time by avoiding awaits under lock
@@ -234,7 +243,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 
                 // Phase 2: Check each connection WITHOUT holding the pool lock
                 // This allows other operations to proceed while we await on each connection
-                let mut to_remove = Vec::new();
+                let mut to_remove = Vec::with_capacity(candidates.len());
                 for (node_id, conn) in candidates {
                     let is_idle = conn.is_idle(CONNECTION_IDLE_TIMEOUT).await;
                     let health = conn.health().await;
@@ -291,15 +300,15 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// Returns true if a connection was evicted, false if no connection existed.
     pub async fn evict(&self, node_id: NodeId) -> bool {
         let mut connections = self.connections.write().await;
-        let evicted = connections.remove(&node_id).is_some();
-        if evicted {
+        let is_evicted = connections.remove(&node_id).is_some();
+        if is_evicted {
             info!(
                 %node_id,
                 pool_size = connections.len(),
                 "evicted stale connection from pool (peer address changed)"
             );
         }
-        evicted
+        is_evicted
     }
 
     /// Shutdown the connection pool gracefully.
@@ -336,22 +345,29 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             bulk_streams_opened = bulk_streams_opened.saturating_add(conn.bulk_streams_opened());
 
             match conn.health().await {
-                ConnectionHealth::Healthy => healthy += 1,
-                ConnectionHealth::Degraded { .. } => degraded += 1,
-                ConnectionHealth::Failed => failed += 1,
+                ConnectionHealth::Healthy => {
+                    healthy = healthy.saturating_add(1);
+                }
+                ConnectionHealth::Degraded { .. } => {
+                    degraded = degraded.saturating_add(1);
+                }
+                ConnectionHealth::Failed => {
+                    failed = failed.saturating_add(1);
+                }
             }
         }
 
         let total_connections = connections.len() as u32;
+        let total_health_counts = healthy.saturating_add(degraded).saturating_add(failed);
 
         // Tiger Style: metrics invariants
         debug_assert!(
-            healthy + degraded + failed == total_connections,
+            total_health_counts == total_connections,
             "POOL: health counts ({} + {} + {} = {}) must equal total ({})",
             healthy,
             degraded,
             failed,
-            healthy + degraded + failed,
+            total_health_counts,
             total_connections
         );
         debug_assert!(

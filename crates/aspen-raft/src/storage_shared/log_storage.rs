@@ -19,6 +19,37 @@ use snafu::ResultExt;
 
 use super::*;
 
+#[inline]
+fn max_batch_size_usize() -> usize {
+    match usize::try_from(MAX_BATCH_SIZE) {
+        Ok(max_batch_size) => max_batch_size,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn empty_response() -> AppResponse {
+    AppResponse {
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
 // ====================================================================================
 // RaftLogReader Implementation
 // ====================================================================================
@@ -34,7 +65,7 @@ impl RaftLogReader<AppTypeConfig> for SharedRedbStorage {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(max_batch_size_usize());
         let iter = table.range(range).context(RangeSnafu)?;
 
         let mut prev_index: Option<u64> = None;
@@ -59,7 +90,7 @@ impl RaftLogReader<AppTypeConfig> for SharedRedbStorage {
 
         // Tiger Style: entry count must not exceed batch size limit
         assert!(
-            entries.len() <= MAX_BATCH_SIZE as usize,
+            entries.len() <= max_batch_size_usize(),
             "LOG: fetched {} entries exceeds MAX_BATCH_SIZE {}",
             entries.len(),
             MAX_BATCH_SIZE
@@ -249,10 +280,11 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
         // If truncate_from == 0, log is empty, chain_tip resets to genesis.
         // =========================================================================
         let new_tip = if truncate_from > 0 {
-            self.read_chain_hash_at(truncate_from - 1)?
+            let previous_index = truncate_from.saturating_sub(1);
+            self.read_chain_hash_at(previous_index)?
                 .map(|hash| ChainTipState {
                     hash,
-                    index: truncate_from - 1,
+                    index: previous_index,
                 })
                 .unwrap_or_default()
         } else {
@@ -373,7 +405,7 @@ impl SharedRedbStorage {
         let mut new_tip_hash = prev_hash;
         let mut new_tip_index: u64 = 0;
         let mut has_entries = false;
-        let mut pending_response_batch: Vec<(u64, AppResponse)> = Vec::new();
+        let mut pending_response_batch: Vec<(u64, AppResponse)> = Vec::with_capacity(max_batch_size_usize());
         let mut prev_appended_index: Option<u64> = None;
 
         for entry in entries {
@@ -438,8 +470,10 @@ impl SharedRedbStorage {
         if let Some(prev_idx) = prev_appended_index {
             assert!(index > prev_idx, "APPEND: log index regression: {index} <= {prev_idx}");
         }
-        // Term 0 is valid for the initial membership entry at index 0
-        assert!(term > 0 || index == 0, "APPEND: entry at index {index} has zero term");
+        // Term 0 is valid only for the initial membership entry at index 0.
+        if index > 0 {
+            assert!(term > 0, "APPEND: entry at index {index} has zero term");
+        }
 
         let data = bincode::serialize(entry).context(SerializeSnafu)?;
         let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
@@ -510,9 +544,9 @@ impl SharedRedbStorage {
                 let stored = StoredMembership::new(Some(log_id), membership.clone());
                 let membership_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
                 sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
-                Ok(AppResponse::default())
+                Ok(empty_response())
             }
-            EntryPayload::Blank => Ok(AppResponse::default()),
+            EntryPayload::Blank => Ok(empty_response()),
         }
     }
 
@@ -554,7 +588,7 @@ impl SharedRedbStorage {
         }
 
         assert!(
-            pending_response_batch.len() <= MAX_BATCH_SIZE as usize,
+            pending_response_batch.len() <= max_batch_size_usize(),
             "APPEND: pending response count {} exceeds MAX_BATCH_SIZE {}",
             pending_response_batch.len(),
             MAX_BATCH_SIZE
