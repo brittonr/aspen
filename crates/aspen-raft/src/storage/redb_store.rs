@@ -70,6 +70,29 @@ use crate::integrity::hash_to_hex;
 use crate::integrity::verify_entry_hash;
 use crate::types::AppTypeConfig;
 
+#[inline]
+fn max_batch_size_usize() -> usize {
+    match usize::try_from(MAX_BATCH_SIZE) {
+        Ok(max_batch_size) => max_batch_size,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn inclusive_range_len_usize(range: std::ops::RangeInclusive<u64>) -> usize {
+    let start_index = *range.start();
+    let end_index = *range.end();
+    if end_index < start_index {
+        return 0;
+    }
+
+    let item_count = end_index.saturating_sub(start_index).saturating_add(1);
+    match usize::try_from(item_count) {
+        Ok(item_count_usize) => item_count_usize,
+        Err(_) => max_batch_size_usize(),
+    }
+}
+
 /// Persistent Raft log backed by redb with chain hashing.
 ///
 /// Stores log entries, vote state, committed index, and last purged log id on disk.
@@ -392,7 +415,7 @@ impl RaftLogReader<AppTypeConfig> for RedbLogStore {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(max_batch_size_usize());
         let iter = table.range(range).context(RangeSnafu)?;
 
         for item in iter {
@@ -495,7 +518,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
             // This reduces lock contention and allows redb to optimize bulk inserts
             // Tiger Style: Pre-allocate with MAX_BATCH_SIZE to avoid repeated reallocations
             let mut serialized_entries: Vec<(u64, u64, Vec<u8>, ChainHash)> =
-                Vec::with_capacity(MAX_BATCH_SIZE as usize);
+                Vec::with_capacity(max_batch_size_usize());
 
             for entry in entries {
                 let log_id = entry.log_id();
@@ -573,10 +596,11 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
 
         // Repair chain tip: read hash from entry at (truncate_from - 1)
         let new_tip = if truncate_from > 0 {
-            self.read_chain_hash_at(truncate_from - 1)?
+            let previous_index = truncate_from.saturating_sub(1);
+            self.read_chain_hash_at(previous_index)?
                 .map(|hash| ChainTipState {
                     hash,
-                    index: truncate_from - 1,
+                    index: previous_index,
                 })
                 .unwrap_or_default()
         } else {
@@ -725,7 +749,7 @@ impl RedbLogStore {
         let mut prev_hash = if start_index == 0 || start_index == 1 {
             GENESIS_HASH
         } else {
-            let prev_index = start_index - 1;
+            let prev_index = start_index.saturating_sub(1);
             match hash_table.get(prev_index).context(GetSnafu)? {
                 Some(h) if h.value().len() == 32 => {
                     let mut hash = [0u8; 32];
@@ -826,7 +850,7 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
             let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
             let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
-            let mut entries = Vec::new();
+            let mut entries = Vec::with_capacity(inclusive_range_len_usize(start_index..=actual_end));
             let iter = table.range(start_index..=actual_end).context(RangeSnafu)?;
 
             // Create HLC for historical replay timestamps
