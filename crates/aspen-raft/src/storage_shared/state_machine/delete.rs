@@ -5,6 +5,37 @@ use snafu::ResultExt;
 
 use super::super::*;
 
+#[inline]
+fn empty_response() -> AppResponse {
+    AppResponse {
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
+#[inline]
+fn max_setmulti_keys_usize() -> usize {
+    match usize::try_from(MAX_SETMULTI_KEYS) {
+        Ok(max_keys) => max_keys,
+        Err(_) => usize::MAX,
+    }
+}
+
 impl SharedRedbStorage {
     /// Apply a Delete operation within a transaction.
     pub(in crate::storage_shared) fn apply_delete_in_txn(
@@ -42,12 +73,11 @@ impl SharedRedbStorage {
         }
 
         // Delete the primary KV entry
-        let existed = kv_table.remove(key_bytes).context(RemoveSnafu)?.is_some();
+        let was_deleted = kv_table.remove(key_bytes).context(RemoveSnafu)?.is_some();
 
-        Ok(AppResponse {
-            deleted: Some(existed),
-            ..Default::default()
-        })
+        let mut response = empty_response();
+        response.deleted = Some(was_deleted);
+        Ok(response)
     }
 
     /// Apply a DeleteMulti operation within a transaction.
@@ -57,7 +87,7 @@ impl SharedRedbStorage {
         index_registry: &IndexRegistry,
         keys: &[String],
     ) -> Result<AppResponse, SharedStorageError> {
-        if keys.len() > MAX_SETMULTI_KEYS as usize {
+        if keys.len() > max_setmulti_keys_usize() {
             return Err(SharedStorageError::BatchTooLarge {
                 size: keys.len() as u32,
                 max: MAX_SETMULTI_KEYS,
@@ -67,15 +97,14 @@ impl SharedRedbStorage {
         // Tiger Style: all keys in multi-delete must be non-empty
         debug_assert!(keys.iter().all(|k| !k.is_empty()), "DELETE_MULTI: all keys must be non-empty");
 
-        let mut deleted_any = false;
+        let mut has_deleted_key = false;
         for key in keys {
             let result = Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)?;
-            deleted_any |= result.deleted.unwrap_or(false);
+            has_deleted_key |= result.deleted.unwrap_or(false);
         }
 
-        Ok(AppResponse {
-            deleted: Some(deleted_any),
-            ..Default::default()
-        })
+        let mut response = empty_response();
+        response.deleted = Some(has_deleted_key);
+        Ok(response)
     }
 }
