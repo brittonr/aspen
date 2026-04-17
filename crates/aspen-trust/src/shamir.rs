@@ -129,12 +129,18 @@ pub enum ShamirError {
 /// - `threshold >= 1`
 /// - `threshold <= total`
 /// - `total <= 255` (GF(2^8) has 255 nonzero elements)
+#[allow(unknown_lints)]
+#[allow(
+    ambiguous_params,
+    reason = "threshold and total are well-named Shamir parameters with different semantics"
+)]
 pub fn split_secret<R: Rng>(
     secret: &[u8; SECRET_SIZE],
     threshold: u8,
     total: u8,
     rng: &mut R,
 ) -> Result<Vec<Share>, ShamirError> {
+    debug_assert!(secret.len() == SECRET_SIZE, "secret must be exactly SECRET_SIZE bytes");
     if threshold < 1 {
         return Err(ShamirError::ThresholdTooLow { threshold });
     }
@@ -192,6 +198,7 @@ pub fn split_secret<R: Rng>(
 /// - Duplicate x-coordinates
 /// - Zero x-coordinate
 pub fn reconstruct_secret(shares: &[Share]) -> Result<[u8; SECRET_SIZE], ShamirError> {
+    debug_assert!(shares.iter().all(|s| s.y.len() == SECRET_SIZE), "all shares must be SECRET_SIZE bytes");
     if shares.is_empty() {
         return Err(ShamirError::InsufficientShares { got: 0, threshold: 1 });
     }

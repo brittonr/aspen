@@ -104,6 +104,7 @@ pub async fn read_frame<R: AsyncRead + Unpin>(
     reader: &mut R,
     bytes_received: &mut u64,
 ) -> Result<Option<ReceivedFrame>, ProtocolError> {
+    const { assert!(RESPONSE_FRAME_HEADER_SIZE > 0, "frame header must have nonzero size") };
     // Read 33-byte header
     let mut header_buf = [0u8; RESPONSE_FRAME_HEADER_SIZE];
     match reader.read_exact(&mut header_buf).await {
@@ -189,6 +190,7 @@ where
     W: AsyncWrite + Unpin,
     I: IntoIterator<Item = ([u8; 32], Option<Vec<u8>>)>,
 {
+    const { assert!(RESPONSE_FRAME_HEADER_SIZE == 33, "protocol uses 33-byte frame headers") };
     let mut stats = SyncStats::default();
 
     for (hash, data) in frames {
