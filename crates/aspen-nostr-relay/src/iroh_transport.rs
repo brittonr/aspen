@@ -54,7 +54,9 @@ impl<S: ?Sized> NostrProtocolHandler<S> {
             throttle,
             write_policy,
             relay_url,
-            connection_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_IROH_CONNECTIONS as usize)),
+            connection_semaphore: Arc::new(tokio::sync::Semaphore::new(
+                usize::try_from(MAX_IROH_CONNECTIONS).unwrap_or(usize::MAX),
+            )),
             conn_counter: std::sync::atomic::AtomicU32::new(0),
         }
     }
@@ -199,7 +201,7 @@ async fn push_matching_iroh_event(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let subs = registry.get_connection_subscriptions(conn_id).await;
     for (sub_id, filters) in &subs {
-        let is_match = filters.iter().any(|f| f.match_event(event, MatchEventOptions::default()));
+        let is_match = filters.iter().any(|f| f.match_event(event, MatchEventOptions::new()));
         if is_match {
             let msg = RelayMessage::Event {
                 subscription_id: Cow::Borrowed(sub_id),
@@ -217,6 +219,7 @@ async fn process_message<S: NostrEventStore>(
     ctx: &IrohConnectionContext<S>,
     auth_state: &mut AuthState,
 ) -> Vec<String> {
+    debug_assert!(!text.is_empty(), "empty messages should be filtered before dispatch");
     let client_msg = match ClientMessage::from_json(text) {
         Ok(msg) => msg,
         Err(e) => {
@@ -248,6 +251,7 @@ async fn process_event_message<S: NostrEventStore>(
     ctx: &IrohConnectionContext<S>,
     auth_state: &AuthState,
 ) -> Vec<String> {
+    debug_assert!(!event.id.to_hex().is_empty(), "events must have an ID");
     let event_id = event.id;
 
     // Write policy check (reuses same logic as WebSocket path)
@@ -292,6 +296,7 @@ async fn process_req_message<S: NostrEventStore>(
     filters: Vec<Cow<'_, Filter>>,
     ctx: &IrohConnectionContext<S>,
 ) -> Vec<String> {
+    debug_assert!(!filters.is_empty(), "REQ must include at least one filter per NIP-01");
     let sub_id = subscription_id.into_owned();
     let filters: Vec<Filter> = filters.into_iter().map(|f| f.into_owned()).collect();
 
@@ -363,7 +368,8 @@ pub async fn read_frame(
     if len > MAX_EVENT_SIZE {
         return Err(format!("frame too large: {len} > {MAX_EVENT_SIZE}").into());
     }
-    let mut buf = vec![0u8; len as usize];
+    let buf_len = usize::try_from(len).map_err(|_| std::io::Error::other("frame length exceeds platform capacity"))?;
+    let mut buf = vec![0u8; buf_len];
     recv.read_exact(&mut buf).await?;
     Ok(Some(buf))
 }

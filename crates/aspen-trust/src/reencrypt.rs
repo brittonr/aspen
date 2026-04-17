@@ -84,6 +84,8 @@ pub async fn reencrypt_secrets(
     old_epoch: u64,
     prefix: &str,
 ) -> Result<ReencryptionResult, ReencryptionError> {
+    debug_assert!(old_epoch > 0, "epoch 0 is not a valid trust epoch");
+    debug_assert!(!prefix.is_empty(), "reencryption prefix must not be empty");
     let table_name = prefix;
     let mut keys_reencrypted: u64 = 0;
     let mut keys_skipped: u64 = 0;
@@ -188,7 +190,7 @@ mod tests {
             batch_key_count: u32,
         ) -> Result<Vec<(String, Vec<u8>)>, ReencryptionError> {
             let data = self.data.lock().unwrap();
-            let batch_key_limit = usize::try_from(batch_key_count).unwrap_or(usize::MAX);
+            let batch_limit_keys = usize::try_from(batch_key_count).unwrap_or(usize::MAX);
             let iter = data
                 .iter()
                 .filter(|(k, _)| k.starts_with(prefix))
@@ -196,7 +198,7 @@ mod tests {
                     Some(after) => k.as_str() > after,
                     None => true,
                 })
-                .take(batch_key_limit)
+                .take(batch_limit_keys)
                 .map(|(k, v)| (k.clone(), v.clone()));
             Ok(iter.collect())
         }

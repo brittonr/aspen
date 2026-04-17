@@ -33,7 +33,8 @@ pub fn filter_scan_prefixes(filter: &Filter) -> Vec<String> {
 
     // Tag-scoped scans
     if !filter.generic_tags.is_empty() {
-        let mut prefixes = Vec::new();
+        let tag_count: usize = filter.generic_tags.values().map(|vs| vs.len()).sum();
+        let mut prefixes = Vec::with_capacity(tag_count);
         for (tag, values) in filter.generic_tags.iter() {
             for value in values {
                 prefixes.push(format!("{}{}:{}:", constants::KV_PREFIX_TAG, tag.as_char(), value));
@@ -64,6 +65,7 @@ pub struct ScanRange {
 /// kind and author index scans. Tag and event-ID scans are unaffected
 /// (tags don't embed timestamps; event IDs are direct lookups).
 pub fn filter_scan_ranges(filter: &Filter) -> Vec<ScanRange> {
+    debug_assert!(filter.since.is_none_or(|s| filter.until.is_none_or(|u| s <= u)), "since must not exceed until");
     let since_pad = filter.since.map(|t| format!("{:016}", t.as_secs()));
     let until_pad = filter.until.map(|t| format!("{:016}", t.as_secs()));
 
@@ -102,7 +104,8 @@ pub fn filter_scan_ranges(filter: &Filter) -> Vec<ScanRange> {
 
     // Tag-scoped scans — no timestamp in key, can't bound
     if !filter.generic_tags.is_empty() {
-        let mut ranges = Vec::new();
+        let tag_count: usize = filter.generic_tags.values().map(|vs| vs.len()).sum();
+        let mut ranges = Vec::with_capacity(tag_count);
         for (tag, values) in filter.generic_tags.iter() {
             for value in values {
                 ranges.push(ScanRange {

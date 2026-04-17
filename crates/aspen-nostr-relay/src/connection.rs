@@ -84,19 +84,33 @@ pub async fn handle_connection<S: NostrEventStore>(
         return;
     }
 
+    connection_event_loop(&ctx, &mut ws_rx, &mut ws_tx, &mut event_rx, &cancel, &mut auth_state).await;
+
+    // Cleanup
+    ctx.registry.remove_connection(ctx.conn_id).await;
+    drop(ws_tx.close().await);
+    info!(ctx.conn_id, "nostr client session ended");
+}
+
+/// Run the main select loop: dispatch client messages and broadcast events.
+async fn connection_event_loop<S: NostrEventStore>(
+    ctx: &ConnectionContext<S>,
+    ws_rx: &mut futures::stream::SplitStream<WebSocketStream<TcpStream>>,
+    ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
+    event_rx: &mut broadcast::Receiver<Arc<Event>>,
+    cancel: &tokio_util::sync::CancellationToken,
+    auth_state: &mut AuthState,
+) {
     while !cancel.is_cancelled() {
         tokio::select! {
-            // Client messages
             msg = ws_rx.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        if text.len() > MAX_EVENT_SIZE as usize {
-                            let _ = send_notice(&mut ws_tx, "message too large").await;
+                        if text.len() > usize::try_from(MAX_EVENT_SIZE).unwrap_or(usize::MAX) {
+                            drop(send_notice(ws_tx, "message too large").await);
                             continue;
                         }
-                        if let Err(e) = handle_message(
-                            &text, &ctx, &mut ws_tx, &mut auth_state,
-                        ).await {
+                        if let Err(e) = handle_message(&text, ctx, ws_tx, auth_state).await {
                             warn!(ctx.conn_id, error = %e, "error handling message");
                         }
                     }
@@ -105,23 +119,19 @@ pub async fn handle_connection<S: NostrEventStore>(
                         break;
                     }
                     Some(Ok(Message::Ping(data))) => {
-                        let _ = ws_tx.send(Message::Pong(data)).await;
+                        drop(ws_tx.send(Message::Pong(data)).await);
                     }
-                    Some(Ok(_)) => {} // Binary, Pong, Frame — ignore
+                    Some(Ok(_)) => {}
                     Some(Err(e)) => {
                         debug!(ctx.conn_id, error = %e, "websocket error");
                         break;
                     }
                 }
             }
-
-            // Real-time broadcast events
             event = event_rx.recv() => {
                 match event {
                     Ok(event) => {
-                        if let Err(e) = push_matching_event(
-                            ctx.conn_id, &event, &ctx.registry, &mut ws_tx,
-                        ).await {
+                        if let Err(e) = push_matching_event(ctx.conn_id, &event, &ctx.registry, ws_tx).await {
                             debug!(ctx.conn_id, error = %e, "error pushing event");
                             break;
                         }
@@ -132,19 +142,12 @@ pub async fn handle_connection<S: NostrEventStore>(
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
-
-            // Cancellation
             _ = cancel.cancelled() => {
                 debug!(ctx.conn_id, "connection cancelled");
                 break;
             }
         }
     }
-
-    // Cleanup
-    ctx.registry.remove_connection(ctx.conn_id).await;
-    let _ = ws_tx.close().await;
-    info!(ctx.conn_id, "nostr client session ended");
 }
 
 /// Process a single NIP-01 client message.
@@ -154,6 +157,7 @@ async fn handle_message<S: NostrEventStore>(
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
     auth_state: &mut AuthState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    debug_assert!(!text.is_empty(), "empty messages should be filtered before dispatch");
     let client_msg: ClientMessage<'_> = ClientMessage::from_json(text)?;
 
     match client_msg {
@@ -204,6 +208,7 @@ async fn handle_auth(
     relay_url: Option<&str>,
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    debug_assert!(event.kind == Kind::Custom(22242), "AUTH events must be kind 22242");
     let event_id = event.id;
     let now_secs = Timestamp::now().as_secs();
 
@@ -238,6 +243,7 @@ async fn handle_event<S: NostrEventStore>(
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
     auth_state: &AuthState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    debug_assert!(!event.id.to_hex().is_empty(), "events must have an ID");
     let event_id = event.id;
 
     // Write policy check
@@ -340,6 +346,7 @@ async fn handle_req<S: NostrEventStore>(
     registry: &Arc<SubscriptionRegistry>,
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    debug_assert!(!filters.is_empty(), "REQ must include at least one filter per NIP-01");
     // Register subscription (replaces existing with same ID)
     if let Err(e) = registry.subscribe(conn_id, sub_id.clone(), filters.clone()).await {
         let msg = RelayMessage::Closed {
@@ -385,7 +392,7 @@ async fn push_matching_event(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let subs = registry.get_connection_subscriptions(conn_id).await;
     for (sub_id, filters) in &subs {
-        let is_match = filters.iter().any(|f| f.match_event(event, MatchEventOptions::default()));
+        let is_match = filters.iter().any(|f| f.match_event(event, MatchEventOptions::new()));
         if is_match {
             let msg = RelayMessage::Event {
                 subscription_id: Cow::Borrowed(sub_id),
