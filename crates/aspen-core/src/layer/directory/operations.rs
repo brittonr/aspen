@@ -3,6 +3,16 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+/// Clock boundary: wall-clock milliseconds since Unix epoch.
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "directory creation timestamps need current wall-clock time")]
+fn unix_epoch_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
+}
+
 use snafu::ResultExt;
 
 use super::super::Subspace;
@@ -87,7 +97,7 @@ impl<KV: KeyValueStore + ?Sized> DirectoryLayer<KV> {
         let prefix_int = self.allocator.allocate().await.context(AllocationFailedSnafu)?;
         let prefix = self.allocator.encode_prefix(prefix_int);
 
-        let created_at_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let created_at_ms = unix_epoch_ms();
 
         // Build metadata keys
         let layer_key = self.metadata_key(path, DIR_FIELD_LAYER);
