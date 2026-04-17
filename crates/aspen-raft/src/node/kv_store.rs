@@ -23,6 +23,44 @@ pub fn read_index_retry_success_count() -> u64 {
     READ_INDEX_RETRY_SUCCESS_COUNT.load(Ordering::Relaxed)
 }
 
+#[inline]
+fn duration_ms_u64(duration: Duration) -> u64 {
+    match u64::try_from(duration.as_millis()) {
+        Ok(duration_ms) => duration_ms,
+        Err(_) => u64::MAX,
+    }
+}
+
+#[inline]
+fn saturating_result_count_u32(count_items: usize) -> u32 {
+    match u32::try_from(count_items) {
+        Ok(count_items_u32) => count_items_u32,
+        Err(_) => u32::MAX,
+    }
+}
+
+#[inline]
+fn bounded_scan_limit_items_u32(limit_results: Option<u32>) -> u32 {
+    limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS)
+}
+
+#[inline]
+fn scan_limit_items_usize(limit_items_u32: u32) -> usize {
+    match usize::try_from(limit_items_u32) {
+        Ok(limit_items) => limit_items,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn redb_scan_limit_items_u32(max_results_items: usize) -> u32 {
+    let max_scan_items_u32 = u32::MAX.saturating_sub(1);
+    match u32::try_from(max_results_items) {
+        Ok(max_results_items_u32) => max_results_items_u32.min(max_scan_items_u32),
+        Err(_) => max_scan_items_u32,
+    }
+}
+
 use aspen_constants::api::DEFAULT_SCAN_LIMIT;
 use aspen_constants::api::MAX_SCAN_RESULTS;
 use aspen_core::validate_write_command;
@@ -100,13 +138,15 @@ impl KeyValueStore for RaftNode {
                 if let Some(forward_info) = err.forward_to_leader()
                     && let Some(forwarder) = self.write_forwarder()
                     && let Some(leader_id) = forward_info.leader_id
-                    && leader_id != self.node_id()
-                    && let Some(leader_node) = &forward_info.leader_node
                 {
-                    let leader_addr = leader_node.iroh_addr.clone();
-                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
-                    metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
-                    return forwarder.forward_write(leader_id, leader_addr, request).await;
+                    if leader_id != self.node_id()
+                        && let Some(leader_node) = &forward_info.leader_node
+                    {
+                        let leader_addr = leader_node.iroh_addr.clone();
+                        debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
+                        metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
+                        return forwarder.forward_write(leader_id, leader_addr, request).await;
+                    }
                 }
                 Err(map_raft_write_error(err))
             }
@@ -161,10 +201,10 @@ impl KeyValueStore for RaftNode {
 
         match result {
             Ok(resp) => {
-                let deleted = resp.data.deleted.unwrap_or(false);
+                let is_deleted = resp.data.deleted.unwrap_or(false);
                 Ok(DeleteResult {
                     key: request.key,
-                    is_deleted: deleted,
+                    is_deleted,
                 })
             }
             Err(err) => {
@@ -172,21 +212,24 @@ impl KeyValueStore for RaftNode {
                 if let Some(forward_info) = err.forward_to_leader()
                     && let Some(forwarder) = self.write_forwarder()
                     && let Some(leader_id) = forward_info.leader_id
-                    && leader_id != self.node_id()
-                    && let Some(leader_node) = &forward_info.leader_node
                 {
-                    let leader_addr = leader_node.iroh_addr.clone();
-                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding delete to leader");
-                    let write_request = WriteRequest {
-                        command: WriteCommand::Delete {
-                            key: request.key.clone(),
-                        },
-                    };
-                    let _write_result = forwarder.forward_write(leader_id, leader_addr, write_request).await?;
-                    return Ok(DeleteResult {
-                        key: request.key,
-                        is_deleted: true,
-                    });
+                    if leader_id != self.node_id()
+                        && let Some(leader_node) = &forward_info.leader_node
+                    {
+                        let leader_addr = leader_node.iroh_addr.clone();
+                        debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding delete to leader");
+                        let write_request = WriteRequest {
+                            command: WriteCommand::Delete {
+                                key: request.key.clone(),
+                            },
+                        };
+                        let _forwarded_write_result =
+                            forwarder.forward_write(leader_id, leader_addr, write_request).await?;
+                        return Ok(DeleteResult {
+                            key: request.key,
+                            is_deleted: true,
+                        });
+                    }
                 }
                 Err(map_raft_write_error(err))
             }
@@ -218,20 +261,21 @@ impl KeyValueStore for RaftNode {
         }
 
         // Apply default limit if not specified
-        let limit = _request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+        let max_results_items_u32 = bounded_scan_limit_items_u32(_request.limit_results);
+        let max_results_items = scan_limit_items_usize(max_results_items_u32);
 
         // Tiger Style: scan limit must be bounded
         assert!(
-            limit <= MAX_SCAN_RESULTS as usize,
-            "SCAN: computed limit {} exceeds MAX_SCAN_RESULTS {}",
-            limit,
+            max_results_items_u32 <= MAX_SCAN_RESULTS,
+            "SCAN: computed max_results_items_u32 {} exceeds MAX_SCAN_RESULTS {}",
+            max_results_items_u32,
             MAX_SCAN_RESULTS
         );
 
         // Scan from appropriate state machine backend
         match self.state_machine() {
-            StateMachineVariant::InMemory(sm) => self.scan_from_inmemory(sm, &_request, limit).await,
-            StateMachineVariant::Redb(sm) => self.scan_from_redb(sm, &_request, limit),
+            StateMachineVariant::InMemory(sm) => self.scan_from_inmemory(sm, &_request, max_results_items).await,
+            StateMachineVariant::Redb(sm) => self.scan_from_redb(sm, &_request, max_results_items),
         }
     }
 
@@ -258,20 +302,21 @@ impl KeyValueStore for RaftNode {
         // without contacting the leader.
 
         // Apply default limit if not specified
-        let limit = request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+        let max_results_items_u32 = bounded_scan_limit_items_u32(request.limit_results);
+        let max_results_items = scan_limit_items_usize(max_results_items_u32);
 
         // Tiger Style: scan limit must be bounded
         assert!(
-            limit <= MAX_SCAN_RESULTS as usize,
-            "SCAN_LOCAL: computed limit {} exceeds MAX_SCAN_RESULTS {}",
-            limit,
+            max_results_items_u32 <= MAX_SCAN_RESULTS,
+            "SCAN_LOCAL: computed max_results_items_u32 {} exceeds MAX_SCAN_RESULTS {}",
+            max_results_items_u32,
             MAX_SCAN_RESULTS
         );
 
         // Scan from appropriate state machine backend
         match self.state_machine() {
-            StateMachineVariant::InMemory(sm) => self.scan_from_inmemory(sm, &request, limit).await,
-            StateMachineVariant::Redb(sm) => self.scan_from_redb(sm, &request, limit),
+            StateMachineVariant::InMemory(sm) => self.scan_from_inmemory(sm, &request, max_results_items).await,
+            StateMachineVariant::Redb(sm) => self.scan_from_redb(sm, &request, max_results_items),
         }
     }
 }
@@ -306,7 +351,7 @@ impl RaftNode {
         let linearizer = tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft().get_read_linearizer(policy))
             .await
             .map_err(|_| KeyValueStoreError::Timeout {
-                duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+                duration_ms: duration_ms_u64(READ_INDEX_TIMEOUT),
             })?
             .map_err(|err| {
                 let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
@@ -320,7 +365,7 @@ impl RaftNode {
         tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(self.raft()))
             .await
             .map_err(|_| KeyValueStoreError::Timeout {
-                duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+                duration_ms: duration_ms_u64(READ_INDEX_TIMEOUT),
             })?
             .map_err(|err| {
                 let leader_hint = self.raft().metrics().borrow().current_leader.map(|id| id.0);
@@ -429,14 +474,15 @@ impl RaftNode {
                     let should_retry =
                         should_retry_read_index(current_leader, self.node_id().0, last_log_index, committed_index);
 
-                    if should_retry && attempt + 1 < READ_INDEX_MAX_RETRIES {
+                    let next_attempt = attempt.saturating_add(1);
+                    if should_retry && next_attempt < READ_INDEX_MAX_RETRIES {
                         READ_INDEX_RETRY_COUNT.fetch_add(1, Ordering::Relaxed);
                         // Jittered backoff: random between base and 2*base
                         let jitter = rand::random_range(0..=READ_INDEX_RETRY_BASE_MS);
-                        let backoff_ms = READ_INDEX_RETRY_BASE_MS + jitter;
+                        let backoff_ms = READ_INDEX_RETRY_BASE_MS.saturating_add(jitter);
                         debug!(
                             node_id = self.node_id().0,
-                            attempt = attempt + 1,
+                            attempt = next_attempt,
                             backoff_ms,
                             log_gap = last_log_index.saturating_sub(committed_index),
                             label,
@@ -461,7 +507,7 @@ impl RaftNode {
         &self,
         sm: &std::sync::Arc<crate::InMemoryStateMachine>,
         request: &ScanRequest,
-        limit: usize,
+        max_results_items: usize,
     ) -> Result<ScanResult, KeyValueStoreError> {
         // Get all KV pairs matching prefix
         let all_pairs = sm.scan_kv_with_prefix_async(&request.prefix).await;
@@ -472,10 +518,10 @@ impl RaftNode {
             all_pairs.into_iter().filter(|(k, _)| start_key.is_none_or(|start| k.as_str() > start)).collect();
 
         // Take limit+1 to check if there are more results
-        let is_truncated = filtered.len() > limit;
+        let is_truncated = filtered.len() > max_results_items;
         let entries: Vec<KeyValueWithRevision> = filtered
             .into_iter()
-            .take(limit)
+            .take(max_results_items)
             .map(|(key, value)| KeyValueWithRevision {
                 key,
                 value,
@@ -492,7 +538,7 @@ impl RaftNode {
         };
 
         Ok(ScanResult {
-            result_count: entries.len() as u32,
+            result_count: saturating_result_count_u32(entries.len()),
             entries,
             is_truncated,
             continuation_token,
@@ -504,14 +550,14 @@ impl RaftNode {
         &self,
         sm: &crate::SharedRedbStorage,
         request: &ScanRequest,
-        limit: usize,
+        max_results_items: usize,
     ) -> Result<ScanResult, KeyValueStoreError> {
         let start_key = request.continuation_token.as_deref();
-        let limit_u32 = limit.min(u32::MAX as usize - 1) as u32;
-        match sm.scan(&request.prefix, start_key, Some(limit_u32 + 1)) {
+        let max_redb_scan_items = redb_scan_limit_items_u32(max_results_items);
+        match sm.scan(&request.prefix, start_key, Some(max_redb_scan_items.saturating_add(1))) {
             Ok(entries_full) => {
-                let is_truncated = entries_full.len() > limit;
-                let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(limit).collect();
+                let is_truncated = entries_full.len() > max_results_items;
+                let entries: Vec<KeyValueWithRevision> = entries_full.into_iter().take(max_results_items).collect();
 
                 let continuation_token = if is_truncated {
                     entries.last().map(|e| e.key.clone())
@@ -520,7 +566,7 @@ impl RaftNode {
                 };
 
                 Ok(ScanResult {
-                    result_count: entries.len() as u32,
+                    result_count: saturating_result_count_u32(entries.len()),
                     entries,
                     is_truncated,
                     continuation_token,

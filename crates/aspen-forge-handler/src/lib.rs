@@ -42,6 +42,7 @@ pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
 pub use aspen_rpc_core::ServiceHandler;
 pub use executor::ForgeServiceExecutor;
+use executor::ForgeServiceExecutorDeps;
 
 // =============================================================================
 // Handler Factory (Plugin Registration)
@@ -72,20 +73,19 @@ impl Default for ForgeHandlerFactory {
 impl HandlerFactory for ForgeHandlerFactory {
     fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
         let caps = ctx.forge_handler_context()?;
-        let executor = Arc::new(ForgeServiceExecutor::new(
-            caps.forge_node,
+        let executor = Arc::new(ForgeServiceExecutor::new(caps.forge_node, ForgeServiceExecutorDeps {
             #[cfg(feature = "global-discovery")]
-            caps.content_discovery,
+            content_discovery: caps.content_discovery,
             #[cfg(feature = "global-discovery")]
-            caps.federation_discovery,
-            caps.federation_identity,
-            caps.federation_trust_manager,
-            caps.federation_cluster_identity,
-            caps.iroh_endpoint,
+            federation_discovery: caps.federation_discovery,
+            federation_identity: caps.federation_identity,
+            federation_trust_manager: caps.federation_trust_manager,
+            federation_cluster_identity: caps.federation_cluster_identity,
+            iroh_endpoint: caps.iroh_endpoint,
             #[cfg(all(feature = "hooks", feature = "git-bridge"))]
-            caps.hook_service,
-            caps.node_id,
-        ));
+            hook_service: caps.hook_service,
+            node_id: caps.node_id,
+        }));
         Ok(Arc::new(ServiceHandler::new(executor)))
     }
 

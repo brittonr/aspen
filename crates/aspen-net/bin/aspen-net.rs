@@ -3,6 +3,7 @@
 //! Provides SOCKS5 proxy, DNS resolution, and service publishing
 //! for accessing named Aspen cluster services.
 
+use std::fmt::Display;
 use std::net::SocketAddr;
 
 use aspen_net::daemon::DaemonConfig;
@@ -72,96 +73,124 @@ enum Commands {
     Status,
 }
 
-fn main() {
-    // Initialize tracing
+struct UpCommandArgs {
+    ticket: String,
+    token: String,
+    socks5_addr_text: String,
+    dns_port: u16,
+    should_enable_dns: bool,
+    publish: Vec<String>,
+    tags: Vec<String>,
+}
+
+fn exit_with_error(message: impl Display) -> ! {
+    eprintln!("{message}");
+    std::process::exit(1);
+}
+
+fn init_tracing() {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+}
 
-    let cli = Cli::parse();
+fn build_runtime_or_exit() -> tokio::runtime::Runtime {
+    match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(error) => exit_with_error(format!("failed to create tokio runtime: {error}")),
+    }
+}
 
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap_or_else(|e| {
-        eprintln!("failed to create tokio runtime: {e}");
-        std::process::exit(1);
-    });
+fn parse_socks5_addr_or_exit(socks5_addr_text: &str) -> SocketAddr {
+    if let Ok(addr) = socks5_addr_text.parse() {
+        return addr;
+    }
+    SocketAddr::from(([127, 0, 0, 1], match socks5_addr_text.parse() {
+        Ok(port) => port,
+        Err(_) => exit_with_error(format!("invalid SOCKS5 address: {socks5_addr_text}")),
+    }))
+}
 
-    rt.block_on(async {
-        match cli.command {
-            Commands::Up {
+fn dns_bind_addr(dns_port: u16) -> SocketAddr {
+    SocketAddr::from(([127, 0, 0, 1], dns_port))
+}
+
+async fn handle_up_command(args: UpCommandArgs) {
+    let socks5_addr = parse_socks5_addr_or_exit(&args.socks5_addr_text);
+    let dns_addr = dns_bind_addr(args.dns_port);
+    debug_assert!(!args.ticket.is_empty(), "daemon start requires a cluster ticket");
+    debug_assert!(dns_addr.port() == args.dns_port, "dns bind helper preserves the requested port");
+    let config = DaemonConfig {
+        cluster_ticket: args.ticket,
+        token: args.token,
+        socks5_addr,
+        dns_addr,
+        dns_enabled: args.should_enable_dns,
+        auto_publish: args.publish,
+        tags: args.tags,
+    };
+    let mut daemon = match NetDaemon::start(config).await {
+        Ok(daemon) => daemon,
+        Err(error) => exit_with_error(format!("failed to start daemon: {error}")),
+    };
+
+    let cancel = daemon.cancel_token();
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            eprintln!("\nReceived Ctrl+C, shutting down...");
+        }
+        _ = cancel.cancelled() => {}
+    }
+
+    daemon.shutdown().await;
+}
+
+async fn handle_forward_command(spec: String) {
+    match parse_forward_spec(&spec) {
+        Ok((addr, service, remote_port)) => {
+            eprintln!(
+                "Forward {addr} -> {service}{}",
+                remote_port.map(|remote_port_u16| format!(":{remote_port_u16}")).unwrap_or_default()
+            );
+            exit_with_error("Port forwarding requires a running daemon connection (not yet wired)");
+        }
+        Err(error) => exit_with_error(format!("invalid forward spec: {error}")),
+    }
+}
+
+async fn run_command(command: Commands) {
+    match command {
+        Commands::Up {
+            ticket,
+            token,
+            socks5_addr,
+            dns_port,
+            no_dns,
+            publish,
+            tags,
+        } => {
+            handle_up_command(UpCommandArgs {
                 ticket,
                 token,
-                socks5_addr,
+                socks5_addr_text: socks5_addr,
                 dns_port,
-                no_dns,
+                should_enable_dns: !no_dns,
                 publish,
                 tags,
-            } => {
-                // Parse socks5_addr: accept "ip:port" or just "port"
-                let socks5_addr: SocketAddr = socks5_addr.parse().unwrap_or_else(|_| {
-                    let port: u16 = socks5_addr.parse().unwrap_or_else(|_| {
-                        eprintln!("invalid SOCKS5 address: {socks5_addr}");
-                        std::process::exit(1);
-                    });
-                    SocketAddr::from(([127, 0, 0, 1], port))
-                });
-
-                let config = DaemonConfig {
-                    cluster_ticket: ticket,
-                    token,
-                    socks5_addr,
-                    dns_addr: SocketAddr::from(([127, 0, 0, 1], dns_port)),
-                    dns_enabled: !no_dns,
-                    auto_publish: publish,
-                    tags,
-                };
-
-                // Start daemon
-                let mut daemon = match NetDaemon::start(config).await {
-                    Ok(d) => d,
-                    Err(e) => {
-                        eprintln!("failed to start daemon: {e}");
-                        std::process::exit(1);
-                    }
-                };
-
-                // Wait for shutdown signal
-                let cancel = daemon.cancel_token();
-                tokio::select! {
-                    _ = tokio::signal::ctrl_c() => {
-                        eprintln!("\nReceived Ctrl+C, shutting down...");
-                    }
-                    _ = cancel.cancelled() => {}
-                }
-
-                daemon.shutdown().await;
-            }
-
-            Commands::Down => {
-                eprintln!("aspen net down: not yet implemented (requires daemon PID tracking)");
-                std::process::exit(1);
-            }
-
-            Commands::Forward {
-                spec,
-                ticket: _,
-                token: _,
-            } => match parse_forward_spec(&spec) {
-                Ok((addr, service, remote_port)) => {
-                    eprintln!(
-                        "Forward {addr} -> {service}{}",
-                        remote_port.map(|p| format!(":{p}")).unwrap_or_default()
-                    );
-                    eprintln!("Port forwarding requires a running daemon connection (not yet wired)");
-                    std::process::exit(1);
-                }
-                Err(e) => {
-                    eprintln!("invalid forward spec: {e}");
-                    std::process::exit(1);
-                }
-            },
-
-            Commands::Status => {
-                eprintln!("aspen net status: not yet implemented");
-                std::process::exit(1);
-            }
+            })
+            .await;
         }
-    });
+        Commands::Down => exit_with_error("aspen net down: not yet implemented (requires daemon PID tracking)"),
+        Commands::Forward {
+            spec,
+            ticket: _,
+            token: _,
+        } => handle_forward_command(spec).await,
+        Commands::Status => exit_with_error("aspen net status: not yet implemented"),
+    }
+}
+
+fn main() {
+    init_tracing();
+    let cli = Cli::parse();
+    let runtime = build_runtime_or_exit();
+    runtime.block_on(run_command(cli.command));
 }

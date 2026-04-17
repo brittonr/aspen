@@ -5,6 +5,29 @@ use snafu::ResultExt;
 
 use super::super::*;
 
+#[inline]
+fn empty_response() -> AppResponse {
+    AppResponse {
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
 impl SharedRedbStorage {
     /// Apply a lease grant operation within a transaction.
     pub(in crate::storage_shared) fn apply_lease_grant_in_txn(
@@ -19,8 +42,8 @@ impl SharedRedbStorage {
         let actual_lease_id = if lease_id == 0 {
             // Simple ID generation using timestamp + random component
             let now = now_unix_ms();
-            let random_component = now % 1000000;
-            now * 1000 + random_component
+            let random_component = now % 1_000_000;
+            now.saturating_mul(1_000).saturating_add(random_component)
         } else {
             lease_id
         };
@@ -47,7 +70,7 @@ impl SharedRedbStorage {
         Ok(AppResponse {
             lease_id: Some(actual_lease_id),
             ttl_seconds: Some(ttl_seconds),
-            ..Default::default()
+            ..empty_response()
         })
     }
 
@@ -87,7 +110,7 @@ impl SharedRedbStorage {
 
         Ok(AppResponse {
             keys_deleted: Some(keys_deleted),
-            ..Default::default()
+            ..empty_response()
         })
     }
 
@@ -122,13 +145,13 @@ impl SharedRedbStorage {
             Ok(AppResponse {
                 lease_id: Some(lease_id),
                 ttl_seconds: Some(ttl),
-                ..Default::default()
+                ..empty_response()
             })
         } else {
             // Lease not found - return None for lease_id to indicate not found
             Ok(AppResponse {
                 lease_id: None,
-                ..Default::default()
+                ..empty_response()
             })
         }
     }

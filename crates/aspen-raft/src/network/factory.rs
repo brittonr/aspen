@@ -24,6 +24,14 @@ use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
 
+#[inline]
+fn max_peers_usize() -> usize {
+    match usize::try_from(MAX_PEERS) {
+        Ok(max_peers) => max_peers,
+        Err(_) => usize::MAX,
+    }
+}
+
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
 /// With the introduction of `RaftMemberInfo`, peer addresses are now stored directly
@@ -59,6 +67,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// Raft membership state, passed to `new_client()` via the `node` parameter.
     ///
     /// Uses `Arc<RwLock<T>>` to allow concurrent peer addition during runtime.
+    ///
+    /// Lock ordering: when multiple factory locks are needed, acquire
+    /// `peer_addrs` before `failure_detector`, then `drift_detector`.
     peer_addrs: Arc<RwLock<HashMap<NodeId, iroh::EndpointAddr>>>,
     /// Failure detector for distinguishing actor crashes from node crashes.
     ///
@@ -184,7 +195,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                     if let Some(lock) = Arc::get_mut(&mut self.peer_addrs) {
                         let peers = lock.get_mut();
                         for (node_id, addr) in cached {
-                            if peers.len() < MAX_PEERS as usize || peers.contains_key(&node_id.into()) {
+                            if peers.len() < max_peers_usize() || peers.contains_key(&node_id.into()) {
                                 peers.insert(node_id.into(), addr);
                             }
                         }
@@ -229,9 +240,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     pub async fn add_peer(&self, node_id: NodeId, addr: iroh::EndpointAddr) {
         let mut peers = self.peer_addrs.write().await;
         // Decomposed: check capacity first, then check if key is new
-        let is_at_capacity = peers.len() >= MAX_PEERS as usize;
+        let is_peer_map_full = peers.len() >= max_peers_usize();
         let is_new_key = !peers.contains_key(&node_id);
-        if is_at_capacity && is_new_key {
+        if is_peer_map_full && is_new_key {
             warn!(
                 current_peers = peers.len(),
                 max_peers = MAX_PEERS,
@@ -246,13 +257,13 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         // but the connection pool still holds a connection to the old port. Without eviction,
         // heartbeats/RPCs route through the dead connection until it times out (~60s),
         // causing election storms that break all inter-node connectivity.
-        let address_changed = peers.get(&node_id).map(|old| old.addrs != addr.addrs).unwrap_or(false);
+        let is_address_changed = peers.get(&node_id).map(|old| old.addrs != addr.addrs).unwrap_or(false);
 
         peers.insert(node_id, addr);
         // Drop the lock before async eviction
         drop(peers);
 
-        if address_changed {
+        if is_address_changed {
             info!(
                 %node_id,
                 "peer address changed, evicting stale connection from pool"
@@ -264,8 +275,10 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         if let Some(ref path) = self.peer_cache_path {
             let peers = self.peer_addrs.read().await;
             let serializable: HashMap<u64, &iroh::EndpointAddr> = peers.iter().map(|(k, v)| (k.0, v)).collect();
-            if let Ok(json) = serde_json::to_string(&serializable) {
-                let _ = std::fs::write(path, json);
+            if let Ok(json) = serde_json::to_string(&serializable)
+                && let Err(write_err) = std::fs::write(path, json)
+            {
+                debug!(path = %path.display(), error = %write_err, "failed to persist peer address cache");
             }
         }
     }
@@ -278,9 +291,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let mut peers = self.peer_addrs.write().await;
         for (node_id, addr) in new_peers {
             // Decomposed: check capacity first, then check if key is new
-            let is_at_capacity = peers.len() >= MAX_PEERS as usize;
+            let is_peer_map_full = peers.len() >= max_peers_usize();
             let is_new_key = !peers.contains_key(&node_id);
-            if is_at_capacity && is_new_key {
+            if is_peer_map_full && is_new_key {
                 warn!(
                     current_peers = peers.len(),
                     max_peers = MAX_PEERS,
@@ -326,7 +339,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         // Update the fallback cache with this address
         {
             let mut peers = self.peer_addrs.write().await;
-            if peers.len() < MAX_PEERS as usize || peers.contains_key(&target) {
+            if peers.len() < max_peers_usize() || peers.contains_key(&target) {
                 peers.insert(target, node.iroh_addr.clone());
             }
         }
@@ -399,7 +412,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         // gossip entry exists — don't overwrite fresher gossip data).
         {
             let mut peers = self.peer_addrs.write().await;
-            if !peers.contains_key(&target) && (peers.len() < MAX_PEERS as usize) {
+            if !peers.contains_key(&target) && (peers.len() < max_peers_usize()) {
                 peers.insert(target, node.iroh_addr.clone());
             }
         }

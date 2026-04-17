@@ -27,6 +27,8 @@ use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
 // ============================================================================
 // Constants
 // ============================================================================
+const MAX_STREAM_ACCEPTS_PER_CONNECTION: u32 = u32::MAX;
+
 /// ALPN identifier for the client protocol.
 /// Re-exported from aspen-transport for consistency.
 pub use aspen_transport::constants::CLIENT_ALPN;
@@ -38,10 +40,10 @@ fn usize_from_u32(value: u32) -> usize {
 use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
 use tokio::sync::Semaphore;
+use tracing::Instrument;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-use tracing::instrument;
 use tracing::warn;
 
 use crate::HandlerRegistry;
@@ -173,8 +175,19 @@ impl ProtocolHandler for ClientProtocolHandler {
 }
 
 /// Handle a single Client connection.
-#[instrument(skip(connection, ctx, registry, request_counter))]
 async fn handle_client_connection(
+    connection: Connection,
+    ctx: Arc<ClientProtocolContext>,
+    registry: HandlerRegistry,
+    request_counter: &AtomicU64,
+) -> anyhow::Result<()> {
+    let remote_node_id = connection.remote_id();
+    handle_client_connection_inner(connection, ctx, registry, request_counter)
+        .instrument(tracing::info_span!("handle_client_connection", remote_node = %remote_node_id))
+        .await
+}
+
+async fn handle_client_connection_inner(
     connection: Connection,
     ctx: Arc<ClientProtocolContext>,
     registry: HandlerRegistry,
@@ -188,7 +201,7 @@ async fn handle_client_connection(
     let active_streams = Arc::new(AtomicU32::new(0));
 
     // Accept bidirectional streams from this connection
-    for _stream_accept_iteration in 0..u32::MAX {
+    for _stream_accept_iteration in 0..MAX_STREAM_ACCEPTS_PER_CONNECTION {
         let stream = match connection.accept_bi().await {
             Ok(stream) => stream,
             Err(err) => {
@@ -300,7 +313,7 @@ async fn handle_client_request_check_rate_limit(
     send: &mut iroh::endpoint::SendStream,
 ) -> anyhow::Result<bool> {
     let client_request_bucket_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
-    let limiter = DistributedRateLimiter::new(
+    let request_throttle = DistributedRateLimiter::new(
         ctx.kv_store.clone(),
         &client_request_bucket_key,
         RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
@@ -308,7 +321,7 @@ async fn handle_client_request_check_rate_limit(
     debug_assert!(!client_request_bucket_key.is_empty());
     debug_assert!(CLIENT_RPC_BURST > 0);
 
-    match limiter.try_acquire().await {
+    match request_throttle.try_acquire().await {
         Ok(_) => Ok(true),
         Err(RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
             warn!(client_id = %client_id, retry_after_ms, "Client rate limited");
@@ -472,8 +485,19 @@ async fn handle_client_request_dispatch(
 }
 
 /// Handle a single Client RPC request on a stream.
-#[instrument(skip(recv, send, ctx, registry), fields(client_id = %client_id, request_id = %request_id))]
 async fn handle_client_request(
+    (recv, send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
+    ctx: Arc<ClientProtocolContext>,
+    client_id: iroh::PublicKey,
+    registry: HandlerRegistry,
+    request_id: u64,
+) -> anyhow::Result<()> {
+    handle_client_request_inner((recv, send), ctx, client_id, registry, request_id)
+        .instrument(tracing::info_span!("handle_client_request", client_id = %client_id, request_id = request_id))
+        .await
+}
+
+async fn handle_client_request_inner(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     ctx: Arc<ClientProtocolContext>,
     client_id: iroh::PublicKey,

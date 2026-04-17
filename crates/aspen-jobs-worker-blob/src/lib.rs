@@ -37,6 +37,19 @@ pub struct BlobProcessorWorker {
     blob_store: Arc<dyn BlobStore>,
 }
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "blob worker measures operation latency with a monotonic clock helper"
+)]
+fn current_instant() -> Instant {
+    Instant::now()
+}
+
+fn elapsed_ms_u64(start: Instant) -> u64 {
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
 impl BlobProcessorWorker {
     /// Create a new blob processor worker with blob store access.
     pub fn new(node_id: u64, blob_store: Arc<dyn BlobStore>) -> Self {
@@ -45,22 +58,23 @@ impl BlobProcessorWorker {
 
     /// Validate a blob by checking existence and verifying content hash.
     async fn validate_blob(&self, hash_str: &str) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         // Parse the hash
         let hash = self.parse_hash(hash_str)?;
 
         // Check if blob exists
-        let exists = self.blob_store.has(&hash).await.map_err(|e| format!("failed to check blob existence: {}", e))?;
+        let is_present =
+            self.blob_store.has(&hash).await.map_err(|e| format!("failed to check blob existence: {}", e))?;
 
-        if !exists {
+        if !is_present {
             return Ok(json!({
                 "node_id": self.node_id,
                 "blob_hash": hash_str,
                 "valid": false,
                 "exists": false,
                 "error": "blob not found",
-                "validation_time_ms": start.elapsed().as_millis() as u64
+                "validation_time_ms": elapsed_ms_u64(start)
             }));
         }
 
@@ -72,21 +86,21 @@ impl BlobProcessorWorker {
             .map_err(|e| format!("failed to get blob: {}", e))?
             .ok_or("blob exists but could not be retrieved")?;
 
-        let size = bytes.len();
+        let size_bytes = bytes.len();
 
         // Verify content hash matches (iroh-blobs uses BLAKE3)
         let computed_hash = Hash::new(&bytes);
-        let valid = computed_hash == hash;
+        let is_valid = computed_hash == hash;
 
-        let validation_time_ms = start.elapsed().as_millis() as u64;
+        let validation_time_ms = elapsed_ms_u64(start);
 
         Ok(json!({
             "node_id": self.node_id,
             "blob_hash": hash_str,
-            "valid": valid,
+            "valid": is_valid,
             "exists": true,
-            "size_bytes": size,
-            "hash_verified": valid,
+            "size_bytes": size_bytes,
+            "hash_verified": is_valid,
             "validation_time_ms": validation_time_ms
         }))
     }
@@ -99,20 +113,20 @@ impl BlobProcessorWorker {
         hash_str: &str,
         target_nodes: &[serde_json::Value],
     ) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let hash = self.parse_hash(hash_str)?;
 
         // Check if blob exists locally
-        let exists = self.blob_store.has(&hash).await.map_err(|e| format!("failed to check blob: {}", e))?;
+        let is_present = self.blob_store.has(&hash).await.map_err(|e| format!("failed to check blob: {}", e))?;
 
-        if !exists {
+        if !is_present {
             return Ok(json!({
                 "node_id": self.node_id,
                 "blob_hash": hash_str,
                 "success": false,
                 "error": "blob not found locally",
-                "replication_time_ms": start.elapsed().as_millis() as u64
+                "replication_time_ms": elapsed_ms_u64(start)
             }));
         }
 
@@ -126,7 +140,7 @@ impl BlobProcessorWorker {
             .await
             .map_err(|e| format!("failed to protect blob: {}", e))?;
 
-        let replication_time_ms = start.elapsed().as_millis() as u64;
+        let replication_time_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -148,7 +162,7 @@ impl BlobProcessorWorker {
 
     /// Compress a blob using the specified algorithm.
     async fn compress_blob(&self, hash_str: &str, algorithm: &str) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let hash = self.parse_hash(hash_str)?;
 
@@ -160,12 +174,12 @@ impl BlobProcessorWorker {
             .map_err(|e| format!("failed to get blob: {}", e))?
             .ok_or("blob not found")?;
 
-        let original_size = original_bytes.len();
+        let original_size_bytes = original_bytes.len();
 
         // Compress based on algorithm
         let compressed = match algorithm.to_lowercase().as_str() {
             "gzip" | "gz" => {
-                let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                let mut encoder = GzEncoder::new(Vec::new(), Compression::new(6));
                 encoder.write_all(&original_bytes).map_err(|e| format!("gzip compression failed: {}", e))?;
                 encoder.finish().map_err(|e| format!("gzip finalization failed: {}", e))?
             }
@@ -175,7 +189,7 @@ impl BlobProcessorWorker {
             }
         };
 
-        let compressed_size = compressed.len();
+        let compressed_size_bytes = compressed.len();
 
         // Store the compressed blob
         let result = self
@@ -185,13 +199,13 @@ impl BlobProcessorWorker {
             .map_err(|e| format!("failed to store compressed blob: {}", e))?;
 
         let compressed_hash = result.blob_ref.hash.to_hex().to_string();
-        let compression_ratio = if original_size > 0 {
-            compressed_size as f64 / original_size as f64
+        let compression_ratio = if original_size_bytes > 0 {
+            compressed_size_bytes as f64 / original_size_bytes as f64
         } else {
             1.0
         };
 
-        let compression_time_ms = start.elapsed().as_millis() as u64;
+        let compression_time_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -207,10 +221,10 @@ impl BlobProcessorWorker {
             "original_hash": hash_str,
             "compressed_hash": compressed_hash,
             "algorithm": algorithm,
-            "original_size": original_size,
-            "compressed_size": compressed_size,
+            "original_size": original_size_bytes,
+            "compressed_size": compressed_size_bytes,
             "compression_ratio": compression_ratio,
-            "space_saved_bytes": original_size as i64 - compressed_size as i64,
+            "space_saved_bytes": original_size_bytes as i64 - compressed_size_bytes as i64,
             "compression_time_ms": compression_time_ms
         }))
     }
@@ -219,7 +233,7 @@ impl BlobProcessorWorker {
     ///
     /// Attempts to detect content type and extract relevant metadata.
     async fn extract_metadata(&self, hash_str: &str) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let hash = self.parse_hash(hash_str)?;
 
@@ -231,7 +245,7 @@ impl BlobProcessorWorker {
             .map_err(|e| format!("failed to get blob: {}", e))?
             .ok_or("blob not found")?;
 
-        let size = bytes.len();
+        let size_bytes = bytes.len();
 
         // Detect content type from magic bytes
         let content_type = detect_content_type(&bytes);
@@ -239,7 +253,7 @@ impl BlobProcessorWorker {
         // Extract additional metadata based on content type
         let mut metadata = serde_json::Map::new();
         metadata.insert("content_type".to_string(), json!(content_type));
-        metadata.insert("size_bytes".to_string(), json!(size));
+        metadata.insert("size_bytes".to_string(), json!(size_bytes));
 
         // Check if it's text
         if content_type.starts_with("text/") || content_type == "application/json" {
@@ -280,7 +294,7 @@ impl BlobProcessorWorker {
             metadata.insert("height".to_string(), json!(height));
         }
 
-        let extraction_time_ms = start.elapsed().as_millis() as u64;
+        let extraction_time_ms = elapsed_ms_u64(start);
 
         debug!(
             node_id = self.node_id,
@@ -320,49 +334,115 @@ fn zstd_compress(data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
     encoder.finish()
 }
 
+fn detect_magic_content_type(bytes: &[u8]) -> Option<&'static str> {
+    match &bytes[..4] {
+        [0x89, b'P', b'N', b'G'] => Some("image/png"),
+        [0xFF, 0xD8, 0xFF, _] => Some("image/jpeg"),
+        [b'G', b'I', b'F', b'8'] => Some("image/gif"),
+        [b'R', b'I', b'F', b'F'] if bytes.len() >= 12 && &bytes[8..12] == b"WEBP" => Some("image/webp"),
+        [0x50, 0x4B, 0x03, 0x04] => Some("application/zip"),
+        [0x1F, 0x8B, _, _] => Some("application/gzip"),
+        [0x28, 0xB5, 0x2F, 0xFD] => Some("application/zstd"),
+        [b'%', b'P', b'D', b'F'] => Some("application/pdf"),
+        [b'{', _, _, _] | [b'[', _, _, _] => Some("application/json"),
+        [b'<', b'?', b'x', b'm'] => Some("application/xml"),
+        [b'<', b'!', b'D', b'O'] | [b'<', b'h', b't', b'm'] | [b'<', b'H', b'T', b'M'] => Some("text/html"),
+        [0x7F, b'E', b'L', b'F'] => Some("application/x-executable"),
+        [0xCA, 0xFE, 0xBA, 0xBE] | [0xCF, 0xFA, 0xED, 0xFE] => Some("application/x-mach-binary"),
+        [b'M', b'Z', _, _] => Some("application/x-dosexec"),
+        [0x00, b'a', b's', b'm'] => Some("application/wasm"),
+        [b'S', b'Q', b'L', b'i'] => Some("application/x-sqlite3"),
+        _ => None,
+    }
+}
+
+fn looks_like_utf8_text_prefix(bytes: &[u8]) -> bool {
+    bytes.iter().take(1024).all(|&byte| {
+        byte.is_ascii_alphanumeric() || byte.is_ascii_punctuation() || byte.is_ascii_whitespace() || byte >= 0x80
+    })
+}
+
 /// Detect content type from magic bytes.
 fn detect_content_type(bytes: &[u8]) -> String {
     if bytes.len() < 4 {
         return "application/octet-stream".to_string();
     }
-
-    // Check magic bytes
-    match &bytes[..4] {
-        // Images
-        [0x89, b'P', b'N', b'G'] => "image/png".to_string(),
-        [0xFF, 0xD8, 0xFF, _] => "image/jpeg".to_string(),
-        [b'G', b'I', b'F', b'8'] => "image/gif".to_string(),
-        [b'R', b'I', b'F', b'F'] if bytes.len() >= 12 && &bytes[8..12] == b"WEBP" => "image/webp".to_string(),
-        // Archives
-        [0x50, 0x4B, 0x03, 0x04] => "application/zip".to_string(),
-        [0x1F, 0x8B, _, _] => "application/gzip".to_string(),
-        [0x28, 0xB5, 0x2F, 0xFD] => "application/zstd".to_string(),
-        // Documents
-        [b'%', b'P', b'D', b'F'] => "application/pdf".to_string(),
-        // Text/Data
-        [b'{', _, _, _] | [b'[', _, _, _] => "application/json".to_string(),
-        [b'<', b'?', b'x', b'm'] => "application/xml".to_string(),
-        [b'<', b'!', b'D', b'O'] | [b'<', b'h', b't', b'm'] | [b'<', b'H', b'T', b'M'] => "text/html".to_string(),
-        // Binary formats
-        [0x7F, b'E', b'L', b'F'] => "application/x-executable".to_string(),
-        [0xCA, 0xFE, 0xBA, 0xBE] | [0xCF, 0xFA, 0xED, 0xFE] => "application/x-mach-binary".to_string(),
-        [b'M', b'Z', _, _] => "application/x-dosexec".to_string(),
-        // Wasm
-        [0x00, b'a', b's', b'm'] => "application/wasm".to_string(),
-        // SQLite
-        [b'S', b'Q', b'L', b'i'] => "application/x-sqlite3".to_string(),
-        // Try to detect text
-        _ => {
-            // Check if it looks like UTF-8 text
-            if bytes.iter().take(1024).all(|&b| {
-                b.is_ascii_alphanumeric() || b.is_ascii_punctuation() || b.is_ascii_whitespace() || b >= 0x80 // Could be valid UTF-8 continuation
-            }) {
-                "text/plain".to_string()
-            } else {
-                "application/octet-stream".to_string()
-            }
-        }
+    if let Some(content_type) = detect_magic_content_type(bytes) {
+        return content_type.to_string();
     }
+    if looks_like_utf8_text_prefix(bytes) {
+        "text/plain".to_string()
+    } else {
+        "application/octet-stream".to_string()
+    }
+}
+
+fn read_u16_be(bytes: &[u8], offset: usize) -> Option<u16> {
+    let end = offset.checked_add(2)?;
+    let slice = bytes.get(offset..end)?;
+    let pair: [u8; 2] = slice.try_into().ok()?;
+    Some(u16::from_be_bytes(pair))
+}
+
+fn read_u32_be(bytes: &[u8], offset: usize) -> Option<u32> {
+    let end = offset.checked_add(4)?;
+    let slice = bytes.get(offset..end)?;
+    let quad: [u8; 4] = slice.try_into().ok()?;
+    Some(u32::from_be_bytes(quad))
+}
+
+fn is_jpeg_sof_marker(marker: u8) -> bool {
+    (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC)
+}
+
+fn extract_png_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    const PNG_MAGIC: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+    if !bytes.starts_with(&PNG_MAGIC) {
+        return None;
+    }
+    let width = read_u32_be(bytes, 16)?;
+    let height = read_u32_be(bytes, 20)?;
+    Some((width, height))
+}
+
+fn parse_jpeg_segment(bytes: &[u8], offset_bytes: usize) -> Option<(u8, usize)> {
+    if *bytes.get(offset_bytes)? != 0xFF {
+        return None;
+    }
+    let marker = *bytes.get(offset_bytes.checked_add(1)?)?;
+    let segment_len_bytes = usize::from(read_u16_be(bytes, offset_bytes.checked_add(2)?)?);
+    Some((marker, segment_len_bytes))
+}
+
+fn jpeg_sof_dimensions(bytes: &[u8], offset_bytes: usize) -> Option<(u32, u32)> {
+    let height = u32::from(read_u16_be(bytes, offset_bytes.checked_add(5)?)?);
+    let width = u32::from(read_u16_be(bytes, offset_bytes.checked_add(7)?)?);
+    Some((width, height))
+}
+
+fn extract_jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    if !bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return None;
+    }
+    let mut offset_bytes = 2usize;
+    while let Some(min_segment_end) = offset_bytes.checked_add(8) {
+        debug_assert!(offset_bytes >= 2, "jpeg scan stays after SOI bytes");
+        debug_assert!(min_segment_end >= offset_bytes, "checked_add keeps scan bound monotonic");
+        if min_segment_end >= bytes.len() {
+            return None;
+        }
+        if let Some((marker, segment_len_bytes)) = parse_jpeg_segment(bytes, offset_bytes) {
+            debug_assert!(segment_len_bytes >= 2, "jpeg segment length includes its length field");
+            if is_jpeg_sof_marker(marker) {
+                return jpeg_sof_dimensions(bytes, offset_bytes);
+            }
+            offset_bytes = offset_bytes.checked_add(2)?.checked_add(segment_len_bytes)?;
+            continue;
+        }
+        offset_bytes = offset_bytes.checked_add(1)?;
+    }
+    None
 }
 
 /// Extract image dimensions from PNG/JPEG headers.
@@ -370,40 +450,7 @@ fn extract_image_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     if bytes.len() < 24 {
         return None;
     }
-
-    // PNG: dimensions at bytes 16-23 (width at 16, height at 20)
-    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) && bytes.len() >= 24 {
-        let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
-        let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-        return Some((width, height));
-    }
-
-    // JPEG: Look for SOF0 marker (0xFF 0xC0)
-    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-        let mut i = 2;
-        while i + 8 < bytes.len() {
-            if bytes[i] == 0xFF {
-                let marker = bytes[i + 1];
-                // SOF markers: 0xC0-0xCF (except 0xC4, 0xC8, 0xCC)
-                if (0xC0..=0xCF).contains(&marker) && marker != 0xC4 && marker != 0xC8 && marker != 0xCC {
-                    let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
-                    let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
-                    return Some((width, height));
-                }
-                // Skip this segment
-                if i + 3 < bytes.len() {
-                    let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
-                    i += 2 + len;
-                } else {
-                    break;
-                }
-            } else {
-                i += 1;
-            }
-        }
-    }
-
-    None
+    extract_png_dimensions(bytes).or_else(|| extract_jpeg_dimensions(bytes))
 }
 
 #[async_trait]

@@ -51,7 +51,7 @@ pub const LOG_BROADCAST_BUFFER_SIZE: u32 = 1000;
 /// Maximum size of a single log entry message (10 MB).
 ///
 /// Matches MAX_RPC_MESSAGE_SIZE for consistency.
-pub const MAX_LOG_ENTRY_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
+pub const MAX_LOG_ENTRY_MESSAGE_SIZE: u32 = 10_u32.saturating_mul(1024).saturating_mul(1024);
 
 /// Timeout for subscription handshake (5 seconds).
 pub const SUBSCRIBE_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -101,7 +101,7 @@ impl SubscriberState {
     /// Record that an entry was sent.
     pub fn record_sent(&mut self, index: u64) {
         self.last_sent_index = index;
-        self.entries_sent += 1;
+        self.entries_sent = self.entries_sent.saturating_add(1);
     }
 }
 
@@ -141,6 +141,61 @@ use crate::auth::AuthContext;
 use crate::auth::AuthResponse;
 use crate::auth::AuthResult;
 use crate::auth::MAX_AUTH_MESSAGE_SIZE;
+
+#[derive(Clone)]
+struct SubscriberConnectionContext<'a> {
+    node_id: u64,
+    subscriber_id: u64,
+    committed_index: Arc<AtomicU64>,
+    historical_reader: Option<Arc<dyn HistoricalLogReader>>,
+    hlc: &'a aspen_core::hlc::HLC,
+}
+
+#[derive(Clone, Copy)]
+struct SubscriptionAcceptance {
+    node_id: u64,
+    subscriber_id: u64,
+    current_committed_index: u64,
+}
+
+#[derive(Clone, Copy)]
+struct KeepaliveContext<'a> {
+    committed_index: &'a Arc<AtomicU64>,
+    hlc: &'a aspen_core::hlc::HLC,
+}
+
+#[derive(Clone, Copy)]
+struct ReplayRange {
+    start_index: u64,
+    committed_index: u64,
+}
+
+#[inline]
+fn usize_from_u32(value_u32: u32) -> usize {
+    match usize::try_from(value_u32) {
+        Ok(value_usize) => value_usize,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn should_replay_historical_entries(replay_range: ReplayRange) -> bool {
+    replay_range.start_index < replay_range.committed_index && replay_range.start_index != u64::MAX
+}
+
+#[inline]
+fn historical_batch_end(replay_range: ReplayRange) -> u64 {
+    let max_batch_span = match u64::try_from(MAX_HISTORICAL_BATCH_SIZE) {
+        Ok(max_batch_size_u64) => max_batch_size_u64.saturating_sub(1),
+        Err(_) => u64::MAX,
+    };
+    replay_range.start_index.saturating_add(max_batch_span).min(replay_range.committed_index)
+}
+
+#[inline]
+fn matches_subscriber_filter(key_prefix: &[u8], operation: &KvOperation) -> bool {
+    key_prefix.is_empty() || operation.matches_prefix(key_prefix)
+}
 
 /// Protocol handler for log subscription over Iroh.
 ///
@@ -193,12 +248,12 @@ impl LogSubscriberProtocolHandler {
     /// # Note
     /// Historical replay is disabled by default. Use `with_historical_reader()` to enable it.
     pub fn new(cluster_cookie: &str, node_id: u64) -> (Self, broadcast::Sender<LogEntryPayload>, Arc<AtomicU64>) {
-        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE as usize);
+        let (log_sender, _) = broadcast::channel(usize_from_u32(LOG_BROADCAST_BUFFER_SIZE));
         let committed_index = Arc::new(AtomicU64::new(0));
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         let handler = Self {
             auth_context: AuthContext::new(cluster_cookie),
-            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS as usize)),
+            connection_semaphore: Arc::new(Semaphore::new(usize_from_u32(MAX_LOG_SUBSCRIBERS))),
             log_sender: log_sender.clone(),
             node_id,
             next_subscriber_id: AtomicU64::new(1),
@@ -222,7 +277,7 @@ impl LogSubscriberProtocolHandler {
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
             auth_context: AuthContext::new(cluster_cookie),
-            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS as usize)),
+            connection_semaphore: Arc::new(Semaphore::new(usize_from_u32(MAX_LOG_SUBSCRIBERS))),
             log_sender,
             node_id,
             next_subscriber_id: AtomicU64::new(1),
@@ -254,7 +309,7 @@ impl LogSubscriberProtocolHandler {
         let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
             auth_context: AuthContext::new(cluster_cookie),
-            connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS as usize)),
+            connection_semaphore: Arc::new(Semaphore::new(usize_from_u32(MAX_LOG_SUBSCRIBERS))),
             log_sender,
             node_id,
             next_subscriber_id: AtomicU64::new(1),
@@ -301,11 +356,13 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
             connection,
             self.auth_context.clone(),
             self.log_sender.subscribe(),
-            self.node_id,
-            subscriber_id,
-            self.committed_index.clone(),
-            self.historical_reader.clone(),
-            &self.hlc,
+            SubscriberConnectionContext {
+                node_id: self.node_id,
+                subscriber_id,
+                committed_index: self.committed_index.clone(),
+                historical_reader: self.historical_reader.clone(),
+                hlc: &self.hlc,
+            },
         )
         .await;
 
@@ -328,44 +385,49 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 /// 3. Acceptance
 /// 4. Historical replay (if requested)
 /// 5. Live streaming
-#[allow(clippy::too_many_arguments)]
-#[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader, hlc))]
+#[instrument(skip(connection, auth_context, log_receiver, context))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
     log_receiver: broadcast::Receiver<LogEntryPayload>,
-    node_id: u64,
-    subscriber_id: u64,
-    committed_index: Arc<AtomicU64>,
-    historical_reader: Option<Arc<dyn HistoricalLogReader>>,
-    hlc: &aspen_core::hlc::HLC,
+    context: SubscriberConnectionContext<'_>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
     let remote_node_id = connection.remote_id();
+    debug_assert!(context.node_id > 0, "node_id must be positive");
+    debug_assert!(context.subscriber_id > 0, "subscriber_id must be positive");
 
     // Accept the initial stream for authentication and subscription setup
     let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscriber stream")?;
 
     // Phase 1: Authenticate subscriber
-    handle_log_subscriber_authenticate(&auth_context, subscriber_id, &mut send, &mut recv).await?;
+    handle_log_subscriber_authenticate(&auth_context, context.subscriber_id, &mut send, &mut recv).await?;
 
     // Phase 2: Receive and validate subscription request
-    let sub_request = handle_log_subscriber_receive_request(subscriber_id, &mut send, &mut recv).await?;
+    let sub_request = handle_log_subscriber_receive_request(context.subscriber_id, &mut send, &mut recv).await?;
 
     debug!(
-        subscriber_id = subscriber_id,
+        subscriber_id = context.subscriber_id,
         start_index = sub_request.start_index,
         prefix = ?sub_request.key_prefix,
         "processing subscription request"
     );
 
     // Phase 3: Accept subscription
-    let current_committed_index = committed_index.load(Ordering::Acquire);
-    handle_log_subscriber_accept(node_id, subscriber_id, current_committed_index, &mut send).await?;
+    let current_committed_index = context.committed_index.load(Ordering::Acquire);
+    handle_log_subscriber_accept(
+        SubscriptionAcceptance {
+            node_id: context.node_id,
+            subscriber_id: context.subscriber_id,
+            current_committed_index,
+        },
+        &mut send,
+    )
+    .await?;
 
     info!(
-        subscriber_id = subscriber_id,
+        subscriber_id = context.subscriber_id,
         remote = %remote_node_id,
         start_index = sub_request.start_index,
         current_index = current_committed_index,
@@ -373,19 +435,34 @@ async fn handle_log_subscriber_connection(
     );
 
     // Phase 4: Historical replay if requested
-    handle_log_subscriber_replay(subscriber_id, &sub_request, current_committed_index, &historical_reader, &mut send)
-        .await?;
+    handle_log_subscriber_replay(
+        context.subscriber_id,
+        &sub_request,
+        current_committed_index,
+        &context.historical_reader,
+        &mut send,
+    )
+    .await?;
 
     // Phase 5: Stream live log entries
-    handle_log_subscriber_stream(subscriber_id, sub_request.key_prefix, log_receiver, &committed_index, hlc, &mut send)
-        .await;
+    handle_log_subscriber_stream(
+        context.subscriber_id,
+        sub_request.key_prefix,
+        log_receiver,
+        KeepaliveContext {
+            committed_index: &context.committed_index,
+            hlc: context.hlc,
+        },
+        &mut send,
+    )
+    .await;
 
     // Best-effort stream finish - log if it fails
     if let Err(finish_err) = send.finish() {
-        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+        debug!(subscriber_id = context.subscriber_id, error = %finish_err, "failed to finish log subscription stream");
     }
 
-    info!(subscriber_id = subscriber_id, "log subscription ended");
+    info!(subscriber_id = context.subscriber_id, "log subscription ended");
 
     Ok(())
 }
@@ -400,6 +477,9 @@ async fn handle_log_subscriber_authenticate(
     recv: &mut iroh::endpoint::RecvStream,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
+
+    debug_assert!(subscriber_id > 0, "subscriber_id must be positive during auth");
+    debug_assert!(MAX_AUTH_MESSAGE_SIZE > 0, "auth message limit must be positive");
 
     // Step 1: Send challenge
     let challenge = auth_context.generate_challenge();
@@ -467,6 +547,9 @@ async fn handle_log_subscriber_receive_request(
 ) -> anyhow::Result<SubscribeRequest> {
     use anyhow::Context;
 
+    debug_assert!(subscriber_id > 0, "subscriber_id must be positive during subscribe request");
+    debug_assert!(SUBSCRIBE_HANDSHAKE_TIMEOUT > Duration::ZERO, "subscribe handshake timeout must be positive");
+
     let sub_request_result = tokio::time::timeout(SUBSCRIBE_HANDSHAKE_TIMEOUT, async {
         let buffer = recv
             .read_to_end(1024) // Subscription requests are small
@@ -508,21 +591,25 @@ async fn handle_log_subscriber_send_rejection(subscriber_id: u64, send: &mut iro
 
 /// Accept subscription and send acceptance response.
 async fn handle_log_subscriber_accept(
-    node_id: u64,
-    subscriber_id: u64,
-    current_committed_index: u64,
+    acceptance: SubscriptionAcceptance,
     send: &mut iroh::endpoint::SendStream,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
+    debug_assert!(acceptance.node_id > 0, "node_id must be positive when accepting subscription");
+    debug_assert!(acceptance.subscriber_id > 0, "subscriber_id must be positive when accepting subscription");
     let response = SubscribeResponse::Accepted {
-        current_index: current_committed_index,
-        node_id,
+        current_index: acceptance.current_committed_index,
+        node_id: acceptance.node_id,
     };
     let response_bytes = postcard::to_stdvec(&response).context("failed to serialize subscribe response")?;
     send.write_all(&response_bytes).await.context("failed to send subscribe response")?;
 
-    debug!(subscriber_id = subscriber_id, current_committed_index, "subscription accepted");
+    debug!(
+        subscriber_id = acceptance.subscriber_id,
+        current_committed_index = acceptance.current_committed_index,
+        "subscription accepted"
+    );
     Ok(())
 }
 
@@ -534,15 +621,17 @@ async fn handle_log_subscriber_replay(
     historical_reader: &Option<Arc<dyn HistoricalLogReader>>,
     send: &mut iroh::endpoint::SendStream,
 ) -> anyhow::Result<()> {
-    // Check if historical replay is needed
-    let needs_replay = sub_request.start_index < current_committed_index;
-    let is_not_latest_only = sub_request.start_index != u64::MAX;
-    if !needs_replay || !is_not_latest_only {
+    debug_assert!(subscriber_id > 0, "subscriber_id must be positive during replay");
+    debug_assert!(MAX_HISTORICAL_BATCH_SIZE > 0, "historical batch size must be positive");
+    if !should_replay_historical_entries(ReplayRange {
+        start_index: sub_request.start_index,
+        committed_index: current_committed_index,
+    }) {
         return Ok(());
     }
 
     let reader = match historical_reader {
-        Some(r) => r,
+        Some(reader) => reader,
         None => {
             debug!(subscriber_id = subscriber_id, "historical replay requested but no reader available");
             return Ok(());
@@ -557,12 +646,12 @@ async fn handle_log_subscriber_replay(
     );
 
     let mut current_start = sub_request.start_index;
-    let mut total_replayed = 0u64;
-
+    let mut total_entries_replayed = 0u64;
     while current_start <= current_committed_index {
-        let batch_end =
-            std::cmp::min(current_start.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64 - 1), current_committed_index);
-
+        let batch_end = historical_batch_end(ReplayRange {
+            start_index: current_start,
+            committed_index: current_committed_index,
+        });
         match reader.read_entries(current_start, batch_end).await {
             Ok(entries) => {
                 if entries.is_empty() {
@@ -573,15 +662,11 @@ async fn handle_log_subscriber_replay(
                     );
                     break;
                 }
-
                 for entry in entries {
-                    // Apply prefix filter
-                    let has_prefix_filter = !sub_request.key_prefix.is_empty();
-                    let is_not_matching = !entry.operation.matches_prefix(&sub_request.key_prefix);
-                    if has_prefix_filter && is_not_matching {
+                    current_start = entry.index.saturating_add(1);
+                    if !matches_subscriber_filter(&sub_request.key_prefix, &entry.operation) {
                         continue;
                     }
-
                     let message = LogEntryMessage::Entry(entry.clone());
                     let message_bytes = match postcard::to_stdvec(&message) {
                         Ok(bytes) => bytes,
@@ -590,36 +675,25 @@ async fn handle_log_subscriber_replay(
                             continue;
                         }
                     };
-
                     if let Err(err) = send.write_all(&message_bytes).await {
-                        debug!(
-                            subscriber_id = subscriber_id,
-                            error = %err,
-                            "subscriber disconnected during replay"
-                        );
+                        debug!(subscriber_id = subscriber_id, error = %err, "subscriber disconnected during replay");
                         return Err(anyhow::anyhow!("subscriber disconnected during replay"));
                     }
-
-                    total_replayed += 1;
-                    current_start = entry.index + 1;
+                    total_entries_replayed = total_entries_replayed.saturating_add(1);
                 }
             }
             Err(err) => {
-                warn!(
-                    subscriber_id = subscriber_id,
-                    error = %err,
-                    "failed to read historical entries, continuing with live stream"
-                );
+                warn!(subscriber_id = subscriber_id, error = %err, "failed to read historical entries, continuing with live stream");
                 break;
             }
         }
-
-        if current_start > current_committed_index {
-            break;
-        }
     }
 
-    info!(subscriber_id = subscriber_id, total_replayed = total_replayed, "historical replay complete");
+    info!(
+        subscriber_id = subscriber_id,
+        total_entries_replayed = total_entries_replayed,
+        "historical replay complete"
+    );
     Ok(())
 }
 
@@ -628,23 +702,20 @@ async fn handle_log_subscriber_stream(
     subscriber_id: u64,
     key_prefix: Vec<u8>,
     mut log_receiver: broadcast::Receiver<LogEntryPayload>,
-    committed_index: &Arc<AtomicU64>,
-    hlc: &aspen_core::hlc::HLC,
+    keepalive_context: KeepaliveContext<'_>,
     send: &mut iroh::endpoint::SendStream,
 ) {
-    let mut keepalive_interval = tokio::time::interval(SUBSCRIBE_KEEPALIVE_INTERVAL);
-    keepalive_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    debug_assert!(subscriber_id > 0, "subscriber_id must be positive during live stream");
+    debug_assert!(SUBSCRIBE_KEEPALIVE_INTERVAL > Duration::ZERO, "keepalive interval must be positive");
+    let mut keepalive_timer = tokio::time::interval(SUBSCRIBE_KEEPALIVE_INTERVAL);
+    keepalive_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
         tokio::select! {
             entry_result = log_receiver.recv() => {
                 match entry_result {
                     Ok(entry) => {
-                        // Apply prefix filter
-                        // Decomposed: check if filter is active first, then check match
-                        let has_prefix_filter = !key_prefix.is_empty();
-                        let is_not_matching = !entry.operation.matches_prefix(&key_prefix);
-                        if has_prefix_filter && is_not_matching {
+                        if !matches_subscriber_filter(&key_prefix, &entry.operation) {
                             continue;
                         }
 
@@ -679,10 +750,10 @@ async fn handle_log_subscriber_stream(
                 }
             }
 
-            _ = keepalive_interval.tick() => {
+            _ = keepalive_timer.tick() => {
                 let keepalive = LogEntryMessage::Keepalive {
-                    committed_index: committed_index.load(Ordering::Acquire),
-                    hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
+                    committed_index: keepalive_context.committed_index.load(Ordering::Acquire),
+                    hlc_timestamp: SerializableTimestamp::from(keepalive_context.hlc.new_timestamp()),
                 };
                 let message_bytes = match postcard::to_stdvec(&keepalive) {
                     Ok(bytes) => bytes,

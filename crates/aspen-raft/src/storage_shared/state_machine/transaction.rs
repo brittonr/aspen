@@ -1,10 +1,42 @@
 //! Transaction (etcd-style) and OptimisticTransaction (FoundationDB-style)
 //! apply helpers for the state machine.
 
+use aspen_constants::api::MAX_SCAN_RESULTS;
 use redb::ReadableTable;
 use snafu::ResultExt;
 
 use super::super::*;
+
+#[inline]
+fn empty_response() -> AppResponse {
+    AppResponse {
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
+#[inline]
+fn max_setmulti_keys_usize() -> usize {
+    match usize::try_from(MAX_SETMULTI_KEYS) {
+        Ok(max_keys) => max_keys,
+        Err(_) => usize::MAX,
+    }
+}
 
 impl SharedRedbStorage {
     /// Apply a Transaction operation (etcd-style) within a transaction.
@@ -21,13 +53,13 @@ impl SharedRedbStorage {
     ) -> Result<AppResponse, SharedStorageError> {
         // Tiger Style: transaction branch sizes must be bounded
         assert!(
-            success.len() <= MAX_SETMULTI_KEYS as usize,
+            success.len() <= max_setmulti_keys_usize(),
             "TXN: success branch has {} ops, exceeds limit {}",
             success.len(),
             MAX_SETMULTI_KEYS
         );
         assert!(
-            failure.len() <= MAX_SETMULTI_KEYS as usize,
+            failure.len() <= max_setmulti_keys_usize(),
             "TXN: failure branch has {} ops, exceeds limit {}",
             failure.len(),
             MAX_SETMULTI_KEYS
@@ -36,7 +68,7 @@ impl SharedRedbStorage {
         assert!(log_index > 0, "TXN: log_index must be positive, got 0");
 
         // Evaluate all comparison conditions
-        let mut all_conditions_met = true;
+        let mut should_run_success_branch = true;
 
         for (target, op, key, value) in compare {
             let key_bytes = key.as_bytes();
@@ -45,7 +77,7 @@ impl SharedRedbStorage {
                 .context(GetSnafu)?
                 .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
 
-            let condition_met = match target {
+            let is_condition_met = match target {
                 0 => {
                     // Value comparison
                     let current_value = current_entry.as_ref().map(|e| e.value.as_str());
@@ -96,15 +128,15 @@ impl SharedRedbStorage {
                 _ => false,
             };
 
-            if !condition_met {
-                all_conditions_met = false;
+            if !is_condition_met {
+                should_run_success_branch = false;
                 break;
             }
         }
 
         // Execute the appropriate branch based on conditions
-        let operations = if all_conditions_met { success } else { failure };
-        let mut results = Vec::new();
+        let operations = if should_run_success_branch { success } else { failure };
+        let mut results = Vec::with_capacity(operations.len());
 
         for (op_type, key, value) in operations {
             let result = match op_type {
@@ -146,8 +178,9 @@ impl SharedRedbStorage {
                 }
                 3 => {
                     // Range operation
-                    let limit: usize = value.parse().unwrap_or(10);
-                    let mut kvs = Vec::new();
+                    let max_results_items_u32 = value.parse::<u32>().unwrap_or(10).min(MAX_SCAN_RESULTS);
+                    let max_results_items = usize::try_from(max_results_items_u32).unwrap_or(usize::MAX);
+                    let mut kvs = Vec::with_capacity(max_results_items);
                     let prefix = key.as_bytes();
 
                     for entry in kv_table.range(prefix..).context(RangeSnafu)? {
@@ -156,7 +189,7 @@ impl SharedRedbStorage {
                         if !k.value().starts_with(prefix) {
                             break;
                         }
-                        if kvs.len() >= limit {
+                        if kvs.len() >= max_results_items {
                             break;
                         }
 
@@ -179,10 +212,10 @@ impl SharedRedbStorage {
         }
 
         Ok(AppResponse {
-            succeeded: Some(all_conditions_met),
+            succeeded: Some(should_run_success_branch),
             txn_results: Some(results),
             header_revision: Some(log_index),
-            ..Default::default()
+            ..empty_response()
         })
     }
 
@@ -198,7 +231,7 @@ impl SharedRedbStorage {
     ) -> Result<AppResponse, SharedStorageError> {
         // Tiger Style: write_set size must be bounded
         assert!(
-            write_set.len() <= MAX_SETMULTI_KEYS as usize,
+            write_set.len() <= max_setmulti_keys_usize(),
             "OCC TXN: write_set has {} ops, exceeds limit {}",
             write_set.len(),
             MAX_SETMULTI_KEYS
@@ -221,7 +254,7 @@ impl SharedRedbStorage {
                 return Ok(AppResponse {
                     occ_conflict: Some(true),
                     conflict_key: Some(key.clone()),
-                    ..Default::default()
+                    ..empty_response()
                 });
             }
         }
@@ -247,7 +280,7 @@ impl SharedRedbStorage {
 
         Ok(AppResponse {
             occ_conflict: Some(false),
-            ..Default::default()
+            ..empty_response()
         })
     }
 }

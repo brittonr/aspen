@@ -16,6 +16,14 @@ use async_trait::async_trait;
 
 use crate::handler::handlers::ForgeNodeRef;
 
+fn unexpected_request_kind(request_family: &str) -> Result<ClientRpcResponse> {
+    Ok(ClientRpcResponse::error("UNEXPECTED_REQUEST_KIND", format!("unexpected {request_family} request")))
+}
+
+fn usize_from_u32(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
+
 // ── Conversion helpers ──────────────────────────────────────────────
 
 fn commit_to_info(hash: blake3::Hash, c: &aspen_forge::git::CommitObject) -> aspen_client_api::ForgeCommitInfo {
@@ -53,6 +61,16 @@ fn patch_to_info(id: &blake3::Hash, patch: &aspen_forge::cob::Patch) -> aspen_cl
         aspen_forge::cob::PatchState::Merged { .. } => "merged",
         aspen_forge::cob::PatchState::Closed { .. } => "closed",
     };
+    let revision_count = u32::try_from(patch.revisions.len()).unwrap_or(u32::MAX);
+    let approval_count = u32::try_from(patch.approvals.len()).unwrap_or(u32::MAX);
+    debug_assert!(
+        usize_from_u32(revision_count) >= patch.revisions.len(),
+        "revision count stays lossless until saturation"
+    );
+    debug_assert!(
+        usize_from_u32(approval_count) >= patch.approvals.len(),
+        "approval count stays lossless until saturation"
+    );
     aspen_client_api::ForgePatchInfo {
         id: id.to_hex().to_string(),
         title: patch.title.clone(),
@@ -61,8 +79,8 @@ fn patch_to_info(id: &blake3::Hash, patch: &aspen_forge::cob::Patch) -> aspen_cl
         base: hex::encode(patch.base),
         head: hex::encode(patch.head),
         labels: patch.labels.iter().cloned().collect(),
-        revision_count: patch.revisions.len() as u32,
-        approval_count: patch.approvals.len() as u32,
+        revision_count,
+        approval_count,
         assignees: patch.assignees.iter().map(hex::encode).collect(),
         created_at_ms: patch.created_at_ms,
         updated_at_ms: patch.updated_at_ms,
@@ -113,6 +131,20 @@ pub struct ForgeServiceExecutor {
     node_id: u64,
     /// Nostr authentication service (created lazily from ForgeNode's key).
     nostr_auth: Arc<aspen_forge::identity::nostr_auth::NostrAuthService<dyn aspen_core::KeyValueStore>>,
+}
+
+pub(crate) struct ForgeServiceExecutorDeps {
+    #[cfg(feature = "global-discovery")]
+    pub(crate) content_discovery: Option<Arc<dyn aspen_core::ContentDiscovery>>,
+    #[cfg(feature = "global-discovery")]
+    pub(crate) federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+    pub(crate) federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
+    pub(crate) federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+    pub(crate) federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
+    pub(crate) iroh_endpoint: Option<Arc<iroh::Endpoint>>,
+    #[cfg(all(feature = "hooks", feature = "git-bridge"))]
+    pub(crate) hook_service: Option<Arc<aspen_hooks::HookService>>,
+    pub(crate) node_id: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -216,20 +248,7 @@ impl ForgeServiceExecutor {
     pub const APP_ID: Option<&'static str> = Some("forge");
 
     /// Create a new forge service executor with captured dependencies.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        forge_node: ForgeNodeRef,
-        #[cfg(feature = "global-discovery")] content_discovery: Option<Arc<dyn aspen_core::ContentDiscovery>>,
-        #[cfg(feature = "global-discovery")] federation_discovery: Option<
-            Arc<aspen_cluster::federation::FederationDiscoveryService>,
-        >,
-        federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
-        federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
-        federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
-        iroh_endpoint: Option<Arc<iroh::Endpoint>>,
-        #[cfg(all(feature = "hooks", feature = "git-bridge"))] hook_service: Option<Arc<aspen_hooks::HookService>>,
-        node_id: u64,
-    ) -> Self {
+    pub(crate) fn new(forge_node: ForgeNodeRef, deps: ForgeServiceExecutorDeps) -> Self {
         // Build auth service from the forge node's key and KV store
         let identity_store = Arc::new(aspen_forge::identity::nostr_mapping::NostrIdentityStore::new(
             forge_node.kv().clone(),
@@ -243,16 +262,16 @@ impl ForgeServiceExecutor {
         Self {
             forge_node,
             #[cfg(feature = "global-discovery")]
-            content_discovery,
+            content_discovery: deps.content_discovery,
             #[cfg(feature = "global-discovery")]
-            federation_discovery,
-            federation_identity,
-            federation_trust_manager,
-            federation_cluster_identity,
-            iroh_endpoint,
+            federation_discovery: deps.federation_discovery,
+            federation_identity: deps.federation_identity,
+            federation_trust_manager: deps.federation_trust_manager,
+            federation_cluster_identity: deps.federation_cluster_identity,
+            iroh_endpoint: deps.iroh_endpoint,
             #[cfg(all(feature = "hooks", feature = "git-bridge"))]
-            hook_service,
-            node_id,
+            hook_service: deps.hook_service,
+            node_id: deps.node_id,
             nostr_auth,
         }
     }
@@ -554,11 +573,11 @@ impl ForgeServiceExecutor {
         &self,
         repo_id: String,
         ref_name: Option<String>,
-        limit: Option<u32>,
+        max_entries_hint: Option<u32>,
     ) -> Result<ClientRpcResponse> {
         use aspen_client_api::ForgeLogResultResponse;
 
-        let limit = limit.unwrap_or(20).min(100) as usize;
+        let max_entries = usize_from_u32(max_entries_hint.unwrap_or(20).min(100));
         let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {}", e))?;
         let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
         let ref_name = ref_name.unwrap_or_else(|| "main".to_string());
@@ -589,8 +608,8 @@ impl ForgeServiceExecutor {
             }
         };
 
-        let commits = self.walk_commit_history(start, limit).await?;
-        let count = commits.len() as u32;
+        let commits = self.walk_commit_history(start, max_entries).await?;
+        let count = u32::try_from(commits.len()).unwrap_or(u32::MAX);
         Ok(ClientRpcResponse::ForgeLogResult(ForgeLogResultResponse {
             is_success: true,
             commits,
@@ -635,7 +654,7 @@ impl ForgeServiceExecutor {
         repo_id: String,
         old_commit: String,
         new_commit: String,
-        include_content: bool,
+        should_include_content: bool,
         context_lines: Option<u32>,
     ) -> Result<ClientRpcResponse> {
         use aspen_client_api::DiffEntryResponse;
@@ -650,10 +669,12 @@ impl ForgeServiceExecutor {
         let new_hash =
             blake3::Hash::from_hex(&new_commit).map_err(|e| anyhow::anyhow!("invalid new commit hash: {e}"))?;
 
-        let opts = DiffOptions { include_content };
+        let opts = DiffOptions {
+            include_content: should_include_content,
+        };
         match diff_commits(&self.forge_node.git, &old_hash, &new_hash, &opts).await {
             Ok(result) => {
-                let unified_diff = if include_content {
+                let unified_diff = if should_include_content {
                     let ctx = context_lines.unwrap_or(3);
                     Some(render_unified_diff(&result.entries, ctx))
                 } else {
@@ -694,7 +715,7 @@ impl ForgeServiceExecutor {
         repo_id: String,
         old_ref: String,
         new_ref: String,
-        include_content: bool,
+        should_include_content: bool,
         context_lines: Option<u32>,
     ) -> Result<ClientRpcResponse> {
         let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
@@ -736,7 +757,8 @@ impl ForgeServiceExecutor {
             }
         };
 
-        self.handle_diff_commits(repo_id, old_commit, new_commit, include_content, context_lines).await
+        self.handle_diff_commits(repo_id, old_commit, new_commit, should_include_content, context_lines)
+            .await
     }
 
     // ========================================================================
@@ -1204,7 +1226,7 @@ impl ForgeServiceExecutor {
 
         let merge_strategy = match strategy.as_deref() {
             Some(s) => s.parse::<aspen_forge::GitMergeStrategy>().map_err(|e| anyhow::anyhow!("{e}"))?,
-            None => aspen_forge::GitMergeStrategy::default(),
+            None => aspen_forge::GitMergeStrategy::MergeCommit,
         };
 
         match self.forge_node.merge_patch(&repo_id, &pid, merge_strategy, message).await {
@@ -1693,19 +1715,22 @@ impl ForgeServiceExecutor {
                     })),
                 }
             }
-            ClientRpcRequest::ForgeListRepos { limit, offset } => {
+            ClientRpcRequest::ForgeListRepos {
+                limit: max_results_hint,
+                offset: start_offset_hint,
+            } => {
                 use aspen_client_api::ForgeRepoInfo;
                 use aspen_client_api::ForgeRepoListResultResponse;
 
-                let limit = limit.unwrap_or(100).min(1000) as usize;
-                let offset = offset.unwrap_or(0) as usize;
+                let max_results = usize_from_u32(max_results_hint.unwrap_or(100).min(1000));
+                let start_index = usize_from_u32(start_offset_hint.unwrap_or(0));
                 match self.forge_node.list_repos().await {
                     Ok(repos) => {
-                        let count = repos.len() as u32;
+                        let count = u32::try_from(repos.len()).unwrap_or(u32::MAX);
                         let repos = repos
                             .into_iter()
-                            .skip(offset)
-                            .take(limit)
+                            .skip(start_index)
+                            .take(max_results)
                             .map(|identity| ForgeRepoInfo {
                                 id: identity.repo_id().to_hex(),
                                 name: identity.name.clone(),
@@ -1732,7 +1757,7 @@ impl ForgeServiceExecutor {
                 }
             }
             ClientRpcRequest::ForgeGetRepo { repo_id } => self.handle_get_repo(repo_id).await,
-            _ => unreachable!("unexpected repo request"),
+            _ => unexpected_request_kind("repo"),
         }
     }
 
@@ -1740,7 +1765,7 @@ impl ForgeServiceExecutor {
         match request {
             ClientRpcRequest::ForgeStoreBlob { repo_id, content } => self.handle_store_blob(repo_id, content).await,
             ClientRpcRequest::ForgeGetBlob { hash } => self.handle_get_blob(hash).await,
-            _ => unreachable!("unexpected blob request"),
+            _ => unexpected_request_kind("blob"),
         }
     }
 
@@ -1751,7 +1776,7 @@ impl ForgeServiceExecutor {
                 entries_json,
             } => self.handle_create_tree(entries_json).await,
             ClientRpcRequest::ForgeGetTree { hash } => self.handle_get_tree(hash).await,
-            _ => unreachable!("unexpected tree request"),
+            _ => unexpected_request_kind("tree"),
         }
     }
 
@@ -1767,9 +1792,9 @@ impl ForgeServiceExecutor {
             ClientRpcRequest::ForgeLog {
                 repo_id,
                 ref_name,
-                limit,
-            } => self.handle_log(repo_id, ref_name, limit).await,
-            _ => unreachable!("unexpected commit request"),
+                limit: max_entries_hint,
+            } => self.handle_log(repo_id, ref_name, max_entries_hint).await,
+            _ => unexpected_request_kind("commit"),
         }
     }
 
@@ -1796,7 +1821,7 @@ impl ForgeServiceExecutor {
             } => self.handle_cas_ref(repo_id, ref_name, expected, new_hash).await,
             ClientRpcRequest::ForgeListBranches { repo_id } => self.handle_list_branches(repo_id).await,
             ClientRpcRequest::ForgeListTags { repo_id } => self.handle_list_tags(repo_id).await,
-            _ => unreachable!("unexpected ref request"),
+            _ => unexpected_request_kind("ref"),
         }
     }
 
@@ -1827,7 +1852,7 @@ impl ForgeServiceExecutor {
             ClientRpcRequest::ForgeReopenIssue { repo_id, issue_id } => {
                 self.handle_reopen_issue(repo_id, issue_id).await
             }
-            _ => unreachable!("unexpected issue request"),
+            _ => unexpected_request_kind("issue"),
         }
     }
 
@@ -1870,7 +1895,7 @@ impl ForgeServiceExecutor {
                 patch_id,
                 reason,
             } => self.handle_close_patch(repo_id, patch_id, reason).await,
-            _ => unreachable!("unexpected patch request"),
+            _ => unexpected_request_kind("patch"),
         }
     }
 
@@ -1910,7 +1935,7 @@ impl ForgeServiceExecutor {
             ClientRpcRequest::ForgeReopenDiscussion { repo_id, discussion_id } => {
                 self.handle_reopen_discussion(repo_id, discussion_id).await
             }
-            _ => unreachable!("unexpected discussion request"),
+            _ => unexpected_request_kind("discussion"),
         }
     }
 
@@ -1921,7 +1946,7 @@ impl ForgeServiceExecutor {
                 name,
                 description,
             } => self.handle_fork_repo(upstream_repo_id, name, description).await,
-            _ => unreachable!("unexpected fork request"),
+            _ => unexpected_request_kind("fork"),
         }
     }
 
@@ -1934,7 +1959,7 @@ impl ForgeServiceExecutor {
             } => self.handle_set_mirror(repo_id, upstream_repo_id, interval_secs).await,
             ClientRpcRequest::ForgeDisableMirror { repo_id } => self.handle_disable_mirror(repo_id).await,
             ClientRpcRequest::ForgeGetMirrorStatus { repo_id } => self.handle_get_mirror_status(repo_id).await,
-            _ => unreachable!("unexpected mirror request"),
+            _ => unexpected_request_kind("mirror"),
         }
     }
 
@@ -2011,9 +2036,11 @@ impl ForgeServiceExecutor {
                 fed_id,
             } => {
                 handle_federation_fetch_refs(
-                    &peer_node_id,
+                    FetchRefsTarget {
+                        fed_id_str: &fed_id,
+                        peer_node_id: &peer_node_id,
+                    },
                     peer_addr.as_deref(),
-                    &fed_id,
                     self.federation_cluster_identity.as_ref(),
                     self.iroh_endpoint.as_ref(),
                     &self.forge_node,
@@ -2027,13 +2054,17 @@ impl ForgeServiceExecutor {
                 repo_id,
             } => {
                 handle_federation_pull(
-                    mirror_repo_id.as_deref(),
-                    peer_node_id.as_deref(),
-                    peer_addr.as_deref(),
-                    repo_id.as_deref(),
-                    self.federation_cluster_identity.as_ref(),
-                    self.iroh_endpoint.as_ref(),
-                    &self.forge_node,
+                    FederationPullRequest {
+                        mirror_repo_id: mirror_repo_id.as_deref(),
+                        peer_node_id: peer_node_id.as_deref(),
+                        peer_addr: peer_addr.as_deref(),
+                        repo_id: repo_id.as_deref(),
+                    },
+                    FederationRuntime {
+                        cluster_identity: self.federation_cluster_identity.as_ref(),
+                        iroh_endpoint: self.iroh_endpoint.as_ref(),
+                        forge_node: &self.forge_node,
+                    },
                 )
                 .await
             }
@@ -2128,7 +2159,7 @@ impl ForgeServiceExecutor {
                 federated_id,
                 remote_cluster,
             } => handle_fetch_federated(&self.forge_node, federated_id, remote_cluster).await,
-            _ => unreachable!("unexpected federation request"),
+            _ => unexpected_request_kind("federation"),
         }
     }
 
@@ -2257,7 +2288,7 @@ impl ForgeServiceExecutor {
                 "GIT_BRIDGE_UNAVAILABLE",
                 "Git bridge feature not enabled. Rebuild with --features git-bridge",
             )),
-            _ => unreachable!("unexpected git bridge request"),
+            _ => unexpected_request_kind("git bridge"),
         }
     }
 
@@ -2336,10 +2367,16 @@ impl ForgeServiceExecutor {
                                 consistency: aspen_core::ReadConsistency::Linearizable,
                             })
                             .await
-                            && let Some(ev_kv) = ev_result.kv
-                            && let Ok(event) = serde_json::from_str::<serde_json::Value>(&ev_kv.value)
-                            && event.get("kind").and_then(|k| k.as_u64()).unwrap_or(0) == 0
                         {
+                            let Some(ev_kv) = ev_result.kv else {
+                                continue;
+                            };
+                            let Ok(event) = serde_json::from_str::<serde_json::Value>(&ev_kv.value) else {
+                                continue;
+                            };
+                            if event.get("kind").and_then(|k| k.as_u64()).unwrap_or(0) != 0 {
+                                continue;
+                            }
                             if let Some(content_str) = event.get("content").and_then(|c| c.as_str())
                                 && let Ok(profile) = serde_json::from_str::<serde_json::Value>(content_str)
                             {
@@ -2356,7 +2393,7 @@ impl ForgeServiceExecutor {
                 }
                 Ok(ClientRpcResponse::NostrGetProfileResult { display_name, nip05 })
             }
-            _ => unreachable!("unexpected nostr request"),
+            _ => unexpected_request_kind("nostr"),
         }
     }
 
@@ -2376,7 +2413,7 @@ impl ForgeServiceExecutor {
                 include_content,
                 context_lines,
             } => self.handle_diff_refs(repo_id, old_ref, new_ref, include_content, context_lines).await,
-            _ => unreachable!("unexpected diff request"),
+            _ => unexpected_request_kind("diff"),
         }
     }
 }
@@ -2410,20 +2447,19 @@ mod tests {
         let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
         let forge_secret = iroh::SecretKey::generate(&mut rand::rng());
         let forge_node = Arc::new(aspen_forge::ForgeNode::new(blob_store, kv, forge_secret));
-        ForgeServiceExecutor::new(
-            forge_node,
+        ForgeServiceExecutor::new(forge_node, ForgeServiceExecutorDeps {
             #[cfg(feature = "global-discovery")]
-            None,
+            content_discovery: None,
             #[cfg(feature = "global-discovery")]
-            None,
-            None,
-            None,
-            None,
-            Some(Arc::new(endpoint)),
+            federation_discovery: None,
+            federation_identity: None,
+            federation_trust_manager: None,
+            federation_cluster_identity: None,
+            iroh_endpoint: Some(Arc::new(endpoint)),
             #[cfg(all(feature = "hooks", feature = "git-bridge"))]
-            None,
-            7,
-        )
+            hook_service: None,
+            node_id: 7,
+        })
     }
 
     #[test]

@@ -5,6 +5,29 @@ use snafu::ResultExt;
 
 use super::super::*;
 
+#[inline]
+fn empty_response() -> AppResponse {
+    AppResponse {
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
 impl SharedRedbStorage {
     /// Apply a CompareAndSwap operation within a transaction.
     pub(in crate::storage_shared) fn apply_compare_and_swap_in_txn(
@@ -36,7 +59,7 @@ impl SharedRedbStorage {
             return Ok(AppResponse {
                 value: current_value.map(String::from),
                 cas_succeeded: Some(false),
-                ..Default::default()
+                ..empty_response()
             });
         }
 
@@ -94,7 +117,7 @@ impl SharedRedbStorage {
         Ok(AppResponse {
             value: Some(new_value.to_string()),
             cas_succeeded: Some(true),
-            ..Default::default()
+            ..empty_response()
         })
     }
 
@@ -122,13 +145,13 @@ impl SharedRedbStorage {
         let current_value = current.as_ref().map(|e| e.value.as_str());
 
         // Check condition
-        let condition_matches = current_value.is_some_and(|v| v == expected);
+        let is_condition_match = current_value.is_some_and(|value| value == expected);
 
-        if !condition_matches {
+        if !is_condition_match {
             return Ok(AppResponse {
                 value: current_value.map(String::from),
                 cas_succeeded: Some(false),
-                ..Default::default()
+                ..empty_response()
             });
         }
 
@@ -157,7 +180,7 @@ impl SharedRedbStorage {
         let response = AppResponse {
             deleted: Some(true),
             cas_succeeded: Some(true),
-            ..Default::default()
+            ..empty_response()
         };
 
         debug_assert!(

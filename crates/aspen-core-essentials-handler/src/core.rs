@@ -232,6 +232,11 @@ async fn handle_get_health(ctx: &ClientProtocolContext) -> anyhow::Result<Client
         let peer_id = ctx.endpoint_manager.peer_id().await;
         if peer_id.is_empty() { None } else { Some(peer_id) }
     };
+    debug_assert!(matches!(status, "healthy" | "degraded" | "unhealthy"));
+    debug_assert!(
+        membership_node_count.unwrap_or(0) == 0 || is_initialized,
+        "non-empty membership implies the cluster is initialized"
+    );
 
     Ok(ClientRpcResponse::Health(HealthResponse {
         status: status.to_string(),
@@ -262,6 +267,14 @@ async fn handle_get_raft_metrics(ctx: &ClientProtocolContext) -> anyhow::Result<
             })
             .collect()
     });
+    debug_assert!(
+        metrics.last_applied_index.unwrap_or(0) <= metrics.last_log_index.unwrap_or(u64::MAX),
+        "applied index should not exceed the last log index"
+    );
+    debug_assert!(
+        metrics.snapshot_index.unwrap_or(0) <= metrics.last_applied_index.unwrap_or(u64::MAX),
+        "snapshot index should not exceed the last applied index"
+    );
 
     Ok(ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
         node_id: ctx.node_id,
@@ -307,12 +320,17 @@ async fn handle_get_metrics(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
         metrics::gauge!("aspen.raft.snapshot_index", "node_id" => node_id_label.clone())
             .set(metrics.snapshot_index.unwrap_or(0) as f64);
     }
-    metrics::gauge!("aspen.node.uptime_seconds", "node_id" => node_id_label)
-        .set(ctx.start_time.elapsed().as_secs() as f64);
+    let uptime_seconds = ctx.start_time.elapsed().as_secs();
+    metrics::gauge!("aspen.node.uptime_seconds", "node_id" => node_id_label.clone()).set(uptime_seconds as f64);
 
     // Render all registered metrics from the prometheus handle.
     // Falls back to empty string if no recorder was installed (e.g., in tests).
     let metrics_text = ctx.prometheus_handle.as_ref().map(|h| h.render()).unwrap_or_default();
+    debug_assert!(!node_id_label.is_empty(), "node id labels should always be non-empty");
+    debug_assert!(
+        ctx.prometheus_handle.is_some() || metrics_text.is_empty(),
+        "metrics text stays empty when no prometheus recorder is installed"
+    );
 
     Ok(ClientRpcResponse::Metrics(MetricsResponse {
         prometheus_text: metrics_text,
@@ -466,6 +484,11 @@ async fn scan_trace_spans(ctx: &ClientProtocolContext, prefix: &str) -> Vec<Inge
             Err(e) => tracing::warn!(key = %entry.key, error = %e, "skip bad trace span"),
         }
     }
+    debug_assert!(
+        scan_result.entries.len() <= usize::try_from(aspen_constants::MAX_SCAN_RESULTS).unwrap_or(usize::MAX),
+        "trace scans stay within the configured result bound"
+    );
+    debug_assert!(spans.len() <= scan_result.entries.len(), "parsed spans are a subset of scanned entries");
     spans
 }
 
@@ -822,6 +845,8 @@ fn aggregate_metric_points(
     if points.is_empty() {
         return vec![];
     }
+    debug_assert!(!points.is_empty(), "aggregation only runs when at least one point is present");
+    debug_assert!(step_us != Some(0), "zero-width aggregation steps are treated as no bucketing");
 
     match step_us.and_then(NonZeroU64::new) {
         Some(step_size_us) => {
@@ -887,6 +912,8 @@ fn compute_aggregation(values: &[f64], aggregation: &str) -> f64 {
 // =============================================================================
 
 async fn handle_alert_create(ctx: &ClientProtocolContext, rule: AlertRuleWire) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(!rule.name.is_empty(), "alert rules require a stable name");
+    debug_assert!(rule.window_duration_us >= rule.for_duration_us, "alert windows should cover their firing duration");
     // Validate name length
     if u32_from_len(rule.name.len()) > aspen_constants::MAX_ALERT_RULE_NAME_SIZE {
         return Ok(ClientRpcResponse::AlertCreateResult(AlertRuleResultResponse {
@@ -956,6 +983,7 @@ async fn handle_alert_create(ctx: &ClientProtocolContext, rule: AlertRuleWire) -
 }
 
 async fn handle_alert_delete(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(!name.is_empty(), "alert deletes target a named rule");
     if let Err(e) = ctx.kv_store.delete(DeleteRequest::new(format!("_sys:alerts:rule:{}", name))).await {
         tracing::warn!(error = %e, rule_name = %name, "failed to delete alert rule");
     }
@@ -966,6 +994,10 @@ async fn handle_alert_delete(ctx: &ClientProtocolContext, name: String) -> anyho
 
     // Delete history entries
     let history_prefix = format!("_sys:alerts:history:{}:", name);
+    debug_assert!(
+        history_prefix.starts_with("_sys:alerts:history:"),
+        "alert history scans stay in the alert namespace"
+    );
     let scan_req = ScanRequest {
         prefix: history_prefix,
         limit_results: Some(aspen_constants::MAX_ALERT_HISTORY_PER_RULE),
@@ -1003,6 +1035,10 @@ async fn handle_alert_list(ctx: &ClientProtocolContext) -> anyhow::Result<Client
         }
     };
 
+    debug_assert!(
+        scan_result.entries.len() <= usize::try_from(aspen_constants::MAX_ALERT_RULES).unwrap_or(usize::MAX),
+        "alert listings stay within the configured rule bound"
+    );
     let mut rules = Vec::with_capacity(scan_result.entries.len());
     for entry in &scan_result.entries {
         let rule = match serde_json::from_str::<AlertRuleWire>(&entry.value) {
@@ -1018,7 +1054,8 @@ async fn handle_alert_list(ctx: &ClientProtocolContext) -> anyhow::Result<Client
         rules.push(AlertRuleWithState { rule, state });
     }
 
-    let count = rules.len() as u32;
+    let count = u32_from_len(rules.len());
+    debug_assert!(usize::try_from(count).unwrap_or(usize::MAX) >= rules.len(), "alert counts only saturate upward");
     Ok(ClientRpcResponse::AlertListResult(AlertListResultResponse {
         rules,
         count,
@@ -1027,6 +1064,7 @@ async fn handle_alert_list(ctx: &ClientProtocolContext) -> anyhow::Result<Client
 }
 
 async fn handle_alert_get(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(!name.is_empty(), "alert lookups target a named rule");
     // Read rule
     let rule_key = format!("_sys:alerts:rule:{}", name);
     let rule = kv_read_value(ctx, &rule_key).await.and_then(|v| serde_json::from_str::<AlertRuleWire>(&v).ok());
@@ -1050,6 +1088,10 @@ async fn handle_alert_get(ctx: &ClientProtocolContext, name: String) -> anyhow::
             }
         }
     }
+    debug_assert!(
+        history.len() <= usize::try_from(aspen_constants::MAX_ALERT_HISTORY_PER_RULE).unwrap_or(usize::MAX),
+        "alert history reads stay within the configured retention bound"
+    );
 
     Ok(ClientRpcResponse::AlertGetResult(AlertGetResultResponse {
         rule,
@@ -1089,6 +1131,8 @@ async fn metric_values_for_rule(
     now_us: u64,
 ) -> Result<Vec<f64>, ClientRpcResponse> {
     let start_us = now_us.saturating_sub(rule.window_duration_us);
+    debug_assert!(!rule.metric_name.is_empty(), "alert evaluation requires a metric name");
+    debug_assert!(start_us <= now_us, "metric evaluation windows stay ordered");
     let scan_req = ScanRequest {
         prefix: format!("_sys:metrics:{}:", rule.metric_name),
         limit_results: Some(aspen_constants::MAX_METRIC_QUERY_RESULTS),
@@ -1152,6 +1196,11 @@ async fn persist_alert_history(
 
 /// Update state fields on transition and persist both state and history.
 async fn apply_and_persist_alert_transition(ctx: &ClientProtocolContext, args: AlertTransitionArgs<'_>) {
+    debug_assert!(args.current_state.rule_name == args.name, "alert state matches the rule being updated");
+    debug_assert!(
+        args.is_transition == (*args.new_status != *args.previous_status),
+        "transition flag tracks status changes"
+    );
     if args.is_transition {
         match args.new_status {
             AlertStatus::Pending => args.current_state.condition_since_us = Some(args.now_us),
@@ -1187,11 +1236,13 @@ async fn handle_alert_evaluate(
     name: String,
     now_us: u64,
 ) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(!name.is_empty(), "alert evaluation targets a named rule");
     let rule = match load_alert_rule_for_evaluation(ctx, &name).await {
         Ok(rule) => rule,
         Err(response) => return Ok(response),
     };
 
+    debug_assert!(rule.window_duration_us >= rule.for_duration_us, "alert window covers the required firing duration");
     if !rule.is_enabled {
         let state_key = format!("_sys:alerts:state:{}", name);
         let status = kv_read_value(ctx, &state_key)

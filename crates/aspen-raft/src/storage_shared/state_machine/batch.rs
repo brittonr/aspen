@@ -5,6 +5,45 @@ use snafu::ResultExt;
 
 use super::super::*;
 
+#[inline]
+fn empty_response() -> AppResponse {
+    AppResponse {
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
+#[inline]
+fn max_setmulti_keys_usize() -> usize {
+    match usize::try_from(MAX_SETMULTI_KEYS) {
+        Ok(max_keys) => max_keys,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn saturating_count_u32(count_items: usize) -> u32 {
+    match u32::try_from(count_items) {
+        Ok(count_u32) => count_u32,
+        Err(_) => u32::MAX,
+    }
+}
+
 impl SharedRedbStorage {
     /// Apply a Batch operation within a transaction.
     pub(in crate::storage_shared) fn apply_batch_in_txn(
@@ -15,9 +54,9 @@ impl SharedRedbStorage {
         operations: &[(bool, String, String)],
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
-        if operations.len() > MAX_SETMULTI_KEYS as usize {
+        if operations.len() > max_setmulti_keys_usize() {
             return Err(SharedStorageError::BatchTooLarge {
-                size: operations.len() as u32,
+                size: saturating_count_u32(operations.len()),
                 max: MAX_SETMULTI_KEYS,
             });
         }
@@ -46,8 +85,8 @@ impl SharedRedbStorage {
         }
 
         Ok(AppResponse {
-            batch_applied: Some(operations.len() as u32),
-            ..Default::default()
+            batch_applied: Some(saturating_count_u32(operations.len())),
+            ..empty_response()
         })
     }
 
@@ -61,15 +100,15 @@ impl SharedRedbStorage {
         operations: &[(bool, String, String)],
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
-        if operations.len() > MAX_SETMULTI_KEYS as usize {
+        if operations.len() > max_setmulti_keys_usize() {
             return Err(SharedStorageError::BatchTooLarge {
-                size: operations.len() as u32,
+                size: saturating_count_u32(operations.len()),
                 max: MAX_SETMULTI_KEYS,
             });
         }
 
         debug_assert!(
-            conditions.len() <= MAX_SETMULTI_KEYS as usize,
+            conditions.len() <= max_setmulti_keys_usize(),
             "BATCH: conditions count {} must not exceed operations limit {}",
             conditions.len(),
             MAX_SETMULTI_KEYS
@@ -82,7 +121,7 @@ impl SharedRedbStorage {
                 .context(GetSnafu)?
                 .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
 
-            let met = match cond_type {
+            let is_condition_met = match cond_type {
                 0 => current.as_ref().map(|e| e.value.as_str() == expected).unwrap_or(false), // ValueEquals
                 1 => current.is_some(),                                                       // KeyExists
                 2 => current.is_none(),                                                       // KeyNotExists
@@ -92,11 +131,11 @@ impl SharedRedbStorage {
                 }
             };
 
-            if !met {
+            if !is_condition_met {
                 return Ok(AppResponse {
                     conditions_met: Some(false),
-                    failed_condition_index: Some(i as u32),
-                    ..Default::default()
+                    failed_condition_index: Some(saturating_count_u32(i)),
+                    ..empty_response()
                 });
             }
         }
@@ -106,8 +145,8 @@ impl SharedRedbStorage {
 
         let response = AppResponse {
             conditions_met: Some(true),
-            batch_applied: Some(operations.len() as u32),
-            ..Default::default()
+            batch_applied: Some(saturating_count_u32(operations.len())),
+            ..empty_response()
         };
 
         debug_assert!(

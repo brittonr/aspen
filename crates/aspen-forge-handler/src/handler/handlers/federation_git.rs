@@ -17,6 +17,7 @@ use tracing::warn;
 
 use super::ForgeNodeRef;
 use super::federation::MirrorMetadata;
+use super::federation::MirrorOrigin;
 // collect_local_sha1_hashes is called via super::federation:: prefix at call sites
 use super::federation::federation_import_objects;
 use super::federation::get_or_create_mirror;
@@ -685,7 +686,13 @@ pub(crate) async fn handle_federation_git_fetch(
     // get_or_create_mirror returns the real repo ID (which may differ from
     // derive_mirror_repo_id's deterministic hash — the mirror repo is
     // created by forge_node.create_repo() which uses its own ID scheme).
-    let mirror_repo_id = match get_or_create_mirror(forge_node, &fed_id_str, origin_key, None, None).await {
+    let mirror_repo_id = match get_or_create_mirror(forge_node, &fed_id_str, MirrorOrigin {
+        cluster_key: origin_key,
+        node_id: None,
+        addr_hint: None,
+    })
+    .await
+    {
         Ok(id) => id,
         Err(e) => {
             return Ok(ClientRpcResponse::FederationGitFetch(GitBridgeFetchResponse {

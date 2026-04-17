@@ -37,12 +37,55 @@ use crate::types::AppTypeConfig;
 // Helper functions for apply() - extracted for Tiger Style compliance
 // ====================================================================================
 
-/// Apply a Set operation to the state machine.
-fn apply_set(data: &mut BTreeMap<String, String>, key: &str, value: &str) -> AppResponse {
-    data.insert(key.to_owned(), value.to_owned());
+#[derive(Clone, Copy)]
+struct KeyValueRef<'a> {
+    key: &'a str,
+    value: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct DeleteConditionRef<'a> {
+    key: &'a str,
+    expected_value: &'a str,
+}
+
+#[inline]
+fn empty_response() -> AppResponse {
     AppResponse {
-        value: Some(value.to_owned()),
-        ..Default::default()
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
+#[inline]
+fn saturating_count_u32(count_items: usize) -> u32 {
+    match u32::try_from(count_items) {
+        Ok(count_items_u32) => count_items_u32,
+        Err(_) => u32::MAX,
+    }
+}
+
+/// Apply a Set operation to the state machine.
+fn apply_set(data: &mut BTreeMap<String, String>, entry: KeyValueRef<'_>) -> AppResponse {
+    data.insert(entry.key.to_owned(), entry.value.to_owned());
+    AppResponse {
+        value: Some(entry.value.to_owned()),
+        ..empty_response()
     }
 }
 
@@ -51,28 +94,28 @@ fn apply_set_multi(data: &mut BTreeMap<String, String>, pairs: &[(String, String
     for (key, value) in pairs {
         data.insert(key.clone(), value.clone());
     }
-    AppResponse::default()
+    empty_response()
 }
 
 /// Apply a Delete operation to the state machine.
 fn apply_delete(data: &mut BTreeMap<String, String>, key: &str) -> AppResponse {
-    let existed = data.remove(key).is_some();
+    let has_existing_key = data.remove(key).is_some();
     AppResponse {
-        deleted: Some(existed),
-        ..Default::default()
+        deleted: Some(has_existing_key),
+        ..empty_response()
     }
 }
 
 /// Apply a DeleteMulti operation to the state machine.
 fn apply_delete_multi(data: &mut BTreeMap<String, String>, keys: &[String]) -> AppResponse {
-    let mut deleted_any = false;
+    let mut has_deleted_key = false;
     for key in keys {
-        deleted_any |= data.contains_key(key);
+        has_deleted_key |= data.contains_key(key);
         data.remove(key);
     }
     AppResponse {
-        deleted: Some(deleted_any),
-        ..Default::default()
+        deleted: Some(has_deleted_key),
+        ..empty_response()
     }
 }
 
@@ -83,44 +126,52 @@ fn apply_compare_and_swap(
     expected: Option<&String>,
     new_value: &str,
 ) -> AppResponse {
-    let current = data.get(key).cloned();
-    let condition_matches = match (expected, &current) {
+    let current_value = data.get(key).cloned();
+    let is_condition_match = match (expected, &current_value) {
         (None, None) => true,
-        (Some(exp), Some(cur)) => exp == cur,
+        (Some(expected_value), Some(actual_value)) => expected_value == actual_value,
         _ => false,
     };
-    if condition_matches {
+    let response = if is_condition_match {
         data.insert(key.to_owned(), new_value.to_owned());
         AppResponse {
             value: Some(new_value.to_owned()),
             cas_succeeded: Some(true),
-            ..Default::default()
+            ..empty_response()
         }
     } else {
         AppResponse {
-            value: current,
+            value: current_value.clone(),
             cas_succeeded: Some(false),
-            ..Default::default()
+            ..empty_response()
         }
-    }
+    };
+    let expected_response_value = if is_condition_match {
+        Some(new_value)
+    } else {
+        current_value.as_deref()
+    };
+    debug_assert_eq!(response.cas_succeeded, Some(is_condition_match));
+    debug_assert_eq!(response.value.as_deref(), expected_response_value);
+    response
 }
 
 /// Apply a CompareAndDelete operation to the state machine.
-fn apply_compare_and_delete(data: &mut BTreeMap<String, String>, key: &str, expected: &str) -> AppResponse {
-    let current = data.get(key).cloned();
-    let condition_matches = matches!(&current, Some(cur) if cur == expected);
-    if condition_matches {
-        data.remove(key);
+fn apply_compare_and_delete(data: &mut BTreeMap<String, String>, request: DeleteConditionRef<'_>) -> AppResponse {
+    let current_value = data.get(request.key).cloned();
+    let is_condition_match = matches!(&current_value, Some(actual_value) if actual_value == request.expected_value);
+    if is_condition_match {
+        data.remove(request.key);
         AppResponse {
             deleted: Some(true),
             cas_succeeded: Some(true),
-            ..Default::default()
+            ..empty_response()
         }
     } else {
         AppResponse {
-            value: current,
+            value: current_value,
             cas_succeeded: Some(false),
-            ..Default::default()
+            ..empty_response()
         }
     }
 }
@@ -135,8 +186,8 @@ fn apply_batch(data: &mut BTreeMap<String, String>, operations: &[(bool, String,
         }
     }
     AppResponse {
-        batch_applied: Some(operations.len() as u32),
-        ..Default::default()
+        batch_applied: Some(saturating_count_u32(operations.len())),
+        ..empty_response()
     }
 }
 
@@ -148,25 +199,24 @@ fn apply_conditional_batch(
 ) -> AppResponse {
     // Check all conditions first
     // condition types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
-    let mut conditions_met = true;
-    let mut failed_index = None;
-    for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
-        let current = data.get(key);
-        let met = match cond_type {
-            0 => current.map(|v| v == expected).unwrap_or(false), // ValueEquals
-            1 => current.is_some(),                               // KeyExists
-            2 => current.is_none(),                               // KeyNotExists
+    let mut should_apply_batch = true;
+    let mut failed_condition_index = None;
+    for (condition_index, (cond_type, key, expected)) in conditions.iter().enumerate() {
+        let current_value = data.get(key);
+        let is_condition_met = match cond_type {
+            0 => current_value.map(|value| value == expected).unwrap_or(false), // ValueEquals
+            1 => current_value.is_some(),                                       // KeyExists
+            2 => current_value.is_none(),                                       // KeyNotExists
             _ => false,
         };
-        if !met {
-            conditions_met = false;
-            failed_index = Some(i as u32);
+        if !is_condition_met {
+            should_apply_batch = false;
+            failed_condition_index = u32::try_from(condition_index).ok();
             break;
         }
     }
 
-    if conditions_met {
-        // Apply all operations
+    let response = if should_apply_batch {
         for (is_set, key, value) in operations {
             if *is_set {
                 data.insert(key.clone(), value.clone());
@@ -175,17 +225,20 @@ fn apply_conditional_batch(
             }
         }
         AppResponse {
-            batch_applied: Some(operations.len() as u32),
+            batch_applied: Some(saturating_count_u32(operations.len())),
             conditions_met: Some(true),
-            ..Default::default()
+            ..empty_response()
         }
     } else {
         AppResponse {
             conditions_met: Some(false),
-            failed_condition_index: failed_index,
-            ..Default::default()
+            failed_condition_index,
+            ..empty_response()
         }
-    }
+    };
+    debug_assert_eq!(response.conditions_met, Some(should_apply_batch));
+    debug_assert_eq!(response.failed_condition_index, failed_condition_index);
+    response
 }
 
 /// Apply a LeaseGrant operation (no-op for in-memory).
@@ -193,7 +246,7 @@ fn apply_lease_grant(lease_id: u64, ttl_seconds: u32) -> AppResponse {
     AppResponse {
         lease_id: Some(lease_id),
         ttl_seconds: Some(ttl_seconds),
-        ..Default::default()
+        ..empty_response()
     }
 }
 
@@ -202,7 +255,7 @@ fn apply_lease_revoke(lease_id: u64) -> AppResponse {
     AppResponse {
         lease_id: Some(lease_id),
         keys_deleted: Some(0),
-        ..Default::default()
+        ..empty_response()
     }
 }
 
@@ -210,8 +263,8 @@ fn apply_lease_revoke(lease_id: u64) -> AppResponse {
 fn apply_lease_keepalive(lease_id: u64) -> AppResponse {
     AppResponse {
         lease_id: Some(lease_id),
-        ttl_seconds: Some(60), // Dummy value
-        ..Default::default()
+        ttl_seconds: Some(60),
+        ..empty_response()
     }
 }
 
@@ -222,17 +275,14 @@ fn apply_transaction(
     success: &[(u8, String, String)],
     failure: &[(u8, String, String)],
 ) -> AppResponse {
-    // Evaluate all comparison conditions
-    let all_conditions_met = apply_transaction_evaluate_conditions(data, compare);
-
-    // Execute the appropriate branch based on conditions
-    let operations = if all_conditions_met { success } else { failure };
+    let should_run_success_branch = apply_transaction_evaluate_conditions(data, compare);
+    let operations = if should_run_success_branch { success } else { failure };
     let results = apply_transaction_execute_operations(data, operations);
 
     AppResponse {
-        succeeded: Some(all_conditions_met),
+        succeeded: Some(should_run_success_branch),
         txn_results: Some(results),
-        ..Default::default()
+        ..empty_response()
     }
 }
 
@@ -241,23 +291,21 @@ fn apply_transaction_evaluate_conditions(
     data: &BTreeMap<String, String>,
     compare: &[(u8, u8, String, String)],
 ) -> bool {
+    debug_assert!(u32::try_from(compare.len()).is_ok());
     for (target, op, key, value) in compare {
+        debug_assert!(matches!(*target, 0..=3));
+        debug_assert!(matches!(*op, 0..=3));
         let current_value = data.get(key);
 
-        let condition_met = match target {
-            0 => {
-                // Value comparison
-                match op {
-                    0 => current_value.map(|v| v.as_str()) == Some(value.as_str()), // Equal
-                    1 => current_value.map(|v| v.as_str()) != Some(value.as_str()), // NotEqual
-                    2 => current_value.map(|v| v.as_str() > value.as_str()).unwrap_or(false), // Greater
-                    3 => current_value.map(|v| v.as_str() < value.as_str()).unwrap_or(false), // Less
-                    _ => false,
-                }
-            }
+        let is_condition_met = match target {
+            0 => match op {
+                0 => current_value.map(|current| current.as_str()) == Some(value.as_str()),
+                1 => current_value.map(|current| current.as_str()) != Some(value.as_str()),
+                2 => current_value.map(|current| current.as_str() > value.as_str()).unwrap_or(false),
+                3 => current_value.map(|current| current.as_str() < value.as_str()).unwrap_or(false),
+                _ => false,
+            },
             1..=3 => {
-                // Version/CreateRevision/ModRevision comparison
-                // In-memory doesn't track versions, treat as 0
                 let current_version: i64 = 0;
                 let expected_version: i64 = value.parse().unwrap_or(0);
                 match op {
@@ -271,7 +319,7 @@ fn apply_transaction_evaluate_conditions(
             _ => false,
         };
 
-        if !condition_met {
+        if !is_condition_met {
             return false;
         }
     }
@@ -283,52 +331,57 @@ fn apply_transaction_execute_operations(
     data: &mut BTreeMap<String, String>,
     operations: &[(u8, String, String)],
 ) -> Vec<TxnOpResult> {
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(operations.len());
 
     for (op_type, key, value) in operations {
-        let result = match op_type {
+        let maybe_result = match op_type {
             0 => {
-                // Put operation
                 data.insert(key.clone(), value.clone());
-                TxnOpResult::Put { revision: 0 }
+                Some(TxnOpResult::Put { revision: 0 })
             }
             1 => {
-                // Delete operation
-                let deleted = if data.remove(key).is_some() { 1 } else { 0 };
-                TxnOpResult::Delete { deleted }
+                let deleted = u32::from(data.remove(key).is_some());
+                Some(TxnOpResult::Delete { deleted })
             }
             2 => {
-                // Get operation
-                let kv = data.get(key).map(|v| KeyValueWithRevision {
+                let kv = data.get(key).map(|stored_value| KeyValueWithRevision {
                     key: key.clone(),
-                    value: v.clone(),
+                    value: stored_value.clone(),
                     version: 0,
                     create_revision: 0,
                     mod_revision: 0,
                 });
-                TxnOpResult::Get { kv }
+                Some(TxnOpResult::Get { kv })
             }
             3 => {
-                // Range operation
-                let limit: usize = value.parse().unwrap_or(10);
-                let prefix = key;
+                let max_results: usize = value.parse().unwrap_or(10);
                 let kvs: Vec<_> = data
                     .iter()
-                    .filter(|(k, _)| k.starts_with(prefix))
-                    .take(limit)
-                    .map(|(k, v)| KeyValueWithRevision {
-                        key: k.clone(),
-                        value: v.clone(),
+                    .filter(|(stored_key, _)| stored_key.starts_with(key))
+                    .take(max_results)
+                    .map(|(stored_key, stored_value)| KeyValueWithRevision {
+                        key: stored_key.clone(),
+                        value: stored_value.clone(),
                         version: 0,
                         create_revision: 0,
                         mod_revision: 0,
                     })
                     .collect();
-                TxnOpResult::Range { kvs, more: false }
+                Some(TxnOpResult::Range { kvs, more: false })
             }
-            _ => continue,
+            _ => None,
         };
-        results.push(result);
+        if let Some(result) = maybe_result {
+            debug_assert!(matches!(
+                (&result, op_type),
+                (TxnOpResult::Put { .. }, 0)
+                    | (TxnOpResult::Delete { .. }, 1)
+                    | (TxnOpResult::Get { .. }, 2)
+                    | (TxnOpResult::Range { .. }, 3)
+            ));
+            results.push(result);
+            debug_assert!(results.len() <= operations.len());
+        }
     }
 
     results
@@ -339,7 +392,6 @@ fn apply_optimistic_transaction(
     data: &mut BTreeMap<String, String>,
     write_set: &[(bool, String, String)],
 ) -> AppResponse {
-    // In-memory state machine doesn't track versions, just apply the writes
     for (is_set, key, value) in write_set {
         if *is_set {
             data.insert(key.clone(), value.clone());
@@ -349,8 +401,8 @@ fn apply_optimistic_transaction(
     }
     AppResponse {
         occ_conflict: Some(false),
-        batch_applied: Some(write_set.len() as u32),
-        ..Default::default()
+        batch_applied: Some(saturating_count_u32(write_set.len())),
+        ..empty_response()
     }
 }
 
@@ -376,6 +428,9 @@ pub struct InMemoryStateMachine {
     /// Counter for generating unique snapshot IDs.
     snapshot_idx: AtomicU64,
     /// Currently held snapshot.
+    ///
+    /// Lock ordering: when both locks are needed, acquire `state_machine` before
+    /// `current_snapshot`.
     current_snapshot: RwLock<Option<StoredSnapshot>>,
 }
 
@@ -502,7 +557,8 @@ impl RaftSnapshotBuilder<AppTypeConfig> for InMemoryStateMachineStore {
         let mut current_snapshot = self.current_snapshot.write().await;
         drop(state_machine);
 
-        let snapshot_idx = self.snapshot_idx.fetch_add(1, Ordering::Relaxed) + 1;
+        let previous_snapshot_idx = self.snapshot_idx.fetch_add(1, Ordering::Relaxed);
+        let snapshot_idx = previous_snapshot_idx.saturating_add(1);
         let snapshot_id = if let Some(last) = last_applied_log {
             format!("{}-{}-{snapshot_idx}", last.committed_leader_id(), last.index())
         } else {
@@ -547,14 +603,17 @@ impl RaftStateMachine<AppTypeConfig> for InMemoryStateMachineStore {
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
     where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
         let mut sm = self.state_machine.write().await;
-        while let Some((entry, responder)) = entries.try_next().await? {
+        for _entry_index in 0..u32::MAX {
+            let Some((entry, responder)) = entries.try_next().await? else {
+                break;
+            };
             sm.last_applied_log = Some(entry.log_id);
             let response = match entry.payload {
-                EntryPayload::Blank => AppResponse::default(),
+                EntryPayload::Blank => empty_response(),
                 EntryPayload::Normal(ref req) => apply_app_request(&mut sm.data, req),
                 EntryPayload::Membership(ref membership) => {
                     sm.last_membership = StoredMembership::new(Some(entry.log_id), membership.clone());
-                    AppResponse::default()
+                    empty_response()
                 }
             };
             if let Some(responder) = responder {
@@ -625,9 +684,9 @@ impl RaftStateMachine<AppTypeConfig> for InMemoryStateMachineStore {
 /// This is extracted from apply() for Tiger Style compliance (function length < 70 lines).
 fn apply_app_request(data: &mut BTreeMap<String, String>, req: &AppRequest) -> AppResponse {
     match req {
-        AppRequest::Set { key, value } => apply_set(data, key, value),
+        AppRequest::Set { key, value } => apply_set(data, KeyValueRef { key, value }),
         // TTL operations: store value but don't track expiration (testing only)
-        AppRequest::SetWithTTL { key, value, .. } => apply_set(data, key, value),
+        AppRequest::SetWithTTL { key, value, .. } => apply_set(data, KeyValueRef { key, value }),
         AppRequest::SetMulti { pairs } => apply_set_multi(data, pairs),
         AppRequest::SetMultiWithTTL { pairs, .. } => apply_set_multi(data, pairs),
         AppRequest::Delete { key } => apply_delete(data, key),
@@ -637,13 +696,16 @@ fn apply_app_request(data: &mut BTreeMap<String, String>, req: &AppRequest) -> A
             expected,
             new_value,
         } => apply_compare_and_swap(data, key, expected.as_ref(), new_value),
-        AppRequest::CompareAndDelete { key, expected } => apply_compare_and_delete(data, key, expected),
+        AppRequest::CompareAndDelete { key, expected } => apply_compare_and_delete(data, DeleteConditionRef {
+            key,
+            expected_value: expected,
+        }),
         AppRequest::Batch { operations } => apply_batch(data, operations),
         AppRequest::ConditionalBatch { conditions, operations } => {
             apply_conditional_batch(data, conditions, operations)
         }
         // Lease operations: store values but don't track leases (testing only)
-        AppRequest::SetWithLease { key, value, .. } => apply_set(data, key, value),
+        AppRequest::SetWithLease { key, value, .. } => apply_set(data, KeyValueRef { key, value }),
         AppRequest::SetMultiWithLease { pairs, .. } => apply_set_multi(data, pairs),
         AppRequest::LeaseGrant { lease_id, ttl_seconds } => apply_lease_grant(*lease_id, *ttl_seconds),
         AppRequest::LeaseRevoke { lease_id } => apply_lease_revoke(*lease_id),
@@ -656,11 +718,11 @@ fn apply_app_request(data: &mut BTreeMap<String, String>, req: &AppRequest) -> A
         } => apply_transaction(data, compare, success, failure),
         // OptimisticTransaction: in-memory doesn't track versions
         AppRequest::OptimisticTransaction { write_set, .. } => apply_optimistic_transaction(data, write_set),
-        AppRequest::TrustInitialize(_) => AppResponse::default(),
-        AppRequest::TrustReconfiguration(_) => AppResponse::default(),
+        AppRequest::TrustInitialize(_) => empty_response(),
+        AppRequest::TrustReconfiguration(_) => empty_response(),
         // Shard topology operations: no-op for in-memory (testing only)
         AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
-            AppResponse::default()
+            empty_response()
         }
     }
 }

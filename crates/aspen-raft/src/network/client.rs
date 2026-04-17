@@ -53,6 +53,68 @@ use crate::verified::deserialize_rpc_response;
 use crate::verified::extract_sharded_response;
 use crate::verified::maybe_prefix_shard_id;
 
+#[inline]
+fn max_rpc_message_size_usize() -> usize {
+    match usize::try_from(MAX_RPC_MESSAGE_SIZE) {
+        Ok(max_message_size) => max_message_size,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn duration_ms_u64(duration: std::time::Duration) -> u64 {
+    match u64::try_from(duration.as_millis()) {
+        Ok(duration_ms) => duration_ms,
+        Err(_) => u64::MAX,
+    }
+}
+
+#[inline]
+fn snapshot_bytes_u64(snapshot_data: &[u8]) -> u64 {
+    match u64::try_from(snapshot_data.len()) {
+        Ok(snapshot_size_bytes) => snapshot_size_bytes,
+        Err(_) => u64::MAX,
+    }
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "snapshot transfer history records wall-clock event time for operators"
+)]
+#[inline]
+fn current_time_us() -> u64 {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration_since_epoch) => match u64::try_from(duration_since_epoch.as_micros()) {
+            Ok(timestamp_us) => timestamp_us,
+            Err(_) => u64::MAX,
+        },
+        Err(_) => 0,
+    }
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "snapshot transfer duration metrics need a monotonic start boundary"
+)]
+#[inline]
+fn current_monotonic_instant() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
+#[inline]
+fn max_snapshot_chunks(snapshot_read_buffer_bytes_u64: u64) -> u64 {
+    debug_assert!(snapshot_read_buffer_bytes_u64 > 0, "snapshot read buffer must be non-zero");
+    if snapshot_read_buffer_bytes_u64 == 0 {
+        return u64::MAX;
+    }
+    match MAX_SNAPSHOT_SIZE.checked_div(snapshot_read_buffer_bytes_u64) {
+        Some(max_chunks) => max_chunks.saturating_add(1),
+        None => u64::MAX,
+    }
+}
+
 /// IRPC-based Raft network client for a single peer.
 ///
 /// Tiger Style:
@@ -77,6 +139,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     connection_pool: Arc<RaftConnectionPool<T>>,
     peer_addr: Option<iroh::EndpointAddr>,
     target: NodeId,
+    /// Lock ordering: when multiple client locks are needed, acquire
+    /// `failure_detector` before `drift_detector`, then `gossip_addrs`.
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
     drift_detector: Arc<RwLock<ClockDriftDetector>>,
     /// Optional shard ID for sharded RPC routing.
@@ -103,7 +167,10 @@ impl<T> IrpcRaftNetwork<T>
 where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
     /// Create a new network client for a single peer.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "network client wiring carries pool, detectors, routing, and update channel state"
+    )]
     pub(crate) fn new(
         connection_pool: Arc<RaftConnectionPool<T>>,
         peer_addr: Option<iroh::EndpointAddr>,
@@ -232,11 +299,13 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                     "connection failure, classifying as NodeCrash"
                 );
                 // Tiger Style: Use bounded channel instead of spawning unbounded tasks
-                let _ = self.failure_update_tx.try_send(FailureDetectorUpdate {
+                if let Err(update_error) = self.failure_update_tx.try_send(FailureDetectorUpdate {
                     node_id: self.target,
                     raft_status: ConnectionStatus::Disconnected,
                     iroh_status: ConnectionStatus::Disconnected,
-                });
+                }) {
+                    tracing::debug!(target = %self.target, error = %update_error, "failed to enqueue NodeCrash failure update");
+                }
             })
             .context("failed to get connection from pool")?;
 
@@ -253,11 +322,13 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                     error = %err,
                     "stream failure with connection up, classifying as ActorCrash"
                 );
-                let _ = self.failure_update_tx.try_send(FailureDetectorUpdate {
+                if let Err(update_error) = self.failure_update_tx.try_send(FailureDetectorUpdate {
                     node_id: self.target,
                     raft_status: ConnectionStatus::Disconnected,
                     iroh_status: ConnectionStatus::Connected,
-                });
+                }) {
+                    tracing::debug!(target = %self.target, error = %update_error, "failed to enqueue ActorCrash failure update");
+                }
             })
             .context("failed to acquire stream from connection")
     }
@@ -280,7 +351,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         &self,
         stream_handle: &mut crate::connection_pool::StreamHandle,
     ) -> anyhow::Result<Vec<u8>> {
-        tokio::time::timeout(IROH_READ_TIMEOUT, stream_handle.recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize))
+        tokio::time::timeout(IROH_READ_TIMEOUT, stream_handle.recv.read_to_end(max_rpc_message_size_usize()))
             .await
             .context("timeout reading RPC response")?
             .context("failed to read RPC response")
@@ -372,6 +443,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     }
 }
 
+// Tiger Style: openraft trait methods return nested protocol/transport matches that stay clearer
+// inline.
 #[allow(clippy::blocks_in_conditions)]
 impl<T> RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork<T>
 where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
@@ -412,10 +485,12 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                     error_kind
                 )))))
             }
-            _ => Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "unexpected response type for append_entries",
-            )))),
+            RaftRpcResponse::Vote(_) | RaftRpcResponse::InstallSnapshot(_) => {
+                Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "unexpected response type for append_entries",
+                ))))
+            }
         }
     }
 
@@ -455,10 +530,12 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                     error_kind
                 )))))
             }
-            _ => Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "unexpected response type for vote",
-            )))),
+            RaftRpcResponse::AppendEntries(_) | RaftRpcResponse::InstallSnapshot(_) => {
+                Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "unexpected response type for vote",
+                ))))
+            }
         }
     }
 
@@ -475,18 +552,28 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         let mut snapshot_reader = snapshot.snapshot;
 
         // Read in chunks, checking size limit to prevent unbounded memory allocation
-        let mut buffer = [0u8; 8192]; // 8KB chunks
-        loop {
+        const SNAPSHOT_READ_BUFFER_SIZE_BYTES: usize = 8192;
+        let snapshot_read_buffer_bytes_u64 = match u64::try_from(SNAPSHOT_READ_BUFFER_SIZE_BYTES) {
+            Ok(snapshot_read_buffer_bytes_u64) => snapshot_read_buffer_bytes_u64,
+            Err(_) => 8192,
+        };
+        let max_snapshot_read_chunks = max_snapshot_chunks(snapshot_read_buffer_bytes_u64);
+        let mut buffer = [0u8; SNAPSHOT_READ_BUFFER_SIZE_BYTES];
+        for _chunk_index in 0..=max_snapshot_read_chunks {
             let bytes_read = snapshot_reader.read(&mut buffer).await.map_err(|err| {
                 StreamingError::StorageError(StorageError::read_snapshot(Some(snapshot.meta.signature()), &err))
             })?;
 
             if bytes_read == 0 {
-                break; // EOF
+                break;
             }
 
-            // Tiger Style: Fail fast if snapshot exceeds size limit
-            if snapshot_data.len() as u64 + bytes_read as u64 > MAX_SNAPSHOT_SIZE {
+            let current_snapshot_size_bytes = snapshot_bytes_u64(&snapshot_data);
+            let bytes_read_u64 = match u64::try_from(bytes_read) {
+                Ok(bytes_read_u64) => bytes_read_u64,
+                Err(_) => u64::MAX,
+            };
+            if current_snapshot_size_bytes.saturating_add(bytes_read_u64) > MAX_SNAPSHOT_SIZE {
                 return Err(StreamingError::StorageError(StorageError::read_snapshot(
                     Some(snapshot.meta.signature()),
                     &std::io::Error::new(
@@ -499,8 +586,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             snapshot_data.extend_from_slice(&buffer[..bytes_read]);
         }
 
-        let snapshot_size = snapshot_data.len() as f64;
-        let snapshot_send_start = std::time::Instant::now();
+        let snapshot_transfer_bytes = snapshot_bytes_u64(&snapshot_data);
+        let snapshot_size_bytes = snapshot_transfer_bytes as f64;
+        let snapshot_send_start = current_monotonic_instant();
         let peer_label = self.target.to_string();
 
         let request = RaftSnapshotRequest {
@@ -550,31 +638,31 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                     error_kind
                 )))))
             }
-            _ => Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "unexpected response type for install_snapshot",
-            )))),
+            RaftRpcResponse::Vote(_) | RaftRpcResponse::AppendEntries(_) => {
+                Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "unexpected response type for install_snapshot",
+                ))))
+            }
         };
 
         // Record snapshot transfer metrics
         let elapsed_ms = snapshot_send_start.elapsed().as_secs_f64() * 1000.0;
         let outcome = if result.is_ok() { "success" } else { "error" };
         metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "send", "peer" => peer_label.clone())
-            .record(snapshot_size);
+            .record(snapshot_size_bytes);
         metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "send", "peer" => peer_label)
             .record(elapsed_ms);
         metrics::counter!("aspen.snapshot.transfers_total", "direction" => "send", "outcome" => outcome).increment(1);
         if let Some(ref history) = self.snapshot_history {
-            let now_us =
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
-                    as u64;
+            let timestamp_us = current_time_us();
             history.push(aspen_transport::snapshot_history::SnapshotTransferEntry {
                 peer_id: self.target.0,
                 direction: "send",
-                size_bytes: snapshot_size as u64,
-                duration_ms: elapsed_ms as u64,
+                size_bytes: snapshot_transfer_bytes,
+                duration_ms: duration_ms_u64(snapshot_send_start.elapsed()),
                 outcome,
-                timestamp_us: now_us,
+                timestamp_us,
             });
         }
 
