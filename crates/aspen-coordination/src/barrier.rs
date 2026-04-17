@@ -90,6 +90,15 @@ enum EnterResult {
     RetryRequired,
 }
 
+struct LeaveUpdateInput<'a> {
+    name: &'a str,
+    participant_id: &'a str,
+    key: &'a str,
+    old_json: String,
+    new_state: &'a BarrierState,
+    remaining: u32,
+}
+
 /// Manager for distributed barrier operations.
 pub struct BarrierManager<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
@@ -334,7 +343,15 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
         if remaining == 0 {
             self.leave_delete_barrier(name, participant_id, key, old_json).await
         } else {
-            self.leave_update_state(name, participant_id, key, old_json, &new_state, remaining).await
+            self.leave_update_state(LeaveUpdateInput {
+                name,
+                participant_id,
+                key,
+                old_json,
+                new_state: &new_state,
+                remaining,
+            })
+            .await
         }
     }
 
@@ -367,15 +384,15 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
     }
 
     /// Update barrier state after participant leaves.
-    async fn leave_update_state(
-        &self,
-        name: &str,
-        participant_id: &str,
-        key: &str,
-        old_json: String,
-        new_state: &BarrierState,
-        remaining: u32,
-    ) -> Result<LeaveResult> {
+    async fn leave_update_state(&self, input: LeaveUpdateInput<'_>) -> Result<LeaveResult> {
+        let LeaveUpdateInput {
+            name,
+            participant_id,
+            key,
+            old_json,
+            new_state,
+            remaining,
+        } = input;
         let new_json = serde_json::to_string(new_state)?;
 
         match self

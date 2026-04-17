@@ -351,13 +351,18 @@ impl RaftNode {
         let metrics = self.raft.metrics().borrow().clone();
         if metrics.membership_config.membership().nodes().next().is_some() {
             // Atomically transition from false to true (only one thread wins)
-            // We don't care if we lose the race - another thread already set it
-            let _ = self.initialized.compare_exchange(
+            // We don't care if we lose the race - another thread already set it.
+            if let Err(current_value) = self.initialized.compare_exchange(
                 false,
                 true,
                 Ordering::Release, // Ensure membership check happens-before this store
                 Ordering::Relaxed, // On failure, we don't need to see the current value
-            );
+            ) {
+                debug_assert!(
+                    current_value,
+                    "initialized compare_exchange should only fail after another writer sets true"
+                );
+            }
             return Ok(());
         }
 
@@ -371,13 +376,15 @@ impl RaftNode {
         let metrics = self.raft.metrics().borrow().clone();
         let membership = &metrics.membership_config;
 
-        let mut nodes = Vec::new();
-        let mut learners = Vec::new();
-        let mut members = Vec::new();
+        let membership_nodes = membership.membership().nodes();
+        let (node_count, _) = membership_nodes.size_hint();
+        let mut nodes = Vec::with_capacity(node_count);
+        let mut learners = Vec::with_capacity(node_count);
+        let mut members = Vec::with_capacity(node_count);
 
         let voter_ids: std::collections::HashSet<NodeId> = membership.membership().voter_ids().collect();
 
-        for (node_id, member_info) in membership.membership().nodes() {
+        for (node_id, member_info) in membership_nodes {
             let cluster_node = ClusterNode::with_iroh_addr((*node_id).into(), member_info.iroh_addr.clone());
 
             if voter_ids.contains(node_id) {

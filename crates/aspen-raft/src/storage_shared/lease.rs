@@ -5,6 +5,30 @@ use snafu::ResultExt;
 
 use super::*;
 
+#[inline]
+fn remaining_ttl_seconds_u32(remaining_ms: u64) -> u32 {
+    match u32::try_from(remaining_ms / 1000) {
+        Ok(remaining_seconds) => remaining_seconds,
+        Err(_) => u32::MAX,
+    }
+}
+
+#[inline]
+fn batch_limit_usize(batch_limit: u32) -> usize {
+    match usize::try_from(batch_limit) {
+        Ok(batch_limit) => batch_limit,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn active_lease_capacity(storage: &SharedRedbStorage) -> Result<usize, SharedStorageError> {
+    match usize::try_from(storage.count_active_leases()?) {
+        Ok(active_leases) => Ok(active_leases),
+        Err(_) => Ok(usize::MAX),
+    }
+}
+
 impl SharedRedbStorage {
     /// Get lease information by ID.
     ///
@@ -25,7 +49,7 @@ impl SharedRedbStorage {
                 }
 
                 let remaining_ms = entry.expires_at_ms.saturating_sub(now_ms);
-                let remaining_seconds = (remaining_ms / 1000) as u32;
+                let remaining_seconds = remaining_ttl_seconds_u32(remaining_ms);
 
                 Ok(Some((entry.ttl_seconds, remaining_seconds)))
             }
@@ -55,7 +79,7 @@ impl SharedRedbStorage {
         let table = read_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
 
         let now_ms = now_unix_ms();
-        let mut leases = Vec::new();
+        let mut leases = Vec::with_capacity(active_lease_capacity(self)?);
 
         for item in table.iter().context(RangeSnafu)? {
             let (id_guard, value_guard) = item.context(GetSnafu)?;
@@ -68,7 +92,7 @@ impl SharedRedbStorage {
             }
 
             let remaining_ms = entry.expires_at_ms.saturating_sub(now_ms);
-            let remaining_seconds = (remaining_ms / 1000) as u32;
+            let remaining_seconds = remaining_ttl_seconds_u32(remaining_ms);
 
             leases.push((lease_id, entry.ttl_seconds, remaining_seconds));
         }
@@ -94,7 +118,7 @@ impl SharedRedbStorage {
             let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
             let table = read_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
 
-            let mut expired = Vec::new();
+            let mut expired = Vec::with_capacity(batch_limit_usize(batch_limit));
             for item in table.iter().context(RangeSnafu)? {
                 if deleted >= batch_limit {
                     break;

@@ -146,6 +146,10 @@ async fn membership_watcher_task(
             metrics.membership_config.membership().nodes().next().is_some(),
         )
     };
+    debug_assert!(
+        has_membership || initial_keys.is_empty(),
+        "membership watcher should not extract peers from an empty membership"
+    );
     sync_public_keys_to_registry(initial_keys, &trusted_peers).await;
 
     // Proactively set initialized flag if we already have membership
@@ -169,6 +173,10 @@ async fn membership_watcher_task(
                                 metrics.membership_config.membership().nodes().next().is_some(),
                             )
                         };
+                        debug_assert!(
+                            has_membership || keys.is_empty(),
+                            "membership watcher should not extract peers from an empty membership"
+                        );
                         sync_public_keys_to_registry(keys, &trusted_peers).await;
 
                         // Proactively set initialized flag when membership is received

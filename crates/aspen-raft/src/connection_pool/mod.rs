@@ -104,6 +104,8 @@ pub const CONNECTION_RETRY_BACKOFF_BASE_MS: u64 = 100;
 pub struct RaftConnectionPool<T>
 where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
 {
+    /// Lock ordering: when multiple pool locks are needed, acquire
+    /// `connections` before `failure_detector`, then `cleanup_task`.
     /// Transport providing endpoint access for creating connections.
     transport: Arc<T>,
     /// Map of NodeId -> PeerConnection (bounded by MAX_PEERS).

@@ -104,15 +104,25 @@ impl RaftNodeHealth {
     /// allow the supervisor to take action (e.g., restart services).
     pub async fn monitor_with_callback<F>(&self, interval_secs: u64, mut on_failure: F)
     where F: FnMut(HealthStatus) + Send {
-        let mut interval = interval(Duration::from_secs(interval_secs));
+        let mut health_check_timer = interval(Duration::from_secs(interval_secs));
 
-        loop {
-            interval.tick().await;
+        while !self.status().await.is_shutdown {
+            health_check_timer.tick().await;
 
             let status = self.status().await;
+            if status.is_shutdown {
+                info!(node_id = %self.node.node_id(), "stopping health monitor after shutdown");
+                break;
+            }
 
             if !status.is_healthy {
-                let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed) + 1;
+                let previous_failures = self
+                    .consecutive_failures
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current_failures| {
+                        Some(current_failures.saturating_add(1))
+                    })
+                    .unwrap_or_else(|current_failures| current_failures);
+                let failures = previous_failures.saturating_add(1);
 
                 warn!(
                     node_id = %self.node.node_id(),

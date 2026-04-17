@@ -13,6 +13,41 @@
 //! - No side effects or I/O
 //! - Deterministic pure functions
 
+/// Batch state needed by the write batcher pure helpers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatchState {
+    /// Number of pending operations in the batch.
+    pub pending_count: u32,
+    /// Current total bytes in the batch.
+    pub current_bytes: u64,
+    /// Monotonic start time for the current batch, or 0 when not set.
+    pub batch_start_ms: u64,
+    /// Current monotonic time for timeout-related helpers, or 0 when unused.
+    pub current_time_ms: u64,
+}
+
+/// Write batcher limits used by the pure helpers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatchLimits {
+    /// Maximum operations allowed per batch.
+    pub max_entries: u32,
+    /// Maximum bytes allowed per batch.
+    pub max_bytes: u64,
+    /// Maximum time to wait before flushing.
+    pub max_wait_ms: u64,
+}
+
+/// Sequence-range state used by contiguity checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatchSequenceState {
+    /// Minimum sequence in the batch.
+    pub min_sequence: u64,
+    /// Maximum sequence in the batch.
+    pub max_sequence: u64,
+    /// Number of operations in the batch.
+    pub batch_len: u64,
+}
+
 /// Result of checking whether a batch operation would exceed limits.
 ///
 /// Used to determine if the current batch should be flushed before
@@ -20,17 +55,35 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BatchLimitCheck {
     /// Whether adding would exceed entry count limit.
-    pub exceeds_entries: bool,
+    pub would_reject_for_entries: bool,
     /// Whether adding would exceed byte size limit.
-    pub exceeds_bytes: bool,
+    pub would_reject_for_bytes: bool,
 }
 
 impl BatchLimitCheck {
     /// Returns true if either limit would be exceeded.
     #[inline]
     pub fn would_exceed(&self) -> bool {
-        self.exceeds_entries || self.exceeds_bytes
+        self.would_reject_for_entries || self.would_reject_for_bytes
     }
+}
+
+/// Size inputs for Set operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetOperationSizeInput {
+    /// Key length in bytes.
+    pub key_len_bytes: u64,
+    /// Value length in bytes.
+    pub value_len_bytes: u64,
+}
+
+/// Operation-kind flags for batchability checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatchableOperationFlags {
+    /// Whether the operation is a Set.
+    pub is_set: bool,
+    /// Whether the operation is a Delete.
+    pub is_delete: bool,
 }
 
 /// Check if adding an operation would exceed batch limits.
@@ -41,11 +94,9 @@ impl BatchLimitCheck {
 ///
 /// # Arguments
 ///
-/// * `current_entries` - Number of operations currently in the batch
-/// * `current_bytes` - Current total size of the batch in bytes
+/// * `batch` - Current batch state
 /// * `op_bytes` - Size of the new operation to add in bytes
-/// * `max_entries` - Maximum allowed operations per batch
-/// * `max_bytes` - Maximum allowed bytes per batch
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
@@ -60,37 +111,40 @@ impl BatchLimitCheck {
 ///
 /// ```rust
 /// use aspen_raft::verified::check_batch_limits;
+/// use aspen_raft::verified::BatchLimits;
+/// use aspen_raft::verified::BatchState;
 ///
 /// let check = check_batch_limits(
-///     99,        // current_entries
-///     500_000,   // current_bytes
-///     1000,      // op_bytes
-///     100,       // max_entries
-///     1_000_000, // max_bytes
+///     BatchState {
+///         pending_count: 99,
+///         current_bytes: 500_000,
+///         batch_start_ms: 0,
+///         current_time_ms: 0,
+///     },
+///     1000,
+///     BatchLimits {
+///         max_entries: 100,
+///         max_bytes: 1_000_000,
+///         max_wait_ms: 0,
+///     },
 /// );
 ///
-/// assert!(!check.exceeds_entries); // 99 < 100
-/// assert!(!check.exceeds_bytes);   // 501_000 < 1_000_000
+/// assert!(!check.would_reject_for_entries); // 99 < 100
+/// assert!(!check.would_reject_for_bytes);   // 501_000 < 1_000_000
 /// assert!(!check.would_exceed());
 /// ```
 #[inline]
-pub fn check_batch_limits(
-    current_entries: u32,
-    current_bytes: u64,
-    op_bytes: u64,
-    max_entries: u32,
-    max_bytes: u64,
-) -> BatchLimitCheck {
+pub fn check_batch_limits(batch: BatchState, op_bytes: u64, limits: BatchLimits) -> BatchLimitCheck {
     // Only check limits if batch is non-empty
     // (we always allow adding to an empty batch)
-    let has_pending = current_entries > 0;
+    let has_pending = batch.pending_count > 0;
 
-    let exceeds_entries = has_pending && current_entries >= max_entries;
-    let exceeds_bytes = has_pending && current_bytes.saturating_add(op_bytes) > max_bytes;
+    let should_reject_for_entries = has_pending && batch.pending_count >= limits.max_entries;
+    let should_reject_for_bytes = has_pending && batch.current_bytes.saturating_add(op_bytes) > limits.max_bytes;
 
     BatchLimitCheck {
-        exceeds_entries,
-        exceeds_bytes,
+        would_reject_for_entries: should_reject_for_entries,
+        would_reject_for_bytes: should_reject_for_bytes,
     }
 }
 
@@ -116,12 +170,9 @@ pub enum FlushDecision {
 ///
 /// # Arguments
 ///
-/// * `pending_count` - Number of operations in the batch after adding
-/// * `current_bytes` - Total bytes in the batch after adding
-/// * `max_entries` - Maximum allowed operations per batch
-/// * `max_bytes` - Maximum allowed bytes per batch
-/// * `max_wait_is_zero` - Whether batching is disabled (max_wait = 0)
-/// * `flush_already_scheduled` - Whether a delayed flush is already pending
+/// * `batch` - Batch state after adding the operation
+/// * `limits` - Batch entry/byte/time limits
+/// * `is_flush_already_scheduled` - Whether a delayed flush is already pending
 ///
 /// # Returns
 ///
@@ -136,51 +187,90 @@ pub enum FlushDecision {
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::verified::{determine_flush_action, FlushDecision};
+/// use aspen_raft::verified::BatchLimits;
+/// use aspen_raft::verified::BatchState;
+/// use aspen_raft::verified::FlushDecision;
+/// use aspen_raft::verified::determine_flush_action;
 ///
 /// // Batch is full, flush immediately
-/// let decision = determine_flush_action(100, 500_000, 100, 1_000_000, false, false);
+/// let decision = determine_flush_action(
+///     BatchState {
+///         pending_count: 100,
+///         current_bytes: 500_000,
+///         batch_start_ms: 0,
+///         current_time_ms: 0,
+///     },
+///     BatchLimits {
+///         max_entries: 100,
+///         max_bytes: 1_000_000,
+///         max_wait_ms: 1,
+///     },
+///     false,
+/// );
 /// assert_eq!(decision, FlushDecision::Immediate);
 ///
 /// // Batch has items, not full, no flush scheduled yet
-/// let decision = determine_flush_action(10, 1000, 100, 1_000_000, false, false);
+/// let decision = determine_flush_action(
+///     BatchState {
+///         pending_count: 10,
+///         current_bytes: 1000,
+///         batch_start_ms: 0,
+///         current_time_ms: 0,
+///     },
+///     BatchLimits {
+///         max_entries: 100,
+///         max_bytes: 1_000_000,
+///         max_wait_ms: 1,
+///     },
+///     false,
+/// );
 /// assert_eq!(decision, FlushDecision::Delayed);
 ///
 /// // Batching disabled, always flush immediately
-/// let decision = determine_flush_action(1, 100, 100, 1_000_000, true, false);
+/// let decision = determine_flush_action(
+///     BatchState {
+///         pending_count: 1,
+///         current_bytes: 100,
+///         batch_start_ms: 0,
+///         current_time_ms: 0,
+///     },
+///     BatchLimits {
+///         max_entries: 100,
+///         max_bytes: 1_000_000,
+///         max_wait_ms: 0,
+///     },
+///     false,
+/// );
 /// assert_eq!(decision, FlushDecision::Immediate);
 /// ```
 #[inline]
 pub fn determine_flush_action(
-    pending_count: u32,
-    current_bytes: u64,
-    max_entries: u32,
-    max_bytes: u64,
-    max_wait_is_zero: bool,
-    flush_already_scheduled: bool,
+    batch: BatchState,
+    limits: BatchLimits,
+    is_flush_already_scheduled: bool,
 ) -> FlushDecision {
     // Immediate flush if batch is full (entries)
-    if pending_count >= max_entries {
+    if batch.pending_count >= limits.max_entries {
         return FlushDecision::Immediate;
     }
 
     // Immediate flush if batch is full (bytes)
-    if current_bytes >= max_bytes {
+    if batch.current_bytes >= limits.max_bytes {
         return FlushDecision::Immediate;
     }
 
     // No pending items means no flush needed
-    if pending_count == 0 {
+    if batch.pending_count == 0 {
         return FlushDecision::None;
     }
 
     // Batching disabled (max_wait = 0) means immediate flush
-    if max_wait_is_zero {
+    if limits.max_wait_ms == 0 {
         return FlushDecision::Immediate;
     }
 
     // Schedule delayed flush if not already scheduled
-    if !flush_already_scheduled {
+    if !is_flush_already_scheduled {
         return FlushDecision::Delayed;
     }
 
@@ -191,15 +281,14 @@ pub fn determine_flush_action(
 ///
 /// # Arguments
 ///
-/// * `key_len` - Length of the key in bytes
-/// * `value_len` - Length of the value in bytes
+/// * `size` - Key/value byte lengths for the Set operation
 ///
 /// # Returns
 ///
 /// Total size in bytes (key_len + value_len).
 #[inline]
-pub const fn calculate_set_op_size(key_len: u64, value_len: u64) -> u64 {
-    key_len + value_len
+pub const fn calculate_set_op_size(size: SetOperationSizeInput) -> u64 {
+    size.key_len_bytes.saturating_add(size.value_len_bytes)
 }
 
 /// Calculate the size of a Delete operation in bytes.
@@ -247,8 +336,8 @@ pub const fn is_key_valid(key_len: u64) -> bool {
 /// Total operation size (saturating at u64::MAX).
 #[inline]
 #[allow(dead_code)]
-pub const fn compute_op_size(key_len: u64, value_len: u64) -> u64 {
-    key_len.saturating_add(value_len)
+pub const fn compute_op_size(size: SetOperationSizeInput) -> u64 {
+    size.key_len_bytes.saturating_add(size.value_len_bytes)
 }
 
 /// Check if operation fits within max bytes limit.
@@ -263,8 +352,8 @@ pub const fn compute_op_size(key_len: u64, value_len: u64) -> u64 {
 /// `true` if operation fits.
 #[inline]
 #[allow(dead_code)]
-pub const fn does_op_fit(op_bytes: u64, max_bytes: u64) -> bool {
-    op_bytes <= max_bytes
+pub const fn does_op_fit(op_bytes: u64, limits: BatchLimits) -> bool {
+    op_bytes <= limits.max_bytes
 }
 
 /// Check if sequence can be incremented.
@@ -301,11 +390,9 @@ pub const fn compute_next_sequence(current_sequence: u64) -> u64 {
 ///
 /// # Arguments
 ///
-/// * `pending_len` - Current pending count
-/// * `max_entries` - Maximum entries
-/// * `current_bytes` - Current batch bytes
-/// * `max_bytes` - Maximum batch bytes
+/// * `batch` - Current batch state
 /// * `op_bytes` - Size of operation to add
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
@@ -313,17 +400,11 @@ pub const fn compute_next_sequence(current_sequence: u64) -> u64 {
 ///
 /// # Safety
 ///
-/// Requires `current_bytes <= max_bytes` (from bytes_bounded invariant).
+/// Requires `batch.current_bytes <= limits.max_bytes` (from bytes_bounded invariant).
 #[inline]
 #[allow(dead_code)]
-pub fn would_add_trigger_flush(
-    pending_len: u32,
-    max_entries: u32,
-    current_bytes: u64,
-    max_bytes: u64,
-    op_bytes: u64,
-) -> bool {
-    pending_len >= max_entries || op_bytes > max_bytes - current_bytes
+pub fn would_add_trigger_flush(batch: BatchState, op_bytes: u64, limits: BatchLimits) -> bool {
+    batch.pending_count >= limits.max_entries || op_bytes > limits.max_bytes.saturating_sub(batch.current_bytes)
 }
 
 /// Compute new batch start time.
@@ -333,20 +414,18 @@ pub fn would_add_trigger_flush(
 ///
 /// # Arguments
 ///
-/// * `pending_len` - Current pending count
-/// * `current_batch_start` - Current batch start time
-/// * `current_time_ms` - Current time
+/// * `batch` - Current batch state
 ///
 /// # Returns
 ///
 /// New batch start time.
 #[inline]
 #[allow(dead_code)]
-pub const fn compute_batch_start(pending_len: u32, current_batch_start: u64, current_time_ms: u64) -> u64 {
-    if pending_len == 0 {
-        current_time_ms
+pub const fn compute_batch_start(batch: BatchState) -> u64 {
+    if batch.pending_count == 0 {
+        batch.current_time_ms
     } else {
-        current_batch_start
+        batch.batch_start_ms
     }
 }
 
@@ -354,7 +433,7 @@ pub const fn compute_batch_start(pending_len: u32, current_batch_start: u64, cur
 ///
 /// # Arguments
 ///
-/// * `current_bytes` - Current batch bytes
+/// * `batch` - Current batch state
 /// * `op_bytes` - Size of operation to add
 ///
 /// # Returns
@@ -362,24 +441,23 @@ pub const fn compute_batch_start(pending_len: u32, current_batch_start: u64, cur
 /// New current bytes (saturating at u64::MAX).
 #[inline]
 #[allow(dead_code)]
-pub const fn compute_bytes_after_add(current_bytes: u64, op_bytes: u64) -> u64 {
-    current_bytes.saturating_add(op_bytes)
+pub const fn compute_bytes_after_add(batch: BatchState, op_bytes: u64) -> u64 {
+    batch.current_bytes.saturating_add(op_bytes)
 }
 
 /// Check if operation is batchable.
 ///
 /// # Arguments
 ///
-/// * `is_set` - Whether this is a Set operation
-/// * `is_delete` - Whether this is a Delete operation
+/// * `operation` - Operation-kind flags
 ///
 /// # Returns
 ///
 /// `true` if operation is batchable.
 #[inline]
 #[allow(dead_code)]
-pub const fn is_batchable_operation(is_set: bool, is_delete: bool) -> bool {
-    is_set || is_delete
+pub const fn is_batchable_operation(operation: BatchableOperationFlags) -> bool {
+    operation.is_set || operation.is_delete
 }
 
 // ============================================================================
@@ -405,32 +483,32 @@ pub const fn should_flush(pending_len: u32) -> bool {
 ///
 /// # Arguments
 ///
-/// * `pending_len` - Current pending count
-/// * `max_entries` - Maximum entries
+/// * `batch` - Current batch state
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
 /// `true` if at or above entries limit.
 #[inline]
 #[allow(dead_code)]
-pub const fn is_entries_full(pending_len: u32, max_entries: u32) -> bool {
-    pending_len >= max_entries
+pub const fn is_entries_full(batch: BatchState, limits: BatchLimits) -> bool {
+    batch.pending_count >= limits.max_entries
 }
 
 /// Check if batch is at bytes limit.
 ///
 /// # Arguments
 ///
-/// * `current_bytes` - Current batch bytes
-/// * `max_bytes` - Maximum bytes
+/// * `batch` - Current batch state
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
 /// `true` if at or above bytes limit.
 #[inline]
 #[allow(dead_code)]
-pub const fn is_bytes_full(current_bytes: u64, max_bytes: u64) -> bool {
-    current_bytes >= max_bytes
+pub const fn is_bytes_full(batch: BatchState, limits: BatchLimits) -> bool {
+    batch.current_bytes >= limits.max_bytes
 }
 
 /// Check if immediate flush mode is enabled.
@@ -452,17 +530,16 @@ pub const fn is_immediate_mode(max_wait_ms: u64) -> bool {
 ///
 /// # Arguments
 ///
-/// * `batch_start_ms` - When batch started
-/// * `current_time_ms` - Current time
-/// * `max_wait_ms` - Maximum wait time
+/// * `batch` - Timed batch state
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
 /// `true` if timeout has elapsed.
 #[inline]
 #[allow(dead_code)]
-pub fn is_timeout_elapsed(batch_start_ms: u64, current_time_ms: u64, max_wait_ms: u64) -> bool {
-    current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+pub fn is_timeout_elapsed(batch: BatchState, limits: BatchLimits) -> bool {
+    batch.current_time_ms.saturating_sub(batch.batch_start_ms) >= limits.max_wait_ms
 }
 
 /// Flush reason enumeration.
@@ -479,31 +556,21 @@ pub enum FlushReason {
 ///
 /// # Arguments
 ///
-/// * `pending_len` - Current pending count
-/// * `max_entries` - Maximum entries
-/// * `current_bytes` - Current bytes
-/// * `max_bytes` - Maximum bytes
-/// * `max_wait_ms` - Maximum wait (0 = immediate)
-/// * `timeout_elapsed` - Whether timeout has elapsed
+/// * `batch` - Current batch state
+/// * `limits` - Batch entry/byte/time limits
+/// * `_has_timeout_elapsed` - Whether timeout has elapsed
 ///
 /// # Returns
 ///
 /// The reason for flushing.
 #[inline]
 #[allow(dead_code)]
-pub fn determine_flush_reason_exec(
-    pending_len: u32,
-    max_entries: u32,
-    current_bytes: u64,
-    max_bytes: u64,
-    max_wait_ms: u64,
-    _timeout_elapsed: bool,
-) -> FlushReason {
-    if pending_len >= max_entries {
+pub fn determine_flush_reason_exec(batch: BatchState, limits: BatchLimits, _has_timeout_elapsed: bool) -> FlushReason {
+    if batch.pending_count >= limits.max_entries {
         FlushReason::EntriesFull
-    } else if current_bytes >= max_bytes {
+    } else if batch.current_bytes >= limits.max_bytes {
         FlushReason::BytesFull
-    } else if max_wait_ms == 0 {
+    } else if limits.max_wait_ms == 0 {
         FlushReason::Immediate
     } else {
         FlushReason::Timeout
@@ -514,41 +581,38 @@ pub fn determine_flush_reason_exec(
 ///
 /// # Arguments
 ///
-/// * `min_sequence` - Minimum sequence in batch
-/// * `max_sequence` - Maximum sequence in batch
-/// * `batch_len` - Number of operations
+/// * `sequence` - Sequence range state for the batch
 ///
 /// # Returns
 ///
 /// `true` if sequences are contiguous.
 #[inline]
 #[allow(dead_code)]
-pub fn is_batch_contiguous(min_sequence: u64, max_sequence: u64, batch_len: u64) -> bool {
-    max_sequence >= min_sequence && (max_sequence - min_sequence).saturating_add(1) == batch_len
+pub fn is_batch_contiguous(sequence: BatchSequenceState) -> bool {
+    sequence.max_sequence >= sequence.min_sequence
+        && sequence.max_sequence.saturating_sub(sequence.min_sequence).saturating_add(1) == sequence.batch_len
 }
 
 /// Compute time since batch started.
 ///
 /// # Arguments
 ///
-/// * `batch_start_ms` - When batch started
-/// * `current_time_ms` - Current time
+/// * `batch` - Timed batch state
 ///
 /// # Returns
 ///
 /// Time elapsed since batch start (saturating at 0 if time went backwards).
 #[inline]
 #[allow(dead_code)]
-pub const fn compute_batch_age(batch_start_ms: u64, current_time_ms: u64) -> u64 {
-    current_time_ms.saturating_sub(batch_start_ms)
+pub const fn compute_batch_age(batch: BatchState) -> u64 {
+    batch.current_time_ms.saturating_sub(batch.batch_start_ms)
 }
 
 /// Compute time until flush is required.
 ///
 /// # Arguments
 ///
-/// * `batch_start_ms` - When batch started
-/// * `current_time_ms` - Current time
+/// * `batch` - Timed batch state
 /// * `max_wait_ms` - Maximum wait time
 ///
 /// # Returns
@@ -556,8 +620,8 @@ pub const fn compute_batch_age(batch_start_ms: u64, current_time_ms: u64) -> u64
 /// Time until flush required (0 if already elapsed).
 #[inline]
 #[allow(dead_code)]
-pub fn compute_time_until_flush(batch_start_ms: u64, current_time_ms: u64, max_wait_ms: u64) -> u64 {
-    let elapsed = current_time_ms.saturating_sub(batch_start_ms);
+pub fn compute_time_until_flush(batch: BatchState, max_wait_ms: u64) -> u64 {
+    let elapsed = batch.current_time_ms.saturating_sub(batch.batch_start_ms);
     max_wait_ms.saturating_sub(elapsed)
 }
 
@@ -569,19 +633,17 @@ pub fn compute_time_until_flush(batch_start_ms: u64, current_time_ms: u64, max_w
 ///
 /// # Arguments
 ///
-/// * `pending_count` - Number of operations in the batch
-/// * `current_bytes` - Total bytes in the batch
+/// * `batch` - Current batch state
 /// * `op_bytes` - Size of the new operation to add
-/// * `max_entries` - Maximum allowed operations per batch
-/// * `max_bytes` - Maximum allowed bytes per batch
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
 /// `true` if there is space for the operation.
 #[inline]
 #[allow(dead_code)]
-pub fn has_space_exec(pending_count: u32, current_bytes: u64, op_bytes: u64, max_entries: u32, max_bytes: u64) -> bool {
-    pending_count < max_entries && op_bytes <= max_bytes.saturating_sub(current_bytes)
+pub fn has_space_exec(batch: BatchState, op_bytes: u64, limits: BatchLimits) -> bool {
+    batch.pending_count < limits.max_entries && op_bytes <= limits.max_bytes.saturating_sub(batch.current_bytes)
 }
 
 /// Check if a batch is empty.
@@ -603,59 +665,42 @@ pub const fn is_batch_empty(pending_count: u32) -> bool {
 ///
 /// # Arguments
 ///
-/// * `pending_count` - Number of operations in the batch
-/// * `current_bytes` - Total bytes in the batch
-/// * `max_entries` - Maximum allowed operations per batch
-/// * `max_bytes` - Maximum allowed bytes per batch
+/// * `batch` - Current batch state
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
 /// `true` if the batch is full.
 #[inline]
 #[allow(dead_code)]
-pub const fn is_batch_full_exec(pending_count: u32, current_bytes: u64, max_entries: u32, max_bytes: u64) -> bool {
-    pending_count >= max_entries || current_bytes >= max_bytes
+pub const fn is_batch_full_exec(batch: BatchState, limits: BatchLimits) -> bool {
+    batch.pending_count >= limits.max_entries || batch.current_bytes >= limits.max_bytes
 }
 
 /// Check if a batch should be flushed.
 ///
 /// # Arguments
 ///
-/// * `pending_count` - Number of operations in the batch
-/// * `current_bytes` - Total bytes in the batch
-/// * `batch_start_ms` - When the first item was added
-/// * `current_time_ms` - Current time
-/// * `max_entries` - Maximum allowed operations per batch
-/// * `max_bytes` - Maximum allowed bytes per batch
-/// * `max_wait_ms` - Maximum time to wait before flushing
+/// * `batch` - Timed batch state
+/// * `limits` - Batch entry/byte/time limits
 ///
 /// # Returns
 ///
 /// `true` if the batch should be flushed.
 #[inline]
 #[allow(dead_code)]
-pub fn should_flush_exec(
-    pending_count: u32,
-    current_bytes: u64,
-    batch_start_ms: u64,
-    current_time_ms: u64,
-    max_entries: u32,
-    max_bytes: u64,
-    max_wait_ms: u64,
-) -> bool {
-    pending_count > 0
-        && (is_batch_full_exec(pending_count, current_bytes, max_entries, max_bytes)
-            || timeout_elapsed_exec(pending_count, batch_start_ms, current_time_ms, max_wait_ms)
-            || max_wait_ms == 0)
+pub fn should_flush_exec(batch: BatchState, limits: BatchLimits) -> bool {
+    batch.pending_count > 0
+        && (is_batch_full_exec(batch, limits)
+            || timeout_elapsed_exec(batch, limits.max_wait_ms)
+            || limits.max_wait_ms == 0)
 }
 
 /// Check if timeout has elapsed for a batch.
 ///
 /// # Arguments
 ///
-/// * `pending_count` - Number of operations in the batch
-/// * `batch_start_ms` - When the first item was added (0 if empty)
-/// * `current_time_ms` - Current time
+/// * `batch` - Timed batch state
 /// * `max_wait_ms` - Maximum time to wait before flushing
 ///
 /// # Returns
@@ -663,8 +708,10 @@ pub fn should_flush_exec(
 /// `true` if timeout has elapsed and flush should occur.
 #[inline]
 #[allow(dead_code)]
-pub fn timeout_elapsed_exec(pending_count: u32, batch_start_ms: u64, current_time_ms: u64, max_wait_ms: u64) -> bool {
-    pending_count > 0 && batch_start_ms > 0 && current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+pub fn timeout_elapsed_exec(batch: BatchState, max_wait_ms: u64) -> bool {
+    batch.pending_count > 0
+        && batch.batch_start_ms > 0
+        && batch.current_time_ms.saturating_sub(batch.batch_start_ms) >= max_wait_ms
 }
 
 /// Check if either limit would be exceeded (convenience wrapper).
@@ -679,12 +726,21 @@ pub fn timeout_elapsed_exec(pending_count: u32, batch_start_ms: u64, current_tim
 #[inline]
 #[allow(dead_code)]
 pub const fn would_exceed(check: &BatchLimitCheck) -> bool {
-    check.exceeds_entries || check.exceeds_bytes
+    check.would_reject_for_entries || check.would_reject_for_bytes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn batch_state(pending_count: u32, current_bytes: u64) -> BatchState {
+        BatchState {
+            pending_count,
+            current_bytes,
+            batch_start_ms: 0,
+            current_time_ms: 0,
+        }
+    }
 
     // ========================================================================
     // check_batch_limits tests
@@ -693,69 +749,105 @@ mod tests {
     #[test]
     fn test_empty_batch_allows_any_operation() {
         // Empty batch should never report exceeded limits
-        let check = check_batch_limits(0, 0, 1_000_000, 1, 1);
-        assert!(!check.exceeds_entries);
-        assert!(!check.exceeds_bytes);
+        let check = check_batch_limits(batch_state(0, 0), 1_000_000, BatchLimits {
+            max_entries: 1,
+            max_bytes: 1,
+            max_wait_ms: 0,
+        });
+        assert!(!check.would_reject_for_entries);
+        assert!(!check.would_reject_for_bytes);
         assert!(!check.would_exceed());
     }
 
     #[test]
     fn test_entry_limit_exceeded() {
-        let check = check_batch_limits(100, 0, 0, 100, u64::MAX);
-        assert!(check.exceeds_entries);
-        assert!(!check.exceeds_bytes);
+        let check = check_batch_limits(batch_state(100, 0), 0, BatchLimits {
+            max_entries: 100,
+            max_bytes: u64::MAX,
+            max_wait_ms: 0,
+        });
+        assert!(check.would_reject_for_entries);
+        assert!(!check.would_reject_for_bytes);
         assert!(check.would_exceed());
     }
 
     #[test]
     fn test_entry_limit_not_exceeded() {
-        let check = check_batch_limits(99, 0, 0, 100, u64::MAX);
-        assert!(!check.exceeds_entries);
+        let check = check_batch_limits(batch_state(99, 0), 0, BatchLimits {
+            max_entries: 100,
+            max_bytes: u64::MAX,
+            max_wait_ms: 0,
+        });
+        assert!(!check.would_reject_for_entries);
         assert!(!check.would_exceed());
     }
 
     #[test]
     fn test_byte_limit_exceeded() {
-        let check = check_batch_limits(1, 900_000, 200_000, 100, 1_000_000);
-        assert!(!check.exceeds_entries);
-        assert!(check.exceeds_bytes);
+        let check = check_batch_limits(batch_state(1, 900_000), 200_000, BatchLimits {
+            max_entries: 100,
+            max_bytes: 1_000_000,
+            max_wait_ms: 0,
+        });
+        assert!(!check.would_reject_for_entries);
+        assert!(check.would_reject_for_bytes);
         assert!(check.would_exceed());
     }
 
     #[test]
     fn test_byte_limit_not_exceeded() {
-        let check = check_batch_limits(1, 500_000, 499_999, 100, 1_000_000);
-        assert!(!check.exceeds_bytes);
+        let check = check_batch_limits(batch_state(1, 500_000), 499_999, BatchLimits {
+            max_entries: 100,
+            max_bytes: 1_000_000,
+            max_wait_ms: 0,
+        });
+        assert!(!check.would_reject_for_bytes);
         assert!(!check.would_exceed());
     }
 
     #[test]
     fn test_byte_limit_exact_boundary() {
         // Exactly at the limit is OK (uses > not >=)
-        let check = check_batch_limits(1, 500_000, 500_000, 100, 1_000_000);
-        assert!(!check.exceeds_bytes);
+        let check = check_batch_limits(batch_state(1, 500_000), 500_000, BatchLimits {
+            max_entries: 100,
+            max_bytes: 1_000_000,
+            max_wait_ms: 0,
+        });
+        assert!(!check.would_reject_for_bytes);
     }
 
     #[test]
     fn test_byte_limit_one_over() {
-        let check = check_batch_limits(1, 500_000, 500_001, 100, 1_000_000);
-        assert!(check.exceeds_bytes);
+        let check = check_batch_limits(batch_state(1, 500_000), 500_001, BatchLimits {
+            max_entries: 100,
+            max_bytes: 1_000_000,
+            max_wait_ms: 0,
+        });
+        assert!(check.would_reject_for_bytes);
     }
 
     #[test]
     fn test_both_limits_exceeded() {
-        let check = check_batch_limits(100, 1_000_000, 1, 100, 1_000_000);
-        assert!(check.exceeds_entries);
-        assert!(check.exceeds_bytes);
+        let check = check_batch_limits(batch_state(100, 1_000_000), 1, BatchLimits {
+            max_entries: 100,
+            max_bytes: 1_000_000,
+            max_wait_ms: 0,
+        });
+        assert!(check.would_reject_for_entries);
+        assert!(check.would_reject_for_bytes);
         assert!(check.would_exceed());
     }
 
     #[test]
     fn test_saturating_arithmetic_prevents_overflow() {
         // Should not overflow when adding huge values
-        let check = check_batch_limits(1, u64::MAX - 1, u64::MAX, 100, u64::MAX);
+        let check = check_batch_limits(batch_state(1, u64::MAX.saturating_sub(1)), u64::MAX, BatchLimits {
+            max_entries: 100,
+            max_bytes: u64::MAX,
+            max_wait_ms: 0,
+        });
         // This should saturate to u64::MAX, not wrap around
-        assert!(!check.exceeds_bytes); // u64::MAX <= u64::MAX
+        assert!(!check.would_reject_for_bytes); // u64::MAX <= u64::MAX
     }
 
     // ========================================================================
@@ -764,44 +856,100 @@ mod tests {
 
     #[test]
     fn test_flush_when_entries_full() {
-        let decision = determine_flush_action(100, 0, 100, 1_000_000, false, false);
+        let decision = determine_flush_action(
+            batch_state(100, 0),
+            BatchLimits {
+                max_entries: 100,
+                max_bytes: 1_000_000,
+                max_wait_ms: 1,
+            },
+            false,
+        );
         assert_eq!(decision, FlushDecision::Immediate);
     }
 
     #[test]
     fn test_flush_when_bytes_full() {
-        let decision = determine_flush_action(1, 1_000_000, 100, 1_000_000, false, false);
+        let decision = determine_flush_action(
+            batch_state(1, 1_000_000),
+            BatchLimits {
+                max_entries: 100,
+                max_bytes: 1_000_000,
+                max_wait_ms: 1,
+            },
+            false,
+        );
         assert_eq!(decision, FlushDecision::Immediate);
     }
 
     #[test]
     fn test_no_flush_when_empty() {
-        let decision = determine_flush_action(0, 0, 100, 1_000_000, false, false);
+        let decision = determine_flush_action(
+            batch_state(0, 0),
+            BatchLimits {
+                max_entries: 100,
+                max_bytes: 1_000_000,
+                max_wait_ms: 1,
+            },
+            false,
+        );
         assert_eq!(decision, FlushDecision::None);
     }
 
     #[test]
     fn test_immediate_flush_when_batching_disabled() {
-        let decision = determine_flush_action(1, 100, 100, 1_000_000, true, false);
+        let decision = determine_flush_action(
+            batch_state(1, 100),
+            BatchLimits {
+                max_entries: 100,
+                max_bytes: 1_000_000,
+                max_wait_ms: 0,
+            },
+            false,
+        );
         assert_eq!(decision, FlushDecision::Immediate);
     }
 
     #[test]
     fn test_delayed_flush_when_not_scheduled() {
-        let decision = determine_flush_action(1, 100, 100, 1_000_000, false, false);
+        let decision = determine_flush_action(
+            batch_state(1, 100),
+            BatchLimits {
+                max_entries: 100,
+                max_bytes: 1_000_000,
+                max_wait_ms: 1,
+            },
+            false,
+        );
         assert_eq!(decision, FlushDecision::Delayed);
     }
 
     #[test]
     fn test_no_action_when_flush_already_scheduled() {
-        let decision = determine_flush_action(1, 100, 100, 1_000_000, false, true);
+        let decision = determine_flush_action(
+            batch_state(1, 100),
+            BatchLimits {
+                max_entries: 100,
+                max_bytes: 1_000_000,
+                max_wait_ms: 1,
+            },
+            true,
+        );
         assert_eq!(decision, FlushDecision::None);
     }
 
     #[test]
     fn test_immediate_overrides_scheduled() {
         // Even if flush is scheduled, immediate takes precedence when full
-        let decision = determine_flush_action(100, 0, 100, 1_000_000, false, true);
+        let decision = determine_flush_action(
+            batch_state(100, 0),
+            BatchLimits {
+                max_entries: 100,
+                max_bytes: 1_000_000,
+                max_wait_ms: 1,
+            },
+            true,
+        );
         assert_eq!(decision, FlushDecision::Immediate);
     }
 
@@ -811,9 +959,27 @@ mod tests {
 
     #[test]
     fn test_set_op_size() {
-        assert_eq!(calculate_set_op_size(8, 10), 18);
-        assert_eq!(calculate_set_op_size(0, 0), 0);
-        assert_eq!(calculate_set_op_size(1000, 1_000_000), 1_001_000);
+        assert_eq!(
+            calculate_set_op_size(SetOperationSizeInput {
+                key_len_bytes: 8,
+                value_len_bytes: 10,
+            }),
+            18,
+        );
+        assert_eq!(
+            calculate_set_op_size(SetOperationSizeInput {
+                key_len_bytes: 0,
+                value_len_bytes: 0,
+            }),
+            0,
+        );
+        assert_eq!(
+            calculate_set_op_size(SetOperationSizeInput {
+                key_len_bytes: 1000,
+                value_len_bytes: 1_000_000,
+            }),
+            1_001_000,
+        );
     }
 
     #[test]

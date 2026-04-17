@@ -87,6 +87,9 @@ struct BatcherState {
 /// Other operations (CAS, transactions, etc.) bypass batching and go
 /// directly to Raft for correctness reasons.
 pub struct WriteBatcher {
+    /// Lock ordering: when multiple batcher locks are needed, acquire
+    /// `state` before `flush_tasks`, and avoid holding either mutex while
+    /// taking `write_forwarder`.
     /// Raft instance for submitting batches
     raft: Arc<openraft::Raft<AppTypeConfig>>,
     /// This node's ID (used to prevent self-forwarding)

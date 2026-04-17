@@ -44,10 +44,10 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::Instrument;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-use tracing::instrument;
 use tracing::warn;
 
 use crate::clock_drift_detection::current_time_ms;
@@ -245,80 +245,83 @@ async fn run_server(
 /// Handle a single incoming Iroh connection.
 ///
 /// Tiger Style: Bounded stream count per connection to prevent resource exhaustion.
-#[instrument(skip(connecting, raft_core, task_tracker))]
 async fn handle_connection(
     connecting: iroh::endpoint::Incoming,
     raft_core: Raft<AppTypeConfig>,
     task_tracker: TaskTracker,
 ) -> Result<()> {
-    debug_assert!(MAX_STREAMS_PER_CONNECTION > 0, "SERVER: max streams per connection must be positive");
-    info!("awaiting incoming connection completion");
-    let connection = connecting.await.context("failed to accept connection")?;
-    let remote_node_id = connection.remote_id();
+    async move {
+        debug_assert!(MAX_STREAMS_PER_CONNECTION > 0, "SERVER: max streams per connection must be positive");
+        info!("awaiting incoming connection completion");
+        let connection = connecting.await.context("failed to accept connection")?;
+        let remote_node_id = connection.remote_id();
 
-    info!(remote_node = %remote_node_id, "accepted connection, waiting for streams");
+        info!(remote_node = %remote_node_id, "accepted connection, waiting for streams");
 
-    // Tiger Style: Fixed limit on concurrent streams per connection
-    let stream_semaphore = Arc::new(Semaphore::new(max_streams_per_connection_usize()));
-    let active_streams = Arc::new(AtomicU32::new(0));
-    debug_assert!(
-        stream_semaphore.available_permits() <= max_streams_per_connection_usize(),
-        "SERVER: stream permit count must not exceed configured max"
-    );
-
-    // Accept bidirectional streams from this connection
-    info!(remote_node = %remote_node_id, "starting accept_bi loop");
-    for stream_accept_iteration in 0..u32::MAX {
-        debug_assert!(stream_accept_iteration < u32::MAX, "SERVER: stream accept loop must stay bounded");
-        info!(remote_node = %remote_node_id, "waiting for stream via accept_bi");
-        let stream = match connection.accept_bi().await {
-            Ok(stream) => {
-                info!(remote_node = %remote_node_id, "accepted bidirectional stream");
-                stream
-            }
-            Err(err) => {
-                // Connection closed or error
-                info!(remote_node = %remote_node_id, error = %err, "connection closed");
-                break;
-            }
-        };
-
-        // Try to acquire a stream permit
-        let permit = match stream_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => permit,
-            Err(_) => {
-                warn!(
-                    remote_node = %remote_node_id,
-                    max_streams = MAX_STREAMS_PER_CONNECTION,
-                    "stream limit reached, dropping stream"
-                );
-                // Drop the stream by not processing it
-                continue;
-            }
-        };
-
-        let prior_active_streams = active_streams.fetch_add(1, Ordering::Relaxed);
+        // Tiger Style: Fixed limit on concurrent streams per connection
+        let stream_semaphore = Arc::new(Semaphore::new(max_streams_per_connection_usize()));
+        let active_streams = Arc::new(AtomicU32::new(0));
         debug_assert!(
-            prior_active_streams < MAX_STREAMS_PER_CONNECTION,
-            "SERVER: active stream count {} must stay below configured max {}",
-            prior_active_streams,
-            MAX_STREAMS_PER_CONNECTION
+            stream_semaphore.available_permits() <= max_streams_per_connection_usize(),
+            "SERVER: stream permit count must not exceed configured max"
         );
-        let active_streams_clone = active_streams.clone();
 
-        let raft_core_clone = raft_core.clone();
-        let (send, recv) = stream;
-        task_tracker.spawn(async move {
-            // Permit is held for the duration of the stream
-            let _permit = permit;
-            if let Err(err) = handle_rpc_stream((recv, send), raft_core_clone).await {
-                error!(error = %err, "failed to handle RPC stream");
-            }
-            active_streams_clone.fetch_sub(1, Ordering::Relaxed);
-        });
+        // Accept bidirectional streams from this connection
+        info!(remote_node = %remote_node_id, "starting accept_bi loop");
+        for stream_accept_iteration in 0..u32::MAX {
+            debug_assert!(stream_accept_iteration < u32::MAX, "SERVER: stream accept loop must stay bounded");
+            info!(remote_node = %remote_node_id, "waiting for stream via accept_bi");
+            let stream = match connection.accept_bi().await {
+                Ok(stream) => {
+                    info!(remote_node = %remote_node_id, "accepted bidirectional stream");
+                    stream
+                }
+                Err(err) => {
+                    // Connection closed or error
+                    info!(remote_node = %remote_node_id, error = %err, "connection closed");
+                    break;
+                }
+            };
+
+            // Try to acquire a stream permit
+            let permit = match stream_semaphore.clone().try_acquire_owned() {
+                Ok(permit) => permit,
+                Err(_) => {
+                    warn!(
+                        remote_node = %remote_node_id,
+                        max_streams = MAX_STREAMS_PER_CONNECTION,
+                        "stream limit reached, dropping stream"
+                    );
+                    // Drop the stream by not processing it
+                    continue;
+                }
+            };
+
+            let prior_active_streams = active_streams.fetch_add(1, Ordering::Relaxed);
+            debug_assert!(
+                prior_active_streams < MAX_STREAMS_PER_CONNECTION,
+                "SERVER: active stream count {} must stay below configured max {}",
+                prior_active_streams,
+                MAX_STREAMS_PER_CONNECTION
+            );
+            let active_streams_clone = active_streams.clone();
+
+            let raft_core_clone = raft_core.clone();
+            let (send, recv) = stream;
+            task_tracker.spawn(async move {
+                // Permit is held for the duration of the stream
+                let _permit = permit;
+                if let Err(err) = handle_rpc_stream((recv, send), raft_core_clone).await {
+                    error!(error = %err, "failed to handle RPC stream");
+                }
+                active_streams_clone.fetch_sub(1, Ordering::Relaxed);
+            });
+        }
+
+        Ok(())
     }
-
-    Ok(())
+    .instrument(tracing::info_span!("handle_connection"))
+    .await
 }
 
 /// Handle a single RPC message on a bidirectional stream.
@@ -327,24 +330,27 @@ async fn handle_connection(
 /// RaftCore is in a fatal state (panicked, stopped, or storage error).
 /// This prevents clients from receiving empty responses and allows proper
 /// failure detection.
-#[instrument(skip(recv, send, raft_core))]
 async fn handle_rpc_stream(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     raft_core: Raft<AppTypeConfig>,
 ) -> Result<()> {
-    info!("handle_rpc_stream started, reading RPC message");
+    async move {
+        info!("handle_rpc_stream started, reading RPC message");
 
-    // Read and deserialize the RPC request
-    let (request, server_recv_ms) = handle_rpc_read_request(&mut recv).await?;
+        // Read and deserialize the RPC request
+        let (request, server_recv_ms) = handle_rpc_read_request(&mut recv).await?;
 
-    // Process the RPC and create response
-    let response = handle_rpc_process_request(request, &raft_core).await;
+        // Process the RPC and create response
+        let response = handle_rpc_process_request(request, &raft_core).await;
 
-    // Send the response with timestamps
-    handle_rpc_send_response(&mut send, response, server_recv_ms).await?;
+        // Send the response with timestamps
+        handle_rpc_send_response(&mut send, response, server_recv_ms).await?;
 
-    info!("RPC response sent successfully");
-    Ok(())
+        info!("RPC response sent successfully");
+        Ok(())
+    }
+    .instrument(tracing::info_span!("handle_rpc_stream"))
+    .await
 }
 
 /// Read and deserialize an RPC request from the stream.

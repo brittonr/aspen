@@ -26,6 +26,7 @@ use openraft::type_config::alias::VoteOf;
 use tokio::io::AsyncReadExt;
 use tokio::select;
 use tokio::sync::RwLock;
+use tracing::Instrument;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -115,6 +116,17 @@ fn max_snapshot_chunks(snapshot_read_buffer_bytes_u64: u64) -> u64 {
     }
 }
 
+pub(crate) struct IrpcRaftNetworkConfig {
+    pub(crate) peer_addr: Option<iroh::EndpointAddr>,
+    pub(crate) target: NodeId,
+    /// Lock ordering: when both config locks are needed, acquire
+    /// `failure_detector` before `drift_detector`.
+    pub(crate) failure_detector: Arc<RwLock<NodeFailureDetector>>,
+    pub(crate) drift_detector: Arc<RwLock<ClockDriftDetector>>,
+    pub(crate) shard_id: Option<ShardId>,
+    pub(crate) failure_update_tx: tokio::sync::mpsc::Sender<FailureDetectorUpdate>,
+}
+
 /// IRPC-based Raft network client for a single peer.
 ///
 /// Tiger Style:
@@ -167,19 +179,15 @@ impl<T> IrpcRaftNetwork<T>
 where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
     /// Create a new network client for a single peer.
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "network client wiring carries pool, detectors, routing, and update channel state"
-    )]
-    pub(crate) fn new(
-        connection_pool: Arc<RaftConnectionPool<T>>,
-        peer_addr: Option<iroh::EndpointAddr>,
-        target: NodeId,
-        failure_detector: Arc<RwLock<NodeFailureDetector>>,
-        drift_detector: Arc<RwLock<ClockDriftDetector>>,
-        shard_id: Option<ShardId>,
-        failure_update_tx: tokio::sync::mpsc::Sender<FailureDetectorUpdate>,
-    ) -> Self {
+    pub(crate) fn new(connection_pool: Arc<RaftConnectionPool<T>>, config: IrpcRaftNetworkConfig) -> Self {
+        let IrpcRaftNetworkConfig {
+            peer_addr,
+            target,
+            failure_detector,
+            drift_detector,
+            shard_id,
+            failure_update_tx,
+        } = config;
         Self {
             connection_pool,
             peer_addr,
@@ -449,97 +457,104 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 impl<T> RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork<T>
 where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
-    #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     async fn append_entries(
         &mut self,
         rpc: AppendEntriesRequest<AppTypeConfig>,
         _option: RPCOption,
     ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        let request = RaftAppendEntriesRequest { request: rpc };
-        let protocol = RaftRpcProtocol::AppendEntries(request);
+        let target_node = self.target;
+        async move {
+            let request = RaftAppendEntriesRequest { request: rpc };
+            let protocol = RaftRpcProtocol::AppendEntries(request);
 
-        // Send the RPC and get response (Critical: heartbeats must beat bulk data)
-        let response = match self.send_rpc(protocol, StreamPriority::Critical).await {
-            Ok(resp) => resp,
-            Err(err) => {
-                warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
-                self.update_failure_on_rpc_error(&err).await;
-                let err_str = err.to_string();
-                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(err_str))));
-            }
-        };
+            // Send the RPC and get response (Critical: heartbeats must beat bulk data)
+            let response = match self.send_rpc(protocol, StreamPriority::Critical).await {
+                Ok(resp) => resp,
+                Err(err) => {
+                    warn!(target_node = %self.target, error = %err, "failed to send append_entries RPC");
+                    self.update_failure_on_rpc_error(&err).await;
+                    let err_str = err.to_string();
+                    return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(err_str))));
+                }
+            };
 
-        // Extract result from response, handling fatal errors gracefully
-        match response {
-            RaftRpcResponse::AppendEntries(result) => Ok(result),
-            RaftRpcResponse::FatalError(error_kind) => {
-                // Peer's RaftCore is in a fatal state - treat as unreachable
-                // The failure detector was already updated in send_rpc
-                error!(
-                    target_node = %self.target,
-                    error_kind = %error_kind,
-                    "peer RaftCore reported fatal error for append_entries"
-                );
-                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
-                    "peer RaftCore fatal error: {}",
-                    error_kind
-                )))))
-            }
-            RaftRpcResponse::Vote(_) | RaftRpcResponse::InstallSnapshot(_) => {
-                Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "unexpected response type for append_entries",
-                ))))
+            // Extract result from response, handling fatal errors gracefully
+            match response {
+                RaftRpcResponse::AppendEntries(result) => Ok(result),
+                RaftRpcResponse::FatalError(error_kind) => {
+                    // Peer's RaftCore is in a fatal state - treat as unreachable
+                    // The failure detector was already updated in send_rpc
+                    error!(
+                        target_node = %self.target,
+                        error_kind = %error_kind,
+                        "peer RaftCore reported fatal error for append_entries"
+                    );
+                    Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
+                        "peer RaftCore fatal error: {}",
+                        error_kind
+                    )))))
+                }
+                RaftRpcResponse::Vote(_) | RaftRpcResponse::InstallSnapshot(_) => {
+                    Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "unexpected response type for append_entries",
+                    ))))
+                }
             }
         }
+        .instrument(tracing::debug_span!("append_entries", target_node = %target_node))
+        .await
     }
 
-    #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     async fn vote(
         &mut self,
         rpc: VoteRequest<AppTypeConfig>,
         _option: RPCOption,
     ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        let request = RaftVoteRequest { request: rpc };
-        let protocol = RaftRpcProtocol::Vote(request);
+        let target_node = self.target;
+        async move {
+            let request = RaftVoteRequest { request: rpc };
+            let protocol = RaftRpcProtocol::Vote(request);
 
-        // Send the RPC and get response (Critical: votes must beat bulk data)
-        let response = match self.send_rpc(protocol, StreamPriority::Critical).await {
-            Ok(resp) => resp,
-            Err(err) => {
-                warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
-                self.update_failure_on_rpc_error(&err).await;
-                let err_str = err.to_string();
-                return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(err_str))));
-            }
-        };
+            // Send the RPC and get response (Critical: votes must beat bulk data)
+            let response = match self.send_rpc(protocol, StreamPriority::Critical).await {
+                Ok(resp) => resp,
+                Err(err) => {
+                    warn!(target_node = %self.target, error = %err, "failed to send vote RPC");
+                    self.update_failure_on_rpc_error(&err).await;
+                    let err_str = err.to_string();
+                    return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(err_str))));
+                }
+            };
 
-        // Extract result from response, handling fatal errors gracefully
-        match response {
-            RaftRpcResponse::Vote(result) => Ok(result),
-            RaftRpcResponse::FatalError(error_kind) => {
-                // Peer's RaftCore is in a fatal state - treat as unreachable
-                // The failure detector was already updated in send_rpc
-                error!(
-                    target_node = %self.target,
-                    error_kind = %error_kind,
-                    "peer RaftCore reported fatal error for vote"
-                );
-                Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
-                    "peer RaftCore fatal error: {}",
-                    error_kind
-                )))))
-            }
-            RaftRpcResponse::AppendEntries(_) | RaftRpcResponse::InstallSnapshot(_) => {
-                Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "unexpected response type for vote",
-                ))))
+            // Extract result from response, handling fatal errors gracefully
+            match response {
+                RaftRpcResponse::Vote(result) => Ok(result),
+                RaftRpcResponse::FatalError(error_kind) => {
+                    // Peer's RaftCore is in a fatal state - treat as unreachable
+                    // The failure detector was already updated in send_rpc
+                    error!(
+                        target_node = %self.target,
+                        error_kind = %error_kind,
+                        "peer RaftCore reported fatal error for vote"
+                    );
+                    Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
+                        "peer RaftCore fatal error: {}",
+                        error_kind
+                    )))))
+                }
+                RaftRpcResponse::AppendEntries(_) | RaftRpcResponse::InstallSnapshot(_) => {
+                    Err(RPCError::Network(NetworkError::new(&std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "unexpected response type for vote",
+                    ))))
+                }
             }
         }
+        .instrument(tracing::debug_span!("vote", target_node = %target_node))
+        .await
     }
 
-    #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     async fn full_snapshot(
         &mut self,
         vote: VoteOf<AppTypeConfig>,
@@ -547,125 +562,130 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         cancel: impl Future<Output = ReplicationClosed> + OptionalSend + 'static,
         _option: RPCOption,
     ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
-        // Read snapshot data into bytes with size limit (Tiger Style: bounded allocation)
-        let mut snapshot_data = Vec::new();
-        let mut snapshot_reader = snapshot.snapshot;
+        let target_node = self.target;
+        async move {
+            // Read snapshot data into bytes with size limit (Tiger Style: bounded allocation)
+            let mut snapshot_data = Vec::new();
+            let mut snapshot_reader = snapshot.snapshot;
 
-        // Read in chunks, checking size limit to prevent unbounded memory allocation
-        const SNAPSHOT_READ_BUFFER_SIZE_BYTES: usize = 8192;
-        let snapshot_read_buffer_bytes_u64 = match u64::try_from(SNAPSHOT_READ_BUFFER_SIZE_BYTES) {
-            Ok(snapshot_read_buffer_bytes_u64) => snapshot_read_buffer_bytes_u64,
-            Err(_) => 8192,
-        };
-        let max_snapshot_read_chunks = max_snapshot_chunks(snapshot_read_buffer_bytes_u64);
-        let mut buffer = [0u8; SNAPSHOT_READ_BUFFER_SIZE_BYTES];
-        for _chunk_index in 0..=max_snapshot_read_chunks {
-            let bytes_read = snapshot_reader.read(&mut buffer).await.map_err(|err| {
-                StreamingError::StorageError(StorageError::read_snapshot(Some(snapshot.meta.signature()), &err))
-            })?;
-
-            if bytes_read == 0 {
-                break;
-            }
-
-            let current_snapshot_size_bytes = snapshot_bytes_u64(&snapshot_data);
-            let bytes_read_u64 = match u64::try_from(bytes_read) {
-                Ok(bytes_read_u64) => bytes_read_u64,
-                Err(_) => u64::MAX,
+            // Read in chunks, checking size limit to prevent unbounded memory allocation
+            const SNAPSHOT_READ_BUFFER_SIZE_BYTES: usize = 8192;
+            let snapshot_read_buffer_bytes_u64 = match u64::try_from(SNAPSHOT_READ_BUFFER_SIZE_BYTES) {
+                Ok(snapshot_read_buffer_bytes_u64) => snapshot_read_buffer_bytes_u64,
+                Err(_) => 8192,
             };
-            if current_snapshot_size_bytes.saturating_add(bytes_read_u64) > MAX_SNAPSHOT_SIZE {
-                return Err(StreamingError::StorageError(StorageError::read_snapshot(
-                    Some(snapshot.meta.signature()),
-                    &std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        format!("snapshot exceeds maximum size of {} bytes", MAX_SNAPSHOT_SIZE),
-                    ),
-                )));
+            let max_snapshot_read_chunks = max_snapshot_chunks(snapshot_read_buffer_bytes_u64);
+            let mut buffer = [0u8; SNAPSHOT_READ_BUFFER_SIZE_BYTES];
+            for _chunk_index in 0..=max_snapshot_read_chunks {
+                let bytes_read = snapshot_reader.read(&mut buffer).await.map_err(|err| {
+                    StreamingError::StorageError(StorageError::read_snapshot(Some(snapshot.meta.signature()), &err))
+                })?;
+
+                if bytes_read == 0 {
+                    break;
+                }
+
+                let current_snapshot_size_bytes = snapshot_bytes_u64(&snapshot_data);
+                let bytes_read_u64 = match u64::try_from(bytes_read) {
+                    Ok(bytes_read_u64) => bytes_read_u64,
+                    Err(_) => u64::MAX,
+                };
+                if current_snapshot_size_bytes.saturating_add(bytes_read_u64) > MAX_SNAPSHOT_SIZE {
+                    return Err(StreamingError::StorageError(StorageError::read_snapshot(
+                        Some(snapshot.meta.signature()),
+                        &std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("snapshot exceeds maximum size of {} bytes", MAX_SNAPSHOT_SIZE),
+                        ),
+                    )));
+                }
+
+                snapshot_data.extend_from_slice(&buffer[..bytes_read]);
             }
 
-            snapshot_data.extend_from_slice(&buffer[..bytes_read]);
-        }
+            let snapshot_transfer_bytes = snapshot_bytes_u64(&snapshot_data);
+            let snapshot_size_bytes = snapshot_transfer_bytes as f64;
+            let snapshot_send_start = current_monotonic_instant();
+            let peer_label = self.target.to_string();
 
-        let snapshot_transfer_bytes = snapshot_bytes_u64(&snapshot_data);
-        let snapshot_size_bytes = snapshot_transfer_bytes as f64;
-        let snapshot_send_start = current_monotonic_instant();
-        let peer_label = self.target.to_string();
+            let request = RaftSnapshotRequest {
+                vote,
+                snapshot_meta: snapshot.meta,
+                snapshot_data,
+            };
+            let protocol = RaftRpcProtocol::InstallSnapshot(request);
 
-        let request = RaftSnapshotRequest {
-            vote,
-            snapshot_meta: snapshot.meta,
-            snapshot_data,
-        };
-        let protocol = RaftRpcProtocol::InstallSnapshot(request);
-
-        // Send the RPC with cancellation support (Bulk: snapshots are large)
-        let response = select! {
-            send_result = self.send_rpc(protocol, StreamPriority::Bulk) => {
-                match send_result {
-                    Ok(resp) => resp,
-                    Err(err) => {
-                        warn!(target_node = %self.target, error = %err, "failed to send snapshot RPC");
-                        self.update_failure_on_rpc_error(&err).await;
-                        let err_str = err.to_string();
-                        return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(
-                            err_str,
-                        ))));
+            // Send the RPC with cancellation support (Bulk: snapshots are large)
+            let response = select! {
+                send_result = self.send_rpc(protocol, StreamPriority::Bulk) => {
+                    match send_result {
+                        Ok(resp) => resp,
+                        Err(err) => {
+                            warn!(target_node = %self.target, error = %err, "failed to send snapshot RPC");
+                            self.update_failure_on_rpc_error(&err).await;
+                            let err_str = err.to_string();
+                            return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(
+                                err_str,
+                            ))));
+                        }
                     }
                 }
-            }
-            closed = cancel => {
-                warn!(target_node = %self.target, "snapshot transmission cancelled");
-                return Err(StreamingError::Closed(closed));
-            }
-        };
+                closed = cancel => {
+                    warn!(target_node = %self.target, "snapshot transmission cancelled");
+                    return Err(StreamingError::Closed(closed));
+                }
+            };
 
-        // Extract result from response, handling fatal errors gracefully
-        let result = match response {
-            RaftRpcResponse::InstallSnapshot(result) => {
-                // Handle remote RaftError as StorageError since snapshot installation failed
-                result.map_err(|raft_err| StreamingError::StorageError(StorageError::read_snapshot(None, &raft_err)))
-            }
-            RaftRpcResponse::FatalError(error_kind) => {
-                // Peer's RaftCore is in a fatal state - treat as unreachable
-                // The failure detector was already updated in send_rpc
-                error!(
-                    target_node = %self.target,
-                    error_kind = %error_kind,
-                    "peer RaftCore reported fatal error for install_snapshot"
-                );
-                Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
-                    "peer RaftCore fatal error: {}",
-                    error_kind
-                )))))
-            }
-            RaftRpcResponse::Vote(_) | RaftRpcResponse::AppendEntries(_) => {
-                Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "unexpected response type for install_snapshot",
-                ))))
-            }
-        };
+            // Extract result from response, handling fatal errors gracefully
+            let result = match response {
+                RaftRpcResponse::InstallSnapshot(result) => {
+                    // Handle remote RaftError as StorageError since snapshot installation failed
+                    result.map_err(|raft_err| StreamingError::StorageError(StorageError::read_snapshot(None, &raft_err)))
+                }
+                RaftRpcResponse::FatalError(error_kind) => {
+                    // Peer's RaftCore is in a fatal state - treat as unreachable
+                    // The failure detector was already updated in send_rpc
+                    error!(
+                        target_node = %self.target,
+                        error_kind = %error_kind,
+                        "peer RaftCore reported fatal error for install_snapshot"
+                    );
+                    Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::other(format!(
+                        "peer RaftCore fatal error: {}",
+                        error_kind
+                    )))))
+                }
+                RaftRpcResponse::Vote(_) | RaftRpcResponse::AppendEntries(_) => {
+                    Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "unexpected response type for install_snapshot",
+                    ))))
+                }
+            };
 
-        // Record snapshot transfer metrics
-        let elapsed_ms = snapshot_send_start.elapsed().as_secs_f64() * 1000.0;
-        let outcome = if result.is_ok() { "success" } else { "error" };
-        metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "send", "peer" => peer_label.clone())
-            .record(snapshot_size_bytes);
-        metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "send", "peer" => peer_label)
-            .record(elapsed_ms);
-        metrics::counter!("aspen.snapshot.transfers_total", "direction" => "send", "outcome" => outcome).increment(1);
-        if let Some(ref history) = self.snapshot_history {
-            let timestamp_us = current_time_us();
-            history.push(aspen_transport::snapshot_history::SnapshotTransferEntry {
-                peer_id: self.target.0,
-                direction: "send",
-                size_bytes: snapshot_transfer_bytes,
-                duration_ms: duration_ms_u64(snapshot_send_start.elapsed()),
-                outcome,
-                timestamp_us,
-            });
+            // Record snapshot transfer metrics
+            let elapsed_ms = snapshot_send_start.elapsed().as_secs_f64() * 1000.0;
+            let outcome = if result.is_ok() { "success" } else { "error" };
+            metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "send", "peer" => peer_label.clone())
+                .record(snapshot_size_bytes);
+            metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "send", "peer" => peer_label)
+                .record(elapsed_ms);
+            metrics::counter!("aspen.snapshot.transfers_total", "direction" => "send", "outcome" => outcome).increment(1);
+            if let Some(ref history) = self.snapshot_history {
+                let timestamp_us = current_time_us();
+                history.push(aspen_transport::snapshot_history::SnapshotTransferEntry {
+                    peer_id: self.target.0,
+                    direction: "send",
+                    size_bytes: snapshot_transfer_bytes,
+                    duration_ms: duration_ms_u64(snapshot_send_start.elapsed()),
+                    outcome,
+                    timestamp_us,
+                });
+            }
+
+            result
         }
-
-        result
+        .instrument(tracing::debug_span!("full_snapshot", target_node = %target_node))
+        .await
     }
 }

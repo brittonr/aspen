@@ -38,6 +38,23 @@ enum DequeueItemResult {
     MovedToDlq,
 }
 
+struct DequeueProcessContext<'a> {
+    name: &'a str,
+    consumer_id: &'a str,
+    queue_state: &'a super::QueueState,
+    pending_groups: &'a [String],
+    excluded_groups: &'a [String],
+    visibility_timeout_ms: u64,
+    now: u64,
+}
+
+struct ClaimItemContext<'a> {
+    name: &'a str,
+    consumer_id: &'a str,
+    visibility_timeout_ms: u64,
+    now: u64,
+}
+
 impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Dequeue items with visibility timeout (non-blocking).
     ///
@@ -84,25 +101,22 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         let mut dequeued = Vec::new();
         let now = now_unix_ms();
+        let process_context = DequeueProcessContext {
+            name,
+            consumer_id,
+            queue_state: &queue_state,
+            pending_groups: &pending_groups,
+            excluded_groups: &[],
+            visibility_timeout_ms,
+            now,
+        };
 
         for item_key in item_keys {
             if dequeued.len() >= max_items as usize {
                 break;
             }
 
-            match self
-                .dequeue_process_item(
-                    name,
-                    consumer_id,
-                    &item_key,
-                    &queue_state,
-                    &pending_groups,
-                    &[],
-                    visibility_timeout_ms,
-                    now,
-                )
-                .await?
-            {
+            match self.dequeue_process_item(&item_key, &process_context).await? {
                 DequeueItemResult::Dequeued(item) => dequeued.push(item),
                 DequeueItemResult::Skip | DequeueItemResult::Conflict | DequeueItemResult::MovedToDlq => continue,
             }
@@ -157,25 +171,22 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         let mut dequeued = Vec::new();
         let now = now_unix_ms();
+        let process_context = DequeueProcessContext {
+            name,
+            consumer_id,
+            queue_state: &queue_state,
+            pending_groups: &pending_groups,
+            excluded_groups,
+            visibility_timeout_ms,
+            now,
+        };
 
         for item_key in item_keys {
             if dequeued.len() >= max_items as usize {
                 break;
             }
 
-            match self
-                .dequeue_process_item(
-                    name,
-                    consumer_id,
-                    &item_key,
-                    &queue_state,
-                    &pending_groups,
-                    excluded_groups,
-                    visibility_timeout_ms,
-                    now,
-                )
-                .await?
-            {
+            match self.dequeue_process_item(&item_key, &process_context).await? {
                 DequeueItemResult::Dequeued(item) => dequeued.push(item),
                 DequeueItemResult::Skip | DequeueItemResult::Conflict | DequeueItemResult::MovedToDlq => continue,
             }
@@ -188,17 +199,10 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     }
 
     /// Process a single item during dequeue operation.
-    #[allow(clippy::too_many_arguments)]
     async fn dequeue_process_item(
         &self,
-        name: &str,
-        consumer_id: &str,
         item_key: &str,
-        queue_state: &super::QueueState,
-        pending_groups: &[String],
-        excluded_groups: &[String],
-        visibility_timeout_ms: u64,
-        now: u64,
+        context: &DequeueProcessContext<'_>,
     ) -> Result<DequeueItemResult> {
         // Read item
         let item: QueueItem = match self.read_json(item_key).await? {
@@ -214,9 +218,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         // Check message group ordering - skip if group is currently pending
         if let Some(ref group) = item.message_group_id
-            && pending_groups.contains(group)
+            && context.pending_groups.contains(group)
         {
-            debug!(name, item_id = item.item_id, group, "skipping item - message group is pending");
+            debug!(context.name, item_id = item.item_id, group, "skipping item - message group is pending");
             return Ok(DequeueItemResult::Skip);
         }
 
@@ -224,53 +228,58 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         // This lets workers avoid claiming jobs they can't handle, preventing
         // delivery_attempts from incrementing and eventually DLQ'ing the item.
         if let Some(ref group) = item.message_group_id
-            && !excluded_groups.is_empty()
-            && excluded_groups.contains(group)
+            && !context.excluded_groups.is_empty()
+            && context.excluded_groups.contains(group)
         {
-            debug!(name, item_id = item.item_id, group, "skipping item - message group excluded by consumer");
+            debug!(context.name, item_id = item.item_id, group, "skipping item - message group excluded by consumer");
             return Ok(DequeueItemResult::Skip);
         }
 
         // Check max delivery attempts
-        if queue_state.max_delivery_attempts > 0 && item.delivery_attempts >= queue_state.max_delivery_attempts {
+        if context.queue_state.max_delivery_attempts > 0
+            && item.delivery_attempts >= context.queue_state.max_delivery_attempts
+        {
             // Move to DLQ
-            self.move_to_dlq(name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None).await?;
-            self.delete_key_best_effort(name, item_key, "remove item after DLQ move").await;
+            self.move_to_dlq(context.name, &item, DLQReason::MaxDeliveryAttemptsExceeded, None).await?;
+            self.delete_key_best_effort(context.name, item_key, "remove item after DLQ move").await;
             return Ok(DequeueItemResult::MovedToDlq);
         }
 
         // Try to claim the item
-        self.dequeue_claim_item(name, consumer_id, item_key, &item, visibility_timeout_ms, now).await
+        let claim_context = ClaimItemContext {
+            name: context.name,
+            consumer_id: context.consumer_id,
+            visibility_timeout_ms: context.visibility_timeout_ms,
+            now: context.now,
+        };
+        self.dequeue_claim_item(item_key, &item, &claim_context).await
     }
 
     /// Attempt to claim an item by creating a pending entry.
     async fn dequeue_claim_item(
         &self,
-        name: &str,
-        consumer_id: &str,
         item_key: &str,
         item: &QueueItem,
-        visibility_timeout_ms: u64,
-        now: u64,
+        context: &ClaimItemContext<'_>,
     ) -> Result<DequeueItemResult> {
         // Generate receipt handle
-        let receipt_handle = verified::generate_receipt_handle(item.item_id, now, rand::random::<u64>());
+        let receipt_handle = verified::generate_receipt_handle(item.item_id, context.now, rand::random::<u64>());
 
         // Create pending item
         let pending = PendingItem {
             item_id: item.item_id,
             payload: item.payload.clone(),
-            consumer_id: consumer_id.to_string(),
+            consumer_id: context.consumer_id.to_string(),
             receipt_handle: receipt_handle.clone(),
-            dequeued_at_ms: now,
-            visibility_deadline_ms: verified::compute_visibility_deadline(now, visibility_timeout_ms),
+            dequeued_at_ms: context.now,
+            visibility_deadline_ms: verified::compute_visibility_deadline(context.now, context.visibility_timeout_ms),
             delivery_attempts: item.delivery_attempts + 1,
             enqueued_at_ms: item.enqueued_at_ms,
             message_group_id: item.message_group_id.clone(),
         };
 
         // Try to claim item with CAS
-        let pend_key = verified::pending_key(name, item.item_id);
+        let pend_key = verified::pending_key(context.name, item.item_id);
         let pending_json = serde_json::to_string(&pending)?;
 
         match self
@@ -288,7 +297,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 // Successfully claimed - delete from items.
                 if let Err(error) = self.delete_key(item_key).await {
                     warn!(
-                        queue = name,
+                        queue = context.name,
                         item_id = item.item_id,
                         item_key,
                         pending_key = %pend_key,
@@ -296,7 +305,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                         "failed to remove claimed item from ready queue; rolling back pending claim"
                     );
                     self.delete_key_best_effort(
-                        name,
+                        context.name,
                         &pend_key,
                         "rollback pending claim after ready-queue delete failure",
                     )
@@ -431,7 +440,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let pending_pref = verified::pending_prefix(name);
         let keys = self.scan_keys(&pending_pref, MAX_QUEUE_CLEANUP_BATCH).await?;
 
-        let mut groups = Vec::new();
+        let mut groups = Vec::with_capacity(keys.len());
         for key in keys {
             if let Some(pending) = self.read_json::<PendingItem>(&key).await?
                 && let Some(group) = pending.message_group_id

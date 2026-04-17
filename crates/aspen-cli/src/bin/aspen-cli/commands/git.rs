@@ -363,6 +363,9 @@ impl GitCommand {
 }
 
 async fn git_init(client: &AspenClient, args: InitArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty(), "git init requires a repository name");
+    debug_assert!(!args.default_branch.is_empty(), "git init requires a default branch");
+
     let response = client
         .send(ClientRpcRequest::ForgeCreateRepo {
             name: args.name,
@@ -407,6 +410,12 @@ async fn git_init(client: &AspenClient, args: InitArgs, is_json_output: bool) ->
 }
 
 async fn git_list(client: &AspenClient, args: ListArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(args.max_repos > 0, "git list should request at least one repository");
+    debug_assert!(
+        args.page_start <= u32::MAX.saturating_sub(args.max_repos),
+        "git list pagination must stay representable"
+    );
+
     let response = client
         .send(ClientRpcRequest::ForgeListRepos {
             limit: Some(args.max_repos),
@@ -455,8 +464,15 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, is_json_output: bool) 
 
     let branch_name = args.branch.unwrap_or_else(|| repo_info.default_branch.clone());
     let ref_name = format!("heads/{}", branch_name);
+    debug_assert!(!branch_name.is_empty(), "git clone must resolve a non-empty branch name");
+    debug_assert!(ref_name.starts_with("heads/"), "git clone HEAD ref must use heads/* namespace");
+    let ref_request = CloneRefRequest {
+        repo_id: &args.repo_id,
+        ref_name: &ref_name,
+        branch_name: &branch_name,
+    };
 
-    let head_hash = match git_clone_resolve_head_ref(client, &args.repo_id, &ref_name, &branch_name).await? {
+    let head_hash = match git_clone_resolve_head_ref(client, ref_request).await? {
         Some(hash) => hash,
         None => {
             git_clone_write_empty_repo_config(&target_dir, &args.repo_id, &repo_info, is_json_output)?;
@@ -464,7 +480,11 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, is_json_output: bool) 
         }
     };
 
-    let commits = git_clone_fetch_commits(client, &args.repo_id, &ref_name).await?;
+    let commits = git_clone_fetch_commits(client, CloneLogRequest {
+        repo_id: &args.repo_id,
+        ref_name: &ref_name,
+    })
+    .await?;
     let head_tree_hash = commits.first().map(|c| c.tree.clone()).unwrap_or_default();
 
     let mut file_entries: Vec<CloneFileEntry> = Vec::new();
@@ -480,20 +500,21 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, is_json_output: bool) 
         .await?;
     }
 
+    let clone_summary = CloneSummary {
+        repo_id: &args.repo_id,
+        repo_name: &repo_info.name,
+        branch_name: &branch_name,
+        head_hash: &head_hash,
+    };
+
     let blob_contents = git_clone_fetch_blobs(client, &blob_hashes, &target_dir).await?;
     git_clone_extract_files(&target_dir, &file_entries, &blob_contents)?;
-    git_clone_write_manifests(&target_dir, &args.repo_id, &repo_info, &branch_name, &head_hash, &commits)?;
-    git_clone_print_result(
-        is_json_output,
-        &target_dir,
-        &args.repo_id,
-        &repo_info.name,
-        &branch_name,
-        &head_hash,
-        &commits,
-        &blob_hashes,
-        &file_entries,
-    );
+    git_clone_write_manifests(&target_dir, &repo_info, clone_summary, &commits)?;
+    git_clone_print_result(is_json_output, &target_dir, clone_summary, CloneArtifacts {
+        commits: &commits,
+        blob_hashes: &blob_hashes,
+        file_entries: &file_entries,
+    });
 
     Ok(())
 }
@@ -501,10 +522,48 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, is_json_output: bool) 
 /// A file entry discovered during tree traversal for clone.
 struct CloneFileEntry {
     hash: String,
-    #[allow(dead_code)]
-    name: String,
     mode: u32,
     path: std::path::PathBuf,
+}
+
+#[derive(Clone, Copy)]
+struct CloneRefRequest<'a> {
+    repo_id: &'a str,
+    ref_name: &'a str,
+    branch_name: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct CloneLogRequest<'a> {
+    repo_id: &'a str,
+    ref_name: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct CloneSummary<'a> {
+    repo_id: &'a str,
+    repo_name: &'a str,
+    branch_name: &'a str,
+    head_hash: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct CloneArtifacts<'a> {
+    commits: &'a [aspen_client_api::ForgeCommitInfo],
+    blob_hashes: &'a std::collections::HashSet<String>,
+    file_entries: &'a [CloneFileEntry],
+}
+
+#[derive(Clone, Copy)]
+struct RefLookupRequest<'a> {
+    repo_id: &'a str,
+    ref_name: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct MirrorTarget<'a> {
+    repo_id: &'a str,
+    upstream_repo_id: &'a str,
 }
 
 /// Fetch repository info from the server.
@@ -539,16 +598,14 @@ fn git_clone_setup_directories(target_dir: &std::path::Path) -> Result<()> {
 }
 
 /// Resolve the HEAD ref for the branch. Returns None if the branch does not exist (empty repo).
-async fn git_clone_resolve_head_ref(
-    client: &AspenClient,
-    repo_id: &str,
-    ref_name: &str,
-    branch_name: &str,
-) -> Result<Option<String>> {
+async fn git_clone_resolve_head_ref(client: &AspenClient, request: CloneRefRequest<'_>) -> Result<Option<String>> {
+    debug_assert!(!request.repo_id.is_empty(), "git clone repo_id must not be empty");
+    debug_assert!(!request.ref_name.is_empty(), "git clone ref_name must not be empty");
+
     let response = client
         .send(ClientRpcRequest::ForgeGetRef {
-            repo_id: repo_id.to_string(),
-            ref_name: ref_name.to_string(),
+            repo_id: request.repo_id.to_string(),
+            ref_name: request.ref_name.to_string(),
         })
         .await?;
 
@@ -558,7 +615,7 @@ async fn git_clone_resolve_head_ref(
                 let hash = result
                     .ref_info
                     .map(|r| r.hash)
-                    .ok_or_else(|| anyhow::anyhow!("Branch '{}' not found", branch_name))?;
+                    .ok_or_else(|| anyhow::anyhow!("Branch '{}' not found", request.branch_name))?;
                 Ok(Some(hash))
             } else {
                 Ok(None)
@@ -598,13 +655,15 @@ fn git_clone_write_empty_repo_config(
 /// Fetch commit history from the server.
 async fn git_clone_fetch_commits(
     client: &AspenClient,
-    repo_id: &str,
-    ref_name: &str,
+    request: CloneLogRequest<'_>,
 ) -> Result<Vec<aspen_client_api::ForgeCommitInfo>> {
+    debug_assert!(!request.repo_id.is_empty(), "git clone log repo_id must not be empty");
+    debug_assert!(!request.ref_name.is_empty(), "git clone log ref_name must not be empty");
+
     let response = client
         .send(ClientRpcRequest::ForgeLog {
-            repo_id: repo_id.to_string(),
-            ref_name: Some(ref_name.to_string()),
+            repo_id: request.repo_id.to_string(),
+            ref_name: Some(request.ref_name.to_string()),
             limit: Some(1000),
         })
         .await?;
@@ -630,6 +689,9 @@ async fn git_clone_fetch_tree_entries(
     file_entries: &mut Vec<CloneFileEntry>,
     blob_hashes: &mut std::collections::HashSet<String>,
 ) -> Result<()> {
+    debug_assert!(!tree_hash.is_empty(), "git clone tree traversal requires a tree hash");
+    debug_assert!(!base_path.is_absolute(), "git clone tree paths must stay relative to target dir");
+
     let tree_response = client
         .send(ClientRpcRequest::ForgeGetTree {
             hash: tree_hash.to_string(),
@@ -645,7 +707,6 @@ async fn git_clone_fetch_tree_entries(
                         blob_hashes.insert(entry.hash.clone());
                         file_entries.push(CloneFileEntry {
                             hash: entry.hash,
-                            name: entry.name,
                             mode: entry.mode,
                             path: entry_path,
                         });
@@ -675,9 +736,13 @@ async fn git_clone_fetch_blobs(
     use std::fs;
 
     let objects_dir = target_dir.join(".aspen/objects");
-    let mut blob_contents: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+    let mut blob_contents: std::collections::HashMap<String, Vec<u8>> =
+        std::collections::HashMap::with_capacity(blob_hashes.len());
 
     for blob_hash in blob_hashes {
+        debug_assert!(!blob_hash.is_empty(), "git clone blob hash must not be empty");
+        debug_assert!(blob_hash.len() >= 2, "git clone blob hash must have prefix bytes for object path");
+
         let blob_response = client
             .send(ClientRpcRequest::ForgeGetBlob {
                 hash: blob_hash.clone(),
@@ -709,6 +774,8 @@ fn git_clone_extract_files(
     use std::fs;
 
     for entry in file_entries {
+        debug_assert!(!entry.hash.is_empty(), "git clone extracted files must reference a blob hash");
+        debug_assert!(!entry.path.is_absolute(), "git clone extracted file paths must stay relative");
         if let Some(content) = blob_contents.get(&entry.hash) {
             let file_path = target_dir.join(&entry.path);
             if let Some(parent) = file_path.parent() {
@@ -731,14 +798,15 @@ fn git_clone_extract_files(
 /// Write commits manifest, HEAD ref, and repo config to the .aspen directory.
 fn git_clone_write_manifests(
     target_dir: &std::path::Path,
-    repo_id: &str,
     repo_info: &aspen_client_api::ForgeRepoInfo,
-    branch_name: &str,
-    head_hash: &str,
+    clone_summary: CloneSummary<'_>,
     commits: &[aspen_client_api::ForgeCommitInfo],
 ) -> Result<()> {
     use std::fs;
     use std::io::Write;
+
+    debug_assert!(!clone_summary.branch_name.is_empty(), "git clone manifests need a branch name");
+    debug_assert!(!clone_summary.head_hash.is_empty(), "git clone manifests need a HEAD hash");
 
     let commits_manifest: Vec<serde_json::Value> = commits
         .iter()
@@ -760,15 +828,16 @@ fn git_clone_write_manifests(
     file.write_all(serde_json::to_string_pretty(&commits_manifest)?.as_bytes())
         .with_context(|| format!("failed to write {}", commits_path.display()))?;
 
-    let head_path = target_dir.join(".aspen/refs/heads").join(branch_name);
-    fs::write(&head_path, head_hash).with_context(|| format!("failed to write HEAD ref at {}", head_path.display()))?;
+    let head_path = target_dir.join(".aspen/refs/heads").join(clone_summary.branch_name);
+    fs::write(&head_path, clone_summary.head_hash)
+        .with_context(|| format!("failed to write HEAD ref at {}", head_path.display()))?;
 
     let config = serde_json::json!({
-        "repo_id": repo_id,
+        "repo_id": clone_summary.repo_id,
         "name": repo_info.name,
         "default_branch": repo_info.default_branch,
-        "cloned_branch": branch_name,
-        "head": head_hash,
+        "cloned_branch": clone_summary.branch_name,
+        "head": clone_summary.head_hash,
     });
     let config_path = target_dir.join(".aspen/config.json");
     let mut file =
@@ -783,39 +852,37 @@ fn git_clone_write_manifests(
 fn git_clone_print_result(
     is_json_output: bool,
     target_dir: &std::path::Path,
-    repo_id: &str,
-    repo_name: &str,
-    branch_name: &str,
-    head_hash: &str,
-    commits: &[aspen_client_api::ForgeCommitInfo],
-    blob_hashes: &std::collections::HashSet<String>,
-    file_entries: &[CloneFileEntry],
+    clone_summary: CloneSummary<'_>,
+    artifacts: CloneArtifacts<'_>,
 ) {
     if is_json_output {
         let output = serde_json::json!({
             "success": true,
             "path": target_dir.display().to_string(),
-            "repo_id": repo_id,
-            "branch": branch_name,
-            "head": head_hash,
-            "commits": commits.len(),
-            "blobs": blob_hashes.len(),
-            "files": file_entries.len(),
+            "repo_id": clone_summary.repo_id,
+            "branch": clone_summary.branch_name,
+            "head": clone_summary.head_hash,
+            "commits": artifacts.commits.len(),
+            "blobs": artifacts.blob_hashes.len(),
+            "files": artifacts.file_entries.len(),
         });
         // JSON serialization of a json! value will not fail
         if let Ok(s) = serde_json::to_string_pretty(&output) {
             println!("{}", s);
         }
     } else {
-        println!("Cloned '{}' to '{}'", repo_name, target_dir.display());
-        println!("  Branch:  {}", branch_name);
-        println!("  HEAD:    {}", &head_hash[..16]);
-        println!("  Commits: {}", commits.len());
-        println!("  Files:   {}", file_entries.len());
+        println!("Cloned '{}' to '{}'", clone_summary.repo_name, target_dir.display());
+        println!("  Branch:  {}", clone_summary.branch_name);
+        println!("  HEAD:    {}", &clone_summary.head_hash[..16]);
+        println!("  Commits: {}", artifacts.commits.len());
+        println!("  Files:   {}", artifacts.file_entries.len());
     }
 }
 
 async fn git_show(client: &AspenClient, args: ShowArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git show requires a repository id");
+    debug_assert!(args.repo.len() <= 64, "git show repo id should stay within hash length bounds");
+
     let response = client.send(ClientRpcRequest::ForgeGetRepo { repo_id: args.repo }).await?;
 
     match response {
@@ -849,6 +916,10 @@ async fn git_show(client: &AspenClient, args: ShowArgs, is_json_output: bool) ->
 }
 
 async fn git_commit(client: &AspenClient, args: CommitArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git commit requires a repository id");
+    debug_assert!(!args.tree.is_empty(), "git commit requires a tree hash");
+    debug_assert!(!args.message.is_empty(), "git commit requires a message");
+
     let response = client
         .send(ClientRpcRequest::ForgeCommit {
             repo_id: args.repo,
@@ -887,6 +958,9 @@ async fn git_commit(client: &AspenClient, args: CommitArgs, is_json_output: bool
 }
 
 async fn git_show_commit(client: &AspenClient, args: ShowCommitArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty(), "git show-commit requires a hash");
+    debug_assert!(args.hash.len() == 64, "git show-commit expects a 64-char BLAKE3 hash");
+
     let response = client
         .send(ClientRpcRequest::ForgeGetCommit {
             hash: args.hash.clone(),
@@ -924,6 +998,9 @@ async fn git_show_commit(client: &AspenClient, args: ShowCommitArgs, is_json_out
 }
 
 async fn git_log(client: &AspenClient, args: LogArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git log requires a repository id");
+    debug_assert!(args.max_commits > 0, "git log should request at least one commit");
+
     let response = client
         .send(ClientRpcRequest::ForgeLog {
             repo_id: args.repo,
@@ -967,11 +1044,14 @@ async fn git_log(client: &AspenClient, args: LogArgs, is_json_output: bool) -> R
 }
 
 /// Fetch the current hash of a ref, returning None if the ref doesn't exist.
-async fn fetch_current_ref_hash(client: &AspenClient, repo_id: &str, ref_name: &str) -> Result<Option<String>> {
+async fn fetch_current_ref_hash(client: &AspenClient, request: RefLookupRequest<'_>) -> Result<Option<String>> {
+    debug_assert!(!request.repo_id.is_empty(), "git ref lookup repo_id must not be empty");
+    debug_assert!(!request.ref_name.is_empty(), "git ref lookup ref_name must not be empty");
+
     let response = client
         .send(ClientRpcRequest::ForgeGetRef {
-            repo_id: repo_id.to_string(),
-            ref_name: ref_name.to_string(),
+            repo_id: request.repo_id.to_string(),
+            ref_name: request.ref_name.to_string(),
         })
         .await?;
 
@@ -1008,7 +1088,11 @@ async fn git_push(client: &AspenClient, args: PushArgs, is_json_output: bool) ->
     let repo_id = RepoId::from_hex(&args.repo).map_err(|e| anyhow::anyhow!("invalid repo_id: {}", e))?;
 
     let current_hash = if !args.is_force {
-        fetch_current_ref_hash(client, &args.repo, &args.ref_name).await?
+        fetch_current_ref_hash(client, RefLookupRequest {
+            repo_id: &args.repo,
+            ref_name: &args.ref_name,
+        })
+        .await?
     } else {
         None
     };
@@ -1151,6 +1235,9 @@ fn git_push_handle_response(response: ClientRpcResponse, ref_name: &str, is_json
 }
 
 async fn git_get_ref(client: &AspenClient, args: GetRefArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git get-ref requires a repository id");
+    debug_assert!(!args.ref_name.is_empty(), "git get-ref requires a ref name");
+
     let response = client
         .send(ClientRpcRequest::ForgeGetRef {
             repo_id: args.repo,
@@ -1184,6 +1271,9 @@ async fn git_get_ref(client: &AspenClient, args: GetRefArgs, is_json_output: boo
 }
 
 async fn git_store_blob(client: &AspenClient, args: StoreBlobArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git store-blob requires a repository id");
+    debug_assert!(args.file.file_name().is_some(), "git store-blob requires a concrete file path");
+
     let content = std::fs::read(&args.file).map_err(|e| anyhow::anyhow!("failed to read file: {}", e))?;
 
     let response = client
@@ -1220,76 +1310,99 @@ async fn git_store_blob(client: &AspenClient, args: StoreBlobArgs, is_json_outpu
     }
 }
 
+fn git_get_blob_write_to_path(hash: &str, path: &std::path::Path, content: &[u8], is_json_output: bool) -> Result<()> {
+    debug_assert!(!hash.is_empty(), "git get-blob path write needs a blob hash");
+    debug_assert!(!content.is_empty(), "git get-blob path write expects blob content");
+
+    std::fs::write(path, content).map_err(|e| anyhow::anyhow!("failed to write file: {}", e))?;
+    if !is_json_output {
+        println!("Wrote {} bytes to {}", content.len(), path.display());
+    } else {
+        println!(
+            "{}",
+            serde_json::json!({
+                "success": true,
+                "hash": hash,
+                "size": content.len(),
+                "path": path.display().to_string()
+            })
+        );
+    }
+    Ok(())
+}
+
+fn git_get_blob_print_content(hash: &str, content: &[u8], is_json_output: bool) {
+    debug_assert!(!hash.is_empty(), "git get-blob output needs a blob hash");
+    debug_assert!(!content.is_empty(), "git get-blob output expects blob content");
+
+    if is_json_output {
+        println!(
+            "{}",
+            serde_json::json!({
+                "success": true,
+                "hash": hash,
+                "size": content.len(),
+                "content_base64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, content)
+            })
+        );
+        return;
+    }
+
+    match std::str::from_utf8(content) {
+        Ok(text) => print!("{}", text),
+        Err(_) => println!("<binary: {} bytes>", content.len()),
+    }
+}
+
+fn git_get_blob_exit_not_found(hash: &str, is_json_output: bool) -> ! {
+    if is_json_output {
+        println!(
+            "{}",
+            serde_json::json!({
+                "success": false,
+                "hash": hash,
+                "error": "blob not found"
+            })
+        );
+    } else {
+        eprintln!("Blob not found: {}", hash);
+    }
+    std::process::exit(1);
+}
+
 async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty(), "git get-blob requires a blob hash");
+    debug_assert!(args.hash.len() == 64, "git get-blob expects a 64-char BLAKE3 hash");
+
     let hash = args.hash.clone();
     let response = client.send(ClientRpcRequest::ForgeGetBlob { hash: args.hash }).await?;
 
     match response {
-        ClientRpcResponse::ForgeBlobResult(result) => {
-            if result.is_success {
-                if let Some(content) = result.content {
-                    if let Some(ref path) = args.output {
-                        std::fs::write(path, &content).map_err(|e| anyhow::anyhow!("failed to write file: {}", e))?;
-                        if !is_json_output {
-                            println!("Wrote {} bytes to {}", content.len(), path.display());
-                        } else {
-                            println!(
-                                "{}",
-                                serde_json::json!({
-                                    "success": true,
-                                    "hash": hash,
-                                    "size": content.len(),
-                                    "path": path.display().to_string()
-                                })
-                            );
-                        }
-                    } else if is_json_output {
-                        println!(
-                            "{}",
-                            serde_json::json!({
-                                "success": true,
-                                "hash": hash,
-                                "size": content.len(),
-                                "content_base64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &content)
-                            })
-                        );
-                    } else {
-                        // Display content nicely like blob get does
-                        match String::from_utf8(content.clone()) {
-                            Ok(s) => print!("{}", s),
-                            Err(_) => println!("<binary: {} bytes>", content.len()),
-                        }
-                    }
-                    Ok(())
-                } else {
-                    if is_json_output {
-                        println!(
-                            "{}",
-                            serde_json::json!({
-                                "success": false,
-                                "hash": hash,
-                                "error": "blob not found"
-                            })
-                        );
-                    } else {
-                        eprintln!("Blob not found: {}", hash);
-                    }
-                    std::process::exit(1);
-                }
+        ClientRpcResponse::ForgeBlobResult(result) if result.is_success => {
+            let content = match result.content {
+                Some(content) => content,
+                None => git_get_blob_exit_not_found(&hash, is_json_output),
+            };
+            if let Some(path) = args.output.as_deref() {
+                git_get_blob_write_to_path(&hash, path, &content, is_json_output)
             } else {
-                let error = result.error.unwrap_or_else(|| "unknown error".to_string());
-                if is_json_output {
-                    println!(
-                        "{}",
-                        serde_json::json!({
-                            "success": false,
-                            "hash": hash,
-                            "error": error
-                        })
-                    );
-                }
-                anyhow::bail!("{}", error)
+                git_get_blob_print_content(&hash, &content, is_json_output);
+                Ok(())
             }
+        }
+        ClientRpcResponse::ForgeBlobResult(result) => {
+            let error = result.error.unwrap_or_else(|| "unknown error".to_string());
+            if is_json_output {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "success": false,
+                        "hash": hash,
+                        "error": error
+                    })
+                );
+            }
+            anyhow::bail!("{}", error)
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             anyhow::bail!("{}", result.error.unwrap_or_else(|| "not found".to_string()))
@@ -1304,8 +1417,11 @@ async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, is_json_output: b
 // ============================================================================
 
 async fn git_create_tree(client: &AspenClient, args: CreateTreeArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git create-tree requires a repository id");
+    debug_assert!(!args.entries.is_empty(), "git create-tree requires at least one entry");
+
     // Parse entries from "mode:name:hash" format
-    let mut entries = Vec::new();
+    let mut entries = Vec::with_capacity(args.entries.len());
     for entry_str in &args.entries {
         let parts: Vec<&str> = entry_str.splitn(3, ':').collect();
         if parts.len() != 3 {
@@ -1371,6 +1487,9 @@ async fn git_create_tree(client: &AspenClient, args: CreateTreeArgs, is_json_out
 }
 
 async fn git_get_tree(client: &AspenClient, args: GetTreeArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty(), "git get-tree requires a tree hash");
+    debug_assert!(args.hash.len() == 64, "git get-tree expects a 64-char BLAKE3 hash");
+
     let response = client
         .send(ClientRpcRequest::ForgeGetTree {
             hash: args.hash.clone(),
@@ -1420,6 +1539,9 @@ async fn git_get_tree(client: &AspenClient, args: GetTreeArgs, is_json_output: b
 // ============================================================================
 
 async fn git_export_key(client: &AspenClient, args: ExportKeyArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git export-key requires a repository id");
+    debug_assert!(args.repo.len() <= 64, "git export-key repo id should stay within hash length bounds");
+
     let response = client
         .send(ClientRpcRequest::ForgeGetDelegateKey {
             repo_id: args.repo.clone(),
@@ -1480,6 +1602,9 @@ async fn git_export_key(client: &AspenClient, args: ExportKeyArgs, is_json_outpu
 // ============================================================================
 
 async fn git_federate(client: &AspenClient, args: FederateArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "git federate requires a repository id");
+    debug_assert!(!args.mode.is_empty(), "git federate requires a federation mode");
+
     let response = client
         .send(ClientRpcRequest::FederateRepository {
             repo_id: args.repo,
@@ -1514,6 +1639,9 @@ async fn git_federate(client: &AspenClient, args: FederateArgs, is_json_output: 
 }
 
 async fn git_list_federated(client: &AspenClient, _args: ListFederatedArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(std::mem::size_of::<ListFederatedArgs>() == 0, "git list-federated args should stay empty");
+    debug_assert!(std::mem::size_of::<ClientRpcRequest>() > 0, "git list-federated request type must be available");
+
     let response = client.send(ClientRpcRequest::ListFederatedRepositories).await?;
 
     match response {
@@ -1544,6 +1672,9 @@ async fn git_list_federated(client: &AspenClient, _args: ListFederatedArgs, is_j
 }
 
 async fn git_fetch_remote(client: &AspenClient, args: FetchRemoteArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.fed_id.is_empty(), "git fetch-remote requires a federated id");
+    debug_assert!(!args.cluster.is_empty(), "git fetch-remote requires a cluster name");
+
     let response = client
         .send(ClientRpcRequest::ForgeFetchFederated {
             federated_id: args.fed_id,
@@ -1586,6 +1717,9 @@ async fn git_fetch_remote(client: &AspenClient, args: FetchRemoteArgs, is_json_o
 }
 
 async fn git_fork(client: &AspenClient, args: ForkArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.upstream.is_empty(), "git fork requires an upstream repository id");
+    debug_assert!(!args.name.is_empty(), "git fork requires a target repository name");
+
     let response = client
         .send(ClientRpcRequest::ForgeForkRepo {
             upstream_repo_id: args.upstream.clone(),
@@ -1615,82 +1749,122 @@ async fn git_fork(client: &AspenClient, args: ForkArgs, is_json_output: bool) ->
     }
 }
 
+async fn git_mirror_show_status(client: &AspenClient, repo_id: &str, is_json_output: bool) -> Result<()> {
+    debug_assert!(!repo_id.is_empty(), "git mirror status requires a repo id");
+    debug_assert!(repo_id.len() <= 64, "git mirror repo id should stay within hash length bounds");
+
+    let response = client
+        .send(ClientRpcRequest::ForgeGetMirrorStatus {
+            repo_id: repo_id.to_string(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeMirrorStatus(status) => {
+            if let Some(status_info) = &status {
+                if is_json_output {
+                    println!("{}", serde_json::to_string_pretty(status_info)?);
+                } else {
+                    println!("Mirror for {}", repo_id);
+                    println!("  Upstream: {}", status_info.upstream_repo_id);
+                    println!("  Interval: {}s", status_info.interval_secs);
+                    println!("  Enabled:  {}", status_info.enabled);
+                    println!("  Last sync: {}ms", status_info.last_sync_ms);
+                    println!("  Synced refs: {}", status_info.synced_refs_count);
+                    println!("  Due: {}", status_info.is_due);
+                }
+            } else if is_json_output {
+                println!("null");
+            } else {
+                println!("No mirror configured for {}", repo_id);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn git_mirror_disable(client: &AspenClient, repo_id: &str, is_json_output: bool) -> Result<()> {
+    debug_assert!(!repo_id.is_empty(), "git mirror disable requires a repo id");
+    debug_assert!(repo_id.len() <= 64, "git mirror repo id should stay within hash length bounds");
+
+    let response = client
+        .send(ClientRpcRequest::ForgeDisableMirror {
+            repo_id: repo_id.to_string(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeOperationResult(result) if result.is_success => {
+            if !is_json_output {
+                println!("Mirror disabled for {}", repo_id);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::ForgeOperationResult(result) => {
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "failed".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn git_mirror_set(
+    client: &AspenClient,
+    target: MirrorTarget<'_>,
+    interval_secs: u32,
+    is_json_output: bool,
+) -> Result<()> {
+    debug_assert!(!target.repo_id.is_empty(), "git mirror set requires a repo id");
+    debug_assert!(!target.upstream_repo_id.is_empty(), "git mirror set requires an upstream repo id");
+
+    let response = client
+        .send(ClientRpcRequest::ForgeSetMirror {
+            repo_id: target.repo_id.to_string(),
+            upstream_repo_id: target.upstream_repo_id.to_string(),
+            interval_secs,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeOperationResult(result) if result.is_success => {
+            if !is_json_output {
+                println!(
+                    "Mirror enabled for {} → {} (interval: {}s)",
+                    target.repo_id, target.upstream_repo_id, interval_secs
+                );
+            }
+            Ok(())
+        }
+        ClientRpcResponse::ForgeOperationResult(result) => {
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "failed".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
 async fn git_mirror(client: &AspenClient, args: MirrorArgs, is_json_output: bool) -> Result<()> {
     if args.status {
-        let response = client
-            .send(ClientRpcRequest::ForgeGetMirrorStatus {
-                repo_id: args.repo.clone(),
-            })
-            .await?;
-
-        match response {
-            ClientRpcResponse::ForgeMirrorStatus(status) => {
-                if let Some(s) = &status {
-                    if is_json_output {
-                        println!("{}", serde_json::to_string_pretty(&s)?);
-                    } else {
-                        println!("Mirror for {}", args.repo);
-                        println!("  Upstream: {}", s.upstream_repo_id);
-                        println!("  Interval: {}s", s.interval_secs);
-                        println!("  Enabled:  {}", s.enabled);
-                        println!("  Last sync: {}ms", s.last_sync_ms);
-                        println!("  Synced refs: {}", s.synced_refs_count);
-                        println!("  Due: {}", s.is_due);
-                    }
-                } else if is_json_output {
-                    println!("null");
-                } else {
-                    println!("No mirror configured for {}", args.repo);
-                }
-                Ok(())
-            }
-            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-            _ => anyhow::bail!("unexpected response type"),
-        }
-    } else if args.disable {
-        let response = client
-            .send(ClientRpcRequest::ForgeDisableMirror {
-                repo_id: args.repo.clone(),
-            })
-            .await?;
-
-        match response {
-            ClientRpcResponse::ForgeOperationResult(r) if r.is_success => {
-                if !is_json_output {
-                    println!("Mirror disabled for {}", args.repo);
-                }
-                Ok(())
-            }
-            ClientRpcResponse::ForgeOperationResult(r) => {
-                anyhow::bail!("{}", r.error.unwrap_or_else(|| "failed".to_string()))
-            }
-            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-            _ => anyhow::bail!("unexpected response type"),
-        }
-    } else {
-        let upstream = args.upstream.ok_or_else(|| anyhow::anyhow!("--upstream is required to set mirror"))?;
-        let response = client
-            .send(ClientRpcRequest::ForgeSetMirror {
-                repo_id: args.repo.clone(),
-                upstream_repo_id: upstream.clone(),
-                interval_secs: args.interval_secs,
-            })
-            .await?;
-
-        match response {
-            ClientRpcResponse::ForgeOperationResult(r) if r.is_success => {
-                if !is_json_output {
-                    println!("Mirror enabled for {} → {} (interval: {}s)", args.repo, upstream, args.interval_secs);
-                }
-                Ok(())
-            }
-            ClientRpcResponse::ForgeOperationResult(r) => {
-                anyhow::bail!("{}", r.error.unwrap_or_else(|| "failed".to_string()))
-            }
-            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-            _ => anyhow::bail!("unexpected response type"),
-        }
+        return git_mirror_show_status(client, &args.repo, is_json_output).await;
     }
+
+    if args.disable {
+        return git_mirror_disable(client, &args.repo, is_json_output).await;
+    }
+
+    let upstream = args.upstream.ok_or_else(|| anyhow::anyhow!("--upstream is required to set mirror"))?;
+    git_mirror_set(
+        client,
+        MirrorTarget {
+            repo_id: &args.repo,
+            upstream_repo_id: &upstream,
+        },
+        args.interval_secs,
+        is_json_output,
+    )
+    .await
 }
 
 #[derive(Args)]

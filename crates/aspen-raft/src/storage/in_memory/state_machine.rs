@@ -25,6 +25,7 @@ use openraft::storage::Snapshot;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
+use tracing::Instrument;
 
 use super::StoredSnapshot;
 use crate::integrity::GENESIS_HASH;
@@ -547,45 +548,48 @@ impl std::ops::Deref for InMemoryStateMachineStore {
 }
 
 impl RaftSnapshotBuilder<AppTypeConfig> for InMemoryStateMachineStore {
-    #[tracing::instrument(level = "trace", skip(self))]
     async fn build_snapshot(&mut self) -> Result<Snapshot<AppTypeConfig>, io::Error> {
-        let state_machine = self.state_machine.read().await;
-        let data =
-            serde_json::to_vec(&state_machine.data).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-        let last_applied_log = state_machine.last_applied_log;
-        let last_membership = state_machine.last_membership.clone();
-        let mut current_snapshot = self.current_snapshot.write().await;
-        drop(state_machine);
+        async move {
+            let state_machine = self.state_machine.read().await;
+            let data = serde_json::to_vec(&state_machine.data)
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+            let last_applied_log = state_machine.last_applied_log;
+            let last_membership = state_machine.last_membership.clone();
+            let mut current_snapshot = self.current_snapshot.write().await;
+            drop(state_machine);
 
-        let previous_snapshot_idx = self.snapshot_idx.fetch_add(1, Ordering::Relaxed);
-        let snapshot_idx = previous_snapshot_idx.saturating_add(1);
-        let snapshot_id = if let Some(last) = last_applied_log {
-            format!("{}-{}-{snapshot_idx}", last.committed_leader_id(), last.index())
-        } else {
-            format!("--{snapshot_idx}")
-        };
+            let previous_snapshot_idx = self.snapshot_idx.fetch_add(1, Ordering::Relaxed);
+            let snapshot_idx = previous_snapshot_idx.saturating_add(1);
+            let snapshot_id = if let Some(last) = last_applied_log {
+                format!("{}-{}-{snapshot_idx}", last.committed_leader_id(), last.index())
+            } else {
+                format!("--{snapshot_idx}")
+            };
 
-        let meta = openraft::SnapshotMeta {
-            last_log_id: last_applied_log,
-            last_membership,
-            snapshot_id,
-        };
+            let meta = openraft::SnapshotMeta {
+                last_log_id: last_applied_log,
+                last_membership,
+                snapshot_id,
+            };
 
-        // Compute snapshot integrity hash (Tiger Style: verify data corruption)
-        let meta_bytes = bincode::serialize(&meta).map_err(|err| io::Error::other(err.to_string()))?;
-        let integrity = SnapshotIntegrity::compute(&meta_bytes, &data, GENESIS_HASH);
+            // Compute snapshot integrity hash (Tiger Style: verify data corruption)
+            let meta_bytes = bincode::serialize(&meta).map_err(|err| io::Error::other(err.to_string()))?;
+            let integrity = SnapshotIntegrity::compute(&meta_bytes, &data, GENESIS_HASH);
 
-        let snapshot = StoredSnapshot {
-            meta: meta.clone(),
-            data: data.clone(),
-            integrity: Some(integrity),
-        };
-        *current_snapshot = Some(snapshot);
+            let snapshot = StoredSnapshot {
+                meta: meta.clone(),
+                data: data.clone(),
+                integrity: Some(integrity),
+            };
+            *current_snapshot = Some(snapshot);
 
-        Ok(Snapshot {
-            meta,
-            snapshot: Cursor::new(data),
-        })
+            Ok(Snapshot {
+                meta,
+                snapshot: Cursor::new(data),
+            })
+        }
+        .instrument(tracing::trace_span!("build_snapshot"))
+        .await
     }
 }
 
@@ -599,28 +603,31 @@ impl RaftStateMachine<AppTypeConfig> for InMemoryStateMachineStore {
         Ok((state_machine.last_applied_log, state_machine.last_membership.clone()))
     }
 
-    #[tracing::instrument(level = "trace", skip(self, entries))]
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
     where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
-        let mut sm = self.state_machine.write().await;
-        for _entry_index in 0..u32::MAX {
-            let Some((entry, responder)) = entries.try_next().await? else {
-                break;
-            };
-            sm.last_applied_log = Some(entry.log_id);
-            let response = match entry.payload {
-                EntryPayload::Blank => empty_response(),
-                EntryPayload::Normal(ref req) => apply_app_request(&mut sm.data, req),
-                EntryPayload::Membership(ref membership) => {
-                    sm.last_membership = StoredMembership::new(Some(entry.log_id), membership.clone());
-                    empty_response()
+        async move {
+            let mut sm = self.state_machine.write().await;
+            for _entry_index in 0..u32::MAX {
+                let Some((entry, responder)) = entries.try_next().await? else {
+                    break;
+                };
+                sm.last_applied_log = Some(entry.log_id);
+                let response = match entry.payload {
+                    EntryPayload::Blank => empty_response(),
+                    EntryPayload::Normal(ref req) => apply_app_request(&mut sm.data, req),
+                    EntryPayload::Membership(ref membership) => {
+                        sm.last_membership = StoredMembership::new(Some(entry.log_id), membership.clone());
+                        empty_response()
+                    }
+                };
+                if let Some(responder) = responder {
+                    responder.send(response);
                 }
-            };
-            if let Some(responder) = responder {
-                responder.send(response);
             }
+            Ok(())
         }
-        Ok(())
+        .instrument(tracing::trace_span!("apply_entries"))
+        .await
     }
 
     async fn begin_receiving_snapshot(&mut self) -> Result<SnapshotDataOf<AppTypeConfig>, io::Error> {

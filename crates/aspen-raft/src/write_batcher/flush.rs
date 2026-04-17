@@ -9,19 +9,50 @@ use tracing::warn;
 use super::*;
 use crate::types::AppRequest;
 use crate::types::NodeId;
+use crate::verified::BatchLimits;
+use crate::verified::BatchState;
 use crate::verified::FlushDecision;
 use crate::verified::determine_flush_action;
+
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "write batcher measures monotonic flush latency for metrics")]
+#[inline]
+fn current_flush_instant() -> Instant {
+    Instant::now()
+}
+
+#[inline]
+fn batch_len_u32(batch: &[PendingWrite]) -> u32 {
+    match u32::try_from(batch.len()) {
+        Ok(batch_len) => batch_len,
+        Err(_) => u32::MAX,
+    }
+}
+
+#[inline]
+fn pending_len_u32(state: &BatcherState) -> u32 {
+    match u32::try_from(state.pending.len()) {
+        Ok(pending_count) => pending_count,
+        Err(_) => u32::MAX,
+    }
+}
 
 impl WriteBatcher {
     /// Check if we should schedule a flush (Arc version).
     pub(super) fn maybe_schedule_flush_shared(&self, state: &mut BatcherState) -> FlushDecision {
         // Use pure function for flush decision logic
         let decision = determine_flush_action(
-            state.pending.len() as u32,
-            state.current_bytes,
-            self.config.max_entries,
-            self.config.max_bytes,
-            self.config.max_wait.is_zero(),
+            BatchState {
+                pending_count: pending_len_u32(state),
+                current_bytes: state.current_bytes,
+                batch_start_ms: 0,
+                current_time_ms: 0,
+            },
+            BatchLimits {
+                max_entries: self.config.max_entries,
+                max_bytes: self.config.max_bytes,
+                max_wait_ms: self.config.max_wait.as_millis().try_into().unwrap_or(u64::MAX),
+            },
             state.flush_scheduled,
         );
 
@@ -38,11 +69,17 @@ impl WriteBatcher {
         // Use pure function for flush decision logic
         // Non-Arc version treats Delayed as no-flush (can't spawn background task)
         let decision = determine_flush_action(
-            state.pending.len() as u32,
-            state.current_bytes,
-            self.config.max_entries,
-            self.config.max_bytes,
-            self.config.max_wait.is_zero(),
+            BatchState {
+                pending_count: pending_len_u32(state),
+                current_bytes: state.current_bytes,
+                batch_start_ms: 0,
+                current_time_ms: 0,
+            },
+            BatchLimits {
+                max_entries: self.config.max_entries,
+                max_bytes: self.config.max_bytes,
+                max_wait_ms: self.config.max_wait.as_millis().try_into().unwrap_or(u64::MAX),
+            },
             state.flush_scheduled,
         );
 
@@ -105,15 +142,18 @@ impl WriteBatcher {
             return;
         }
 
+        let batch_item_count = batch.len();
+        let batch_item_count_u32 = batch_len_u32(&batch);
+
         // Tiger Style: batch size must be bounded
         assert!(
-            batch.len() as u32 <= self.config.max_entries,
+            batch_item_count_u32 <= self.config.max_entries,
             "FLUSH: batch size {} exceeds max_entries {}",
-            batch.len(),
+            batch_item_count,
             self.config.max_entries
         );
 
-        let flush_start = std::time::Instant::now();
+        let flush_start = current_flush_instant();
 
         // Build the Raft batch operation
         let operations: Vec<(bool, String, String)> = batch.iter().map(|p| p.operation.clone()).collect();
@@ -128,10 +168,8 @@ impl WriteBatcher {
             operations: operations.clone(),
         };
 
-        let batch_size = batch.len();
-
         // Record batch size histogram
-        metrics::histogram!("aspen.write_batcher.batch_size").record(batch_size as f64);
+        metrics::histogram!("aspen.write_batcher.batch_size").record(batch_item_count as f64);
         metrics::counter!("aspen.write_batcher.flush_total").increment(1);
 
         // Submit to Raft
@@ -141,7 +179,7 @@ impl WriteBatcher {
         let write_result = match result {
             Ok(_resp) => Ok(WriteResult {
                 command: None,
-                batch_applied: Some(batch_size as u32),
+                batch_applied: Some(batch_item_count_u32),
                 conditions_met: None,
                 failed_condition_index: None,
                 lease_id: None,
@@ -158,7 +196,7 @@ impl WriteBatcher {
             Err(e) => {
                 // Check if this is a ForwardToLeader (leadership changed mid-batch).
                 if let Some(forward_info) = e.forward_to_leader() {
-                    self.handle_forward_to_leader(forward_info, &operations, batch_size).await
+                    self.handle_forward_to_leader(forward_info, &operations, batch_item_count).await
                 } else {
                     Err(KeyValueStoreError::Failed {
                         reason: format!("raft error: {}", e),
@@ -173,7 +211,9 @@ impl WriteBatcher {
 
         // Clone result for each waiter
         for pending in batch {
-            let _ = pending.result_tx.send(write_result.clone());
+            if pending.result_tx.send(write_result.clone()).is_err() {
+                debug!("flush result receiver dropped before notification");
+            }
         }
     }
 
@@ -189,12 +229,17 @@ impl WriteBatcher {
         let leader_node = forward_info.leader_node.as_ref();
 
         // Try to forward via the write forwarder (never forward to self — iroh can't self-connect)
-        if let Some(forwarder) = self.write_forwarder()
-            && let Some(lid) = leader_id
-            && NodeId(lid.0) != self.node_id()
-            && let Some(node) = leader_node
+        let forwarder = self.write_forwarder();
+        let leader_node_id = leader_id.map(|id| NodeId(id.0));
+        let can_forward_to_remote_leader = leader_node_id.is_some_and(|leader| leader != self.node_id());
+        if can_forward_to_remote_leader
+            && let (Some(forwarder), Some(lid), Some(node)) = (forwarder, leader_id, leader_node)
         {
-            debug!(leader_id = lid.0, batch_size, "forwarding batched write to leader after leadership change");
+            debug!(
+                leader_id = lid.0,
+                batch_item_count = batch_size,
+                "forwarding batched write to leader after leadership change"
+            );
 
             let batch_ops: Vec<BatchOperation> = operations
                 .iter()
@@ -221,7 +266,7 @@ impl WriteBatcher {
         let leader_hint = leader_id.map(|id| id.0);
         warn!(
             leader = ?leader_hint,
-            batch_size,
+            batch_item_count = batch_size,
             "batch flush failed: leadership changed, no forwarder available"
         );
         Err(KeyValueStoreError::NotLeader {

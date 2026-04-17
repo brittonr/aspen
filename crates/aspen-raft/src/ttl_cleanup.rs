@@ -82,63 +82,30 @@ async fn run_redb_ttl_cleanup_loop(
         "Redb TTL cleanup task started"
     );
 
-    loop {
-        tokio::select! {
-            _ = cancel.cancelled() => {
-                info!("Redb TTL cleanup task shutting down");
-                break;
-            }
-            _ = ticker.tick() => {
-                run_redb_cleanup_iteration(&storage, &config).await;
-            }
-        }
+    while wait_for_ttl_cleanup_tick(&mut ticker, &cancel).await {
+        run_redb_cleanup_iteration(&storage, &config).await;
     }
 }
 
-/// Run a single cleanup iteration for Redb storage.
-async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCleanupConfig) {
-    let mut total_deleted: u64 = 0;
-    let mut batches_run: u32 = 0;
-
-    // Keep deleting batches until no more expired keys or max batches reached
-    loop {
-        if batches_run >= config.max_batches_per_run {
-            debug!(
-                total_deleted,
-                batches_run,
-                max_batches = config.max_batches_per_run,
-                "Redb TTL cleanup reached max batches limit"
-            );
-            break;
+async fn wait_for_ttl_cleanup_tick(ticker: &mut tokio::time::Interval, cancel: &CancellationToken) -> bool {
+    tokio::select! {
+        _ = cancel.cancelled() => {
+            info!("Redb TTL cleanup task shutting down");
+            false
         }
-
-        match storage.delete_expired_keys(config.batch_size_keys) {
-            Ok(deleted) => {
-                total_deleted += deleted as u64;
-                batches_run += 1;
-
-                if deleted == 0 {
-                    // No more expired keys
-                    break;
-                }
-
-                if deleted < config.batch_size_keys {
-                    // Deleted fewer than batch size, so we're done
-                    break;
-                }
-            }
-            Err(e) => {
-                warn!(error = %e, "Redb TTL cleanup batch failed");
-                break;
-            }
-        }
+        _ = ticker.tick() => true,
     }
+}
 
+#[inline]
+fn should_stop_ttl_cleanup(deleted: u32, config: &TtlCleanupConfig) -> bool {
+    deleted == 0 || deleted < config.batch_size_keys
+}
+
+fn log_ttl_cleanup_results(storage: &SharedRedbStorage, total_deleted: u64, batches_run: u32) {
     if total_deleted > 0 {
-        // Log metrics for monitoring
         let remaining = storage.count_expired_keys().unwrap_or(0);
         let with_ttl = storage.count_keys_with_ttl().unwrap_or(0);
-
         info!(
             total_deleted,
             batches_run,
@@ -149,6 +116,46 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCle
     } else {
         debug!("Redb TTL cleanup: no expired keys to delete");
     }
+}
+
+/// Run a single cleanup iteration for Redb storage.
+async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCleanupConfig) {
+    let mut total_deleted: u64 = 0;
+    let mut batches_run: u32 = 0;
+
+    while batches_run < config.max_batches_per_run {
+        let deleted = match storage.delete_expired_keys(config.batch_size_keys) {
+            Ok(deleted) => deleted,
+            Err(error) => {
+                warn!(error = %error, "Redb TTL cleanup batch failed");
+                break;
+            }
+        };
+
+        total_deleted = total_deleted.saturating_add(u64::from(deleted));
+        batches_run = batches_run.saturating_add(1);
+        debug_assert!(
+            batches_run <= config.max_batches_per_run,
+            "TTL_CLEANUP: batches_run must stay within max_batches_per_run"
+        );
+        debug_assert!(
+            total_deleted >= u64::from(deleted),
+            "TTL_CLEANUP: total_deleted must include the latest deleted batch"
+        );
+        if should_stop_ttl_cleanup(deleted, config) {
+            break;
+        }
+    }
+
+    if batches_run >= config.max_batches_per_run && config.max_batches_per_run > 0 {
+        debug!(
+            total_deleted,
+            batches_run,
+            max_batches = config.max_batches_per_run,
+            "Redb TTL cleanup reached max batches limit"
+        );
+    }
+    log_ttl_cleanup_results(storage, total_deleted, batches_run);
 }
 
 #[cfg(test)]

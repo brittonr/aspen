@@ -17,6 +17,16 @@ pub use aspen_raft_types::network::FailureType;
 use crate::constants::MAX_UNREACHABLE_NODES;
 use crate::types::NodeId;
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "failure detector timestamps first unreachable observation with monotonic time"
+)]
+#[inline]
+fn current_failure_instant() -> Instant {
+    Instant::now()
+}
+
 /// Internal tracking for unreachable nodes.
 #[derive(Debug, Clone)]
 struct UnreachableInfo {
@@ -101,11 +111,11 @@ impl NodeFailureDetector {
                 use crate::verified::should_evict_oldest_unreachable;
 
                 // Tiger Style: Enforce bounded map size before insertion (using pure function)
-                let already_tracked = self.unreachable_nodes.contains_key(&node_id);
+                let is_already_tracked = self.unreachable_nodes.contains_key(&node_id);
                 if should_evict_oldest_unreachable(
                     self.unreachable_nodes.len() as u32,
                     MAX_UNREACHABLE_NODES,
-                    already_tracked,
+                    is_already_tracked,
                 ) {
                     tracing::error!(
                         max_unreachable_nodes = MAX_UNREACHABLE_NODES,
@@ -136,7 +146,7 @@ impl NodeFailureDetector {
                         );
 
                         UnreachableInfo {
-                            first_failed_at: Instant::now(),
+                            first_failed_at: current_failure_instant(),
                             raft_heartbeat_status: raft_heartbeat,
                             iroh_connection_status: iroh_connection,
                             failure_type,

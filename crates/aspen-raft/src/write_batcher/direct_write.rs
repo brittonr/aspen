@@ -8,7 +8,28 @@ use super::command_conversion::write_command_to_app_request;
 use super::*;
 use crate::types::NodeId;
 
+struct DirectWriteForwardTarget {
+    leader_id: NodeId,
+    leader_addr: iroh::EndpointAddr,
+}
+
 impl WriteBatcher {
+    #[inline]
+    fn direct_write_forward_target(
+        &self,
+        forward_info: &openraft::error::ForwardToLeader<AppTypeConfig>,
+    ) -> Option<DirectWriteForwardTarget> {
+        let leader_id = forward_info.leader_id?;
+        let leader_node = forward_info.leader_node.as_ref()?;
+        if NodeId(leader_id.0) == self.node_id() {
+            return None;
+        }
+        Some(DirectWriteForwardTarget {
+            leader_id: NodeId(leader_id.0),
+            leader_addr: leader_node.iroh_addr.clone(),
+        })
+    }
+
     /// Write directly to Raft without batching.
     ///
     /// If Raft returns ForwardToLeader (leadership changed), forwards the
@@ -36,27 +57,30 @@ impl WriteBatcher {
                 conflict_expected_version: None,
                 conflict_actual_version: None,
             }),
-            Err(e) => {
-                // Forward to leader if this is a leadership change during write
-                if let Some(forward_info) = e.forward_to_leader() {
-                    // Guard: never forward to self (iroh can't self-connect)
-                    if let Some(forwarder) = self.write_forwarder()
-                        && let Some(lid) = forward_info.leader_id
-                        && NodeId(lid.0) != self.node_id()
-                        && let Some(node) = &forward_info.leader_node
+            Err(error) => {
+                // Forward to leader if this is a leadership change during write.
+                if let Some(forward_info) = error.forward_to_leader() {
+                    if let Some(forward_target) = self.direct_write_forward_target(forward_info)
+                        && let Some(forwarder) = self.write_forwarder()
                     {
-                        debug!(leader_id = lid.0, "forwarding direct write to leader after leadership change");
+                        debug!(
+                            leader_id = forward_target.leader_id.0,
+                            "forwarding direct write to leader after leadership change"
+                        );
                         let request = WriteRequest { command };
-                        return forwarder.forward_write(NodeId(lid.0), node.iroh_addr.clone(), request).await;
+                        return forwarder
+                            .forward_write(forward_target.leader_id, forward_target.leader_addr, request)
+                            .await;
                     }
-                    // No forwarder or no leader info
+
                     return Err(KeyValueStoreError::NotLeader {
                         leader: forward_info.leader_id.map(|id| id.0),
                         reason: "leadership changed during direct write".to_string(),
                     });
                 }
+
                 Err(KeyValueStoreError::Failed {
-                    reason: format!("raft error: {}", e),
+                    reason: format!("raft error: {}", error),
                 })
             }
         }

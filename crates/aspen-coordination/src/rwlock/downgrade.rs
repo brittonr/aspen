@@ -22,6 +22,15 @@ enum DowngradeResult {
     Retry,
 }
 
+struct DowngradeExecuteInput<'a> {
+    name: &'a str,
+    holder_id: &'a str,
+    fencing_token: u64,
+    ttl_ms: u64,
+    key: &'a str,
+    state: &'a super::types::RWLockState,
+}
+
 impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     /// Downgrade a write lock to a read lock.
     ///
@@ -41,7 +50,17 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
             match current {
                 None => bail!("lock does not exist"),
                 Some(state) => {
-                    match self.downgrade_execute(name, holder_id, fencing_token, ttl_ms, &key, &state).await? {
+                    match self
+                        .downgrade_execute(DowngradeExecuteInput {
+                            name,
+                            holder_id,
+                            fencing_token,
+                            ttl_ms,
+                            key: &key,
+                            state: &state,
+                        })
+                        .await?
+                    {
                         DowngradeResult::Success(token, deadline, count) => return Ok((token, deadline, count)),
                         DowngradeResult::Retry => continue,
                     }
@@ -51,15 +70,15 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     }
 
     /// Execute the downgrade operation on the lock state.
-    async fn downgrade_execute(
-        &self,
-        name: &str,
-        holder_id: &str,
-        fencing_token: u64,
-        ttl_ms: u64,
-        key: &str,
-        state: &super::types::RWLockState,
-    ) -> Result<DowngradeResult> {
+    async fn downgrade_execute(&self, input: DowngradeExecuteInput<'_>) -> Result<DowngradeResult> {
+        let DowngradeExecuteInput {
+            name,
+            holder_id,
+            fencing_token,
+            ttl_ms,
+            key,
+            state,
+        } = input;
         // Verify we hold write lock
         self.downgrade_verify_writer(holder_id, fencing_token, state)?;
 

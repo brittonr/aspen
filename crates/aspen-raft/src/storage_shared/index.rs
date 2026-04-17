@@ -4,6 +4,14 @@ use std::sync::Arc;
 
 use super::*;
 
+#[inline]
+fn index_scan_limit_usize(limit_results: u32) -> usize {
+    match usize::try_from(limit_results) {
+        Ok(limit_result_slots) => limit_result_slots,
+        Err(_) => usize::MAX,
+    }
+}
+
 // ====================================================================================
 // IndexQueryExecutor Implementation
 // ====================================================================================
@@ -50,7 +58,8 @@ impl SharedRedbStorage {
     /// Internal helper to scan an index range and extract primary keys.
     fn scan_index_range(&self, start: &[u8], end: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
         // Cap the limit to prevent resource exhaustion
-        let effective_limit = limit.min(aspen_core::layer::MAX_INDEX_SCAN_RESULTS);
+        let max_results = limit.min(aspen_core::layer::MAX_INDEX_SCAN_RESULTS);
+        let max_result_slots = index_scan_limit_usize(max_results);
 
         let read_txn = self.db.begin_read().map_err(|e| aspen_core::layer::IndexError::ExtractionFailed {
             name: "scan".to_string(),
@@ -63,7 +72,7 @@ impl SharedRedbStorage {
                 reason: e.to_string(),
             })?;
 
-        let mut primary_keys = Vec::new();
+        let mut primary_keys = Vec::with_capacity(max_result_slots);
         let mut has_more = false;
 
         // Scan the range
@@ -78,7 +87,7 @@ impl SharedRedbStorage {
                 reason: e.to_string(),
             })?;
 
-            if primary_keys.len() >= effective_limit as usize {
+            if primary_keys.len() >= max_result_slots {
                 has_more = true;
                 break;
             }

@@ -72,6 +72,15 @@ pub struct DistributedLock<S: KeyValueStore + ?Sized> {
     config: LockConfig,
 }
 
+struct TryAcquireCasInput {
+    current: Option<LockEntry>,
+    expected: Option<String>,
+    new_json: String,
+    released_json: String,
+    new_entry: LockEntry,
+    new_token: u64,
+}
+
 impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
     /// Create a new distributed lock handle.
     ///
@@ -173,7 +182,15 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
         let new_json = serde_json::to_string(&new_entry)?;
         let released_json = serde_json::to_string(&new_entry.released())?;
 
-        self.try_acquire_cas(current, expected, new_json, released_json, new_entry, new_token).await
+        self.try_acquire_cas(TryAcquireCasInput {
+            current,
+            expected,
+            new_json,
+            released_json,
+            new_entry,
+            new_token,
+        })
+        .await
     }
 
     /// Prepare expected value and new token for lock acquisition.
@@ -193,15 +210,15 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
     }
 
     /// Execute CAS and build lock guard on success.
-    async fn try_acquire_cas(
-        &self,
-        current: Option<LockEntry>,
-        expected: Option<String>,
-        new_json: String,
-        released_json: String,
-        new_entry: LockEntry,
-        new_token: u64,
-    ) -> Result<LockGuard<S>, CoordinationError> {
+    async fn try_acquire_cas(&self, input: TryAcquireCasInput) -> Result<LockGuard<S>, CoordinationError> {
+        let TryAcquireCasInput {
+            current,
+            expected,
+            new_json,
+            released_json,
+            new_entry,
+            new_token,
+        } = input;
         match self
             .store
             .write(WriteRequest {

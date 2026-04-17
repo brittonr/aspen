@@ -3,6 +3,8 @@ use aspen_kv_types::WriteResult;
 use tokio::sync::oneshot;
 
 use super::*;
+use crate::verified::BatchLimits;
+use crate::verified::BatchState;
 use crate::verified::FlushDecision;
 use crate::verified::check_batch_limits;
 
@@ -44,8 +46,21 @@ fn set_operation_size_bytes(payload: SetPayloadRef<'_>) -> u64 {
 
 #[inline]
 fn should_flush_before_enqueue(state: &BatcherState, op_bytes: u64, config: &BatchConfig) -> bool {
-    check_batch_limits(pending_len_u32(state), state.current_bytes, op_bytes, config.max_entries, config.max_bytes)
-        .would_exceed()
+    check_batch_limits(
+        BatchState {
+            pending_count: pending_len_u32(state),
+            current_bytes: state.current_bytes,
+            batch_start_ms: 0,
+            current_time_ms: 0,
+        },
+        op_bytes,
+        BatchLimits {
+            max_entries: config.max_entries,
+            max_bytes: config.max_bytes,
+            max_wait_ms: 0,
+        },
+    )
+    .would_exceed()
 }
 
 impl WriteBatcher {

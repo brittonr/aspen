@@ -41,14 +41,31 @@ where
     C::Term: Into<u64> + Copy,
 {
     let membership = metrics.membership_config.membership();
+    let last_log_index = metrics.last_log_index;
+    let last_applied_index = metrics.last_applied.as_ref().map(|la| la.index);
+    let snapshot_index = metrics.snapshot.as_ref().map(|s| s.index);
+    debug_assert!(
+        last_applied_index
+            .zip(last_log_index)
+            .map(|(applied_index, log_index)| applied_index <= log_index)
+            .unwrap_or(true),
+        "last applied index must not exceed last log index"
+    );
+    debug_assert!(
+        snapshot_index
+            .zip(last_applied_index)
+            .map(|(snapshot_log_index, applied_index)| snapshot_log_index <= applied_index)
+            .unwrap_or(true),
+        "snapshot index must not exceed last applied index"
+    );
     ClusterMetrics {
         id: metrics.id.into(),
         state: node_state_from_openraft(metrics.state),
         current_leader: metrics.current_leader.map(|id| id.into()),
         current_term: metrics.current_term.into(),
-        last_log_index: metrics.last_log_index,
-        last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
-        snapshot_index: metrics.snapshot.as_ref().map(|s| s.index),
+        last_log_index,
+        last_applied_index,
+        snapshot_index,
         replication: metrics.replication.as_ref().map(|repl_map| {
             repl_map
                 .iter()

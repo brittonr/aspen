@@ -21,7 +21,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let dlq_pref = verified::dlq_prefix(name);
 
         let keys = self.scan_keys(&dlq_pref, max_items).await?;
-        let mut items = Vec::new();
+        let mut items = Vec::with_capacity(keys.len());
 
         for key in keys {
             if let Some(item) = self.read_json::<DLQItem>(&key).await? {

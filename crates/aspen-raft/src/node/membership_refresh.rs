@@ -21,6 +21,16 @@ use super::RaftNode;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "membership refresh debouncer timestamps recent updates with monotonic time"
+)]
+#[inline]
+fn current_address_update_instant() -> Instant {
+    Instant::now()
+}
+
 /// Debounce window for membership address updates.
 const ADDRESS_UPDATE_DEBOUNCE: Duration = Duration::from_secs(60);
 
@@ -59,7 +69,7 @@ impl AddressUpdateDebouncer {
     /// Record that an address update was submitted for this (node_id, address_hash).
     async fn record_update(&self, node_id: NodeId, addr_hash: u64) {
         let mut recent = self.recent.lock().await;
-        recent.insert((node_id, addr_hash), Instant::now());
+        recent.insert((node_id, addr_hash), current_address_update_instant());
 
         // Evict stale entries to prevent unbounded growth.
         // Tiger Style: bounded cleanup — only evict if map exceeds 128 entries.
@@ -172,8 +182,8 @@ impl RaftNode {
 
         // Non-blocking add_learner: updates the Node metadata without
         // changing voter/learner sets. Timeout prevents hanging.
-        let timeout = Duration::from_secs(5);
-        match tokio::time::timeout(timeout, self.raft().add_learner(target_node, updated_info, false)).await {
+        let update_wait = Duration::from_secs(5);
+        match tokio::time::timeout(update_wait, self.raft().add_learner(target_node, updated_info, false)).await {
             Ok(Ok(_)) => {
                 debouncer.record_update(target_node, addr_hash).await;
                 info!(
@@ -195,7 +205,7 @@ impl RaftNode {
                 warn!(
                     target_node = %target_node,
                     "membership address update timed out after {}s",
-                    timeout.as_secs()
+                    update_wait.as_secs()
                 );
                 Ok(false)
             }

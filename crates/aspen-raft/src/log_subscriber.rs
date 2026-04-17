@@ -130,10 +130,10 @@ use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
 use tokio::sync::Semaphore;
 use tokio::sync::broadcast;
+use tracing::Instrument;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
-use tracing::instrument;
 use tracing::warn;
 
 use crate::auth::AUTH_HANDSHAKE_TIMEOUT;
@@ -385,86 +385,90 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 /// 3. Acceptance
 /// 4. Historical replay (if requested)
 /// 5. Live streaming
-#[instrument(skip(connection, auth_context, log_receiver, context))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
     log_receiver: broadcast::Receiver<LogEntryPayload>,
     context: SubscriberConnectionContext<'_>,
 ) -> anyhow::Result<()> {
-    use anyhow::Context;
+    let subscriber_id = context.subscriber_id;
+    async move {
+        use anyhow::Context;
 
-    let remote_node_id = connection.remote_id();
-    debug_assert!(context.node_id > 0, "node_id must be positive");
-    debug_assert!(context.subscriber_id > 0, "subscriber_id must be positive");
+        let remote_node_id = connection.remote_id();
+        debug_assert!(context.node_id > 0, "node_id must be positive");
+        debug_assert!(context.subscriber_id > 0, "subscriber_id must be positive");
 
-    // Accept the initial stream for authentication and subscription setup
-    let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscriber stream")?;
+        // Accept the initial stream for authentication and subscription setup
+        let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscriber stream")?;
 
-    // Phase 1: Authenticate subscriber
-    handle_log_subscriber_authenticate(&auth_context, context.subscriber_id, &mut send, &mut recv).await?;
+        // Phase 1: Authenticate subscriber
+        handle_log_subscriber_authenticate(&auth_context, context.subscriber_id, &mut send, &mut recv).await?;
 
-    // Phase 2: Receive and validate subscription request
-    let sub_request = handle_log_subscriber_receive_request(context.subscriber_id, &mut send, &mut recv).await?;
+        // Phase 2: Receive and validate subscription request
+        let sub_request = handle_log_subscriber_receive_request(context.subscriber_id, &mut send, &mut recv).await?;
 
-    debug!(
-        subscriber_id = context.subscriber_id,
-        start_index = sub_request.start_index,
-        prefix = ?sub_request.key_prefix,
-        "processing subscription request"
-    );
+        debug!(
+            subscriber_id = context.subscriber_id,
+            start_index = sub_request.start_index,
+            prefix = ?sub_request.key_prefix,
+            "processing subscription request"
+        );
 
-    // Phase 3: Accept subscription
-    let current_committed_index = context.committed_index.load(Ordering::Acquire);
-    handle_log_subscriber_accept(
-        SubscriptionAcceptance {
-            node_id: context.node_id,
-            subscriber_id: context.subscriber_id,
+        // Phase 3: Accept subscription
+        let current_committed_index = context.committed_index.load(Ordering::Acquire);
+        handle_log_subscriber_accept(
+            SubscriptionAcceptance {
+                node_id: context.node_id,
+                subscriber_id: context.subscriber_id,
+                current_committed_index,
+            },
+            &mut send,
+        )
+        .await?;
+
+        info!(
+            subscriber_id = context.subscriber_id,
+            remote = %remote_node_id,
+            start_index = sub_request.start_index,
+            current_index = current_committed_index,
+            "log subscription active"
+        );
+
+        // Phase 4: Historical replay if requested
+        handle_log_subscriber_replay(
+            context.subscriber_id,
+            &sub_request,
             current_committed_index,
-        },
-        &mut send,
-    )
-    .await?;
+            &context.historical_reader,
+            &mut send,
+        )
+        .await?;
 
-    info!(
-        subscriber_id = context.subscriber_id,
-        remote = %remote_node_id,
-        start_index = sub_request.start_index,
-        current_index = current_committed_index,
-        "log subscription active"
-    );
+        // Phase 5: Stream live log entries
+        handle_log_subscriber_stream(
+            context.subscriber_id,
+            sub_request.key_prefix,
+            log_receiver,
+            KeepaliveContext {
+                committed_index: &context.committed_index,
+                hlc: context.hlc,
+            },
+            &mut send,
+        )
+        .await;
 
-    // Phase 4: Historical replay if requested
-    handle_log_subscriber_replay(
-        context.subscriber_id,
-        &sub_request,
-        current_committed_index,
-        &context.historical_reader,
-        &mut send,
-    )
-    .await?;
+        // Best-effort stream finish - log if it fails
+        if let Err(finish_err) = send.finish() {
+            debug!(subscriber_id = context.subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+        }
 
-    // Phase 5: Stream live log entries
-    handle_log_subscriber_stream(
-        context.subscriber_id,
-        sub_request.key_prefix,
-        log_receiver,
-        KeepaliveContext {
-            committed_index: &context.committed_index,
-            hlc: context.hlc,
-        },
-        &mut send,
-    )
-    .await;
+        info!(subscriber_id = context.subscriber_id, "log subscription ended");
 
-    // Best-effort stream finish - log if it fails
-    if let Err(finish_err) = send.finish() {
-        debug!(subscriber_id = context.subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+        Ok(())
     }
-
-    info!(subscriber_id = context.subscriber_id, "log subscription ended");
-
-    Ok(())
+    .instrument(tracing::info_span!("handle_log_subscriber_connection", subscriber_id = subscriber_id))
+    .await
 }
 
 /// Authenticate a log subscriber connection.
@@ -613,6 +617,50 @@ async fn handle_log_subscriber_accept(
     Ok(())
 }
 
+struct ReplayBatchInput<'a> {
+    subscriber_id: u64,
+    key_prefix: &'a [u8],
+    entries: Vec<LogEntryPayload>,
+    current_start: &'a mut u64,
+    total_entries_replayed: &'a mut u64,
+    send: &'a mut iroh::endpoint::SendStream,
+}
+
+async fn handle_log_subscriber_replay_batch(input: ReplayBatchInput<'_>) -> anyhow::Result<()> {
+    let ReplayBatchInput {
+        subscriber_id,
+        key_prefix,
+        entries,
+        current_start,
+        total_entries_replayed,
+        send,
+    } = input;
+    debug_assert!(subscriber_id > 0, "subscriber_id must be positive during replay batch");
+    debug_assert!(entries.len() <= MAX_HISTORICAL_BATCH_SIZE as usize, "historical replay batch must stay bounded");
+
+    for entry in entries {
+        *current_start = entry.index.saturating_add(1);
+        if !matches_subscriber_filter(key_prefix, &entry.operation) {
+            continue;
+        }
+        let message = LogEntryMessage::Entry(entry.clone());
+        let message_bytes = match postcard::to_stdvec(&message) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                error!(error = %err, "failed to serialize historical entry");
+                continue;
+            }
+        };
+        if let Err(err) = send.write_all(&message_bytes).await {
+            debug!(subscriber_id = subscriber_id, error = %err, "subscriber disconnected during replay");
+            return Err(anyhow::anyhow!("subscriber disconnected during replay"));
+        }
+        *total_entries_replayed = total_entries_replayed.saturating_add(1);
+    }
+
+    Ok(())
+}
+
 /// Replay historical log entries if requested and available.
 async fn handle_log_subscriber_replay(
     subscriber_id: u64,
@@ -662,25 +710,15 @@ async fn handle_log_subscriber_replay(
                     );
                     break;
                 }
-                for entry in entries {
-                    current_start = entry.index.saturating_add(1);
-                    if !matches_subscriber_filter(&sub_request.key_prefix, &entry.operation) {
-                        continue;
-                    }
-                    let message = LogEntryMessage::Entry(entry.clone());
-                    let message_bytes = match postcard::to_stdvec(&message) {
-                        Ok(bytes) => bytes,
-                        Err(err) => {
-                            error!(error = %err, "failed to serialize historical entry");
-                            continue;
-                        }
-                    };
-                    if let Err(err) = send.write_all(&message_bytes).await {
-                        debug!(subscriber_id = subscriber_id, error = %err, "subscriber disconnected during replay");
-                        return Err(anyhow::anyhow!("subscriber disconnected during replay"));
-                    }
-                    total_entries_replayed = total_entries_replayed.saturating_add(1);
-                }
+                handle_log_subscriber_replay_batch(ReplayBatchInput {
+                    subscriber_id,
+                    key_prefix: &sub_request.key_prefix,
+                    entries,
+                    current_start: &mut current_start,
+                    total_entries_replayed: &mut total_entries_replayed,
+                    send,
+                })
+                .await?;
             }
             Err(err) => {
                 warn!(subscriber_id = subscriber_id, error = %err, "failed to read historical entries, continuing with live stream");

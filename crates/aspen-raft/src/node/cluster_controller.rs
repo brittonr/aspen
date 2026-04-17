@@ -22,6 +22,14 @@ use super::conversions::snapshot_log_id_from_openraft;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
 
+#[inline]
+fn duration_ms_u64(duration: std::time::Duration) -> u64 {
+    match u64::try_from(duration.as_millis()) {
+        Ok(duration_ms) => duration_ms,
+        Err(_) => u64::MAX,
+    }
+}
+
 #[async_trait]
 impl ClusterController for RaftNode {
     #[instrument(skip(self))]
@@ -35,15 +43,18 @@ impl ClusterController for RaftNode {
         request.validate()?;
 
         // Build RaftMemberInfo map
-        let mut nodes: BTreeMap<NodeId, RaftMemberInfo> = BTreeMap::new();
-        for cluster_node in &request.initial_members {
-            let iroh_addr = cluster_node.iroh_addr().ok_or_else(|| ControlPlaneError::InvalidRequest {
-                reason: format!("node_addr must be set for node {}", cluster_node.id),
-            })?;
-            let mut member_info = RaftMemberInfo::new(iroh_addr.clone());
-            member_info.relay_url = cluster_node.relay_url.clone();
-            nodes.insert(cluster_node.id.into(), member_info);
-        }
+        let nodes: BTreeMap<NodeId, RaftMemberInfo> = request
+            .initial_members
+            .iter()
+            .map(|cluster_node| {
+                let iroh_addr = cluster_node.iroh_addr().ok_or_else(|| ControlPlaneError::InvalidRequest {
+                    reason: format!("node_addr must be set for node {}", cluster_node.id),
+                })?;
+                let mut member_info = RaftMemberInfo::new(iroh_addr.clone());
+                member_info.relay_url = cluster_node.relay_url.clone();
+                Ok::<_, ControlPlaneError>((cluster_node.id.into(), member_info))
+            })
+            .collect::<Result<_, _>>()?;
 
         // Tiger Style: nodes map must match input
         debug_assert!(
@@ -58,7 +69,7 @@ impl ClusterController for RaftNode {
         tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft().initialize(nodes))
             .await
             .map_err(|_| ControlPlaneError::Timeout {
-                duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+                duration_ms: duration_ms_u64(MEMBERSHIP_OPERATION_TIMEOUT),
             })?
             .map_err(|err| ControlPlaneError::Failed {
                 reason: err.to_string(),
@@ -109,7 +120,7 @@ impl ClusterController for RaftNode {
         tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft().add_learner(learner.id.into(), node, true))
             .await
             .map_err(|_| ControlPlaneError::Timeout {
-                duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+                duration_ms: duration_ms_u64(MEMBERSHIP_OPERATION_TIMEOUT),
             })?
             .map_err(|err| ControlPlaneError::Failed {
                 reason: err.to_string(),
@@ -143,7 +154,7 @@ impl ClusterController for RaftNode {
             tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft().change_membership(members, false))
                 .await
                 .map_err(|_| ControlPlaneError::Timeout {
-                    duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+                    duration_ms: duration_ms_u64(MEMBERSHIP_OPERATION_TIMEOUT),
                 })?
                 .map_err(|err| ControlPlaneError::Failed {
                     reason: err.to_string(),

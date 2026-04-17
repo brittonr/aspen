@@ -133,6 +133,14 @@ pub enum StateMachineVariant {
     Redb(Arc<SharedRedbStorage>),
 }
 
+#[inline]
+fn scan_result_limit_usize(limit_results: u32) -> usize {
+    match usize::try_from(limit_results) {
+        Ok(limit_results_usize) => limit_results_usize,
+        Err(_) => usize::MAX,
+    }
+}
+
 impl StateMachineVariant {
     /// Read a value from the state machine.
     ///
@@ -154,9 +162,10 @@ impl StateMachineVariant {
     /// Returns keys in sorted order (lexicographic).
     /// Tiger Style: Bounded results prevent unbounded memory usage.
     pub async fn scan(&self, request: &ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-        let limit_u32 = request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS).min(MAX_BATCH_SIZE);
-        let limit = limit_u32 as usize;
-        let fetch_limit = limit_u32.saturating_add(1);
+        let max_results_u32 =
+            request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS).min(MAX_BATCH_SIZE);
+        let max_results = scan_result_limit_usize(max_results_u32);
+        let scan_page_entries_u32 = max_results_u32.saturating_add(1);
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {
@@ -168,17 +177,18 @@ impl StateMachineVariant {
         match self {
             Self::InMemory(sm) => {
                 let kv_pairs = sm.scan_kv_with_prefix_async(&request.prefix).await;
-                Self::build_scan_result(kv_pairs, &start_after, limit)
+                Self::build_scan_result(kv_pairs, &start_after, max_results)
             }
             Self::Redb(sm) => {
-                let entries = sm.scan(&request.prefix, start_after.as_deref(), Some(fetch_limit)).map_err(|err| {
-                    KeyValueStoreError::Failed {
-                        reason: format!("redb storage scan error: {}", err),
-                    }
-                })?;
+                let entries =
+                    sm.scan(&request.prefix, start_after.as_deref(), Some(scan_page_entries_u32)).map_err(|err| {
+                        KeyValueStoreError::Failed {
+                            reason: format!("redb storage scan error: {}", err),
+                        }
+                    })?;
                 // Convert KeyValueWithRevision to (String, String) pairs
                 let kv_pairs: Vec<(String, String)> = entries.into_iter().map(|e| (e.key, e.value)).collect();
-                Self::build_scan_result(kv_pairs, &start_after, limit)
+                Self::build_scan_result(kv_pairs, &start_after, max_results)
             }
         }
     }

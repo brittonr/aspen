@@ -38,6 +38,21 @@ enum TryAcquireResult {
     Error(String),
 }
 
+/// Parameters for semaphore permit acquisition.
+#[derive(Clone, Copy)]
+pub struct SemaphoreAcquireRequest<'a> {
+    /// Semaphore name.
+    pub name: &'a str,
+    /// Holder identifier.
+    pub holder_id: &'a str,
+    /// Permits requested.
+    pub permits: u32,
+    /// Total semaphore capacity.
+    pub capacity: u32,
+    /// Lease TTL for held permits.
+    pub ttl_ms: u64,
+}
+
 /// Semaphore state stored in the key-value store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemaphoreState {
@@ -105,21 +120,18 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     /// Acquire permits, blocking until available or timeout.
     ///
     /// Returns (permits_acquired, available_after) on success.
-    pub async fn acquire(
-        &self,
-        name: &str,
-        holder_id: &str,
-        permits: u32,
-        capacity: u32,
-        ttl_ms: u64,
-        timeout: Option<Duration>,
-    ) -> Result<(u32, u32)> {
+    pub async fn acquire(&self, request: SemaphoreAcquireRequest<'_>, timeout: Option<Duration>) -> Result<(u32, u32)> {
         // Tiger Style: argument validation
-        debug_assert!(!name.is_empty(), "SEMAPHORE: name must not be empty");
-        debug_assert!(!holder_id.is_empty(), "SEMAPHORE: holder_id must not be empty");
-        debug_assert!(permits > 0, "SEMAPHORE: permits must be positive");
-        debug_assert!(capacity > 0, "SEMAPHORE: capacity must be positive");
-        debug_assert!(permits <= capacity, "SEMAPHORE: permits ({}) must not exceed capacity ({})", permits, capacity);
+        debug_assert!(!request.name.is_empty(), "SEMAPHORE: name must not be empty");
+        debug_assert!(!request.holder_id.is_empty(), "SEMAPHORE: holder_id must not be empty");
+        debug_assert!(request.permits > 0, "SEMAPHORE: permits must be positive");
+        debug_assert!(request.capacity > 0, "SEMAPHORE: capacity must be positive");
+        debug_assert!(
+            request.permits <= request.capacity,
+            "SEMAPHORE: permits ({}) must not exceed capacity ({})",
+            request.permits,
+            request.capacity
+        );
 
         let deadline = runtime_clock::optional_deadline(timeout);
 
@@ -129,7 +141,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                 bail!("semaphore acquire timeout");
             }
 
-            match self.try_acquire(name, holder_id, permits, capacity, ttl_ms).await? {
+            match self.try_acquire(request).await? {
                 Some(result) => return Ok(result),
                 None => {
                     // Wait and retry
@@ -142,27 +154,20 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     /// Try to acquire permits without blocking.
     ///
     /// Returns Some((permits_acquired, available_after)) on success, None if no permits available.
-    pub async fn try_acquire(
-        &self,
-        name: &str,
-        holder_id: &str,
-        permits: u32,
-        capacity: u32,
-        ttl_ms: u64,
-    ) -> Result<Option<(u32, u32)>> {
+    pub async fn try_acquire(&self, request: SemaphoreAcquireRequest<'_>) -> Result<Option<(u32, u32)>> {
         // Tiger Style: argument validation
-        debug_assert!(!name.is_empty(), "SEMAPHORE: name must not be empty for try_acquire");
-        debug_assert!(!holder_id.is_empty(), "SEMAPHORE: holder_id must not be empty for try_acquire");
-        debug_assert!(ttl_ms > 0, "SEMAPHORE: ttl_ms must be positive");
+        debug_assert!(!request.name.is_empty(), "SEMAPHORE: name must not be empty for try_acquire");
+        debug_assert!(!request.holder_id.is_empty(), "SEMAPHORE: holder_id must not be empty for try_acquire");
+        debug_assert!(request.ttl_ms > 0, "SEMAPHORE: ttl_ms must be positive");
 
-        let key = verified::semaphore_key(name);
+        let key = verified::semaphore_key(request.name);
 
         loop {
             // Read current state
             let current = self.read_state(&key).await?;
 
             match current {
-                None => match self.try_acquire_create(name, holder_id, permits, capacity, ttl_ms, &key).await? {
+                None => match self.try_acquire_create(request, &key).await? {
                     TryAcquireResult::Success(result) => return Ok(Some(result)),
                     TryAcquireResult::Retry => continue,
                     TryAcquireResult::NoPermits => return Ok(None),
@@ -173,8 +178,11 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                     state.cleanup_expired();
 
                     // Check if already holding permits - refresh TTL
-                    if state.find_holder(holder_id).is_some() {
-                        match self.try_acquire_refresh(name, holder_id, ttl_ms, &key, &state).await? {
+                    if state.find_holder(request.holder_id).is_some() {
+                        match self
+                            .try_acquire_refresh(request.name, request.holder_id, request.ttl_ms, &key, &state)
+                            .await?
+                        {
                             TryAcquireResult::Success(result) => return Ok(Some(result)),
                             TryAcquireResult::Retry => continue,
                             TryAcquireResult::NoPermits => return Ok(None),
@@ -183,7 +191,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                     }
 
                     // Try to acquire new permits
-                    match self.try_acquire_new(name, holder_id, permits, ttl_ms, &key, &state).await? {
+                    match self.try_acquire_new(request, &key, &state).await? {
                         TryAcquireResult::Success(result) => return Ok(Some(result)),
                         TryAcquireResult::Retry => continue,
                         TryAcquireResult::NoPermits => return Ok(None),
@@ -195,28 +203,23 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     }
 
     /// Create a new semaphore with the first holder.
-    async fn try_acquire_create(
-        &self,
-        name: &str,
-        holder_id: &str,
-        permits: u32,
-        capacity: u32,
-        ttl_ms: u64,
-        key: &str,
-    ) -> Result<TryAcquireResult> {
-        if permits > capacity {
-            return Ok(TryAcquireResult::Error(format!("requested permits {} exceeds capacity {}", permits, capacity)));
+    async fn try_acquire_create(&self, request: SemaphoreAcquireRequest<'_>, key: &str) -> Result<TryAcquireResult> {
+        if request.permits > request.capacity {
+            return Ok(TryAcquireResult::Error(format!(
+                "requested permits {} exceeds capacity {}",
+                request.permits, request.capacity
+            )));
         }
 
         let now = now_unix_ms();
         let state = SemaphoreState {
-            name: name.to_string(),
-            capacity_permits: capacity,
+            name: request.name.to_string(),
+            capacity_permits: request.capacity,
             holders: vec![SemaphoreHolder {
-                holder_id: holder_id.to_string(),
-                permits,
+                holder_id: request.holder_id.to_string(),
+                permits: request.permits,
                 acquired_at_ms: now,
-                deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
+                deadline_ms: crate::verified::compute_holder_deadline(now, request.ttl_ms),
             }],
         };
         let new_json = serde_json::to_string(&state)?;
@@ -233,8 +236,8 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
             .await
         {
             Ok(_) => {
-                debug!(name, holder_id, permits, "semaphore created");
-                Ok(TryAcquireResult::Success((permits, capacity - permits)))
+                debug!(request.name, request.holder_id, permits = request.permits, "semaphore created");
+                Ok(TryAcquireResult::Success((request.permits, request.capacity - request.permits)))
             }
             Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(TryAcquireResult::Retry),
             Err(e) => Ok(TryAcquireResult::Error(format!("semaphore CAS failed: {}", e))),
@@ -285,16 +288,13 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     /// Acquire new permits for a holder not yet in the semaphore.
     async fn try_acquire_new(
         &self,
-        name: &str,
-        holder_id: &str,
-        permits: u32,
-        ttl_ms: u64,
+        request: SemaphoreAcquireRequest<'_>,
         key: &str,
         state: &SemaphoreState,
     ) -> Result<TryAcquireResult> {
         // Check if enough permits available
         let available = state.available_permits();
-        if available < permits {
+        if available < request.permits {
             return Ok(TryAcquireResult::NoPermits);
         }
 
@@ -302,7 +302,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         let active_holders = state.holders.len();
         if active_holders >= MAX_SEMAPHORE_HOLDERS as usize {
             return Err(CoordinationError::TooManySemaphoreHolders {
-                name: name.to_string(),
+                name: request.name.to_string(),
                 count: active_holders as u32,
                 max: MAX_SEMAPHORE_HOLDERS,
             }
@@ -313,10 +313,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         let now = now_unix_ms();
         let mut new_state = state.clone();
         new_state.holders.push(SemaphoreHolder {
-            holder_id: holder_id.to_string(),
-            permits,
+            holder_id: request.holder_id.to_string(),
+            permits: request.permits,
             acquired_at_ms: now,
-            deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
+            deadline_ms: crate::verified::compute_holder_deadline(now, request.ttl_ms),
         });
 
         let old_json = serde_json::to_string(state)?;
@@ -335,8 +335,14 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         {
             Ok(_) => {
                 let new_available = new_state.available_permits();
-                debug!(name, holder_id, permits, available = new_available, "acquired permits");
-                Ok(TryAcquireResult::Success((permits, new_available)))
+                debug!(
+                    request.name,
+                    request.holder_id,
+                    permits = request.permits,
+                    available = new_available,
+                    "acquired permits"
+                );
+                Ok(TryAcquireResult::Success((request.permits, new_available)))
             }
             Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => Ok(TryAcquireResult::Retry),
             Err(e) => Ok(TryAcquireResult::Error(format!("semaphore CAS failed: {}", e))),
@@ -462,7 +468,14 @@ mod tests {
         let manager = SemaphoreManager::new(store);
 
         // Acquire 2 of 3 permits
-        let (acquired, available) = manager.try_acquire("test", "h1", 2, 3, 60000).await.unwrap().unwrap();
+        let request = SemaphoreAcquireRequest {
+            name: "test",
+            holder_id: "h1",
+            permits: 2,
+            capacity: 3,
+            ttl_ms: 60000,
+        };
+        let (acquired, available) = manager.try_acquire(request).await.unwrap().unwrap();
 
         assert_eq!(acquired, 2);
         assert_eq!(available, 1);
@@ -478,13 +491,29 @@ mod tests {
         let manager = SemaphoreManager::new(store);
 
         // Acquire all permits
-        let (acquired, available) = manager.try_acquire("test", "h1", 3, 3, 60000).await.unwrap().unwrap();
+        let request = SemaphoreAcquireRequest {
+            name: "test",
+            holder_id: "h1",
+            permits: 3,
+            capacity: 3,
+            ttl_ms: 60000,
+        };
+        let (acquired, available) = manager.try_acquire(request).await.unwrap().unwrap();
 
         assert_eq!(acquired, 3);
         assert_eq!(available, 0);
 
         // Try to acquire more - should fail
-        let result = manager.try_acquire("test", "h2", 1, 3, 60000).await.unwrap();
+        let result = manager
+            .try_acquire(SemaphoreAcquireRequest {
+                name: "test",
+                holder_id: "h2",
+                permits: 1,
+                capacity: 3,
+                ttl_ms: 60000,
+            })
+            .await
+            .unwrap();
 
         assert!(result.is_none());
     }
@@ -500,7 +529,16 @@ mod tests {
         assert_eq!(capacity, 0);
 
         // Create semaphore
-        manager.try_acquire("test", "h1", 2, 5, 60000).await.unwrap();
+        manager
+            .try_acquire(SemaphoreAcquireRequest {
+                name: "test",
+                holder_id: "h1",
+                permits: 2,
+                capacity: 5,
+                ttl_ms: 60000,
+            })
+            .await
+            .unwrap();
 
         let (available, capacity) = manager.status("test").await.unwrap();
         assert_eq!(available, 3);
@@ -513,16 +551,46 @@ mod tests {
         let manager = SemaphoreManager::new(store);
 
         // First holder gets 2
-        manager.try_acquire("test", "h1", 2, 5, 60000).await.unwrap().unwrap();
+        manager
+            .try_acquire(SemaphoreAcquireRequest {
+                name: "test",
+                holder_id: "h1",
+                permits: 2,
+                capacity: 5,
+                ttl_ms: 60000,
+            })
+            .await
+            .unwrap()
+            .unwrap();
 
         // Second holder gets 2
-        let (acquired, available) = manager.try_acquire("test", "h2", 2, 5, 60000).await.unwrap().unwrap();
+        let (acquired, available) = manager
+            .try_acquire(SemaphoreAcquireRequest {
+                name: "test",
+                holder_id: "h2",
+                permits: 2,
+                capacity: 5,
+                ttl_ms: 60000,
+            })
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(acquired, 2);
         assert_eq!(available, 1);
 
         // Third holder can only get 1
-        let (acquired, available) = manager.try_acquire("test", "h3", 1, 5, 60000).await.unwrap().unwrap();
+        let (acquired, available) = manager
+            .try_acquire(SemaphoreAcquireRequest {
+                name: "test",
+                holder_id: "h3",
+                permits: 1,
+                capacity: 5,
+                ttl_ms: 60000,
+            })
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(acquired, 1);
         assert_eq!(available, 0);
@@ -538,12 +606,29 @@ mod tests {
 
         // Acquire MAX_SEMAPHORE_HOLDERS holders, each holding 1 permit
         for i in 0..MAX_SEMAPHORE_HOLDERS {
-            let result = manager.try_acquire("test", &format!("holder{}", i), 1, capacity, 60000).await.unwrap();
+            let result = manager
+                .try_acquire(SemaphoreAcquireRequest {
+                    name: "test",
+                    holder_id: &format!("holder{}", i),
+                    permits: 1,
+                    capacity,
+                    ttl_ms: 60000,
+                })
+                .await
+                .unwrap();
             assert!(result.is_some(), "holder {} should acquire permit", i);
         }
 
         // One more holder should fail with TooManySemaphoreHolders error
-        let result = manager.try_acquire("test", "one_too_many", 1, capacity, 60000).await;
+        let result = manager
+            .try_acquire(SemaphoreAcquireRequest {
+                name: "test",
+                holder_id: "one_too_many",
+                permits: 1,
+                capacity,
+                ttl_ms: 60000,
+            })
+            .await;
         assert!(result.is_err(), "should fail when exceeding holder limit");
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("too many holders"), "error should mention 'too many holders', got: {}", err_msg);
@@ -564,7 +649,16 @@ mod tests {
         for i in 0..num_holders {
             let mgr = Arc::clone(&manager);
             let holder_id = format!("holder{}", i);
-            tasks.spawn(async move { mgr.try_acquire("concurrent_test", &holder_id, 1, capacity, 60000).await });
+            tasks.spawn(async move {
+                mgr.try_acquire(SemaphoreAcquireRequest {
+                    name: "concurrent_test",
+                    holder_id: &holder_id,
+                    permits: 1,
+                    capacity,
+                    ttl_ms: 60000,
+                })
+                .await
+            });
         }
 
         // Wait for all to complete

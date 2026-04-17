@@ -205,6 +205,9 @@ pub use scan::filter_kv_pairs_after_token;
 
 // Batch Limit Checking
 pub use write_batcher::BatchLimitCheck;
+pub use write_batcher::BatchLimits;
+pub use write_batcher::BatchSequenceState;
+pub use write_batcher::BatchState;
 // Flush Decision
 pub use write_batcher::FlushDecision;
 // Size Calculation

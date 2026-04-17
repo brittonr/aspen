@@ -106,6 +106,11 @@ impl PendingItem {
     }
 }
 
+#[inline]
+fn default_message_group_id() -> Option<String> {
+    None
+}
+
 /// An item in the dead letter queue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DLQItem {
@@ -124,7 +129,7 @@ pub struct DLQItem {
     /// Last error message (if any).
     pub last_error: Option<String>,
     /// Original message group ID (preserved for FIFO-per-group after redrive).
-    #[serde(default)]
+    #[serde(default = "default_message_group_id")]
     pub message_group_id: Option<String>,
 }
 

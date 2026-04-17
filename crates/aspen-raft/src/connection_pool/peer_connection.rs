@@ -24,11 +24,31 @@ use crate::constants::IROH_STREAM_OPEN_TIMEOUT;
 use crate::constants::MAX_STREAMS_PER_CONNECTION;
 use crate::types::NodeId;
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "peer connections stamp monotonic usage time for idle cleanup"
+)]
+#[inline]
+fn current_connection_instant() -> Instant {
+    Instant::now()
+}
+
+#[inline]
+fn max_streams_per_connection_usize() -> usize {
+    match usize::try_from(MAX_STREAMS_PER_CONNECTION) {
+        Ok(max_streams) => max_streams,
+        Err(_) => usize::MAX,
+    }
+}
+
 /// A persistent connection to a peer node.
 ///
 /// Manages a single QUIC connection with health tracking and stream multiplexing.
 /// No per-stream authentication is needed - NodeId is verified at connection time
 /// by Iroh's QUIC TLS layer.
+///
+/// Lock ordering: acquire `last_used` before `health` when both locks are needed.
 ///
 /// Tiger Style: Bounded stream count, explicit health states.
 pub struct PeerConnection {
@@ -36,6 +56,7 @@ pub struct PeerConnection {
     connection: Connection,
     /// Node ID of the peer.
     node_id: NodeId,
+    // Lock order: always acquire `last_used` before `health`.
     /// Last successful RPC timestamp (for idle timeout).
     last_used: AsyncMutex<Instant>,
     /// Connection health status.
@@ -65,9 +86,9 @@ impl PeerConnection {
         Self {
             connection,
             node_id,
-            last_used: AsyncMutex::new(Instant::now()),
+            last_used: AsyncMutex::new(current_connection_instant()),
             health: AsyncMutex::new(ConnectionHealth::Healthy),
-            stream_semaphore: Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize)),
+            stream_semaphore: Arc::new(Semaphore::new(max_streams_per_connection_usize())),
             active_streams: Arc::new(AtomicU32::new(0)),
             raft_streams_opened: Arc::new(AtomicU32::new(0)),
             bulk_streams_opened: Arc::new(AtomicU32::new(0)),
@@ -92,7 +113,7 @@ impl PeerConnection {
         self.acquire_stream_check_health().await?;
         let permit = self.acquire_stream_get_permit()?;
 
-        let active_count = self.active_streams.fetch_add(1, Ordering::Relaxed) + 1;
+        let active_count = self.active_streams.fetch_add(1, Ordering::Relaxed).saturating_add(1);
         debug!(
             node_id = %self.node_id,
             active_streams = active_count,
@@ -137,7 +158,7 @@ impl PeerConnection {
         use crate::verified::transition_connection_health;
 
         debug!(node_id = %self.node_id, "stream opened successfully");
-        *self.last_used.lock().await = Instant::now();
+        *self.last_used.lock().await = current_connection_instant();
 
         // Transition health state using pure function
         let mut health = self.health.lock().await;

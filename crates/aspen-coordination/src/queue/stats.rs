@@ -57,7 +57,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let items_pref = verified::items_prefix(name);
 
         let item_keys = self.scan_keys(&items_pref, max_items).await?;
-        let mut items = Vec::new();
+        let mut items = Vec::with_capacity(item_keys.len());
 
         for key in item_keys {
             if let Some(item) = self.read_json::<QueueItem>(&key).await?

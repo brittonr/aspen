@@ -17,6 +17,18 @@ use super::types::ServiceInstance;
 use super::types::ServiceInstanceMetadata;
 use crate::types::now_unix_ms;
 
+struct RegisterBuildInstanceInput<'a> {
+    service_name: &'a str,
+    instance_id: &'a str,
+    address: &'a str,
+    metadata: &'a ServiceInstanceMetadata,
+    options: &'a RegisterOptions,
+    now: u64,
+    deadline_ms: u64,
+    ttl_ms: u64,
+    existing: &'a Option<ServiceInstance>,
+}
+
 impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     /// Register a service instance.
     ///
@@ -46,17 +58,17 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             // Read existing instance if any
             let existing = self.read_json::<ServiceInstance>(&key).await?;
 
-            let instance = self.register_build_instance(
+            let instance = self.register_build_instance(RegisterBuildInstanceInput {
                 service_name,
                 instance_id,
                 address,
-                &metadata,
-                &options,
+                metadata: &metadata,
+                options: &options,
                 now,
                 deadline_ms,
                 ttl_ms,
-                &existing,
-            );
+                existing: &existing,
+            });
 
             match self.register_write(&key, &instance, &existing).await? {
                 Some((token, deadline)) => return Ok((token, deadline)),
@@ -66,19 +78,18 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     }
 
     /// Build a ServiceInstance for registration.
-    #[allow(clippy::too_many_arguments)]
-    fn register_build_instance(
-        &self,
-        service_name: &str,
-        instance_id: &str,
-        address: &str,
-        metadata: &ServiceInstanceMetadata,
-        options: &RegisterOptions,
-        now: u64,
-        deadline_ms: u64,
-        ttl_ms: u64,
-        existing: &Option<ServiceInstance>,
-    ) -> ServiceInstance {
+    fn register_build_instance(&self, input: RegisterBuildInstanceInput<'_>) -> ServiceInstance {
+        let RegisterBuildInstanceInput {
+            service_name,
+            instance_id,
+            address,
+            metadata,
+            options,
+            now,
+            deadline_ms,
+            ttl_ms,
+            existing,
+        } = input;
         let (fencing_token, registered_at_ms) = match existing {
             Some(inst) => (crate::verified::compute_next_instance_token(inst.fencing_token), inst.registered_at_ms),
             None => (1, now),

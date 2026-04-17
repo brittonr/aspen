@@ -20,6 +20,22 @@ use snafu::ResultExt;
 
 use super::*;
 
+#[inline]
+fn snapshot_entry_count_u32(entry_count: usize) -> u32 {
+    match u32::try_from(entry_count) {
+        Ok(entry_count_u32) => entry_count_u32,
+        Err(_) => u32::MAX,
+    }
+}
+
+#[inline]
+fn max_snapshot_entries_usize() -> usize {
+    match usize::try_from(MAX_SNAPSHOT_ENTRIES) {
+        Ok(max_entries) => max_entries,
+        Err(_) => usize::MAX,
+    }
+}
+
 // ====================================================================================
 // RaftStateMachine Implementation (No-Op Apply)
 // ====================================================================================
@@ -179,7 +195,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
 
         // Deserialize and validate snapshot data
         let kv_entries = self.install_snapshot_deserialize_data(&data)?;
-        let kv_entries_count = kv_entries.len().min(u32::MAX as usize) as u32;
+        let kv_entries_count = snapshot_entry_count_u32(kv_entries.len());
 
         // Write snapshot data to state machine
         self.install_snapshot_write_data(meta, kv_entries)?;
@@ -252,27 +268,33 @@ impl SharedRedbStorage {
         data: &[u8],
     ) -> Result<(), io::Error> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        if let Ok(table) = read_txn.open_table(SNAPSHOT_TABLE)
-            && let Some(value) = table.get("current").context(GetSnafu)?
-            && let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value())
-            && let Some(ref integrity) = stored.integrity
-        {
-            let meta_bytes = bincode::serialize(meta).map_err(|e| {
-                io::Error::other(format!("failed to serialize snapshot metadata for integrity check: {e}"))
-            })?;
-            if !integrity.verify(&meta_bytes, data) {
-                tracing::error!(
-                    snapshot_id = %meta.snapshot_id,
-                    "snapshot integrity verification failed"
-                );
-                return Err(io::Error::other("snapshot integrity verification failed"));
-            }
-            tracing::debug!(
+        let Ok(table) = read_txn.open_table(SNAPSHOT_TABLE) else {
+            return Ok(());
+        };
+        let Some(value) = table.get("current").context(GetSnafu)? else {
+            return Ok(());
+        };
+        let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value()) else {
+            return Ok(());
+        };
+        let Some(ref integrity) = stored.integrity else {
+            return Ok(());
+        };
+
+        let meta_bytes = bincode::serialize(meta)
+            .map_err(|e| io::Error::other(format!("failed to serialize snapshot metadata for integrity check: {e}")))?;
+        if !integrity.verify(&meta_bytes, data) {
+            tracing::error!(
                 snapshot_id = %meta.snapshot_id,
-                integrity_hash = %integrity.combined_hash_hex(),
-                "snapshot integrity verified"
+                "snapshot integrity verification failed"
             );
+            return Err(io::Error::other("snapshot integrity verification failed"));
         }
+        tracing::debug!(
+            snapshot_id = %meta.snapshot_id,
+            integrity_hash = %integrity.combined_hash_hex(),
+            "snapshot integrity verified"
+        );
         Ok(())
     }
 
@@ -284,7 +306,7 @@ impl SharedRedbStorage {
 
         // Tiger Style: installed snapshot must not exceed entry limit
         assert!(
-            kv_entries.len() <= MAX_SNAPSHOT_ENTRIES as usize,
+            kv_entries.len() <= max_snapshot_entries_usize(),
             "INSTALL SNAPSHOT: {} entries exceeds MAX_SNAPSHOT_ENTRIES {}",
             kv_entries.len(),
             MAX_SNAPSHOT_ENTRIES
@@ -345,10 +367,15 @@ impl SharedRedbStorage {
                 snapshot_id: meta.snapshot_id.clone(),
                 last_log_index: meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0),
                 term: meta.last_log_id.as_ref().map(|l| l.leader_id.term).unwrap_or(0),
-                entry_count: kv_entries_count as u64,
+                entry_count: u64::from(kv_entries_count),
             };
-            // Non-blocking send - ignore errors (no subscribers)
-            let _ = tx.send(event);
+            if let Err(error) = tx.send(event) {
+                tracing::debug!(
+                    snapshot_id = %meta.snapshot_id,
+                    error = %error,
+                    "snapshot install event broadcast dropped"
+                );
+            }
         }
     }
 }

@@ -63,6 +63,16 @@ use crate::verified::can_remove_voter_safely;
 use crate::verified::compute_learner_lag;
 use crate::verified::is_learner_caught_up;
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "learner promotion stamps monotonic membership-change timing"
+)]
+#[inline]
+fn current_membership_change_instant() -> Instant {
+    Instant::now()
+}
+
 /// Errors that can occur during learner promotion.
 #[derive(Debug, Snafu)]
 pub enum PromotionError {
@@ -108,8 +118,8 @@ pub enum PromotionError {
     },
 
     /// Specified node is already a voter, not a learner.
-    #[snafu(display("Node {} is not a learner (already a voter)", node_id))]
-    NotALearner {
+    #[snafu(display("Node {} is already a voter, not a learner", node_id))]
+    NodeAlreadyVoter {
         /// ID of the node that is already a voter.
         node_id: NodeId,
     },
@@ -162,6 +172,7 @@ where C: ClusterController
 {
     /// Cluster controller for membership operations.
     cluster_controller: Arc<C>,
+    // Lock order: always acquire `failure_detector` before `last_membership_change`.
     /// Optional failure detector for health checks.
     failure_detector: Option<Arc<RwLock<NodeFailureDetector>>>,
     /// Timestamp of last membership change.
@@ -224,7 +235,7 @@ where C: ClusterController + 'static
 
         // Verify learner exists and is actually a learner
         if current_voters.contains(&request.learner_id) {
-            return Err(PromotionError::NotALearner {
+            return Err(PromotionError::NodeAlreadyVoter {
                 node_id: request.learner_id,
             });
         }
@@ -263,7 +274,7 @@ where C: ClusterController + 'static
             .map_err(|e| PromotionError::MembershipChangeError { source: Box::new(e) })?;
 
         // Update last change timestamp
-        *self.last_membership_change.write().await = Some(Instant::now());
+        *self.last_membership_change.write().await = Some(current_membership_change_instant());
 
         tracing::info!(
             learner_id = %request.learner_id,
@@ -277,7 +288,7 @@ where C: ClusterController + 'static
             learner_id: request.learner_id,
             previous_voters: current_voters,
             new_voters,
-            timestamp: Instant::now(),
+            timestamp: current_membership_change_instant(),
         })
     }
 

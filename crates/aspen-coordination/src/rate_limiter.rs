@@ -246,10 +246,10 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         source: KeyValueStoreError,
     ) -> TryAcquireResult {
         // Check if this is a "not leader" error from Raft write
-        let is_not_leader =
+        let is_leader_redirect_error =
             matches!(&source, KeyValueStoreError::NotLeader { .. }) || source.to_string().contains("forward");
 
-        if is_not_leader {
+        if is_leader_redirect_error {
             // Follower node - allow request (fail-open), leader manages state
             debug!(
                 key = %self.key,
