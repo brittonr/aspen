@@ -10,7 +10,51 @@ use aspen_raft::types::NodeId;
 
 use super::AspenRaftTester;
 use super::buggify::BuggifyFault;
+use super::node::TestNode;
 use super::node::empty_artifact_builder;
+
+fn node_id_from_slot(node_slot: usize) -> NodeId {
+    let node_index = u64::try_from(node_slot).unwrap_or(u64::MAX);
+    NodeId::from(node_index.saturating_add(1))
+}
+
+fn pick_slot_by_seed(seed: u64, node_count: usize) -> Option<usize> {
+    let node_count_u64 = u64::try_from(node_count).ok()?;
+    let slot = seed.checked_rem(node_count_u64)?;
+    usize::try_from(slot).ok()
+}
+
+fn connected_node_slots(nodes: &[TestNode]) -> Vec<usize> {
+    let mut connected_slots = Vec::with_capacity(nodes.len());
+    for (node_slot, node) in nodes.iter().enumerate() {
+        if node.connected().load(Ordering::Relaxed) {
+            connected_slots.push(node_slot);
+        }
+    }
+    connected_slots
+}
+
+fn for_each_node_pair(node_count: usize, mut visit: impl FnMut(NodeId, NodeId)) {
+    for from_slot in 0..node_count {
+        let from = node_id_from_slot(from_slot);
+        for to_slot in 0..node_count {
+            if from_slot == to_slot {
+                continue;
+            }
+            let to = node_id_from_slot(to_slot);
+            visit(from, to);
+        }
+    }
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "BUGGIFY loop timing uses monotonic instants to bound simulated runtime"
+)]
+fn current_instant() -> Instant {
+    Instant::now()
+}
 
 impl AspenRaftTester {
     /// Enable BUGGIFY fault injection for this test.
@@ -46,16 +90,12 @@ impl AspenRaftTester {
         if !self.buggify.should_trigger(BuggifyFault::NetworkDelay) {
             return;
         }
-        let delay_ms = 50 + (self.seed % 200); // 50-250ms delay
+        let delay_ms = 50_u64.saturating_add(self.seed % 200); // 50-250ms delay
 
         // Apply delay to all node pairs
-        for i in 0..self.nodes.len() {
-            for j in 0..self.nodes.len() {
-                if i != j {
-                    self.injector.set_network_delay(NodeId::from(i as u64 + 1), NodeId::from(j as u64 + 1), delay_ms);
-                }
-            }
-        }
+        for_each_node_pair(self.nodes.len(), |from, to| {
+            self.injector.set_network_delay(from, to, delay_ms);
+        });
 
         self.add_event(format!("buggify: injected {}ms network delay", delay_ms));
         self.metrics.buggify_triggers += 1;
@@ -66,17 +106,9 @@ impl AspenRaftTester {
             return;
         }
         // Apply packet loss to all links
-        for i in 0..self.nodes.len() {
-            for j in 0..self.nodes.len() {
-                if i != j {
-                    self.injector.set_packet_loss_rate(
-                        NodeId::from(i as u64 + 1),
-                        NodeId::from(j as u64 + 1),
-                        0.1, // 10% loss rate
-                    );
-                }
-            }
-        }
+        for_each_node_pair(self.nodes.len(), |from, to| {
+            self.injector.set_packet_loss_rate(from, to, 0.1); // 10% loss rate
+        });
 
         self.add_event("buggify: enabled 10% packet drop");
         self.metrics.buggify_triggers += 1;
@@ -85,13 +117,9 @@ impl AspenRaftTester {
         madsim::time::sleep(Duration::from_secs(2)).await;
 
         // Clear packet loss
-        for i in 0..self.nodes.len() {
-            for j in 0..self.nodes.len() {
-                if i != j {
-                    self.injector.set_packet_loss_rate(NodeId::from(i as u64 + 1), NodeId::from(j as u64 + 1), 0.0);
-                }
-            }
-        }
+        for_each_node_pair(self.nodes.len(), |from, to| {
+            self.injector.set_packet_loss_rate(from, to, 0.0);
+        });
 
         self.add_event("buggify: restored packet delivery");
     }
@@ -100,17 +128,14 @@ impl AspenRaftTester {
         if !self.buggify.should_trigger(BuggifyFault::NodeCrash) {
             return;
         }
-        let connected_nodes: Vec<usize> = self
-            .nodes
-            .iter()
-            .enumerate()
-            .filter(|(_, n)| n.connected().load(Ordering::Relaxed))
-            .map(|(i, _)| i)
-            .collect();
+        let connected_nodes = connected_node_slots(&self.nodes);
 
         if connected_nodes.len() > 2 {
             // Keep at least 2 nodes alive
-            let victim = connected_nodes[self.seed as usize % connected_nodes.len()];
+            let Some(victim_offset) = pick_slot_by_seed(self.seed, connected_nodes.len()) else {
+                return;
+            };
+            let victim = connected_nodes[victim_offset];
             self.crash_node(victim).await;
             self.add_event(format!("buggify: crashed node {}", victim));
             self.metrics.buggify_triggers += 1;
@@ -127,18 +152,22 @@ impl AspenRaftTester {
             ByzantineCorruptionMode::IncrementTerm,
             ByzantineCorruptionMode::DuplicateMessage,
         ];
-        let mode = modes[self.seed as usize % modes.len()];
+        let Some(mode_slot) = pick_slot_by_seed(self.seed, modes.len()) else {
+            return;
+        };
+        let mode = modes[mode_slot];
 
         // Apply to a random node pair
-        let src = self.seed as usize % self.nodes.len();
-        let dst = (src + 1) % self.nodes.len();
+        let Some(src) = pick_slot_by_seed(self.seed, self.nodes.len()) else {
+            return;
+        };
+        let dst = match src.checked_add(1) {
+            Some(next) if next < self.nodes.len() => next,
+            Some(_) | None => 0,
+        };
 
-        self.byzantine_injector.set_byzantine_mode(
-            NodeId::from(src as u64 + 1),
-            NodeId::from(dst as u64 + 1),
-            mode,
-            0.5,
-        );
+        self.byzantine_injector
+            .set_byzantine_mode(node_id_from_slot(src), node_id_from_slot(dst), mode, 0.5);
 
         self.add_event(format!("buggify: enabled {:?} corruption on link {}->{}", mode, src, dst));
         self.metrics.buggify_triggers += 1;
@@ -203,8 +232,8 @@ impl AspenRaftTester {
         if let Some(leader_idx) = self.check_one_leader().await {
             // Use Raft::trigger().snapshot() to manually trigger snapshot on leader
             let raft = self.nodes[leader_idx].raft();
-            if let Err(e) = raft.trigger().snapshot().await {
-                self.add_event(format!("buggify: snapshot trigger failed: {:?}", e));
+            if let Err(error) = raft.trigger().snapshot().await {
+                self.add_event(format!("buggify: snapshot trigger failed: {:?}", error));
             } else {
                 self.add_event("buggify: triggered snapshot on leader");
             }
@@ -220,15 +249,11 @@ impl AspenRaftTester {
         if !self.buggify.should_trigger(BuggifyFault::SlowStorage) {
             return;
         }
-        let delay_ms = 500 + (self.seed % 1500); // 500-2000ms
+        let delay_ms = 500_u64.saturating_add(self.seed % 1500); // 500-2000ms
 
-        for i in 0..self.nodes.len() {
-            for j in 0..self.nodes.len() {
-                if i != j {
-                    self.injector.set_network_delay(NodeId::from(i as u64 + 1), NodeId::from(j as u64 + 1), delay_ms);
-                }
-            }
-        }
+        for_each_node_pair(self.nodes.len(), |from, to| {
+            self.injector.set_network_delay(from, to, delay_ms);
+        });
 
         self.add_event(format!("buggify: injected {}ms slow storage delay", delay_ms));
         self.metrics.buggify_triggers += 1;
@@ -236,13 +261,9 @@ impl AspenRaftTester {
         // Hold delay for a period then clear
         madsim::time::sleep(Duration::from_secs(3)).await;
 
-        for i in 0..self.nodes.len() {
-            for j in 0..self.nodes.len() {
-                if i != j {
-                    self.injector.set_network_delay(NodeId::from(i as u64 + 1), NodeId::from(j as u64 + 1), 0);
-                }
-            }
-        }
+        for_each_node_pair(self.nodes.len(), |from, to| {
+            self.injector.set_network_delay(from, to, 0);
+        });
 
         self.add_event("buggify: cleared slow storage delay");
     }
@@ -254,13 +275,7 @@ impl AspenRaftTester {
             return;
         }
 
-        let connected_nodes: Vec<usize> = self
-            .nodes
-            .iter()
-            .enumerate()
-            .filter(|(_, n)| n.connected().load(Ordering::Relaxed))
-            .map(|(i, _)| i)
-            .collect();
+        let connected_nodes = connected_node_slots(&self.nodes);
 
         // Need at least 3 connected nodes (leader + majority after crash)
         if connected_nodes.len() < 3 {
@@ -269,11 +284,14 @@ impl AspenRaftTester {
 
         // Find leader and pick a follower victim
         if let Some(leader_idx) = self.check_one_leader().await {
-            let victim = connected_nodes.iter().find(|&&i| i != leader_idx).copied().unwrap_or(0);
+            let victim = connected_nodes.iter().find(|&&node_slot| node_slot != leader_idx).copied().unwrap_or(0);
 
             // Trigger snapshot on leader
             let raft = self.nodes[leader_idx].raft();
-            let _ = raft.trigger().snapshot().await;
+            if let Err(error) = raft.trigger().snapshot().await {
+                self.add_event(format!("buggify: snapshot trigger before reset failed: {:?}", error));
+                return;
+            }
 
             // Crash the follower mid-transfer
             self.crash_node(victim).await;
@@ -291,7 +309,7 @@ impl AspenRaftTester {
     ///
     /// This runs for the specified duration, applying BUGGIFY faults every second.
     pub async fn run_with_buggify_loop(&mut self, duration: Duration) {
-        let start = Instant::now();
+        let start = current_instant();
 
         while start.elapsed() < duration {
             // Apply faults
@@ -315,17 +333,33 @@ impl AspenRaftTester {
         }
 
         // Save current probabilities
-        let saved = self.buggify.probabilities.lock().unwrap().clone();
+        let saved = {
+            let probabilities = match self.buggify.probabilities.lock() {
+                Ok(probabilities) => probabilities,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            probabilities.clone()
+        };
 
         // Set 100% probability for this specific fault
         let mut probs = HashMap::new();
         probs.insert(fault, 1.0);
-        *self.buggify.probabilities.lock().unwrap() = probs;
+        {
+            let mut probabilities = match self.buggify.probabilities.lock() {
+                Ok(probabilities) => probabilities,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            *probabilities = probs;
+        }
 
         // Apply the fault
         self.apply_buggify_faults().await;
 
         // Restore original probabilities
-        *self.buggify.probabilities.lock().unwrap() = saved;
+        let mut probabilities = match self.buggify.probabilities.lock() {
+            Ok(probabilities) => probabilities,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        *probabilities = saved;
     }
 }
