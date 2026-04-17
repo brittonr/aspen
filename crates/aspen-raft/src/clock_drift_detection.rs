@@ -51,6 +51,24 @@ use crate::constants::MAX_DRIFT_OBSERVATIONS;
 use crate::constants::MIN_DRIFT_OBSERVATIONS;
 use crate::types::NodeId;
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "clock drift observations track local monotonic timestamps for staleness only"
+)]
+#[inline]
+fn current_observation_instant() -> Instant {
+    Instant::now()
+}
+
+#[inline]
+fn max_drift_observations_usize() -> usize {
+    match usize::try_from(MAX_DRIFT_OBSERVATIONS) {
+        Ok(max_observations) => max_observations,
+        Err(_) => usize::MAX,
+    }
+}
+
 /// Observation state for a single peer's clock drift.
 struct DriftObservation {
     /// Most recent raw offset measurement (signed milliseconds).
@@ -77,7 +95,7 @@ impl DriftObservation {
             last_offset_ms: offset_ms,
             ewma_offset_ms: offset_ms as f64,
             observation_count: 1,
-            last_observed_at: Instant::now(),
+            last_observed_at: current_observation_instant(),
             severity,
         }
     }
@@ -91,7 +109,7 @@ impl DriftObservation {
         // EWMA: new_avg = alpha * new_value + (1 - alpha) * old_avg
         self.ewma_offset_ms = compute_ewma(offset_ms as f64, self.ewma_offset_ms, DRIFT_EWMA_ALPHA);
         self.observation_count = self.observation_count.saturating_add(1);
-        self.last_observed_at = Instant::now();
+        self.last_observed_at = current_observation_instant();
         self.severity = classify_drift_severity(self.ewma_offset_ms, warning_threshold_ms, alert_threshold_ms);
     }
 }
@@ -174,9 +192,9 @@ impl ClockDriftDetector {
 
         // Tiger Style: Bounded storage
         // Decomposed: check capacity first, then check if key is new
-        let is_at_capacity = self.observations.len() >= MAX_DRIFT_OBSERVATIONS as usize;
+        let is_observation_map_full = self.observations.len() >= max_drift_observations_usize();
         let is_new_key = !self.observations.contains_key(&node_id);
-        if is_at_capacity && is_new_key {
+        if is_observation_map_full && is_new_key {
             // Remove oldest observation to make room
             if let Some(oldest_id) = self.find_oldest_observation() {
                 self.observations.remove(&oldest_id);

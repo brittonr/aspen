@@ -58,6 +58,55 @@ use crate::rpc::RaftRpcResponseWithTimestamps;
 use crate::rpc::TimestampInfo;
 use crate::types::AppTypeConfig;
 
+#[inline]
+fn max_concurrent_connections_usize() -> usize {
+    match usize::try_from(MAX_CONCURRENT_CONNECTIONS) {
+        Ok(max_connections) => max_connections,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn max_streams_per_connection_usize() -> usize {
+    match usize::try_from(MAX_STREAMS_PER_CONNECTION) {
+        Ok(max_streams) => max_streams,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn max_rpc_message_size_usize() -> usize {
+    match usize::try_from(MAX_RPC_MESSAGE_SIZE) {
+        Ok(max_message_size) => max_message_size,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn snapshot_from_request(snapshot_req: crate::rpc::RaftSnapshotRequest) -> openraft::Snapshot<AppTypeConfig> {
+    openraft::Snapshot {
+        meta: snapshot_req.snapshot_meta,
+        snapshot: Cursor::new(snapshot_req.snapshot_data),
+    }
+}
+
+struct RpcResponseTimestamps {
+    server_recv_ms: u64,
+    server_send_ms: u64,
+}
+
+fn response_with_timestamps(
+    response: RaftRpcResponse,
+    timestamps: RpcResponseTimestamps,
+) -> RaftRpcResponseWithTimestamps {
+    RaftRpcResponseWithTimestamps {
+        inner: response,
+        timestamps: Some(TimestampInfo {
+            server_recv_ms: timestamps.server_recv_ms,
+            server_send_ms: timestamps.server_send_ms,
+        }),
+    }
+}
+
 /// IRPC server for handling Raft RPC requests.
 ///
 /// Spawns a task that listens for incoming Iroh connections and processes
@@ -128,12 +177,19 @@ async fn run_server(
     task_tracker: TaskTracker,
     is_expunged: Arc<AtomicBool>,
 ) -> Result<()> {
+    debug_assert!(MAX_CONCURRENT_CONNECTIONS > 0, "SERVER: max connections must be positive");
+
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
-    let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));
+    let connection_semaphore = Arc::new(Semaphore::new(max_concurrent_connections_usize()));
+    debug_assert!(
+        connection_semaphore.available_permits() <= max_concurrent_connections_usize(),
+        "SERVER: initial permit count must not exceed configured max"
+    );
 
     info!(max_connections = MAX_CONCURRENT_CONNECTIONS, "IRPC server listening for incoming connections");
 
-    loop {
+    for accept_iteration in 0..u32::MAX {
+        debug_assert!(accept_iteration < u32::MAX, "SERVER: accept loop must stay bounded");
         tokio::select! {
             _ = cancel.cancelled() => {
                 info!("IRPC server received shutdown signal");
@@ -165,6 +221,10 @@ async fn run_server(
                         continue;
                     }
                 };
+                debug_assert!(
+                    connection_semaphore.available_permits() < max_concurrent_connections_usize(),
+                    "SERVER: acquired connection permit should reduce remaining capacity"
+                );
 
                 let raft_core_clone = raft_core.clone();
                 let stream_tracker = task_tracker.clone();
@@ -191,6 +251,7 @@ async fn handle_connection(
     raft_core: Raft<AppTypeConfig>,
     task_tracker: TaskTracker,
 ) -> Result<()> {
+    debug_assert!(MAX_STREAMS_PER_CONNECTION > 0, "SERVER: max streams per connection must be positive");
     info!("awaiting incoming connection completion");
     let connection = connecting.await.context("failed to accept connection")?;
     let remote_node_id = connection.remote_id();
@@ -198,12 +259,17 @@ async fn handle_connection(
     info!(remote_node = %remote_node_id, "accepted connection, waiting for streams");
 
     // Tiger Style: Fixed limit on concurrent streams per connection
-    let stream_semaphore = Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize));
+    let stream_semaphore = Arc::new(Semaphore::new(max_streams_per_connection_usize()));
     let active_streams = Arc::new(AtomicU32::new(0));
+    debug_assert!(
+        stream_semaphore.available_permits() <= max_streams_per_connection_usize(),
+        "SERVER: stream permit count must not exceed configured max"
+    );
 
     // Accept bidirectional streams from this connection
     info!(remote_node = %remote_node_id, "starting accept_bi loop");
-    loop {
+    for stream_accept_iteration in 0..u32::MAX {
+        debug_assert!(stream_accept_iteration < u32::MAX, "SERVER: stream accept loop must stay bounded");
         info!(remote_node = %remote_node_id, "waiting for stream via accept_bi");
         let stream = match connection.accept_bi().await {
             Ok(stream) => {
@@ -231,7 +297,13 @@ async fn handle_connection(
             }
         };
 
-        active_streams.fetch_add(1, Ordering::Relaxed);
+        let prior_active_streams = active_streams.fetch_add(1, Ordering::Relaxed);
+        debug_assert!(
+            prior_active_streams < MAX_STREAMS_PER_CONNECTION,
+            "SERVER: active stream count {} must stay below configured max {}",
+            prior_active_streams,
+            MAX_STREAMS_PER_CONNECTION
+        );
         let active_streams_clone = active_streams.clone();
 
         let raft_core_clone = raft_core.clone();
@@ -277,7 +349,7 @@ async fn handle_rpc_stream(
 
 /// Read and deserialize an RPC request from the stream.
 async fn handle_rpc_read_request(recv: &mut iroh::endpoint::RecvStream) -> Result<(RaftRpcProtocol, u64)> {
-    let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
+    let buffer = recv.read_to_end(max_rpc_message_size_usize()).await.context("failed to read RPC message")?;
     let server_recv_ms = current_time_ms();
     debug!(buffer_size = buffer.len(), "read RPC message bytes");
 
@@ -346,12 +418,9 @@ async fn handle_rpc_install_snapshot(
     snapshot_req: crate::rpc::RaftSnapshotRequest,
     raft_core: &Raft<AppTypeConfig>,
 ) -> RaftRpcResponse {
-    let snapshot_cursor = Cursor::new(snapshot_req.snapshot_data);
-    let snapshot = openraft::Snapshot {
-        meta: snapshot_req.snapshot_meta,
-        snapshot: snapshot_cursor,
-    };
-    match raft_core.install_full_snapshot(snapshot_req.vote, snapshot).await {
+    let vote = snapshot_req.vote;
+    let snapshot = snapshot_from_request(snapshot_req);
+    match raft_core.install_full_snapshot(vote, snapshot).await {
         Ok(result) => RaftRpcResponse::InstallSnapshot(Ok(result)),
         Err(fatal) => {
             let error_kind = RaftFatalErrorKind::from_fatal(&fatal);
@@ -381,15 +450,19 @@ async fn handle_rpc_send_response(
         );
     }
 
-    let response_with_timestamps = RaftRpcResponseWithTimestamps {
-        inner: response,
-        timestamps: Some(TimestampInfo {
-            server_recv_ms,
-            server_send_ms,
-        }),
-    };
+    let response_with_timestamps = response_with_timestamps(response, RpcResponseTimestamps {
+        server_recv_ms,
+        server_send_ms,
+    });
 
     let response_bytes = postcard::to_stdvec(&response_with_timestamps).context("failed to serialize RPC response")?;
+    debug_assert!(!response_bytes.is_empty(), "SERVER: serialized response must not be empty");
+    debug_assert!(
+        response_bytes.len() <= max_rpc_message_size_usize(),
+        "SERVER: serialized response size {} exceeds configured max {}",
+        response_bytes.len(),
+        max_rpc_message_size_usize()
+    );
     info!(response_size = response_bytes.len(), "sending RPC response");
 
     send.write_all(&response_bytes).await.context("failed to write RPC response")?;
