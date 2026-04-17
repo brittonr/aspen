@@ -63,6 +63,21 @@ const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_l
 const RAFT_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("raft_meta");
 const SNAPSHOT_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("snapshots");
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "offline storage validation measures elapsed runtime for operator diagnostics"
+)]
+#[inline]
+fn current_validation_instant() -> Instant {
+    Instant::now()
+}
+
+#[inline]
+fn suspicious_snapshot_index_threshold() -> u64 {
+    u64::MAX.saturating_sub(1000)
+}
+
 /// Errors that can occur during storage validation.
 ///
 /// Tiger Style: Explicit error types with actionable context for operators.
@@ -229,7 +244,7 @@ pub struct ValidationReport {
     ///
     /// Expected to be <100ms for 1000 log entries on typical hardware.
     /// Longer durations may indicate slow storage or large log size.
-    pub validation_duration: Duration,
+    pub validation_elapsed: Duration,
 }
 
 impl ValidationReport {
@@ -242,7 +257,7 @@ impl ValidationReport {
             last_snapshot_index: None,
             vote_term: None,
             committed_index: None,
-            validation_duration: Duration::from_micros(0),
+            validation_elapsed: Duration::from_micros(0),
         }
     }
 }
@@ -270,7 +285,7 @@ pub fn validate_raft_storage(
     storage_path: &Path,
 ) -> Result<ValidationReport, StorageValidationError> {
     let node_id = node_id.into();
-    let start = Instant::now();
+    let start_instant = current_validation_instant();
     let mut checks_passed: u32 = 0;
 
     // Check if database file exists
@@ -282,25 +297,32 @@ pub fn validate_raft_storage(
 
     // 1. Verify database can be opened
     let db = open_redb_database(storage_path)?;
-    checks_passed += 1;
+    checks_passed = checks_passed.saturating_add(1);
 
     // 2. Validate log entry monotonicity (no gaps, ascending indices)
     let last_log_index = validate_log_monotonicity(&db)?;
-    checks_passed += 1;
+    checks_passed = checks_passed.saturating_add(1);
 
     // 3. Validate snapshot metadata (if exists)
     let last_snapshot_index = validate_snapshot_metadata(&db)?;
-    checks_passed += 1;
+    checks_passed = checks_passed.saturating_add(1);
 
     // 4. Validate vote state consistency
     let vote_term = validate_vote_state(&db)?;
-    checks_passed += 1;
+    checks_passed = checks_passed.saturating_add(1);
 
     // 5. Validate committed index is within bounds
     let committed_index = validate_committed_index(&db, last_log_index)?;
-    checks_passed += 1;
+    checks_passed = checks_passed.saturating_add(1);
 
-    let validation_duration = start.elapsed();
+    let validation_elapsed = start_instant.elapsed();
+    debug_assert_eq!(checks_passed, 5, "VALIDATION: successful validation must complete all checks");
+    debug_assert!(
+        committed_index.is_none_or(|committed| last_log_index.is_none_or(|last| committed <= last)),
+        "VALIDATION: committed index {:?} must not exceed last log index {:?}",
+        committed_index,
+        last_log_index
+    );
 
     Ok(ValidationReport {
         node_id,
@@ -309,7 +331,7 @@ pub fn validate_raft_storage(
         last_snapshot_index,
         vote_term,
         committed_index,
-        validation_duration,
+        validation_elapsed,
     })
 }
 
@@ -349,7 +371,15 @@ fn validate_log_monotonicity(db: &Database) -> Result<Option<u64>, StorageValida
 
         // Check for gaps in the sequence
         if let Some(prev) = prev_index {
-            let expected = prev + 1;
+            let expected = match prev.checked_add(1) {
+                Some(expected_index) => expected_index,
+                None => {
+                    return Err(StorageValidationError::LogNotMonotonic {
+                        prev,
+                        current: current_index,
+                    });
+                }
+            };
             if current_index != expected {
                 // Gap detected: entries are not sequential
                 return Err(StorageValidationError::LogNotMonotonic {
@@ -386,37 +416,41 @@ fn validate_log_monotonicity(db: &Database) -> Result<Option<u64>, StorageValida
 /// We don't validate snapshot index <= last_log_index here because snapshots
 /// can exist when log entries have been purged (this is normal after compaction).
 fn validate_snapshot_metadata(db: &Database) -> Result<Option<u64>, StorageValidationError> {
+    let Some(snapshot) = read_current_snapshot(db)? else {
+        return Ok(None);
+    };
+
+    let snapshot_index = snapshot.meta.last_log_id.map(|log_id| log_id.index);
+    if let Some(index) = snapshot_index {
+        validate_snapshot_index_reasonable(index)?;
+    }
+
+    Ok(snapshot_index)
+}
+
+fn read_current_snapshot(db: &Database) -> Result<Option<StoredSnapshot>, StorageValidationError> {
     let read_txn = db.begin_read().context(BeginReadFailedSnafu)?;
     let table = read_txn.open_table(SNAPSHOT_TABLE).context(OpenTableFailedSnafu {
         table_name: "snapshots",
     })?;
-
-    // Try to read the current snapshot
-    let snapshot_bytes = match table.get("current").context(TableReadFailedSnafu)? {
-        Some(value) => value,
-        None => return Ok(None), // No snapshot is valid
+    let Some(snapshot_bytes) = table.get("current").context(TableReadFailedSnafu)? else {
+        return Ok(None);
     };
 
-    // Deserialize snapshot metadata
     let snapshot: StoredSnapshot = bincode::deserialize(snapshot_bytes.value()).context(DeserializeFailedSnafu {
         data_type: "snapshot metadata",
     })?;
+    Ok(Some(snapshot))
+}
 
-    // Extract last_log_id index from snapshot
-    let snapshot_index = snapshot.meta.last_log_id.map(|log_id| log_id.index);
-
-    // Validate snapshot index is reasonable (Tiger Style: explicit bounds)
-    if let Some(index) = snapshot_index {
-        // Sanity check: snapshot index should not be absurdly large
-        // (u64::MAX would indicate corruption or overflow)
-        if index >= u64::MAX - 1000 {
-            return Err(StorageValidationError::SnapshotCorrupted {
-                reason: format!("snapshot index {} is suspiciously large", index),
-            });
-        }
+fn validate_snapshot_index_reasonable(snapshot_index: u64) -> Result<(), StorageValidationError> {
+    let suspicious_threshold = suspicious_snapshot_index_threshold();
+    if snapshot_index >= suspicious_threshold {
+        return Err(StorageValidationError::SnapshotCorrupted {
+            reason: format!("snapshot index {} is suspiciously large", snapshot_index),
+        });
     }
-
-    Ok(snapshot_index)
+    Ok(())
 }
 
 /// Validates vote state consistency.
@@ -428,34 +462,38 @@ fn validate_snapshot_metadata(db: &Database) -> Result<Option<u64>, StorageValid
 /// - Vote term must be >= 0 (always true for u64, but we check for sanity)
 /// - No vote is valid (returns None)
 fn validate_vote_state(db: &Database) -> Result<Option<u64>, StorageValidationError> {
+    let Some(vote) = read_vote_state(db)? else {
+        return Ok(None);
+    };
+
+    let term = vote.leader_id().term;
+    validate_vote_term_reasonable(term)?;
+
+    Ok(Some(term))
+}
+
+fn read_vote_state(db: &Database) -> Result<Option<Vote<AppTypeConfig>>, StorageValidationError> {
     let read_txn = db.begin_read().context(BeginReadFailedSnafu)?;
     let table = read_txn.open_table(RAFT_META_TABLE).context(OpenTableFailedSnafu {
         table_name: "raft_meta",
     })?;
-
-    // Try to read vote state
-    let vote_bytes = match table.get("vote").context(TableReadFailedSnafu)? {
-        Some(value) => value,
-        None => return Ok(None), // No vote is valid (initial state)
+    let Some(vote_bytes) = table.get("vote").context(TableReadFailedSnafu)? else {
+        return Ok(None);
     };
 
-    // Deserialize vote (using AppTypeConfig)
     let vote: Vote<AppTypeConfig> = bincode::deserialize(vote_bytes.value()).context(DeserializeFailedSnafu {
         data_type: "vote state",
     })?;
+    Ok(Some(vote))
+}
 
-    // Extract term from vote
-    let term = vote.leader_id().term;
-
-    // Sanity check: term should be reasonable
-    // (In practice, terms > 2^60 would indicate corruption)
+fn validate_vote_term_reasonable(term: u64) -> Result<(), StorageValidationError> {
     if term >= (1u64 << 60) {
         return Err(StorageValidationError::VoteInconsistent {
             reason: format!("vote term {} is suspiciously large", term),
         });
     }
-
-    Ok(Some(term))
+    Ok(())
 }
 
 /// Validates that the committed index is consistent with the log.
@@ -467,26 +505,36 @@ fn validate_vote_state(db: &Database) -> Result<Option<u64>, StorageValidationEr
 /// - Committed index must be deserializable if it exists
 /// - No committed index is valid (returns None)
 fn validate_committed_index(db: &Database, last_log_index: Option<u64>) -> Result<Option<u64>, StorageValidationError> {
+    let Some(committed) = read_committed_log_id(db)? else {
+        return Ok(None);
+    };
+
+    let committed_index = committed.index;
+    ensure_committed_index_within_log(committed_index, last_log_index)?;
+
+    Ok(Some(committed_index))
+}
+
+fn read_committed_log_id(db: &Database) -> Result<Option<LogId<AppTypeConfig>>, StorageValidationError> {
     let read_txn = db.begin_read().context(BeginReadFailedSnafu)?;
     let table = read_txn.open_table(RAFT_META_TABLE).context(OpenTableFailedSnafu {
         table_name: "raft_meta",
     })?;
-
-    // Try to read committed state
-    let committed_bytes = match table.get("committed").context(TableReadFailedSnafu)? {
-        Some(value) => value,
-        None => return Ok(None), // No committed index is valid (initial state)
+    let Some(committed_bytes) = table.get("committed").context(TableReadFailedSnafu)? else {
+        return Ok(None);
     };
 
-    // Deserialize committed log id
     let committed: LogId<AppTypeConfig> =
         bincode::deserialize(committed_bytes.value()).context(DeserializeFailedSnafu {
             data_type: "committed index",
         })?;
+    Ok(Some(committed))
+}
 
-    let committed_index = committed.index;
-
-    // Validate committed index is <= last_log_index
+fn ensure_committed_index_within_log(
+    committed_index: u64,
+    last_log_index: Option<u64>,
+) -> Result<(), StorageValidationError> {
     if let Some(last_index) = last_log_index
         && committed_index > last_index
     {
@@ -494,8 +542,7 @@ fn validate_committed_index(db: &Database, last_log_index: Option<u64>) -> Resul
             reason: format!("committed index {} > last log index {}", committed_index, last_index),
         });
     }
-
-    Ok(Some(committed_index))
+    Ok(())
 }
 
 #[cfg(test)]
@@ -556,7 +603,7 @@ mod tests {
         assert_eq!(report.node_id, NodeId::from(1));
         assert_eq!(report.checks_passed, 5);
         assert_eq!(report.last_log_index, Some(9));
-        assert!(report.validation_duration.as_millis() < 100);
+        assert!(report.validation_elapsed.as_millis() < 100);
     }
 
     #[test]
@@ -613,7 +660,7 @@ mod tests {
         let report = result.unwrap();
         assert_eq!(report.node_id, NodeId::from(42));
         assert_eq!(report.last_log_index, Some(99));
-        assert!(report.validation_duration.as_millis() < 100);
+        assert!(report.validation_elapsed.as_millis() < 100);
     }
 
     #[test]
