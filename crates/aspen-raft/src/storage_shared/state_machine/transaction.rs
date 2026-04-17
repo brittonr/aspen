@@ -147,11 +147,13 @@ impl SharedRedbStorage {
                         index_table,
                         index_registry,
                         leases_table,
-                        key,
-                        value,
-                        log_index,
-                        None,
-                        None,
+                        super::set::SetOperationInput {
+                            key,
+                            value,
+                            log_index,
+                            expires_at_ms: None,
+                            lease_id: None,
+                        },
                     )?;
                     TxnOpResult::Put { revision: log_index }
                 }
@@ -267,11 +269,13 @@ impl SharedRedbStorage {
                     index_table,
                     index_registry,
                     leases_table,
-                    key,
-                    value,
-                    log_index,
-                    None,
-                    None,
+                    super::set::SetOperationInput {
+                        key,
+                        value,
+                        log_index,
+                        expires_at_ms: None,
+                        lease_id: None,
+                    },
                 )?;
             } else {
                 Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)?;
