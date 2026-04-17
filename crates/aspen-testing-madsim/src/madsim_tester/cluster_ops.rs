@@ -40,27 +40,60 @@ use super::node::TestNode;
 use super::node::create_test_raft_member_info;
 use super::node::empty_artifact_builder;
 
+fn node_id_from_slot(node_slot: usize) -> NodeId {
+    let node_index = u64::try_from(node_slot).unwrap_or(u64::MAX);
+    NodeId::from(node_index.saturating_add(1))
+}
+
+fn node_slot_from_node_id(node_id: NodeId) -> Option<usize> {
+    node_id.0.checked_sub(1).and_then(|node_index| usize::try_from(node_index).ok())
+}
+
+fn node_slot_from_raw_id(node_id: u64) -> Option<usize> {
+    usize::try_from(node_id).ok()
+}
+
+fn restart_socket_addr(node_slot: usize) -> String {
+    format!("127.0.0.1:{}", 26_000_u16.saturating_add(u16::try_from(node_slot).unwrap_or(u16::MAX)))
+}
+
+fn leader_check_backoff_ms() -> u64 {
+    let backoff_range_ms = LEADER_CHECK_BACKOFF_MAX_MS.saturating_sub(LEADER_CHECK_BACKOFF_MIN_MS);
+    let random_offset_ms = madsim::rand::random::<u64>().checked_rem(backoff_range_ms).unwrap_or(0);
+    LEADER_CHECK_BACKOFF_MIN_MS.saturating_add(random_offset_ms)
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "log-sync wait uses a monotonic deadline helper in deterministic madsim tests"
+)]
+fn current_instant() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
 impl AspenRaftTester {
     /// Crash a node (marks as failed in router).
     ///
     /// For persistent nodes, we need to properly shutdown the Raft instance
     /// to release database locks before the node can be restarted.
-    pub async fn crash_node(&mut self, i: usize) {
-        assert!(i < self.nodes.len(), "Invalid node index");
-        let node_id = NodeId::from(i as u64 + 1);
+    pub async fn crash_node(&mut self, node_slot: usize) {
+        assert!(node_slot < self.nodes.len(), "Invalid node index");
+        let node_id = node_id_from_slot(node_slot);
 
         self.router.mark_node_failed(node_id, true);
-        self.nodes[i].connected().store(false, Ordering::SeqCst);
+        self.nodes[node_slot].connected().store(false, Ordering::SeqCst);
 
         // For Redb nodes, shutdown Raft to release database locks
-        if self.nodes[i].redb_storage_path().is_some() {
-            // Shutdown the Raft instance to release resources
-            let _ = self.nodes[i].raft().shutdown().await;
+        if self.nodes[node_slot].redb_storage_path().is_some()
+            && let Err(error) = self.nodes[node_slot].raft().shutdown().await
+        {
+            self.add_event(format!("crash: node {} shutdown error: {}", node_slot, error));
         }
 
         self.metrics.node_crashes += 1;
-        self.artifact =
-            std::mem::replace(&mut self.artifact, empty_artifact_builder()).add_event(format!("crash: node {}", i));
+        self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
+            .add_event(format!("crash: node {}", node_slot));
     }
 
     /// Restart a crashed node.
@@ -68,19 +101,19 @@ impl AspenRaftTester {
     /// For in-memory nodes, this only clears the failed status.
     /// For Redb nodes, this recreates the node with new storage to avoid lock conflicts,
     /// simulating a full crash recovery.
-    pub async fn restart_node(&mut self, i: usize) {
-        assert!(i < self.nodes.len(), "Invalid node index");
-        let node_id = NodeId::from(i as u64 + 1);
+    pub async fn restart_node(&mut self, node_slot: usize) {
+        assert!(node_slot < self.nodes.len(), "Invalid node index");
+        let node_id = node_id_from_slot(node_slot);
 
         // For Redb nodes, actually recreate the node to simulate full restart
-        if let Some(storage_path) = self.nodes[i].redb_storage_path() {
+        if let Some(storage_path) = self.nodes[node_slot].redb_storage_path() {
             let storage_path = storage_path.clone();
-            self.restart_redb_node(i, node_id, &storage_path).await;
+            self.restart_redb_node(node_slot, node_id, &storage_path).await;
         } else {
             // For in-memory nodes, just clear the failed status
-            self.nodes[i].connected().store(true, Ordering::SeqCst);
+            self.nodes[node_slot].connected().store(true, Ordering::SeqCst);
             self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-                .add_event(format!("restart: node {} (in-memory, state preserved)", i));
+                .add_event(format!("restart: node {} (in-memory, state preserved)", node_slot));
         }
 
         self.router.mark_node_failed(node_id, false);
@@ -88,7 +121,7 @@ impl AspenRaftTester {
     }
 
     /// Restart a Redb-backed node with fresh storage.
-    async fn restart_redb_node(&mut self, i: usize, node_id: NodeId, storage_path: &RedbStoragePath) {
+    async fn restart_redb_node(&mut self, node_slot: usize, node_id: NodeId, storage_path: &RedbStoragePath) {
         // Recreate the node with the same Redb storage
         let raft_config = Config {
             heartbeat_interval: DEFAULT_HEARTBEAT_INTERVAL_MS,
@@ -102,35 +135,35 @@ impl AspenRaftTester {
         // In madsim, all nodes run in the same process, so we can't reopen the same database
         // file that might still be locked. Instead, create a fresh database and let the
         // node rejoin the cluster and sync from peers (simulating full crash recovery).
-        let restart_count = self.restart_counts.get(&i).copied().unwrap_or(0) + 1;
-        self.restart_counts.insert(i, restart_count);
+        let restart_count = self.restart_counts.get(&node_slot).copied().unwrap_or(0).saturating_add(1);
+        self.restart_counts.insert(node_slot, restart_count);
 
         let parent_dir = storage_path.db_path.parent().expect("storage path should have parent");
         let fresh_db_path = parent_dir.join(format!("shared-restart-{}.redb", restart_count));
 
         // Create fresh SharedRedbStorage (implements both log and state machine)
-        let storage =
+        let raw_storage =
             SharedRedbStorage::new(&fresh_db_path, &node_id.to_string()).expect("failed to create fresh Redb storage");
 
         let network_factory = MadsimNetworkFactory::new(node_id, self.router.clone(), self.injector.clone());
 
-        let raft = Raft::new(node_id, raft_config, network_factory, storage.clone(), storage.clone())
+        let raft = Raft::new(node_id, raft_config, network_factory, raw_storage.clone(), raw_storage.clone())
             .await
             .expect("failed to recreate raft instance");
 
         // Re-register with router
         self.router
-            .register_node(node_id, format!("127.0.0.1:{}", 26000 + i), raft.clone())
+            .register_node(node_id, restart_socket_addr(node_slot), raft.clone())
             .expect("failed to re-register node");
 
         // Wrap storage in Arc and create RaftNode wrapper (only when sql feature is enabled)
-        let storage = Arc::new(storage);
+        let storage = Arc::new(raw_storage);
         #[cfg(feature = "sql")]
         let raft_node =
             Arc::new(RaftNode::new(node_id, Arc::new(raft.clone()), StateMachineVariant::Redb(storage.clone())));
 
         // Replace the node in our list with fresh storage path
-        self.nodes[i] = TestNode::Redb {
+        self.nodes[node_slot] = TestNode::Redb {
             raft,
             #[cfg(feature = "sql")]
             raft_node,
@@ -140,7 +173,7 @@ impl AspenRaftTester {
         };
 
         self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
-            .add_event(format!("restart: node {} with Redb storage", i));
+            .add_event(format!("restart: node {} with Redb storage", node_slot));
     }
 
     /// Check for exactly one leader among connected nodes.
@@ -152,9 +185,8 @@ impl AspenRaftTester {
 
         while retries > 0 {
             // Random backoff using madsim's deterministic random
-            let backoff = LEADER_CHECK_BACKOFF_MIN_MS
-                + (madsim::rand::random::<u64>() % (LEADER_CHECK_BACKOFF_MAX_MS - LEADER_CHECK_BACKOFF_MIN_MS));
-            madsim::time::sleep(Duration::from_millis(backoff)).await;
+            let backoff_ms = leader_check_backoff_ms();
+            madsim::time::sleep(Duration::from_millis(backoff_ms)).await;
 
             if let Some((idx, id)) = self.find_agreed_leader() {
                 let metrics = self.nodes[idx].raft().metrics().borrow().clone();
@@ -183,7 +215,7 @@ impl AspenRaftTester {
             if node.connected().load(Ordering::Relaxed) {
                 let metrics = node.raft().metrics().borrow().clone();
                 if let Some(current_leader) = metrics.current_leader {
-                    let current_idx = (current_leader.0 - 1) as usize;
+                    let current_idx = node_slot_from_node_id(current_leader)?;
                     if !self.nodes[current_idx].connected().load(Ordering::Relaxed) {
                         return None;
                     }
@@ -202,7 +234,7 @@ impl AspenRaftTester {
             }
         }
 
-        leader_idx.map(|idx| (idx, leader_id.unwrap()))
+        leader_idx.zip(leader_id)
     }
 
     /// Verify no split brain (at most one leader per term).
@@ -213,7 +245,7 @@ impl AspenRaftTester {
             let metrics = node.raft().metrics().borrow().clone();
             let term = metrics.current_term;
             if let Some(leader_id) = metrics.current_leader
-                && leader_id == NodeId::from(i as u64 + 1)
+                && leader_id == node_id_from_slot(i)
             {
                 leaders_per_term.entry(term).or_default().push(i);
             }
@@ -355,7 +387,7 @@ impl AspenRaftTester {
             .await
             .ok_or_else(|| anyhow::anyhow!("No leader available for add_learner"))?;
 
-        let node_id = NodeId::from(node_idx as u64 + 1);
+        let node_id = node_id_from_slot(node_idx);
         let member_info = create_test_raft_member_info(node_id);
 
         self.nodes[leader_idx]
@@ -386,7 +418,7 @@ impl AspenRaftTester {
             .await
             .ok_or_else(|| anyhow::anyhow!("No leader available for change_membership"))?;
 
-        let members: BTreeSet<NodeId> = voter_indices.iter().map(|&i| NodeId::from(i as u64 + 1)).collect();
+        let members: BTreeSet<NodeId> = voter_indices.iter().map(|&node_slot| node_id_from_slot(node_slot)).collect();
 
         self.nodes[leader_idx]
             .raft()
@@ -410,8 +442,8 @@ impl AspenRaftTester {
             if node.connected().load(Ordering::Relaxed) {
                 let metrics = node.raft().metrics().borrow().clone();
                 let membership = metrics.membership_config.membership();
-                let voters: Vec<usize> = membership.voter_ids().map(|id| (id.0 - 1) as usize).collect();
-                let learners: Vec<usize> = membership.learner_ids().map(|id| (id.0 - 1) as usize).collect();
+                let voters: Vec<usize> = membership.voter_ids().filter_map(node_slot_from_node_id).collect();
+                let learners: Vec<usize> = membership.learner_ids().filter_map(node_slot_from_node_id).collect();
                 return (voters, learners);
             }
         }
@@ -423,10 +455,10 @@ impl AspenRaftTester {
     /// This is useful after membership changes to ensure replication.
     pub async fn wait_for_log_sync(&mut self, timeout_secs: u64) -> Result<()> {
         let deadline = Duration::from_secs(timeout_secs);
-        let start = std::time::Instant::now();
+        let start = current_instant();
 
         while start.elapsed() < deadline {
-            let mut indices: Vec<u64> = Vec::new();
+            let mut indices: Vec<u64> = Vec::with_capacity(self.nodes.len());
 
             for node in &self.nodes {
                 if node.connected().load(Ordering::Relaxed) {
@@ -472,11 +504,11 @@ impl AspenRaftTester {
 
     /// Trigger an election on a specific node.
     pub async fn trigger_election(&mut self, node_id: u64) -> Result<()> {
-        if node_id >= self.nodes.len() as u64 {
-            return Err(anyhow::anyhow!("Invalid node ID: {}", node_id));
-        }
+        let node_slot = node_slot_from_raw_id(node_id)
+            .filter(|&node_slot| node_slot < self.nodes.len())
+            .ok_or_else(|| anyhow::anyhow!("Invalid node ID: {}", node_id))?;
 
-        self.nodes[node_id as usize].raft().trigger().elect().await?;
+        self.nodes[node_slot].raft().trigger().elect().await?;
 
         self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
             .add_event(format!("Triggered election on node {}", node_id));
@@ -489,11 +521,11 @@ impl AspenRaftTester {
     /// This manually triggers the state machine to build a snapshot.
     /// Typically called on the leader to force log compaction.
     pub async fn trigger_snapshot(&mut self, node_id: u64) -> Result<()> {
-        if node_id >= self.nodes.len() as u64 {
-            return Err(anyhow::anyhow!("Invalid node ID: {}", node_id));
-        }
+        let node_slot = node_slot_from_raw_id(node_id)
+            .filter(|&node_slot| node_slot < self.nodes.len())
+            .ok_or_else(|| anyhow::anyhow!("Invalid node ID: {}", node_id))?;
 
-        self.nodes[node_id as usize].raft().trigger().snapshot().await?;
+        self.nodes[node_slot].raft().trigger().snapshot().await?;
 
         self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())
             .add_event(format!("Triggered snapshot on node {}", node_id));
@@ -503,10 +535,11 @@ impl AspenRaftTester {
 
     /// Get metrics for a specific node.
     pub fn get_metrics(&self, node_id: u64) -> Option<openraft::RaftMetrics<AppTypeConfig>> {
-        if node_id >= self.nodes.len() as u64 {
+        let node_slot = node_slot_from_raw_id(node_id)?;
+        if node_slot >= self.nodes.len() {
             return None;
         }
-        Some(self.nodes[node_id as usize].raft().metrics().borrow().clone())
+        Some(self.nodes[node_slot].raft().metrics().borrow().clone())
     }
 }
 
