@@ -240,7 +240,8 @@ mod tests {
 
     #[test]
     fn test_deadline_overflow() {
-        assert_eq!(compute_deadline_ms(u64::MAX - 1000, 30), u64::MAX);
+        let start_time_ms = (u64::MAX).saturating_sub(1000);
+        assert_eq!(compute_deadline_ms(start_time_ms, 30), u64::MAX);
     }
 
     #[test]

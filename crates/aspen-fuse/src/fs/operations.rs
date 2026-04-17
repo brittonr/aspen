@@ -1116,7 +1116,7 @@ impl AspenFs {
     /// Rename a file or symlink by copying data, metadata, and xattrs to the new key.
     fn rename_file_or_symlink(&self, old_key: &str, new_key: &str) -> std::io::Result<()> {
         // Use chunked rename — handles both small files and chunked large files
-        crate::chunking::chunked_rename(self, old_key, new_key)?;
+        crate::chunking::chunked_rename(self, crate::chunking::RenameKeys { old_key, new_key })?;
 
         // For symlinks, also move the target
         let symlink_old = format!("{}{}", old_key, SYMLINK_SUFFIX);

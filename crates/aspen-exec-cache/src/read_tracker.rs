@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 use std::time::Instant;
 
 use dashmap::DashMap;
@@ -67,7 +68,20 @@ pub struct ReadTracker {
     /// Active tracking sessions keyed by PID.
     sessions: DashMap<u32, ReadSession>,
     /// Master enable flag. When false, all tracking operations are no-ops.
-    enabled: AtomicBool,
+    is_enabled: AtomicBool,
+}
+
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "read tracking owns its monotonic session-start boundary")]
+fn session_started_at() -> Instant {
+    Instant::now()
+}
+
+fn session_limit(value: u32) -> usize {
+    match usize::try_from(value) {
+        Ok(limit) => limit,
+        Err(_) => usize::MAX,
+    }
 }
 
 impl ReadTracker {
@@ -75,18 +89,18 @@ impl ReadTracker {
     pub fn new() -> Self {
         Self {
             sessions: DashMap::new(),
-            enabled: AtomicBool::new(false),
+            is_enabled: AtomicBool::new(false),
         }
     }
 
     /// Enable or disable tracking globally.
     pub fn set_enabled(&self, enabled: bool) {
-        self.enabled.store(enabled, Ordering::Release);
+        self.is_enabled.store(enabled, Ordering::Release);
     }
 
     /// Check if tracking is enabled.
     pub fn is_enabled(&self) -> bool {
-        self.enabled.load(Ordering::Acquire)
+        self.is_enabled.load(Ordering::Acquire)
     }
 
     /// Start a new tracking session for a root process.
@@ -96,14 +110,14 @@ impl ReadTracker {
         if !self.is_enabled() {
             return false;
         }
-        if self.sessions.len() >= MAX_CONCURRENT_SESSIONS as usize {
+        if self.sessions.len() >= session_limit(MAX_CONCURRENT_SESSIONS) {
             warn!(pid, "session limit reached, not tracking");
             return false;
         }
         self.sessions.insert(pid, ReadSession {
             read_set: HashMap::new(),
             parent_pid: None,
-            created_at: Instant::now(),
+            created_at: session_started_at(),
             child_cache_keys: Vec::new(),
             is_active: true,
         });
@@ -122,14 +136,14 @@ impl ReadTracker {
         if !self.sessions.contains_key(&parent_pid) {
             return false;
         }
-        if self.sessions.len() >= MAX_CONCURRENT_SESSIONS as usize {
+        if self.sessions.len() >= session_limit(MAX_CONCURRENT_SESSIONS) {
             warn!(pid, parent_pid, "session limit reached, not tracking child");
             return false;
         }
         self.sessions.insert(pid, ReadSession {
             read_set: HashMap::new(),
             parent_pid: Some(parent_pid),
-            created_at: Instant::now(),
+            created_at: session_started_at(),
             child_cache_keys: Vec::new(),
             is_active: true,
         });
@@ -157,7 +171,7 @@ impl ReadTracker {
         }
 
         // Check resource bound before inserting
-        if session.read_set.len() >= MAX_INPUT_FILES as usize {
+        if session.read_set.len() >= session_limit(MAX_INPUT_FILES) {
             warn!(pid, count = session.read_set.len(), "input file limit reached, disabling tracking");
             session.is_active = false;
             return false;
@@ -190,7 +204,7 @@ impl ReadTracker {
             session.read_set.into_iter().map(|(path, hash)| ReadRecord { path, hash }).collect();
 
         // Sort by path for deterministic ordering
-        records.sort_by(|a, b| a.path.cmp(&b.path));
+        records.sort_unstable_by(|a, b| a.path.cmp(&b.path));
 
         debug!(pid, file_count = records.len(), child_count = session.child_cache_keys.len(), "finalized session");
 
@@ -217,7 +231,7 @@ impl ReadTracker {
     ///
     /// Returns the number of sessions cleaned up.
     pub fn cleanup_stale(&self) -> u32 {
-        let timeout = std::time::Duration::from_secs(SESSION_TIMEOUT_SECS);
+        let stale_cutoff = Duration::from_secs(SESSION_TIMEOUT_SECS);
         let mut cleaned = 0u32;
 
         // Collect stale PIDs to avoid holding the lock during removal
@@ -226,7 +240,7 @@ impl ReadTracker {
             .iter()
             .filter(|entry| {
                 let session = entry.value();
-                session.created_at.elapsed() > timeout && !pid_exists(*entry.key())
+                session.created_at.elapsed() > stale_cutoff && !pid_exists(*entry.key())
             })
             .map(|entry| *entry.key())
             .collect();
@@ -241,8 +255,8 @@ impl ReadTracker {
     }
 
     /// Number of active sessions.
-    pub fn session_count(&self) -> usize {
-        self.sessions.len()
+    pub fn session_count(&self) -> u32 {
+        u32::try_from(self.sessions.len()).unwrap_or(u32::MAX)
     }
 }
 
@@ -265,8 +279,9 @@ pub fn read_ppid(pid: u32) -> Option<u32> {
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
     // Format: "pid (comm) state ppid ..."
     // The comm field can contain spaces and parens, so find the last ')' first
-    let after_comm = stat.rfind(')')? + 2; // skip ') '
-    let fields: Vec<&str> = stat[after_comm..].split_whitespace().collect();
+    let after_comm = stat.rfind(')')?.checked_add(2)?; // skip ') '
+    let fields_str = stat.get(after_comm..)?;
+    let fields: Vec<&str> = fields_str.split_whitespace().collect();
     // fields[0] = state, fields[1] = ppid
     fields.get(1)?.parse::<u32>().ok()
 }
@@ -382,7 +397,7 @@ mod tests {
             read_set: HashMap::new(),
             parent_pid: None,
             // Set created_at far in the past
-            created_at: Instant::now() - std::time::Duration::from_secs(SESSION_TIMEOUT_SECS + 10),
+            created_at: session_started_at() - Duration::from_secs(SESSION_TIMEOUT_SECS.saturating_add(10)),
             child_cache_keys: Vec::new(),
             is_active: true,
         });

@@ -45,35 +45,55 @@ impl IndexRegistry {
         // idx_mod_revision: Query by modification revision
         // Note: Registration cannot fail as we're adding to an empty registry with capacity > 4
         let mod_rev_space = index_subspace.subspace(&Tuple::new().push("mod_revision"));
-        let _ = registry.register(SecondaryIndex::numeric(
-            "idx_mod_revision",
-            mod_rev_space,
-            Arc::new(|entry| Some(entry.mod_revision.to_be_bytes().to_vec())),
-        ));
+        if registry
+            .register(SecondaryIndex::numeric(
+                "idx_mod_revision",
+                mod_rev_space,
+                Arc::new(|entry| Some(entry.mod_revision.to_be_bytes().to_vec())),
+            ))
+            .is_err()
+        {
+            return registry;
+        }
 
         // idx_create_revision: Query by creation revision
         let create_rev_space = index_subspace.subspace(&Tuple::new().push("create_revision"));
-        let _ = registry.register(SecondaryIndex::numeric(
-            "idx_create_revision",
-            create_rev_space,
-            Arc::new(|entry| Some(entry.create_revision.to_be_bytes().to_vec())),
-        ));
+        if registry
+            .register(SecondaryIndex::numeric(
+                "idx_create_revision",
+                create_rev_space,
+                Arc::new(|entry| Some(entry.create_revision.to_be_bytes().to_vec())),
+            ))
+            .is_err()
+        {
+            return registry;
+        }
 
         // idx_expires_at: Query by expiration time (for TTL cleanup)
         let expires_space = index_subspace.subspace(&Tuple::new().push("expires_at"));
-        let _ = registry.register(SecondaryIndex::numeric(
-            "idx_expires_at",
-            expires_space,
-            Arc::new(|entry| entry.expires_at_ms.map(|ms| (ms as i64).to_be_bytes().to_vec())),
-        ));
+        if registry
+            .register(SecondaryIndex::numeric(
+                "idx_expires_at",
+                expires_space,
+                Arc::new(|entry| entry.expires_at_ms.map(|ms| (ms as i64).to_be_bytes().to_vec())),
+            ))
+            .is_err()
+        {
+            return registry;
+        }
 
         // idx_lease_id: Query keys by lease
         let lease_space = index_subspace.subspace(&Tuple::new().push("lease_id"));
-        let _ = registry.register(SecondaryIndex::numeric(
-            "idx_lease_id",
-            lease_space,
-            Arc::new(|entry| entry.lease_id.map(|id| (id as i64).to_be_bytes().to_vec())),
-        ));
+        if registry
+            .register(SecondaryIndex::numeric(
+                "idx_lease_id",
+                lease_space,
+                Arc::new(|entry| entry.lease_id.map(|id| (id as i64).to_be_bytes().to_vec())),
+            ))
+            .is_err()
+        {
+            return registry;
+        }
 
         registry
     }
@@ -84,7 +104,8 @@ impl IndexRegistry {
     ///
     /// Returns `IndexError::TooManyIndexes` if the registry is at capacity.
     pub fn register(&mut self, index: SecondaryIndex) -> IndexResult<()> {
-        if self.indexes.len() >= MAX_INDEXES as usize {
+        let max_indexes = usize::try_from(MAX_INDEXES).unwrap_or(usize::MAX);
+        if self.indexes.len() >= max_indexes {
             return Err(IndexError::TooManyIndexes);
         }
         self.indexes.insert(index.name().to_owned(), index);
@@ -102,8 +123,8 @@ impl IndexRegistry {
     }
 
     /// Get the number of registered indexes.
-    pub fn len(&self) -> usize {
-        self.indexes.len()
+    pub fn len(&self) -> u32 {
+        u32::try_from(self.indexes.len()).unwrap_or(u32::MAX)
     }
 
     /// Check if the registry is empty.

@@ -76,31 +76,31 @@ pub struct JobConfig {
     pub job_type: JobType,
 
     /// Shell command to execute (for shell jobs).
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub command: Option<String>,
 
     /// Command arguments.
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     pub args: Vec<String>,
 
     /// Environment variables.
-    #[serde(default)]
+    #[serde(default = "default_string_map")]
     pub env: HashMap<String, String>,
 
     /// Working directory.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub working_dir: Option<String>,
 
     /// Nix flake URL (for nix jobs).
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub flake_url: Option<String>,
 
     /// Nix flake attribute (for nix jobs).
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub flake_attr: Option<String>,
 
     /// Binary blob hash (for VM jobs).
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub binary_hash: Option<String>,
 
     /// Job timeout in seconds.
@@ -112,15 +112,15 @@ pub struct JobConfig {
     pub isolation: IsolationMode,
 
     /// Cache key for build caching.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub cache_key: Option<String>,
 
     /// Artifact glob patterns to collect.
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     pub artifacts: Vec<String>,
 
     /// Job dependencies (names of other jobs).
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     pub depends_on: Vec<String>,
 
     /// Number of retry attempts.
@@ -132,7 +132,7 @@ pub struct JobConfig {
     pub allow_failure: bool,
 
     /// Tags for worker affinity.
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     pub tags: Vec<String>,
 
     /// Whether to upload build results to blob store (for nix jobs).
@@ -149,25 +149,25 @@ pub struct JobConfig {
 
     /// Name of a build job in a preceding stage whose artifact this deploy
     /// job should deploy. Required for `Deploy` jobs.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub artifact_from: Option<String>,
 
     /// Deployment strategy (e.g., "rolling"). Defaults to "rolling".
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub strategy: Option<String>,
 
     /// Health check timeout in seconds for deployment. Uses the cluster
     /// default (`DEPLOY_HEALTH_TIMEOUT_SECS`) when not set.
-    #[serde(default)]
+    #[serde(default = "default_optional_u64")]
     pub health_check_timeout_secs: Option<u64>,
 
     /// Maximum number of nodes to upgrade concurrently during rolling deploy.
-    #[serde(default)]
+    #[serde(default = "default_optional_u32")]
     pub max_concurrent: Option<u32>,
 
     /// Binary to validate inside a Nix store path during deployment.
     /// Defaults to `bin/aspen-node`. Set to `bin/cowsay` for non-aspen deploys.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub expected_binary: Option<String>,
 
     /// Whether to track deployment lifecycle state in Raft KV.
@@ -175,7 +175,7 @@ pub struct JobConfig {
     /// and rollback points under `_deploy:state:{deploy_id}:`.
     /// When `false`, only CI job logs are persisted (stateless push deploy).
     /// Defaults to `true`.
-    #[serde(default)]
+    #[serde(default = "default_optional_bool")]
     pub stateful: Option<bool>,
 
     /// When `true`, only validate the artifact exists and the expected binary
@@ -183,7 +183,7 @@ pub struct JobConfig {
     /// pipeline tests that verify the deploy stage resolves artifacts without
     /// modifying the running cluster.
     /// Defaults to `false`.
-    #[serde(default)]
+    #[serde(default = "default_optional_bool")]
     pub validate_only: Option<bool>,
 
     /// Force cold-boot for VM jobs, bypassing snapshot restore.
@@ -215,12 +215,36 @@ pub struct JobConfig {
     /// VM to succeed commits its results; others are killed.
     /// Only applies to `JobType::Vm` jobs with snapshots enabled.
     /// Defaults to `None` (single VM, no speculation).
-    #[serde(default)]
+    #[serde(default = "default_optional_u32")]
     pub speculative_count: Option<u32>,
 }
 
 fn default_job_timeout() -> u64 {
     3600 // 1 hour
+}
+
+fn default_string_vec() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_string_map() -> HashMap<String, String> {
+    HashMap::new()
+}
+
+fn default_optional_string() -> Option<String> {
+    None
+}
+
+fn default_optional_u64() -> Option<u64> {
+    None
+}
+
+fn default_optional_u32() -> Option<u32> {
+    None
+}
+
+fn default_optional_bool() -> Option<bool> {
+    None
 }
 
 impl JobConfig {
@@ -281,11 +305,11 @@ pub struct StageConfig {
     pub parallel: bool,
 
     /// Stage dependencies (names of other stages).
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     pub depends_on: Vec<String>,
 
     /// Only run when ref matches this pattern.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub when: Option<String>,
 }
 
@@ -346,11 +370,11 @@ pub struct TriggerConfig {
     pub refs: Vec<String>,
 
     /// Path patterns to ignore.
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     pub ignore_paths: Vec<String>,
 
     /// Path patterns to watch (if set, only these trigger).
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     pub only_paths: Vec<String>,
 }
 
@@ -422,22 +446,22 @@ pub struct PipelineConfig {
     pub name: String,
 
     /// Pipeline description.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub description: Option<String>,
 
     /// Trigger configuration.
-    #[serde(default)]
+    #[serde(default = "default_trigger_config")]
     pub triggers: TriggerConfig,
 
     /// Pipeline stages.
     pub stages: Vec<StageConfig>,
 
     /// Artifact configuration.
-    #[serde(default)]
+    #[serde(default = "default_artifact_config")]
     pub artifacts: ArtifactConfig,
 
     /// Global environment variables.
-    #[serde(default)]
+    #[serde(default = "default_string_map")]
     pub env: HashMap<String, String>,
 
     /// Pipeline timeout in seconds.
@@ -451,6 +475,14 @@ pub struct PipelineConfig {
 
 fn default_pipeline_timeout() -> u64 {
     7200 // 2 hours
+}
+
+fn default_trigger_config() -> TriggerConfig {
+    TriggerConfig::default()
+}
+
+fn default_artifact_config() -> ArtifactConfig {
+    ArtifactConfig::default()
 }
 
 impl PipelineConfig {
@@ -506,51 +538,63 @@ impl PipelineConfig {
         use std::collections::HashMap;
         use std::collections::HashSet;
 
-        // Build dependency graph
-        let mut deps: HashMap<&str, Vec<&str>> = HashMap::new();
-        for stage in &self.stages {
-            deps.insert(&stage.name, stage.depends_on.iter().map(|s| s.as_str()).collect());
-        }
-
-        // DFS to detect cycles
-        let mut visited = HashSet::new();
-        let mut path = Vec::new();
-
-        fn visit<'a>(
+        struct VisitFrame<'a> {
             node: &'a str,
-            deps: &HashMap<&'a str, Vec<&'a str>>,
-            visited: &mut HashSet<&'a str>,
-            path: &mut Vec<&'a str>,
-        ) -> Result<(), String> {
-            if path.contains(&node) {
-                path.push(node);
-                let cycle_start = path.iter().position(|&n| n == node).unwrap_or(0);
-                return Err(path[cycle_start..].join(" -> "));
-            }
-
-            if visited.contains(node) {
-                return Ok(());
-            }
-
-            path.push(node);
-
-            if let Some(dependencies) = deps.get(node) {
-                for dep in dependencies {
-                    visit(dep, deps, visited, path)?;
-                }
-            }
-
-            path.pop();
-            visited.insert(node);
-
-            Ok(())
+            next_dep_index: usize,
         }
 
+        // Build dependency graph
+        let mut deps: HashMap<&str, Vec<&str>> = HashMap::with_capacity(self.stages.len());
         for stage in &self.stages {
-            if !visited.contains(stage.name.as_str())
-                && let Err(cycle) = visit(&stage.name, &deps, &mut visited, &mut path)
-            {
-                return Err(CiCoreError::CircularDependency { path: cycle });
+            deps.insert(&stage.name, stage.depends_on.iter().map(|name| name.as_str()).collect());
+        }
+
+        let mut visited = HashSet::with_capacity(self.stages.len());
+        let mut path = Vec::with_capacity(self.stages.len());
+        let mut stack = Vec::with_capacity(self.stages.len());
+
+        for stage in &self.stages {
+            let start = stage.name.as_str();
+            if visited.contains(start) {
+                continue;
+            }
+
+            path.push(start);
+            stack.push(VisitFrame {
+                node: start,
+                next_dep_index: 0,
+            });
+
+            while let Some(frame) = stack.last_mut() {
+                let dependencies = deps.get(frame.node).map(Vec::as_slice).unwrap_or(&[]);
+                if frame.next_dep_index >= dependencies.len() {
+                    let finished = frame.node;
+                    stack.pop();
+                    path.pop();
+                    visited.insert(finished);
+                    continue;
+                }
+
+                let dependency = dependencies[frame.next_dep_index];
+                frame.next_dep_index = frame.next_dep_index.saturating_add(1);
+
+                if let Some(cycle_start) = path.iter().position(|&node| node == dependency) {
+                    let mut cycle = path[cycle_start..].to_vec();
+                    cycle.push(dependency);
+                    return Err(CiCoreError::CircularDependency {
+                        path: cycle.join(" -> "),
+                    });
+                }
+
+                if visited.contains(dependency) {
+                    continue;
+                }
+
+                path.push(dependency);
+                stack.push(VisitFrame {
+                    node: dependency,
+                    next_dep_index: 0,
+                });
             }
         }
 
@@ -573,8 +617,8 @@ impl PipelineConfig {
                     && !preceding_job_names.contains(artifact_from.as_str())
                 {
                     // Check if it's in the same stage (different error message)
-                    let in_same_stage = stage.jobs.iter().any(|j| j.name == *artifact_from);
-                    if in_same_stage {
+                    let is_in_same_stage = stage.jobs.iter().any(|j| j.name == *artifact_from);
+                    if is_in_same_stage {
                         return Err(CiCoreError::InvalidConfig {
                             reason: format!(
                                 "Deploy job '{}' references '{}' in the same stage; \
@@ -617,9 +661,9 @@ impl PipelineConfig {
                     continue;
                 }
 
-                let deps_met = stage.depends_on.iter().all(|d| completed.contains(d.as_str()));
+                let is_deps_met = stage.depends_on.iter().all(|d| completed.contains(d.as_str()));
 
-                if deps_met {
+                if is_deps_met {
                     result.push(stage_map[stage.name.as_str()]);
                     completed.insert(&stage.name);
                 }
@@ -687,6 +731,8 @@ mod tests {
             cached_execution: false,
         };
         let err = job.validate().unwrap_err();
+        assert_eq!(job.job_type, JobType::Deploy);
+        assert!(job.artifact_from.is_none());
         assert!(err.to_string().contains("requires artifact_from"), "got: {err}");
     }
 
@@ -723,6 +769,7 @@ mod tests {
             speculative_count: None,
             cached_execution: false,
         };
+        assert_eq!(job.artifact_from.as_deref(), Some("build-node"));
         assert!(job.validate().is_ok());
     }
 
@@ -760,9 +807,14 @@ mod tests {
         }
     }
 
-    fn make_deploy_job(name: &str, artifact_from: &str) -> JobConfig {
+    struct DeployJobFixture<'a> {
+        name: &'a str,
+        artifact_from: &'a str,
+    }
+
+    fn make_deploy_job(fixture: DeployJobFixture<'_>) -> JobConfig {
         JobConfig {
-            name: name.to_string(),
+            name: fixture.name.to_string(),
             job_type: JobType::Deploy,
             command: None,
             args: vec![],
@@ -781,7 +833,7 @@ mod tests {
             tags: vec![],
             should_upload_result: true,
             publish_to_cache: true,
-            artifact_from: Some(artifact_from.to_string()),
+            artifact_from: Some(fixture.artifact_from.to_string()),
             strategy: Some("rolling".to_string()),
             health_check_timeout_secs: None,
             max_concurrent: None,
@@ -810,7 +862,10 @@ mod tests {
                 },
                 StageConfig {
                     name: "deploy".to_string(),
-                    jobs: vec![make_deploy_job("deploy-node", "build-node")],
+                    jobs: vec![make_deploy_job(DeployJobFixture {
+                        name: "deploy-node",
+                        artifact_from: "build-node",
+                    })],
                     parallel: true,
                     depends_on: vec!["build".to_string()],
                     when: None,
@@ -821,6 +876,7 @@ mod tests {
             timeout_secs: 7200,
             priority: Priority::default(),
         };
+        assert_eq!(config.stages.len(), 2);
         assert!(config.validate().is_ok());
     }
 
@@ -840,7 +896,10 @@ mod tests {
                 },
                 StageConfig {
                     name: "deploy".to_string(),
-                    jobs: vec![make_deploy_job("deploy-node", "nonexistent")],
+                    jobs: vec![make_deploy_job(DeployJobFixture {
+                        name: "deploy-node",
+                        artifact_from: "nonexistent",
+                    })],
                     parallel: true,
                     depends_on: vec!["build".to_string()],
                     when: None,
@@ -852,6 +911,7 @@ mod tests {
             priority: Priority::default(),
         };
         let err = config.validate().unwrap_err();
+        assert_eq!(config.stages.len(), 2);
         assert!(err.to_string().contains("unknown job"), "got: {err}");
     }
 
@@ -865,7 +925,10 @@ mod tests {
                 name: "all-in-one".to_string(),
                 jobs: vec![
                     make_shell_job("build-node"),
-                    make_deploy_job("deploy-node", "build-node"),
+                    make_deploy_job(DeployJobFixture {
+                        name: "deploy-node",
+                        artifact_from: "build-node",
+                    }),
                 ],
                 parallel: true,
                 depends_on: vec![],
@@ -877,7 +940,40 @@ mod tests {
             priority: Priority::default(),
         };
         let err = config.validate().unwrap_err();
+        assert_eq!(config.stages[0].jobs.len(), 2);
         assert!(err.to_string().contains("same stage"), "got: {err}");
+    }
+
+    #[test]
+    fn test_pipeline_validate_rejects_stage_cycle() {
+        let config = PipelineConfig {
+            name: "test".to_string(),
+            description: None,
+            triggers: TriggerConfig::default(),
+            stages: vec![
+                StageConfig {
+                    name: "build".to_string(),
+                    jobs: vec![make_shell_job("build-node")],
+                    parallel: true,
+                    depends_on: vec!["deploy".to_string()],
+                    when: None,
+                },
+                StageConfig {
+                    name: "deploy".to_string(),
+                    jobs: vec![make_shell_job("deploy-node")],
+                    parallel: true,
+                    depends_on: vec!["build".to_string()],
+                    when: None,
+                },
+            ],
+            artifacts: ArtifactConfig::default(),
+            env: HashMap::new(),
+            timeout_secs: 7200,
+            priority: Priority::default(),
+        };
+
+        let err = config.validate().unwrap_err();
+        assert!(err.to_string().contains("build -> deploy -> build"), "got: {err}");
     }
 
     #[test]

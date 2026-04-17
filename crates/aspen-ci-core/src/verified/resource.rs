@@ -170,7 +170,7 @@ pub const fn compute_memory_high_watermark(max_bytes: u64, high_percentage: u32)
     if high_percentage >= 100 {
         return max_bytes;
     }
-    (max_bytes / 100) * high_percentage as u64
+    (max_bytes / 100).saturating_mul(high_percentage as u64)
 }
 
 /// Check if job resource limits are valid.
@@ -213,10 +213,10 @@ pub const fn are_resource_limits_valid(
     max_pids: u32,
 ) -> bool {
     let has_sufficient_memory = memory_bytes >= min_memory_bytes;
-    let is_within_memory_limit = memory_bytes <= max_memory_bytes;
-    let is_within_pid_limit = pids <= max_pids;
+    let is_memory_allowed = memory_bytes <= max_memory_bytes;
+    let is_pid_allowed = pids <= max_pids;
 
-    has_sufficient_memory && is_within_memory_limit && is_within_pid_limit
+    has_sufficient_memory && is_memory_allowed && is_pid_allowed
 }
 
 /// Format bytes as a human-readable string for cgroup configuration.
@@ -247,8 +247,9 @@ pub fn format_bytes_for_cgroup(bytes: u64) -> String {
 mod tests {
     use super::*;
 
-    const GB: u64 = 1024 * 1024 * 1024;
-    const MB: u64 = 1024 * 1024;
+    const KIBI_BYTE_COUNT: u64 = 1024;
+    const MEBI_BYTE_COUNT: u64 = KIBI_BYTE_COUNT.saturating_mul(1024);
+    const GIBI_BYTE_COUNT: u64 = MEBI_BYTE_COUNT.saturating_mul(1024);
 
     // ========================================================================
     // compute_effective_memory_limit tests
@@ -256,17 +257,28 @@ mod tests {
 
     #[test]
     fn test_memory_within_limits() {
-        assert_eq!(compute_effective_memory_limit(Some(2 * GB), 4 * GB, GB), 2 * GB);
+        let requested_memory_bytes = (2u64).saturating_mul(GIBI_BYTE_COUNT);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert_eq!(
+            compute_effective_memory_limit(Some(requested_memory_bytes), max_memory_bytes, GIBI_BYTE_COUNT),
+            requested_memory_bytes
+        );
     }
 
     #[test]
     fn test_memory_exceeds_max() {
-        assert_eq!(compute_effective_memory_limit(Some(8 * GB), 4 * GB, GB), 4 * GB);
+        let requested_memory_bytes = (8u64).saturating_mul(GIBI_BYTE_COUNT);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert_eq!(
+            compute_effective_memory_limit(Some(requested_memory_bytes), max_memory_bytes, GIBI_BYTE_COUNT),
+            max_memory_bytes
+        );
     }
 
     #[test]
     fn test_memory_default() {
-        assert_eq!(compute_effective_memory_limit(None, 4 * GB, GB), GB);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert_eq!(compute_effective_memory_limit(None, max_memory_bytes, GIBI_BYTE_COUNT), GIBI_BYTE_COUNT);
     }
 
     // ========================================================================
@@ -313,22 +325,25 @@ mod tests {
 
     #[test]
     fn test_watermark_75_percent() {
-        // 75% of 4 GB: (4294967296 / 100) * 75 = 42949672 * 75 = 3221225400
+        // 75% of 4 GiB: (4294967296 / 100) * 75 = 42949672 * 75 = 3221225400
         // This has some rounding due to integer division
-        let expected = (4 * GB / 100) * 75;
-        assert_eq!(compute_memory_high_watermark(4 * GB, 75), expected);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        let expected = (max_memory_bytes / 100).saturating_mul(75);
+        assert_eq!(compute_memory_high_watermark(max_memory_bytes, 75), expected);
     }
 
     #[test]
     fn test_watermark_100_percent() {
         // 100% returns exact max_bytes to avoid rounding
-        assert_eq!(compute_memory_high_watermark(4 * GB, 100), 4 * GB);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert_eq!(compute_memory_high_watermark(max_memory_bytes, 100), max_memory_bytes);
     }
 
     #[test]
     fn test_watermark_over_100() {
         // Capped at 100% (returns exact max_bytes)
-        assert_eq!(compute_memory_high_watermark(4 * GB, 150), 4 * GB);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert_eq!(compute_memory_high_watermark(max_memory_bytes, 150), max_memory_bytes);
     }
 
     // ========================================================================
@@ -337,22 +352,34 @@ mod tests {
 
     #[test]
     fn test_valid_limits() {
-        assert!(are_resource_limits_valid(2 * GB, 2048, 256 * MB, 4 * GB, 4096));
+        let requested_memory_bytes = (2u64).saturating_mul(GIBI_BYTE_COUNT);
+        let min_memory_bytes = (256u64).saturating_mul(MEBI_BYTE_COUNT);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert!(are_resource_limits_valid(requested_memory_bytes, 2048, min_memory_bytes, max_memory_bytes, 4096));
     }
 
     #[test]
     fn test_memory_too_low() {
-        assert!(!are_resource_limits_valid(128 * MB, 2048, 256 * MB, 4 * GB, 4096));
+        let requested_memory_bytes = (128u64).saturating_mul(MEBI_BYTE_COUNT);
+        let min_memory_bytes = (256u64).saturating_mul(MEBI_BYTE_COUNT);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert!(!are_resource_limits_valid(requested_memory_bytes, 2048, min_memory_bytes, max_memory_bytes, 4096));
     }
 
     #[test]
     fn test_memory_too_high() {
-        assert!(!are_resource_limits_valid(8 * GB, 2048, 256 * MB, 4 * GB, 4096));
+        let requested_memory_bytes = (8u64).saturating_mul(GIBI_BYTE_COUNT);
+        let min_memory_bytes = (256u64).saturating_mul(MEBI_BYTE_COUNT);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert!(!are_resource_limits_valid(requested_memory_bytes, 2048, min_memory_bytes, max_memory_bytes, 4096));
     }
 
     #[test]
     fn test_pids_too_high() {
-        assert!(!are_resource_limits_valid(2 * GB, 8192, 256 * MB, 4 * GB, 4096));
+        let requested_memory_bytes = (2u64).saturating_mul(GIBI_BYTE_COUNT);
+        let min_memory_bytes = (256u64).saturating_mul(MEBI_BYTE_COUNT);
+        let max_memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert!(!are_resource_limits_valid(requested_memory_bytes, 8192, min_memory_bytes, max_memory_bytes, 4096));
     }
 
     // ========================================================================
@@ -361,6 +388,7 @@ mod tests {
 
     #[test]
     fn test_format_bytes() {
-        assert_eq!(format_bytes_for_cgroup(4 * GB), "4294967296");
+        let memory_bytes = (4u64).saturating_mul(GIBI_BYTE_COUNT);
+        assert_eq!(format_bytes_for_cgroup(memory_bytes), "4294967296");
     }
 }

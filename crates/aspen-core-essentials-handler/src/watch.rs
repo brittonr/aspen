@@ -45,12 +45,17 @@ impl RequestHandler for WatchHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
-        match request {
-            ClientRpcRequest::WatchCreate { .. } => handle_watch_create().await,
-            ClientRpcRequest::WatchCancel { watch_id } => handle_watch_cancel(watch_id).await,
-            ClientRpcRequest::WatchStatus { watch_id } => handle_watch_status(watch_id, ctx).await,
-            _ => Err(anyhow::anyhow!("request not handled by WatchHandler")),
+        if let ClientRpcRequest::WatchCreate { .. } = request {
+            return handle_watch_create().await;
         }
+        if let ClientRpcRequest::WatchCancel { watch_id } = request {
+            return handle_watch_cancel(watch_id).await;
+        }
+        if let ClientRpcRequest::WatchStatus { watch_id } = request {
+            return handle_watch_status(watch_id, ctx).await;
+        }
+
+        Err(anyhow::anyhow!("request not handled by WatchHandler"))
     }
 
     fn name(&self) -> &'static str {
@@ -125,15 +130,18 @@ async fn handle_watch_status(watch_id: Option<u64>, ctx: &ClientProtocolContext)
                 .collect()
         };
 
-        return Ok(ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
+        let payload = WatchStatusResultResponse {
             is_success: true,
             watches: Some(watches),
             error: None,
-        }));
+        };
+        debug_assert!(payload.is_success);
+        debug_assert!(payload.watches.is_some());
+        return Ok(ClientRpcResponse::WatchStatusResult(payload));
     }
 
     // No watch registry configured - return informative message
-    Ok(ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
+    let payload = WatchStatusResultResponse {
         is_success: true,
         watches: Some(vec![]),
         error: Some(
@@ -141,7 +149,10 @@ async fn handle_watch_status(watch_id: Option<u64>, ctx: &ClientProtocolContext)
              protocol (LOG_SUBSCRIBER_ALPN). This node reports no active watches."
                 .to_string(),
         ),
-    }))
+    };
+    debug_assert!(payload.is_success);
+    debug_assert!(payload.watches.is_some());
+    Ok(ClientRpcResponse::WatchStatusResult(payload))
 }
 
 #[cfg(test)]

@@ -20,8 +20,8 @@ impl IndexScanResult {
     }
 
     /// Get the number of results.
-    pub fn len(&self) -> usize {
-        self.primary_keys.len()
+    pub fn len(&self) -> u32 {
+        u32::try_from(self.primary_keys.len()).unwrap_or(u32::MAX)
     }
 
     /// Check if the result is empty.
@@ -61,9 +61,15 @@ pub fn extract_primary_key_from_tuple(tuple: &Tuple) -> Option<Vec<u8>> {
         return None;
     }
 
-    match tuple.get(len - 1) {
+    match tuple.get(len.saturating_sub(1)) {
         Some(Element::Bytes(pk)) => Some(pk.clone()),
         Some(Element::String(pk)) => Some(pk.as_bytes().to_vec()),
-        _ => None,
+        Some(Element::Null)
+        | Some(Element::Int(_))
+        | Some(Element::Bool(_))
+        | Some(Element::Float(_))
+        | Some(Element::Double(_))
+        | Some(Element::Tuple(_))
+        | None => None,
     }
 }

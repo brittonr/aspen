@@ -35,14 +35,14 @@ const _: () = assert!(IROH_STREAM_OPEN_TIMEOUT_SECS > 0);
 const _: () = assert!(IROH_READ_TIMEOUT_SECS > 0);
 
 // ReadIndex should complete within read timeout
-const _: () = assert!(READ_INDEX_TIMEOUT_SECS <= IROH_READ_TIMEOUT_SECS * 2);
+const _: () = assert!(READ_INDEX_TIMEOUT_SECS <= IROH_READ_TIMEOUT_SECS.saturating_mul(2));
 
 // Membership operations are longer due to consensus rounds
 const _: () = assert!(MEMBERSHIP_OPERATION_TIMEOUT_SECS > READ_INDEX_TIMEOUT_SECS);
 
 // Gossip timeouts
 const _: () = assert!(GOSSIP_SUBSCRIBE_TIMEOUT_SECS > 0);
-const _: () = assert!(GOSSIP_SUBSCRIBE_TIMEOUT_SECS <= IROH_READ_TIMEOUT_SECS * 2);
+const _: () = assert!(GOSSIP_SUBSCRIBE_TIMEOUT_SECS <= IROH_READ_TIMEOUT_SECS.saturating_mul(2));
 
 // Gossip interval ordering
 const _: () = assert!(GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS < GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS);
@@ -60,7 +60,7 @@ const _: () = assert!(MAX_KEY_SIZE <= 1024 * 1024); // max 1MB key (sanity check
 
 // Values must be bounded
 const _: () = assert!(MAX_VALUE_SIZE > 0);
-const _: () = assert!(MAX_VALUE_SIZE <= 100 * 1024 * 1024); // max 100MB value (sanity check)
+const _: () = assert!(MAX_VALUE_SIZE <= 104_857_600); // max 100MB value (sanity check)
 
 // SetMulti operations should not exceed practical memory limits
 // 100 keys * 1MB values = 100MB max per SetMulti (acceptable)
@@ -101,11 +101,11 @@ const _: () = assert!(MAX_CONCURRENT_VMS <= 1000); // sanity check
 
 // Binary size must be bounded
 const _: () = assert!(MAX_BINARY_SIZE > 0);
-const _: () = assert!(MAX_BINARY_SIZE <= 1024 * 1024 * 1024); // max 1GB (sanity check)
+const _: () = assert!(MAX_BINARY_SIZE <= 1_073_741_824); // max 1GB (sanity check)
 
 // Build time must be reasonable
 const _: () = assert!(MAX_BUILD_TIME_MS > 0);
-const _: () = assert!(MAX_BUILD_TIME_MS <= 60 * 60 * 1000); // max 1 hour (sanity check)
+const _: () = assert!(MAX_BUILD_TIME_MS <= 3_600_000); // max 1 hour (sanity check)
 
 // ============================================================================
 // Queue Bounds Consistency
@@ -221,7 +221,7 @@ const _: () = assert!(MAX_PEER_COUNT > 0);
 // RPC message size must be bounded but reasonable
 const _: () = assert!(MAX_RPC_MESSAGE_SIZE > 0);
 const _: () = assert!(MAX_RPC_MESSAGE_SIZE >= MAX_VALUE_SIZE);
-const _: () = assert!(MAX_RPC_MESSAGE_SIZE <= 1024 * 1024 * 1024); // max 1GB (sanity check)
+const _: () = assert!(MAX_RPC_MESSAGE_SIZE <= 1_073_741_824); // max 1GB (sanity check)
 
 // Snapshot size must be larger than RPC message size
 const _: () = assert!(MAX_SNAPSHOT_SIZE > 0);
@@ -356,9 +356,10 @@ const _: () = assert!(JOB_HEARTBEAT_INTERVAL_MS > 0);
 const _: () = assert!(MAX_MISSED_JOB_HEARTBEATS > 0);
 const _: () = assert!(MAX_PIPELINE_RECOVERY_BATCH > 0);
 // Derived: orphan threshold = heartbeat_interval × max_missed
-const _: () = assert!(JOB_ORPHAN_DETECTION_THRESHOLD_MS == JOB_HEARTBEAT_INTERVAL_MS * MAX_MISSED_JOB_HEARTBEATS);
+const _: () =
+    assert!(JOB_ORPHAN_DETECTION_THRESHOLD_MS == JOB_HEARTBEAT_INTERVAL_MS.saturating_mul(MAX_MISSED_JOB_HEARTBEATS));
 // Orphan detection must be significantly larger than heartbeat interval
-const _: () = assert!(JOB_ORPHAN_DETECTION_THRESHOLD_MS > JOB_HEARTBEAT_INTERVAL_MS * 10);
+const _: () = assert!(JOB_ORPHAN_DETECTION_THRESHOLD_MS > JOB_HEARTBEAT_INTERVAL_MS.saturating_mul(10));
 
 // ============================================================================
 // Memory Pressure Constants

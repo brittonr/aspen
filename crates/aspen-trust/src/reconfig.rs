@@ -343,7 +343,8 @@ mod tests {
     }
 
     fn majority_threshold(count: u8) -> u8 {
-        ((u32::from(count) / 2) + 1) as u8
+        let majority = (u32::from(count) / 2).saturating_add(1);
+        u8::try_from(majority).unwrap_or(u8::MAX)
     }
 
     #[test]
@@ -533,15 +534,13 @@ mod tests {
         ) {
             prop_assume!(keep_count <= old_count);
             prop_assume!(keep_count > 0 || add_count > 0);
-            let new_count = keep_count + add_count;
+            let new_count = keep_count.saturating_add(add_count);
             prop_assume!(new_count >= 1);
             prop_assume!(new_count <= 6);
 
             let old_members: BTreeSet<u64> = (1u64..=u64::from(old_count)).collect();
             let mut new_members: BTreeSet<u64> = (1u64..=u64::from(keep_count)).collect();
-            for extra in 0..u64::from(add_count) {
-                new_members.insert(100 + extra);
-            }
+            new_members.extend((0..u64::from(add_count)).map(|extra| 100u64.saturating_add(extra)));
 
             let old_threshold = majority_threshold(old_count);
             let new_threshold = majority_threshold(new_count);
@@ -585,9 +584,10 @@ mod tests {
             prop_assert_eq!(new_digests.len(), usize::from(new_count));
 
             let share_values: Vec<Share> = new_shares.values().cloned().collect();
-            let threshold_usize = usize::from(new_threshold);
-            let first_secret = shamir::reconstruct_secret(&share_values[..threshold_usize]).unwrap();
-            let last_secret = shamir::reconstruct_secret(&share_values[share_values.len() - threshold_usize..]).unwrap();
+            let threshold_share_count = usize::from(new_threshold);
+            let first_secret = shamir::reconstruct_secret(&share_values[..threshold_share_count]).unwrap();
+            let start_index = share_values.len().saturating_sub(threshold_share_count);
+            let last_secret = shamir::reconstruct_secret(&share_values[start_index..]).unwrap();
             prop_assert_eq!(first_secret, last_secret);
 
             let prior = chain::decrypt_chain(&encrypted_chain, &first_secret, b"prop-cluster").unwrap();

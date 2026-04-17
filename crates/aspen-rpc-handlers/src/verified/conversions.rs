@@ -148,7 +148,7 @@ pub struct QueueItemData {
 
 /// DLQ item data extracted for response building.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DLQItemData {
+pub struct DlqItemData {
     /// Unique identifier for the item.
     pub item_id: u64,
     /// The item payload.

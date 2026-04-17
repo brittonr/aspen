@@ -36,9 +36,9 @@ impl Tuple {
     }
 
     /// Create a tuple with pre-allocated capacity.
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity_elements: u32) -> Self {
         Self {
-            elements: Vec::with_capacity(capacity),
+            elements: Vec::with_capacity(usize::try_from(capacity_elements).unwrap_or(usize::MAX)),
         }
     }
 
@@ -54,8 +54,8 @@ impl Tuple {
     }
 
     /// Get the number of elements in the tuple.
-    pub fn len(&self) -> usize {
-        self.elements.len()
+    pub fn len(&self) -> u32 {
+        u32::try_from(self.elements.len()).unwrap_or(u32::MAX)
     }
 
     /// Check if the tuple is empty.
@@ -64,7 +64,8 @@ impl Tuple {
     }
 
     /// Get an element by index.
-    pub fn get(&self, index: usize) -> Option<&Element> {
+    pub fn get(&self, element_index: u32) -> Option<&Element> {
+        let index = usize::try_from(element_index).unwrap_or(usize::MAX);
         self.elements.get(index)
     }
 
@@ -78,7 +79,7 @@ impl Tuple {
     /// The resulting bytes will sort lexicographically in the same order
     /// as the original tuple elements.
     pub fn pack(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(self.elements.len() * 8);
+        let mut buf = Vec::with_capacity(self.elements.len().saturating_mul(8));
         self.pack_into(&mut buf);
         buf
     }
@@ -94,7 +95,8 @@ impl Tuple {
     ///
     /// Returns the decoded tuple and ensures all bytes were consumed.
     pub fn unpack(data: &[u8]) -> Result<Self, TupleError> {
-        let (tuple, consumed) = Self::unpack_partial(data)?;
+        let (tuple, consumed_bytes) = Self::unpack_partial(data)?;
+        let consumed = usize::try_from(consumed_bytes).unwrap_or(usize::MAX);
         if consumed != data.len() {
             // Extra bytes after tuple - this is valid, return what we got
         }
@@ -104,17 +106,17 @@ impl Tuple {
     /// Unpack a tuple from bytes, returning how many bytes were consumed.
     ///
     /// This is useful for parsing nested tuples or concatenated data.
-    pub fn unpack_partial(data: &[u8]) -> Result<(Self, usize), TupleError> {
+    pub fn unpack_partial(data: &[u8]) -> Result<(Self, u32), TupleError> {
         let mut tuple = Tuple::new();
-        let mut offset = 0;
+        let mut offset_bytes = 0usize;
 
-        while offset < data.len() {
-            let (elem, consumed) = decode_element(data, offset)?;
+        while offset_bytes < data.len() {
+            let (elem, consumed_bytes) = decode_element(data, offset_bytes)?;
             tuple.elements.push(elem);
-            offset += consumed;
+            offset_bytes = offset_bytes.saturating_add(consumed_bytes);
         }
 
-        Ok((tuple, offset))
+        Ok((tuple, u32::try_from(offset_bytes).unwrap_or(u32::MAX)))
     }
 
     /// Get the range of keys that have this tuple as a prefix.
@@ -174,7 +176,8 @@ fn strinc(data: &mut Vec<u8>) -> bool {
     while let Some(&last) = data.last() {
         if last < 0xFF {
             let len = data.len();
-            data[len - 1] = last + 1;
+            let last_index = len.saturating_sub(1);
+            data[last_index] = last.saturating_add(1);
             return true;
         }
         data.pop();

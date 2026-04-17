@@ -65,7 +65,10 @@ use std::time::UNIX_EPOCH;
 /// - No panic-on-time-conversion paths - safe fallback to 0
 /// - Inline for hot path performance
 #[inline]
-#[allow(ambient_clock, reason = "aspen-time owns the wall-clock boundary for unix timestamp helpers")]
+#[allow(
+    ambient_clock,
+    reason = "aspen-time owns the wall-clock boundary for unix timestamp helpers"
+)]
 pub fn current_time_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -80,7 +83,10 @@ pub fn current_time_ms() -> u64 {
 /// - No panic-on-time-conversion paths - safe fallback to 0
 /// - Inline for hot path performance
 #[inline]
-#[allow(ambient_clock, reason = "aspen-time owns the wall-clock boundary for unix timestamp helpers")]
+#[allow(
+    ambient_clock,
+    reason = "aspen-time owns the wall-clock boundary for unix timestamp helpers"
+)]
 pub fn current_time_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }

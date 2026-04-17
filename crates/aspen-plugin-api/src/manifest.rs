@@ -3,13 +3,37 @@
 use serde::Deserialize;
 use serde::Serialize;
 
+fn default_optional_string() -> Option<String> {
+    None
+}
+
+fn default_optional_u64() -> Option<u64> {
+    None
+}
+
+fn default_string_list() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_permissions() -> PluginPermissions {
+    PluginPermissions::default()
+}
+
+fn default_signature_info() -> Option<PluginSignatureInfo> {
+    None
+}
+
+fn default_dependencies() -> Vec<PluginDependency> {
+    Vec::new()
+}
+
 /// A dependency on another plugin.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PluginDependency {
     /// Name of the required plugin.
     pub name: String,
     /// Minimum version (semver). If None, any version satisfies.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub min_version: Option<String>,
     /// If true, missing dependency produces a warning, not an error.
     #[serde(default)]
@@ -42,7 +66,7 @@ pub struct PluginManifest {
     /// When set, the plugin's app capability is registered with [`AppRegistry`]
     /// during loading so that federation dispatch can route requests to clusters
     /// running this plugin.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub app_id: Option<String>,
     /// Wall-clock execution timeout in seconds for a single guest call.
     ///
@@ -51,7 +75,7 @@ pub struct PluginManifest {
     ///
     /// hyperlight-wasm 0.12 does not support fuel metering, so this
     /// wall-clock timeout is the only execution-time safeguard.
-    #[serde(default)]
+    #[serde(default = "default_optional_u64")]
     pub execution_timeout_secs: Option<u64>,
     /// KV key prefixes this plugin is allowed to access.
     ///
@@ -61,35 +85,35 @@ pub struct PluginManifest {
     /// keyspace.
     ///
     /// Tiger Style: Explicit bounds prevent cross-plugin data access.
-    #[serde(default)]
+    #[serde(default = "default_string_list")]
     pub kv_prefixes: Vec<String>,
     /// Capability permissions controlling which host APIs the plugin may use.
     ///
     /// Default: all denied. The manifest must explicitly grant each capability.
     /// Checked at runtime before each host function call.
-    #[serde(default)]
+    #[serde(default = "default_permissions")]
     pub permissions: PluginPermissions,
     /// Optional Ed25519 signature of the plugin WASM binary.
     ///
     /// Populated by the signing tool (`cargo aspen-plugin sign`) and verified
     /// on install. When present, the CLI checks the signature against trusted
     /// author keys before loading the plugin.
-    #[serde(default)]
+    #[serde(default = "default_signature_info")]
     pub signature: Option<PluginSignatureInfo>,
     /// Human-readable description.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub description: Option<String>,
     /// Author or organization.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub author: Option<String>,
     /// Searchable tags (e.g., ["storage", "kv", "core"]).
-    #[serde(default)]
+    #[serde(default = "default_string_list")]
     pub tags: Vec<String>,
     /// Minimum plugin API version required.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub min_api_version: Option<String>,
     /// Dependencies on other plugins.
-    #[serde(default)]
+    #[serde(default = "default_dependencies")]
     pub dependencies: Vec<PluginDependency>,
 }
 
@@ -204,20 +228,20 @@ pub struct PluginInfo {
     /// Dispatch priority.
     pub priority: u32,
     /// Optional application ID for federation discovery.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub app_id: Option<String>,
     /// KV key prefixes this plugin is allowed to access.
     ///
     /// See [`PluginManifest::kv_prefixes`] for details.
-    #[serde(default)]
+    #[serde(default = "default_string_list")]
     pub kv_prefixes: Vec<String>,
     /// Capability permissions the plugin requires.
     ///
     /// Declared in `plugin.json` and carried through to [`PluginManifest`]
     /// at install time. Default: all denied.
-    #[serde(default)]
+    #[serde(default = "default_permissions")]
     pub permissions: PluginPermissions,
     /// Human-readable description.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub description: Option<String>,
 }

@@ -11,11 +11,11 @@ impl CacheKey {
     /// Encode as lowercase hex string.
     pub fn to_hex(&self) -> String {
         let mut buf = [0u8; 64];
-        for (i, byte) in self.0.iter().enumerate() {
+        for (hex_bytes, byte) in buf.chunks_exact_mut(2).zip(self.0.iter().copied()) {
             let hi = byte >> 4;
             let lo = byte & 0x0f;
-            buf[i * 2] = if hi < 10 { b'0' + hi } else { b'a' + hi - 10 };
-            buf[i * 2 + 1] = if lo < 10 { b'0' + lo } else { b'a' + lo - 10 };
+            hex_bytes[0] = encode_hex_digit(hi);
+            hex_bytes[1] = encode_hex_digit(lo);
         }
         // SAFETY: hex encoding only produces ASCII bytes
         unsafe { String::from_utf8_unchecked(buf.to_vec()) }
@@ -29,9 +29,9 @@ impl CacheKey {
             return None;
         }
         let mut bytes = [0u8; 32];
-        for (i, byte) in bytes.iter_mut().enumerate() {
-            let hi = hex_digit(hex.as_bytes()[i * 2])?;
-            let lo = hex_digit(hex.as_bytes()[i * 2 + 1])?;
+        for (byte, hex_pair) in bytes.iter_mut().zip(hex.as_bytes().chunks_exact(2)) {
+            let hi = hex_digit(hex_pair[0])?;
+            let lo = hex_digit(hex_pair[1])?;
             *byte = (hi << 4) | lo;
         }
         Some(CacheKey(bytes))
@@ -44,12 +44,20 @@ impl std::fmt::Display for CacheKey {
     }
 }
 
+/// Encode a 4-bit value as a lowercase hex digit.
+fn encode_hex_digit(nibble: u8) -> u8 {
+    match nibble {
+        0..=9 => b'0'.saturating_add(nibble),
+        _ => b'a'.saturating_add(nibble.saturating_sub(10)),
+    }
+}
+
 /// Decode a single hex digit to its 4-bit value.
 fn hex_digit(b: u8) -> Option<u8> {
     match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
+        b'0'..=b'9' => b.checked_sub(b'0'),
+        b'a'..=b'f' => b.checked_sub(b'a').map(|value| value.saturating_add(10)),
+        b'A'..=b'F' => b.checked_sub(b'A').map(|value| value.saturating_add(10)),
         _ => None,
     }
 }

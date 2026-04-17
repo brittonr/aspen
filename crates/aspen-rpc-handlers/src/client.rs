@@ -31,6 +31,10 @@ use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
 /// Re-exported from aspen-transport for consistency.
 pub use aspen_transport::constants::CLIENT_ALPN;
 use iroh::endpoint::Connection;
+
+fn usize_from_u32(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
 use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
 use tokio::sync::Semaphore;
@@ -111,7 +115,7 @@ impl ClientProtocolHandler {
         let registry = HandlerRegistry::new(&ctx, &plan)?;
         Ok(Self {
             ctx: Arc::new(ctx),
-            connection_semaphore: Arc::new(Semaphore::new(MAX_CLIENT_CONNECTIONS as usize)),
+            connection_semaphore: Arc::new(Semaphore::new(usize_from_u32(MAX_CLIENT_CONNECTIONS))),
             registry,
             request_counter: AtomicU64::new(0),
         })
@@ -178,11 +182,13 @@ async fn handle_client_connection(
 ) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
 
-    let stream_semaphore = Arc::new(Semaphore::new(MAX_CLIENT_STREAMS_PER_CONNECTION as usize));
+    debug_assert!(MAX_CLIENT_STREAMS_PER_CONNECTION > 0);
+    debug_assert!(!remote_node_id.as_bytes().is_empty());
+    let stream_semaphore = Arc::new(Semaphore::new(usize_from_u32(MAX_CLIENT_STREAMS_PER_CONNECTION)));
     let active_streams = Arc::new(AtomicU32::new(0));
 
     // Accept bidirectional streams from this connection
-    loop {
+    for _stream_accept_iteration in 0..u32::MAX {
         let stream = match connection.accept_bi().await {
             Ok(stream) => stream,
             Err(err) => {
@@ -293,12 +299,14 @@ async fn handle_client_request_check_rate_limit(
     client_id: &iroh::PublicKey,
     send: &mut iroh::endpoint::SendStream,
 ) -> anyhow::Result<bool> {
-    let rate_limit_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
+    let client_request_bucket_key = format!("{}{}", CLIENT_RPC_RATE_LIMIT_PREFIX, client_id);
     let limiter = DistributedRateLimiter::new(
         ctx.kv_store.clone(),
-        &rate_limit_key,
+        &client_request_bucket_key,
         RateLimiterConfig::new(CLIENT_RPC_RATE_PER_SECOND, CLIENT_RPC_BURST),
     );
+    debug_assert!(!client_request_bucket_key.is_empty());
+    debug_assert!(CLIENT_RPC_BURST > 0);
 
     match limiter.try_acquire().await {
         Ok(_) => Ok(true),
@@ -331,6 +339,8 @@ async fn handle_client_request_check_auth(
     token: &Option<aspen_auth::CapabilityToken>,
     send: &mut iroh::endpoint::SendStream,
 ) -> anyhow::Result<bool> {
+    debug_assert!(!client_id.as_bytes().is_empty());
+    debug_assert!(matches!(token, Some(_) | None));
     let verifier = match &ctx.token_verifier {
         Some(v) => v,
         None => return Ok(true),
@@ -365,6 +375,102 @@ async fn handle_client_request_check_auth(
     Ok(true)
 }
 
+fn handle_client_request_parse(
+    buffer: &[u8],
+) -> anyhow::Result<(ClientRpcRequest, Option<aspen_auth::CapabilityToken>, u8)> {
+    use anyhow::Context;
+
+    match postcard::from_bytes::<AuthenticatedRequest>(buffer) {
+        Ok(auth_req) => Ok((auth_req.request, auth_req.token, auth_req.proxy_hops)),
+        Err(_) => {
+            let request = postcard::from_bytes(buffer).context("failed to deserialize Client request")?;
+            Ok((request, None, 0))
+        }
+    }
+}
+
+async fn handle_client_request_check_initialized(
+    ctx: &ClientProtocolContext,
+    send: &mut iroh::endpoint::SendStream,
+    is_bootstrap_operation: bool,
+) -> anyhow::Result<bool> {
+    if is_bootstrap_operation || ctx.controller.is_initialized() {
+        return Ok(true);
+    }
+
+    handle_client_request_send_error(send, "NOT_INITIALIZED", "cluster not initialized - call InitCluster first")
+        .await?;
+    Ok(false)
+}
+
+#[cfg(feature = "blob")]
+async fn handle_client_request_blob(
+    send: &mut iroh::endpoint::SendStream,
+    ctx: &ClientProtocolContext,
+    request: &ClientRpcRequest,
+) -> anyhow::Result<bool> {
+    use anyhow::Context;
+
+    let ClientRpcRequest::GetBlob { hash } = request else {
+        return Ok(false);
+    };
+
+    match aspen_blob_handler::BlobHandler::handle_get_blob_streaming(ctx, hash.clone()).await {
+        Ok(aspen_blob_handler::GetBlobOutcome::Stream { header, data }) => {
+            let header_bytes = postcard::to_stdvec(&header).context("failed to serialize blob stream header")?;
+            send.write_all(&header_bytes).await.context("failed to write blob stream header")?;
+            send.write_all(&data).await.context("failed to stream blob data")?;
+            send.finish().context("failed to finish blob stream")?;
+        }
+        Ok(aspen_blob_handler::GetBlobOutcome::Inline(resp) | aspen_blob_handler::GetBlobOutcome::Response(resp)) => {
+            let response_bytes = postcard::to_stdvec(&resp).context("failed to serialize Client response")?;
+            send.write_all(&response_bytes).await.context("failed to write Client response")?;
+            send.finish().context("failed to finish send stream")?;
+        }
+        Err(err) => {
+            warn!(error = %err, "blob get failed");
+            let response = ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err));
+            let response_bytes = postcard::to_stdvec(&response).context("failed to serialize error response")?;
+            send.write_all(&response_bytes).await.context("failed to write error response")?;
+            send.finish().context("failed to finish send stream")?;
+        }
+    }
+
+    Ok(true)
+}
+
+#[cfg(not(feature = "blob"))]
+async fn handle_client_request_blob(
+    _send: &mut iroh::endpoint::SendStream,
+    _ctx: &ClientProtocolContext,
+    _request: &ClientRpcRequest,
+) -> anyhow::Result<bool> {
+    Ok(false)
+}
+
+async fn handle_client_request_dispatch(
+    send: &mut iroh::endpoint::SendStream,
+    registry: &HandlerRegistry,
+    ctx: &ClientProtocolContext,
+    request: ClientRpcRequest,
+    proxy_hops: u8,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    let response = match registry.dispatch(request, ctx, proxy_hops).await {
+        Ok(resp) => resp,
+        Err(err) => {
+            warn!(error = %err, "Client request processing failed");
+            ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err))
+        }
+    };
+
+    let response_bytes = postcard::to_stdvec(&response).context("failed to serialize Client response")?;
+    send.write_all(&response_bytes).await.context("failed to write Client response")?;
+    send.finish().context("failed to finish send stream")?;
+    Ok(())
+}
+
 /// Handle a single Client RPC request on a stream.
 #[instrument(skip(recv, send, ctx, registry), fields(client_id = %client_id, request_id = %request_id))]
 async fn handle_client_request(
@@ -376,51 +482,30 @@ async fn handle_client_request(
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
-    // Read and parse the request
+    debug_assert!(!client_id.as_bytes().is_empty());
+    debug_assert!(request_id < u64::MAX);
     let buffer = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read Client request")?;
-    let (request, token, proxy_hops): (ClientRpcRequest, Option<aspen_auth::CapabilityToken>, u8) =
-        match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
-            Ok(auth_req) => (auth_req.request, auth_req.token, auth_req.proxy_hops),
-            Err(_) => {
-                let req: ClientRpcRequest =
-                    postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
-                (req, None, 0)
-            }
-        };
+    let (request, token, proxy_hops) = handle_client_request_parse(&buffer)?;
 
     debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, has_token = token.is_some(), "received Client request");
 
-    // Check cluster initialization
     let is_bootstrap_operation = handle_client_request_is_bootstrap(&request);
-    if !is_bootstrap_operation && !ctx.controller.is_initialized() {
-        handle_client_request_send_error(
-            &mut send,
-            "NOT_INITIALIZED",
-            "cluster not initialized - call InitCluster first",
-        )
-        .await?;
+    if !handle_client_request_check_initialized(&ctx, &mut send, is_bootstrap_operation).await? {
         return Ok(());
     }
-
-    // Rate limit check for non-exempt operations
     if !handle_client_request_is_rate_limit_exempt(&request)
         && !handle_client_request_check_rate_limit(&ctx, &client_id, &mut send).await?
     {
         return Ok(());
     }
-
-    // Authorization check
     if !handle_client_request_check_auth(&ctx, &client_id, &request, &token, &mut send).await? {
         return Ok(());
     }
 
-    // Drain check: reject new RPCs during node upgrade drain.
-    // Bootstrap operations are exempt — they're needed for cluster health during upgrades.
     #[cfg(feature = "deploy")]
     let _drain_guard = if !is_bootstrap_operation {
         if let Some(ref drain_state) = ctx.drain_state {
             if !drain_state.try_start_op() {
-                // Node is draining for upgrade — tell client to fail over
                 debug!(client_id = %client_id, request_id = %request_id, "rejecting RPC during drain, returning NOT_LEADER");
                 handle_client_request_send_error(
                     &mut send,
@@ -430,7 +515,6 @@ async fn handle_client_request(
                 .await?;
                 return Ok(());
             }
-            // Guard ensures finish_op() is called even on panic/error
             Some(DrainGuard {
                 drain_state: Arc::clone(drain_state),
             })
@@ -441,61 +525,16 @@ async fn handle_client_request(
         None
     };
 
-    // Intercept GetBlob for streaming support (large blobs exceed RPC size limits).
-    // Small blobs are sent inline in the response. Large blobs (>4MB) are sent as
-    // a header response followed by raw bytes on the same QUIC stream.
-    #[cfg(feature = "blob")]
-    let handled = if let ClientRpcRequest::GetBlob { ref hash } = request {
-        match aspen_blob_handler::BlobHandler::handle_get_blob_streaming(&ctx, hash.clone()).await {
-            Ok(aspen_blob_handler::GetBlobOutcome::Stream { header, data }) => {
-                let header_bytes = postcard::to_stdvec(&header).context("failed to serialize blob stream header")?;
-                send.write_all(&header_bytes).await.context("failed to write blob stream header")?;
-                send.write_all(&data).await.context("failed to stream blob data")?;
-                send.finish().context("failed to finish blob stream")?;
-                true
-            }
-            Ok(
-                aspen_blob_handler::GetBlobOutcome::Inline(resp) | aspen_blob_handler::GetBlobOutcome::Response(resp),
-            ) => {
-                let response_bytes = postcard::to_stdvec(&resp).context("failed to serialize Client response")?;
-                send.write_all(&response_bytes).await.context("failed to write Client response")?;
-                send.finish().context("failed to finish send stream")?;
-                true
-            }
-            Err(err) => {
-                warn!(error = %err, "blob get failed");
-                let resp = ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err));
-                let response_bytes = postcard::to_stdvec(&resp).context("failed to serialize error response")?;
-                send.write_all(&response_bytes).await.context("failed to write error response")?;
-                send.finish().context("failed to finish send stream")?;
-                true
-            }
-        }
-    } else {
-        false
-    };
-    #[cfg(not(feature = "blob"))]
-    let handled = false;
-
-    if !handled {
-        // Normal dispatch path for all other requests (and GetBlob when blob feature is off)
-        let response = match registry.dispatch(request, &ctx, proxy_hops).await {
-            Ok(resp) => resp,
-            Err(err) => {
-                warn!(error = %err, "Client request processing failed");
-                ClientRpcResponse::error("INTERNAL_ERROR", sanitize_error_for_client(&err))
-            }
-        };
-
-        let response_bytes = postcard::to_stdvec(&response).context("failed to serialize Client response")?;
-        send.write_all(&response_bytes).await.context("failed to write Client response")?;
-        send.finish().context("failed to finish send stream")?;
+    if !handle_client_request_blob(&mut send, &ctx, &request).await? {
+        handle_client_request_dispatch(&mut send, &registry, &ctx, request, proxy_hops).await?;
     }
 
-    // Increment cluster-wide request counter (best-effort, non-blocking)
     let kv_store = ctx.kv_store.clone();
     tokio::spawn(async move {
-        let counter = AtomicCounter::new(kv_store, CLIENT_RPC_REQUEST_COUNTER, CounterConfig::default());
+        let counter = AtomicCounter::new(kv_store, CLIENT_RPC_REQUEST_COUNTER, CounterConfig {
+            max_retries: 100,
+            retry_delay_ms: 1,
+        });
         if let Err(e) = counter.increment().await {
             debug!(error = %e, "Failed to increment request counter");
         }

@@ -4,6 +4,9 @@
 //! guest plugins. Both sides depend on these types to ensure a stable
 //! serialization contract.
 
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -54,7 +57,7 @@ pub const MAX_PLUGIN_TAG_SIZE: usize = 64;
 pub const PLUGIN_DEFAULT_FUEL: u64 = 500_000_000;
 
 /// Default memory limit for a single plugin instance (128 MB).
-pub const PLUGIN_DEFAULT_MEMORY: u64 = 128 * 1024 * 1024;
+pub const PLUGIN_DEFAULT_MEMORY: u64 = 134_217_728;
 
 /// Lifecycle state of a plugin instance.
 ///
@@ -103,6 +106,18 @@ pub struct PluginHealth {
     pub last_check_ms: u64,
 }
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "plugin API health and metrics timestamps cross the wall-clock boundary here"
+)]
+fn current_epoch_ms() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration_since_epoch) => u64::try_from(duration_since_epoch.as_millis()).unwrap_or(u64::MAX),
+        Err(_) => 0,
+    }
+}
+
 impl PluginHealth {
     /// Creates a healthy plugin status with state `Ready`.
     ///
@@ -112,10 +127,7 @@ impl PluginHealth {
         Self {
             state: PluginState::Ready,
             message: Some(msg.into()),
-            last_check_ms: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64,
+            last_check_ms: current_epoch_ms(),
         }
     }
 
@@ -127,10 +139,7 @@ impl PluginHealth {
         Self {
             state: PluginState::Degraded,
             message: Some(msg.into()),
-            last_check_ms: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64,
+            last_check_ms: current_epoch_ms(),
         }
     }
 
@@ -191,7 +200,7 @@ impl PluginMetrics {
     }
 
     /// Record a completed request.
-    pub fn record(&self, duration_ns: u64, success: bool) {
+    pub fn record(&self, duration_ns: u64, success: bool, request_epoch_ms: u64) {
         use std::sync::atomic::Ordering::Relaxed;
         self.request_count.fetch_add(1, Relaxed);
         if success {
@@ -208,9 +217,7 @@ impl PluginMetrics {
                 Err(actual) => current = actual,
             }
         }
-        let now_ms =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-        self.last_request_epoch_ms.store(now_ms, Relaxed);
+        self.last_request_epoch_ms.store(request_epoch_ms, Relaxed);
     }
 
     /// Snapshot current metrics as a serializable value.
@@ -332,7 +339,7 @@ mod tests {
     #[test]
     fn metrics_record_success() {
         let m = PluginMetrics::new();
-        m.record(1_000_000, true); // 1ms
+        m.record(1_000_000, true, 1234); // 1ms
         let snap = m.snapshot();
         assert_eq!(snap.request_count, 1);
         assert_eq!(snap.success_count, 1);
@@ -340,13 +347,13 @@ mod tests {
         assert_eq!(snap.total_duration_ns, 1_000_000);
         assert_eq!(snap.max_duration_ns, 1_000_000);
         assert_eq!(snap.avg_duration_ns, 1_000_000);
-        assert!(snap.last_request_epoch_ms > 0);
+        assert_eq!(snap.last_request_epoch_ms, 1234);
     }
 
     #[test]
     fn metrics_record_error() {
         let m = PluginMetrics::new();
-        m.record(500_000, false);
+        m.record(500_000, false, 2222);
         let snap = m.snapshot();
         assert_eq!(snap.request_count, 1);
         assert_eq!(snap.success_count, 0);
@@ -357,9 +364,9 @@ mod tests {
     #[test]
     fn metrics_max_duration_tracks_peak() {
         let m = PluginMetrics::new();
-        m.record(100, true);
-        m.record(500, true);
-        m.record(300, true);
+        m.record(100, true, 10);
+        m.record(500, true, 20);
+        m.record(300, true, 30);
         let snap = m.snapshot();
         assert_eq!(snap.max_duration_ns, 500);
         assert_eq!(snap.request_count, 3);
@@ -379,7 +386,7 @@ mod tests {
     #[test]
     fn metrics_snapshot_serializes_to_json() {
         let m = PluginMetrics::new();
-        m.record(42_000, true);
+        m.record(42_000, true, 777);
         let snap = m.snapshot();
         let json = serde_json::to_string(&snap).expect("serialize");
         assert!(json.contains("\"request_count\":1"));

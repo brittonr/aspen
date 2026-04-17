@@ -21,6 +21,7 @@ use crate::gf256;
 
 /// The size of the secret in bytes.
 pub const SECRET_SIZE: usize = 32;
+const SERIALIZED_SHARE_SIZE: usize = SECRET_SIZE.saturating_add(1);
 
 /// A single Shamir share: 1-byte x-coordinate + 32-byte y-values.
 ///
@@ -36,17 +37,17 @@ pub struct Share {
 
 impl Share {
     /// Serialize the share to 33 bytes: [x, y[0], y[1], ..., y[31]].
-    pub fn to_bytes(&self) -> [u8; SECRET_SIZE + 1] {
-        let mut buf = [0u8; SECRET_SIZE + 1];
+    pub fn to_bytes(&self) -> [u8; SERIALIZED_SHARE_SIZE] {
+        let mut buf = [0u8; SERIALIZED_SHARE_SIZE];
         buf[0] = self.x;
         buf[1..].copy_from_slice(&self.y);
         buf
     }
 
     /// Deserialize a share from 33 bytes.
-    pub fn from_bytes(bytes: &[u8; SECRET_SIZE + 1]) -> Result<Self, ShamirError> {
+    pub fn from_bytes(bytes: &[u8; SERIALIZED_SHARE_SIZE]) -> Result<Self, ShamirError> {
         if bytes[0] == 0 {
-            return Err(ShamirError::ZeroXCoordinate);
+            return Err(ShamirError::ZeroShareCoordinate);
         }
         let mut y = [0u8; SECRET_SIZE];
         y.copy_from_slice(&bytes[1..]);
@@ -111,11 +112,11 @@ pub enum ShamirError {
 
     /// Share x-coordinate must be nonzero.
     #[snafu(display("share x-coordinate must be nonzero"))]
-    ZeroXCoordinate,
+    ZeroShareCoordinate,
 
     /// Duplicate x-coordinates in share set.
     #[snafu(display("duplicate x-coordinate: {x}"))]
-    DuplicateXCoordinate { x: u8 },
+    DuplicateShareCoordinate { x: u8 },
 }
 
 /// Split a 32-byte secret into `total` shares with reconstruction `threshold`.
@@ -151,7 +152,7 @@ pub fn split_secret<R: Rng>(
     // Each polynomial has degree (threshold - 1) with the secret byte as constant term.
     let mut polynomials: Vec<Vec<u8>> = Vec::with_capacity(SECRET_SIZE);
     for &secret_byte in secret {
-        let mut coeffs = vec![0u8; threshold as usize];
+        let mut coeffs = vec![0u8; usize::from(threshold)];
         coeffs[0] = secret_byte;
         for coeff in coeffs.iter_mut().skip(1) {
             *coeff = rng.random();
@@ -160,9 +161,9 @@ pub fn split_secret<R: Rng>(
     }
 
     // Evaluate all 32 polynomials at each x-coordinate to produce shares
-    let mut shares = Vec::with_capacity(total as usize);
+    let mut shares = Vec::with_capacity(usize::from(total));
     for share_idx in 0..total {
-        let x = share_idx.checked_add(1).expect("total <= 255 so share_idx + 1 <= 255");
+        let x = share_idx.saturating_add(1);
         let mut y = [0u8; SECRET_SIZE];
         for (byte_idx, coeffs) in polynomials.iter().enumerate() {
             y[byte_idx] = gf256::eval_polynomial(coeffs, x);
@@ -199,11 +200,11 @@ pub fn reconstruct_secret(shares: &[Share]) -> Result<[u8; SECRET_SIZE], ShamirE
     let xs: Vec<u8> = shares.iter().map(|s| s.x).collect();
     for (i, &x) in xs.iter().enumerate() {
         if x == 0 {
-            return Err(ShamirError::ZeroXCoordinate);
+            return Err(ShamirError::ZeroShareCoordinate);
         }
         for &other in &xs[..i] {
             if x == other {
-                return Err(ShamirError::DuplicateXCoordinate { x });
+                return Err(ShamirError::DuplicateShareCoordinate { x });
             }
         }
     }
@@ -214,7 +215,8 @@ pub fn reconstruct_secret(shares: &[Share]) -> Result<[u8; SECRET_SIZE], ShamirE
     for (byte_idx, secret_byte) in secret.iter_mut().enumerate() {
         let mut value: u8 = 0;
         for (i, share) in shares.iter().enumerate() {
-            let li = gf256::lagrange_basis_at_zero(&xs, i);
+            let share_index = u32::try_from(i).unwrap_or(u32::MAX);
+            let li = gf256::lagrange_basis_at_zero(&xs, share_index);
             value ^= gf256::mul(share.y[byte_idx], li);
         }
         *secret_byte = value;
@@ -235,84 +237,90 @@ mod tests {
     }
 
     #[test]
-    fn test_share_roundtrip_bytes() {
+    fn test_share_roundtrip_bytes() -> Result<(), ShamirError> {
         let share = Share {
             x: 3,
             y: [7u8; SECRET_SIZE],
         };
         let bytes = share.to_bytes();
-        let recovered = Share::from_bytes(&bytes).unwrap();
+        let recovered = Share::from_bytes(&bytes)?;
         assert!(bool::from(share.ct_eq(&recovered)));
+        Ok(())
     }
 
     #[test]
     fn test_share_from_bytes_rejects_zero_x() {
-        let bytes = [0u8; SECRET_SIZE + 1];
+        let bytes = [0u8; SERIALIZED_SHARE_SIZE];
         assert!(Share::from_bytes(&bytes).is_err());
     }
 
     #[test]
-    fn test_split_reconstruct_basic() {
+    fn test_split_reconstruct_basic() -> Result<(), ShamirError> {
         let mut rng = test_rng();
         let secret = [42u8; SECRET_SIZE];
-        let shares = split_secret(&secret, 3, 5, &mut rng).unwrap();
+        let shares = split_secret(&secret, 3, 5, &mut rng)?;
         assert_eq!(shares.len(), 5);
 
         // Reconstruct with first 3 shares
-        let reconstructed = reconstruct_secret(&shares[..3]).unwrap();
+        let reconstructed = reconstruct_secret(&shares[..3])?;
         assert_eq!(reconstructed, secret);
+        Ok(())
     }
 
     #[test]
-    fn test_split_reconstruct_all_shares() {
+    fn test_split_reconstruct_all_shares() -> Result<(), ShamirError> {
         let mut rng = test_rng();
-        let secret: [u8; SECRET_SIZE] = core::array::from_fn(|i| i as u8);
-        let shares = split_secret(&secret, 3, 5, &mut rng).unwrap();
+        let secret: [u8; SECRET_SIZE] = core::array::from_fn(|index| u8::try_from(index).unwrap_or_default());
+        let shares = split_secret(&secret, 3, 5, &mut rng)?;
 
-        let reconstructed = reconstruct_secret(&shares).unwrap();
+        let reconstructed = reconstruct_secret(&shares)?;
         assert_eq!(reconstructed, secret);
+        Ok(())
     }
 
     #[test]
-    fn test_split_reconstruct_any_k_subset() {
+    fn test_split_reconstruct_any_k_subset() -> Result<(), ShamirError> {
         let mut rng = test_rng();
         let secret = [0xAB; SECRET_SIZE];
-        let shares = split_secret(&secret, 3, 5, &mut rng).unwrap();
+        let shares = split_secret(&secret, 3, 5, &mut rng)?;
 
         // Try all 3-element subsets of 5 shares
-        for i in 0..5 {
-            for j in (i + 1)..5 {
-                for k in (j + 1)..5 {
+        for i in 0..5usize {
+            for j in (i).saturating_add(1)..5 {
+                for k in (j).saturating_add(1)..5 {
                     let subset = vec![shares[i].clone(), shares[j].clone(), shares[k].clone()];
-                    let reconstructed = reconstruct_secret(&subset).unwrap();
+                    let reconstructed = reconstruct_secret(&subset)?;
                     assert_eq!(reconstructed, secret, "failed with shares ({i}, {j}, {k})");
                 }
             }
         }
+        Ok(())
     }
 
     #[test]
-    fn test_fewer_than_threshold_produces_wrong_value() {
+    fn test_fewer_than_threshold_produces_wrong_value() -> Result<(), ShamirError> {
         let mut rng = test_rng();
         let secret = [0xFF; SECRET_SIZE];
-        let shares = split_secret(&secret, 3, 5, &mut rng).unwrap();
+        let shares = split_secret(&secret, 3, 5, &mut rng)?;
 
         // Only 2 shares (threshold is 3) — should NOT recover the secret
-        let wrong = reconstruct_secret(&shares[..2]).unwrap();
+        let wrong = reconstruct_secret(&shares[..2])?;
         assert_ne!(wrong, secret);
+        Ok(())
     }
 
     #[test]
-    fn test_threshold_1_trivial() {
+    fn test_threshold_1_trivial() -> Result<(), ShamirError> {
         let mut rng = test_rng();
         let secret = [99u8; SECRET_SIZE];
-        let shares = split_secret(&secret, 1, 3, &mut rng).unwrap();
+        let shares = split_secret(&secret, 1, 3, &mut rng)?;
 
         // Any single share should reconstruct (threshold = 1)
         for share in &shares {
-            let reconstructed = reconstruct_secret(core::slice::from_ref(share)).unwrap();
+            let reconstructed = reconstruct_secret(core::slice::from_ref(share))?;
             assert_eq!(reconstructed, secret);
         }
+        Ok(())
     }
 
     #[test]
@@ -334,7 +342,7 @@ mod tests {
             x: 1,
             y: [2; SECRET_SIZE],
         };
-        assert!(matches!(reconstruct_secret(&[s1, s2]), Err(ShamirError::DuplicateXCoordinate { x: 1 })));
+        assert!(matches!(reconstruct_secret(&[s1, s2]), Err(ShamirError::DuplicateShareCoordinate { x: 1 })));
     }
 
     #[test]

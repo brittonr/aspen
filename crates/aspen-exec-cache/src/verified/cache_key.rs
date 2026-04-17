@@ -54,31 +54,33 @@ pub fn compute_cache_key(
 /// included as empty values to distinguish "not set" from "set to empty".
 #[inline]
 pub fn compute_env_hash(env_vars: &[(&str, Option<&str>)]) -> [u8; 32] {
-    let mut sorted: Vec<(&str, Option<&str>)> = env_vars.to_vec();
-    sorted.sort_by_key(|(name, _)| *name);
+    let mut sorted_env_vars: Vec<(&str, Option<&str>)> = env_vars.to_vec();
+    sorted_env_vars.sort_by_key(|(name, _)| *name);
 
     let mut hasher = blake3::Hasher::new();
-    hasher.update(&(sorted.len() as u64).to_le_bytes());
+    hasher.update(&(sorted_env_vars.len() as u64).to_le_bytes());
 
-    for (name, value) in &sorted {
-        // Hash name with length prefix
-        hasher.update(&(name.len() as u64).to_le_bytes());
-        hasher.update(name.as_bytes());
-
-        // Hash value presence + content
-        match value {
-            Some(v) => {
-                hasher.update(&[1u8]); // present
-                hasher.update(&(v.len() as u64).to_le_bytes());
-                hasher.update(v.as_bytes());
-            }
-            None => {
-                hasher.update(&[0u8]); // absent
-            }
-        }
+    for (name, value) in &sorted_env_vars {
+        hash_env_var(&mut hasher, name, *value);
     }
 
     *hasher.finalize().as_bytes()
+}
+
+#[inline]
+fn hash_env_var(hasher: &mut blake3::Hasher, name: &str, value: Option<&str>) {
+    hasher.update(&(name.len() as u64).to_le_bytes());
+    hasher.update(name.as_bytes());
+    match value {
+        Some(value_str) => {
+            hasher.update(&[1u8]);
+            hasher.update(&(value_str.len() as u64).to_le_bytes());
+            hasher.update(value_str.as_bytes());
+        }
+        None => {
+            hasher.update(&[0u8]);
+        }
+    }
 }
 
 #[cfg(test)]

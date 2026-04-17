@@ -52,6 +52,16 @@ use crate::RequestHandler;
 /// here — they fall through to the WASM plugin handler.
 pub struct CoordinationHandler;
 
+struct LockSetResponseArgs {
+    is_success: bool,
+    holder_id: Option<String>,
+    member_tokens: Vec<LockSetMemberTokenWire>,
+    deadline_ms: Option<u64>,
+    blocked_member: Option<String>,
+    blocked_holder: Option<String>,
+    error: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CoordinationRequestFamily {
     Counter,
@@ -142,23 +152,15 @@ impl CoordinationHandler {
         })
     }
 
-    fn lockset_response(
-        is_success: bool,
-        holder_id: Option<String>,
-        member_tokens: Vec<LockSetMemberTokenWire>,
-        deadline_ms: Option<u64>,
-        blocked_member: Option<String>,
-        blocked_holder: Option<String>,
-        error: Option<String>,
-    ) -> ClientRpcResponse {
+    fn lockset_response(args: LockSetResponseArgs) -> ClientRpcResponse {
         ClientRpcResponse::LockSetResult(LockSetResultResponse {
-            is_success,
-            holder_id,
-            member_tokens,
-            deadline_ms,
-            blocked_member,
-            blocked_holder,
-            error,
+            is_success: args.is_success,
+            holder_id: args.holder_id,
+            member_tokens: args.member_tokens,
+            deadline_ms: args.deadline_ms,
+            blocked_member: args.blocked_member,
+            blocked_holder: args.blocked_holder,
+            error: args.error,
         })
     }
 
@@ -174,6 +176,38 @@ impl CoordinationHandler {
             retry_after_ms,
             error,
         })
+    }
+
+    fn default_counter_config() -> CounterConfig {
+        CounterConfig {
+            max_retries: 100,
+            retry_delay_ms: 1,
+        }
+    }
+
+    fn default_sequence_config() -> SequenceConfig {
+        SequenceConfig {
+            batch_size_ids: 100,
+            start_value: 1,
+        }
+    }
+
+    fn default_lock_config(ttl_ms: u64) -> LockConfig {
+        LockConfig {
+            ttl_ms,
+            acquire_timeout_ms: 10_000,
+            initial_backoff_ms: 10,
+            max_backoff_ms: 1_000,
+        }
+    }
+
+    fn lock_config_with_timeout(ttl_ms: u64, acquire_timeout_ms: u64) -> LockConfig {
+        LockConfig {
+            ttl_ms,
+            acquire_timeout_ms,
+            initial_backoff_ms: 10,
+            max_backoff_ms: 1_000,
+        }
     }
 }
 
@@ -240,66 +274,66 @@ impl CoordinationHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> ClientRpcResponse {
-        match request {
-            ClientRpcRequest::CounterGet { key } => {
-                let counter = self.make_counter(&ctx.kv_store, &key);
-                match counter.get().await {
-                    Ok(value) => Self::counter_response(true, Some(value), None),
-                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::CounterIncrement { key } => {
-                let counter = self.make_counter(&ctx.kv_store, &key);
-                match counter.increment().await {
-                    Ok(value) => Self::counter_response(true, Some(value), None),
-                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::CounterDecrement { key } => {
-                let counter = self.make_counter(&ctx.kv_store, &key);
-                match counter.decrement().await {
-                    Ok(value) => Self::counter_response(true, Some(value), None),
-                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::CounterAdd { key, amount } => {
-                let counter = self.make_counter(&ctx.kv_store, &key);
-                match counter.add(amount).await {
-                    Ok(value) => Self::counter_response(true, Some(value), None),
-                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::CounterSubtract { key, amount } => {
-                let counter = self.make_counter(&ctx.kv_store, &key);
-                match counter.subtract(amount).await {
-                    Ok(value) => Self::counter_response(true, Some(value), None),
-                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::CounterSet { key, value } => {
-                let counter = self.make_counter(&ctx.kv_store, &key);
-                match counter.set(value).await {
-                    Ok(()) => Self::counter_response(true, Some(value), None),
-                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::CounterCompareAndSet {
-                key,
-                expected,
-                new_value,
-            } => {
-                let counter = self.make_counter(&ctx.kv_store, &key);
-                match counter.compare_and_set(expected, new_value).await {
-                    Ok(swapped) => Self::counter_response(
-                        swapped,
-                        Some(if swapped { new_value } else { expected }),
-                        (!swapped).then(|| "compare-and-set failed: value has changed".to_string()),
-                    ),
-                    Err(error) => Self::counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            _ => unreachable!("unexpected counter request"),
+        if let ClientRpcRequest::CounterGet { key } = request {
+            let counter = self.make_counter(&ctx.kv_store, &key);
+            return match counter.get().await {
+                Ok(value) => Self::counter_response(true, Some(value), None),
+                Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+            };
         }
+        if let ClientRpcRequest::CounterIncrement { key } = request {
+            let counter = self.make_counter(&ctx.kv_store, &key);
+            return match counter.increment().await {
+                Ok(value) => Self::counter_response(true, Some(value), None),
+                Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::CounterDecrement { key } = request {
+            let counter = self.make_counter(&ctx.kv_store, &key);
+            return match counter.decrement().await {
+                Ok(value) => Self::counter_response(true, Some(value), None),
+                Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::CounterAdd { key, amount } = request {
+            let counter = self.make_counter(&ctx.kv_store, &key);
+            return match counter.add(amount).await {
+                Ok(value) => Self::counter_response(true, Some(value), None),
+                Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::CounterSubtract { key, amount } = request {
+            let counter = self.make_counter(&ctx.kv_store, &key);
+            return match counter.subtract(amount).await {
+                Ok(value) => Self::counter_response(true, Some(value), None),
+                Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::CounterSet { key, value } = request {
+            let counter = self.make_counter(&ctx.kv_store, &key);
+            return match counter.set(value).await {
+                Ok(()) => Self::counter_response(true, Some(value), None),
+                Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::CounterCompareAndSet {
+            key,
+            expected,
+            new_value,
+        } = request
+        {
+            let counter = self.make_counter(&ctx.kv_store, &key);
+            return match counter.compare_and_set(expected, new_value).await {
+                Ok(swapped) => Self::counter_response(
+                    swapped,
+                    Some(if swapped { new_value } else { expected }),
+                    (!swapped).then(|| "compare-and-set failed: value has changed".to_string()),
+                ),
+                Err(error) => Self::counter_response(false, None, Some(error.to_string())),
+            };
+        }
+
+        Self::counter_response(false, None, Some("unexpected counter request".to_string()))
     }
 
     async fn handle_signed_counter_request(
@@ -307,23 +341,22 @@ impl CoordinationHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> ClientRpcResponse {
-        match request {
-            ClientRpcRequest::SignedCounterGet { key } => {
-                let counter = self.make_signed_counter(&ctx.kv_store, &key);
-                match counter.get().await {
-                    Ok(value) => Self::signed_counter_response(true, Some(value), None),
-                    Err(error) => Self::signed_counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::SignedCounterAdd { key, amount } => {
-                let counter = self.make_signed_counter(&ctx.kv_store, &key);
-                match counter.add(amount).await {
-                    Ok(value) => Self::signed_counter_response(true, Some(value), None),
-                    Err(error) => Self::signed_counter_response(false, None, Some(error.to_string())),
-                }
-            }
-            _ => unreachable!("unexpected signed counter request"),
+        if let ClientRpcRequest::SignedCounterGet { key } = request {
+            let counter = self.make_signed_counter(&ctx.kv_store, &key);
+            return match counter.get().await {
+                Ok(value) => Self::signed_counter_response(true, Some(value), None),
+                Err(error) => Self::signed_counter_response(false, None, Some(error.to_string())),
+            };
         }
+        if let ClientRpcRequest::SignedCounterAdd { key, amount } = request {
+            let counter = self.make_signed_counter(&ctx.kv_store, &key);
+            return match counter.add(amount).await {
+                Ok(value) => Self::signed_counter_response(true, Some(value), None),
+                Err(error) => Self::signed_counter_response(false, None, Some(error.to_string())),
+            };
+        }
+
+        Self::signed_counter_response(false, None, Some("unexpected signed counter request".to_string()))
     }
 
     async fn handle_sequence_request(
@@ -331,96 +364,109 @@ impl CoordinationHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> ClientRpcResponse {
-        match request {
-            ClientRpcRequest::SequenceNext { key } => {
-                let sequence = self.make_sequence(&ctx.kv_store, &key);
-                match sequence.next().await {
-                    Ok(value) => Self::sequence_response(true, Some(value), None),
-                    Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::SequenceReserve { key, count } => {
-                let sequence = self.make_sequence(&ctx.kv_store, &key);
-                match sequence.reserve(count).await {
-                    Ok(start) => Self::sequence_response(true, Some(start), None),
-                    Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::SequenceCurrent { key } => {
-                let sequence = self.make_sequence(&ctx.kv_store, &key);
-                match sequence.current().await {
-                    Ok(value) => Self::sequence_response(true, Some(value), None),
-                    Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
-                }
-            }
-            _ => unreachable!("unexpected sequence request"),
+        if let ClientRpcRequest::SequenceNext { key } = request {
+            let sequence = self.make_sequence(&ctx.kv_store, &key);
+            return match sequence.next().await {
+                Ok(value) => Self::sequence_response(true, Some(value), None),
+                Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
+            };
         }
+        if let ClientRpcRequest::SequenceReserve { key, count } = request {
+            let sequence = self.make_sequence(&ctx.kv_store, &key);
+            return match sequence.reserve(count).await {
+                Ok(start) => Self::sequence_response(true, Some(start), None),
+                Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::SequenceCurrent { key } = request {
+            let sequence = self.make_sequence(&ctx.kv_store, &key);
+            return match sequence.current().await {
+                Ok(value) => Self::sequence_response(true, Some(value), None),
+                Err(error) => Self::sequence_response(false, None, Some(error.to_string())),
+            };
+        }
+
+        Self::sequence_response(false, None, Some("unexpected sequence request".to_string()))
     }
 
     async fn handle_lock_request(&self, request: ClientRpcRequest, ctx: &ClientProtocolContext) -> ClientRpcResponse {
-        match request {
-            ClientRpcRequest::LockAcquire {
-                key,
-                holder_id,
-                ttl_ms,
-                timeout_ms,
-            } => {
-                let config = LockConfig {
-                    ttl_ms,
-                    acquire_timeout_ms: timeout_ms,
-                    ..LockConfig::default()
-                };
-                let lock = DistributedLock::new(
-                    Arc::clone(&ctx.kv_store),
-                    format!("{}{key}", Self::LOCK_PREFIX),
-                    &holder_id,
-                    config,
-                );
-                match lock.acquire().await {
-                    Ok(guard) => Self::forget_lock_guard(guard, holder_id),
-                    Err(error) => Self::lock_response(false, None, None, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::LockTryAcquire { key, holder_id, ttl_ms } => {
-                let lock = self.make_lock(&ctx.kv_store, &key, &holder_id, ttl_ms);
-                match lock.try_acquire().await {
-                    Ok(guard) => Self::forget_lock_guard(guard, holder_id),
-                    Err(error) => Self::lock_response(false, None, None, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::LockRelease {
-                key,
-                holder_id,
-                fencing_token,
-            } => self.release_lock(ctx, key, holder_id, fencing_token).await,
-            ClientRpcRequest::LockRenew {
-                key,
-                holder_id,
-                fencing_token,
-                ttl_ms,
-            } => self.renew_lock(ctx, key, holder_id, fencing_token, ttl_ms).await,
-            ClientRpcRequest::LockSetAcquire {
-                members,
-                holder_id,
-                ttl_ms,
-                timeout_ms,
-            } => self.acquire_lockset(ctx, members, holder_id, ttl_ms, timeout_ms).await,
-            ClientRpcRequest::LockSetTryAcquire {
-                members,
-                holder_id,
-                ttl_ms,
-            } => self.try_acquire_lockset(ctx, members, holder_id, ttl_ms).await,
-            ClientRpcRequest::LockSetRelease {
-                holder_id,
-                member_tokens,
-            } => self.release_lockset(ctx, holder_id, member_tokens).await,
-            ClientRpcRequest::LockSetRenew {
-                holder_id,
-                member_tokens,
-                ttl_ms,
-            } => self.renew_lockset(ctx, holder_id, member_tokens, ttl_ms).await,
-            _ => unreachable!("unexpected lock request"),
+        if let ClientRpcRequest::LockAcquire {
+            key,
+            holder_id,
+            ttl_ms,
+            timeout_ms,
+        } = request
+        {
+            let config = Self::lock_config_with_timeout(ttl_ms, timeout_ms);
+            let lock = DistributedLock::new(
+                Arc::clone(&ctx.kv_store),
+                format!("{}{key}", Self::LOCK_PREFIX),
+                &holder_id,
+                config,
+            );
+            return match lock.acquire().await {
+                Ok(guard) => Self::forget_lock_guard(guard, holder_id),
+                Err(error) => Self::lock_response(false, None, None, None, Some(error.to_string())),
+            };
         }
+        if let ClientRpcRequest::LockTryAcquire { key, holder_id, ttl_ms } = request {
+            let lock = self.make_lock(&ctx.kv_store, &key, &holder_id, ttl_ms);
+            return match lock.try_acquire().await {
+                Ok(guard) => Self::forget_lock_guard(guard, holder_id),
+                Err(error) => Self::lock_response(false, None, None, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::LockRelease {
+            key,
+            holder_id,
+            fencing_token,
+        } = request
+        {
+            return self.release_lock(ctx, key, holder_id, fencing_token).await;
+        }
+        if let ClientRpcRequest::LockRenew {
+            key,
+            holder_id,
+            fencing_token,
+            ttl_ms,
+        } = request
+        {
+            return self.renew_lock(ctx, key, holder_id, fencing_token, ttl_ms).await;
+        }
+        if let ClientRpcRequest::LockSetAcquire {
+            members,
+            holder_id,
+            ttl_ms,
+            timeout_ms,
+        } = request
+        {
+            return self.acquire_lockset(ctx, members, holder_id, ttl_ms, timeout_ms).await;
+        }
+        if let ClientRpcRequest::LockSetTryAcquire {
+            members,
+            holder_id,
+            ttl_ms,
+        } = request
+        {
+            return self.try_acquire_lockset(ctx, members, holder_id, ttl_ms).await;
+        }
+        if let ClientRpcRequest::LockSetRelease {
+            holder_id,
+            member_tokens,
+        } = request
+        {
+            return self.release_lockset(ctx, holder_id, member_tokens).await;
+        }
+        if let ClientRpcRequest::LockSetRenew {
+            holder_id,
+            member_tokens,
+            ttl_ms,
+        } = request
+        {
+            return self.renew_lockset(ctx, holder_id, member_tokens, ttl_ms).await;
+        }
+
+        Self::lock_response(false, None, None, None, Some("unexpected lock request".to_string()))
     }
 
     async fn handle_rate_limiter_request(
@@ -428,59 +474,62 @@ impl CoordinationHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> ClientRpcResponse {
-        match request {
-            ClientRpcRequest::RateLimiterTryAcquire {
-                key,
-                tokens,
-                capacity_tokens,
-                refill_rate,
-            } => {
-                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
-                match limiter.try_acquire_n(tokens).await {
-                    Ok(remaining) => Self::rate_limiter_response(true, Some(remaining), None, None),
-                    Err(aspen_coordination::RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
-                        Self::rate_limiter_response(false, None, Some(retry_after_ms), Some("rate limited".into()))
-                    }
-                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+        if let ClientRpcRequest::RateLimiterTryAcquire {
+            key,
+            tokens,
+            capacity_tokens,
+            refill_rate,
+        } = request
+        {
+            let bucket = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+            return match bucket.try_acquire_n(tokens).await {
+                Ok(remaining) => Self::rate_limiter_response(true, Some(remaining), None, None),
+                Err(aspen_coordination::RateLimitError::TokensExhausted { retry_after_ms, .. }) => {
+                    Self::rate_limiter_response(false, None, Some(retry_after_ms), Some("rate limited".into()))
                 }
-            }
-            ClientRpcRequest::RateLimiterAcquire {
-                key,
-                tokens,
-                capacity_tokens,
-                refill_rate,
-                timeout_ms,
-            } => {
-                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
-                match limiter.acquire_n(tokens, Duration::from_millis(timeout_ms)).await {
-                    Ok(remaining) => Self::rate_limiter_response(true, Some(remaining), None, None),
-                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::RateLimiterAvailable {
-                key,
-                capacity_tokens,
-                refill_rate,
-            } => {
-                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
-                match limiter.available().await {
-                    Ok(available) => Self::rate_limiter_response(true, Some(available), None, None),
-                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
-                }
-            }
-            ClientRpcRequest::RateLimiterReset {
-                key,
-                capacity_tokens,
-                refill_rate,
-            } => {
-                let limiter = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
-                match limiter.reset().await {
-                    Ok(()) => Self::rate_limiter_response(true, Some(capacity_tokens), None, None),
-                    Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
-                }
-            }
-            _ => unreachable!("unexpected rate limiter request"),
+                Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+            };
         }
+        if let ClientRpcRequest::RateLimiterAcquire {
+            key,
+            tokens,
+            capacity_tokens,
+            refill_rate,
+            timeout_ms,
+        } = request
+        {
+            let bucket = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+            return match bucket.acquire_n(tokens, Duration::from_millis(timeout_ms)).await {
+                Ok(remaining) => Self::rate_limiter_response(true, Some(remaining), None, None),
+                Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::RateLimiterAvailable {
+            key,
+            capacity_tokens,
+            refill_rate,
+        } = request
+        {
+            let bucket = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+            return match bucket.available().await {
+                Ok(available) => Self::rate_limiter_response(true, Some(available), None, None),
+                Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+            };
+        }
+        if let ClientRpcRequest::RateLimiterReset {
+            key,
+            capacity_tokens,
+            refill_rate,
+        } = request
+        {
+            let bucket = self.make_rate_limiter(&ctx.kv_store, &key, refill_rate, capacity_tokens);
+            return match bucket.reset().await {
+                Ok(()) => Self::rate_limiter_response(true, Some(capacity_tokens), None, None),
+                Err(error) => Self::rate_limiter_response(false, None, None, Some(error.to_string())),
+            };
+        }
+
+        Self::rate_limiter_response(false, None, None, Some("unexpected rate limiter request".to_string()))
     }
 
     fn forget_lock_guard(
@@ -507,7 +556,15 @@ impl CoordinationHandler {
             })
             .collect();
         std::mem::forget(guard);
-        Self::lockset_response(true, Some(holder_id), member_tokens, Some(deadline), None, None, None)
+        Self::lockset_response(LockSetResponseArgs {
+            is_success: true,
+            holder_id: Some(holder_id),
+            member_tokens,
+            deadline_ms: Some(deadline),
+            blocked_member: None,
+            blocked_holder: None,
+            error: None,
+        })
     }
 
     async fn acquire_lockset(
@@ -518,11 +575,7 @@ impl CoordinationHandler {
         ttl_ms: u64,
         timeout_ms: u64,
     ) -> ClientRpcResponse {
-        let config = LockConfig {
-            ttl_ms,
-            acquire_timeout_ms: timeout_ms,
-            ..LockConfig::default()
-        };
+        let config = Self::lock_config_with_timeout(ttl_ms, timeout_ms);
         let prefixed_members = Self::prefix_lockset_members(members);
         match DistributedLockSet::new(Arc::clone(&ctx.kv_store), prefixed_members, holder_id.clone(), config) {
             Ok(lockset) => match lockset.acquire().await {
@@ -541,10 +594,12 @@ impl CoordinationHandler {
         ttl_ms: u64,
     ) -> ClientRpcResponse {
         let prefixed_members = Self::prefix_lockset_members(members);
-        match DistributedLockSet::new(Arc::clone(&ctx.kv_store), prefixed_members, holder_id.clone(), LockConfig {
-            ttl_ms,
-            ..LockConfig::default()
-        }) {
+        match DistributedLockSet::new(
+            Arc::clone(&ctx.kv_store),
+            prefixed_members,
+            holder_id.clone(),
+            Self::default_lock_config(ttl_ms),
+        ) {
             Ok(lockset) => match lockset.try_acquire().await {
                 Ok(guard) => Self::forget_lockset_guard(guard, holder_id),
                 Err(error) => Self::lockset_error_response(error),
@@ -561,9 +616,22 @@ impl CoordinationHandler {
     ) -> ClientRpcResponse {
         let coordination_tokens = Self::prefix_member_tokens(member_tokens);
         let members: Vec<String> = coordination_tokens.iter().map(|token| token.member.clone()).collect();
-        match DistributedLockSet::new(Arc::clone(&ctx.kv_store), members, holder_id.clone(), LockConfig::default()) {
+        match DistributedLockSet::new(
+            Arc::clone(&ctx.kv_store),
+            members,
+            holder_id.clone(),
+            Self::default_lock_config(30_000),
+        ) {
             Ok(lockset) => match lockset.release_member_tokens(&coordination_tokens).await {
-                Ok(()) => Self::lockset_response(true, Some(holder_id), Vec::new(), Some(0), None, None, None),
+                Ok(()) => Self::lockset_response(LockSetResponseArgs {
+                    is_success: true,
+                    holder_id: Some(holder_id),
+                    member_tokens: Vec::new(),
+                    deadline_ms: Some(0),
+                    blocked_member: None,
+                    blocked_holder: None,
+                    error: None,
+                }),
                 Err(error) => Self::lockset_error_response(error),
             },
             Err(error) => Self::lockset_error_response(error),
@@ -579,26 +647,28 @@ impl CoordinationHandler {
     ) -> ClientRpcResponse {
         let coordination_tokens = Self::prefix_member_tokens(member_tokens);
         let members: Vec<String> = coordination_tokens.iter().map(|token| token.member.clone()).collect();
-        match DistributedLockSet::new(Arc::clone(&ctx.kv_store), members, holder_id.clone(), LockConfig {
-            ttl_ms,
-            ..LockConfig::default()
-        }) {
+        match DistributedLockSet::new(
+            Arc::clone(&ctx.kv_store),
+            members,
+            holder_id.clone(),
+            Self::default_lock_config(ttl_ms),
+        ) {
             Ok(lockset) => match lockset.renew_member_tokens(&coordination_tokens).await {
-                Ok(deadline_ms) => Self::lockset_response(
-                    true,
-                    Some(holder_id),
-                    coordination_tokens
+                Ok(deadline_ms) => Self::lockset_response(LockSetResponseArgs {
+                    is_success: true,
+                    holder_id: Some(holder_id),
+                    member_tokens: coordination_tokens
                         .iter()
                         .map(|token| LockSetMemberTokenWire {
                             member: Self::strip_lock_prefix(&token.member),
                             fencing_token: token.fencing_token.value(),
                         })
                         .collect(),
-                    Some(deadline_ms),
-                    None,
-                    None,
-                    None,
-                ),
+                    deadline_ms: Some(deadline_ms),
+                    blocked_member: None,
+                    blocked_holder: None,
+                    error: None,
+                }),
                 Err(error) => Self::lockset_error_response(error),
             },
             Err(error) => Self::lockset_error_response(error),
@@ -611,16 +681,24 @@ impl CoordinationHandler {
                 member,
                 holder,
                 deadline_ms,
-            } => Self::lockset_response(
-                false,
-                None,
-                Vec::new(),
-                Some(deadline_ms),
-                Some(Self::strip_lock_prefix(&member)),
-                Some(holder),
-                Some("lock set blocked".to_string()),
-            ),
-            other => Self::lockset_response(false, None, Vec::new(), None, None, None, Some(other.to_string())),
+            } => Self::lockset_response(LockSetResponseArgs {
+                is_success: false,
+                holder_id: None,
+                member_tokens: Vec::new(),
+                deadline_ms: Some(deadline_ms),
+                blocked_member: Some(Self::strip_lock_prefix(&member)),
+                blocked_holder: Some(holder),
+                error: Some("lock set blocked".to_string()),
+            }),
+            other => Self::lockset_response(LockSetResponseArgs {
+                is_success: false,
+                holder_id: None,
+                member_tokens: Vec::new(),
+                deadline_ms: None,
+                blocked_member: None,
+                blocked_holder: None,
+                error: Some(other.to_string()),
+            }),
         }
     }
 
@@ -771,17 +849,17 @@ impl CoordinationHandler {
 
     fn make_counter(&self, store: &Arc<dyn KeyValueStore>, key: &str) -> AtomicCounter<dyn KeyValueStore> {
         let prefixed = format!("{}{key}", Self::COUNTER_PREFIX);
-        AtomicCounter::new(Arc::clone(store), prefixed, CounterConfig::default())
+        AtomicCounter::new(Arc::clone(store), prefixed, Self::default_counter_config())
     }
 
     fn make_signed_counter(&self, store: &Arc<dyn KeyValueStore>, key: &str) -> SignedAtomicCounter<dyn KeyValueStore> {
         let prefixed = format!("{}{key}", Self::COUNTER_PREFIX);
-        SignedAtomicCounter::new(Arc::clone(store), prefixed, CounterConfig::default())
+        SignedAtomicCounter::new(Arc::clone(store), prefixed, Self::default_counter_config())
     }
 
     fn make_sequence(&self, store: &Arc<dyn KeyValueStore>, key: &str) -> SequenceGenerator<dyn KeyValueStore> {
         let prefixed = format!("{}{key}", Self::SEQUENCE_PREFIX);
-        SequenceGenerator::new(Arc::clone(store), prefixed, SequenceConfig::default())
+        SequenceGenerator::new(Arc::clone(store), prefixed, Self::default_sequence_config())
     }
 
     fn make_lock(
@@ -792,10 +870,7 @@ impl CoordinationHandler {
         ttl_ms: u64,
     ) -> DistributedLock<dyn KeyValueStore> {
         let prefixed = format!("{}{key}", Self::LOCK_PREFIX);
-        let config = LockConfig {
-            ttl_ms,
-            ..LockConfig::default()
-        };
+        let config = Self::default_lock_config(ttl_ms);
         DistributedLock::new(Arc::clone(store), prefixed, holder_id, config)
     }
 

@@ -76,7 +76,12 @@ pub fn encrypt_chain(
     rand::fill(&mut salt);
 
     // Derive chain encryption key
-    let mut info = Vec::with_capacity(CONTEXT_CHAIN_ENCRYPTION.len() + salt.len() + cluster_id.len() + 8);
+    let info_len = CONTEXT_CHAIN_ENCRYPTION
+        .len()
+        .saturating_add(salt.len())
+        .saturating_add(cluster_id.len())
+        .saturating_add(8);
+    let mut info = Vec::with_capacity(info_len);
     info.extend_from_slice(CONTEXT_CHAIN_ENCRYPTION);
     info.extend_from_slice(&salt);
     info.extend_from_slice(cluster_id);
@@ -96,7 +101,7 @@ pub fn encrypt_chain(
         salt,
         data: ciphertext,
         epoch,
-        prior_count: prior_secrets.len() as u32,
+        prior_count: u32::try_from(prior_secrets.len()).unwrap_or(u32::MAX),
     })
 }
 
@@ -107,7 +112,12 @@ pub fn decrypt_chain(
     cluster_id: &[u8],
 ) -> Result<BTreeMap<u64, [u8; 32]>, ChainError> {
     // Derive the same chain encryption key
-    let mut info = Vec::with_capacity(CONTEXT_CHAIN_ENCRYPTION.len() + chain.salt.len() + cluster_id.len() + 8);
+    let info_len = CONTEXT_CHAIN_ENCRYPTION
+        .len()
+        .saturating_add(chain.salt.len())
+        .saturating_add(cluster_id.len())
+        .saturating_add(8);
+    let mut info = Vec::with_capacity(info_len);
     info.extend_from_slice(CONTEXT_CHAIN_ENCRYPTION);
     info.extend_from_slice(&chain.salt);
     info.extend_from_slice(cluster_id);
@@ -200,13 +210,16 @@ mod tests {
 
     #[test]
     fn test_multi_epoch_chain() {
-        let mut all_secrets = BTreeMap::new();
+        let all_secrets: BTreeMap<u64, [u8; 32]> = [
+            (1u64, make_secret(1)),
+            (2u64, make_secret(2)),
+            (3u64, make_secret(3)),
+            (4u64, make_secret(4)),
+            (5u64, make_secret(5)),
+        ]
+        .into_iter()
+        .collect();
         let cluster_id = b"multi-epoch";
-
-        for epoch in 1u64..=5 {
-            let secret = make_secret(epoch as u8);
-            all_secrets.insert(epoch, secret);
-        }
 
         let prior: BTreeMap<u64, [u8; 32]> =
             all_secrets.iter().filter(|(k, _)| **k < 5).map(|(&k, &v)| (k, v)).collect();
@@ -240,17 +253,20 @@ mod tests {
             current_secret in any::<[u8; 32]>(),
             prior_candidates in proptest::collection::vec(any::<[u8; 32]>(), 7),
         ) {
-            let mut prior = BTreeMap::new();
-            let expected_len = (epoch - 1) as usize;
-            for (index, secret) in prior_candidates.into_iter().take(expected_len).enumerate() {
-                prior.insert((index as u64) + 1, secret);
-            }
+            let expected_len = usize::try_from(epoch.saturating_sub(1)).unwrap_or(usize::MAX);
+            let prior: BTreeMap<u64, [u8; 32]> = prior_candidates
+                .into_iter()
+                .take(expected_len)
+                .zip(1u64..)
+                .map(|(secret, prior_epoch)| (prior_epoch, secret))
+                .collect();
 
             let chain = encrypt_chain(&prior, &current_secret, b"prop-chain", epoch).unwrap();
             let recovered = decrypt_chain(&chain, &current_secret, b"prop-chain").unwrap();
 
             prop_assert_eq!(chain.epoch, epoch);
-            prop_assert_eq!(chain.prior_count, (epoch - 1) as u32);
+            let expected_prior_count = u32::try_from(epoch.saturating_sub(1)).unwrap_or(u32::MAX);
+            prop_assert_eq!(chain.prior_count, expected_prior_count);
             prop_assert_eq!(recovered.len(), expected_len);
             prop_assert_eq!(recovered, prior);
         }

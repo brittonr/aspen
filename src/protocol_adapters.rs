@@ -100,12 +100,11 @@ impl StateMachineProvider for StateMachineProviderAdapter {
         self.direct_read(key).await.is_some()
     }
 
-    async fn direct_scan(&self, prefix: &[u8], limit: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-        // Tiger Style: Log invalid UTF-8 rather than silently returning empty
+    async fn direct_scan(&self, prefix: &[u8], max_results: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
         let prefix_str = match std::str::from_utf8(prefix) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::debug!(error = %e, "direct_scan: invalid UTF-8 prefix");
+            Ok(prefix_str) => prefix_str,
+            Err(error) => {
+                tracing::debug!(error = %error, "direct_scan: invalid UTF-8 prefix");
                 return Vec::new();
             }
         };
@@ -113,16 +112,19 @@ impl StateMachineProvider for StateMachineProviderAdapter {
         match &self.inner {
             StateMachineVariant::InMemory(sm) => {
                 let results = sm.scan_kv_with_prefix_async(prefix_str).await;
-                results.into_iter().take(limit).map(|(k, v)| (k.into_bytes(), v.into_bytes())).collect()
+                results.into_iter().take(max_results).map(|(k, v)| (k.into_bytes(), v.into_bytes())).collect()
             }
-            StateMachineVariant::Redb(sm) => match sm.scan(prefix_str, None, Some(limit.min(u32::MAX as usize) as u32))
-            {
-                Ok(results) => results.into_iter().map(|kv| (kv.key.into_bytes(), kv.value.into_bytes())).collect(),
-                Err(e) => {
-                    tracing::debug!(error = %e, prefix = ?prefix_str, limit, "direct_scan: scan failed");
-                    Vec::new()
+            StateMachineVariant::Redb(sm) => {
+                let scan_cap = max_results.min(usize::try_from(u32::MAX).unwrap_or(usize::MAX));
+                let scan_cap_u32 = u32::try_from(scan_cap).unwrap_or(u32::MAX);
+                match sm.scan(prefix_str, None, Some(scan_cap_u32)) {
+                    Ok(results) => results.into_iter().map(|kv| (kv.key.into_bytes(), kv.value.into_bytes())).collect(),
+                    Err(error) => {
+                        tracing::debug!(error = %error, prefix = ?prefix_str, max_results, "direct_scan: scan failed");
+                        Vec::new()
+                    }
                 }
-            },
+            }
         }
     }
 }

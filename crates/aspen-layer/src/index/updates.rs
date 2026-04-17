@@ -27,8 +27,8 @@ impl IndexUpdate {
     }
 
     /// Get total number of operations.
-    pub fn operation_count(&self) -> usize {
-        self.inserts.len() + self.deletes.len()
+    pub fn operation_count(&self) -> u32 {
+        u32::try_from(self.inserts.len().saturating_add(self.deletes.len())).unwrap_or(u32::MAX)
     }
 }
 

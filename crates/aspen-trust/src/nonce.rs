@@ -55,6 +55,12 @@ impl NonceGenerator {
 mod tests {
     use super::*;
 
+    fn counter_from_nonce_bytes(nonce: [u8; 12]) -> u64 {
+        let mut counter_bytes = [0u8; 8];
+        counter_bytes.copy_from_slice(&nonce[4..12]);
+        u64::from_be_bytes(counter_bytes)
+    }
+
     #[test]
     fn test_sequential_nonces_are_unique() {
         let nonce_gen = NonceGenerator::new(1, 0);
@@ -83,7 +89,7 @@ mod tests {
         assert_eq!(counter, 100); // initial_counter(99) + 1, then fetch_add returns 100
         assert_eq!(&nonce[..4], &[0x01, 0x02, 0x03, 0x04]);
         // Counter bytes
-        let counter_bytes = u64::from_be_bytes(nonce[4..12].try_into().unwrap());
+        let counter_bytes = counter_from_nonce_bytes(nonce);
         assert_eq!(counter_bytes, 100);
     }
 
@@ -102,7 +108,7 @@ mod tests {
 
         // Verify no overlap with gen1's range
         // gen1 used counters 1..11, gen2 starts at persisted+1
-        let counter_from_nonce = u64::from_be_bytes(n1[4..12].try_into().unwrap());
+        let counter_from_nonce = counter_from_nonce_bytes(n1);
         assert!(counter_from_nonce > 10);
     }
 
@@ -110,9 +116,10 @@ mod tests {
     fn test_counter_saturates() {
         // new(1, MAX-2) starts counter at MAX-2+1 = MAX-1
         // first fetch_add(1) returns MAX-1 (old value), sets counter to MAX
-        let nonce_gen = NonceGenerator::new(1, u64::MAX - 2);
+        let initial_counter = (u64::MAX).saturating_sub(2);
+        let nonce_gen = NonceGenerator::new(1, initial_counter);
         let (_, c1) = nonce_gen.next_nonce();
-        assert_eq!(c1, u64::MAX - 1);
+        assert_eq!(c1, (u64::MAX).saturating_sub(1));
         let (_, c2) = nonce_gen.next_nonce();
         assert_eq!(c2, u64::MAX);
     }

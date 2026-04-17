@@ -23,8 +23,16 @@ use std::time::UNIX_EPOCH;
 /// - No `.expect()` or `.unwrap()` - safe fallback to 0
 /// - Inline for hot path performance
 #[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "root utils module owns the wall-clock boundary for health helpers"
+)]
 pub fn current_time_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration_since_epoch) => u64::try_from(duration_since_epoch.as_millis()).unwrap_or(u64::MAX),
+        Err(_) => 0,
+    }
 }
 
 /// Get current Unix timestamp in seconds.
@@ -37,8 +45,16 @@ pub fn current_time_ms() -> u64 {
 /// - No `.expect()` or `.unwrap()` - safe fallback to 0
 /// - Inline for hot path performance
 #[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "root utils module owns the wall-clock boundary for health helpers"
+)]
 pub fn current_time_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration_since_epoch) => duration_since_epoch.as_secs(),
+        Err(_) => 0,
+    }
 }
 
 // ============================================================================
@@ -65,7 +81,7 @@ impl DiskSpace {
             return 0;
         }
         let used = total.saturating_sub(available);
-        used.saturating_mul(100) / total
+        used.saturating_mul(100).checked_div(total).unwrap_or(0)
     }
 }
 
@@ -101,10 +117,12 @@ pub fn check_disk_space(path: &Path) -> std::io::Result<DiskSpace> {
         return Err(std::io::Error::last_os_error());
     }
 
-    let total_bytes = stat.f_blocks * stat.f_frsize;
-    let available_bytes = stat.f_bavail * stat.f_frsize;
+    let total_bytes = stat.f_blocks.saturating_mul(stat.f_frsize);
+    let available_bytes = stat.f_bavail.saturating_mul(stat.f_frsize);
     let used_bytes = total_bytes.saturating_sub(available_bytes);
     let usage_percent = DiskSpace::usage_percent(total_bytes, available_bytes);
+    debug_assert!(available_bytes <= total_bytes);
+    debug_assert!(usage_percent <= 100);
 
     Ok(DiskSpace {
         total_bytes,

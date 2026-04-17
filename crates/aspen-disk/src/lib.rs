@@ -31,8 +31,11 @@ impl DiskSpace {
         if total == 0 {
             return 0;
         }
+        assert!(total > 0, "zero total handled above");
         let used = total.saturating_sub(available);
-        used.saturating_mul(100) / total
+        let usage_percent = used.saturating_mul(100) / total;
+        assert!(usage_percent <= 100, "usage percent must stay bounded");
+        usage_percent
     }
 }
 
@@ -67,11 +70,14 @@ pub fn check_disk_space(path: &Path) -> std::io::Result<DiskSpace> {
     if result != 0 {
         return Err(std::io::Error::last_os_error());
     }
+    assert!(result == 0, "non-zero statvfs result returned early");
 
-    let total_bytes = stat.f_blocks * stat.f_frsize;
-    let available_bytes = stat.f_bavail * stat.f_frsize;
+    let total_bytes = stat.f_blocks.saturating_mul(stat.f_frsize);
+    let available_bytes = stat.f_bavail.saturating_mul(stat.f_frsize);
     let used_bytes = total_bytes.saturating_sub(available_bytes);
     let usage_percent = DiskSpace::usage_percent(total_bytes, available_bytes);
+    assert!(usage_percent <= 100, "disk usage percent must stay bounded");
+    assert!(used_bytes <= total_bytes, "used bytes must fit within total bytes");
 
     Ok(DiskSpace {
         total_bytes,
@@ -275,8 +281,13 @@ mod tests {
                 // Good - disk has space
             }
             Err(e) => {
-                // Should be OutOfMemory error kind if disk is too full
-                assert!(e.kind() == std::io::ErrorKind::OutOfMemory || e.kind() == std::io::ErrorKind::NotFound);
+                // Should be OutOfMemory error kind if disk is too full.
+                let error_kind = e.kind();
+                if error_kind == std::io::ErrorKind::OutOfMemory {
+                    assert_eq!(error_kind, std::io::ErrorKind::OutOfMemory);
+                } else {
+                    assert_eq!(error_kind, std::io::ErrorKind::NotFound);
+                }
             }
         }
     }

@@ -97,7 +97,13 @@ fn test_integer_ordering() {
     let packed: Vec<Vec<u8>> = values.iter().map(|&n| Tuple::new().push(n).pack()).collect();
 
     for i in 1..packed.len() {
-        assert!(packed[i - 1] < packed[i], "ordering failed: {:?} should be < {:?}", values[i - 1], values[i]);
+        let prev_index = i.saturating_sub(1);
+        assert!(
+            packed[prev_index] < packed[i],
+            "ordering failed: {:?} should be < {:?}",
+            values[prev_index],
+            values[i]
+        );
     }
 }
 
@@ -107,7 +113,13 @@ fn test_string_ordering() {
     let packed: Vec<Vec<u8>> = values.iter().map(|s| Tuple::new().push(*s).pack()).collect();
 
     for i in 1..packed.len() {
-        assert!(packed[i - 1] < packed[i], "ordering failed: {:?} should be < {:?}", values[i - 1], values[i]);
+        let prev_index = i.saturating_sub(1);
+        assert!(
+            packed[prev_index] < packed[i],
+            "ordering failed: {:?} should be < {:?}",
+            values[prev_index],
+            values[i]
+        );
     }
 }
 
@@ -199,7 +211,8 @@ fn test_range() {
 
     // Any key with a longer suffix should be in range
     let key = Tuple::new().push("users").push(1i64).push("profile").pack();
-    assert!(key >= start && key < end);
+    assert!(key >= start);
+    assert!(key < end);
 }
 
 #[test]
@@ -249,7 +262,8 @@ fn test_float_positive_infinity() {
     let unpacked = Tuple::unpack(&packed).unwrap();
 
     if let Some(Element::Float(f)) = unpacked.get(0) {
-        assert!(f.is_infinite() && f.is_sign_positive());
+        assert!(f.is_infinite());
+        assert!(f.is_sign_positive());
     } else {
         panic!("expected Float element");
     }
@@ -262,7 +276,8 @@ fn test_float_negative_infinity() {
     let unpacked = Tuple::unpack(&packed).unwrap();
 
     if let Some(Element::Float(f)) = unpacked.get(0) {
-        assert!(f.is_infinite() && f.is_sign_negative());
+        assert!(f.is_infinite());
+        assert!(f.is_sign_negative());
     } else {
         panic!("expected Float element");
     }
@@ -302,7 +317,8 @@ fn test_double_positive_infinity() {
     let unpacked = Tuple::unpack(&packed).unwrap();
 
     if let Some(Element::Double(d)) = unpacked.get(0) {
-        assert!(d.is_infinite() && d.is_sign_positive());
+        assert!(d.is_infinite());
+        assert!(d.is_sign_positive());
     } else {
         panic!("expected Double element");
     }
@@ -315,7 +331,8 @@ fn test_double_negative_infinity() {
     let unpacked = Tuple::unpack(&packed).unwrap();
 
     if let Some(Element::Double(d)) = unpacked.get(0) {
-        assert!(d.is_infinite() && d.is_sign_negative());
+        assert!(d.is_infinite());
+        assert!(d.is_sign_negative());
     } else {
         panic!("expected Double element");
     }
@@ -341,7 +358,13 @@ fn test_float_ordering() {
     let packed: Vec<Vec<u8>> = values.iter().map(|&f| Tuple::new().push(f).pack()).collect();
 
     for i in 1..packed.len() {
-        assert!(packed[i - 1] < packed[i], "float ordering failed: {:?} should be < {:?}", values[i - 1], values[i]);
+        let prev_index = i.saturating_sub(1);
+        assert!(
+            packed[prev_index] < packed[i],
+            "float ordering failed: {:?} should be < {:?}",
+            values[prev_index],
+            values[i]
+        );
     }
 }
 
@@ -352,7 +375,13 @@ fn test_double_ordering() {
     let packed: Vec<Vec<u8>> = values.iter().map(|&d| Tuple::new().push(d).pack()).collect();
 
     for i in 1..packed.len() {
-        assert!(packed[i - 1] < packed[i], "double ordering failed: {:?} should be < {:?}", values[i - 1], values[i]);
+        let prev_index = i.saturating_sub(1);
+        assert!(
+            packed[prev_index] < packed[i],
+            "double ordering failed: {:?} should be < {:?}",
+            values[prev_index],
+            values[i]
+        );
     }
 }
 
@@ -584,7 +613,7 @@ fn test_unpack_partial() {
     // unpack_partial should only consume the first tuple's bytes
     let (unpacked, consumed) = Tuple::unpack_partial(&t1.pack()).unwrap();
     assert_eq!(unpacked, t1);
-    assert_eq!(consumed, t1.pack().len());
+    assert_eq!(consumed, u32::try_from(t1.pack().len()).unwrap_or(u32::MAX));
 }
 
 // =========================================================================
@@ -602,19 +631,21 @@ fn test_deeply_nested_tuples() {
 
     let packed = level1.pack();
     let unpacked = Tuple::unpack(&packed).unwrap();
+    assert_eq!(unpacked.len(), 1);
 
-    // Navigate to level5
-    if let Some(Element::Tuple(l2)) = unpacked.get(0) {
-        if let Some(Element::Tuple(l3)) = l2.get(0) {
-            if let Some(Element::Tuple(l4)) = l3.get(0) {
-                if let Some(Element::Tuple(l5)) = l4.get(0) {
-                    assert_eq!(l5.get(0), Some(&Element::String("level5".to_string())));
-                    return;
-                }
-            }
-        }
-    }
-    panic!("failed to navigate nested structure");
+    let Some(Element::Tuple(l2)) = unpacked.get(0) else {
+        panic!("expected level 2 tuple");
+    };
+    let Some(Element::Tuple(l3)) = l2.get(0) else {
+        panic!("expected level 3 tuple");
+    };
+    let Some(Element::Tuple(l4)) = l3.get(0) else {
+        panic!("expected level 4 tuple");
+    };
+    let Some(Element::Tuple(l5)) = l4.get(0) else {
+        panic!("expected level 5 tuple");
+    };
+    assert_eq!(l5.get(0), Some(&Element::String("level5".to_string())));
 }
 
 #[test]
@@ -735,13 +766,12 @@ fn test_bytes_with_embedded_nulls() {
 
 #[test]
 fn test_strinc_all_ff() {
-    // A tuple that packs to all 0xFF should return None from strinc
-    let t = Tuple::new().push(vec![0xFFu8; 10]);
-    // Actually the packed form won't be all 0xFF due to type code and escaping
-    // Let's test the underlying strinc function directly
+    // A tuple that packs to all 0xFF should return None from strinc.
+    // Actually the packed form won't be all 0xFF due to type code and escaping.
+    // Let's test the underlying strinc function directly.
     let mut data = vec![0xFF, 0xFF, 0xFF];
-    let result = super::tuple_type::strinc_for_test(&mut data);
-    assert!(!result);
+    let is_incremented = super::tuple_type::strinc_for_test(&mut data);
+    assert!(!is_incremented);
     assert!(data.is_empty()); // All bytes were popped
 }
 
@@ -749,16 +779,16 @@ fn test_strinc_all_ff() {
 fn test_strinc_trailing_ff() {
     // Test strinc with trailing 0xFF bytes
     let mut data = vec![0x01, 0x02, 0xFF, 0xFF];
-    let result = super::tuple_type::strinc_for_test(&mut data);
-    assert!(result);
+    let is_incremented = super::tuple_type::strinc_for_test(&mut data);
+    assert!(is_incremented);
     assert_eq!(data, vec![0x01, 0x03]); // Incremented 0x02 -> 0x03, removed trailing FF
 }
 
 #[test]
 fn test_strinc_empty() {
     let mut data = vec![];
-    let result = super::tuple_type::strinc_for_test(&mut data);
-    assert!(!result);
+    let is_incremented = super::tuple_type::strinc_for_test(&mut data);
+    assert!(!is_incremented);
 }
 
 // =========================================================================
@@ -841,7 +871,7 @@ fn test_unpack_partial_not_consuming_all() {
 
     // unpack_partial returns how many bytes were consumed
     let (unpacked, consumed) = Tuple::unpack_partial(&packed).unwrap();
-    assert_eq!(consumed, packed.len());
+    assert_eq!(consumed, u32::try_from(packed.len()).unwrap_or(u32::MAX));
     assert_eq!(unpacked.get(0), Some(&Element::String("test".to_string())));
 }
 

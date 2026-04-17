@@ -69,14 +69,18 @@ impl<S: CacheKvStore> ExecCacheIndex<S> {
                 "cache miss: entry expired"
             );
             // Clean up expired entry
-            let _ = self.store.delete(&kv_key);
+            if let Err(message) = self.store.delete(&kv_key) {
+                debug!(cache_key = %key, error = %message, "failed to delete expired cache entry");
+            }
             return Ok(None);
         }
 
         // Update last_accessed_ms for LRU tracking
         entry.last_accessed_ms = now_ms;
         if let Ok(updated_bytes) = entry.to_json() {
-            let _ = self.store.write(&kv_key, &updated_bytes);
+            if let Err(message) = self.store.write(&kv_key, &updated_bytes) {
+                debug!(cache_key = %key, error = %message, "failed to refresh cache access time");
+            }
         }
 
         debug!(cache_key = %key, exit_code = entry.exit_code, "cache hit");
@@ -147,6 +151,13 @@ pub(crate) mod test_store {
 
     use super::CacheKvStore;
 
+    fn scan_limit(limit: u32) -> usize {
+        match usize::try_from(limit) {
+            Ok(scan_limit) => scan_limit,
+            Err(_) => usize::MAX,
+        }
+    }
+
     pub struct InMemoryKvStore {
         data: RwLock<BTreeMap<String, Vec<u8>>>,
     }
@@ -182,7 +193,7 @@ pub(crate) mod test_store {
             Ok(data
                 .range(prefix.to_string()..)
                 .take_while(|(k, _)| k.starts_with(prefix))
-                .take(limit as usize)
+                .take(scan_limit(limit))
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect())
         }

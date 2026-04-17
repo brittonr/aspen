@@ -96,12 +96,17 @@ mod tests {
     use crate::subspace::Subspace;
     use crate::tuple::Tuple;
 
-    fn make_test_entry(mod_revision: i64, create_revision: i64) -> IndexableEntry {
+    struct TestEntryFixture {
+        mod_revision: i64,
+        create_revision: i64,
+    }
+
+    fn make_test_entry(fixture: TestEntryFixture) -> IndexableEntry {
         IndexableEntry {
             value: "test".to_string(),
             version: 1,
-            create_revision,
-            mod_revision,
+            create_revision: fixture.create_revision,
+            mod_revision: fixture.mod_revision,
             expires_at_ms: None,
             lease_id: None,
         }
@@ -168,7 +173,10 @@ mod tests {
         let idx_subspace = Subspace::new(Tuple::new().push("idx"));
         let registry = IndexRegistry::with_builtins(idx_subspace);
 
-        let entry = make_test_entry(100, 50);
+        let entry = make_test_entry(TestEntryFixture {
+            mod_revision: 100,
+            create_revision: 50,
+        });
         let updates = registry.updates_for_set(b"my-key", None, &entry);
 
         // Should have inserts for mod_revision and create_revision
@@ -182,8 +190,14 @@ mod tests {
         let idx_subspace = Subspace::new(Tuple::new().push("idx"));
         let registry = IndexRegistry::with_builtins(idx_subspace);
 
-        let old_entry = make_test_entry(50, 50);
-        let new_entry = make_test_entry(100, 50); // Same create, different mod
+        let old_entry = make_test_entry(TestEntryFixture {
+            mod_revision: 50,
+            create_revision: 50,
+        });
+        let new_entry = make_test_entry(TestEntryFixture {
+            mod_revision: 100,
+            create_revision: 50,
+        }); // Same create, different mod
 
         let updates = registry.updates_for_set(b"my-key", Some(&old_entry), &new_entry);
 
@@ -197,7 +211,10 @@ mod tests {
         let idx_subspace = Subspace::new(Tuple::new().push("idx"));
         let registry = IndexRegistry::with_builtins(idx_subspace);
 
-        let entry = make_test_entry(100, 50);
+        let entry = make_test_entry(TestEntryFixture {
+            mod_revision: 100,
+            create_revision: 50,
+        });
         let updates = registry.updates_for_delete(b"my-key", &entry);
 
         // Should have deletes for mod_revision and create_revision
@@ -575,8 +592,8 @@ mod tests {
         assert!(registry.get("custom_idx").is_some());
 
         // Unregister it
-        let removed = registry.unregister("custom_idx");
-        assert!(removed);
+        let is_removed = registry.unregister("custom_idx");
+        assert!(is_removed);
         assert!(registry.get("custom_idx").is_none());
     }
 
@@ -586,8 +603,8 @@ mod tests {
         let mut registry = IndexRegistry::with_builtins(idx_subspace);
 
         // Try to unregister a builtin - should fail
-        let removed = registry.unregister("idx_mod_revision");
-        assert!(!removed);
+        let is_removed = registry.unregister("idx_mod_revision");
+        assert!(!is_removed);
         assert!(registry.get("idx_mod_revision").is_some());
     }
 

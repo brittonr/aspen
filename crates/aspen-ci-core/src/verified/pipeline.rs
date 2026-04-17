@@ -297,35 +297,36 @@ pub fn compute_stage_order(stages_with_deps: &[(u32, Vec<u32>)], stage_count: u3
         return Some(Vec::new());
     }
 
-    let stage_count_usize = to_usize(stage_count)?;
-    let mut in_degree = vec![0u32; stage_count_usize];
+    let stage_count_index = to_usize(stage_count)?;
+    let mut in_degree = vec![0u32; stage_count_index];
     for (idx, deps) in stages_with_deps {
         let Some(idx_usize) = to_usize(*idx) else {
             continue;
         };
-        if idx_usize < stage_count_usize {
+        if idx_usize < stage_count_index {
             in_degree[idx_usize] = u32::try_from(deps.len()).unwrap_or(u32::MAX);
         }
     }
 
     let mut queue: Vec<u32> = (0..stage_count)
         .filter(|&stage| {
-            let Some(stage_usize) = to_usize(stage) else {
+            let Some(stage_index) = to_usize(stage) else {
                 return false;
             };
-            in_degree[stage_usize] == 0
+            in_degree[stage_index] == 0
         })
         .collect();
 
-    let mut result = Vec::with_capacity(stage_count_usize);
-    let mut processed = vec![false; stage_count_usize];
+    let mut result = Vec::with_capacity(stage_count_index);
+    let mut processed = vec![false; stage_count_index];
+    debug_assert_eq!(in_degree.len(), stage_count_index);
 
     while let Some(stage) = queue.pop() {
-        let stage_usize = to_usize(stage)?;
-        if processed[stage_usize] {
+        let stage_index = to_usize(stage)?;
+        if processed[stage_index] {
             continue;
         }
-        processed[stage_usize] = true;
+        processed[stage_index] = true;
         result.push(stage);
 
         for (idx, deps) in stages_with_deps {
@@ -342,7 +343,8 @@ pub fn compute_stage_order(stages_with_deps: &[(u32, Vec<u32>)], stage_count: u3
         }
     }
 
-    if result.len() == stage_count_usize {
+    debug_assert!(result.len() <= stage_count_index);
+    if result.len() == stage_count_index {
         Some(result)
     } else {
         None

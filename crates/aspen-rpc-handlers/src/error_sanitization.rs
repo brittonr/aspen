@@ -14,6 +14,19 @@
 //! By categorizing errors and returning generic messages, we prevent
 //! information leakage while still providing useful feedback to clients.
 
+fn contains_any(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
+fn first_matching_message<'a>(haystack: &str, cases: &'a [(&'a [&'a str], &'a str)]) -> Option<&'a str> {
+    for (needles, message) in cases {
+        if contains_any(haystack, needles) {
+            return Some(message);
+        }
+    }
+    None
+}
+
 /// Sanitize an error message for client consumption.
 ///
 /// This function converts internal error messages to user-safe messages that
@@ -25,59 +38,24 @@
 /// - Generic fallback for unknown errors
 /// - Full error logged internally at appropriate level
 pub fn sanitize_error_for_client(err: &anyhow::Error) -> String {
-    // Check for specific error types we can provide better messages for
     let err_string = err.to_string().to_lowercase();
+    let cases: &[(&[&str], &str)] = &[
+        (&["not leader", "forward to leader"], "operation must be performed on leader node"),
+        (&["not found", "key not found"], "resource not found"),
+        (&["not initialized", "cluster not initialized", "uninitialized"], "cluster not initialized"),
+        (&["timeout", "timed out"], "operation timed out"),
+        (&["connection", "network", "unreachable"], "network error"),
+        (&["permission", "unauthorized"], "permission denied"),
+        (&["invalid", "malformed"], "invalid request"),
+        (&["quorum", "membership"], "cluster membership error"),
+        (&["snapshot"], "snapshot operation failed"),
+        (&["storage", "database", "sqlite", "redb"], "storage error"),
+    ];
 
-    // Categorize errors by their root cause
-    if err_string.contains("not leader") || err_string.contains("forward to leader") {
-        return "operation must be performed on leader node".to_string();
-    }
-
-    if err_string.contains("not found") || err_string.contains("key not found") {
-        return "resource not found".to_string();
-    }
-
-    if err_string.contains("not initialized")
-        || err_string.contains("cluster not initialized")
-        || err_string.contains("uninitialized")
-    {
-        return "cluster not initialized".to_string();
-    }
-
-    if err_string.contains("timeout") || err_string.contains("timed out") {
-        return "operation timed out".to_string();
-    }
-
-    if err_string.contains("connection") || err_string.contains("network") || err_string.contains("unreachable") {
-        return "network error".to_string();
-    }
-
-    if err_string.contains("permission") || err_string.contains("unauthorized") {
-        return "permission denied".to_string();
-    }
-
-    if err_string.contains("invalid") || err_string.contains("malformed") {
-        return "invalid request".to_string();
-    }
-
-    if err_string.contains("quorum") || err_string.contains("membership") {
-        return "cluster membership error".to_string();
-    }
-
-    if err_string.contains("snapshot") {
-        return "snapshot operation failed".to_string();
-    }
-
-    if err_string.contains("storage")
-        || err_string.contains("database")
-        || err_string.contains("sqlite")
-        || err_string.contains("redb")
-    {
-        return "storage error".to_string();
-    }
-
-    // Generic fallback - never expose raw error messages
-    "internal error".to_string()
+    debug_assert!(!err_string.is_empty());
+    let sanitized = first_matching_message(&err_string, cases).unwrap_or("internal error").to_string();
+    debug_assert!(!sanitized.is_empty());
+    sanitized
 }
 
 /// Sanitize an error string for client consumption.
@@ -86,33 +64,19 @@ pub fn sanitize_error_for_client(err: &anyhow::Error) -> String {
 #[allow(dead_code)]
 pub fn sanitize_error_string_for_client(err: &str) -> String {
     let err_lower = err.to_lowercase();
+    let cases: &[(&[&str], &str)] = &[
+        (&["not leader", "forward to leader"], "operation must be performed on leader node"),
+        (&["not found", "key not found"], "resource not found"),
+        (&["not initialized", "cluster not initialized"], "cluster not initialized"),
+        (&["timeout", "timed out"], "operation timed out"),
+        (&["connection", "network"], "network error"),
+        (&["invalid", "malformed"], "invalid request"),
+    ];
 
-    if err_lower.contains("not leader") || err_lower.contains("forward to leader") {
-        return "operation must be performed on leader node".to_string();
-    }
-
-    if err_lower.contains("not found") || err_lower.contains("key not found") {
-        return "resource not found".to_string();
-    }
-
-    if err_lower.contains("not initialized") || err_lower.contains("cluster not initialized") {
-        return "cluster not initialized".to_string();
-    }
-
-    if err_lower.contains("timeout") || err_lower.contains("timed out") {
-        return "operation timed out".to_string();
-    }
-
-    if err_lower.contains("connection") || err_lower.contains("network") {
-        return "network error".to_string();
-    }
-
-    if err_lower.contains("invalid") || err_lower.contains("malformed") {
-        return "invalid request".to_string();
-    }
-
-    // Generic fallback
-    "internal error".to_string()
+    debug_assert!(!err_lower.is_empty() || err.is_empty());
+    let sanitized = first_matching_message(&err_lower, cases).unwrap_or("internal error").to_string();
+    debug_assert!(!sanitized.is_empty());
+    sanitized
 }
 
 /// Sanitize a ControlPlaneError for client consumption.
@@ -141,7 +105,8 @@ pub fn sanitize_control_error(err: &aspen_core::ControlPlaneError) -> String {
 /// but remove potentially sensitive implementation details.
 pub fn sanitize_kv_error(err: &aspen_core::KeyValueStoreError) -> String {
     use aspen_core::KeyValueStoreError;
-    match err {
+
+    let sanitized = match err {
         KeyValueStoreError::NotFound { .. } => "key not found".to_string(),
         KeyValueStoreError::Failed { .. } => "operation failed".to_string(),
         KeyValueStoreError::NotLeader { leader, .. } => {
@@ -180,7 +145,11 @@ pub fn sanitize_kv_error(err: &aspen_core::KeyValueStoreError) -> String {
         KeyValueStoreError::TopologyVersionMismatch { expected, actual } => {
             format!("topology version mismatch: expected {}, got {}", expected, actual)
         }
-    }
+    };
+
+    debug_assert!(!sanitized.is_empty());
+    debug_assert!(sanitized != err.to_string() || matches!(err, KeyValueStoreError::NotFound { .. }));
+    sanitized
 }
 
 /// Sanitize a blob store error for client consumption.

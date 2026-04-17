@@ -17,15 +17,16 @@ const MODULUS: u16 = 0x11B;
 #[inline]
 pub fn mul(a: u8, b: u8) -> u8 {
     let mut result: u8 = 0;
-    let mut a = a as u16;
+    let mut a = u16::from(a);
     let mut b = b;
 
     // Process each bit of b
-    let mut i: u32 = 0;
+    let mut i: u8 = 0;
     while i < 8 {
         // If low bit of b is set, XOR a into result
         if b & 1 != 0 {
-            result ^= a as u8;
+            let reduced = a & u16::from(u8::MAX);
+            result ^= u8::try_from(reduced).unwrap_or_default();
         }
         // Shift a left (multiply by x)
         a <<= 1;
@@ -34,7 +35,7 @@ pub fn mul(a: u8, b: u8) -> u8 {
             a ^= MODULUS;
         }
         b >>= 1;
-        i += 1;
+        i = i.saturating_add(1);
     }
     result
 }
@@ -91,19 +92,21 @@ pub fn eval_polynomial(coeffs: &[u8], x: u8) -> u8 {
 ///
 /// In GF(2^8), subtraction is XOR (same as addition).
 #[inline]
-pub fn lagrange_basis_at_zero(xs: &[u8], i: usize) -> u8 {
+pub fn lagrange_basis_at_zero(xs: &[u8], share_index: u32) -> u8 {
     let mut result: u8 = 1;
-    let xi = xs[i];
+    let share_slot = usize::try_from(share_index).unwrap_or(usize::MAX);
+    let xi = xs[share_slot];
 
-    let mut j: usize = 0;
-    while j < xs.len() {
-        if j != i {
-            let xj = xs[j];
+    let mut current_slot = 0u32;
+    while usize::try_from(current_slot).unwrap_or(usize::MAX) < xs.len() {
+        if current_slot != share_index {
+            let slot = usize::try_from(current_slot).unwrap_or(usize::MAX);
+            let xj = xs[slot];
             // numerator: xj, denominator: xj XOR xi (subtraction = addition in GF(2^8))
             let denom = xj ^ xi;
             result = mul(result, mul(xj, inv(denom)));
         }
-        j += 1;
+        current_slot = current_slot.saturating_add(1);
     }
     result
 }
@@ -114,33 +117,32 @@ mod tests {
 
     #[test]
     fn test_mul_identity() {
-        for a in 0u16..=255 {
-            assert_eq!(mul(a as u8, 1), a as u8);
-            assert_eq!(mul(1, a as u8), a as u8);
+        for a in u8::MIN..=u8::MAX {
+            assert_eq!(mul(a, 1), a);
+            assert_eq!(mul(1, a), a);
         }
     }
 
     #[test]
     fn test_mul_zero() {
-        for a in 0u16..=255 {
-            assert_eq!(mul(a as u8, 0), 0);
-            assert_eq!(mul(0, a as u8), 0);
+        for a in u8::MIN..=u8::MAX {
+            assert_eq!(mul(a, 0), 0);
+            assert_eq!(mul(0, a), 0);
         }
     }
 
     #[test]
     fn test_mul_commutative() {
-        for a in 0u16..=255 {
-            for b in 0u16..=255 {
-                assert_eq!(mul(a as u8, b as u8), mul(b as u8, a as u8));
+        for a in u8::MIN..=u8::MAX {
+            for b in u8::MIN..=u8::MAX {
+                assert_eq!(mul(a, b), mul(b, a));
             }
         }
     }
 
     #[test]
     fn test_inverse() {
-        for a in 1u16..=255 {
-            let a = a as u8;
+        for a in 1u8..=u8::MAX {
             let a_inv = inv(a);
             assert_eq!(mul(a, a_inv), 1, "inv({a}) = {a_inv}, but a * inv(a) != 1");
         }
@@ -150,8 +152,8 @@ mod tests {
     fn test_eval_constant_polynomial() {
         // f(x) = 42 for all x
         let coeffs = [42u8];
-        for x in 0u16..=255 {
-            assert_eq!(eval_polynomial(&coeffs, x as u8), 42);
+        for x in u8::MIN..=u8::MAX {
+            assert_eq!(eval_polynomial(&coeffs, x), 42);
         }
     }
 
@@ -165,8 +167,8 @@ mod tests {
     fn test_eval_linear_polynomial() {
         // f(x) = 0 + 1*x => f(x) = x
         let coeffs = [0u8, 1];
-        for x in 0u16..=255 {
-            assert_eq!(eval_polynomial(&coeffs, x as u8), x as u8);
+        for x in u8::MIN..=u8::MAX {
+            assert_eq!(eval_polynomial(&coeffs, x), x);
         }
     }
 

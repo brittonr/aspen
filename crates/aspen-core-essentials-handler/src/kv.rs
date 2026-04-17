@@ -41,6 +41,39 @@ use aspen_rpc_core::RequestHandler;
 /// Handler for key-value store operations.
 pub struct KvHandler;
 
+struct IndexCreateArgs {
+    name: String,
+    field: String,
+    field_type: String,
+    is_unique: bool,
+    should_index_nulls: bool,
+}
+
+struct IndexScanArgs {
+    index_name: String,
+    mode: String,
+    value: String,
+    end_value: Option<String>,
+    limit_results: Option<u32>,
+}
+
+fn u32_from_len(len: usize) -> u32 {
+    u32::try_from(len).unwrap_or(u32::MAX)
+}
+
+fn parse_index_field_type(field_type: &str) -> Option<IndexFieldType> {
+    match field_type {
+        "integer" => Some(IndexFieldType::Integer),
+        "unsignedinteger" => Some(IndexFieldType::UnsignedInteger),
+        "string" => Some(IndexFieldType::String),
+        _ => None,
+    }
+}
+
+fn decode_index_value_bytes(value: &str) -> Vec<u8> {
+    hex::decode(value).unwrap_or_else(|_| value.as_bytes().to_vec())
+}
+
 #[async_trait::async_trait]
 impl RequestHandler for KvHandler {
     fn can_handle(&self, request: &ClientRpcRequest) -> bool {
@@ -68,47 +101,87 @@ impl RequestHandler for KvHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
-        match request {
-            ClientRpcRequest::ReadKey { key } => handle_read(ctx, key).await,
-            ClientRpcRequest::WriteKey { key, value } => handle_write(ctx, key, value).await,
-            ClientRpcRequest::DeleteKey { key } => handle_delete(ctx, key).await,
-            ClientRpcRequest::ScanKeys {
-                prefix,
-                limit,
-                continuation_token,
-            } => handle_scan(ctx, prefix, limit, continuation_token).await,
-            ClientRpcRequest::CompareAndSwapKey {
-                key,
-                expected,
-                new_value,
-            } => handle_cas(ctx, key, expected, new_value).await,
-            ClientRpcRequest::CompareAndDeleteKey { key, expected } => handle_cad(ctx, key, expected).await,
-            ClientRpcRequest::BatchRead { keys } => handle_batch_read(ctx, keys).await,
-            ClientRpcRequest::BatchWrite { operations } => handle_batch_write(ctx, operations).await,
-            ClientRpcRequest::ConditionalBatchWrite { conditions, operations } => {
-                handle_conditional_batch_write(ctx, conditions, operations).await
-            }
-            ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } => {
-                handle_write_with_lease(ctx, key, value, lease_id).await
-            }
-            ClientRpcRequest::IndexCreate {
+        if let ClientRpcRequest::ReadKey { key } = request {
+            return handle_read(ctx, key).await;
+        }
+        if let ClientRpcRequest::WriteKey { key, value } = request {
+            return handle_write(ctx, key, value).await;
+        }
+        if let ClientRpcRequest::DeleteKey { key } = request {
+            return handle_delete(ctx, key).await;
+        }
+        if let ClientRpcRequest::ScanKeys {
+            prefix,
+            limit,
+            continuation_token,
+        } = request
+        {
+            return handle_scan(ctx, prefix, limit, continuation_token).await;
+        }
+        if let ClientRpcRequest::CompareAndSwapKey {
+            key,
+            expected,
+            new_value,
+        } = request
+        {
+            return handle_cas(ctx, key, expected, new_value).await;
+        }
+        if let ClientRpcRequest::CompareAndDeleteKey { key, expected } = request {
+            return handle_cad(ctx, key, expected).await;
+        }
+        if let ClientRpcRequest::BatchRead { keys } = request {
+            return handle_batch_read(ctx, keys).await;
+        }
+        if let ClientRpcRequest::BatchWrite { operations } = request {
+            return handle_batch_write(ctx, operations).await;
+        }
+        if let ClientRpcRequest::ConditionalBatchWrite { conditions, operations } = request {
+            return handle_conditional_batch_write(ctx, conditions, operations).await;
+        }
+        if let ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } = request {
+            return handle_write_with_lease(ctx, key, value, lease_id).await;
+        }
+        if let ClientRpcRequest::IndexCreate {
+            name,
+            field,
+            field_type,
+            is_unique,
+            should_index_nulls,
+        } = request
+        {
+            return handle_index_create(ctx, IndexCreateArgs {
                 name,
                 field,
                 field_type,
                 is_unique,
                 should_index_nulls,
-            } => handle_index_create(ctx, name, field, field_type, is_unique, should_index_nulls).await,
-            ClientRpcRequest::IndexDrop { name } => handle_index_drop(ctx, name).await,
-            ClientRpcRequest::IndexScan {
+            })
+            .await;
+        }
+        if let ClientRpcRequest::IndexDrop { name } = request {
+            return handle_index_drop(ctx, name).await;
+        }
+        if let ClientRpcRequest::IndexScan {
+            index_name,
+            mode,
+            value,
+            end_value,
+            limit,
+        } = request
+        {
+            return handle_index_scan(ctx, IndexScanArgs {
                 index_name,
                 mode,
                 value,
                 end_value,
-                limit,
-            } => handle_index_scan(ctx, index_name, mode, value, end_value, limit),
-            ClientRpcRequest::IndexList => handle_index_list(ctx),
-            _ => Err(anyhow::anyhow!("request not handled by KvHandler")),
+                limit_results: limit,
+            });
         }
+        if let ClientRpcRequest::IndexList = request {
+            return handle_index_list(ctx);
+        }
+
+        Err(anyhow::anyhow!("request not handled by KvHandler"))
     }
 
     fn name(&self) -> &'static str {
@@ -131,11 +204,14 @@ async fn handle_read(ctx: &ClientProtocolContext, key: String) -> anyhow::Result
                 Some(kv) => (Some(kv.value.into_bytes()), true),
                 None => (None, false),
             };
-            Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
+            let payload = ReadResultResponse {
                 value,
                 was_found,
                 error: None,
-            }))
+            };
+            debug_assert!(payload.error.is_none());
+            debug_assert_eq!(payload.was_found, payload.value.is_some());
+            Ok(ClientRpcResponse::ReadResult(payload))
         }
         // NotFound is not a real error — key simply doesn't exist
         Err(KeyValueStoreError::NotFound { .. }) => Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
@@ -143,7 +219,7 @@ async fn handle_read(ctx: &ClientProtocolContext, key: String) -> anyhow::Result
             was_found: false,
             error: None,
         })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         Err(e) => Ok(ClientRpcResponse::ReadResult(ReadResultResponse {
             value: None,
             was_found: false,
@@ -160,7 +236,7 @@ async fn handle_write(ctx: &ClientProtocolContext, key: String, value: Vec<u8>) 
             is_success: true,
             error: None,
         })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         Err(e) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
             is_success: false,
             error: Some(sanitize_kv_error(&e)),
@@ -183,15 +259,25 @@ async fn handle_write_with_lease(
         },
     };
     match ctx.kv_store.write(req).await {
-        Ok(_) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-            is_success: true,
-            error: None,
-        })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
-        Err(e) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-            is_success: false,
-            error: Some(sanitize_kv_error(&e)),
-        })),
+        Ok(_) => {
+            let payload = WriteResultResponse {
+                is_success: true,
+                error: None,
+            };
+            debug_assert!(payload.is_success);
+            debug_assert!(payload.error.is_none());
+            Ok(ClientRpcResponse::WriteResult(payload))
+        }
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(e) => {
+            let payload = WriteResultResponse {
+                is_success: false,
+                error: Some(sanitize_kv_error(&e)),
+            };
+            debug_assert!(!payload.is_success);
+            debug_assert!(payload.error.is_some());
+            Ok(ClientRpcResponse::WriteResult(payload))
+        }
     }
 }
 
@@ -203,7 +289,7 @@ async fn handle_delete(ctx: &ClientProtocolContext, key: String) -> anyhow::Resu
             was_deleted: result.is_deleted,
             error: None,
         })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         Err(e) => Ok(ClientRpcResponse::DeleteResult(DeleteResultResponse {
             key,
             was_deleted: false,
@@ -245,7 +331,7 @@ async fn handle_scan(
                 error: None,
             }))
         }
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         Err(e) => Ok(ClientRpcResponse::ScanResult(ScanResultResponse {
             entries: vec![],
             count: 0,
@@ -286,7 +372,7 @@ async fn handle_cas(
                 error: None,
             }))
         }
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         // Other errors (timeout, etc.)
         Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
             is_success: false,
@@ -320,7 +406,7 @@ async fn handle_cad(ctx: &ClientProtocolContext, key: String, expected: Vec<u8>)
                 error: None,
             }))
         }
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         // Other errors
         Err(e) => Ok(ClientRpcResponse::CompareAndSwapResult(CompareAndSwapResultResponse {
             is_success: false,
@@ -342,7 +428,7 @@ async fn handle_batch_read(ctx: &ClientProtocolContext, keys: Vec<String>) -> an
             // NotFound is normal — key doesn't exist, return None for that slot
             Err(KeyValueStoreError::NotFound { .. }) => None,
             // NOT_LEADER on first key means all reads will fail — bail early
-            Err(ref e) if is_not_leader_error(e) => {
+            Err(ref e) if is_leader_redirect_error(e) => {
                 return Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e)));
             }
             // Real errors should still surface as None per-key (batch is best-effort per key)
@@ -383,7 +469,7 @@ async fn handle_batch_write(
             command: WriteCommand::SetMulti { pairs },
         };
         if let Err(e) = ctx.kv_store.write(req).await {
-            if is_not_leader_error(&e) {
+            if is_leader_redirect_error(&e) {
                 return Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(&e)));
             }
             return Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
@@ -397,7 +483,7 @@ async fn handle_batch_write(
     for key in delete_keys {
         let req = DeleteRequest::new(key);
         if let Err(e) = ctx.kv_store.delete(req).await {
-            if is_not_leader_error(&e) {
+            if is_leader_redirect_error(&e) {
                 return Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(&e)));
             }
             return Ok(ClientRpcResponse::BatchWriteResult(BatchWriteResultResponse {
@@ -422,8 +508,8 @@ async fn handle_conditional_batch_write(
 ) -> anyhow::Result<ClientRpcResponse> {
     // Check preconditions
     for (i, condition) in conditions.iter().enumerate() {
-        let condition_met = check_condition(ctx, condition).await;
-        if !condition_met {
+        let is_condition_met = check_condition(ctx, condition).await;
+        if !is_condition_met {
             return Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
                 is_success: false,
                 conditions_met: false,
@@ -448,7 +534,7 @@ async fn handle_conditional_batch_write(
             command: WriteCommand::SetMulti { pairs },
         };
         if let Err(e) = ctx.kv_store.write(req).await {
-            if is_not_leader_error(&e) {
+            if is_leader_redirect_error(&e) {
                 return Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(&e)));
             }
             return Ok(ClientRpcResponse::ConditionalBatchWriteResult(ConditionalBatchWriteResultResponse {
@@ -514,55 +600,40 @@ async fn check_condition(ctx: &ClientProtocolContext, condition: &BatchCondition
 // Index handler functions
 // =============================================================================
 
-async fn handle_index_create(
-    ctx: &ClientProtocolContext,
-    name: String,
-    field: String,
-    field_type: String,
-    is_unique: bool,
-    should_index_nulls: bool,
-) -> anyhow::Result<ClientRpcResponse> {
-    // Validate name length
-    if name.len() > aspen_constants::MAX_INDEX_NAME_SIZE as usize {
+async fn handle_index_create(ctx: &ClientProtocolContext, args: IndexCreateArgs) -> anyhow::Result<ClientRpcResponse> {
+    if u32_from_len(args.name.len()) > aspen_constants::MAX_INDEX_NAME_SIZE {
         return Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
             is_success: false,
-            name,
+            name: args.name,
             error: Some(format!("index name exceeds {} bytes", aspen_constants::MAX_INDEX_NAME_SIZE)),
         }));
     }
 
-    // Reject builtin-reserved names
     let builtins = IndexDefinition::builtins();
-    if builtins.iter().any(|b| b.name == name) {
+    if builtins.iter().any(|builtin| builtin.name == args.name) {
         return Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
             is_success: false,
-            name,
+            name: args.name,
             error: Some("cannot create index with built-in name".to_string()),
         }));
     }
 
-    // Parse field type
-    let parsed_type = match field_type.as_str() {
-        "integer" => IndexFieldType::Integer,
-        "unsignedinteger" => IndexFieldType::UnsignedInteger,
-        "string" => IndexFieldType::String,
-        _ => {
-            return Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
-                is_success: false,
-                name,
-                error: Some(format!(
-                    "invalid field_type '{}': expected 'integer', 'unsignedinteger', or 'string'",
-                    field_type
-                )),
-            }));
-        }
+    let Some(parsed_type) = parse_index_field_type(&args.field_type) else {
+        return Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
+            is_success: false,
+            name: args.name,
+            error: Some(format!(
+                "invalid field_type '{}': expected 'integer', 'unsignedinteger', or 'string'",
+                args.field_type
+            )),
+        }));
     };
 
-    // Store index definition in KV (persisted via Raft)
-    let def = IndexDefinition::custom(&name, &field, parsed_type)
-        .with_unique(is_unique)
-        .with_index_nulls(should_index_nulls);
-
+    let def = IndexDefinition::custom(&args.name, &args.field, parsed_type)
+        .with_unique(args.is_unique)
+        .with_index_nulls(args.should_index_nulls);
+    debug_assert_eq!(def.name, args.name);
+    debug_assert_eq!(def.field.as_deref(), Some(args.field.as_str()));
     let key = def.system_key();
     let value_json = serde_json::to_string(&def).map_err(|e| anyhow::anyhow!("serialize index definition: {}", e))?;
 
@@ -570,20 +641,20 @@ async fn handle_index_create(
     match ctx.kv_store.write(write_req).await {
         Ok(_) => Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
             is_success: true,
-            name,
+            name: args.name,
             error: None,
         })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         Err(e) => Ok(ClientRpcResponse::IndexCreateResult(IndexCreateResultResponse {
             is_success: false,
-            name,
+            name: args.name,
             error: Some(sanitize_kv_error(&e)),
         })),
     }
 }
 
 async fn handle_index_drop(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
-    // Reject dropping builtin indexes
+    debug_assert!(!aspen_core::layer::INDEX_METADATA_PREFIX.is_empty());
     let builtins = IndexDefinition::builtins();
     if builtins.iter().any(|b| b.name == name) {
         return Ok(ClientRpcResponse::IndexDropResult(IndexDropResultResponse {
@@ -594,8 +665,8 @@ async fn handle_index_drop(ctx: &ClientProtocolContext, name: String) -> anyhow:
         }));
     }
 
-    // Delete the index definition from KV using the canonical system_key
     let key = format!("{}{}", aspen_core::layer::INDEX_METADATA_PREFIX, name);
+    debug_assert!(key.len() >= name.len());
     let delete_req = DeleteRequest { key: key.clone() };
     match ctx.kv_store.delete(delete_req).await {
         Ok(result) => Ok(ClientRpcResponse::IndexDropResult(IndexDropResultResponse {
@@ -604,7 +675,7 @@ async fn handle_index_drop(ctx: &ClientProtocolContext, name: String) -> anyhow:
             was_dropped: result.is_deleted,
             error: None,
         })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
         Err(e) => Ok(ClientRpcResponse::IndexDropResult(IndexDropResultResponse {
             is_success: false,
             name,
@@ -614,14 +685,7 @@ async fn handle_index_drop(ctx: &ClientProtocolContext, name: String) -> anyhow:
     }
 }
 
-fn handle_index_scan(
-    ctx: &ClientProtocolContext,
-    index_name: String,
-    mode: String,
-    value: String,
-    end_value: Option<String>,
-    limit: Option<u32>,
-) -> anyhow::Result<ClientRpcResponse> {
+fn handle_index_scan(ctx: &ClientProtocolContext, args: IndexScanArgs) -> anyhow::Result<ClientRpcResponse> {
     use aspen_core::layer::IndexQueryExecutor;
     use aspen_raft::StateMachineVariant;
 
@@ -638,20 +702,21 @@ fn handle_index_scan(
         }
     };
 
-    // Decode hex values
-    let value_bytes = hex::decode(&value).unwrap_or_else(|_| value.as_bytes().to_vec());
-    let scan_limit = limit.unwrap_or(aspen_constants::DEFAULT_SCAN_LIMIT).min(aspen_constants::MAX_SCAN_RESULTS);
+    debug_assert!(aspen_constants::DEFAULT_SCAN_LIMIT <= aspen_constants::MAX_SCAN_RESULTS);
+    let value_bytes = decode_index_value_bytes(&args.value);
+    let max_result_count = args
+        .limit_results
+        .unwrap_or(aspen_constants::DEFAULT_SCAN_LIMIT)
+        .min(aspen_constants::MAX_SCAN_RESULTS);
+    debug_assert!(max_result_count <= aspen_constants::MAX_SCAN_RESULTS);
 
-    let result = match mode.as_str() {
-        "exact" => sm.scan_by_index(&index_name, &value_bytes, scan_limit),
+    let result = match args.mode.as_str() {
+        "exact" => sm.scan_by_index(&args.index_name, &value_bytes, max_result_count),
         "range" => {
-            let end_bytes = end_value
-                .as_deref()
-                .map(|e| hex::decode(e).unwrap_or_else(|_| e.as_bytes().to_vec()))
-                .unwrap_or_default();
-            sm.range_by_index(&index_name, &value_bytes, &end_bytes, scan_limit)
+            let end_bytes = args.end_value.as_deref().map(decode_index_value_bytes).unwrap_or_default();
+            sm.range_by_index(&args.index_name, &value_bytes, &end_bytes, max_result_count)
         }
-        "lt" => sm.scan_index_lt(&index_name, &value_bytes, scan_limit),
+        "lt" => sm.scan_index_lt(&args.index_name, &value_bytes, max_result_count),
         other => {
             return Ok(ClientRpcResponse::IndexScanResult(IndexScanResultResponse {
                 is_success: false,
@@ -666,7 +731,7 @@ fn handle_index_scan(
     match result {
         Ok(scan_result) => {
             let primary_keys: Vec<String> = scan_result.primary_keys.iter().map(hex::encode).collect();
-            let count = primary_keys.len() as u32;
+            let count = u32_from_len(primary_keys.len());
             Ok(ClientRpcResponse::IndexScanResult(IndexScanResultResponse {
                 is_success: true,
                 primary_keys,
@@ -688,7 +753,6 @@ fn handle_index_scan(
 fn handle_index_list(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     use aspen_raft::StateMachineVariant;
 
-    // Get definitions from the state machine registry if available
     let definitions = match &ctx.state_machine {
         Some(StateMachineVariant::Redb(sm)) => {
             let registry = sm.index_registry();
@@ -713,7 +777,9 @@ fn handle_index_list(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcRes
         })
         .collect();
 
-    let count = indexes.len() as u32;
+    debug_assert_eq!(indexes.len(), definitions.len());
+    debug_assert!(indexes.iter().all(|index| !index.name.is_empty()));
+    let count = u32_from_len(indexes.len());
     Ok(ClientRpcResponse::IndexListResult(IndexListResultResponse {
         is_success: true,
         indexes,
@@ -722,7 +788,7 @@ fn handle_index_list(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcRes
     }))
 }
 
-use crate::error_utils::is_not_leader_error;
+use crate::error_utils::is_leader_redirect_error;
 use crate::error_utils::sanitize_kv_error;
 
 #[cfg(test)]

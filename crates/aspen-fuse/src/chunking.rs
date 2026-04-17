@@ -37,8 +37,27 @@ use serde::Serialize;
 use crate::constants::CHUNK_KEY_SUFFIX;
 use crate::constants::CHUNK_MANIFEST_MAGIC;
 use crate::constants::CHUNK_SIZE;
+use crate::constants::CHUNK_SIZE_U32;
 use crate::constants::MAX_FILE_SIZE;
 use crate::fs::AspenFs;
+
+fn usize_from_u64(value: u64) -> io::Result<usize> {
+    usize::try_from(value).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "value does not fit in usize"))
+}
+
+fn usize_from_u32(value: u32) -> io::Result<usize> {
+    usize::try_from(value).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "value does not fit in usize"))
+}
+
+fn u64_from_usize(value: usize) -> u64 {
+    u64::try_from(value).unwrap_or(u64::MAX)
+}
+
+fn checked_div_u64(numerator: u64, denominator: u64) -> io::Result<u64> {
+    numerator
+        .checked_div(denominator)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "division by zero"))
+}
 
 /// Chunk manifest stored at the main key for chunked files.
 ///
@@ -65,13 +84,21 @@ impl ChunkManifest {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "file too large"));
         }
 
-        let chunk_size = CHUNK_SIZE as u32;
-        let chunk_count = file_size.saturating_add(u64::from(chunk_size).saturating_sub(1)) / u64::from(chunk_size);
+        let chunk_size_bytes = CHUNK_SIZE_U32;
+        if chunk_size_bytes == 0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "chunk size must be non-zero"));
+        }
+        let chunk_count_u64 = checked_div_u64(
+            file_size.saturating_add(u64::from(chunk_size_bytes).saturating_sub(1)),
+            u64::from(chunk_size_bytes),
+        )?;
+        let chunk_count = u32::try_from(chunk_count_u64)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "chunk count exceeds u32"))?;
 
         Ok(Self {
             total_size: file_size,
-            chunk_size,
-            chunk_count: chunk_count as u32,
+            chunk_size: chunk_size_bytes,
+            chunk_count,
         })
     }
 
@@ -106,11 +133,16 @@ impl ChunkManifest {
 
         if chunk_index == self.chunk_count.saturating_sub(1) {
             // Last chunk may be smaller
-            let remainder = self.total_size % u64::from(self.chunk_size);
+            let Some(remainder) = self.total_size.checked_rem(u64::from(self.chunk_size)) else {
+                return self.chunk_size;
+            };
             if remainder == 0 {
                 self.chunk_size
             } else {
-                remainder as u32
+                match u32::try_from(remainder) {
+                    Ok(remainder_bytes) => remainder_bytes,
+                    Err(_) => self.chunk_size,
+                }
             }
         } else {
             self.chunk_size
@@ -122,8 +154,13 @@ impl ChunkManifest {
         if self.chunk_size == 0 {
             return 0;
         }
-        let index = offset / u64::from(self.chunk_size);
-        index.min(u64::from(self.chunk_count.saturating_sub(1))) as u32
+        let Some(index) = offset.checked_div(u64::from(self.chunk_size)) else {
+            return 0;
+        };
+        match u32::try_from(index.min(u64::from(self.chunk_count.saturating_sub(1)))) {
+            Ok(chunk_index) => chunk_index,
+            Err(_) => self.chunk_count.saturating_sub(1),
+        }
     }
 
     /// Calculate the byte offset within a chunk for a given file offset.
@@ -131,7 +168,13 @@ impl ChunkManifest {
         if self.chunk_size == 0 {
             return 0;
         }
-        (offset % u64::from(self.chunk_size)) as u32
+        let Some(chunk_offset_u64) = offset.checked_rem(u64::from(self.chunk_size)) else {
+            return 0;
+        };
+        match u32::try_from(chunk_offset_u64) {
+            Ok(chunk_offset) => chunk_offset,
+            Err(_) => 0,
+        }
     }
 }
 
@@ -156,6 +199,7 @@ pub fn chunked_read(fs: &AspenFs, key: &str) -> io::Result<Option<Vec<u8>>> {
     // NOTE: This should call fs.kv_read_raw(key) once that method exists.
     // For now, this is a placeholder showing the expected implementation.
     let value = fs.kv_read(key)?;
+    debug_assert!(!key.is_empty());
 
     let Some(value) = value else {
         return Ok(None);
@@ -174,7 +218,7 @@ pub fn chunked_read(fs: &AspenFs, key: &str) -> io::Result<Option<Vec<u8>>> {
         return Ok(Some(Vec::new()));
     }
 
-    let mut result = Vec::with_capacity(manifest.total_size as usize);
+    let mut result = Vec::with_capacity(usize_from_u64(manifest.total_size)?);
 
     for chunk_index in 0..manifest.chunk_count {
         let chunk_k = chunk_key(key, chunk_index);
@@ -185,7 +229,8 @@ pub fn chunked_read(fs: &AspenFs, key: &str) -> io::Result<Option<Vec<u8>>> {
     }
 
     // Verify we got the expected size
-    if result.len() != manifest.total_size as usize {
+    debug_assert!(manifest.chunk_count == 0 || manifest.chunk_size > 0);
+    if result.len() != usize_from_u64(manifest.total_size)? {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "size mismatch"));
     }
 
@@ -198,31 +243,29 @@ pub fn chunked_read(fs: &AspenFs, key: &str) -> io::Result<Option<Vec<u8>>> {
 pub fn chunked_read_range(fs: &AspenFs, key: &str, offset: u64, size: u32) -> io::Result<Vec<u8>> {
     let value = fs.kv_read(key)?.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "file not found"))?;
 
-    // Check if it's a manifest or raw data
     if !is_chunk_manifest(&value) {
-        // Small file: read from the in-memory value
-        let start = offset as usize;
-        if start >= value.len() {
+        let start_bytes = usize_from_u64(offset)?;
+        if start_bytes >= value.len() {
             return Ok(Vec::new());
         }
-        let end = start.saturating_add(size as usize).min(value.len());
-        return Ok(value[start..end].to_vec());
+        let end_bytes = start_bytes.saturating_add(usize_from_u32(size)?).min(value.len());
+        debug_assert!(start_bytes <= end_bytes);
+        return Ok(value[start_bytes..end_bytes].to_vec());
     }
 
-    // Large file: read only affected chunks
     let manifest = ChunkManifest::from_bytes(&value)?;
+    debug_assert!(manifest.chunk_count == 0 || manifest.chunk_size > 0);
 
     if offset >= manifest.total_size {
         return Ok(Vec::new());
     }
 
-    let end_offset = offset.saturating_add(u64::from(size)).min(manifest.total_size);
-    let bytes_to_read = end_offset.saturating_sub(offset);
-
-    let mut result = Vec::with_capacity(bytes_to_read as usize);
+    let end_offset_bytes = offset.saturating_add(u64::from(size)).min(manifest.total_size);
+    let bytes_to_read_bytes = end_offset_bytes.saturating_sub(offset);
+    let mut result = Vec::with_capacity(usize_from_u64(bytes_to_read_bytes)?);
 
     let start_chunk = manifest.chunk_index_for_offset(offset);
-    let end_chunk = manifest.chunk_index_for_offset(end_offset.saturating_sub(1));
+    let end_chunk = manifest.chunk_index_for_offset(end_offset_bytes.saturating_sub(1));
 
     for chunk_index in start_chunk..=end_chunk {
         if chunk_index >= manifest.chunk_count {
@@ -233,27 +276,30 @@ pub fn chunked_read_range(fs: &AspenFs, key: &str, offset: u64, size: u32) -> io
         let chunk_data =
             fs.kv_read(&chunk_k)?.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "chunk missing"))?;
 
-        // Calculate which bytes from this chunk we need
-        let chunk_start_offset = u64::from(chunk_index).saturating_mul(u64::from(manifest.chunk_size));
-        let chunk_end_offset = chunk_start_offset.saturating_add(chunk_data.len() as u64);
+        let chunk_start_offset_bytes = u64::from(chunk_index).saturating_mul(u64::from(manifest.chunk_size));
+        let chunk_end_offset_bytes = chunk_start_offset_bytes.saturating_add(u64_from_usize(chunk_data.len()));
 
-        let read_start = if offset > chunk_start_offset {
-            (offset.saturating_sub(chunk_start_offset)) as usize
+        let read_start_bytes = if offset > chunk_start_offset_bytes {
+            usize_from_u64(offset.saturating_sub(chunk_start_offset_bytes))?
         } else {
             0
         };
 
-        let read_end = if end_offset < chunk_end_offset {
-            (end_offset.saturating_sub(chunk_start_offset)) as usize
+        let read_end_bytes = if end_offset_bytes < chunk_end_offset_bytes {
+            usize_from_u64(end_offset_bytes.saturating_sub(chunk_start_offset_bytes))?
         } else {
             chunk_data.len()
         };
 
-        if read_start < chunk_data.len() && read_end <= chunk_data.len() && read_start <= read_end {
-            result.extend_from_slice(&chunk_data[read_start..read_end]);
+        if read_start_bytes < chunk_data.len()
+            && read_end_bytes <= chunk_data.len()
+            && read_start_bytes <= read_end_bytes
+        {
+            result.extend_from_slice(&chunk_data[read_start_bytes..read_end_bytes]);
         }
     }
 
+    debug_assert!(result.len() <= usize_from_u64(bytes_to_read_bytes).unwrap_or(usize::MAX));
     Ok(result)
 }
 
@@ -262,16 +308,19 @@ pub fn chunked_read_range(fs: &AspenFs, key: &str, offset: u64, size: u32) -> io
 /// If `data.len() <= CHUNK_SIZE`, stores as a single KV entry (backwards compatible).
 /// Otherwise, creates a manifest and stores chunks.
 pub fn chunked_write(fs: &AspenFs, key: &str, data: &[u8]) -> io::Result<()> {
-    let data_len = data.len() as u64;
+    let data_len = u64::try_from(data.len())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "file length exceeds u64"))?;
+    debug_assert!(!key.is_empty());
 
     if data_len > MAX_FILE_SIZE {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "file too large"));
     }
 
     // Small file: write directly (backwards compatible)
-    if data_len <= CHUNK_SIZE as u64 {
+    let chunk_threshold_bytes = u64::try_from(CHUNK_SIZE).unwrap_or(u64::MAX);
+    if data_len <= chunk_threshold_bytes {
         // Delete any existing chunks first (in case we're overwriting a large file)
-        let _ = chunked_delete(fs, key);
+        chunked_delete(fs, key)?;
         return fs.kv_write(key, data);
     }
 
@@ -280,8 +329,8 @@ pub fn chunked_write(fs: &AspenFs, key: &str, data: &[u8]) -> io::Result<()> {
 
     // Write chunks first
     for chunk_index in 0..manifest.chunk_count {
-        let chunk_start = (u64::from(chunk_index).saturating_mul(u64::from(manifest.chunk_size))) as usize;
-        let chunk_end = chunk_start.saturating_add(manifest.chunk_size as usize).min(data.len());
+        let chunk_start = usize_from_u64(u64::from(chunk_index).saturating_mul(u64::from(manifest.chunk_size)))?;
+        let chunk_end = chunk_start.saturating_add(usize_from_u32(manifest.chunk_size)?).min(data.len());
 
         let chunk_data = &data[chunk_start..chunk_end];
         let chunk_k = chunk_key(key, chunk_index);
@@ -290,6 +339,7 @@ pub fn chunked_write(fs: &AspenFs, key: &str, data: &[u8]) -> io::Result<()> {
     }
 
     // Write manifest last (makes the chunked file visible atomically)
+    debug_assert!(manifest.chunk_count > 0);
     let manifest_bytes = manifest.to_bytes()?;
     fs.kv_write(key, &manifest_bytes)?;
 
@@ -305,109 +355,96 @@ pub fn chunked_write_range(fs: &AspenFs, key: &str, offset: u64, data: &[u8]) ->
         return Ok(());
     }
 
-    // Check if file exists
     let existing = fs.kv_read(key)?;
-
-    let end_offset = offset.saturating_add(data.len() as u64);
-
-    if end_offset > MAX_FILE_SIZE {
+    let end_offset_bytes = offset.saturating_add(u64_from_usize(data.len()));
+    if end_offset_bytes > MAX_FILE_SIZE {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "file would be too large"));
     }
 
-    // If file doesn't exist or is small, handle differently
     match existing {
         None => {
-            // New file: create with zeros up to offset, then data
-            let mut new_data = vec![0u8; offset as usize];
+            let mut new_data = vec![0u8; usize_from_u64(offset)?];
             new_data.extend_from_slice(data);
+            debug_assert_eq!(new_data.len(), usize_from_u64(end_offset_bytes).unwrap_or(usize::MAX));
             chunked_write(fs, key, &new_data)
         }
         Some(ref value) if !is_chunk_manifest(value) => {
-            // Small file: read, modify, write
             let mut file_data = value.clone();
-            let required_size = end_offset as usize;
-
-            if file_data.len() < required_size {
-                file_data.resize(required_size, 0);
+            let required_size_bytes = usize_from_u64(end_offset_bytes)?;
+            if file_data.len() < required_size_bytes {
+                file_data.resize(required_size_bytes, 0);
             }
 
-            file_data[offset as usize..end_offset as usize].copy_from_slice(data);
+            let write_start_bytes = usize_from_u64(offset)?;
+            let write_end_bytes = usize_from_u64(end_offset_bytes)?;
+            debug_assert!(write_start_bytes <= write_end_bytes);
+            file_data[write_start_bytes..write_end_bytes].copy_from_slice(data);
             chunked_write(fs, key, &file_data)
         }
         Some(ref value) => {
-            // Large chunked file: update affected chunks
             let manifest = ChunkManifest::from_bytes(value)?;
-
-            // Determine new file size
-            let new_size = end_offset.max(manifest.total_size);
-
-            // If we're extending significantly, we might need to add chunks
-            let new_manifest = ChunkManifest::new(new_size)?;
+            let new_size_bytes = end_offset_bytes.max(manifest.total_size);
+            let new_manifest = ChunkManifest::new(new_size_bytes)?;
 
             let start_chunk = new_manifest.chunk_index_for_offset(offset);
-            let end_chunk = new_manifest.chunk_index_for_offset(end_offset.saturating_sub(1));
+            let end_chunk = new_manifest.chunk_index_for_offset(end_offset_bytes.saturating_sub(1));
 
-            // Update each affected chunk
             for chunk_index in start_chunk..=end_chunk {
                 let chunk_k = chunk_key(key, chunk_index);
-
-                // Read existing chunk (or create empty if extending)
+                let chunk_capacity_bytes = usize_from_u32(new_manifest.chunk_size)?;
                 let mut chunk_data = if chunk_index < manifest.chunk_count {
-                    fs.kv_read(&chunk_k)?.unwrap_or_else(|| vec![0u8; new_manifest.chunk_size as usize])
+                    fs.kv_read(&chunk_k)?.unwrap_or_else(|| vec![0u8; chunk_capacity_bytes])
                 } else {
-                    vec![0u8; new_manifest.chunk_size as usize]
+                    vec![0u8; chunk_capacity_bytes]
                 };
 
-                // Ensure chunk is properly sized
-                let expected_chunk_size = new_manifest.chunk_size_at(chunk_index) as usize;
-                if chunk_data.len() < expected_chunk_size {
-                    chunk_data.resize(expected_chunk_size, 0);
+                let expected_chunk_size_bytes = usize_from_u32(new_manifest.chunk_size_at(chunk_index))?;
+                if chunk_data.len() < expected_chunk_size_bytes {
+                    chunk_data.resize(expected_chunk_size_bytes, 0);
                 }
 
-                // Calculate which bytes to write to this chunk
-                let chunk_start_offset = u64::from(chunk_index).saturating_mul(u64::from(new_manifest.chunk_size));
-                let chunk_end_offset = chunk_start_offset.saturating_add(chunk_data.len() as u64);
+                let chunk_start_offset_bytes =
+                    u64::from(chunk_index).saturating_mul(u64::from(new_manifest.chunk_size));
+                let chunk_end_offset_bytes = chunk_start_offset_bytes.saturating_add(u64_from_usize(chunk_data.len()));
 
-                let write_start_in_chunk = if offset > chunk_start_offset {
-                    offset.saturating_sub(chunk_start_offset) as usize
+                let write_start_in_chunk_bytes = if offset > chunk_start_offset_bytes {
+                    usize_from_u64(offset.saturating_sub(chunk_start_offset_bytes))?
                 } else {
                     0
                 };
 
-                let write_end_in_chunk = if end_offset < chunk_end_offset {
-                    end_offset.saturating_sub(chunk_start_offset) as usize
+                let write_end_in_chunk_bytes = if end_offset_bytes < chunk_end_offset_bytes {
+                    usize_from_u64(end_offset_bytes.saturating_sub(chunk_start_offset_bytes))?
                 } else {
                     chunk_data.len()
                 };
 
-                // Calculate which part of data to copy
-                let data_start = if chunk_start_offset > offset {
-                    chunk_start_offset.saturating_sub(offset) as usize
+                let data_start_bytes = if chunk_start_offset_bytes > offset {
+                    usize_from_u64(chunk_start_offset_bytes.saturating_sub(offset))?
                 } else {
                     0
                 };
 
-                let data_end = data_start.saturating_add(write_end_in_chunk.saturating_sub(write_start_in_chunk));
+                let data_end_bytes = data_start_bytes
+                    .saturating_add(write_end_in_chunk_bytes.saturating_sub(write_start_in_chunk_bytes));
 
-                if data_end <= data.len()
-                    && write_start_in_chunk < chunk_data.len()
-                    && write_end_in_chunk <= chunk_data.len()
+                if data_end_bytes <= data.len()
+                    && write_start_in_chunk_bytes < chunk_data.len()
+                    && write_end_in_chunk_bytes <= chunk_data.len()
                 {
-                    chunk_data[write_start_in_chunk..write_end_in_chunk].copy_from_slice(&data[data_start..data_end]);
+                    chunk_data[write_start_in_chunk_bytes..write_end_in_chunk_bytes]
+                        .copy_from_slice(&data[data_start_bytes..data_end_bytes]);
                 }
 
-                // Truncate last chunk to its expected size
-                let final_chunk_size = new_manifest.chunk_size_at(chunk_index) as usize;
-                if chunk_data.len() > final_chunk_size {
-                    chunk_data.truncate(final_chunk_size);
+                let final_chunk_size_bytes = usize_from_u32(new_manifest.chunk_size_at(chunk_index))?;
+                if chunk_data.len() > final_chunk_size_bytes {
+                    chunk_data.truncate(final_chunk_size_bytes);
                 }
 
-                // Write updated chunk
                 fs.kv_write(&chunk_k, &chunk_data)?;
             }
 
-            // Update manifest if size changed
-            if new_size != manifest.total_size {
+            if new_size_bytes != manifest.total_size {
                 let manifest_bytes = new_manifest.to_bytes()?;
                 fs.kv_write(key, &manifest_bytes)?;
             }
@@ -432,7 +469,11 @@ pub fn chunked_delete(fs: &AspenFs, key: &str) -> io::Result<()> {
 
         for chunk_index in 0..manifest.chunk_count {
             let chunk_k = chunk_key(key, chunk_index);
-            let _ = fs.kv_delete(&chunk_k); // Ignore errors for missing chunks
+            if let Err(error) = fs.kv_delete(&chunk_k)
+                && error.kind() != io::ErrorKind::NotFound
+            {
+                return Err(error);
+            }
         }
     }
 
@@ -456,16 +497,24 @@ pub fn chunked_size(fs: &AspenFs, key: &str) -> io::Result<Option<u64>> {
         let manifest = ChunkManifest::from_bytes(&value)?;
         Ok(Some(manifest.total_size))
     } else {
-        Ok(Some(value.len() as u64))
+        Ok(Some(u64::try_from(value.len()).unwrap_or(u64::MAX)))
     }
+}
+
+/// Rename source and destination keys for chunked rename.
+pub struct RenameKeys<'a> {
+    /// Existing key to move from.
+    pub old_key: &'a str,
+    /// New key to move to.
+    pub new_key: &'a str,
 }
 
 /// Rename a file and all its chunks.
 ///
 /// Handles both chunked and non-chunked files.
-pub fn chunked_rename(fs: &AspenFs, old_key: &str, new_key: &str) -> io::Result<()> {
+pub fn chunked_rename(fs: &AspenFs, keys: RenameKeys<'_>) -> io::Result<()> {
     // Read to check if it's chunked
-    let value = fs.kv_read(old_key)?.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "file not found"))?;
+    let value = fs.kv_read(keys.old_key)?.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "file not found"))?;
 
     if is_chunk_manifest(&value) {
         // Chunked file: rename manifest and all chunks
@@ -473,8 +522,8 @@ pub fn chunked_rename(fs: &AspenFs, old_key: &str, new_key: &str) -> io::Result<
 
         // Copy chunks to new location
         for chunk_index in 0..manifest.chunk_count {
-            let old_chunk = chunk_key(old_key, chunk_index);
-            let new_chunk = chunk_key(new_key, chunk_index);
+            let old_chunk = chunk_key(keys.old_key, chunk_index);
+            let new_chunk = chunk_key(keys.new_key, chunk_index);
 
             if let Some(chunk_data) = fs.kv_read(&old_chunk)? {
                 fs.kv_write(&new_chunk, &chunk_data)?;
@@ -482,20 +531,26 @@ pub fn chunked_rename(fs: &AspenFs, old_key: &str, new_key: &str) -> io::Result<
         }
 
         // Copy manifest
-        fs.kv_write(new_key, &value)?;
+        fs.kv_write(keys.new_key, &value)?;
 
         // Delete old chunks
         for chunk_index in 0..manifest.chunk_count {
-            let old_chunk = chunk_key(old_key, chunk_index);
-            let _ = fs.kv_delete(&old_chunk); // Ignore errors
+            let old_chunk = chunk_key(keys.old_key, chunk_index);
+            if let Err(error) = fs.kv_delete(&old_chunk)
+                && error.kind() != io::ErrorKind::NotFound
+            {
+                return Err(error);
+            }
         }
     } else {
         // Small file: just copy the value
-        fs.kv_write(new_key, &value)?;
+        fs.kv_write(keys.new_key, &value)?;
     }
 
     // Delete old manifest/data
-    fs.kv_delete(old_key)?;
+    debug_assert!(!keys.old_key.is_empty());
+    debug_assert!(!keys.new_key.is_empty());
+    fs.kv_delete(keys.old_key)?;
 
     Ok(())
 }
@@ -761,7 +816,11 @@ mod tests {
         chunked_write(&fs, "test/old", &data).expect("write failed");
 
         // Rename
-        chunked_rename(&fs, "test/old", "test/new").expect("rename failed");
+        chunked_rename(&fs, RenameKeys {
+            old_key: "test/old",
+            new_key: "test/new",
+        })
+        .expect("rename failed");
 
         // Old should be gone
         assert!(chunked_read(&fs, "test/old").expect("read failed").is_none());

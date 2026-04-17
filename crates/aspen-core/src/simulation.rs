@@ -16,7 +16,10 @@ use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[allow(ambient_clock, reason = "simulation artifact capture owns the wall-clock timestamp boundary")]
+#[allow(
+    ambient_clock,
+    reason = "simulation artifact capture owns the wall-clock timestamp boundary"
+)]
 fn artifact_wall_clock_now() -> DateTime<Utc> {
     Utc::now()
 }

@@ -35,7 +35,10 @@ pub const MAX_VALUE_SIZE: usize = 1024 * 1024;
 // ============================================================================
 
 /// Chunk size for large files (512 KB). Files larger than this are split.
-pub const CHUNK_SIZE: usize = 512 * 1024;
+pub const CHUNK_SIZE: usize = 524_288;
+
+/// Chunk size for large files as a fixed-width integer.
+pub const CHUNK_SIZE_U32: u32 = 524_288;
 
 /// Maximum file size (4 GB). Theoretical limit with u32 chunk count.
 pub const MAX_FILE_SIZE: u64 = 4 * 1024 * 1024 * 1024;

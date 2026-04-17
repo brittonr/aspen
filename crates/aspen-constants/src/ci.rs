@@ -18,7 +18,7 @@
 ///
 /// Used in:
 /// - `aspen-ci/workers/resource_limiter.rs`: cgroup memory.max setting
-pub const MAX_CI_JOB_MEMORY_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+pub const MAX_CI_JOB_MEMORY_BYTES: u64 = 4_294_967_296;
 
 /// Soft memory limit per CI job for throttling (3 GB).
 ///
@@ -27,7 +27,7 @@ pub const MAX_CI_JOB_MEMORY_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 ///
 /// Used in:
 /// - `aspen-ci/workers/resource_limiter.rs`: cgroup memory.high setting
-pub const MAX_CI_JOB_MEMORY_HIGH_BYTES: u64 = 3 * 1024 * 1024 * 1024;
+pub const MAX_CI_JOB_MEMORY_HIGH_BYTES: u64 = 3_221_225_472;
 
 /// CPU weight for CI jobs (relative priority).
 ///
@@ -54,7 +54,7 @@ pub const MAX_CI_JOB_PIDS: u32 = 4096;
 ///
 /// Used in:
 /// - `aspen-ci/workers/resource_limiter.rs`: cgroup io.max setting
-pub const MAX_CI_JOB_IO_BYTES_PER_SEC: u64 = 100 * 1024 * 1024;
+pub const MAX_CI_JOB_IO_BYTES_PER_SEC: u64 = 104_857_600;
 
 /// Maximum I/O operations per CI job per second (1000 IOPS).
 ///
@@ -97,7 +97,7 @@ pub const MAX_CI_LOG_CHUNKS_PER_JOB: u32 = 10_000;
 /// Used in:
 /// - `aspen-ci/log_writer.rs`: Log cleanup scheduling
 /// - `aspen-rpc-handlers/handlers/ci.rs`: Log expiry checks
-pub const CI_LOG_RETENTION_MS: u64 = 24 * 60 * 60 * 1000;
+pub const CI_LOG_RETENTION_MS: u64 = 86_400_000;
 
 /// CI log flush interval in milliseconds (500 ms).
 ///
@@ -184,7 +184,7 @@ pub const MAX_CI_VMS_PER_NODE: u32 = 8;
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/config.rs`: Default VM memory configuration
-pub const CI_VM_DEFAULT_MEMORY_BYTES: u64 = 24 * 1024 * 1024 * 1024;
+pub const CI_VM_DEFAULT_MEMORY_BYTES: u64 = 25_769_803_776;
 
 /// Maximum memory per CI VM in bytes (64 GB).
 ///
@@ -193,7 +193,7 @@ pub const CI_VM_DEFAULT_MEMORY_BYTES: u64 = 24 * 1024 * 1024 * 1024;
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM memory validation
-pub const CI_VM_MAX_MEMORY_BYTES: u64 = 64 * 1024 * 1024 * 1024;
+pub const CI_VM_MAX_MEMORY_BYTES: u64 = 68_719_476_736;
 
 /// Default vCPUs per CI VM (4).
 ///
@@ -244,7 +244,7 @@ pub const CI_VM_AGENT_TIMEOUT_MS: u64 = 120_000;
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/worker.rs`: Default execution timeout
-pub const CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS: u64 = 30 * 60 * 1000;
+pub const CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS: u64 = 1_800_000;
 
 /// Maximum job execution timeout in CI VMs in milliseconds (4 hours).
 ///
@@ -253,7 +253,7 @@ pub const CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS: u64 = 30 * 60 * 1000;
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/worker.rs`: Max execution timeout
-pub const CI_VM_MAX_EXECUTION_TIMEOUT_MS: u64 = 4 * 60 * 60 * 1000;
+pub const CI_VM_MAX_EXECUTION_TIMEOUT_MS: u64 = 14_400_000;
 
 /// Default warm VM pool size (1).
 ///
@@ -292,7 +292,7 @@ pub const VSOCK_HOST_CID: u32 = 2;
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/executor.rs`: Message framing
 /// - `aspen-ci-agent/protocol.rs`: Message validation
-pub const CI_VM_MAX_MESSAGE_SIZE: u32 = 16 * 1024 * 1024;
+pub const CI_VM_MAX_MESSAGE_SIZE: u32 = 16_777_216;
 
 /// VM snapshot directory name.
 ///

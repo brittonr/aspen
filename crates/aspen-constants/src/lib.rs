@@ -140,7 +140,7 @@ mod tests {
         assert_eq!(api::MAX_SETMULTI_KEYS, 100, "MAX_SETMULTI_KEYS changed");
         assert_eq!(api::MAX_SCAN_RESULTS, 10_000, "MAX_SCAN_RESULTS changed");
         assert_eq!(api::DEFAULT_SCAN_LIMIT, 1_000, "DEFAULT_SCAN_LIMIT changed");
-        assert_eq!(api::MAX_BINARY_SIZE, 50 * 1024 * 1024, "MAX_BINARY_SIZE changed");
+        assert_eq!(api::MAX_BINARY_SIZE, 52_428_800, "MAX_BINARY_SIZE changed");
         assert_eq!(api::MAX_BUILD_TIME_MS, 300_000, "MAX_BUILD_TIME_MS changed");
         assert_eq!(api::MAX_CONCURRENT_VMS, 100, "MAX_CONCURRENT_VMS changed");
         assert_eq!(api::VM_STARTUP_TIMEOUT_MS, 10, "VM_STARTUP_TIMEOUT_MS changed");
@@ -151,11 +151,11 @@ mod tests {
 
     #[test]
     fn golden_network_constants() {
-        assert_eq!(network::MAX_RPC_MESSAGE_SIZE, 10 * 1024 * 1024);
+        assert_eq!(network::MAX_RPC_MESSAGE_SIZE, 10_485_760);
         assert_eq!(network::IROH_CONNECT_TIMEOUT_SECS, 5);
         assert_eq!(network::IROH_STREAM_OPEN_TIMEOUT_SECS, 2);
         assert_eq!(network::IROH_READ_TIMEOUT_SECS, 10);
-        assert_eq!(network::MAX_SNAPSHOT_SIZE, 1024 * 1024 * 1024);
+        assert_eq!(network::MAX_SNAPSHOT_SIZE, 1_073_741_824);
         assert_eq!(network::MAX_STREAMS_PER_CONNECTION, 100);
         assert_eq!(network::MAX_CONCURRENT_CONNECTIONS, 500);
         assert_eq!(network::MAX_PEERS, 1000);
@@ -212,14 +212,14 @@ mod tests {
 
     #[test]
     fn golden_file_size_constants() {
-        assert_eq!(network::MAX_CONFIG_FILE_SIZE, 10 * 1024 * 1024);
+        assert_eq!(network::MAX_CONFIG_FILE_SIZE, 10_485_760);
         assert_eq!(network::MAX_JOB_SPEC_SIZE, 1024 * 1024);
-        assert_eq!(network::MAX_SOPS_FILE_SIZE, 10 * 1024 * 1024);
+        assert_eq!(network::MAX_SOPS_FILE_SIZE, 10_485_760);
         assert_eq!(network::MAX_SQL_FILE_SIZE, 1024 * 1024);
         assert_eq!(network::MAX_KEY_FILE_SIZE, 64 * 1024);
         assert_eq!(network::MAX_GIT_OBJECT_TREE_DEPTH, 1000);
         assert_eq!(network::MAX_GIT_OBJECTS_PER_PUSH, 100_000);
-        assert_eq!(network::MAX_GIT_OBJECT_SIZE, 100 * 1024 * 1024);
+        assert_eq!(network::MAX_GIT_OBJECT_SIZE, 104_857_600);
     }
 
     // =========================================================================

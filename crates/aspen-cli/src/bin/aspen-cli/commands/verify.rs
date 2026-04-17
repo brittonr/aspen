@@ -26,6 +26,11 @@
 
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
+const VERIFY_ALL_KEY_COUNT: u32 = 3;
+const VERIFY_ALL_KEY_PREFIX: &str = "__verify_";
 
 use anyhow::Context;
 use anyhow::Result;
@@ -118,7 +123,76 @@ pub struct VerifyTiming {
 impl VerifyTiming {
     /// Total time across all phases.
     pub fn total_ms(&self) -> u64 {
-        self.write_ms + self.replicate_ms + self.read_ms + self.cleanup_ms + self.cross_node_ms
+        self.write_ms
+            .saturating_add(self.replicate_ms)
+            .saturating_add(self.read_ms)
+            .saturating_add(self.cleanup_ms)
+            .saturating_add(self.cross_node_ms)
+    }
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "CLI verification commands own the wall-clock measurement boundary"
+)]
+fn current_unix_seconds() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration_since_epoch) => duration_since_epoch.as_secs(),
+        Err(_) => 0,
+    }
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "CLI verification commands own the monotonic timing boundary"
+)]
+fn current_instant() -> Instant {
+    Instant::now()
+}
+
+fn elapsed_ms_u64(started_at: Instant) -> u64 {
+    match u64::try_from(started_at.elapsed().as_millis()) {
+        Ok(duration_ms) => duration_ms,
+        Err(_) => u64::MAX,
+    }
+}
+
+fn usize_from_u32(value: u32) -> usize {
+    match usize::try_from(value) {
+        Ok(value_usize) => value_usize,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn u32_from_usize(value: usize) -> u32 {
+    match u32::try_from(value) {
+        Ok(value_u32) => value_u32,
+        Err(_) => u32::MAX,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct DocsAvailabilityError<'a> {
+    code: &'a str,
+    message: &'a str,
+}
+
+async fn cleanup_verify_keys(client: &AspenClient, test_keys: &[String], errors: &mut Vec<String>) {
+    for key in test_keys {
+        match client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await {
+            Ok(ClientRpcResponse::DeleteResult(_)) => {}
+            Ok(ClientRpcResponse::Error(error)) => {
+                errors.push(format!("Cleanup {} failed: {}", key, error.message));
+            }
+            Ok(_) => {
+                errors.push(format!("Cleanup {} unexpected response", key));
+            }
+            Err(error) => {
+                errors.push(format!("Cleanup {} error: {}", key, error));
+            }
+        }
     }
 }
 
@@ -267,68 +341,64 @@ impl Outputable for VerifyAllResult {
 
 impl VerifyCommand {
     /// Execute the verify command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            VerifyCommand::Kv(args) => verify_kv(client, args, json).await,
-            VerifyCommand::Docs(args) => verify_docs(client, args, json).await,
-            VerifyCommand::Blob(args) => verify_blob(client, args, json).await,
-            VerifyCommand::All(args) => verify_all(client, args, json).await,
+            VerifyCommand::Kv(args) => verify_kv(client, args, is_json_output).await,
+            VerifyCommand::Docs(args) => verify_docs(client, args, is_json_output).await,
+            VerifyCommand::Blob(args) => verify_blob(client, args, is_json_output).await,
+            VerifyCommand::All(args) => verify_all(client, args, is_json_output).await,
         }
     }
 }
 
 /// Verify KV store replication.
-async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, json: bool) -> Result<()> {
-    let start = Instant::now();
-    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+async fn verify_kv(client: &AspenClient, args: VerifyKvArgs, is_json_output: bool) -> Result<()> {
+    let started_at = current_instant();
+    let timestamp = current_unix_seconds();
+    let test_key_count = usize_from_u32(args.count);
 
-    let mut errors = Vec::new();
-    let mut replication_details = Vec::new();
-    let mut node_status_list: Vec<NodeReplicationStatus> = Vec::new();
+    let mut errors = Vec::with_capacity(test_key_count);
+    let mut replication_details = Vec::with_capacity(test_key_count);
+    let mut node_status_list: Vec<NodeReplicationStatus> = Vec::with_capacity(test_key_count);
     let mut timing = VerifyTiming::default();
 
-    let test_keys: Vec<String> = (0..args.count).map(|i| format!("{}test_{}_{}", args.prefix, timestamp, i)).collect();
+    let test_keys: Vec<String> =
+        (0..args.count).map(|index| format!("{}test_{}_{}", args.prefix, timestamp, index)).collect();
+    debug_assert_eq!(test_keys.len(), test_key_count);
 
-    // Step 1: Write test keys
-    let write_start = Instant::now();
+    let write_started_at = current_instant();
     verify_kv_write_test_keys(client, &test_keys, &mut errors).await;
-    timing.write_ms = write_start.elapsed().as_millis() as u64;
+    timing.write_ms = elapsed_ms_u64(write_started_at);
 
-    // Brief pause for replication
-    let replicate_start = Instant::now();
+    let replicate_started_at = current_instant();
     tokio::time::sleep(Duration::from_millis(100)).await;
-    timing.replicate_ms = replicate_start.elapsed().as_millis() as u64;
+    timing.replicate_ms = elapsed_ms_u64(replicate_started_at);
 
-    // Step 2: Check replication status from leader
-    let replication_ok =
+    let is_replication_ok =
         verify_kv_check_replication(client, &mut errors, &mut replication_details, &mut node_status_list).await;
 
-    // Step 3: Read back and verify
-    let read_start = Instant::now();
+    let read_started_at = current_instant();
     let read_success = verify_kv_read_and_verify(client, &test_keys, &mut errors).await;
-    timing.read_ms = read_start.elapsed().as_millis() as u64;
+    timing.read_ms = elapsed_ms_u64(read_started_at);
 
-    // Step 4: Cleanup (unless --no-cleanup)
-    let cleanup_start = Instant::now();
+    let cleanup_started_at = current_instant();
     if !args.no_cleanup {
-        for key in &test_keys {
-            let _ = client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await;
-        }
+        cleanup_verify_keys(client, &test_keys, &mut errors).await;
     }
-    timing.cleanup_ms = cleanup_start.elapsed().as_millis() as u64;
+    timing.cleanup_ms = elapsed_ms_u64(cleanup_started_at);
 
-    let result = verify_kv_build_result(
-        args.count,
+    let result = verify_kv_build_result(VerifyKvResultInputs {
+        count: args.count,
         read_success,
-        replication_ok,
-        &errors,
-        &replication_details,
-        start.elapsed().as_millis() as u64,
+        is_replication_ok,
+        errors: &errors,
+        replication_details: &replication_details,
+        duration_ms: elapsed_ms_u64(started_at),
         timing,
         node_status_list,
-    );
+    });
 
-    print_output(&result, json);
+    print_output(&result, is_json_output);
 
     if !result.passed {
         anyhow::bail!("KV verification failed");
@@ -371,14 +441,14 @@ async fn verify_kv_check_replication(
             let last_applied = metrics.last_applied_index.unwrap_or(0);
 
             if let Some(replication) = &metrics.replication {
-                let mut all_caught_up = true;
+                let mut is_caught_up = true;
                 for progress in replication {
                     let matched = progress.matched_index.unwrap_or(0);
                     let lag = last_applied.saturating_sub(matched);
                     let status = if matched >= last_applied {
                         "OK".to_string()
                     } else {
-                        all_caught_up = false;
+                        is_caught_up = false;
                         "BEHIND".to_string()
                     };
 
@@ -395,7 +465,7 @@ async fn verify_kv_check_replication(
                         progress.node_id, matched, last_applied, status
                     ));
                 }
-                all_caught_up
+                is_caught_up
             } else {
                 replication_details.push(format!(
                     "leader: {}, last_applied: {}",
@@ -419,15 +489,17 @@ async fn verify_kv_check_replication(
 /// Read back test keys and verify values, returning the count of successes.
 async fn verify_kv_read_and_verify(client: &AspenClient, test_keys: &[String], errors: &mut Vec<String>) -> u32 {
     let mut read_success = 0u32;
-    for (i, key) in test_keys.iter().enumerate() {
-        let expected = format!("verify_value_{}", i);
+    let expected_key_count = u32_from_usize(test_keys.len());
+    debug_assert!(errors.len() <= errors.capacity());
+    for (index, key) in test_keys.iter().enumerate() {
+        let expected = format!("verify_value_{}", index);
         let response = client.send(ClientRpcRequest::ReadKey { key: key.clone() }).await;
 
         match response {
             Ok(ClientRpcResponse::ReadResult(result)) => {
                 if let Some(value) = result.value {
                     if value == expected.as_bytes() {
-                        read_success += 1;
+                        read_success = read_success.saturating_add(1);
                     } else {
                         errors.push(format!("Key {} value mismatch", key));
                     }
@@ -435,30 +507,46 @@ async fn verify_kv_read_and_verify(client: &AspenClient, test_keys: &[String], e
                     errors.push(format!("Key {} not found after write", key));
                 }
             }
-            Ok(ClientRpcResponse::Error(e)) => {
-                errors.push(format!("Read {} failed: {}", key, e.message));
+            Ok(ClientRpcResponse::Error(error)) => {
+                errors.push(format!("Read {} failed: {}", key, error.message));
             }
             Ok(_) => errors.push(format!("Read {} unexpected response", key)),
-            Err(e) => errors.push(format!("Read {} error: {}", key, e)),
+            Err(error) => errors.push(format!("Read {} error: {}", key, error)),
         }
     }
+    debug_assert!(read_success <= expected_key_count);
     read_success
 }
 
-/// Build the final VerifyResult from collected data.
-fn verify_kv_build_result(
+/// Inputs for building the final KV VerifyResult.
+struct VerifyKvResultInputs<'a> {
     count: u32,
     read_success: u32,
-    replication_ok: bool,
-    errors: &[String],
-    replication_details: &[String],
+    is_replication_ok: bool,
+    errors: &'a [String],
+    replication_details: &'a [String],
     duration_ms: u64,
     timing: VerifyTiming,
     node_status_list: Vec<NodeReplicationStatus>,
-) -> VerifyResult {
-    let passed = errors.is_empty() && read_success == count && replication_ok;
+}
 
-    let mut all_details = Vec::new();
+/// Build the final VerifyResult from collected data.
+fn verify_kv_build_result(inputs: VerifyKvResultInputs<'_>) -> VerifyResult {
+    let VerifyKvResultInputs {
+        count,
+        read_success,
+        is_replication_ok,
+        errors,
+        replication_details,
+        duration_ms,
+        timing,
+        node_status_list,
+    } = inputs;
+    let is_passed = errors.is_empty() && read_success == count && is_replication_ok;
+    debug_assert!(read_success <= count);
+    debug_assert!(is_passed || !errors.is_empty() || read_success < count || !is_replication_ok);
+
+    let mut all_details = Vec::with_capacity(2);
     if !replication_details.is_empty() {
         all_details.push(format!("replication: {}", replication_details.join(", ")));
     }
@@ -468,10 +556,10 @@ fn verify_kv_build_result(
 
     VerifyResult {
         name: "kv-replication".to_string(),
-        passed,
-        message: if passed {
+        passed: is_passed,
+        message: if is_passed {
             format!("{}/{} keys verified, replication OK", read_success, count)
-        } else if !replication_ok {
+        } else if !is_replication_ok {
             format!("{}/{} keys verified, replication BEHIND", read_success, count)
         } else {
             format!("{}/{} keys verified, {} errors", read_success, count, errors.len())
@@ -492,47 +580,42 @@ fn verify_kv_build_result(
 }
 
 /// Verify iroh-docs sync status.
-async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, json: bool) -> Result<()> {
-    let start = Instant::now();
-    let mut details = Vec::new();
+async fn verify_docs(client: &AspenClient, args: VerifyDocsArgs, is_json_output: bool) -> Result<()> {
+    let start = current_instant();
+    let mut details = Vec::with_capacity(6);
 
-    // Get docs status
-    let (enabled, namespace_id) = match verify_docs_check_status(client, &mut details).await {
+    let (is_enabled, namespace_id) = match verify_docs_check_status(client, &mut details).await {
         Ok(result) => result,
         Err(fail_result) => {
-            print_output(&fail_result, json);
+            print_output(&fail_result, is_json_output);
             anyhow::bail!("Docs verification failed");
         }
     };
 
-    if !enabled {
+    if !is_enabled {
         let result = VerifyResult {
             name: "docs-sync".to_string(),
             passed: true,
             message: "Docs sync not enabled (skipped)".to_string(),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: elapsed_ms_u64(start),
             details: None,
             timing: None,
             node_status: None,
         };
-        print_output(&result, json);
+        print_output(&result, is_json_output);
         return Ok(());
     }
 
-    // Optionally write and verify a test entry
     if args.write_test {
         verify_docs_write_read_test(client, &mut details).await;
     }
 
-    // Wait a bit more for sync to propagate before cross-node check
     tokio::time::sleep(Duration::from_millis(500)).await;
+    let is_cross_node_ok = verify_docs_cross_node(client, &mut details).await;
+    let result = verify_docs_build_result(&namespace_id, &details, is_cross_node_ok, elapsed_ms_u64(start));
+    debug_assert!(!args.write_test || !details.is_empty());
 
-    // Cross-node verification: check entry counts across all nodes
-    let cross_node_ok = verify_docs_cross_node(client, &mut details).await;
-
-    let result = verify_docs_build_result(&namespace_id, &details, cross_node_ok, start.elapsed().as_millis() as u64);
-
-    print_output(&result, json);
+    print_output(&result, is_json_output);
 
     if !result.passed {
         anyhow::bail!("Docs verification failed");
@@ -547,25 +630,28 @@ async fn verify_docs_check_status(
     details: &mut Vec<String>,
 ) -> std::result::Result<(bool, Option<String>), VerifyResult> {
     let response = client.send(ClientRpcRequest::DocsStatus).await;
-
-    match response {
+    let status_result = match response {
         Ok(ClientRpcResponse::DocsStatusResult(status)) => {
-            if let Some(ref ns_id) = status.namespace_id {
-                details.push(format!("namespace: {}", ns_id));
+            if let Some(ref namespace_id) = status.namespace_id {
+                details.push(format!("namespace: {}", namespace_id));
             }
-            if let Some(count) = status.entry_count {
-                details.push(format!("entries: {}", count));
+            if let Some(entry_count) = status.entry_count {
+                details.push(format!("entries: {}", entry_count));
             }
             Ok((true, status.namespace_id.clone()))
         }
-        Ok(ClientRpcResponse::Error(e)) => {
-            if is_docs_unavailable_error(&e.code, &e.message) {
+        Ok(ClientRpcResponse::Error(error)) => {
+            let docs_error = DocsAvailabilityError {
+                code: &error.code,
+                message: &error.message,
+            };
+            if is_docs_unavailable_error(docs_error) {
                 Ok((false, None))
             } else {
                 Err(VerifyResult {
                     name: "docs-sync".to_string(),
                     passed: false,
-                    message: format!("Status check failed: {}", e.message),
+                    message: format!("Status check failed: {}", error.message),
                     duration_ms: 0,
                     details: None,
                     timing: None,
@@ -582,23 +668,30 @@ async fn verify_docs_check_status(
             timing: None,
             node_status: None,
         }),
-        Err(e) => Err(VerifyResult {
+        Err(error) => Err(VerifyResult {
             name: "docs-sync".to_string(),
             passed: false,
-            message: format!("Error: {}", e),
+            message: format!("Error: {}", error),
             duration_ms: 0,
             details: None,
             timing: None,
             node_status: None,
         }),
-    }
+    };
+    debug_assert!(details.len() <= details.capacity());
+    debug_assert!(match &status_result {
+        Ok((is_enabled, _)) => *is_enabled || details.is_empty(),
+        Err(result) => !result.passed,
+    });
+    status_result
 }
 
 /// Write a test entry via docs and read it back, collecting results into details.
 async fn verify_docs_write_read_test(client: &AspenClient, details: &mut Vec<String>) {
-    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+    let timestamp = current_unix_seconds();
     let test_key = format!("__verify_docs_{}", timestamp);
     let test_value = "docs_verify_value";
+    debug_assert!(!test_key.is_empty());
 
     // Write via docs
     let write_response = client
@@ -642,22 +735,35 @@ async fn verify_docs_write_read_test(client: &AspenClient, details: &mut Vec<Str
     }
 
     // Cleanup
-    let _ = client.send(ClientRpcRequest::DocsDelete { key: test_key }).await;
+    match client.send(ClientRpcRequest::DocsDelete { key: test_key }).await {
+        Ok(ClientRpcResponse::DocsDeleteResult(_)) => {}
+        Ok(ClientRpcResponse::Error(error)) => {
+            details.push(format!("cleanup: FAIL ({})", error.message));
+        }
+        Ok(_) => {
+            details.push("cleanup: FAIL (unexpected response)".to_string());
+        }
+        Err(error) => {
+            details.push(format!("cleanup: FAIL ({})", error));
+        }
+    }
 }
 
 /// Build the final VerifyResult for docs verification.
 fn verify_docs_build_result(
     namespace_id: &Option<String>,
     details: &[String],
-    cross_node_ok: bool,
+    is_cross_node_ok: bool,
     duration_ms: u64,
 ) -> VerifyResult {
-    let passed = !details.iter().any(|d| d.contains("FAIL") || d.contains("MISMATCH")) && cross_node_ok;
+    let is_passed =
+        !details.iter().any(|detail| detail.contains("FAIL") || detail.contains("MISMATCH")) && is_cross_node_ok;
+    debug_assert!(is_passed || !details.is_empty() || !is_cross_node_ok);
 
     VerifyResult {
         name: "docs-sync".to_string(),
-        passed,
-        message: if passed {
+        passed: is_passed,
+        message: if is_passed {
             format!("Docs enabled, namespace {}", namespace_id.as_deref().unwrap_or("unknown"))
         } else {
             "Docs verification failed".to_string()
@@ -673,76 +779,83 @@ fn verify_docs_build_result(
     }
 }
 
+fn generate_test_blob_data(size_bytes: u32) -> Vec<u8> {
+    let mut test_data = Vec::with_capacity(usize::try_from(size_bytes).unwrap_or(usize::MAX));
+    for byte_index in 0..size_bytes {
+        test_data.push(u8::try_from(byte_index % 256).unwrap_or(0));
+    }
+    test_data
+}
+
 /// Verify blob storage.
-async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, json: bool) -> Result<()> {
-    let start = Instant::now();
-    let mut details = Vec::new();
+async fn verify_blob(client: &AspenClient, args: VerifyBlobArgs, is_json_output: bool) -> Result<()> {
+    let started_at = current_instant();
+    let mut details = Vec::with_capacity(8);
+    let test_data = generate_test_blob_data(args.size_bytes);
 
-    // Generate test data
-    let test_data: Vec<u8> = (0..args.size_bytes).map(|i| (i % 256) as u8).collect();
-
-    // Add blob and get hash
     let hash = match verify_blob_add(client, &test_data, &mut details).await {
-        VerifyBlobAddResult::Hash(h) => h,
+        VerifyBlobAddResult::Hash(hash) => hash,
         VerifyBlobAddResult::Skipped(result) => {
-            print_output(&result, json);
+            print_output(&result, is_json_output);
             return Ok(());
         }
         VerifyBlobAddResult::Failed(result) => {
-            print_output(&result, json);
+            print_output(&result, is_json_output);
             anyhow::bail!("Blob verification failed");
         }
     };
 
-    // Check blob exists
     verify_blob_check_exists(client, &hash, &mut details).await;
-
-    // Get blob and verify content
     verify_blob_verify_content(client, &hash, &test_data, &mut details).await;
+    let is_cross_node_ok = verify_blob_cross_node(client, &hash, &mut details).await;
 
-    // Cross-node verification
-    // Cross-node check is informational only — blobs are not Raft-replicated,
-    // so freshly-added blobs won't exist on other nodes until explicit replication.
-    let _cross_node_ok = verify_blob_cross_node(client, &hash, &mut details).await;
-
-    // Cleanup (unless --no-cleanup)
     if !args.no_cleanup {
-        let _ = client
+        match client
             .send(ClientRpcRequest::DeleteBlob {
                 hash: hash.clone(),
                 is_force: true,
             })
-            .await;
+            .await
+        {
+            Ok(ClientRpcResponse::DeleteBlobResult(_)) => {}
+            Ok(ClientRpcResponse::Error(error)) => {
+                details.push(format!("cleanup: FAIL ({})", error.message));
+            }
+            Ok(_) => {
+                details.push("cleanup: FAIL (unexpected response)".to_string());
+            }
+            Err(error) => {
+                details.push(format!("cleanup: FAIL ({})", error));
+            }
+        }
     }
 
-    let duration_ms = start.elapsed().as_millis() as u64;
-
-    // Cross-node check is informational only for blobs — blob storage is local
-    // (not Raft-replicated), so freshly-added blobs won't exist on other nodes
-    // until explicit replication is triggered. Only core operations (add/has/get)
-    // determine pass/fail.
-    let core_passed = !details
+    let is_core_passed = !details
         .iter()
-        .filter(|d| d.starts_with("add:") || d.starts_with("has:") || d.starts_with("get:"))
-        .any(|d| d.contains("FAIL"));
+        .filter(|detail| detail.starts_with("add:") || detail.starts_with("has:") || detail.starts_with("get:"))
+        .any(|detail| detail.contains("FAIL"));
+    let is_passed = is_core_passed && is_cross_node_ok;
+    debug_assert!(is_passed || !details.is_empty() || !is_cross_node_ok);
 
     let result = VerifyResult {
         name: "blob-storage".to_string(),
-        passed: core_passed,
-        message: if core_passed {
+        passed: is_passed,
+        message: if is_passed {
             format!("Blob add/has/get verified (hash: {}...)", &hash[..16.min(hash.len())])
+        } else if !is_cross_node_ok {
+            "Blob replication incomplete".to_string()
         } else {
             "Blob verification failed".to_string()
         },
-        duration_ms,
+        duration_ms: elapsed_ms_u64(started_at),
         details: Some(details.join(", ")),
         timing: None,
         node_status: None,
     };
 
-    print_output(&result, json);
+    print_output(&result, is_json_output);
 
-    if !core_passed {
+    if !is_passed {
         anyhow::bail!("Blob verification failed");
     }
 
@@ -772,8 +885,126 @@ fn verify_blob_result(passed: bool, message: impl Into<String>) -> VerifyResult 
     }
 }
 
+fn simple_verify_result(
+    name: &str,
+    is_passed: bool,
+    message: impl Into<String>,
+    duration_ms: u64,
+    details: Option<String>,
+) -> VerifyResult {
+    VerifyResult {
+        name: name.to_string(),
+        passed: is_passed,
+        message: message.into(),
+        duration_ms,
+        details,
+        timing: None,
+        node_status: None,
+    }
+}
+
+async fn run_verify_kv_replication_status(client: &AspenClient) -> (bool, Option<String>) {
+    match client.send(ClientRpcRequest::GetRaftMetrics).await {
+        Ok(ClientRpcResponse::RaftMetrics(metrics)) => {
+            let last_applied = metrics.last_applied_index.unwrap_or(0);
+            if let Some(replication) = &metrics.replication {
+                let is_all_caught_up =
+                    replication.iter().all(|progress| progress.matched_index.unwrap_or(0) >= last_applied);
+                let node_count = replication.len();
+                (is_all_caught_up, Some(format!("{} nodes, all caught up: {}", node_count, is_all_caught_up)))
+            } else {
+                (true, Some(format!("last_applied: {}", last_applied)))
+            }
+        }
+        _ => (true, None),
+    }
+}
+
+async fn run_verify_kv_cleanup(client: &AspenClient, test_keys: &[String], errors: &mut Vec<String>) {
+    for key in test_keys {
+        match client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await {
+            Ok(ClientRpcResponse::DeleteResult(_)) => {}
+            Ok(ClientRpcResponse::Error(error)) => errors.push(error.message),
+            Ok(_) => errors.push("unexpected cleanup response".to_string()),
+            Err(error) => errors.push(error.to_string()),
+        }
+    }
+}
+
+async fn run_verify_blob_add_hash(client: &AspenClient) -> std::result::Result<String, VerifyResult> {
+    let add_result = client
+        .send(ClientRpcRequest::AddBlob {
+            data: (u8::MIN..=u8::MAX).collect(),
+            tag: Some("__verify_all".to_string()),
+        })
+        .await;
+
+    let blob_result = match add_result {
+        Ok(ClientRpcResponse::AddBlobResult(result)) if result.is_success => match result.hash {
+            Some(hash) => Ok(hash),
+            None => Err(simple_verify_result("blob-storage", false, "No hash returned", 0, None)),
+        },
+        Ok(ClientRpcResponse::Error(error)) => {
+            let is_skipped = error.message.contains("not enabled") || error.message.contains("disabled");
+            let message = if is_skipped {
+                "Blobs not enabled (skipped)".to_string()
+            } else {
+                format!("Error: {}", error.message)
+            };
+            Err(simple_verify_result("blob-storage", is_skipped, message, 0, None))
+        }
+        Ok(ClientRpcResponse::AddBlobResult(_)) => {
+            Err(simple_verify_result("blob-storage", false, "Add blob failed", 0, None))
+        }
+        Ok(other_response) => Err(simple_verify_result(
+            "blob-storage",
+            false,
+            format!("Unexpected add blob response: {:?}", other_response),
+            0,
+            None,
+        )),
+        Err(error) => Err(simple_verify_result("blob-storage", false, format!("Transport error: {}", error), 0, None)),
+    };
+
+    debug_assert!(matches!(&blob_result, Ok(hash) if !hash.is_empty()) || blob_result.is_err());
+    debug_assert!(matches!(&blob_result, Err(result) if !result.message.is_empty()) || blob_result.is_ok());
+    blob_result
+}
+
+async fn run_verify_blob_cleanup(client: &AspenClient, hash: &str) {
+    match client
+        .send(ClientRpcRequest::DeleteBlob {
+            hash: hash.to_string(),
+            is_force: true,
+        })
+        .await
+    {
+        Ok(ClientRpcResponse::DeleteBlobResult(_)) => {}
+        Ok(ClientRpcResponse::Error(_)) | Ok(_) | Err(_) => {}
+    }
+}
+
+fn endpoint_addr_from_public_key_hex(key_hex: &str) -> Result<EndpointAddr> {
+    use iroh::PublicKey;
+
+    let bytes = hex::decode(key_hex).context("failed to decode public key")?;
+    let bytes_array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("public key must be 32 bytes"))?;
+    let public_key = PublicKey::from_bytes(&bytes_array).context("invalid public key bytes")?;
+    Ok(EndpointAddr::new(public_key))
+}
+
+fn debug_endpoint_public_key_hex(addr_str: &str) -> Option<&str> {
+    let public_key_prefix = "PublicKey(";
+    let start = addr_str.find(public_key_prefix)?;
+    let rest_start = start.saturating_add(public_key_prefix.len());
+    let rest = addr_str.get(rest_start..)?;
+    let end = rest.find(')')?;
+    Some(&rest[..end])
+}
+
 /// Add a test blob and return the hash, or a result if it failed/was skipped.
 async fn verify_blob_add(client: &AspenClient, test_data: &[u8], details: &mut Vec<String>) -> VerifyBlobAddResult {
+    debug_assert!(!test_data.is_empty());
     let add_response = client
         .send(ClientRpcRequest::AddBlob {
             data: test_data.to_vec(),
@@ -781,34 +1012,32 @@ async fn verify_blob_add(client: &AspenClient, test_data: &[u8], details: &mut V
         })
         .await;
 
-    let hash = match add_response {
+    let add_result = match add_response {
         Ok(ClientRpcResponse::AddBlobResult(result)) => {
             if result.is_success {
                 details.push(format!("add: OK ({} bytes)", result.size_bytes.unwrap_or(0)));
-                result.hash
+                match result.hash {
+                    Some(hash) => VerifyBlobAddResult::Hash(hash),
+                    None => VerifyBlobAddResult::Failed(verify_blob_result(false, "Add blob returned no hash")),
+                }
             } else {
-                let msg = format!("Add blob failed: {}", result.error.unwrap_or_default());
-                return VerifyBlobAddResult::Failed(verify_blob_result(false, msg));
+                let message = format!("Add blob failed: {}", result.error.unwrap_or_default());
+                VerifyBlobAddResult::Failed(verify_blob_result(false, message))
             }
         }
-        Ok(ClientRpcResponse::Error(e)) => {
-            if e.message.contains("not enabled") || e.message.contains("disabled") {
-                return VerifyBlobAddResult::Skipped(verify_blob_result(true, "Blob storage not enabled (skipped)"));
+        Ok(ClientRpcResponse::Error(error)) => {
+            if error.message.contains("not enabled") || error.message.contains("disabled") {
+                VerifyBlobAddResult::Skipped(verify_blob_result(true, "Blob storage not enabled (skipped)"))
+            } else {
+                VerifyBlobAddResult::Failed(verify_blob_result(false, format!("Add blob failed: {}", error.message)))
             }
-            return VerifyBlobAddResult::Failed(verify_blob_result(false, format!("Add blob failed: {}", e.message)));
         }
-        Ok(_) => {
-            return VerifyBlobAddResult::Failed(verify_blob_result(false, "Unexpected response from add blob"));
-        }
-        Err(e) => {
-            return VerifyBlobAddResult::Failed(verify_blob_result(false, format!("Error: {}", e)));
-        }
+        Ok(_) => VerifyBlobAddResult::Failed(verify_blob_result(false, "Unexpected response from add blob")),
+        Err(error) => VerifyBlobAddResult::Failed(verify_blob_result(false, format!("Error: {}", error))),
     };
 
-    match hash {
-        Some(h) => VerifyBlobAddResult::Hash(h),
-        None => VerifyBlobAddResult::Failed(verify_blob_result(false, "Add blob returned no hash")),
-    }
+    debug_assert!(details.iter().all(|detail| !detail.is_empty()));
+    add_result
 }
 
 /// Check if a blob exists by hash, appending result to details.
@@ -834,6 +1063,7 @@ async fn verify_blob_check_exists(client: &AspenClient, hash: &str, details: &mu
 
 /// Get a blob by hash and verify its content matches test_data.
 async fn verify_blob_verify_content(client: &AspenClient, hash: &str, test_data: &[u8], details: &mut Vec<String>) {
+    debug_assert!(!hash.is_empty());
     let get_response = client.send(ClientRpcRequest::GetBlob { hash: hash.to_string() }).await;
 
     match get_response {
@@ -846,65 +1076,67 @@ async fn verify_blob_verify_content(client: &AspenClient, hash: &str, test_data:
                 details.push("get: FAIL (not found)".to_string());
             }
         }
-        Ok(ClientRpcResponse::Error(e)) => {
-            details.push(format!("get: FAIL ({})", e.message));
+        Ok(ClientRpcResponse::Error(error)) => {
+            details.push(format!("get: FAIL ({})", error.message));
         }
         _ => {
             details.push("get: FAIL (unexpected response)".to_string());
         }
     }
+
+    debug_assert!(details.iter().all(|detail| !detail.is_empty()));
 }
 
 /// Run all verification tests.
-async fn verify_all(client: &AspenClient, args: VerifyAllArgs, json: bool) -> Result<()> {
-    let mut results = Vec::new();
+async fn verify_all(client: &AspenClient, args: VerifyAllArgs, is_json_output: bool) -> Result<()> {
+    let mut results = Vec::with_capacity(3);
 
-    // Verify KV
     let kv_result = run_verify_kv(client, args.no_cleanup).await;
-    let kv_failed = !kv_result.passed;
+    let is_kv_failed = !kv_result.passed;
     results.push(kv_result);
 
-    if kv_failed && !args.continue_on_error {
+    if is_kv_failed && !args.continue_on_error {
         let output = VerifyAllResult {
             total_passed: 0,
             total_failed: 1,
             results,
         };
-        print_output(&output, json);
+        print_output(&output, is_json_output);
         anyhow::bail!("Verification failed");
     }
 
-    // Verify Docs
     let docs_result = run_verify_docs(client).await;
-    let docs_failed = !docs_result.passed;
+    let is_docs_failed = !docs_result.passed;
     results.push(docs_result);
 
-    if docs_failed && !args.continue_on_error {
-        let passed = results.iter().filter(|r| r.passed).count() as u32;
-        let failed = results.iter().filter(|r| !r.passed).count() as u32;
+    if is_docs_failed && !args.continue_on_error {
+        let total_passed = u32_from_usize(results.iter().filter(|result| result.passed).count());
+        let total_failed = u32_from_usize(results.iter().filter(|result| !result.passed).count());
         let output = VerifyAllResult {
-            total_passed: passed,
-            total_failed: failed,
+            total_passed,
+            total_failed,
             results,
         };
-        print_output(&output, json);
+        debug_assert!(total_passed.saturating_add(total_failed) >= 1);
+        debug_assert!(total_failed >= 1);
+        print_output(&output, is_json_output);
         anyhow::bail!("Verification failed");
     }
 
-    // Verify Blobs
     let blob_result = run_verify_blob(client, args.no_cleanup).await;
     results.push(blob_result);
 
-    let total_passed = results.iter().filter(|r| r.passed).count() as u32;
-    let total_failed = results.iter().filter(|r| !r.passed).count() as u32;
-
+    let total_passed = u32_from_usize(results.iter().filter(|result| result.passed).count());
+    let total_failed = u32_from_usize(results.iter().filter(|result| !result.passed).count());
     let output = VerifyAllResult {
         total_passed,
         total_failed,
         results,
     };
 
-    print_output(&output, json);
+    debug_assert_eq!(total_passed.saturating_add(total_failed), 3);
+    debug_assert!(total_failed <= 3);
+    print_output(&output, is_json_output);
 
     if total_failed > 0 {
         anyhow::bail!("{} verification test(s) failed", total_failed);
@@ -914,18 +1146,16 @@ async fn verify_all(client: &AspenClient, args: VerifyAllArgs, json: bool) -> Re
 }
 
 /// Helper to run KV verification and return result.
-async fn run_verify_kv(client: &AspenClient, no_cleanup: bool) -> VerifyResult {
-    let start = Instant::now();
-    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+async fn run_verify_kv(client: &AspenClient, should_skip_cleanup: bool) -> VerifyResult {
+    let started_at = current_instant();
+    let count = VERIFY_ALL_KEY_COUNT;
+    let timestamp = current_unix_seconds();
+    let test_keys: Vec<String> =
+        (0..count).map(|index| format!("{}all_{}_{}", VERIFY_ALL_KEY_PREFIX, timestamp, index)).collect();
+    let mut errors = Vec::with_capacity(usize_from_u32(count));
 
-    let count = 3;
-    let prefix = "__verify_";
-    let test_keys: Vec<String> = (0..count).map(|i| format!("{}all_{}_{}", prefix, timestamp, i)).collect();
-    let mut errors = Vec::new();
-
-    // Write
-    for (i, key) in test_keys.iter().enumerate() {
-        let value = format!("verify_value_{}", i);
+    for (index, key) in test_keys.iter().enumerate() {
+        let value = format!("verify_value_{}", index);
         match client
             .send(ClientRpcRequest::WriteKey {
                 key: key.clone(),
@@ -934,89 +1164,71 @@ async fn run_verify_kv(client: &AspenClient, no_cleanup: bool) -> VerifyResult {
             .await
         {
             Ok(ClientRpcResponse::WriteResult(_)) => {}
-            Ok(ClientRpcResponse::Error(e)) => errors.push(e.message),
+            Ok(ClientRpcResponse::Error(error)) => errors.push(error.message),
             _ => errors.push("unexpected response".to_string()),
         }
     }
 
     tokio::time::sleep(Duration::from_millis(100)).await;
+    let (is_replication_ok, replication_detail) = run_verify_kv_replication_status(client).await;
 
-    // Check replication status
-    let (replication_ok, replication_detail) = match client.send(ClientRpcRequest::GetRaftMetrics).await {
-        Ok(ClientRpcResponse::RaftMetrics(metrics)) => {
-            let last_applied = metrics.last_applied_index.unwrap_or(0);
-            if let Some(replication) = &metrics.replication {
-                let all_ok = replication.iter().all(|p| p.matched_index.unwrap_or(0) >= last_applied);
-                let node_count = replication.len();
-                (all_ok, Some(format!("{} nodes, all caught up: {}", node_count, all_ok)))
-            } else {
-                (true, Some(format!("last_applied: {}", last_applied)))
-            }
-        }
-        _ => (true, None),
-    };
-
-    // Read
-    let mut success = 0;
-    for (i, key) in test_keys.iter().enumerate() {
-        let expected = format!("verify_value_{}", i);
-        match client.send(ClientRpcRequest::ReadKey { key: key.clone() }).await {
-            Ok(ClientRpcResponse::ReadResult(r)) if r.value.as_deref() == Some(expected.as_bytes()) => {
-                success += 1;
-            }
-            _ => {}
+    let mut success = 0u32;
+    for (index, key) in test_keys.iter().enumerate() {
+        let expected = format!("verify_value_{}", index);
+        if let Ok(ClientRpcResponse::ReadResult(result)) =
+            client.send(ClientRpcRequest::ReadKey { key: key.clone() }).await
+            && result.value.as_deref() == Some(expected.as_bytes())
+        {
+            success = success.saturating_add(1);
         }
     }
 
-    // Cleanup
-    if !no_cleanup {
-        for key in &test_keys {
-            let _ = client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await;
-        }
+    if !should_skip_cleanup {
+        run_verify_kv_cleanup(client, &test_keys, &mut errors).await;
     }
 
-    let passed = success == count && errors.is_empty() && replication_ok;
-
-    VerifyResult {
-        name: "kv-replication".to_string(),
-        passed,
-        message: if passed {
+    let is_passed = success == count && errors.is_empty() && is_replication_ok;
+    debug_assert!(success <= count);
+    debug_assert!(is_passed || !errors.is_empty() || success < count || !is_replication_ok);
+    simple_verify_result(
+        "kv-replication",
+        is_passed,
+        if is_passed {
             format!("{}/{} keys verified, replication OK", success, count)
-        } else if !replication_ok {
+        } else if !is_replication_ok {
             format!("{}/{} keys verified, replication BEHIND", success, count)
         } else {
             format!("{}/{} keys verified", success, count)
         },
-        duration_ms: start.elapsed().as_millis() as u64,
-        details: replication_detail,
-        timing: None,
-        node_status: None,
-    }
+        elapsed_ms_u64(started_at),
+        replication_detail,
+    )
 }
 
 /// Helper to run docs verification and return result.
 async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
-    let start = Instant::now();
-
-    match client.send(ClientRpcRequest::DocsStatus).await {
+    let started_at = current_instant();
+    let result = match client.send(ClientRpcRequest::DocsStatus).await {
         Ok(ClientRpcResponse::DocsStatusResult(status)) => VerifyResult {
             name: "docs-sync".to_string(),
             passed: true,
             message: format!("Docs enabled, {} entries", status.entry_count.unwrap_or(0)),
-            duration_ms: start.elapsed().as_millis() as u64,
-            details: status.namespace_id.map(|ns| format!("namespace: {}", ns)),
+            duration_ms: elapsed_ms_u64(started_at),
+            details: status.namespace_id.map(|namespace_id| format!("namespace: {}", namespace_id)),
             timing: None,
             node_status: None,
         },
-        Ok(ClientRpcResponse::Error(e)) => {
-            // Docs handler not registered when docs_sync is unavailable.
-            // The server sanitizes "no handler found" to "internal error".
-            if is_docs_unavailable_error(&e.code, &e.message) {
+        Ok(ClientRpcResponse::Error(error)) => {
+            let docs_error = DocsAvailabilityError {
+                code: &error.code,
+                message: &error.message,
+            };
+            if is_docs_unavailable_error(docs_error) {
                 VerifyResult {
                     name: "docs-sync".to_string(),
                     passed: true,
                     message: "Docs not enabled (skipped)".to_string(),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    duration_ms: elapsed_ms_u64(started_at),
                     details: None,
                     timing: None,
                     node_status: None,
@@ -1025,8 +1237,8 @@ async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
                 VerifyResult {
                     name: "docs-sync".to_string(),
                     passed: false,
-                    message: format!("Error: {}", e.message),
-                    duration_ms: start.elapsed().as_millis() as u64,
+                    message: format!("Error: {}", error.message),
+                    duration_ms: elapsed_ms_u64(started_at),
                     details: None,
                     timing: None,
                     node_status: None,
@@ -1037,12 +1249,15 @@ async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
             name: "docs-sync".to_string(),
             passed: false,
             message: "Unexpected response".to_string(),
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: elapsed_ms_u64(started_at),
             details: None,
             timing: None,
             node_status: None,
         },
-    }
+    };
+    debug_assert!(!result.message.is_empty());
+    debug_assert!(result.duration_ms <= elapsed_ms_u64(started_at));
+    result
 }
 
 /// Check if an error indicates the docs service is unavailable.
@@ -1052,110 +1267,48 @@ async fn run_verify_docs(client: &AspenClient) -> VerifyResult {
 /// which gets sanitized to "internal error" by the server's error sanitization
 /// layer (to prevent information leakage). We treat both the raw and sanitized
 /// forms as "docs not available".
-fn is_docs_unavailable_error(code: &str, message: &str) -> bool {
-    // Explicit "not enabled/disabled" from a registered handler
-    message.contains("not enabled")
-        || message.contains("disabled")
-        // Raw dispatch error (if sanitization is bypassed or changes)
-        || message.contains("no handler found")
-        || message.contains("not available")
-        // Sanitized form: dispatch error → "internal error" with INTERNAL_ERROR code.
-        // DocsStatus is a simple probe — the only way it triggers an internal error
-        // is if no handler is registered for it.
-        || (code == "INTERNAL_ERROR" && message == "internal error")
+fn is_docs_unavailable_error(error: DocsAvailabilityError<'_>) -> bool {
+    debug_assert!(!error.code.is_empty() || !error.message.is_empty());
+    let is_unavailable = error.message.contains("not enabled")
+        || error.message.contains("disabled")
+        || error.message.contains("no handler found")
+        || error.message.contains("not available")
+        || (error.code == "INTERNAL_ERROR" && error.message == "internal error");
+    debug_assert!(is_unavailable || !error.message.is_empty());
+    is_unavailable
 }
 
 /// Helper to run blob verification and return result.
-async fn run_verify_blob(client: &AspenClient, no_cleanup: bool) -> VerifyResult {
-    let start = Instant::now();
-    let test_data: Vec<u8> = (0..256).map(|i| i as u8).collect();
-
-    let add_result = client
-        .send(ClientRpcRequest::AddBlob {
-            data: test_data.clone(),
-            tag: Some("__verify_all".to_string()),
-        })
-        .await;
-
-    let hash = match add_result {
-        Ok(ClientRpcResponse::AddBlobResult(r)) if r.is_success => r.hash,
-        Ok(ClientRpcResponse::Error(e)) => {
-            if e.message.contains("not enabled") || e.message.contains("disabled") {
-                return VerifyResult {
-                    name: "blob-storage".to_string(),
-                    passed: true,
-                    message: "Blobs not enabled (skipped)".to_string(),
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    details: None,
-                    timing: None,
-                    node_status: None,
-                };
-            }
-            return VerifyResult {
-                name: "blob-storage".to_string(),
-                passed: false,
-                message: format!("Error: {}", e.message),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
-        }
-        _ => {
-            return VerifyResult {
-                name: "blob-storage".to_string(),
-                passed: false,
-                message: "Add blob failed".to_string(),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
+async fn run_verify_blob(client: &AspenClient, should_skip_cleanup: bool) -> VerifyResult {
+    let started_at = current_instant();
+    let hash = match run_verify_blob_add_hash(client).await {
+        Ok(hash) => hash,
+        Err(mut result) => {
+            result.duration_ms = elapsed_ms_u64(started_at);
+            return result;
         }
     };
 
-    let hash = match hash {
-        Some(h) => h,
-        None => {
-            return VerifyResult {
-                name: "blob-storage".to_string(),
-                passed: false,
-                message: "No hash returned".to_string(),
-                duration_ms: start.elapsed().as_millis() as u64,
-                details: None,
-                timing: None,
-                node_status: None,
-            };
-        }
-    };
-
-    // Verify exists
     let has_result = client.send(ClientRpcRequest::HasBlob { hash: hash.clone() }).await;
-    let exists = matches!(has_result, Ok(ClientRpcResponse::HasBlobResult(r)) if r.does_exist);
+    let is_blob_present = matches!(has_result, Ok(ClientRpcResponse::HasBlobResult(result)) if result.does_exist);
 
-    // Cleanup
-    if !no_cleanup {
-        let _ = client
-            .send(ClientRpcRequest::DeleteBlob {
-                hash: hash.clone(),
-                is_force: true,
-            })
-            .await;
+    if !should_skip_cleanup {
+        run_verify_blob_cleanup(client, &hash).await;
     }
 
-    VerifyResult {
-        name: "blob-storage".to_string(),
-        passed: exists,
-        message: if exists {
+    debug_assert!(!hash.is_empty());
+    debug_assert!(is_blob_present || !should_skip_cleanup || !hash.is_empty());
+    simple_verify_result(
+        "blob-storage",
+        is_blob_present,
+        if is_blob_present {
             format!("Blob verified (hash: {}...)", &hash[..16.min(hash.len())])
         } else {
             "Blob not found after add".to_string()
         },
-        duration_ms: start.elapsed().as_millis() as u64,
-        details: None,
-        timing: None,
-        node_status: None,
-    }
+        elapsed_ms_u64(started_at),
+        None,
+    )
 }
 
 // =============================================================================
@@ -1187,39 +1340,23 @@ async fn get_cluster_nodes(client: &AspenClient) -> Result<Vec<NodeDescriptor>> 
 /// We try to parse as hex public key first (most common), then fall back to
 /// other formats if needed.
 fn parse_endpoint_addr(addr_str: &str) -> Result<EndpointAddr> {
-    use iroh::PublicKey;
-
-    // Try parsing as hex-encoded public key (64 hex chars = 32 bytes)
-    if addr_str.len() == 64 && addr_str.chars().all(|c| c.is_ascii_hexdigit()) {
-        let bytes = hex::decode(addr_str).context("failed to decode hex public key")?;
-        let bytes_array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("public key must be 32 bytes"))?;
-        let public_key = PublicKey::from_bytes(&bytes_array).context("invalid public key bytes")?;
-        return Ok(EndpointAddr::new(public_key));
+    debug_assert!(!addr_str.is_empty());
+    if addr_str.len() == 64 && addr_str.chars().all(|character| character.is_ascii_hexdigit()) {
+        return endpoint_addr_from_public_key_hex(addr_str).context("failed to decode hex public key");
     }
 
-    // Try parsing as JSON
     if let Ok(addr) = serde_json::from_str::<EndpointAddr>(addr_str) {
         return Ok(addr);
     }
 
-    // Try extracting public key from Debug format: "EndpointAddr { id: PublicKey(...), ... }"
-    if addr_str.starts_with("EndpointAddr") {
-        // Extract the hex key from PublicKey(...) format
-        if let Some(start) = addr_str.find("PublicKey(") {
-            let rest = &addr_str[start + 10..];
-            if let Some(end) = rest.find(')') {
-                let key_hex = &rest[..end];
-                if key_hex.len() == 64 && key_hex.chars().all(|c| c.is_ascii_hexdigit()) {
-                    let bytes = hex::decode(key_hex).context("failed to decode public key from debug format")?;
-                    let bytes_array: [u8; 32] =
-                        bytes.try_into().map_err(|_| anyhow::anyhow!("public key must be 32 bytes"))?;
-                    let public_key = PublicKey::from_bytes(&bytes_array).context("invalid public key bytes")?;
-                    return Ok(EndpointAddr::new(public_key));
-                }
-            }
-        }
+    if let Some(key_hex) = debug_endpoint_public_key_hex(addr_str)
+        && key_hex.len() == 64
+        && key_hex.chars().all(|character| character.is_ascii_hexdigit())
+    {
+        return endpoint_addr_from_public_key_hex(key_hex).context("failed to decode public key from debug format");
     }
 
+    debug_assert!(addr_str.len() != 64 || !addr_str.chars().all(|character| character.is_ascii_hexdigit()));
     anyhow::bail!("unrecognized endpoint address format: {}", addr_str)
 }
 
@@ -1231,12 +1368,11 @@ fn parse_endpoint_addr(addr_str: &str) -> Result<EndpointAddr> {
 /// 3. Querying each node's entry count
 /// 4. Verifying counts match (within tolerance for eventual consistency)
 async fn verify_docs_cross_node(client: &AspenClient, details: &mut Vec<String>) -> bool {
-    // Get cluster nodes
     let nodes = match get_cluster_nodes(client).await {
         Ok(nodes) => nodes,
-        Err(e) => {
-            details.push(format!("cross-node: SKIP ({})", e));
-            return true; // Skip cross-node check if we can't get nodes
+        Err(error) => {
+            details.push(format!("cross-node: SKIP ({})", error));
+            return true;
         }
     };
 
@@ -1245,15 +1381,14 @@ async fn verify_docs_cross_node(client: &AspenClient, details: &mut Vec<String>)
         return true;
     }
 
-    // Get entry counts from all nodes
-    let mut entry_counts: Vec<(u64, u64)> = Vec::new();
-    let mut query_errors: Vec<String> = Vec::new();
+    let mut entry_counts: Vec<(u64, u64)> = Vec::with_capacity(nodes.len());
+    let mut query_errors: Vec<String> = Vec::with_capacity(nodes.len());
 
     for node in &nodes {
         let addr = match parse_endpoint_addr(&node.endpoint_addr) {
-            Ok(a) => a,
-            Err(e) => {
-                query_errors.push(format!("node {}: parse error ({})", node.node_id, e));
+            Ok(addr) => addr,
+            Err(error) => {
+                query_errors.push(format!("node {}: parse error ({})", node.node_id, error));
                 continue;
             }
         };
@@ -1265,46 +1400,48 @@ async fn verify_docs_cross_node(client: &AspenClient, details: &mut Vec<String>)
                     entry_counts.push((node.node_id, count));
                 }
             }
-            Ok(ClientRpcResponse::Error(e)) => {
-                if !e.message.contains("not enabled") {
-                    query_errors.push(format!("node {}: {}", node.node_id, e.message));
+            Ok(ClientRpcResponse::Error(error)) => {
+                if !error.message.contains("not enabled") {
+                    query_errors.push(format!("node {}: {}", node.node_id, error.message));
                 }
             }
             Ok(_) => {
                 query_errors.push(format!("node {}: unexpected response", node.node_id));
             }
-            Err(e) => {
-                query_errors.push(format!("node {}: {}", node.node_id, e));
+            Err(error) => {
+                query_errors.push(format!("node {}: {}", node.node_id, error));
             }
         }
     }
 
-    if entry_counts.is_empty() {
+    let is_consistent_across_nodes = if entry_counts.is_empty() {
         if !query_errors.is_empty() {
             details.push(format!("cross-node: SKIP (errors: {})", query_errors.join("; ")));
         } else {
             details.push("cross-node: SKIP (no nodes with docs enabled)".to_string());
         }
-        return true;
-    }
-
-    // Check if entry counts match across nodes
-    let first_count = entry_counts[0].1;
-    let all_match = entry_counts.iter().all(|(_, count)| *count == first_count);
-
-    let counts_str: String = entry_counts
-        .iter()
-        .map(|(id, count)| format!("node{}={}", id, count))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    if all_match {
-        details.push(format!("cross-node: OK ({} nodes, {} entries each)", entry_counts.len(), first_count));
         true
     } else {
-        details.push(format!("cross-node: MISMATCH ({})", counts_str));
-        false
-    }
+        let first_count = entry_counts[0].1;
+        let is_all_match = entry_counts.iter().all(|(_, count)| *count == first_count);
+        let counts_str = entry_counts
+            .iter()
+            .map(|(id, count)| format!("node{}={}", id, count))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        if is_all_match {
+            details.push(format!("cross-node: OK ({} nodes, {} entries each)", entry_counts.len(), first_count));
+            true
+        } else {
+            details.push(format!("cross-node: MISMATCH ({})", counts_str));
+            false
+        }
+    };
+
+    debug_assert!(details.len() <= details.capacity() || details.capacity() == 0);
+    debug_assert!(is_consistent_across_nodes || !entry_counts.is_empty());
+    is_consistent_across_nodes
 }
 
 /// Verify blob replication across all cluster nodes.
@@ -1314,11 +1451,10 @@ async fn verify_docs_cross_node(client: &AspenClient, details: &mut Vec<String>)
 /// 2. Querying each node to check if the blob hash exists
 /// 3. Verifying all nodes have the blob
 async fn verify_blob_cross_node(client: &AspenClient, hash: &str, details: &mut Vec<String>) -> bool {
-    // Get cluster nodes
     let nodes = match get_cluster_nodes(client).await {
         Ok(nodes) => nodes,
-        Err(e) => {
-            details.push(format!("cross-node: SKIP ({})", e));
+        Err(error) => {
+            details.push(format!("cross-node: SKIP ({})", error));
             return true;
         }
     };
@@ -1328,15 +1464,15 @@ async fn verify_blob_cross_node(client: &AspenClient, hash: &str, details: &mut 
         return true;
     }
 
-    let mut nodes_with_blob: Vec<u64> = Vec::new();
-    let mut nodes_without_blob: Vec<u64> = Vec::new();
-    let mut query_errors: Vec<String> = Vec::new();
+    let mut nodes_with_blob: Vec<u64> = Vec::with_capacity(nodes.len());
+    let mut nodes_without_blob: Vec<u64> = Vec::with_capacity(nodes.len());
+    let mut query_errors: Vec<String> = Vec::with_capacity(nodes.len());
 
     for node in &nodes {
         let addr = match parse_endpoint_addr(&node.endpoint_addr) {
-            Ok(a) => a,
-            Err(e) => {
-                query_errors.push(format!("node {}: parse error ({})", node.node_id, e));
+            Ok(addr) => addr,
+            Err(error) => {
+                query_errors.push(format!("node {}: parse error ({})", node.node_id, error));
                 continue;
             }
         };
@@ -1349,44 +1485,42 @@ async fn verify_blob_cross_node(client: &AspenClient, hash: &str, details: &mut 
                     nodes_without_blob.push(node.node_id);
                 }
             }
-            Ok(ClientRpcResponse::Error(e)) => {
-                if e.message.contains("not enabled") {
-                    // Blobs not enabled on this node, skip it
-                    continue;
+            Ok(ClientRpcResponse::Error(error)) => {
+                if !error.message.contains("not enabled") {
+                    query_errors.push(format!("node {}: {}", node.node_id, error.message));
                 }
-                query_errors.push(format!("node {}: {}", node.node_id, e.message));
             }
             Ok(_) => {
                 query_errors.push(format!("node {}: unexpected response", node.node_id));
             }
-            Err(e) => {
-                query_errors.push(format!("node {}: {}", node.node_id, e));
+            Err(error) => {
+                query_errors.push(format!("node {}: {}", node.node_id, error));
             }
         }
     }
 
-    if nodes_with_blob.is_empty() && nodes_without_blob.is_empty() {
+    let is_replication_acceptable = if nodes_with_blob.is_empty() && nodes_without_blob.is_empty() {
         if !query_errors.is_empty() {
             details.push(format!("cross-node: SKIP (errors: {})", query_errors.join("; ")));
         } else {
             details.push("cross-node: SKIP (no nodes with blobs enabled)".to_string());
         }
-        return true;
-    }
-
-    if nodes_without_blob.is_empty() {
+        true
+    } else if nodes_without_blob.is_empty() {
         details.push(format!("cross-node: OK ({}/{} nodes have blob)", nodes_with_blob.len(), nodes_with_blob.len()));
         true
     } else {
+        let total_nodes = nodes_with_blob.len().saturating_add(nodes_without_blob.len());
         details.push(format!(
             "cross-node: PARTIAL ({}/{} nodes have blob, missing on {:?})",
             nodes_with_blob.len(),
-            nodes_with_blob.len() + nodes_without_blob.len(),
+            total_nodes,
             nodes_without_blob
         ));
-        // Return true for partial (eventual consistency - blob may not have propagated yet)
-        // Use 50% threshold for "acceptable" replication
-        let total = nodes_with_blob.len() + nodes_without_blob.len();
-        nodes_with_blob.len() * 2 >= total
-    }
+        nodes_with_blob.len().saturating_mul(2) >= total_nodes
+    };
+
+    debug_assert!(!hash.is_empty());
+    debug_assert!(is_replication_acceptable || !nodes_without_blob.is_empty());
+    is_replication_acceptable
 }

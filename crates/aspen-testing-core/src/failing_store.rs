@@ -85,7 +85,7 @@ impl FaultConfig {
             FaultMode::None => false,
             FaultMode::All => true,
             FaultMode::EveryN(n) => {
-                let count = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
+                let count = (self.counter.fetch_add(1, Ordering::Relaxed)).saturating_add(1);
                 count.is_multiple_of(*n)
             }
         }
@@ -103,6 +103,11 @@ impl FaultConfig {
 /// All operations delegate to the inner store unless a fault is configured
 /// for that operation type. Faults can be changed at any time via the
 /// configuration methods.
+#[allow(unknown_lints)]
+#[allow(
+    multi_lock_ordering,
+    reason = "fault configs are independent and test helper does not nest these locks"
+)]
 pub struct FailingKeyValueStore<S: KeyValueStore + ?Sized> {
     inner: Arc<S>,
     read_faults: RwLock<FaultConfig>,

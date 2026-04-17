@@ -21,13 +21,12 @@
 //! and NOT_LEADER errors.
 
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use aspen_client_api::AlertRuleWire;
 use aspen_client_api::AlertStatus;
 use aspen_client_api::ClientRpcRequest;
 use aspen_core::KeyValueStore;
+use aspen_core::utils::current_time_ms;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 use tokio_util::sync::CancellationToken;
@@ -100,21 +99,21 @@ pub fn spawn_alert_evaluator(
 ) -> AlertEvaluatorHandle {
     let cancel = shutdown_token.child_token();
     let cancel_clone = cancel.clone();
-    let interval_seconds = config.interval_seconds;
+    let task_config = config.clone();
 
     let join_handle = tokio::spawn(async move {
-        run_evaluation_loop(ctx, config, cancel_clone).await;
+        run_evaluation_loop(ctx, task_config, cancel_clone).await;
     });
 
-    info!(interval_seconds = interval_seconds, "periodic alert evaluator started");
+    info!(interval_seconds = config.interval_seconds, "periodic alert evaluator started");
 
     AlertEvaluatorHandle { cancel, join_handle }
 }
 
 /// Main evaluation loop. Runs until cancelled.
 async fn run_evaluation_loop(ctx: ClientProtocolContext, config: AlertEvaluatorConfig, cancel: CancellationToken) {
-    let mut interval = tokio::time::interval(Duration::from_secs(config.interval_seconds));
-    interval.tick().await; // Skip first immediate tick
+    let mut tick_timer = tokio::time::interval(Duration::from_secs(config.interval_seconds));
+    tick_timer.tick().await; // Skip first immediate tick
 
     loop {
         tokio::select! {
@@ -122,7 +121,7 @@ async fn run_evaluation_loop(ctx: ClientProtocolContext, config: AlertEvaluatorC
                 info!("periodic alert evaluator shutting down");
                 return;
             }
-            _ = interval.tick() => {
+            _ = tick_timer.tick() => {
                 evaluate_all_rules(&ctx).await;
             }
         }
@@ -133,90 +132,105 @@ async fn run_evaluation_loop(ctx: ClientProtocolContext, config: AlertEvaluatorC
 ///
 /// Scans `_sys:alerts:rule:*` for rules, skips disabled ones, and evaluates
 /// each enabled rule. Only runs on the leader — skips the cycle otherwise.
+fn current_time_us() -> u64 {
+    current_time_ms().saturating_mul(1_000)
+}
+
+struct AlertRuleEntryRef<'a> {
+    key: &'a str,
+    value_json: &'a str,
+}
+
+fn parse_alert_rule_entry(entry: AlertRuleEntryRef<'_>) -> Option<AlertRuleWire> {
+    match serde_json::from_str(entry.value_json) {
+        Ok(rule) => Some(rule),
+        Err(error) => {
+            warn!(key = %entry.key, error = %error, "failed to parse alert rule");
+            None
+        }
+    }
+}
+
+async fn evaluate_rule(ctx: &ClientProtocolContext, rule: &AlertRuleWire, now_us: u64) -> (bool, bool) {
+    debug_assert!(!rule.name.is_empty());
+    let request = ClientRpcRequest::AlertEvaluate {
+        name: rule.name.clone(),
+        now_us,
+    };
+
+    let handler = CoreHandler;
+    match handler.handle(request, ctx).await {
+        Ok(aspen_client_api::ClientRpcResponse::AlertEvaluateResult(result)) => {
+            if result.did_transition {
+                let previous_status = result.previous_status.as_ref().map(format_status).unwrap_or("unknown");
+                let current_status = format_status(&result.status);
+                info!(
+                    rule = %result.rule_name,
+                    from = %previous_status,
+                    to = %current_status,
+                    value = ?result.computed_value,
+                    threshold = result.threshold,
+                    "alert state transition"
+                );
+            }
+            if let Some(ref error) = result.error {
+                warn!(rule = %result.rule_name, error = %error, "alert evaluation error");
+            }
+            (true, result.did_transition)
+        }
+        Ok(other) => {
+            warn!(rule = %rule.name, response = ?other, "unexpected response from alert evaluation");
+            (false, false)
+        }
+        Err(error) => {
+            warn!(rule = %rule.name, error = %error, "alert evaluation failed");
+            (false, false)
+        }
+    }
+}
+
 async fn evaluate_all_rules(ctx: &ClientProtocolContext) {
-    // Check leadership via a lightweight KV scan (ReadIndex).
-    // If the scan fails with NOT_LEADER, we skip this cycle.
-    let rule_prefix = "_sys:alerts:rule:";
     let scan_req = aspen_core::ScanRequest {
-        prefix: rule_prefix.to_string(),
+        prefix: "_sys:alerts:rule:".to_string(),
         limit_results: Some(aspen_constants::MAX_ALERT_RULES),
         continuation_token: None,
     };
 
     let rules = match ctx.kv_store.scan(scan_req).await {
         Ok(result) => result.entries,
-        Err(e) => {
-            // NOT_LEADER errors are expected on follower nodes — just skip quietly
-            let err_msg = format!("{}", e);
-            if err_msg.contains("NotLeader") || err_msg.contains("not leader") {
+        Err(error) => {
+            let error_text = format!("{}", error);
+            if error_text.contains("NotLeader") || error_text.contains("not leader") {
                 debug!("skipping alert evaluation cycle: not leader");
             } else {
-                warn!(error = %e, "failed to scan alert rules");
+                warn!(error = %error, "failed to scan alert rules");
             }
             return;
         }
     };
-
     if rules.is_empty() {
         debug!("no alert rules defined, skipping evaluation");
         return;
     }
 
-    let now_us = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
-
+    let now_us = current_time_us();
+    debug_assert!(now_us > 0);
     let mut evaluated_count: u32 = 0;
     let mut transition_count: u32 = 0;
 
     for entry in &rules {
-        let rule: AlertRuleWire = match serde_json::from_str(&entry.value) {
-            Ok(r) => r,
-            Err(e) => {
-                warn!(key = %entry.key, error = %e, "failed to parse alert rule");
-                continue;
-            }
+        let Some(rule) = parse_alert_rule_entry(AlertRuleEntryRef {
+            key: &entry.key,
+            value_json: &entry.value,
+        }) else {
+            continue;
         };
-
         if !rule.is_enabled {
             continue;
         }
-
-        // Dispatch through the handler so all evaluation logic is centralized
-        let request = ClientRpcRequest::AlertEvaluate {
-            name: rule.name.clone(),
-            now_us,
-        };
-
-        let handler = CoreHandler;
-        match handler.handle(request, ctx).await {
-            Ok(aspen_client_api::ClientRpcResponse::AlertEvaluateResult(result)) => {
-                evaluated_count = evaluated_count.saturating_add(1);
-
-                if result.did_transition {
-                    transition_count = transition_count.saturating_add(1);
-                    let prev = result.previous_status.as_ref().map(format_status).unwrap_or("unknown");
-                    let current = format_status(&result.status);
-
-                    info!(
-                        rule = %result.rule_name,
-                        from = %prev,
-                        to = %current,
-                        value = ?result.computed_value,
-                        threshold = result.threshold,
-                        "alert state transition"
-                    );
-                }
-
-                if let Some(ref error) = result.error {
-                    warn!(rule = %result.rule_name, error = %error, "alert evaluation error");
-                }
-            }
-            Ok(other) => {
-                warn!(rule = %rule.name, response = ?other, "unexpected response from alert evaluation");
-            }
-            Err(e) => {
-                warn!(rule = %rule.name, error = %e, "alert evaluation failed");
-            }
-        }
+        let (was_evaluated, did_transition) = evaluate_rule(ctx, &rule, now_us).await;
+        evaluated_count = evaluated_count.saturating_add(u32::from(was_evaluated));
+        transition_count = transition_count.saturating_add(u32::from(did_transition));
     }
 
     if evaluated_count > 0 {

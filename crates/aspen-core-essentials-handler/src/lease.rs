@@ -17,7 +17,7 @@ use aspen_core::WriteRequest;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
 
-use crate::error_utils::is_not_leader_error;
+use crate::error_utils::is_leader_redirect_error;
 use crate::error_utils::sanitize_kv_error;
 
 /// Handler for lease operations.
@@ -42,22 +42,30 @@ impl RequestHandler for LeaseHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
-        match request {
-            ClientRpcRequest::LeaseGrant { ttl_seconds, lease_id } => {
-                handle_lease_grant(ctx, ttl_seconds, lease_id).await
-            }
-            ClientRpcRequest::LeaseRevoke { lease_id } => handle_lease_revoke(ctx, lease_id).await,
-            ClientRpcRequest::LeaseKeepalive { lease_id } => handle_lease_keepalive(ctx, lease_id).await,
-            ClientRpcRequest::LeaseTimeToLive {
-                lease_id,
-                should_include_keys,
-            } => handle_lease_time_to_live(ctx, lease_id, should_include_keys).await,
-            ClientRpcRequest::LeaseList => handle_lease_list(ctx).await,
-            ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } => {
-                handle_write_key_with_lease(ctx, key, value, lease_id).await
-            }
-            _ => Err(anyhow::anyhow!("request not handled by LeaseHandler")),
+        if let ClientRpcRequest::LeaseGrant { ttl_seconds, lease_id } = request {
+            return handle_lease_grant(ctx, ttl_seconds, lease_id).await;
         }
+        if let ClientRpcRequest::LeaseRevoke { lease_id } = request {
+            return handle_lease_revoke(ctx, lease_id).await;
+        }
+        if let ClientRpcRequest::LeaseKeepalive { lease_id } = request {
+            return handle_lease_keepalive(ctx, lease_id).await;
+        }
+        if let ClientRpcRequest::LeaseTimeToLive {
+            lease_id,
+            should_include_keys,
+        } = request
+        {
+            return handle_lease_time_to_live(ctx, lease_id, should_include_keys).await;
+        }
+        if let ClientRpcRequest::LeaseList = request {
+            return handle_lease_list(ctx).await;
+        }
+        if let ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } = request {
+            return handle_write_key_with_lease(ctx, key, value, lease_id).await;
+        }
+
+        Err(anyhow::anyhow!("request not handled by LeaseHandler"))
     }
 
     fn name(&self) -> &'static str {
@@ -87,19 +95,29 @@ async fn handle_lease_grant(
         .await;
 
     match result {
-        Ok(response) => Ok(ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-            is_success: true,
-            lease_id: response.lease_id,
-            ttl_seconds: response.ttl_seconds,
-            error: None,
-        })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
-        Err(e) => Ok(ClientRpcResponse::LeaseGrantResult(LeaseGrantResultResponse {
-            is_success: false,
-            lease_id: None,
-            ttl_seconds: None,
-            error: Some(sanitize_kv_error(&e)),
-        })),
+        Ok(response) => {
+            let payload = LeaseGrantResultResponse {
+                is_success: true,
+                lease_id: response.lease_id,
+                ttl_seconds: response.ttl_seconds,
+                error: None,
+            };
+            debug_assert!(payload.is_success);
+            debug_assert!(payload.error.is_none());
+            Ok(ClientRpcResponse::LeaseGrantResult(payload))
+        }
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(e) => {
+            let payload = LeaseGrantResultResponse {
+                is_success: false,
+                lease_id: None,
+                ttl_seconds: None,
+                error: Some(sanitize_kv_error(&e)),
+            };
+            debug_assert!(!payload.is_success);
+            debug_assert!(payload.error.is_some());
+            Ok(ClientRpcResponse::LeaseGrantResult(payload))
+        }
     }
 }
 
@@ -112,17 +130,27 @@ async fn handle_lease_revoke(ctx: &ClientProtocolContext, lease_id: u64) -> anyh
         .await;
 
     match result {
-        Ok(response) => Ok(ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
-            is_success: true,
-            keys_deleted: response.keys_deleted,
-            error: None,
-        })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
-        Err(e) => Ok(ClientRpcResponse::LeaseRevokeResult(LeaseRevokeResultResponse {
-            is_success: false,
-            keys_deleted: None,
-            error: Some(sanitize_kv_error(&e)),
-        })),
+        Ok(response) => {
+            let payload = LeaseRevokeResultResponse {
+                is_success: true,
+                keys_deleted: response.keys_deleted,
+                error: None,
+            };
+            debug_assert!(payload.is_success);
+            debug_assert!(payload.error.is_none());
+            Ok(ClientRpcResponse::LeaseRevokeResult(payload))
+        }
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(e) => {
+            let payload = LeaseRevokeResultResponse {
+                is_success: false,
+                keys_deleted: None,
+                error: Some(sanitize_kv_error(&e)),
+            };
+            debug_assert!(!payload.is_success);
+            debug_assert!(payload.error.is_some());
+            Ok(ClientRpcResponse::LeaseRevokeResult(payload))
+        }
     }
 }
 
@@ -135,19 +163,29 @@ async fn handle_lease_keepalive(ctx: &ClientProtocolContext, lease_id: u64) -> a
         .await;
 
     match result {
-        Ok(response) => Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-            is_success: true,
-            lease_id: response.lease_id,
-            ttl_seconds: response.ttl_seconds,
-            error: None,
-        })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
-        Err(e) => Ok(ClientRpcResponse::LeaseKeepaliveResult(LeaseKeepaliveResultResponse {
-            is_success: false,
-            lease_id: None,
-            ttl_seconds: None,
-            error: Some(sanitize_kv_error(&e)),
-        })),
+        Ok(response) => {
+            let payload = LeaseKeepaliveResultResponse {
+                is_success: true,
+                lease_id: response.lease_id,
+                ttl_seconds: response.ttl_seconds,
+                error: None,
+            };
+            debug_assert!(payload.is_success);
+            debug_assert!(payload.error.is_none());
+            Ok(ClientRpcResponse::LeaseKeepaliveResult(payload))
+        }
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(e) => {
+            let payload = LeaseKeepaliveResultResponse {
+                is_success: false,
+                lease_id: None,
+                ttl_seconds: None,
+                error: Some(sanitize_kv_error(&e)),
+            };
+            debug_assert!(!payload.is_success);
+            debug_assert!(payload.error.is_some());
+            Ok(ClientRpcResponse::LeaseKeepaliveResult(payload))
+        }
     }
 }
 
@@ -247,15 +285,25 @@ async fn handle_write_key_with_lease(
         .await;
 
     match result {
-        Ok(_) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-            is_success: true,
-            error: None,
-        })),
-        Err(ref e) if is_not_leader_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
-        Err(e) => Ok(ClientRpcResponse::WriteResult(WriteResultResponse {
-            is_success: false,
-            error: Some(sanitize_kv_error(&e)),
-        })),
+        Ok(_) => {
+            let payload = WriteResultResponse {
+                is_success: true,
+                error: None,
+            };
+            debug_assert!(payload.is_success);
+            debug_assert!(payload.error.is_none());
+            Ok(ClientRpcResponse::WriteResult(payload))
+        }
+        Err(ref e) if is_leader_redirect_error(e) => Ok(ClientRpcResponse::error("NOT_LEADER", sanitize_kv_error(e))),
+        Err(e) => {
+            let payload = WriteResultResponse {
+                is_success: false,
+                error: Some(sanitize_kv_error(&e)),
+            };
+            debug_assert!(!payload.is_success);
+            debug_assert!(payload.error.is_some());
+            Ok(ClientRpcResponse::WriteResult(payload))
+        }
     }
 }
 

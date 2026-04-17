@@ -24,7 +24,7 @@ pub const ENVELOPE_MAGIC: [u8; 4] = [0x41, 0x45, 0x4E, 0x43];
 const TAG_LEN: usize = 16;
 
 /// Minimum serialized size: magic(4) + version(1) + epoch(8) + nonce(12) + tag(16).
-const MIN_SERIALIZED_LEN: usize = 4 + 1 + 8 + 12 + TAG_LEN;
+const MIN_SERIALIZED_LEN: usize = 4usize.saturating_add(1).saturating_add(8).saturating_add(12).saturating_add(TAG_LEN);
 
 /// An encrypted value envelope.
 ///
@@ -105,7 +105,8 @@ impl EncryptedValue {
     ///
     /// Layout: `magic(4) || version(1) || epoch_be(8) || nonce(12) || ciphertext+tag(N)`
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(4 + 1 + 8 + 12 + self.ciphertext.len());
+        let header_len = 4usize.saturating_add(1).saturating_add(8).saturating_add(12);
+        let mut buf = Vec::with_capacity(header_len.saturating_add(self.ciphertext.len()));
         buf.extend_from_slice(&ENVELOPE_MAGIC);
         buf.push(self.version);
         buf.extend_from_slice(&self.epoch.to_be_bytes());
@@ -245,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_from_bytes_bad_magic() {
-        let mut bytes = vec![0u8; MIN_SERIALIZED_LEN + 1];
+        let mut bytes = vec![0u8; MIN_SERIALIZED_LEN.saturating_add(1)];
         bytes[0] = 42; // bad magic
         let result = EncryptedValue::from_bytes(&bytes);
         assert!(matches!(result, Err(EnvelopeError::UnsupportedVersion { .. })));
@@ -253,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_from_bytes_bad_version() {
-        let mut bytes = vec![0u8; MIN_SERIALIZED_LEN + 1];
+        let mut bytes = vec![0u8; MIN_SERIALIZED_LEN.saturating_add(1)];
         // Correct magic, bad version
         bytes[0..4].copy_from_slice(&ENVELOPE_MAGIC);
         bytes[4] = 99; // bad version

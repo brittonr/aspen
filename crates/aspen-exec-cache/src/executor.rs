@@ -114,6 +114,29 @@ pub struct CachedExecutor<S, B> {
     lookup_timeout_ms: u64,
 }
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "cache lookup latency measurement owns its monotonic timing boundary"
+)]
+fn cache_lookup_started_at() -> Instant {
+    Instant::now()
+}
+
+fn elapsed_lookup_time_us(started_at: Instant) -> u64 {
+    match u64::try_from(started_at.elapsed().as_micros()) {
+        Ok(lookup_time_us) => lookup_time_us,
+        Err(_) => u64::MAX,
+    }
+}
+
+fn output_file_limit() -> usize {
+    match usize::try_from(MAX_OUTPUT_FILES) {
+        Ok(output_file_limit) => output_file_limit,
+        Err(_) => usize::MAX,
+    }
+}
+
 impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
     /// Create a new cached executor.
     pub fn new(index: ExecCacheIndex<S>, blobs: B, tracker: ReadTracker) -> Self {
@@ -162,14 +185,14 @@ impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
         env: &HashMap<String, String>,
         now_ms: u64,
     ) -> Option<CachedExecResult> {
-        let start = Instant::now();
+        let start = cache_lookup_started_at();
 
         // Get the read set for this PID
         // Note: we peek without consuming — finalize happens later
         let read_set = self.tracker.finalize(pid)?;
         let key = self.compute_key(command, args, env, &read_set);
 
-        let lookup_time_us = start.elapsed().as_micros() as u64;
+        let lookup_time_us = elapsed_lookup_time_us(start);
 
         // Check timeout
         if lookup_time_us > self.lookup_timeout_ms.saturating_mul(1000) {
@@ -259,7 +282,7 @@ impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
             now_ms,
         } = params;
         // Check output file count
-        if output_files.len() > MAX_OUTPUT_FILES as usize {
+        if output_files.len() > output_file_limit() {
             return Err(ExecCacheError::TooManyOutputFiles {
                 count: output_files.len() as u32,
                 max: MAX_OUTPUT_FILES,

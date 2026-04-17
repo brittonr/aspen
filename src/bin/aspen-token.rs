@@ -106,6 +106,11 @@ enum Commands {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    debug_assert!(matches!(
+        cli.command,
+        Commands::GenerateRoot { .. } | Commands::Delegate { .. } | Commands::Verify { .. } | Commands::Inspect { .. }
+    ));
+    debug_assert!(!cli.json || std::env::args().any(|arg| arg == "--json"));
 
     match cli.command {
         Commands::GenerateRoot {
@@ -120,15 +125,15 @@ fn main() -> Result<()> {
             lifetime,
             audience,
             output,
-        } => delegate_cmd(
-            &parent_token,
-            &parent_key,
-            &capability,
-            &lifetime,
-            audience.as_deref(),
-            output.as_deref(),
-            cli.json,
-        ),
+        } => delegate_cmd(DelegateCmdInput {
+            parent_token_b64: &parent_token,
+            parent_key_hex: &parent_key,
+            capabilities: &capability,
+            lifetime_str: &lifetime,
+            audience_hex: audience.as_deref(),
+            output_path: output.as_deref(),
+            is_json_output: cli.json,
+        }),
         Commands::Verify { token, trusted_root } => verify_cmd(&token, &trusted_root, cli.json),
         Commands::Inspect { token } => inspect_cmd(&token, cli.json),
     }
@@ -138,8 +143,11 @@ fn generate_root_cmd(
     secret_key_hex: Option<String>,
     lifetime_str: &str,
     output_path: Option<&std::path::Path>,
-    json: bool,
+    is_json_output: bool,
 ) -> Result<()> {
+    debug_assert!(!lifetime_str.trim().is_empty());
+    debug_assert!(secret_key_hex.as_ref().map(|hex| !hex.is_empty()).unwrap_or(true));
+
     let secret_key = if let Some(hex) = secret_key_hex {
         parse_secret_key(&hex)?
     } else {
@@ -148,10 +156,9 @@ fn generate_root_cmd(
 
     let lifetime = parse_duration(lifetime_str)?;
     let token = generate_root_token(&secret_key, lifetime).context("failed to generate root token")?;
-
     let token_b64 = token.to_base64().context("failed to encode token")?;
 
-    let output = if json {
+    let output = if is_json_output {
         serde_json::json!({
             "token": token_b64,
             "issuer": secret_key.public().to_string(),
@@ -182,41 +189,42 @@ fn generate_root_cmd(
     Ok(())
 }
 
-fn delegate_cmd(
-    parent_token_b64: &str,
-    parent_key_hex: &str,
-    capabilities: &[String],
-    lifetime_str: &str,
-    audience_hex: Option<&str>,
-    output_path: Option<&std::path::Path>,
-    json: bool,
-) -> Result<()> {
-    let parent_token = CapabilityToken::from_base64(parent_token_b64).context("failed to decode parent token")?;
-    let issuer_key = parse_secret_key(parent_key_hex)?;
-    let lifetime = parse_duration(lifetime_str)?;
+struct DelegateCmdInput<'a> {
+    parent_token_b64: &'a str,
+    parent_key_hex: &'a str,
+    capabilities: &'a [String],
+    lifetime_str: &'a str,
+    audience_hex: Option<&'a str>,
+    output_path: Option<&'a std::path::Path>,
+    is_json_output: bool,
+}
 
+fn delegate_cmd(args: DelegateCmdInput<'_>) -> Result<()> {
+    debug_assert!(!args.parent_token_b64.is_empty());
+    debug_assert!(!args.parent_key_hex.is_empty());
+
+    let parent_token = CapabilityToken::from_base64(args.parent_token_b64).context("failed to decode parent token")?;
+    let issuer_key = parse_secret_key(args.parent_key_hex)?;
+    let lifetime = parse_duration(args.lifetime_str)?;
     let mut builder = TokenBuilder::new(issuer_key.clone()).delegated_from(parent_token);
 
-    // Parse and add capabilities
-    for cap_str in capabilities {
-        let cap = parse_capability(cap_str)?;
-        builder = builder.with_capability(cap);
+    for capability_str in args.capabilities {
+        let capability = parse_capability(capability_str)?;
+        builder = builder.with_capability(capability);
     }
 
-    // Set audience
-    if let Some(aud_hex) = audience_hex {
-        let aud_key = parse_public_key(aud_hex)?;
-        builder = builder.for_key(aud_key);
+    if let Some(audience_hex) = args.audience_hex {
+        let audience_key = parse_public_key(audience_hex)?;
+        builder = builder.for_key(audience_key);
     } else {
         builder = builder.for_audience(Audience::Bearer);
     }
 
     builder = builder.with_lifetime(lifetime).with_random_nonce();
-
     let token = builder.build().context("failed to build delegated token")?;
     let token_b64 = token.to_base64().context("failed to encode token")?;
 
-    let output = if json {
+    let output = if args.is_json_output {
         serde_json::json!({
             "token": token_b64,
             "issuer": issuer_key.public().to_string(),
@@ -241,7 +249,7 @@ fn delegate_cmd(
             token
                 .capabilities
                 .iter()
-                .map(|c| format!("  - {}", format_capability(c)))
+                .map(|capability| format!("  - {}", format_capability(capability)))
                 .collect::<Vec<_>>()
                 .join("\n"),
             format_timestamp(token.expires_at),
@@ -249,13 +257,15 @@ fn delegate_cmd(
         )
     };
 
-    write_output(&output, output_path)?;
+    write_output(&output, args.output_path)?;
     Ok(())
 }
 
-fn verify_cmd(token_b64: &str, trusted_roots: &[String], json: bool) -> Result<()> {
-    let token = CapabilityToken::from_base64(token_b64).context("failed to decode token")?;
+fn verify_cmd(token_b64: &str, trusted_roots: &[String], is_json_output: bool) -> Result<()> {
+    debug_assert!(!token_b64.is_empty());
+    debug_assert!(trusted_roots.iter().all(|root| !root.is_empty()));
 
+    let token = CapabilityToken::from_base64(token_b64).context("failed to decode token")?;
     let mut verifier = TokenVerifier::new();
     for root_hex in trusted_roots {
         let root_key = parse_public_key(root_hex)?;
@@ -263,13 +273,10 @@ fn verify_cmd(token_b64: &str, trusted_roots: &[String], json: bool) -> Result<(
     }
 
     let verification_result = verifier.verify(&token, None);
-
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before UNIX epoch")?.as_secs();
-
+    let now_secs = current_unix_seconds()?;
     let is_valid = verification_result.is_ok();
-    let error_msg = verification_result.err().map(|e| e.to_string());
-
-    let output = if json {
+    let error_msg = verification_result.err().map(|error| error.to_string());
+    let output = if is_json_output {
         serde_json::json!({
             "valid": is_valid,
             "error": error_msg,
@@ -280,70 +287,45 @@ fn verify_cmd(token_b64: &str, trusted_roots: &[String], json: bool) -> Result<(
             "issued_at_iso": format_timestamp(token.issued_at),
             "expires_at": token.expires_at,
             "expires_at_iso": format_timestamp(token.expires_at),
-            "expired": token.expires_at < now,
+            "expired": token.expires_at < now_secs,
             "has_nonce": token.nonce.is_some(),
             "has_proof": token.proof.is_some(),
         })
         .to_string()
     } else {
         let status = if is_valid { "✓ VALID" } else { "✗ INVALID" };
-
-        let mut output = format!(
-            "Token Verification\n\
-             ==================\n\
-             Status: {}\n",
-            status
-        );
-
-        if let Some(err) = error_msg {
-            output.push_str(&format!("Error: {}\n", err));
+        let mut output = format!("Token Verification\n==================\nStatus: {}\n", status);
+        if let Some(error_message) = error_msg {
+            output.push_str(&format!("Error: {}\n", error_message));
         }
-
         output.push_str(&format!(
-            "\nToken Details:\n\
-             Issuer: {}\n\
-             Audience: {}\n\
-             Capabilities:\n{}\n\
-             Issued: {} ({})\n\
-             Expires: {} ({})\n\
-             Expired: {}\n\
-             Has Nonce: {}\n\
-             Has Proof (delegated): {}",
+            "\nToken Details:\nIssuer: {}\nAudience: {}\nCapabilities:\n{}\nIssued: {} ({})\nExpires: {} ({})\nExpired: {}\nHas Nonce: {}\nHas Proof (delegated): {}",
             token.issuer,
             format_audience(&token.audience),
-            token
-                .capabilities
-                .iter()
-                .map(|c| format!("  - {}", format_capability(c)))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            format_timestamp(token.issued_at),
-            token.issued_at,
-            format_timestamp(token.expires_at),
-            token.expires_at,
-            token.expires_at < now,
+            token.capabilities.iter().map(|capability| format!("  - {}", format_capability(capability))).collect::<Vec<_>>().join("\n"),
+            format_timestamp(token.issued_at), token.issued_at,
+            format_timestamp(token.expires_at), token.expires_at,
+            token.expires_at < now_secs,
             token.nonce.is_some(),
             token.proof.is_some(),
         ));
-
         output
     };
 
     write_output(&output, None)?;
-
     if !is_valid {
         std::process::exit(1);
     }
-
     Ok(())
 }
 
-fn inspect_cmd(token_b64: &str, json: bool) -> Result<()> {
+fn inspect_cmd(token_b64: &str, is_json_output: bool) -> Result<()> {
+    debug_assert!(!token_b64.is_empty());
     let token = CapabilityToken::from_base64(token_b64).context("failed to decode token")?;
+    let now_secs = current_unix_seconds()?;
+    debug_assert!(token.expires_at >= token.issued_at || token.version > 0);
 
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before UNIX epoch")?.as_secs();
-
-    let output = if json {
+    let output = if is_json_output {
         serde_json::json!({
             "version": token.version,
             "issuer": token.issuer.to_string(),
@@ -353,7 +335,7 @@ fn inspect_cmd(token_b64: &str, json: bool) -> Result<()> {
             "issued_at_iso": format_timestamp(token.issued_at),
             "expires_at": token.expires_at,
             "expires_at_iso": format_timestamp(token.expires_at),
-            "expired": token.expires_at < now,
+            "expired": token.expires_at < now_secs,
             "nonce": token.nonce.map(hex::encode),
             "proof": token.proof.map(hex::encode),
             "signature": hex::encode(token.signature),
@@ -379,14 +361,14 @@ fn inspect_cmd(token_b64: &str, json: bool) -> Result<()> {
             token
                 .capabilities
                 .iter()
-                .map(|c| format!("  - {}", format_capability(c)))
+                .map(|capability| format!("  - {}", format_capability(capability)))
                 .collect::<Vec<_>>()
                 .join("\n"),
             format_timestamp(token.issued_at),
             token.issued_at,
             format_timestamp(token.expires_at),
             token.expires_at,
-            token.expires_at < now,
+            token.expires_at < now_secs,
             token.nonce.map_or("None".to_string(), hex::encode),
             token.proof.map_or("None (root token)".to_string(), hex::encode),
             hex::encode(token.signature)
@@ -400,8 +382,15 @@ fn inspect_cmd(token_b64: &str, json: bool) -> Result<()> {
 // Helper functions
 
 /// Parse a duration string like "1d", "7d", "365d", "1h", "30m".
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "token CLI owns wall-clock boundary when checking expiry")]
+fn current_unix_seconds() -> Result<u64> {
+    Ok(SystemTime::now().duration_since(UNIX_EPOCH).context("system time before UNIX epoch")?.as_secs())
+}
+
 fn parse_duration(s: &str) -> Result<Duration> {
     let s = s.trim();
+    debug_assert!(!s.contains(char::is_whitespace));
     if s.is_empty() {
         anyhow::bail!("duration cannot be empty");
     }
@@ -413,19 +402,19 @@ fn parse_duration(s: &str) -> Result<Duration> {
 
     let value_str = &s[..unit_pos];
     let unit = &s[unit_pos..];
-
     let value: u64 = value_str.parse().context("duration value must be a positive integer")?;
 
     let seconds = match unit {
         "s" | "sec" | "secs" => value,
-        "m" | "min" | "mins" => value * 60,
-        "h" | "hr" | "hrs" | "hour" | "hours" => value * 3600,
-        "d" | "day" | "days" => value * 86400,
-        "w" | "week" | "weeks" => value * 604800,
-        "y" | "year" | "years" => value * 31536000,
+        "m" | "min" | "mins" => value.saturating_mul(60),
+        "h" | "hr" | "hrs" | "hour" | "hours" => value.saturating_mul(3600),
+        "d" | "day" | "days" => value.saturating_mul(86400),
+        "w" | "week" | "weeks" => value.saturating_mul(604800),
+        "y" | "year" | "years" => value.saturating_mul(31536000),
         _ => anyhow::bail!("unknown duration unit '{}'. Use: s, m, h, d, w, y", unit),
     };
 
+    debug_assert!(seconds >= value || matches!(unit, "s" | "sec" | "secs"));
     Ok(Duration::from_secs(seconds))
 }
 
@@ -459,197 +448,216 @@ fn parse_public_key(hex_str: &str) -> Result<PublicKey> {
 /// - Transit: transit-encrypt:KEY_PREFIX, transit-decrypt:KEY_PREFIX, transit-sign:KEY_PREFIX,
 ///   transit-verify:KEY_PREFIX, transit-manage:KEY_PREFIX
 /// - PKI: pki-issue:ROLE_PREFIX, pki-revoke, pki-read-ca, pki-manage
-fn parse_capability(s: &str) -> Result<Capability> {
-    let parts: Vec<&str> = s.splitn(2, ':').collect();
+struct CapabilityRequirement<'a> {
+    capability_name: &'a str,
+    usage_suffix: &'a str,
+}
 
-    match parts[0] {
-        "read" => {
-            if parts.len() != 2 {
-                anyhow::bail!("read capability requires prefix: read:PREFIX");
-            }
-            Ok(Capability::Read {
-                prefix: parts[1].to_string(),
-            })
-        }
-        "write" => {
-            if parts.len() != 2 {
-                anyhow::bail!("write capability requires prefix: write:PREFIX");
-            }
-            Ok(Capability::Write {
-                prefix: parts[1].to_string(),
-            })
-        }
-        "delete" => {
-            if parts.len() != 2 {
-                anyhow::bail!("delete capability requires prefix: delete:PREFIX");
-            }
-            Ok(Capability::Delete {
-                prefix: parts[1].to_string(),
-            })
-        }
-        "full" => {
-            if parts.len() != 2 {
-                anyhow::bail!("full capability requires prefix: full:PREFIX");
-            }
-            Ok(Capability::Full {
-                prefix: parts[1].to_string(),
-            })
-        }
-        "watch" => {
-            if parts.len() != 2 {
-                anyhow::bail!("watch capability requires prefix: watch:PREFIX");
-            }
-            Ok(Capability::Watch {
-                prefix: parts[1].to_string(),
-            })
-        }
-        "cluster-admin" => Ok(Capability::ClusterAdmin),
-        "delegate" => Ok(Capability::Delegate),
+fn required_capability_suffix<'a>(parts: &'a [&str], requirement: CapabilityRequirement<'_>) -> Result<&'a str> {
+    if parts.len() == 2 {
+        Ok(parts[1])
+    } else {
+        anyhow::bail!(
+            "{} capability requires {}: {}:{}",
+            requirement.capability_name,
+            requirement.usage_suffix,
+            requirement.capability_name,
+            requirement.usage_suffix
+        )
+    }
+}
 
-        // Secrets engine capabilities
+fn required_mount_prefix<'a>(parts: &'a [&str], capability_name: &str) -> Result<(&'a str, &'a str)> {
+    let rest = required_capability_suffix(parts, CapabilityRequirement {
+        capability_name,
+        usage_suffix: "MOUNT:PREFIX",
+    })?;
+    let sub_parts: Vec<&str> = rest.splitn(2, ':').collect();
+    if sub_parts.len() == 2 {
+        Ok((sub_parts[0], sub_parts[1]))
+    } else {
+        anyhow::bail!("{} capability requires mount:prefix: {}:MOUNT:PREFIX", capability_name, capability_name)
+    }
+}
+
+fn parse_basic_capability(parts: &[&str]) -> Result<Option<Capability>> {
+    Ok(match parts[0] {
+        "read" => Some(Capability::Read {
+            prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "read",
+                usage_suffix: "PREFIX",
+            })?
+            .to_string(),
+        }),
+        "write" => Some(Capability::Write {
+            prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "write",
+                usage_suffix: "PREFIX",
+            })?
+            .to_string(),
+        }),
+        "delete" => Some(Capability::Delete {
+            prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "delete",
+                usage_suffix: "PREFIX",
+            })?
+            .to_string(),
+        }),
+        "full" => Some(Capability::Full {
+            prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "full",
+                usage_suffix: "PREFIX",
+            })?
+            .to_string(),
+        }),
+        "watch" => Some(Capability::Watch {
+            prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "watch",
+                usage_suffix: "PREFIX",
+            })?
+            .to_string(),
+        }),
+        "cluster-admin" => Some(Capability::ClusterAdmin),
+        "delegate" => Some(Capability::Delegate),
+        _ => None,
+    })
+}
+
+fn parse_secrets_capability(parts: &[&str]) -> Result<Option<Capability>> {
+    Ok(match parts[0] {
         "secrets-read" => {
-            if parts.len() != 2 {
-                anyhow::bail!("secrets-read capability requires mount:prefix: secrets-read:MOUNT:PREFIX");
-            }
-            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
-            if sub_parts.len() != 2 {
-                anyhow::bail!("secrets-read capability requires mount:prefix: secrets-read:MOUNT:PREFIX");
-            }
-            Ok(Capability::SecretsRead {
-                mount: sub_parts[0].to_string(),
-                prefix: sub_parts[1].to_string(),
+            let (mount, prefix) = required_mount_prefix(parts, "secrets-read")?;
+            Some(Capability::SecretsRead {
+                mount: mount.to_string(),
+                prefix: prefix.to_string(),
             })
         }
         "secrets-write" => {
-            if parts.len() != 2 {
-                anyhow::bail!("secrets-write capability requires mount:prefix: secrets-write:MOUNT:PREFIX");
-            }
-            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
-            if sub_parts.len() != 2 {
-                anyhow::bail!("secrets-write capability requires mount:prefix: secrets-write:MOUNT:PREFIX");
-            }
-            Ok(Capability::SecretsWrite {
-                mount: sub_parts[0].to_string(),
-                prefix: sub_parts[1].to_string(),
+            let (mount, prefix) = required_mount_prefix(parts, "secrets-write")?;
+            Some(Capability::SecretsWrite {
+                mount: mount.to_string(),
+                prefix: prefix.to_string(),
             })
         }
         "secrets-delete" => {
-            if parts.len() != 2 {
-                anyhow::bail!("secrets-delete capability requires mount:prefix: secrets-delete:MOUNT:PREFIX");
-            }
-            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
-            if sub_parts.len() != 2 {
-                anyhow::bail!("secrets-delete capability requires mount:prefix: secrets-delete:MOUNT:PREFIX");
-            }
-            Ok(Capability::SecretsDelete {
-                mount: sub_parts[0].to_string(),
-                prefix: sub_parts[1].to_string(),
+            let (mount, prefix) = required_mount_prefix(parts, "secrets-delete")?;
+            Some(Capability::SecretsDelete {
+                mount: mount.to_string(),
+                prefix: prefix.to_string(),
             })
         }
         "secrets-list" => {
-            if parts.len() != 2 {
-                anyhow::bail!("secrets-list capability requires mount:prefix: secrets-list:MOUNT:PREFIX");
-            }
-            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
-            if sub_parts.len() != 2 {
-                anyhow::bail!("secrets-list capability requires mount:prefix: secrets-list:MOUNT:PREFIX");
-            }
-            Ok(Capability::SecretsList {
-                mount: sub_parts[0].to_string(),
-                prefix: sub_parts[1].to_string(),
+            let (mount, prefix) = required_mount_prefix(parts, "secrets-list")?;
+            Some(Capability::SecretsList {
+                mount: mount.to_string(),
+                prefix: prefix.to_string(),
             })
         }
         "secrets-full" => {
-            if parts.len() != 2 {
-                anyhow::bail!("secrets-full capability requires mount:prefix: secrets-full:MOUNT:PREFIX");
-            }
-            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
-            if sub_parts.len() != 2 {
-                anyhow::bail!("secrets-full capability requires mount:prefix: secrets-full:MOUNT:PREFIX");
-            }
-            Ok(Capability::SecretsFull {
-                mount: sub_parts[0].to_string(),
-                prefix: sub_parts[1].to_string(),
+            let (mount, prefix) = required_mount_prefix(parts, "secrets-full")?;
+            Some(Capability::SecretsFull {
+                mount: mount.to_string(),
+                prefix: prefix.to_string(),
             })
         }
-        "secrets-admin" => Ok(Capability::SecretsAdmin),
+        "secrets-admin" => Some(Capability::SecretsAdmin),
+        _ => None,
+    })
+}
 
-        // Transit engine capabilities
-        "transit-encrypt" => {
-            if parts.len() != 2 {
-                anyhow::bail!("transit-encrypt capability requires key prefix: transit-encrypt:KEY_PREFIX");
-            }
-            Ok(Capability::TransitEncrypt {
-                key_prefix: parts[1].to_string(),
-            })
-        }
-        "transit-decrypt" => {
-            if parts.len() != 2 {
-                anyhow::bail!("transit-decrypt capability requires key prefix: transit-decrypt:KEY_PREFIX");
-            }
-            Ok(Capability::TransitDecrypt {
-                key_prefix: parts[1].to_string(),
-            })
-        }
-        "transit-sign" => {
-            if parts.len() != 2 {
-                anyhow::bail!("transit-sign capability requires key prefix: transit-sign:KEY_PREFIX");
-            }
-            Ok(Capability::TransitSign {
-                key_prefix: parts[1].to_string(),
-            })
-        }
-        "transit-verify" => {
-            if parts.len() != 2 {
-                anyhow::bail!("transit-verify capability requires key prefix: transit-verify:KEY_PREFIX");
-            }
-            Ok(Capability::TransitVerify {
-                key_prefix: parts[1].to_string(),
-            })
-        }
-        "transit-manage" => {
-            if parts.len() != 2 {
-                anyhow::bail!("transit-manage capability requires key prefix: transit-manage:KEY_PREFIX");
-            }
-            Ok(Capability::TransitKeyManage {
-                key_prefix: parts[1].to_string(),
-            })
-        }
+fn parse_transit_capability(parts: &[&str]) -> Result<Option<Capability>> {
+    Ok(match parts[0] {
+        "transit-encrypt" => Some(Capability::TransitEncrypt {
+            key_prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "transit-encrypt",
+                usage_suffix: "KEY_PREFIX",
+            })?
+            .to_string(),
+        }),
+        "transit-decrypt" => Some(Capability::TransitDecrypt {
+            key_prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "transit-decrypt",
+                usage_suffix: "KEY_PREFIX",
+            })?
+            .to_string(),
+        }),
+        "transit-sign" => Some(Capability::TransitSign {
+            key_prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "transit-sign",
+                usage_suffix: "KEY_PREFIX",
+            })?
+            .to_string(),
+        }),
+        "transit-verify" => Some(Capability::TransitVerify {
+            key_prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "transit-verify",
+                usage_suffix: "KEY_PREFIX",
+            })?
+            .to_string(),
+        }),
+        "transit-manage" => Some(Capability::TransitKeyManage {
+            key_prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "transit-manage",
+                usage_suffix: "KEY_PREFIX",
+            })?
+            .to_string(),
+        }),
+        _ => None,
+    })
+}
 
-        // PKI engine capabilities
-        "pki-issue" => {
-            if parts.len() != 2 {
-                anyhow::bail!("pki-issue capability requires role prefix: pki-issue:ROLE_PREFIX");
-            }
-            Ok(Capability::PkiIssue {
-                role_prefix: parts[1].to_string(),
-            })
-        }
-        "pki-revoke" => Ok(Capability::PkiRevoke),
-        "pki-read-ca" => Ok(Capability::PkiReadCa),
-        "pki-manage" => Ok(Capability::PkiManage),
+fn parse_pki_capability(parts: &[&str]) -> Result<Option<Capability>> {
+    Ok(match parts[0] {
+        "pki-issue" => Some(Capability::PkiIssue {
+            role_prefix: required_capability_suffix(parts, CapabilityRequirement {
+                capability_name: "pki-issue",
+                usage_suffix: "ROLE_PREFIX",
+            })?
+            .to_string(),
+        }),
+        "pki-revoke" => Some(Capability::PkiRevoke),
+        "pki-read-ca" => Some(Capability::PkiReadCa),
+        "pki-manage" => Some(Capability::PkiManage),
+        _ => None,
+    })
+}
 
-        // Federation sync capabilities
-        "federation-pull" => {
-            let prefix = if parts.len() == 2 { parts[1] } else { "" };
-            Ok(Capability::FederationPull {
-                repo_prefix: prefix.to_string(),
-            })
-        }
-        "federation-push" => {
-            let prefix = if parts.len() == 2 { parts[1] } else { "" };
-            Ok(Capability::FederationPush {
-                repo_prefix: prefix.to_string(),
-            })
-        }
-
-        _ => anyhow::bail!(
-            "unknown capability type '{}'. Use: read:PREFIX, write:PREFIX, delete:PREFIX, \
-             full:PREFIX, watch:PREFIX, cluster-admin, delegate, secrets-*:MOUNT:PREFIX, \
-             transit-*:KEY_PREFIX, pki-*, federation-pull[:PREFIX], federation-push[:PREFIX]",
-            parts[0]
-        ),
+fn parse_federation_capability(parts: &[&str]) -> Option<Capability> {
+    let repo_prefix = if parts.len() == 2 { parts[1] } else { "" }.to_string();
+    match parts[0] {
+        "federation-pull" => Some(Capability::FederationPull { repo_prefix }),
+        "federation-push" => Some(Capability::FederationPush { repo_prefix }),
+        _ => None,
     }
+}
+
+fn parse_capability(s: &str) -> Result<Capability> {
+    let parts: Vec<&str> = s.splitn(2, ':').collect();
+    debug_assert!(!parts.is_empty());
+    debug_assert!(!parts[0].is_empty());
+
+    if let Some(capability) = parse_basic_capability(&parts)? {
+        return Ok(capability);
+    }
+    if let Some(capability) = parse_secrets_capability(&parts)? {
+        return Ok(capability);
+    }
+    if let Some(capability) = parse_transit_capability(&parts)? {
+        return Ok(capability);
+    }
+    if let Some(capability) = parse_pki_capability(&parts)? {
+        return Ok(capability);
+    }
+    if let Some(capability) = parse_federation_capability(&parts) {
+        return Ok(capability);
+    }
+
+    anyhow::bail!(
+        "unknown capability type '{}'. Use: read:PREFIX, write:PREFIX, delete:PREFIX, \
+         full:PREFIX, watch:PREFIX, cluster-admin, delegate, secrets-*:MOUNT:PREFIX, \
+         transit-*:KEY_PREFIX, pki-*, federation-pull[:PREFIX], federation-push[:PREFIX]",
+        parts[0]
+    )
 }
 
 /// Format a capability for display.
@@ -710,7 +718,10 @@ fn format_audience(aud: &Audience) -> String {
 fn format_timestamp(unix_secs: u64) -> String {
     use chrono::DateTime;
     use chrono::Utc;
-    let dt = DateTime::<Utc>::from_timestamp(unix_secs as i64, 0).unwrap_or(DateTime::UNIX_EPOCH);
+
+    let capped_unix_secs = unix_secs.min(i64::MAX as u64);
+    let unix_secs_i64 = i64::try_from(capped_unix_secs).unwrap_or(i64::MAX);
+    let dt = DateTime::<Utc>::from_timestamp(unix_secs_i64, 0).unwrap_or(DateTime::UNIX_EPOCH);
     dt.to_rfc3339()
 }
 

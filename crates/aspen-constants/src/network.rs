@@ -20,7 +20,7 @@
 /// Used in:
 /// - `network.rs`: Message reading with `read_to_end(MAX_RPC_MESSAGE_SIZE)`
 /// - `server.rs`: RPC message deserialization from streams
-pub const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
+pub const MAX_RPC_MESSAGE_SIZE: u32 = 10_485_760;
 
 /// Timeout for Iroh connection establishment in seconds (5 seconds).
 ///
@@ -57,7 +57,7 @@ pub const IROH_READ_TIMEOUT_SECS: u64 = 10;
 ///
 /// Used in:
 /// - `network.rs`: Chunked snapshot reading with size validation
-pub const MAX_SNAPSHOT_SIZE: u64 = 1024 * 1024 * 1024;
+pub const MAX_SNAPSHOT_SIZE: u64 = 1_073_741_824;
 
 /// Maximum number of concurrent streams per connection (100).
 ///
@@ -279,7 +279,7 @@ pub const SNAPSHOT_INSTALL_TIMEOUT_MS: u64 = 5000;
 /// Used in:
 /// - `cluster/config.rs`: Cluster configuration loading
 /// - `git-remote-aspen`: Git config file reading
-pub const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
+pub const MAX_CONFIG_FILE_SIZE: u64 = 10_485_760;
 
 /// Maximum size for job specification files (1 MB).
 ///
@@ -297,7 +297,7 @@ pub const MAX_JOB_SPEC_SIZE: u64 = 1024 * 1024;
 ///
 /// Used in:
 /// - `aspen-secrets/sops/decryptor.rs`: SOPS file loading
-pub const MAX_SOPS_FILE_SIZE: u64 = 10 * 1024 * 1024;
+pub const MAX_SOPS_FILE_SIZE: u64 = 10_485_760;
 
 /// Maximum size for SQL query files (1 MB).
 ///
@@ -325,7 +325,7 @@ pub const MAX_KEY_FILE_SIZE: u64 = 64 * 1024;
 ///
 /// Used in:
 /// - `aspen-core/simulation.rs`: Artifact loading
-pub const MAX_SIMULATION_ARTIFACT_SIZE: u64 = 10 * 1024 * 1024;
+pub const MAX_SIMULATION_ARTIFACT_SIZE: u64 = 10_485_760;
 
 /// Maximum size for TUI state files (1 MB).
 ///
@@ -343,7 +343,7 @@ pub const MAX_TUI_STATE_SIZE: u64 = 1024 * 1024;
 ///
 /// Used in:
 /// - `git-remote-aspen`: packed-refs parsing
-pub const MAX_GIT_PACKED_REFS_SIZE: u64 = 10 * 1024 * 1024;
+pub const MAX_GIT_PACKED_REFS_SIZE: u64 = 10_485_760;
 
 // ============================================================================
 // Git Remote Helper Constants (Tiger Style Resource Bounds)
@@ -376,7 +376,7 @@ pub const MAX_GIT_OBJECTS_PER_PUSH: u32 = 100_000;
 ///
 /// Used in:
 /// - `git-remote-aspen/main.rs`: read_loose_object() bounded decompression
-pub const MAX_GIT_OBJECT_SIZE: u64 = 100 * 1024 * 1024;
+pub const MAX_GIT_OBJECT_SIZE: u64 = 104_857_600;
 
 // ============================================================================
 // QUIC Stream Priority Constants

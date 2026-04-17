@@ -100,25 +100,27 @@ where
     F: FnMut() -> Fut + Send,
     Fut: std::future::Future<Output = Result<bool, String>> + Send,
 {
-    let start = tokio::time::Instant::now();
+    #[allow(unknown_lints)]
+    #[allow(ambient_clock, reason = "test harness wait boundary reads monotonic time")]
+    fn current_instant() -> tokio::time::Instant {
+        tokio::time::Instant::now()
+    }
+
+    let start = current_instant();
     let deadline = start + timeout;
 
-    loop {
+    while current_instant() < deadline {
         match check().await {
             Ok(true) => return Ok(()),
-            Ok(false) => {}
+            Ok(false) => tokio::time::sleep(poll_interval).await,
             Err(msg) => return Err(WaitError::ClusterError(msg)),
         }
-
-        if tokio::time::Instant::now() >= deadline {
-            return Err(WaitError::TimedOut {
-                condition: condition.to_string(),
-                elapsed: start.elapsed(),
-            });
-        }
-
-        tokio::time::sleep(poll_interval).await;
     }
+
+    Err(WaitError::TimedOut {
+        condition: condition.to_string(),
+        elapsed: start.elapsed(),
+    })
 }
 
 #[cfg(test)]
@@ -180,11 +182,11 @@ mod tests {
     async fn wait_outcome_into_result() {
         assert!(WaitOutcome::Ready.into_result().is_ok());
 
-        let timeout = WaitOutcome::TimedOut {
+        let timed_out_outcome = WaitOutcome::TimedOut {
             condition: "test".to_string(),
             elapsed: Duration::from_secs(5),
         };
-        let err = timeout.into_result().unwrap_err();
+        let err = timed_out_outcome.into_result().unwrap_err();
         assert!(err.to_string().contains("test"));
     }
 

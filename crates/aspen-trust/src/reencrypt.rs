@@ -156,6 +156,7 @@ mod tests {
     use super::*;
 
     /// In-memory store for testing re-encryption.
+    // Lock order: data -> checkpoints.
     struct TestStore {
         data: Mutex<BTreeMap<String, Vec<u8>>>,
         checkpoints: Mutex<BTreeMap<String, String>>,
@@ -184,9 +185,10 @@ mod tests {
             &self,
             prefix: &str,
             after_key: Option<&str>,
-            batch_size: u32,
+            batch_key_count: u32,
         ) -> Result<Vec<(String, Vec<u8>)>, ReencryptionError> {
             let data = self.data.lock().unwrap();
+            let batch_key_limit = usize::try_from(batch_key_count).unwrap_or(usize::MAX);
             let iter = data
                 .iter()
                 .filter(|(k, _)| k.starts_with(prefix))
@@ -194,7 +196,7 @@ mod tests {
                     Some(after) => k.as_str() > after,
                     None => true,
                 })
-                .take(batch_size as usize)
+                .take(batch_key_limit)
                 .map(|(k, v)| (k.clone(), v.clone()));
             Ok(iter.collect())
         }

@@ -91,12 +91,12 @@ pub const DEFAULT_SQL_TIMEOUT_MS: u32 = 5_000;
 ///
 /// Tiger Style: Fixed limit prevents DoS via huge build artifacts.
 /// Most binaries are < 10MB; 50MB allows for statically linked binaries.
-pub const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
+pub const MAX_BINARY_SIZE: usize = 52_428_800;
 
 /// Maximum build time for Nix derivations (5 minutes).
 ///
 /// Tiger Style: Upper bound on build time prevents indefinite compilation.
-pub const MAX_BUILD_TIME_MS: u64 = 5 * 60 * 1000;
+pub const MAX_BUILD_TIME_MS: u64 = 300_000;
 
 /// Maximum concurrent VMs per worker (100).
 ///

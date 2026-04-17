@@ -15,6 +15,7 @@
 //! Native handlers are fixed at startup; only the WASM plugin portion is swappable.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use arc_swap::ArcSwap;
 use aspen_client_api::CapabilityUnavailableResponse;
@@ -228,6 +229,7 @@ static CACHE_HANDLER_FACTORY: aspen_nix_handler::cache_factory::CacheHandlerFact
 static CACHE_MIGRATION_HANDLER_FACTORY: aspen_nix_handler::cache_factory::CacheMigrationHandlerFactory =
     aspen_nix_handler::cache_factory::CacheMigrationHandlerFactory;
 
+#[allow(unknown_lints)]
 #[allow(unused_mut)]
 fn builtin_handler_factories(_plan: &NativeHandlerPlan) -> Vec<&'static dyn HandlerFactory> {
     let mut factories: Vec<&'static dyn HandlerFactory> = vec![
@@ -277,7 +279,18 @@ fn builtin_handler_factories(_plan: &NativeHandlerPlan) -> Vec<&'static dyn Hand
         factories.push(&SNIX_HANDLER_FACTORY);
     }
 
+    debug_assert!(factories.len() >= 6);
+    debug_assert!(factories.iter().all(|factory| factory.priority() <= u32::MAX));
     factories
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "handler registry dispatch owns the monotonic timing boundary"
+)]
+fn dispatch_started_at() -> Instant {
+    Instant::now()
 }
 
 impl HandlerRegistry {
@@ -287,10 +300,11 @@ impl HandlerRegistry {
     /// domain factories belong in a given node composition, then each factory
     /// validates its own capability slice.
     pub fn new(ctx: &ClientProtocolContext, plan: &NativeHandlerPlan) -> anyhow::Result<Self> {
-        // Collect handlers with their priorities for sorting
-        let mut handlers_with_priority: Vec<(Arc<dyn RequestHandler>, u32)> = Vec::new();
+        let handler_factories = builtin_handler_factories(plan);
+        let mut handlers_with_priority: Vec<(Arc<dyn RequestHandler>, u32)> =
+            Vec::with_capacity(handler_factories.len());
 
-        for factory in builtin_handler_factories(plan) {
+        for factory in handler_factories {
             let handler = factory.create(ctx)?;
             trace!(factory = factory.name(), priority = factory.priority(), "handler registered via explicit assembly");
             handlers_with_priority.push((handler, factory.priority()));
@@ -358,7 +372,7 @@ impl HandlerRegistry {
         proxy_hops: u8,
     ) -> anyhow::Result<ClientRpcResponse> {
         let operation = request.variant_name();
-        let start = std::time::Instant::now();
+        let start = dispatch_started_at();
         metrics::counter!("aspen.rpc.requests_total", "operation" => operation).increment(1);
 
         // Handle plugin reload directly — it requires access to the registry itself,

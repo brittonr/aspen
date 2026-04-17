@@ -105,15 +105,19 @@ pub struct ForgeCommitInfo {
     /// Author public key (hex-encoded ed25519).
     pub author_key: Option<String>,
     /// Author Nostr public key (hex-encoded secp256k1).
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub author_npub: Option<String>,
     /// Resolved Nostr display name (from kind 0 profile).
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub author_display_name: Option<String>,
     /// Commit message.
     pub message: String,
     /// Timestamp (ms since epoch).
     pub timestamp_ms: u64,
+}
+
+fn default_optional_string() -> Option<String> {
+    None
 }
 
 /// Commit operation result.

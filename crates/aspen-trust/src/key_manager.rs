@@ -64,6 +64,7 @@ pub struct KeyManagerConfig {
 /// Thread-safe via `tokio::sync::RwLock`. The encryption context is
 /// lazily initialized on first access and rotated on epoch changes.
 pub struct KeyManager {
+    // Lock order: encryption -> reconstruction_attempted.
     /// Current encryption context (None until first reconstruction).
     encryption: RwLock<Option<Arc<SecretsEncryption>>>,
     /// Configuration.

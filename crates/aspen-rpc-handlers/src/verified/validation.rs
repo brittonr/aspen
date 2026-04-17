@@ -118,10 +118,12 @@ pub fn validate_lock_ownership(
     claimed_holder_id: &str,
     claimed_fencing_token: u64,
 ) -> Result<(), LockOwnershipError> {
-    let holder_matches = current_holder_id == claimed_holder_id;
-    let token_matches = current_fencing_token == claimed_fencing_token;
+    let is_holder_match = current_holder_id == claimed_holder_id;
+    let is_token_match = current_fencing_token == claimed_fencing_token;
+    debug_assert!(!current_holder_id.is_empty() || !claimed_holder_id.is_empty());
+    debug_assert!(is_holder_match || current_holder_id != claimed_holder_id);
 
-    match (holder_matches, token_matches) {
+    match (is_holder_match, is_token_match) {
         (true, true) => Ok(()),
         (false, false) => Err(LockOwnershipError::BothMismatch {
             actual_holder: current_holder_id.to_string(),

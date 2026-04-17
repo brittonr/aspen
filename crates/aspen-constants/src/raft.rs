@@ -254,7 +254,7 @@ pub const MAX_MISSED_JOB_HEARTBEATS: u64 = 30;
 ///
 /// Used in:
 /// - `aspen-ci/orchestrator/recovery.rs`: Orphan detection logic
-pub const JOB_ORPHAN_DETECTION_THRESHOLD_MS: u64 = JOB_HEARTBEAT_INTERVAL_MS * MAX_MISSED_JOB_HEARTBEATS;
+pub const JOB_ORPHAN_DETECTION_THRESHOLD_MS: u64 = JOB_HEARTBEAT_INTERVAL_MS.saturating_mul(MAX_MISSED_JOB_HEARTBEATS);
 
 /// Maximum pipelines to recover per scan (50).
 ///
@@ -304,4 +304,4 @@ pub const MEMORY_WATCHER_INTERVAL_MS: u64 = 1000;
 ///
 /// Used in:
 /// - `aspen-cluster/memory_watcher.rs`: Available memory threshold
-pub const MEMORY_RESERVED_FOR_RAFT_BYTES: u64 = 512 * 1024 * 1024;
+pub const MEMORY_RESERVED_FOR_RAFT_BYTES: u64 = 536_870_912;

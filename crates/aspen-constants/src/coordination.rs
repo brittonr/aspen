@@ -78,7 +78,7 @@ pub const DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS: u64 = 30_000;
 ///
 /// Used in:
 /// - `coordination/queue.rs`: TTL validation
-pub const MAX_QUEUE_ITEM_TTL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+pub const MAX_QUEUE_ITEM_TTL_MS: u64 = 604_800_000;
 
 /// Default deduplication window TTL in milliseconds (5 minutes = 300,000 ms).
 ///
@@ -208,7 +208,7 @@ pub const DEFAULT_SERVICE_TTL_MS: u64 = 30_000;
 ///
 /// Used in:
 /// - `coordination/registry.rs`: TTL validation
-pub const MAX_SERVICE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
+pub const MAX_SERVICE_TTL_MS: u64 = 86_400_000;
 
 /// Cleanup batch size for expired instance removal (100).
 ///

@@ -12,57 +12,61 @@ use crate::transaction::TxnOp;
 use crate::write::WriteCommand;
 use crate::write::WriteOp;
 
+#[derive(Clone, Copy)]
+struct WritePairRef<'a> {
+    key: &'a str,
+    value: &'a str,
+}
+
 /// Validate a key against size limits.
 fn validate_write_command_check_key(key: &str) -> Result<(), KeyValueStoreError> {
     if key.is_empty() {
         return Err(KeyValueStoreError::EmptyKey);
     }
-    let len = key.len();
-    if len > MAX_KEY_SIZE as usize {
-        Err(KeyValueStoreError::KeyTooLarge {
-            size: len as u32,
+    let key_len_bytes = usize_to_u32_saturating(key.len());
+    if key_len_bytes > MAX_KEY_SIZE {
+        return Err(KeyValueStoreError::KeyTooLarge {
+            size: key_len_bytes,
             max: MAX_KEY_SIZE,
-        })
-    } else {
-        Ok(())
+        });
     }
+    Ok(())
 }
 
 /// Validate a value against size limits.
 fn validate_write_command_check_value(value: &str) -> Result<(), KeyValueStoreError> {
-    let len = value.len();
-    if len > MAX_VALUE_SIZE as usize {
-        Err(KeyValueStoreError::ValueTooLarge {
-            size: len as u32,
+    let value_len_bytes = usize_to_u32_saturating(value.len());
+    if value_len_bytes > MAX_VALUE_SIZE {
+        return Err(KeyValueStoreError::ValueTooLarge {
+            size: value_len_bytes,
             max: MAX_VALUE_SIZE,
-        })
-    } else {
-        Ok(())
+        });
     }
+    Ok(())
 }
 
 /// Validate batch size against limits.
-fn validate_write_command_check_batch_size(size: usize) -> Result<(), KeyValueStoreError> {
-    if size > MAX_SETMULTI_KEYS as usize {
-        Err(KeyValueStoreError::BatchTooLarge {
-            size: size as u32,
+fn validate_write_command_check_batch_size(size_count: usize) -> Result<(), KeyValueStoreError> {
+    let batch_len_items = usize_to_u32_saturating(size_count);
+    if batch_len_items > MAX_SETMULTI_KEYS {
+        return Err(KeyValueStoreError::BatchTooLarge {
+            size: batch_len_items,
             max: MAX_SETMULTI_KEYS,
-        })
-    } else {
-        Ok(())
+        });
     }
+    Ok(())
 }
 
 /// Validate a key-value pair.
-fn validate_write_command_check_pair(key: &str, value: &str) -> Result<(), KeyValueStoreError> {
-    validate_write_command_check_key(key)?;
-    validate_write_command_check_value(value)
+fn validate_write_command_check_pair(pair: WritePairRef<'_>) -> Result<(), KeyValueStoreError> {
+    validate_write_command_check_key(pair.key)?;
+    validate_write_command_check_value(pair.value)
 }
 
 /// Validate a batch operation.
 fn validate_write_command_check_batch_op(op: &BatchOperation) -> Result<(), KeyValueStoreError> {
     match op {
-        BatchOperation::Set { key, value } => validate_write_command_check_pair(key, value),
+        BatchOperation::Set { key, value } => validate_write_command_check_pair(WritePairRef { key, value }),
         BatchOperation::Delete { key } => validate_write_command_check_key(key),
     }
 }
@@ -70,7 +74,9 @@ fn validate_write_command_check_batch_op(op: &BatchOperation) -> Result<(), KeyV
 /// Validate a batch condition.
 fn validate_write_command_check_condition(cond: &BatchCondition) -> Result<(), KeyValueStoreError> {
     match cond {
-        BatchCondition::ValueEquals { key, expected } => validate_write_command_check_pair(key, expected),
+        BatchCondition::ValueEquals { key, expected } => {
+            validate_write_command_check_pair(WritePairRef { key, value: expected })
+        }
         BatchCondition::KeyExists { key } | BatchCondition::KeyNotExists { key } => {
             validate_write_command_check_key(key)
         }
@@ -80,7 +86,7 @@ fn validate_write_command_check_condition(cond: &BatchCondition) -> Result<(), K
 /// Validate a transaction operation.
 fn validate_write_command_check_txn_op(op: &TxnOp) -> Result<(), KeyValueStoreError> {
     match op {
-        TxnOp::Put { key, value } => validate_write_command_check_pair(key, value),
+        TxnOp::Put { key, value } => validate_write_command_check_pair(WritePairRef { key, value }),
         TxnOp::Delete { key } | TxnOp::Get { key } => validate_write_command_check_key(key),
         TxnOp::Range { prefix, limit } => {
             validate_write_command_check_key(prefix)?;
@@ -98,32 +104,115 @@ fn validate_write_command_check_txn_op(op: &TxnOp) -> Result<(), KeyValueStoreEr
 /// Validate a write operation.
 fn validate_write_command_check_write_op(op: &WriteOp) -> Result<(), KeyValueStoreError> {
     match op {
-        WriteOp::Set { key, value } => validate_write_command_check_pair(key, value),
+        WriteOp::Set { key, value } => validate_write_command_check_pair(WritePairRef { key, value }),
         WriteOp::Delete { key } => validate_write_command_check_key(key),
     }
+}
+
+fn validate_write_command_check_pair_list(pairs: &[(String, String)]) -> Result<(), KeyValueStoreError> {
+    validate_write_command_check_batch_size(pairs.len())?;
+    for (key, value) in pairs {
+        validate_write_command_check_pair(WritePairRef { key, value })?;
+    }
+    Ok(())
+}
+
+fn validate_write_command_check_key_list(keys: &[String]) -> Result<(), KeyValueStoreError> {
+    validate_write_command_check_batch_size(keys.len())?;
+    for key in keys {
+        validate_write_command_check_key(key)?;
+    }
+    Ok(())
+}
+
+fn validate_write_command_check_batch_ops(operations: &[BatchOperation]) -> Result<(), KeyValueStoreError> {
+    validate_write_command_check_batch_size(operations.len())?;
+    for op in operations {
+        validate_write_command_check_batch_op(op)?;
+    }
+    Ok(())
+}
+
+fn validate_write_command_check_conditional_batch(
+    conditions: &[BatchCondition],
+    operations: &[BatchOperation],
+) -> Result<(), KeyValueStoreError> {
+    let total_count = conditions.len().saturating_add(operations.len());
+    validate_write_command_check_batch_size(total_count)?;
+    for cond in conditions {
+        validate_write_command_check_condition(cond)?;
+    }
+    for op in operations {
+        validate_write_command_check_batch_op(op)?;
+    }
+    Ok(())
+}
+
+fn validate_write_command_check_transaction(
+    compare: &[crate::transaction::TxnCompare],
+    success: &[TxnOp],
+    failure: &[TxnOp],
+) -> Result<(), KeyValueStoreError> {
+    let compare_and_success = compare.len().saturating_add(success.len());
+    let total_count = compare_and_success.saturating_add(failure.len());
+    validate_write_command_check_batch_size(total_count)?;
+    for cmp in compare {
+        validate_write_command_check_pair(WritePairRef {
+            key: &cmp.key,
+            value: &cmp.value,
+        })?;
+    }
+    for op in success.iter().chain(failure.iter()) {
+        validate_write_command_check_txn_op(op)?;
+    }
+    Ok(())
+}
+
+fn validate_write_command_check_optimistic_transaction(
+    read_set: &[(String, i64)],
+    write_set: &[WriteOp],
+) -> Result<(), KeyValueStoreError> {
+    validate_write_command_check_batch_size(read_set.len())?;
+    validate_write_command_check_batch_size(write_set.len())?;
+    for (key, _) in read_set {
+        validate_write_command_check_key(key)?;
+    }
+    for op in write_set {
+        validate_write_command_check_write_op(op)?;
+    }
+    Ok(())
+}
+
+fn validate_write_command_check_topology_data(topology_data: &[u8]) -> Result<(), KeyValueStoreError> {
+    let topology_size_bytes = usize_to_u32_saturating(topology_data.len());
+    if topology_size_bytes > MAX_VALUE_SIZE {
+        return Err(KeyValueStoreError::ValueTooLarge {
+            size: topology_size_bytes,
+            max: MAX_VALUE_SIZE,
+        });
+    }
+    Ok(())
+}
+
+fn usize_to_u32_saturating(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 /// Validate a write command against fixed size limits.
 pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStoreError> {
     match command {
-        WriteCommand::Set { key, value } | WriteCommand::SetWithTTL { key, value, .. } => {
-            validate_write_command_check_pair(key, value)
+        WriteCommand::Set { key, value }
+        | WriteCommand::SetWithTTL { key, value, .. }
+        | WriteCommand::SetWithLease { key, value, .. } => {
+            validate_write_command_check_pair(WritePairRef { key, value })
         }
-        WriteCommand::SetMulti { pairs } | WriteCommand::SetMultiWithTTL { pairs, .. } => {
-            validate_write_command_check_batch_size(pairs.len())?;
-            for (key, value) in pairs {
-                validate_write_command_check_pair(key, value)?;
-            }
-            Ok(())
+        WriteCommand::SetMulti { pairs }
+        | WriteCommand::SetMultiWithTTL { pairs, .. }
+        | WriteCommand::SetMultiWithLease { pairs, .. } => validate_write_command_check_pair_list(pairs),
+        WriteCommand::Delete { key } | WriteCommand::ShardSplit { split_key: key, .. } => {
+            validate_write_command_check_key(key)
         }
-        WriteCommand::Delete { key } => validate_write_command_check_key(key),
-        WriteCommand::DeleteMulti { keys } => {
-            validate_write_command_check_batch_size(keys.len())?;
-            for key in keys {
-                validate_write_command_check_key(key)?;
-            }
-            Ok(())
-        }
+        WriteCommand::DeleteMulti { keys } => validate_write_command_check_key_list(keys),
         WriteCommand::CompareAndSwap {
             key,
             expected,
@@ -135,71 +224,26 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
             }
             validate_write_command_check_value(new_value)
         }
-        WriteCommand::CompareAndDelete { key, expected } => validate_write_command_check_pair(key, expected),
-        WriteCommand::Batch { operations } => {
-            validate_write_command_check_batch_size(operations.len())?;
-            for op in operations {
-                validate_write_command_check_batch_op(op)?;
-            }
-            Ok(())
+        WriteCommand::CompareAndDelete { key, expected } => {
+            validate_write_command_check_pair(WritePairRef { key, value: expected })
         }
+        WriteCommand::Batch { operations } => validate_write_command_check_batch_ops(operations),
         WriteCommand::ConditionalBatch { conditions, operations } => {
-            validate_write_command_check_batch_size(conditions.len() + operations.len())?;
-            for cond in conditions {
-                validate_write_command_check_condition(cond)?;
-            }
-            for op in operations {
-                validate_write_command_check_batch_op(op)?;
-            }
-            Ok(())
+            validate_write_command_check_conditional_batch(conditions, operations)
         }
         WriteCommand::Transaction {
             compare,
             success,
             failure,
-        } => {
-            validate_write_command_check_batch_size(compare.len() + success.len() + failure.len())?;
-            for cmp in compare {
-                validate_write_command_check_pair(&cmp.key, &cmp.value)?;
-            }
-            for op in success.iter().chain(failure.iter()) {
-                validate_write_command_check_txn_op(op)?;
-            }
-            Ok(())
-        }
-        WriteCommand::SetWithLease { key, value, .. } => validate_write_command_check_pair(key, value),
-        WriteCommand::SetMultiWithLease { pairs, .. } => {
-            validate_write_command_check_batch_size(pairs.len())?;
-            for (key, value) in pairs {
-                validate_write_command_check_pair(key, value)?;
-            }
-            Ok(())
-        }
-        WriteCommand::LeaseGrant { .. } | WriteCommand::LeaseRevoke { .. } | WriteCommand::LeaseKeepalive { .. } => {
-            Ok(())
-        }
+        } => validate_write_command_check_transaction(compare, success, failure),
+        WriteCommand::LeaseGrant { .. }
+        | WriteCommand::LeaseRevoke { .. }
+        | WriteCommand::LeaseKeepalive { .. }
+        | WriteCommand::ShardMerge { .. } => Ok(()),
         WriteCommand::OptimisticTransaction { read_set, write_set } => {
-            validate_write_command_check_batch_size(read_set.len())?;
-            validate_write_command_check_batch_size(write_set.len())?;
-            for (key, _) in read_set {
-                validate_write_command_check_key(key)?;
-            }
-            for op in write_set {
-                validate_write_command_check_write_op(op)?;
-            }
-            Ok(())
+            validate_write_command_check_optimistic_transaction(read_set, write_set)
         }
-        WriteCommand::ShardSplit { split_key, .. } => validate_write_command_check_key(split_key),
-        WriteCommand::ShardMerge { .. } => Ok(()),
-        WriteCommand::TopologyUpdate { topology_data } => {
-            if topology_data.len() > MAX_VALUE_SIZE as usize {
-                return Err(KeyValueStoreError::ValueTooLarge {
-                    size: topology_data.len() as u32,
-                    max: MAX_VALUE_SIZE,
-                });
-            }
-            Ok(())
-        }
+        WriteCommand::TopologyUpdate { topology_data } => validate_write_command_check_topology_data(topology_data),
     }
 }
 
@@ -214,6 +258,14 @@ mod tests {
     use crate::transaction::TxnOp;
     use crate::write::WriteCommand;
     use crate::write::WriteOp;
+
+    fn max_key_size_usize() -> usize {
+        usize::try_from(MAX_KEY_SIZE).unwrap_or(usize::MAX)
+    }
+
+    fn max_value_size_usize() -> usize {
+        usize::try_from(MAX_VALUE_SIZE).unwrap_or(usize::MAX)
+    }
 
     // ============================================================================
     // WriteCommand validation - basic Set
@@ -239,18 +291,18 @@ mod tests {
 
     #[test]
     fn key_at_max_size_accepted() {
-        let key = "k".repeat(MAX_KEY_SIZE as usize);
+        let key = "k".repeat(max_key_size_usize());
         let cmd = WriteCommand::Set { key, value: "v".into() };
         assert!(validate_write_command(&cmd).is_ok());
     }
 
     #[test]
     fn key_over_max_size_rejected() {
-        let key = "k".repeat(MAX_KEY_SIZE as usize + 1);
+        let key = "k".repeat(max_key_size_usize().saturating_add(1));
         let cmd = WriteCommand::Set { key, value: "v".into() };
         match validate_write_command(&cmd) {
             Err(KeyValueStoreError::KeyTooLarge { size, max }) => {
-                assert_eq!(size, MAX_KEY_SIZE + 1);
+                assert_eq!(size, MAX_KEY_SIZE.saturating_add(1));
                 assert_eq!(max, MAX_KEY_SIZE);
             }
             other => panic!("unexpected result: {:?}", other),
@@ -259,18 +311,18 @@ mod tests {
 
     #[test]
     fn value_at_max_size_accepted() {
-        let value = "v".repeat(MAX_VALUE_SIZE as usize);
+        let value = "v".repeat(max_value_size_usize());
         let cmd = WriteCommand::Set { key: "k".into(), value };
         assert!(validate_write_command(&cmd).is_ok());
     }
 
     #[test]
     fn value_over_max_size_rejected() {
-        let value = "v".repeat(MAX_VALUE_SIZE as usize + 1);
+        let value = "v".repeat(max_value_size_usize().saturating_add(1));
         let cmd = WriteCommand::Set { key: "k".into(), value };
         match validate_write_command(&cmd) {
             Err(KeyValueStoreError::ValueTooLarge { size, max }) => {
-                assert_eq!(size, MAX_VALUE_SIZE + 1);
+                assert_eq!(size, MAX_VALUE_SIZE.saturating_add(1));
                 assert_eq!(max, MAX_VALUE_SIZE);
             }
             other => panic!("unexpected result: {:?}", other),
@@ -302,7 +354,7 @@ mod tests {
         let cmd = WriteCommand::SetMulti { pairs };
         match validate_write_command(&cmd) {
             Err(KeyValueStoreError::BatchTooLarge { size, max }) => {
-                assert_eq!(size, MAX_SETMULTI_KEYS + 1);
+                assert_eq!(size, MAX_SETMULTI_KEYS.saturating_add(1));
                 assert_eq!(max, MAX_SETMULTI_KEYS);
             }
             other => panic!("unexpected result: {:?}", other),
@@ -337,7 +389,7 @@ mod tests {
             compare: vec![],
             success: vec![TxnOp::Range {
                 prefix: "prefix".into(),
-                limit: MAX_SCAN_RESULTS + 1,
+                limit: MAX_SCAN_RESULTS.saturating_add(1),
             }],
             failure: vec![],
         };
@@ -423,7 +475,7 @@ mod tests {
     #[test]
     fn topology_update_over_max_rejected() {
         let cmd = WriteCommand::TopologyUpdate {
-            topology_data: vec![0; MAX_VALUE_SIZE as usize + 1],
+            topology_data: vec![0; max_value_size_usize().saturating_add(1)],
         };
         assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::ValueTooLarge { .. })));
     }

@@ -105,29 +105,48 @@ impl std::error::Error for DependencyError {}
 /// - No partial state on error
 /// - Bounded iteration prevents infinite loops
 pub fn resolve_load_order(manifests: &[PluginManifest]) -> Result<Vec<&PluginManifest>, Vec<DependencyError>> {
-    // Filter to enabled manifests only
-    let enabled: Vec<&PluginManifest> = manifests.iter().filter(|m| m.enabled).collect();
+    let enabled = enabled_manifests(manifests);
+    debug_assert!(enabled.len() <= manifests.len());
 
-    // Build name → index lookup map
-    let mut name_to_idx: HashMap<&str, usize> = HashMap::new();
-    for (idx, manifest) in enabled.iter().enumerate() {
-        name_to_idx.insert(&manifest.name, idx);
+    let name_to_idx = build_name_to_index_map(&enabled);
+    let (in_degree, edges, errors) = build_dependency_graph(&enabled, &name_to_idx);
+    if !errors.is_empty() {
+        return Err(errors);
     }
 
-    // Build dependency graph and collect errors
-    let mut errors: Vec<DependencyError> = Vec::new();
-    let mut in_degree: Vec<usize> = vec![0; enabled.len()];
-    let mut edges: Vec<Vec<usize>> = vec![Vec::new(); enabled.len()];
+    toposort_load_order(&enabled, in_degree, edges)
+}
+
+fn enabled_manifests(manifests: &[PluginManifest]) -> Vec<&PluginManifest> {
+    manifests.iter().filter(|manifest| manifest.enabled).collect()
+}
+
+fn build_name_to_index_map<'a>(enabled: &[&'a PluginManifest]) -> HashMap<&'a str, usize> {
+    let mut name_to_idx = HashMap::with_capacity(enabled.len());
+    for (idx, manifest) in enabled.iter().enumerate() {
+        name_to_idx.insert(manifest.name.as_str(), idx);
+    }
+    name_to_idx
+}
+
+fn build_dependency_graph<'a>(
+    enabled: &[&'a PluginManifest],
+    name_to_idx: &HashMap<&'a str, usize>,
+) -> (Vec<usize>, Vec<Vec<usize>>, Vec<DependencyError>) {
+    let mut errors = Vec::with_capacity(enabled.len());
+    let mut in_degree = vec![0usize; enabled.len()];
+    let mut edges = build_edge_lists(enabled, name_to_idx);
+    debug_assert_eq!(in_degree.len(), enabled.len());
+    debug_assert_eq!(edges.len(), enabled.len());
 
     for (idx, manifest) in enabled.iter().enumerate() {
         for dep in &manifest.dependencies {
-            if dep.optional {
-                // Optional dep missing → skip silently
-                if let Some(&dep_idx) = name_to_idx.get(dep.name.as_str()) {
-                    // Check version if dependency exists
+            let maybe_dep_idx = name_to_idx.get(dep.name.as_str()).copied();
+            match maybe_dep_idx {
+                Some(dep_idx) => {
                     let dep_manifest = enabled[dep_idx];
                     if let Some(min_ver) = &dep.min_version
-                        && !version_satisfies(&dep_manifest.version, min_ver)
+                        && !version_at_least(ActualVersion(&dep_manifest.version), MinimumVersion(min_ver))
                     {
                         errors.push(DependencyError::VersionMismatch {
                             plugin: manifest.name.clone(),
@@ -136,29 +155,11 @@ pub fn resolve_load_order(manifests: &[PluginManifest]) -> Result<Vec<&PluginMan
                             actual_version: dep_manifest.version.clone(),
                         });
                     }
-                    // Add edge: dep → dependent
                     edges[dep_idx].push(idx);
-                    in_degree[idx] += 1;
+                    in_degree[idx] = in_degree[idx].saturating_add(1);
                 }
-                // If optional dep doesn't exist, silently skip
-            } else {
-                // Hard dep missing → error
-                if let Some(&dep_idx) = name_to_idx.get(dep.name.as_str()) {
-                    let dep_manifest = enabled[dep_idx];
-                    if let Some(min_ver) = &dep.min_version
-                        && !version_satisfies(&dep_manifest.version, min_ver)
-                    {
-                        errors.push(DependencyError::VersionMismatch {
-                            plugin: manifest.name.clone(),
-                            requires: dep.name.clone(),
-                            min_version: min_ver.clone(),
-                            actual_version: dep_manifest.version.clone(),
-                        });
-                    }
-                    // Add edge: dep → dependent
-                    edges[dep_idx].push(idx);
-                    in_degree[idx] += 1;
-                } else {
+                None if dep.optional => {}
+                None => {
                     errors.push(DependencyError::Missing {
                         plugin: manifest.name.clone(),
                         requires: dep.name.clone(),
@@ -169,42 +170,57 @@ pub fn resolve_load_order(manifests: &[PluginManifest]) -> Result<Vec<&PluginMan
         }
     }
 
-    if !errors.is_empty() {
-        return Err(errors);
+    (in_degree, edges, errors)
+}
+
+fn build_edge_lists<'a>(enabled: &[&'a PluginManifest], name_to_idx: &HashMap<&'a str, usize>) -> Vec<Vec<usize>> {
+    let mut edge_capacities = vec![0usize; enabled.len()];
+    for manifest in enabled {
+        for dep in &manifest.dependencies {
+            if let Some(dep_idx) = name_to_idx.get(dep.name.as_str()) {
+                edge_capacities[*dep_idx] = edge_capacities[*dep_idx].saturating_add(1);
+            }
+        }
     }
 
-    // Kahn's algorithm: queue all with in-degree 0
-    let mut queue: VecDeque<usize> = VecDeque::new();
+    edge_capacities.into_iter().map(Vec::with_capacity).collect()
+}
+
+fn toposort_load_order<'a>(
+    enabled: &[&'a PluginManifest],
+    mut in_degree: Vec<usize>,
+    edges: Vec<Vec<usize>>,
+) -> Result<Vec<&'a PluginManifest>, Vec<DependencyError>> {
+    let mut queue = VecDeque::with_capacity(enabled.len());
     for (idx, &degree) in in_degree.iter().enumerate() {
         if degree == 0 {
             queue.push_back(idx);
         }
     }
 
-    let mut sorted: Vec<&PluginManifest> = Vec::new();
+    let mut sorted = Vec::with_capacity(enabled.len());
     while let Some(idx) = queue.pop_front() {
         sorted.push(enabled[idx]);
         for &dependent_idx in &edges[idx] {
-            in_degree[dependent_idx] -= 1;
+            in_degree[dependent_idx] = in_degree[dependent_idx].saturating_sub(1);
             if in_degree[dependent_idx] == 0 {
                 queue.push_back(dependent_idx);
             }
         }
     }
 
-    // If output.len() < filtered.len() → cycle among remaining
     if sorted.len() < enabled.len() {
-        // Find nodes in cycle (those with in_degree > 0)
         let mut cycle_nodes: Vec<String> = enabled
             .iter()
             .enumerate()
             .filter(|(idx, _)| in_degree[*idx] > 0)
-            .map(|(_, m)| m.name.clone())
+            .map(|(_, manifest)| manifest.name.clone())
             .collect();
         cycle_nodes.sort();
         return Err(vec![DependencyError::Cycle(cycle_nodes)]);
     }
 
+    debug_assert_eq!(sorted.len(), enabled.len());
     Ok(sorted)
 }
 
@@ -224,40 +240,23 @@ pub fn resolve_load_order(manifests: &[PluginManifest]) -> Result<Vec<&PluginMan
 /// - Check API version first
 /// - Then check all dependencies
 pub fn validate_install(manifest: &PluginManifest, installed: &[PluginManifest]) -> Result<(), Vec<DependencyError>> {
-    let mut errors: Vec<DependencyError> = Vec::new();
+    let mut errors = Vec::with_capacity(manifest.dependencies.len().saturating_add(1));
 
-    // Check API version
-    if let Err(e) = check_api_version(manifest) {
-        errors.push(e);
+    if let Err(error) = check_api_version(manifest) {
+        errors.push(error);
     }
 
-    // Build name → manifest lookup
-    let mut installed_map: HashMap<&str, &PluginManifest> = HashMap::new();
-    for m in installed {
-        installed_map.insert(&m.name, m);
+    let mut installed_map: HashMap<&str, &PluginManifest> = HashMap::with_capacity(installed.len());
+    for installed_manifest in installed {
+        installed_map.insert(&installed_manifest.name, installed_manifest);
     }
+    debug_assert!(installed_map.len() <= installed.len());
 
-    // Check each dependency
     for dep in &manifest.dependencies {
-        if dep.optional {
-            // Optional dep: check version if it exists
-            if let Some(&dep_manifest) = installed_map.get(dep.name.as_str())
-                && let Some(min_ver) = &dep.min_version
-                && !version_satisfies(&dep_manifest.version, min_ver)
-            {
-                errors.push(DependencyError::VersionMismatch {
-                    plugin: manifest.name.clone(),
-                    requires: dep.name.clone(),
-                    min_version: min_ver.clone(),
-                    actual_version: dep_manifest.version.clone(),
-                });
-            }
-            // Missing optional dep is OK
-        } else {
-            // Hard dep: must exist
-            if let Some(&dep_manifest) = installed_map.get(dep.name.as_str()) {
+        match installed_map.get(dep.name.as_str()).copied() {
+            Some(dep_manifest) => {
                 if let Some(min_ver) = &dep.min_version
-                    && !version_satisfies(&dep_manifest.version, min_ver)
+                    && !version_at_least(ActualVersion(&dep_manifest.version), MinimumVersion(min_ver))
                 {
                     errors.push(DependencyError::VersionMismatch {
                         plugin: manifest.name.clone(),
@@ -266,7 +265,9 @@ pub fn validate_install(manifest: &PluginManifest, installed: &[PluginManifest])
                         actual_version: dep_manifest.version.clone(),
                     });
                 }
-            } else {
+            }
+            None if dep.optional => {}
+            None => {
                 errors.push(DependencyError::Missing {
                     plugin: manifest.name.clone(),
                     requires: dep.name.clone(),
@@ -276,7 +277,12 @@ pub fn validate_install(manifest: &PluginManifest, installed: &[PluginManifest])
         }
     }
 
-    if errors.is_empty() { Ok(()) } else { Err(errors) }
+    if errors.is_empty() {
+        debug_assert!(errors.is_empty());
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }
 
 /// Find which installed plugins depend on the named plugin.
@@ -289,7 +295,7 @@ pub fn validate_install(manifest: &PluginManifest, installed: &[PluginManifest])
 /// # Returns
 /// * Vec of plugin names that depend on `name`
 pub fn reverse_dependents(name: &str, installed: &[PluginManifest]) -> Vec<String> {
-    let mut dependents: Vec<String> = Vec::new();
+    let mut dependents = Vec::with_capacity(installed.len());
     for manifest in installed {
         for dep in &manifest.dependencies {
             if dep.name == name && !dep.optional {
@@ -312,7 +318,7 @@ pub fn reverse_dependents(name: &str, installed: &[PluginManifest]) -> Vec<Strin
 /// * `Err(DependencyError::ApiVersionTooNew)` - Plugin requires newer API
 pub fn check_api_version(manifest: &PluginManifest) -> Result<(), DependencyError> {
     if let Some(min_api) = &manifest.min_api_version
-        && !version_satisfies(PLUGIN_API_VERSION, min_api)
+        && !version_at_least(ActualVersion(PLUGIN_API_VERSION), MinimumVersion(min_api))
     {
         return Err(DependencyError::ApiVersionTooNew {
             plugin: manifest.name.clone(),
@@ -331,13 +337,16 @@ pub fn check_api_version(manifest: &PluginManifest) -> Result<(), DependencyErro
 ///
 /// # Returns
 /// * `true` if actual >= min_version
-fn version_satisfies(actual: &str, min_version: &str) -> bool {
-    // Try semver comparison first
-    if let (Ok(actual_ver), Ok(min_ver)) = (semver::Version::parse(actual), semver::Version::parse(min_version)) {
+struct ActualVersion<'a>(&'a str);
+struct MinimumVersion<'a>(&'a str);
+
+fn version_at_least(actual_version: ActualVersion<'_>, minimum_version: MinimumVersion<'_>) -> bool {
+    if let (Ok(actual_ver), Ok(min_ver)) =
+        (semver::Version::parse(actual_version.0), semver::Version::parse(minimum_version.0))
+    {
         return actual_ver >= min_ver;
     }
-    // Fallback to string equality
-    actual == min_version
+    actual_version.0 == minimum_version.0
 }
 
 #[cfg(test)]
@@ -594,11 +603,11 @@ mod tests {
     #[test]
     fn test_non_semver_version_strings() {
         // Fallback to string equality for non-semver versions
-        assert!(version_satisfies("foo", "foo"));
-        assert!(!version_satisfies("foo", "bar"));
-        assert!(version_satisfies("1.0.0", "1.0.0"));
-        assert!(version_satisfies("1.5.0", "1.0.0"));
-        assert!(!version_satisfies("0.9.0", "1.0.0"));
+        assert!(version_at_least(ActualVersion("foo"), MinimumVersion("foo")));
+        assert!(!version_at_least(ActualVersion("foo"), MinimumVersion("bar")));
+        assert!(version_at_least(ActualVersion("1.0.0"), MinimumVersion("1.0.0")));
+        assert!(version_at_least(ActualVersion("1.5.0"), MinimumVersion("1.0.0")));
+        assert!(!version_at_least(ActualVersion("0.9.0"), MinimumVersion("1.0.0")));
     }
 
     #[test]

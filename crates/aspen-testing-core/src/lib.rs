@@ -260,7 +260,7 @@ impl DeterministicKeyValueStore {
 
     /// Get the next revision number (simulates Raft log index).
     fn next_revision(&self) -> u64 {
-        self.revision.fetch_add(1, Ordering::SeqCst) + 1
+        (self.revision.fetch_add(1, Ordering::SeqCst)).saturating_add(1)
     }
 
     /// Insert or update a key with proper version tracking.
@@ -284,7 +284,7 @@ impl DeterministicKeyValueStore {
     fn evaluate_transaction_comparisons(inner: &HashMap<String, VersionedValue>, comparisons: &[TxnCompare]) -> bool {
         for cmp in comparisons {
             let current_versioned = inner.get(&cmp.key);
-            let passed = match cmp.target {
+            let is_passed = match cmp.target {
                 CompareTarget::Value => {
                     let actual = current_versioned.map(|v| v.value.clone()).unwrap_or_default();
                     match cmp.op {
@@ -325,7 +325,7 @@ impl DeterministicKeyValueStore {
                     }
                 }
             };
-            if !passed {
+            if !is_passed {
                 return false;
             }
         }
@@ -340,7 +340,7 @@ impl DeterministicKeyValueStore {
         operations: &[TxnOp],
         revision: u64,
     ) -> Vec<TxnOpResult> {
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(operations.len());
         for op in operations {
             match op {
                 TxnOp::Put { key, value } => {
@@ -363,10 +363,11 @@ impl DeterministicKeyValueStore {
                 }
                 TxnOp::Range { prefix, limit } => {
                     let matching: Vec<_> = inner.iter().filter(|(k, _)| k.starts_with(prefix)).collect();
-                    let more = matching.len() > *limit as usize;
+                    let limit_entries = usize::try_from(*limit).unwrap_or(usize::MAX);
+                    let is_more_results = matching.len() > limit_entries;
                     let kvs: Vec<_> = matching
                         .into_iter()
-                        .take(*limit as usize)
+                        .take(limit_entries)
                         .map(|(k, v)| KeyValueWithRevision {
                             key: k.clone(),
                             value: v.value.clone(),
@@ -375,7 +376,10 @@ impl DeterministicKeyValueStore {
                             mod_revision: v.mod_revision,
                         })
                         .collect();
-                    results.push(TxnOpResult::Range { kvs, more });
+                    results.push(TxnOpResult::Range {
+                        kvs,
+                        more: is_more_results,
+                    });
                 }
             }
         }
@@ -394,14 +398,14 @@ impl DeterministicKeyValueStore {
         // Check all conditions first
         let mut failed_index = None;
         for (i, cond) in conditions.iter().enumerate() {
-            let met = match cond {
+            let is_met = match cond {
                 BatchCondition::ValueEquals { key, expected } => {
                     inner.get(key).map(|v| &v.value == expected).unwrap_or(false)
                 }
                 BatchCondition::KeyExists { key } => inner.contains_key(key),
                 BatchCondition::KeyNotExists { key } => !inner.contains_key(key),
             };
-            if !met {
+            if !is_met {
                 failed_index = Some(i as u32);
                 break;
             }
@@ -556,12 +560,12 @@ impl DeterministicKeyValueStore {
         revision: u64,
     ) -> Result<WriteResult, KeyValueStoreError> {
         let current = inner.get(&key).map(|v| v.value.clone());
-        let condition_matches = match (&expected, &current) {
+        let is_condition_match = match (&expected, &current) {
             (None, None) => true,
             (Some(exp), Some(cur)) => exp == cur,
             _ => false,
         };
-        if condition_matches {
+        if is_condition_match {
             Self::insert_versioned(inner, key.clone(), new_value.clone(), revision);
             Ok(WriteResult {
                 command: Some(WriteCommand::CompareAndSwap {
@@ -588,8 +592,8 @@ impl DeterministicKeyValueStore {
         revision: u64,
     ) -> Result<WriteResult, KeyValueStoreError> {
         let current = inner.get(&key).map(|v| v.value.clone());
-        let condition_matches = matches!(&current, Some(cur) if cur == &expected);
-        if condition_matches {
+        let is_condition_match = matches!(&current, Some(cur) if cur == &expected);
+        if is_condition_match {
             inner.remove(&key);
             Ok(WriteResult {
                 command: Some(WriteCommand::CompareAndDelete { key, expected }),
@@ -692,12 +696,12 @@ impl DeterministicKeyValueStore {
         failure: &[TxnOp],
         revision: u64,
     ) -> Result<WriteResult, KeyValueStoreError> {
-        let all_passed = Self::evaluate_transaction_comparisons(inner, compare);
-        let ops = if all_passed { success } else { failure };
+        let is_all_passed = Self::evaluate_transaction_comparisons(inner, compare);
+        let ops = if is_all_passed { success } else { failure };
         let results = Self::execute_transaction_operations(inner, ops, revision);
 
         Ok(WriteResult {
-            succeeded: Some(all_passed),
+            succeeded: Some(is_all_passed),
             txn_results: Some(results),
             header_revision: Some(revision),
             ..Default::default()
@@ -796,7 +800,8 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let inner = self.inner.lock().await;
 
         // Apply Tiger Style bounded limit
-        let limit = request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+        let limit_entries = usize::try_from(request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS))
+            .unwrap_or(usize::MAX);
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {
@@ -823,10 +828,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
         matching.sort_by(|a, b| a.0.cmp(&b.0));
 
         // Take limit + 1 to check if there are more results
-        let is_truncated = matching.len() > limit;
+        let is_truncated = matching.len() > limit_entries;
         let entries: Vec<KeyValueWithRevision> = matching
             .into_iter()
-            .take(limit)
+            .take(limit_entries)
             .map(|(key, versioned)| KeyValueWithRevision {
                 key,
                 value: versioned.value,

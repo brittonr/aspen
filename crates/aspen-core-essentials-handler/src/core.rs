@@ -4,6 +4,7 @@
 //! CheckpointWal, ListVaults, GetVaultKeys, Trace*, Metric*, Alert*.
 
 use std::collections::HashMap;
+use std::num::NonZeroU64;
 
 use aspen_client_api::AlertComparison;
 use aspen_client_api::AlertEvaluateResultResponse;
@@ -48,6 +49,52 @@ use aspen_rpc_core::RequestHandler;
 
 /// Handler for core operations (health, metrics, node info).
 pub struct CoreHandler;
+
+struct MetricQueryArgs {
+    name: String,
+    start_time_us: Option<u64>,
+    end_time_us: Option<u64>,
+    label_filters: Vec<(String, String)>,
+    aggregation: Option<String>,
+    step_us: Option<u64>,
+    limit: Option<u32>,
+}
+
+struct TraceSearchArgs {
+    operation: Option<String>,
+    min_duration_us: Option<u64>,
+    max_duration_us: Option<u64>,
+    status: Option<String>,
+    limit: Option<u32>,
+}
+
+struct AlertTransitionArgs<'a> {
+    name: &'a str,
+    current_state: &'a mut AlertStateWire,
+    new_status: &'a AlertStatus,
+    previous_status: &'a AlertStatus,
+    is_transition: bool,
+    now_us: u64,
+    computed_value: f64,
+    threshold: f64,
+}
+
+struct ResultLimitBounds {
+    default_limit: u32,
+    max_limit: u32,
+}
+
+fn usize_from_u32(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
+
+fn u32_from_len(len: usize) -> u32 {
+    u32::try_from(len).unwrap_or(u32::MAX)
+}
+
+fn bounded_result_count(limit: Option<u32>, bounds: ResultLimitBounds) -> usize {
+    usize_from_u32(limit.unwrap_or(bounds.default_limit).min(bounds.max_limit))
+}
 
 #[async_trait::async_trait]
 impl RequestHandler for CoreHandler {
@@ -109,7 +156,16 @@ impl RequestHandler for CoreHandler {
                 max_duration_us,
                 status,
                 limit,
-            } => handle_trace_search(ctx, operation, min_duration_us, max_duration_us, status, limit).await,
+            } => {
+                handle_trace_search(ctx, TraceSearchArgs {
+                    operation,
+                    min_duration_us,
+                    max_duration_us,
+                    status,
+                    limit,
+                })
+                .await
+            }
             ClientRpcRequest::MetricIngest {
                 data_points,
                 ttl_seconds,
@@ -124,8 +180,16 @@ impl RequestHandler for CoreHandler {
                 step_us,
                 limit,
             } => {
-                handle_metric_query(ctx, name, start_time_us, end_time_us, label_filters, aggregation, step_us, limit)
-                    .await
+                handle_metric_query(ctx, MetricQueryArgs {
+                    name,
+                    start_time_us,
+                    end_time_us,
+                    label_filters,
+                    aggregation,
+                    step_us,
+                    limit,
+                })
+                .await
             }
             ClientRpcRequest::AlertCreate { rule } => handle_alert_create(ctx, rule).await,
             ClientRpcRequest::AlertDelete { name } => handle_alert_delete(ctx, name).await,
@@ -157,9 +221,9 @@ async fn handle_get_health(ctx: &ClientProtocolContext) -> anyhow::Result<Client
                 "degraded"
             };
             // Node is initialized if it has non-empty membership (voters + learners)
-            let node_count = metrics.voters.len() + metrics.learners.len();
+            let node_count = u32_from_len(metrics.voters.len()).saturating_add(u32_from_len(metrics.learners.len()));
             let is_init = node_count > 0;
-            (status, is_init, Some(node_count as u32))
+            (status, is_init, Some(node_count))
         }
         Err(_) => ("unhealthy", false, None),
     };
@@ -339,10 +403,11 @@ fn handle_get_vault_keys(vault_name: String) -> anyhow::Result<ClientRpcResponse
 }
 
 async fn handle_trace_ingest(ctx: &ClientProtocolContext, spans: Vec<IngestSpan>) -> anyhow::Result<ClientRpcResponse> {
-    let max_batch = aspen_constants::MAX_TRACE_BATCH_SIZE as usize;
+    let max_batch = usize_from_u32(aspen_constants::MAX_TRACE_BATCH_SIZE);
     let total_count = spans.len();
-    let accepted_count = total_count.min(max_batch) as u32;
-    let dropped_count = total_count.saturating_sub(max_batch) as u32;
+    let accepted_count = u32_from_len(total_count.min(max_batch));
+    let dropped_count = u32_from_len(total_count.saturating_sub(max_batch));
+    debug_assert!(accepted_count <= aspen_constants::MAX_TRACE_BATCH_SIZE);
 
     // Truncate to max batch and keep a reference for OTLP forwarding.
     let accepted: Vec<IngestSpan> = spans.into_iter().take(max_batch).collect();
@@ -357,7 +422,7 @@ async fn handle_trace_ingest(ctx: &ClientProtocolContext, spans: Vec<IngestSpan>
             return Ok(ClientRpcResponse::TraceIngestResult(TraceIngestResultResponse {
                 is_success: false,
                 accepted_count: 0,
-                dropped_count: total_count as u32,
+                dropped_count: u32_from_len(total_count),
                 error: Some(format!("storage error: {}", e)),
             }));
         }
@@ -416,7 +481,7 @@ fn matches_status(span: &IngestSpan, filter: &str) -> bool {
 
 /// Build a TraceSummary from a group of spans sharing a trace_id.
 fn build_trace_summary(trace_id: String, spans: &[IngestSpan]) -> TraceSummary {
-    let span_count = spans.len() as u32;
+    let span_count = u32_from_len(spans.len());
     let root_operation = spans.iter().find(|s| s.parent_id == "0000000000000000").map(|s| s.operation.clone());
     let start_time_us = spans.iter().map(|s| s.start_time_us).min().unwrap_or(0);
     let end_time_us = spans.iter().map(|s| s.start_time_us.saturating_add(s.duration_us)).max().unwrap_or(0);
@@ -439,25 +504,24 @@ async fn handle_trace_list(
     limit: Option<u32>,
     _continuation_token: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    let effective_limit = limit
-        .unwrap_or(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT)
-        .min(aspen_constants::MAX_TRACE_QUERY_RESULTS) as usize;
-
+    debug_assert!(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT <= aspen_constants::MAX_TRACE_QUERY_RESULTS);
+    let max_result_count = bounded_result_count(limit, ResultLimitBounds {
+        default_limit: aspen_constants::DEFAULT_TRACE_QUERY_LIMIT,
+        max_limit: aspen_constants::MAX_TRACE_QUERY_RESULTS,
+    });
+    debug_assert!(max_result_count <= usize_from_u32(aspen_constants::MAX_TRACE_QUERY_RESULTS));
     let spans = scan_trace_spans(ctx, "_sys:traces:").await;
 
-    // Group by trace_id
     let mut groups: HashMap<String, Vec<&IngestSpan>> = HashMap::new();
     for span in &spans {
         groups.entry(span.trace_id.clone()).or_default().push(span);
     }
 
-    // Build summaries with optional time-range filter
     let mut summaries: Vec<TraceSummary> = groups
         .into_iter()
         .filter_map(|(trace_id, group)| {
             let owned: Vec<IngestSpan> = group.into_iter().cloned().collect();
             let summary = build_trace_summary(trace_id, &owned);
-            // Time-range filter: skip if entire trace is outside the range
             if let Some(start) = start_time_us {
                 let trace_end = summary.start_time_us.saturating_add(summary.total_duration_us);
                 if trace_end < start {
@@ -473,12 +537,10 @@ async fn handle_trace_list(
         })
         .collect();
 
-    // Sort newest first
-    summaries.sort_by_key(|s| std::cmp::Reverse(s.start_time_us));
-
-    let is_truncated = summaries.len() > effective_limit;
-    summaries.truncate(effective_limit);
-    let count = summaries.len() as u32;
+    summaries.sort_by_key(|summary| std::cmp::Reverse(summary.start_time_us));
+    let is_truncated = summaries.len() > max_result_count;
+    summaries.truncate(max_result_count);
+    let count = u32::try_from(summaries.len()).unwrap_or(u32::MAX);
 
     Ok(ClientRpcResponse::TraceListResult(TraceListResultResponse {
         traces: summaries,
@@ -491,7 +553,7 @@ async fn handle_trace_list(
 async fn handle_trace_get(ctx: &ClientProtocolContext, trace_id: String) -> anyhow::Result<ClientRpcResponse> {
     let prefix = format!("_sys:traces:{}:", trace_id);
     let spans = scan_trace_spans(ctx, &prefix).await;
-    let span_count = spans.len() as u32;
+    let span_count = u32_from_len(spans.len());
 
     Ok(ClientRpcResponse::TraceGetResult(TraceGetResultResponse {
         trace_id,
@@ -501,51 +563,46 @@ async fn handle_trace_get(ctx: &ClientProtocolContext, trace_id: String) -> anyh
     }))
 }
 
-async fn handle_trace_search(
-    ctx: &ClientProtocolContext,
-    operation: Option<String>,
-    min_duration_us: Option<u64>,
-    max_duration_us: Option<u64>,
-    status: Option<String>,
-    limit: Option<u32>,
-) -> anyhow::Result<ClientRpcResponse> {
-    let effective_limit = limit
-        .unwrap_or(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT)
-        .min(aspen_constants::MAX_TRACE_QUERY_RESULTS) as usize;
-
+async fn handle_trace_search(ctx: &ClientProtocolContext, args: TraceSearchArgs) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(aspen_constants::DEFAULT_TRACE_QUERY_LIMIT <= aspen_constants::MAX_TRACE_QUERY_RESULTS);
+    let max_result_count = bounded_result_count(args.limit, ResultLimitBounds {
+        default_limit: aspen_constants::DEFAULT_TRACE_QUERY_LIMIT,
+        max_limit: aspen_constants::MAX_TRACE_QUERY_RESULTS,
+    });
+    debug_assert!(max_result_count <= usize_from_u32(aspen_constants::MAX_TRACE_QUERY_RESULTS));
     let all_spans = scan_trace_spans(ctx, "_sys:traces:").await;
-    let op_lower = operation.as_deref().map(str::to_lowercase);
+    let op_lower = args.operation.as_deref().map(str::to_lowercase);
 
-    let mut matched: Vec<IngestSpan> = Vec::new();
+    let mut matched: Vec<IngestSpan> = Vec::with_capacity(max_result_count);
     for span in all_spans {
         if let Some(ref op) = op_lower
             && !span.operation.to_lowercase().contains(op.as_str())
         {
             continue;
         }
-        if let Some(min) = min_duration_us
+        if let Some(min) = args.min_duration_us
             && span.duration_us < min
         {
             continue;
         }
-        if let Some(max) = max_duration_us
+        if let Some(max) = args.max_duration_us
             && span.duration_us > max
         {
             continue;
         }
-        if let Some(ref s) = status
-            && !matches_status(&span, s)
+        if let Some(ref status_filter) = args.status
+            && !matches_status(&span, status_filter)
         {
             continue;
         }
         matched.push(span);
-        if matched.len() >= effective_limit {
+        if matched.len() >= max_result_count {
             break;
         }
     }
 
-    let is_truncated = matched.len() >= effective_limit;
-    let count = matched.len() as u32;
+    let is_truncated = matched.len() >= max_result_count;
+    let count = u32::try_from(matched.len()).unwrap_or(u32::MAX);
 
     Ok(ClientRpcResponse::TraceSearchResult(TraceSearchResultResponse {
         spans: matched,
@@ -577,10 +634,11 @@ async fn handle_metric_ingest(
     data_points: Vec<MetricDataPoint>,
     ttl_seconds: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    let max_batch = aspen_constants::MAX_METRIC_BATCH_SIZE as usize;
+    let max_batch = usize_from_u32(aspen_constants::MAX_METRIC_BATCH_SIZE);
     let total_count = data_points.len();
-    let accepted_count = total_count.min(max_batch) as u32;
-    let dropped_count = total_count.saturating_sub(max_batch) as u32;
+    let accepted_count = u32_from_len(total_count.min(max_batch));
+    let dropped_count = u32_from_len(total_count.saturating_sub(max_batch));
+    debug_assert!(accepted_count <= aspen_constants::MAX_METRIC_BATCH_SIZE);
 
     let ttl = ttl_seconds
         .unwrap_or(aspen_constants::METRIC_DEFAULT_TTL_SECONDS)
@@ -598,7 +656,7 @@ async fn handle_metric_ingest(
             return Ok(ClientRpcResponse::MetricIngestResult(MetricIngestResultResponse {
                 is_success: false,
                 accepted_count: 0,
-                dropped_count: total_count as u32,
+                dropped_count: u32_from_len(total_count),
                 error: Some(format!("storage error: {}", e)),
             }));
         }
@@ -638,13 +696,14 @@ async fn handle_metric_list(
     limit: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
     let scan_prefix = format!("_sys:metrics_meta:{}", prefix.as_deref().unwrap_or(""));
-    let effective_limit = limit
+    let max_result_count = limit
         .unwrap_or(aspen_constants::MAX_METRIC_LIST_RESULTS)
         .min(aspen_constants::MAX_METRIC_LIST_RESULTS);
+    debug_assert!(max_result_count <= aspen_constants::MAX_METRIC_LIST_RESULTS);
 
     let scan_req = ScanRequest {
         prefix: scan_prefix,
-        limit_results: Some(effective_limit),
+        limit_results: Some(max_result_count),
         continuation_token: None,
     };
     let scan_result = match ctx.kv_store.scan(scan_req).await {
@@ -667,7 +726,8 @@ async fn handle_metric_list(
         }
     }
 
-    let count = metrics.len() as u32;
+    debug_assert!(metrics.len() <= scan_result.entries.len());
+    let count = u32::try_from(metrics.len()).unwrap_or(u32::MAX);
     Ok(ClientRpcResponse::MetricListResult(MetricListResultResponse {
         metrics,
         count,
@@ -675,18 +735,9 @@ async fn handle_metric_list(
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn handle_metric_query(
-    ctx: &ClientProtocolContext,
-    name: String,
-    start_time_us: Option<u64>,
-    end_time_us: Option<u64>,
-    label_filters: Vec<(String, String)>,
-    aggregation: Option<String>,
-    step_us: Option<u64>,
-    limit: Option<u32>,
-) -> anyhow::Result<ClientRpcResponse> {
-    let scan_prefix = format!("_sys:metrics:{}:", name);
+async fn handle_metric_query(ctx: &ClientProtocolContext, args: MetricQueryArgs) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(aspen_constants::DEFAULT_METRIC_QUERY_LIMIT <= aspen_constants::MAX_METRIC_QUERY_RESULTS);
+    let scan_prefix = format!("_sys:metrics:{}:", args.name);
     let scan_req = ScanRequest {
         prefix: scan_prefix,
         limit_results: Some(aspen_constants::MAX_METRIC_QUERY_RESULTS),
@@ -695,9 +746,9 @@ async fn handle_metric_query(
     let scan_result = match ctx.kv_store.scan(scan_req).await {
         Ok(result) => result,
         Err(e) => {
-            tracing::warn!(error = %e, metric_name = %name, "metric query scan failed");
+            tracing::warn!(error = %e, metric_name = %args.name, "metric query scan failed");
             return Ok(ClientRpcResponse::MetricQueryResult(MetricQueryResultResponse {
-                name,
+                name: args.name,
                 data_points: vec![],
                 count: 0,
                 is_truncated: false,
@@ -706,8 +757,7 @@ async fn handle_metric_query(
         }
     };
 
-    // Deserialize and filter
-    let mut points: Vec<MetricDataPoint> = Vec::new();
+    let mut points: Vec<MetricDataPoint> = Vec::with_capacity(scan_result.entries.len());
     for entry in &scan_result.entries {
         let dp = match serde_json::from_str::<MetricDataPoint>(&entry.value) {
             Ok(dp) => dp,
@@ -716,39 +766,40 @@ async fn handle_metric_query(
                 continue;
             }
         };
-        if let Some(start) = start_time_us
+        if let Some(start) = args.start_time_us
             && dp.timestamp_us < start
         {
             continue;
         }
-        if let Some(end) = end_time_us
+        if let Some(end) = args.end_time_us
             && dp.timestamp_us >= end
         {
             continue;
         }
-        if !matches_label_filters(&dp.labels, &label_filters) {
+        if !matches_label_filters(&dp.labels, &args.label_filters) {
             continue;
         }
         points.push(dp);
     }
 
-    // Apply aggregation
-    let agg = aggregation.as_deref().unwrap_or("none");
-    let result_points = if agg == "none" {
+    let aggregation = args.aggregation.as_deref().unwrap_or("none");
+    let result_points = if aggregation == "none" {
         points
     } else {
-        aggregate_metric_points(&points, agg, step_us, &name)
+        aggregate_metric_points(&points, aggregation, args.step_us, &args.name)
     };
 
-    let effective_limit = limit
-        .unwrap_or(aspen_constants::DEFAULT_METRIC_QUERY_LIMIT)
-        .min(aspen_constants::MAX_METRIC_QUERY_RESULTS) as usize;
-    let is_truncated = result_points.len() > effective_limit;
-    let truncated: Vec<MetricDataPoint> = result_points.into_iter().take(effective_limit).collect();
-    let count = truncated.len() as u32;
+    let max_result_count = bounded_result_count(args.limit, ResultLimitBounds {
+        default_limit: aspen_constants::DEFAULT_METRIC_QUERY_LIMIT,
+        max_limit: aspen_constants::MAX_METRIC_QUERY_RESULTS,
+    });
+    debug_assert!(max_result_count <= usize_from_u32(aspen_constants::MAX_METRIC_QUERY_RESULTS));
+    let is_truncated = result_points.len() > max_result_count;
+    let truncated: Vec<MetricDataPoint> = result_points.into_iter().take(max_result_count).collect();
+    let count = u32::try_from(truncated.len()).unwrap_or(u32::MAX);
 
     Ok(ClientRpcResponse::MetricQueryResult(MetricQueryResultResponse {
-        name,
+        name: args.name,
         data_points: truncated,
         count,
         is_truncated,
@@ -772,12 +823,13 @@ fn aggregate_metric_points(
         return vec![];
     }
 
-    match step_us {
-        Some(step) if step > 0 => {
-            // Bucket points by timestamp
+    match step_us.and_then(NonZeroU64::new) {
+        Some(step_size_us) => {
+            let step_size_us = step_size_us.get();
             let mut buckets: HashMap<u64, Vec<f64>> = HashMap::new();
             for dp in points {
-                let bucket_key = dp.timestamp_us / step * step;
+                let bucket_index = dp.timestamp_us.checked_div(step_size_us).unwrap_or(0);
+                let bucket_key = bucket_index.saturating_mul(step_size_us);
                 buckets.entry(bucket_key).or_default().push(dp.value);
             }
             let mut result: Vec<MetricDataPoint> = buckets
@@ -836,7 +888,7 @@ fn compute_aggregation(values: &[f64], aggregation: &str) -> f64 {
 
 async fn handle_alert_create(ctx: &ClientProtocolContext, rule: AlertRuleWire) -> anyhow::Result<ClientRpcResponse> {
     // Validate name length
-    if rule.name.len() > aspen_constants::MAX_ALERT_RULE_NAME_SIZE as usize {
+    if u32_from_len(rule.name.len()) > aspen_constants::MAX_ALERT_RULE_NAME_SIZE {
         return Ok(ClientRpcResponse::AlertCreateResult(AlertRuleResultResponse {
             is_success: false,
             rule_name: rule.name,
@@ -852,11 +904,11 @@ async fn handle_alert_create(ctx: &ClientProtocolContext, rule: AlertRuleWire) -
     if !is_update {
         let scan_req = ScanRequest {
             prefix: "_sys:alerts:rule:".to_string(),
-            limit_results: Some(aspen_constants::MAX_ALERT_RULES + 1),
+            limit_results: Some(aspen_constants::MAX_ALERT_RULES.saturating_add(1)),
             continuation_token: None,
         };
         if let Ok(result) = ctx.kv_store.scan(scan_req).await
-            && result.entries.len() >= aspen_constants::MAX_ALERT_RULES as usize
+            && u32_from_len(result.entries.len()) >= aspen_constants::MAX_ALERT_RULES
         {
             return Ok(ClientRpcResponse::AlertCreateResult(AlertRuleResultResponse {
                 is_success: false,
@@ -904,11 +956,13 @@ async fn handle_alert_create(ctx: &ClientProtocolContext, rule: AlertRuleWire) -
 }
 
 async fn handle_alert_delete(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
-    // Delete rule
-    let _ = ctx.kv_store.delete(DeleteRequest::new(format!("_sys:alerts:rule:{}", name))).await;
+    if let Err(e) = ctx.kv_store.delete(DeleteRequest::new(format!("_sys:alerts:rule:{}", name))).await {
+        tracing::warn!(error = %e, rule_name = %name, "failed to delete alert rule");
+    }
 
-    // Delete state
-    let _ = ctx.kv_store.delete(DeleteRequest::new(format!("_sys:alerts:state:{}", name))).await;
+    if let Err(e) = ctx.kv_store.delete(DeleteRequest::new(format!("_sys:alerts:state:{}", name))).await {
+        tracing::warn!(error = %e, rule_name = %name, "failed to delete alert state");
+    }
 
     // Delete history entries
     let history_prefix = format!("_sys:alerts:history:{}:", name);
@@ -919,7 +973,9 @@ async fn handle_alert_delete(ctx: &ClientProtocolContext, name: String) -> anyho
     };
     if let Ok(result) = ctx.kv_store.scan(scan_req).await {
         for entry in &result.entries {
-            let _ = ctx.kv_store.delete(DeleteRequest::new(entry.key.clone())).await;
+            if let Err(e) = ctx.kv_store.delete(DeleteRequest::new(entry.key.clone())).await {
+                tracing::warn!(error = %e, key = %entry.key, rule_name = %name, "failed to delete alert history");
+            }
         }
     }
 
@@ -1095,45 +1151,34 @@ async fn persist_alert_history(
 }
 
 /// Update state fields on transition and persist both state and history.
-#[allow(clippy::too_many_arguments)]
-async fn apply_and_persist_alert_transition(
-    ctx: &ClientProtocolContext,
-    name: &str,
-    current_state: &mut AlertStateWire,
-    new_status: &AlertStatus,
-    previous_status: &AlertStatus,
-    did_transition: bool,
-    now_us: u64,
-    computed_value: f64,
-    threshold: f64,
-) {
-    if did_transition {
-        match new_status {
-            AlertStatus::Pending => current_state.condition_since_us = Some(now_us),
-            AlertStatus::Firing => current_state.last_fired_us = Some(now_us),
+async fn apply_and_persist_alert_transition(ctx: &ClientProtocolContext, args: AlertTransitionArgs<'_>) {
+    if args.is_transition {
+        match args.new_status {
+            AlertStatus::Pending => args.current_state.condition_since_us = Some(args.now_us),
+            AlertStatus::Firing => args.current_state.last_fired_us = Some(args.now_us),
             AlertStatus::Ok => {
-                if previous_status == &AlertStatus::Firing {
-                    current_state.last_resolved_us = Some(now_us);
+                if args.previous_status == &AlertStatus::Firing {
+                    args.current_state.last_resolved_us = Some(args.now_us);
                 }
-                current_state.condition_since_us = None;
+                args.current_state.condition_since_us = None;
             }
         }
     }
-    current_state.status = new_status.clone();
-    current_state.last_value = Some(computed_value);
-    current_state.last_evaluated_us = now_us;
-    persist_alert_state(ctx, name, current_state).await;
+    args.current_state.status = args.new_status.clone();
+    args.current_state.last_value = Some(args.computed_value);
+    args.current_state.last_evaluated_us = args.now_us;
+    persist_alert_state(ctx, args.name, args.current_state).await;
 
-    if did_transition {
+    if args.is_transition {
         let history_entry = AlertHistoryEntry {
-            rule_name: name.to_string(),
-            from_status: previous_status.clone(),
-            to_status: new_status.clone(),
-            value: computed_value,
-            threshold,
-            timestamp_us: now_us,
+            rule_name: args.name.to_string(),
+            from_status: args.previous_status.clone(),
+            to_status: args.new_status.clone(),
+            value: args.computed_value,
+            threshold: args.threshold,
+            timestamp_us: args.now_us,
         };
-        persist_alert_history(ctx, &history_entry, name, now_us).await;
+        persist_alert_history(ctx, &history_entry, args.name, args.now_us).await;
     }
 }
 
@@ -1191,18 +1236,17 @@ async fn handle_alert_evaluate(
 
     let previous_status = current_state.status.clone();
     let new_status = compute_alert_transition(&current_state.status, is_breached, &current_state, &rule, now_us);
-    let did_transition = new_status != previous_status;
-    apply_and_persist_alert_transition(
-        ctx,
-        &name,
-        &mut current_state,
-        &new_status,
-        &previous_status,
-        did_transition,
+    let is_transition = new_status != previous_status;
+    apply_and_persist_alert_transition(ctx, AlertTransitionArgs {
+        name: &name,
+        current_state: &mut current_state,
+        new_status: &new_status,
+        previous_status: &previous_status,
+        is_transition,
         now_us,
         computed_value,
-        rule.threshold,
-    )
+        threshold: rule.threshold,
+    })
     .await;
 
     Ok(ClientRpcResponse::AlertEvaluateResult(AlertEvaluateResultResponse {
@@ -1210,8 +1254,8 @@ async fn handle_alert_evaluate(
         status: new_status,
         computed_value: Some(computed_value),
         threshold: rule.threshold,
-        did_transition,
-        previous_status: if did_transition { Some(previous_status) } else { None },
+        did_transition: is_transition,
+        previous_status: if is_transition { Some(previous_status) } else { None },
         error: None,
     }))
 }

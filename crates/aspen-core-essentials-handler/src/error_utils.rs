@@ -18,7 +18,7 @@ use aspen_core::error::KeyValueStoreError;
 /// When this returns true, the handler should return `ClientRpcResponse::error("NOT_LEADER", ...)`
 /// instead of embedding the error in a domain response field. This allows clients to detect the
 /// condition at the top level and rotate to the next bootstrap peer.
-pub fn is_not_leader_error(e: &KeyValueStoreError) -> bool {
+pub fn is_leader_redirect_error(e: &KeyValueStoreError) -> bool {
     matches!(e, KeyValueStoreError::NotLeader { .. }) || {
         let msg = e.to_string();
         msg.contains("ForwardToLeader") || msg.contains("NOT_LEADER") || msg.contains("not leader")
@@ -32,7 +32,7 @@ pub fn is_not_leader_error(e: &KeyValueStoreError) -> bool {
 /// For all other errors, returns the error's Display string as-is.
 pub fn sanitize_kv_error(e: &KeyValueStoreError) -> String {
     let msg = e.to_string();
-    if msg.contains("ForwardToLeader") || msg.contains("NOT_LEADER") || msg.contains("not leader") {
+    if is_leader_redirect_error(e) {
         return "NOT_LEADER".to_string();
     }
     msg

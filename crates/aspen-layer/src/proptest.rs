@@ -372,14 +372,16 @@ fn test_negative_integer_ordering() {
     ];
 
     let packed: Vec<Vec<u8>> = values.iter().map(|&n| Tuple::new().push(n).pack()).collect();
+    assert_eq!(packed.len(), values.len());
 
     for i in 1..packed.len() {
+        let prev_index = i.saturating_sub(1);
         assert!(
-            packed[i - 1] < packed[i],
+            packed[prev_index] < packed[i],
             "ordering failed: {} < {} but {:?} >= {:?}",
-            values[i - 1],
+            values[prev_index],
             values[i],
-            packed[i - 1],
+            packed[prev_index],
             packed[i]
         );
     }
@@ -416,8 +418,9 @@ fn test_subspace_range_disjoint() {
     let (users_start, users_end) = users.range();
     let (orders_start, orders_end) = orders.range();
 
-    // Since "orders" < "users" lexicographically, orders range should be before users
-    assert!(orders_end <= users_start || users_end <= orders_start);
+    // Since "orders" < "users" lexicographically, orders range should be before users.
+    assert!(orders_end <= users_start);
+    assert!(orders_start < users_end);
 }
 
 #[test]

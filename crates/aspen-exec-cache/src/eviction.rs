@@ -30,6 +30,15 @@ impl BlobGc for NoOpBlobGc {
     }
 }
 
+/// Parameters for one eviction run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EvictionParams {
+    /// Current wall-clock time in milliseconds since epoch.
+    pub now_ms: u64,
+    /// Maximum cache storage budget in bytes.
+    pub max_storage_bytes: u64,
+}
+
 /// Result of an eviction run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvictionResult {
@@ -51,50 +60,13 @@ pub struct EvictionResult {
 /// Returns the eviction result.
 pub fn run_eviction<S: CacheKvStore, G: BlobGc>(
     index: &ExecCacheIndex<S>,
-    now_ms: u64,
-    max_storage_bytes: u64,
+    params: EvictionParams,
     blob_gc: &G,
 ) -> crate::Result<EvictionResult> {
     let all_entries = index.scan_all(u32::MAX)?;
-
-    let mut expired_removed = 0u32;
-    let mut live_entries: Vec<(CacheKey, CacheEntry)> = Vec::new();
-
-    // Phase 1: remove expired entries
-    for (key, entry) in &all_entries {
-        if entry.is_expired(now_ms) {
-            let _ = index.delete(key);
-            unreference_entry_blobs(entry, blob_gc);
-            expired_removed = expired_removed.saturating_add(1);
-            debug!(cache_key = %key, "evicted expired entry");
-        } else {
-            live_entries.push((*key, entry.clone()));
-        }
-    }
-
-    // Phase 2: LRU eviction if over storage limit
-    let mut lru_evicted = 0u32;
-    let mut total_size = estimate_total_size(&live_entries);
-
-    if total_size > max_storage_bytes {
-        // Sort by last_accessed_ms ascending (oldest first)
-        live_entries.sort_by_key(|(_, entry)| entry.last_accessed_ms);
-
-        while total_size > max_storage_bytes {
-            let Some((key, entry)) = live_entries.first() else {
-                break;
-            };
-            let entry_size = estimate_entry_size(entry);
-            let _ = index.delete(key);
-            unreference_entry_blobs(entry, blob_gc);
-            total_size = total_size.saturating_sub(entry_size);
-            lru_evicted = lru_evicted.saturating_add(1);
-            debug!(cache_key = %key, last_accessed_ms = entry.last_accessed_ms, "evicted LRU entry");
-            live_entries.remove(0);
-        }
-    }
-
-    let remaining = live_entries.len() as u32;
+    let (mut live_entries, expired_removed) = remove_expired_entries(index, &all_entries, params.now_ms, blob_gc)?;
+    let lru_evicted = evict_lru_entries(index, &mut live_entries, params.max_storage_bytes, blob_gc)?;
+    let remaining = u32::try_from(live_entries.len()).unwrap_or(u32::MAX);
 
     if expired_removed > 0 || lru_evicted > 0 {
         info!(expired_removed, lru_evicted, remaining, "eviction pass complete");
@@ -107,12 +79,82 @@ pub fn run_eviction<S: CacheKvStore, G: BlobGc>(
     })
 }
 
+fn remove_expired_entries<S: CacheKvStore, G: BlobGc>(
+    index: &ExecCacheIndex<S>,
+    all_entries: &[(CacheKey, CacheEntry)],
+    now_ms: u64,
+    blob_gc: &G,
+) -> crate::Result<(Vec<(CacheKey, CacheEntry)>, u32)> {
+    let mut expired_removed = 0u32;
+    let mut live_entries = Vec::with_capacity(all_entries.len());
+
+    for (key, entry) in all_entries {
+        if entry.is_expired(now_ms) {
+            index.delete(key)?;
+            unreference_entry_blobs(entry, blob_gc);
+            expired_removed = expired_removed.saturating_add(1);
+            debug!(cache_key = %key, "evicted expired entry");
+            continue;
+        }
+        live_entries.push((*key, entry.clone()));
+    }
+
+    Ok((live_entries, expired_removed))
+}
+
+fn evict_lru_entries<S: CacheKvStore, G: BlobGc>(
+    index: &ExecCacheIndex<S>,
+    live_entries: &mut Vec<(CacheKey, CacheEntry)>,
+    max_storage_bytes: u64,
+    blob_gc: &G,
+) -> crate::Result<u32> {
+    if estimate_total_size_bytes(live_entries) <= max_storage_bytes {
+        return Ok(0);
+    }
+
+    live_entries.sort_by_key(|(_, entry)| entry.last_accessed_ms);
+    let removed_entries_count = count_lru_entries_to_remove(index, live_entries, max_storage_bytes, blob_gc)?;
+    live_entries.drain(..removed_entries_count);
+    Ok(u32::try_from(removed_entries_count).unwrap_or(u32::MAX))
+}
+
+fn count_lru_entries_to_remove<S: CacheKvStore, G: BlobGc>(
+    index: &ExecCacheIndex<S>,
+    live_entries: &[(CacheKey, CacheEntry)],
+    max_storage_bytes: u64,
+    blob_gc: &G,
+) -> crate::Result<usize> {
+    let mut total_size_bytes = estimate_total_size_bytes(live_entries);
+    let mut removed_entries_count = 0usize;
+
+    for (key, entry) in live_entries {
+        if total_size_bytes <= max_storage_bytes {
+            break;
+        }
+
+        let entry_size_bytes = estimate_entry_size_bytes(entry);
+        index.delete(key)?;
+        unreference_entry_blobs(entry, blob_gc);
+        total_size_bytes = total_size_bytes.saturating_sub(entry_size_bytes);
+        removed_entries_count = removed_entries_count.saturating_add(1);
+        debug!(cache_key = %key, last_accessed_ms = entry.last_accessed_ms, "evicted LRU entry");
+    }
+
+    Ok(removed_entries_count)
+}
+
 /// Unreference all blobs (stdout, stderr, outputs) for an evicted entry.
 fn unreference_entry_blobs<G: BlobGc>(entry: &CacheEntry, blob_gc: &G) {
-    let _ = blob_gc.unreference(&entry.stdout_hash);
-    let _ = blob_gc.unreference(&entry.stderr_hash);
+    log_unreference_result("stdout", &entry.stdout_hash, blob_gc.unreference(&entry.stdout_hash));
+    log_unreference_result("stderr", &entry.stderr_hash, blob_gc.unreference(&entry.stderr_hash));
     for output in &entry.outputs {
-        let _ = blob_gc.unreference(&output.hash);
+        log_unreference_result("output", &output.hash, blob_gc.unreference(&output.hash));
+    }
+}
+
+fn log_unreference_result(kind: &str, hash: &[u8; 32], result: std::result::Result<(), String>) {
+    if let Err(error) = result {
+        debug!(blob_kind = kind, blob_hash = ?hash, error, "failed to unreference evicted blob");
     }
 }
 
@@ -120,15 +162,15 @@ fn unreference_entry_blobs<G: BlobGc>(entry: &CacheEntry, blob_gc: &G) {
 ///
 /// Uses output file sizes as the primary metric since the KV index
 /// entries are small (~200 bytes each).
-fn estimate_total_size(entries: &[(CacheKey, CacheEntry)]) -> u64 {
-    entries.iter().map(|(_, entry)| estimate_entry_size(entry)).sum()
+fn estimate_total_size_bytes(entries: &[(CacheKey, CacheEntry)]) -> u64 {
+    entries.iter().map(|(_, entry)| estimate_entry_size_bytes(entry)).sum()
 }
 
 /// Estimate storage for a single entry: sum of output file sizes + index overhead.
-fn estimate_entry_size(entry: &CacheEntry) -> u64 {
-    let output_size: u64 = entry.outputs.iter().map(|o| o.size_bytes).sum();
+fn estimate_entry_size_bytes(entry: &CacheEntry) -> u64 {
+    let output_size_bytes: u64 = entry.outputs.iter().map(|output| output.size_bytes).sum();
     // ~256 bytes for the index entry itself
-    output_size.saturating_add(256)
+    output_size_bytes.saturating_add(256)
 }
 
 #[cfg(test)]
@@ -171,7 +213,15 @@ mod tests {
         let key2 = CacheKey([0x02; 32]);
         index.put(&key2, &make_entry(now, now, 100)).unwrap();
 
-        let result = run_eviction(&index, now, MAX_CACHE_STORAGE_BYTES, &NoOpBlobGc).unwrap();
+        let result = run_eviction(
+            &index,
+            EvictionParams {
+                now_ms: now,
+                max_storage_bytes: MAX_CACHE_STORAGE_BYTES,
+            },
+            &NoOpBlobGc,
+        )
+        .unwrap();
         assert_eq!(result.expired_removed, 1);
         assert_eq!(result.lru_evicted, 0);
         assert_eq!(result.remaining, 1);
@@ -197,7 +247,15 @@ mod tests {
 
         // Set max to allow only ~2 entries
         let max = 2 * (1024 + 256) + 1;
-        let result = run_eviction(&index, now, max, &NoOpBlobGc).unwrap();
+        let result = run_eviction(
+            &index,
+            EvictionParams {
+                now_ms: now,
+                max_storage_bytes: max,
+            },
+            &NoOpBlobGc,
+        )
+        .unwrap();
 
         assert_eq!(result.lru_evicted, 1);
         assert_eq!(result.remaining, 2);
@@ -215,7 +273,15 @@ mod tests {
         let key = CacheKey([0x01; 32]);
         index.put(&key, &make_entry(now, now, 100)).unwrap();
 
-        let result = run_eviction(&index, now, MAX_CACHE_STORAGE_BYTES, &NoOpBlobGc).unwrap();
+        let result = run_eviction(
+            &index,
+            EvictionParams {
+                now_ms: now,
+                max_storage_bytes: MAX_CACHE_STORAGE_BYTES,
+            },
+            &NoOpBlobGc,
+        )
+        .unwrap();
         assert_eq!(result.expired_removed, 0);
         assert_eq!(result.lru_evicted, 0);
         assert_eq!(result.remaining, 1);

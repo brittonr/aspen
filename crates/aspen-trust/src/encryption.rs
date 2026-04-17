@@ -157,8 +157,8 @@ impl SecretsEncryption {
     }
 
     /// How many epoch keys are currently held.
-    pub fn epoch_key_count(&self) -> usize {
-        self.keys.len()
+    pub fn epoch_key_count(&self) -> u32 {
+        u32::try_from(self.keys.len()).unwrap_or(u32::MAX)
     }
 }
 

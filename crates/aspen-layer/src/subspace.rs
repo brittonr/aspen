@@ -273,7 +273,7 @@ fn strinc_inplace(data: &mut Vec<u8>) -> bool {
             // The while-let condition guarantees data.last() is Some,
             // so data.last_mut() is also Some.
             if let Some(last_byte) = data.last_mut() {
-                *last_byte = last + 1;
+                *last_byte = last.saturating_add(1);
             }
             return true;
         }
@@ -360,18 +360,19 @@ mod tests {
         assert_eq!(start, users.raw_prefix());
 
         // End should be prefix + 0xFF
-        assert_eq!(end.len(), start.len() + 1);
+        assert_eq!(end.len(), start.len().saturating_add(1));
         assert_eq!(end[..start.len()], start[..]);
         assert_eq!(end[start.len()], 0xFF);
 
         // Any key in subspace should be in range
         let key = users.pack(&Tuple::new().push("alice"));
-        assert!(key >= start && key < end);
+        assert!(key >= start);
+        assert!(key < end);
 
         // Keys outside subspace should not be in range
         let other = Subspace::new(Tuple::new().push("orders"));
         let other_key = other.pack(&Tuple::new().push("12345"));
-        assert!(!(other_key >= start && other_key < end));
+        assert!(other_key < start);
     }
 
     #[test]
@@ -382,12 +383,14 @@ mod tests {
         // Keys for alice should be in range
         let alice_profile = users.pack(&Tuple::new().push("alice").push("profile"));
         let alice_settings = users.pack(&Tuple::new().push("alice").push("settings"));
-        assert!(alice_profile >= start && alice_profile < end);
-        assert!(alice_settings >= start && alice_settings < end);
+        assert!(alice_profile >= start);
+        assert!(alice_profile < end);
+        assert!(alice_settings >= start);
+        assert!(alice_settings < end);
 
         // Keys for bob should NOT be in range
         let bob_profile = users.pack(&Tuple::new().push("bob").push("profile"));
-        assert!(!(bob_profile >= start && bob_profile < end));
+        assert!(bob_profile >= end);
     }
 
     #[test]
@@ -406,11 +409,13 @@ mod tests {
         let key1 = sub1.pack(&Tuple::new().push("key"));
         let key2 = sub2.pack(&Tuple::new().push("key"));
 
-        assert!(key1 >= start1 && key1 < end1);
-        assert!(!(key1 >= start2 && key1 < end2));
+        assert!(key1 >= start1);
+        assert!(key1 < end1);
+        assert!(key1 < start2);
 
-        assert!(key2 >= start2 && key2 < end2);
-        assert!(!(key2 >= start1 && key2 < end1));
+        assert!(key2 >= start2);
+        assert!(key2 < end2);
+        assert!(key2 >= end1);
     }
 
     #[test]
