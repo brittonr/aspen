@@ -5,6 +5,20 @@ use snafu::ResultExt;
 
 use super::*;
 
+#[inline]
+fn bounded_batch_limit_usize(batch_limit: u32) -> usize {
+    match usize::try_from(batch_limit) {
+        Ok(batch_limit_usize) => batch_limit_usize,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn scan_limit_usize(limit: Option<u32>) -> usize {
+    let max_results = limit.unwrap_or(MAX_BATCH_SIZE).min(MAX_BATCH_SIZE);
+    bounded_batch_limit_usize(max_results)
+}
+
 impl SharedRedbStorage {
     /// Get a key-value entry from the state machine.
     pub fn get(&self, key: &str) -> Result<Option<KvEntry>, SharedStorageError> {
@@ -63,10 +77,10 @@ impl SharedRedbStorage {
         let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
 
         let now_ms = now_unix_ms();
-        let bounded_limit = limit.unwrap_or(MAX_BATCH_SIZE).min(MAX_BATCH_SIZE) as usize;
+        let max_results = scan_limit_usize(limit);
         let prefix_bytes = prefix.as_bytes();
 
-        let mut results = Vec::with_capacity(bounded_limit.min(128));
+        let mut results = Vec::with_capacity(max_results.min(128));
 
         for item in table.iter().context(RangeSnafu)? {
             let (key_guard, value_guard) = item.context(GetSnafu)?;
@@ -113,18 +127,13 @@ impl SharedRedbStorage {
                 mod_revision: entry.mod_revision as u64,
             });
 
-            if results.len() >= bounded_limit {
+            if results.len() >= max_results {
                 break;
             }
         }
 
         // Tiger Style: result count must not exceed bounded limit
-        assert!(
-            results.len() <= bounded_limit,
-            "SCAN: results {} exceed bounded_limit {}",
-            results.len(),
-            bounded_limit
-        );
+        assert!(results.len() <= max_results, "SCAN: results {} exceed max_results {}", results.len(), max_results);
 
         Ok(results)
     }
@@ -151,9 +160,10 @@ impl SharedRedbStorage {
             let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
             let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
 
-            let mut keys = Vec::new();
+            let max_keys_to_delete = bounded_batch_limit_usize(batch_limit);
+            let mut keys = Vec::with_capacity(max_keys_to_delete.min(128));
             for item in table.iter().context(RangeSnafu)? {
-                if keys.len() >= batch_limit as usize {
+                if keys.len() >= max_keys_to_delete {
                     break;
                 }
 
@@ -249,9 +259,10 @@ impl SharedRedbStorage {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
 
-        let mut expired_keys = Vec::new();
+        let max_expired_keys = bounded_batch_limit_usize(batch_limit);
+        let mut expired_keys = Vec::with_capacity(max_expired_keys.min(128));
         for item in table.iter().context(RangeSnafu)? {
-            if expired_keys.len() >= batch_limit as usize {
+            if expired_keys.len() >= max_expired_keys {
                 break;
             }
 
