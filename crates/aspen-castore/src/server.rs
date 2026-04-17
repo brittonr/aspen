@@ -113,23 +113,23 @@ where
     /// This prevents oscillation when queue depth hovers near a threshold.
     fn should_reject(&self) -> bool {
         let depth = self.in_flight.load(Ordering::Relaxed);
-        let active = self.backpressure_active.load(Ordering::Relaxed);
+        let is_active = self.backpressure_active.load(Ordering::Relaxed);
 
-        if !active && depth >= BACKPRESSURE_HIGH_WATERMARK {
+        if !is_active && depth >= BACKPRESSURE_HIGH_WATERMARK {
             // Cross high watermark — activate backpressure
             self.backpressure_active.store(true, Ordering::Relaxed);
             warn!(depth, high_watermark = BACKPRESSURE_HIGH_WATERMARK, "castore backpressure activated");
             return true;
         }
 
-        if active && depth <= BACKPRESSURE_LOW_WATERMARK {
+        if is_active && depth <= BACKPRESSURE_LOW_WATERMARK {
             // Cross low watermark — deactivate backpressure
             self.backpressure_active.store(false, Ordering::Relaxed);
             info!(depth, low_watermark = BACKPRESSURE_LOW_WATERMARK, "castore backpressure deactivated");
             return false;
         }
 
-        active
+        is_active
     }
 
     /// Increment in-flight counter. Returns a guard that decrements on drop.
@@ -193,14 +193,16 @@ where
     async fn handle_blob_has(&self, msg: WithChannels<BlobHas, CastoreProtocol>) {
         let WithChannels { inner, tx, .. } = msg;
         let digest = B3Digest::from(&inner.digest);
-        let result = match self.blob.has(&digest).await {
+        let is_present = match self.blob.has(&digest).await {
             Ok(exists) => exists,
             Err(e) => {
                 warn!(error = %e, "blob has failed");
                 false
             }
         };
-        let _ = tx.send(result).await;
+        if tx.send(is_present).await.is_err() {
+            debug!(digest = %hex::encode(inner.digest), "blob has receiver dropped");
+        }
     }
 
     #[instrument(skip_all, fields(digest = hex::encode(msg.digest)))]
@@ -212,7 +214,7 @@ where
                 let mut buf = Vec::new();
                 match tokio::io::AsyncReadExt::read_to_end(&mut reader, &mut buf).await {
                     Ok(_) => {
-                        debug!(size = buf.len(), "blob read");
+                        debug!(size_bytes = buf.len(), "blob read");
                         BlobReadResponse { data: Some(buf) }
                     }
                     Err(e) => {
@@ -230,10 +232,12 @@ where
                 BlobReadResponse { data: None }
             }
         };
-        let _ = tx.send(response).await;
+        if tx.send(response).await.is_err() {
+            debug!(digest = %hex::encode(inner.digest), "blob read receiver dropped");
+        }
     }
 
-    #[instrument(skip_all, fields(size = msg.data.len()))]
+    #[instrument(skip_all, fields(size_bytes = msg.data.len()))]
     async fn handle_blob_write(&self, msg: WithChannels<BlobWrite, CastoreProtocol>) {
         let WithChannels { inner, tx, .. } = msg;
         let mut writer = self.blob.open_write().await;
@@ -246,12 +250,16 @@ where
         match result {
             Ok(digest) => {
                 debug!(digest = %digest, "blob written");
-                let _ = tx.send(*digest.as_ref()).await;
+                if tx.send(*digest.as_ref()).await.is_err() {
+                    debug!(digest = %digest, "blob write receiver dropped");
+                }
             }
             Err(e) => {
                 warn!(error = %e, "blob write failed");
                 // Send zeroed digest on error — caller will see it doesn't match
-                let _ = tx.send([0u8; 32]).await;
+                if tx.send([0u8; 32]).await.is_err() {
+                    debug!("blob write error receiver dropped");
+                }
             }
         }
     }
@@ -277,7 +285,9 @@ where
                 DirGetResponse { data: None }
             }
         };
-        let _ = tx.send(response).await;
+        if tx.send(response).await.is_err() {
+            debug!(digest = %hex::encode(inner.digest), "directory get receiver dropped");
+        }
     }
 
     #[instrument(skip_all, fields(data_len = msg.data.len()))]
@@ -287,11 +297,15 @@ where
         match result {
             Ok(digest) => {
                 debug!(digest = hex::encode(digest), "directory stored");
-                let _ = tx.send(digest).await;
+                if tx.send(digest).await.is_err() {
+                    debug!(digest = %hex::encode(digest), "directory put receiver dropped");
+                }
             }
             Err(e) => {
                 warn!(error = %e, "directory put failed");
-                let _ = tx.send([0u8; 32]).await;
+                if tx.send([0u8; 32]).await.is_err() {
+                    debug!("directory put error receiver dropped");
+                }
             }
         }
     }
@@ -314,19 +328,27 @@ where
             visited.insert(digest);
 
             if depth > MAX_RECURSIVE_DEPTH {
-                let _ = tx
+                if tx
                     .send(DirGetRecursiveItem {
                         result: Err(format!("max depth {MAX_RECURSIVE_DEPTH} exceeded")),
                     })
-                    .await;
+                    .await
+                    .is_err()
+                {
+                    debug!("dir recursive max-depth receiver dropped");
+                }
                 return;
             }
             if queue.len() as u32 > MAX_RECURSIVE_BUFFER {
-                let _ = tx
+                if tx
                     .send(DirGetRecursiveItem {
                         result: Err(format!("max buffer {MAX_RECURSIVE_BUFFER} exceeded")),
                     })
-                    .await;
+                    .await
+                    .is_err()
+                {
+                    debug!("dir recursive max-buffer receiver dropped");
+                }
                 return;
             }
 
@@ -359,11 +381,15 @@ where
                     // Directory not found — skip (matches snix behavior)
                 }
                 Err(e) => {
-                    let _ = tx
+                    if tx
                         .send(DirGetRecursiveItem {
                             result: Err(format!("directory get error: {e}")),
                         })
-                        .await;
+                        .await
+                        .is_err()
+                    {
+                        debug!(error = %e, "dir recursive error receiver dropped");
+                    }
                     return;
                 }
             }
@@ -381,21 +407,29 @@ where
             match decode_directory(&item.data) {
                 Ok(dir) => {
                     if let Err(e) = putter.put(dir).await {
-                        let _ = tx
+                        if tx
                             .send(DirPutMultipleResponse {
                                 result: Err(format!("put error: {e}")),
                             })
-                            .await;
+                            .await
+                            .is_err()
+                        {
+                            debug!(error = %e, "dir put multiple put-error receiver dropped");
+                        }
                         return;
                     }
                     count += 1;
                 }
                 Err(e) => {
-                    let _ = tx
+                    if tx
                         .send(DirPutMultipleResponse {
                             result: Err(format!("decode error: {e}")),
                         })
-                        .await;
+                        .await
+                        .is_err()
+                    {
+                        debug!(error = %e, "dir put multiple decode-error receiver dropped");
+                    }
                     return;
                 }
             }
@@ -405,19 +439,27 @@ where
         match putter.close().await {
             Ok(digest) => {
                 debug!(count, digest = %digest, "batch put complete");
-                let _ = tx
+                if tx
                     .send(DirPutMultipleResponse {
                         result: Ok(*digest.as_ref()),
                     })
-                    .await;
+                    .await
+                    .is_err()
+                {
+                    debug!(digest = %digest, "dir put multiple receiver dropped");
+                }
             }
             Err(e) => {
                 warn!(error = %e, count, "batch put close failed");
-                let _ = tx
+                if tx
                     .send(DirPutMultipleResponse {
                         result: Err(format!("close error: {e}")),
                     })
-                    .await;
+                    .await
+                    .is_err()
+                {
+                    debug!(error = %e, "dir put multiple close-error receiver dropped");
+                }
             }
         }
     }
@@ -509,16 +551,18 @@ async fn handle_irpc_connection(
         };
 
         // Read length-prefixed postcard message (irpc wire format)
-        let size = irpc::util::AsyncReadVarintExt::read_varint_u64(&mut recv)
+        let frame_size_bytes = irpc::util::AsyncReadVarintExt::read_varint_u64(&mut recv)
             .await?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "no size"))?;
 
-        if size > irpc::rpc::MAX_MESSAGE_SIZE {
+        if frame_size_bytes > irpc::rpc::MAX_MESSAGE_SIZE {
             connection.close(irpc::rpc::ERROR_CODE_MAX_MESSAGE_SIZE_EXCEEDED.into(), b"max message size exceeded");
             return Err(std::io::Error::other("max message size exceeded"));
         }
 
-        let mut buf = vec![0u8; size as usize];
+        let frame_size_bytes = usize::try_from(frame_size_bytes)
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "message size exceeds platform usize"))?;
+        let mut buf = vec![0u8; frame_size_bytes];
         recv.read_exact(&mut buf)
             .await
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::UnexpectedEof, e))?;
