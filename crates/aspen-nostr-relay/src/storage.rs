@@ -103,7 +103,8 @@ fn author_index_key(author: &PublicKey, created_at: Timestamp, id: &EventId) -> 
 
 /// Build tag index keys for all indexable tags on an event.
 fn tag_index_keys(event: &Event) -> Vec<String> {
-    let mut keys = Vec::new();
+    let tag_count = event.tags.len();
+    let mut keys = Vec::with_capacity(tag_count);
     for tag in event.tags.iter() {
         let slice = tag.as_slice();
         // Only index single-letter tags with at least one value (NIP-01 generic tag queries)
@@ -206,7 +207,7 @@ impl<S: KeyValueStore + ?Sized> NostrEventStore for KvEventStore<S> {
 
     async fn query_events(&self, filters: &[Filter]) -> Result<Vec<Event>, StorageError> {
         let mut all_events: Vec<Event> = Vec::new();
-        let mut seen_ids: HashSet<String> = HashSet::new();
+        let mut seen_ids: HashSet<String> = HashSet::with_capacity(filters.len().saturating_mul(16));
 
         for filter in filters {
             let candidates = self.query_single_filter(filter).await?;
@@ -533,9 +534,9 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
             // For event keys: `nostr:ev:{event_id}` → event_id is after prefix
             // For index keys: `nostr:ki:...:{event_id}` → event_id is last segment
             let id_hex = if range.start == KV_PREFIX_EVENT {
-                entry.key.strip_prefix(KV_PREFIX_EVENT).unwrap_or("")
+                entry.key.strip_prefix(KV_PREFIX_EVENT).unwrap_or_default()
             } else {
-                entry.key.rsplit(':').next().unwrap_or("")
+                entry.key.rsplit(':').next().unwrap_or_default()
             };
             if let Ok(event_id) = EventId::from_hex(id_hex) {
                 ids.push(event_id);

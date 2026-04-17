@@ -26,13 +26,13 @@ use crate::storage::NostrEventStore;
 use crate::subscriptions::SubscriptionRegistry;
 
 /// Maximum concurrent iroh connections to the Nostr relay.
-const MAX_IROH_CONNECTIONS: usize = 128;
+const MAX_IROH_CONNECTIONS: u32 = 128;
 
 /// Protocol handler for Nostr over iroh QUIC.
 pub struct NostrProtocolHandler<S: ?Sized + 'static> {
     store: Arc<KvEventStore<S>>,
     registry: Arc<SubscriptionRegistry>,
-    rate_limiter: Arc<RateLimiter>,
+    throttle: Arc<RateLimiter>,
     write_policy: WritePolicy,
     relay_url: Option<String>,
     connection_semaphore: Arc<tokio::sync::Semaphore>,
@@ -44,17 +44,17 @@ impl<S: ?Sized> NostrProtocolHandler<S> {
     pub fn new(
         store: Arc<KvEventStore<S>>,
         registry: Arc<SubscriptionRegistry>,
-        rate_limiter: Arc<RateLimiter>,
+        throttle: Arc<RateLimiter>,
         write_policy: WritePolicy,
         relay_url: Option<String>,
     ) -> Self {
         Self {
             store,
             registry,
-            rate_limiter,
+            throttle,
             write_policy,
             relay_url,
-            connection_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_IROH_CONNECTIONS)),
+            connection_semaphore: Arc::new(tokio::sync::Semaphore::new(MAX_IROH_CONNECTIONS as usize)),
             conn_counter: std::sync::atomic::AtomicU32::new(0),
         }
     }
@@ -77,7 +77,7 @@ impl<S: KeyValueStore + 'static> ProtocolHandler for NostrProtocolHandler<S> {
         let conn_id = self.conn_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as u64;
         let store = Arc::clone(&self.store);
         let registry = Arc::clone(&self.registry);
-        let rate_limiter = Arc::clone(&self.rate_limiter);
+        let conn_throttle = Arc::clone(&self.throttle);
         let write_policy = self.write_policy;
         let relay_url = self.relay_url.clone();
         let event_rx = registry.add_connection(conn_id).await;
@@ -91,7 +91,7 @@ impl<S: KeyValueStore + 'static> ProtocolHandler for NostrProtocolHandler<S> {
                 store,
                 registry.clone(),
                 event_rx,
-                rate_limiter,
+                conn_throttle,
                 write_policy,
                 relay_url,
             )
@@ -107,20 +107,37 @@ impl<S: KeyValueStore + 'static> ProtocolHandler for NostrProtocolHandler<S> {
     }
 }
 
+/// Connection-scoped context for iroh Nostr connections.
+struct IrohConnectionContext<S: ?Sized> {
+    conn_id: u64,
+    store: Arc<S>,
+    registry: Arc<SubscriptionRegistry>,
+    throttle: Arc<RateLimiter>,
+    write_policy: WritePolicy,
+    relay_url: Option<String>,
+}
+
 /// Handle a single iroh connection: accept a bidirectional stream and
 /// process length-prefixed Nostr messages.
-#[allow(clippy::too_many_arguments)]
 async fn handle_iroh_connection<S: NostrEventStore>(
     connection: Connection,
     conn_id: u64,
     store: Arc<S>,
     registry: Arc<SubscriptionRegistry>,
     mut event_rx: broadcast::Receiver<Arc<Event>>,
-    rate_limiter: Arc<RateLimiter>,
+    conn_throttle: Arc<RateLimiter>,
     write_policy: WritePolicy,
     relay_url: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (mut send, mut recv) = connection.accept_bi().await?;
+    let ctx = IrohConnectionContext {
+        conn_id,
+        store,
+        registry,
+        throttle: conn_throttle,
+        write_policy,
+        relay_url,
+    };
 
     let mut auth_state = AuthState::new();
 
@@ -138,28 +155,18 @@ async fn handle_iroh_connection<S: NostrEventStore>(
                         let text = String::from_utf8(data)
                             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
-                        let responses = process_message(
-                            &text,
-                            conn_id,
-                            &store,
-                            &registry,
-                            &mut auth_state,
-                            write_policy,
-                            relay_url.as_deref(),
-                            &rate_limiter,
-                        )
-                        .await;
+                        let responses = process_message(&text, &ctx, &mut auth_state).await;
 
                         for resp in responses {
                             write_frame(&mut send, resp.as_bytes()).await?;
                         }
                     }
                     Ok(None) => {
-                        debug!(conn_id, "iroh client disconnected");
+                        debug!(ctx.conn_id, "iroh client disconnected");
                         break;
                     }
                     Err(e) => {
-                        debug!(conn_id, error = %e, "iroh frame read error");
+                        debug!(ctx.conn_id, error = %e, "iroh frame read error");
                         break;
                     }
                 }
@@ -168,20 +175,10 @@ async fn handle_iroh_connection<S: NostrEventStore>(
             event = event_rx.recv() => {
                 match event {
                     Ok(event) => {
-                        let subs = registry.get_connection_subscriptions(conn_id).await;
-                        for (sub_id, filters) in &subs {
-                            let matches = filters.iter().any(|f| f.match_event(&event, MatchEventOptions::default()));
-                            if matches {
-                                let msg = RelayMessage::Event {
-                                    subscription_id: Cow::Borrowed(sub_id),
-                                    event: Cow::Borrowed(&event),
-                                };
-                                write_frame(&mut send, msg.as_json().as_bytes()).await?;
-                            }
-                        }
+                        push_matching_iroh_event(ctx.conn_id, &event, &ctx.registry, &mut send).await?;
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
-                        debug!(conn_id, skipped = n, "iroh broadcast lagged");
+                        debug!(ctx.conn_id, skipped = n, "iroh broadcast lagged");
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
@@ -192,172 +189,153 @@ async fn handle_iroh_connection<S: NostrEventStore>(
     Ok(())
 }
 
+/// Push a broadcast event to matching subscriptions over an iroh stream.
+async fn push_matching_iroh_event(
+    conn_id: u64,
+    event: &Event,
+    registry: &Arc<SubscriptionRegistry>,
+    send: &mut iroh::endpoint::SendStream,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let subs = registry.get_connection_subscriptions(conn_id).await;
+    for (sub_id, filters) in &subs {
+        let is_match = filters.iter().any(|f| f.match_event(event, MatchEventOptions::default()));
+        if is_match {
+            let msg = RelayMessage::Event {
+                subscription_id: Cow::Borrowed(sub_id),
+                event: Cow::Borrowed(event),
+            };
+            write_frame(send, msg.as_json().as_bytes()).await?;
+        }
+    }
+    Ok(())
+}
+
 /// Process a single Nostr message and return response strings.
-///
-/// Reuses the same logic as the WebSocket connection handler but returns
-/// response strings instead of writing to a WebSocket sink.
-#[allow(clippy::too_many_arguments)]
 async fn process_message<S: NostrEventStore>(
     text: &str,
-    conn_id: u64,
-    store: &Arc<S>,
-    registry: &Arc<SubscriptionRegistry>,
+    ctx: &IrohConnectionContext<S>,
     auth_state: &mut AuthState,
-    write_policy: WritePolicy,
-    relay_url: Option<&str>,
-    rate_limiter: &RateLimiter,
 ) -> Vec<String> {
-    let mut responses = Vec::new();
-
     let client_msg = match ClientMessage::from_json(text) {
         Ok(msg) => msg,
         Err(e) => {
             let notice = RelayMessage::Notice(Cow::Owned(format!("error: {e}")));
-            responses.push(notice.as_json());
-            return responses;
+            return vec![notice.as_json()];
         }
     };
 
     match client_msg {
         ClientMessage::Event(event) => {
-            let event_id = event.id;
-
-            // IP rate limiting not applicable for iroh (no raw IP)
-            // Pubkey rate check after signature
-
-            // Write policy
-            match write_policy {
-                WritePolicy::ReadOnly => {
-                    let msg = RelayMessage::Ok {
-                        event_id,
-                        status: false,
-                        message: Cow::Borrowed("blocked: relay is read-only"),
-                    };
-                    responses.push(msg.as_json());
-                    return responses;
-                }
-                WritePolicy::AuthRequired if !auth_state.is_authenticated() => {
-                    let msg = RelayMessage::Ok {
-                        event_id,
-                        status: false,
-                        message: Cow::Borrowed("auth-required: please authenticate"),
-                    };
-                    responses.push(msg.as_json());
-                    return responses;
-                }
-                _ => {}
-            }
-
-            let event = event.into_owned();
-
-            // Validate signature
-            if let Err(e) = event.verify() {
-                let msg = RelayMessage::Ok {
-                    event_id,
-                    status: false,
-                    message: Cow::Owned(format!("invalid: {e}")),
-                };
-                responses.push(msg.as_json());
-                return responses;
-            }
-
-            // Pubkey rate limit
-            if rate_limiter.is_enabled() && !rate_limiter.check_pubkey(&event.pubkey.to_hex()) {
-                let msg = RelayMessage::Ok {
-                    event_id,
-                    status: false,
-                    message: Cow::Borrowed("rate-limited: too many events from this author"),
-                };
-                responses.push(msg.as_json());
-                return responses;
-            }
-
-            match store.store_event(&event).await {
-                Ok(is_new) => {
-                    if is_new {
-                        registry.broadcast_event(Arc::new(event));
-                    }
-                    let msg = RelayMessage::Ok {
-                        event_id,
-                        status: true,
-                        message: Cow::Borrowed(""),
-                    };
-                    responses.push(msg.as_json());
-                }
-                Err(e) => {
-                    let msg = RelayMessage::Ok {
-                        event_id,
-                        status: false,
-                        message: Cow::Owned(format!("error: {e}")),
-                    };
-                    responses.push(msg.as_json());
-                }
-            }
+            process_event_message(event, ctx, auth_state).await
         }
-
-        ClientMessage::Req {
-            subscription_id,
-            filters,
-        } => {
-            let sub_id = subscription_id.into_owned();
-            let filters: Vec<Filter> = filters.into_iter().map(|f| f.into_owned()).collect();
-
-            if let Err(e) = registry.subscribe(conn_id, sub_id.clone(), filters.clone()).await {
-                let msg = RelayMessage::Closed {
-                    subscription_id: Cow::Borrowed(&sub_id),
-                    message: Cow::Owned(format!("error: {e}")),
-                };
-                responses.push(msg.as_json());
-                return responses;
-            }
-
-            let events = store.query_events(&filters).await.unwrap_or_default();
-            for event in &events {
-                let msg = RelayMessage::Event {
-                    subscription_id: Cow::Borrowed(&sub_id),
-                    event: Cow::Borrowed(event),
-                };
-                responses.push(msg.as_json());
-            }
-
-            let eose = RelayMessage::EndOfStoredEvents(Cow::Borrowed(&sub_id));
-            responses.push(eose.as_json());
+        ClientMessage::Req { subscription_id, filters } => {
+            process_req_message(subscription_id, filters, ctx).await
         }
-
         ClientMessage::Close(sub_id) => {
-            registry.unsubscribe(conn_id, &sub_id).await;
+            ctx.registry.unsubscribe(ctx.conn_id, &sub_id).await;
+            Vec::new()
         }
-
         ClientMessage::Auth(event) => {
-            let event_id = event.id;
-            let now_secs = Timestamp::now().as_secs();
-            match auth_state.verify_and_authenticate(&event, relay_url, now_secs) {
-                Ok(_pubkey) => {
-                    let msg = RelayMessage::Ok {
-                        event_id,
-                        status: true,
-                        message: Cow::Borrowed(""),
-                    };
-                    responses.push(msg.as_json());
-                }
-                Err(e) => {
-                    let msg = RelayMessage::Ok {
-                        event_id,
-                        status: false,
-                        message: Cow::Owned(format!("auth-required: {e}")),
-                    };
-                    responses.push(msg.as_json());
-                }
-            }
+            process_auth_message(event, auth_state, ctx.relay_url.as_deref())
         }
-
         _ => {
-            let notice = RelayMessage::Notice(Cow::Borrowed("unsupported message type"));
-            responses.push(notice.as_json());
+            vec![RelayMessage::Notice(Cow::Borrowed("unsupported message type")).as_json()]
         }
     }
+}
 
+/// Process an EVENT client message over iroh.
+async fn process_event_message<S: NostrEventStore>(
+    event: Cow<'_, Event>,
+    ctx: &IrohConnectionContext<S>,
+    auth_state: &AuthState,
+) -> Vec<String> {
+    let event_id = event.id;
+
+    // Write policy check (reuses same logic as WebSocket path)
+    match ctx.write_policy {
+        WritePolicy::ReadOnly => {
+            return vec![ok_response(event_id, false, "blocked: relay is read-only")];
+        }
+        WritePolicy::AuthRequired if !auth_state.is_authenticated() => {
+            return vec![ok_response(event_id, false, "auth-required: please authenticate")];
+        }
+        _ => {}
+    }
+
+    let event = event.into_owned();
+
+    if let Err(e) = event.verify() {
+        return vec![ok_response(event_id, false, &format!("invalid: {e}"))];
+    }
+
+    if ctx.throttle.is_enabled() && !ctx.throttle.check_pubkey(&event.pubkey.to_hex()) {
+        return vec![ok_response(event_id, false, "rate-limited: too many events from this author")];
+    }
+
+    match ctx.store.store_event(&event).await {
+        Ok(is_new) => {
+            if is_new {
+                ctx.registry.broadcast_event(Arc::new(event));
+            }
+            vec![ok_response(event_id, true, "")]
+        }
+        Err(e) => vec![ok_response(event_id, false, &format!("error: {e}"))],
+    }
+}
+
+/// Process a REQ client message over iroh.
+async fn process_req_message<S: NostrEventStore>(
+    subscription_id: Cow<'_, SubscriptionId>,
+    filters: Vec<Cow<'_, Filter>>,
+    ctx: &IrohConnectionContext<S>,
+) -> Vec<String> {
+    let sub_id = subscription_id.into_owned();
+    let filters: Vec<Filter> = filters.into_iter().map(|f| f.into_owned()).collect();
+
+    if let Err(e) = ctx.registry.subscribe(ctx.conn_id, sub_id.clone(), filters.clone()).await {
+        let msg = RelayMessage::Closed {
+            subscription_id: Cow::Borrowed(&sub_id),
+            message: Cow::Owned(format!("error: {e}")),
+        };
+        return vec![msg.as_json()];
+    }
+
+    let events = ctx.store.query_events(&filters).await.unwrap_or_default();
+    let mut responses = Vec::with_capacity(events.len().saturating_add(1));
+    for event in &events {
+        let msg = RelayMessage::Event {
+            subscription_id: Cow::Borrowed(&sub_id),
+            event: Cow::Borrowed(event),
+        };
+        responses.push(msg.as_json());
+    }
+    responses.push(RelayMessage::EndOfStoredEvents(Cow::Borrowed(&sub_id)).as_json());
     responses
+}
+
+/// Process an AUTH client message over iroh.
+fn process_auth_message(
+    event: Cow<'_, Event>,
+    auth_state: &mut AuthState,
+    relay_url: Option<&str>,
+) -> Vec<String> {
+    let event_id = event.id;
+    let now_secs = Timestamp::now().as_secs();
+    match auth_state.verify_and_authenticate(&event, relay_url, now_secs) {
+        Ok(_pubkey) => vec![ok_response(event_id, true, "")],
+        Err(e) => vec![ok_response(event_id, false, &format!("auth-required: {e}"))],
+    }
+}
+
+/// Build a RelayMessage::Ok JSON string.
+fn ok_response(event_id: EventId, status: bool, message: &str) -> String {
+    let msg = RelayMessage::Ok {
+        event_id,
+        status,
+        message: Cow::Borrowed(message),
+    };
+    msg.as_json()
 }
 
 /// Write a length-prefixed frame: 4-byte BE length + payload.

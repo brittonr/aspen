@@ -29,7 +29,7 @@ use crate::subscriptions::SubscriptionRegistry;
 struct RelayInner<S: ?Sized> {
     store: Arc<KvEventStore<S>>,
     registry: Arc<SubscriptionRegistry>,
-    rate_limiter: Arc<RateLimiter>,
+    throttle: Arc<RateLimiter>,
     active_connections: AtomicU32,
 }
 
@@ -49,25 +49,12 @@ impl<S: KeyValueStore + 'static> NostrRelayService<S> {
     /// Create a new relay service from a concrete KV store.
     pub fn new(config: NostrRelayConfig, identity: NostrIdentity, kv: Arc<S>) -> Self {
         let store = Arc::new(KvEventStore::new(kv));
-        let registry = Arc::new(SubscriptionRegistry::new(config.max_subscriptions_per_connection));
-        let rate_limiter = Arc::new(RateLimiter::new(
-            config.events_per_second_per_ip,
-            config.events_burst_per_ip,
-            config.events_per_second_per_pubkey,
-            config.events_burst_per_pubkey,
-        ));
-        let cancel = tokio_util::sync::CancellationToken::new();
-        rate_limiter.start_cleanup_task(cancel.child_token());
+        let (inner, cancel) = build_relay_inner(store, &config);
 
         Self {
             config,
             identity,
-            inner: Arc::new(RelayInner {
-                store,
-                registry,
-                rate_limiter,
-                active_connections: AtomicU32::new(0),
-            }),
+            inner,
             conn_counter: AtomicU32::new(0),
             cancel,
         }
@@ -83,28 +70,39 @@ pub fn new_dyn_relay(
     kv: Arc<dyn KeyValueStore>,
 ) -> NostrRelayService<dyn KeyValueStore> {
     let store = Arc::new(KvEventStore::from_arc(kv));
+    let (inner, cancel) = build_relay_inner(store, &config);
+
+    NostrRelayService {
+        config,
+        identity,
+        inner,
+        conn_counter: AtomicU32::new(0),
+        cancel,
+    }
+}
+
+/// Build the shared relay inner state from a store and config.
+fn build_relay_inner<S: ?Sized + 'static>(
+    store: Arc<KvEventStore<S>>,
+    config: &NostrRelayConfig,
+) -> (Arc<RelayInner<S>>, tokio_util::sync::CancellationToken) {
     let registry = Arc::new(SubscriptionRegistry::new(config.max_subscriptions_per_connection));
-    let rate_limiter = Arc::new(RateLimiter::new(
+    let throttle = Arc::new(RateLimiter::new(
         config.events_per_second_per_ip,
         config.events_burst_per_ip,
         config.events_per_second_per_pubkey,
         config.events_burst_per_pubkey,
     ));
     let cancel = tokio_util::sync::CancellationToken::new();
-    rate_limiter.start_cleanup_task(cancel.child_token());
+    throttle.start_cleanup_task(cancel.child_token());
 
-    NostrRelayService {
-        config,
-        identity,
-        inner: Arc::new(RelayInner {
-            store,
-            registry,
-            rate_limiter,
-            active_connections: AtomicU32::new(0),
-        }),
-        conn_counter: AtomicU32::new(0),
-        cancel,
-    }
+    let inner = Arc::new(RelayInner {
+        store,
+        registry,
+        throttle,
+        active_connections: AtomicU32::new(0),
+    });
+    (inner, cancel)
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
@@ -200,7 +198,7 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
 
                             let write_policy = self.config.write_policy;
                             let relay_url = self.config.relay_url.clone();
-                            let rate_limiter = Arc::clone(&inner.rate_limiter);
+                            let conn_throttle = Arc::clone(&inner.throttle);
 
                             tokio::spawn(async move {
                                 handle_connection(
@@ -212,7 +210,7 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                                     cancel,
                                     write_policy,
                                     relay_url,
-                                    Some((rate_limiter, peer.ip())),
+                                    Some((conn_throttle, peer.ip())),
                                 ).await;
                                 inner.active_connections.fetch_sub(1, Ordering::Relaxed);
                             });
@@ -300,7 +298,7 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
 
     /// Access the rate limiter (for iroh transport sharing).
     pub fn rate_limiter(&self) -> &Arc<RateLimiter> {
-        &self.inner.rate_limiter
+        &self.inner.throttle
     }
 
     /// Access the write policy.

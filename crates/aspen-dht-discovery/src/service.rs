@@ -300,8 +300,8 @@ impl ContentDiscoveryService {
         let tracker = Arc::new(RwLock::new(AnnounceTracker::new(MAX_TRACKED_ANNOUNCES)));
 
         // Republish timer
-        let mut republish_interval = tokio::time::interval(REPUBLISH_INTERVAL);
-        republish_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut republish_ticker = tokio::time::interval(REPUBLISH_INTERVAL);
+        republish_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         loop {
             tokio::select! {
@@ -325,7 +325,7 @@ impl ContentDiscoveryService {
                                 size,
                                 format,
                             ).await;
-                            let _ = reply.send(result);
+                            drop(reply.send(result));
                         }
 
                         DiscoveryCommand::FindProviders { hash, format, reply } => {
@@ -334,11 +334,11 @@ impl ContentDiscoveryService {
                                 hash,
                                 format,
                             ).await;
-                            let _ = reply.send(result);
+                            drop(reply.send(result));
                         }
 
                         DiscoveryCommand::AnnounceLocalBlobs { blobs, reply } => {
-                            let mut announced = 0;
+                            let mut announced = 0u32;
                             for (hash, size, format) in blobs {
                                 let result = Self::handle_announce(
                                     &endpoint,
@@ -350,11 +350,11 @@ impl ContentDiscoveryService {
                                     format,
                                 ).await;
                                 if result.is_ok() {
-                                    announced += 1;
+                                    announced = announced.saturating_add(1);
                                 }
                             }
                             info!(count = announced, "bulk announced local blobs to DHT");
-                            let _ = reply.send(Ok(announced));
+                            drop(reply.send(Ok(announced as usize)));
                         }
 
                         DiscoveryCommand::FindProviderByKey { public_key, hash, format, reply } => {
@@ -364,12 +364,12 @@ impl ContentDiscoveryService {
                                 hash,
                                 format,
                             ).await;
-                            let _ = reply.send(result);
+                            drop(reply.send(result));
                         }
                     }
                 }
 
-                _ = republish_interval.tick() => {
+                _ = republish_ticker.tick() => {
                     let stale = tracker.read().get_stale_announces();
                     if !stale.is_empty() {
                         debug!(count = stale.len(), "republishing stale announces");
@@ -442,10 +442,7 @@ impl ContentDiscoveryService {
             let signing_key = iroh_secret_to_signing_key(secret_key);
 
             // Use a monotonically increasing sequence number based on timestamp
-            let seq = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(1);
+            let seq = unix_epoch_secs();
 
             if let Err(e) = dht.put_mutable(&signing_key, infohash, &node_addr, seq).await {
                 debug!(error = %e, "put_mutable failed (non-fatal)");
@@ -479,10 +476,7 @@ impl ContentDiscoveryService {
         format: BlobFormat,
     ) -> Result<Vec<ProviderInfo>> {
         let infohash = to_dht_infohash(&hash, format);
-        let now_micros = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_micros() as u64)
-            .unwrap_or(0);
+        let now_micros = unix_epoch_micros();
 
         let Some(dht) = dht_client else {
             debug!(
@@ -555,6 +549,26 @@ impl ContentDiscoveryService {
 
         dht.get_mutable(key_bytes, infohash).await
     }
+}
+
+// ============================================================================
+// Clock boundary helpers (Tiger Style: no direct clock reads in logic)
+// ============================================================================
+
+/// Current wall-clock time as seconds since Unix epoch.
+fn unix_epoch_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+        .unwrap_or(1)
+}
+
+/// Current wall-clock time as microseconds since Unix epoch.
+fn unix_epoch_micros() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
 }
 
 // ============================================================================

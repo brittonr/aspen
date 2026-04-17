@@ -33,6 +33,16 @@ use crate::storage::NostrEventStore;
 use crate::subscriptions::ConnectionId;
 use crate::subscriptions::SubscriptionRegistry;
 
+/// Connection-scoped context shared across message handlers.
+struct ConnectionContext<S: ?Sized> {
+    conn_id: ConnectionId,
+    store: Arc<S>,
+    registry: Arc<SubscriptionRegistry>,
+    write_policy: WritePolicy,
+    relay_url: Option<String>,
+    throttle: Option<(Arc<RateLimiter>, IpAddr)>,
+}
+
 /// Handle a single WebSocket connection.
 ///
 /// Reads NIP-01 client messages, processes them, and sends relay responses.
@@ -53,8 +63,16 @@ pub async fn handle_connection<S: NostrEventStore>(
     rate_limit: Option<(Arc<RateLimiter>, IpAddr)>,
 ) {
     let (mut ws_tx, mut ws_rx) = ws.split();
+    let ctx = ConnectionContext {
+        conn_id,
+        store,
+        registry,
+        write_policy,
+        relay_url,
+        throttle: rate_limit,
+    };
 
-    info!(conn_id, "nostr client connected");
+    info!(ctx.conn_id, "nostr client connected");
 
     // NIP-42: send AUTH challenge immediately on connect
     let mut auth_state = AuthState::new();
@@ -62,11 +80,11 @@ pub async fn handle_connection<S: NostrEventStore>(
         challenge: Cow::Borrowed(auth_state.challenge_hex()),
     };
     if let Err(e) = ws_tx.send(Message::Text(auth_msg.as_json().into())).await {
-        debug!(conn_id, error = %e, "failed to send auth challenge");
+        debug!(ctx.conn_id, error = %e, "failed to send auth challenge");
         return;
     }
 
-    loop {
+    while !cancel.is_cancelled() {
         tokio::select! {
             // Client messages
             msg = ws_rx.next() => {
@@ -77,15 +95,13 @@ pub async fn handle_connection<S: NostrEventStore>(
                             continue;
                         }
                         if let Err(e) = handle_message(
-                            &text, conn_id, &store, &registry, &mut ws_tx,
-                            &mut auth_state, write_policy, relay_url.as_deref(),
-                            rate_limit.as_ref(),
+                            &text, &ctx, &mut ws_tx, &mut auth_state,
                         ).await {
-                            warn!(conn_id, error = %e, "error handling message");
+                            warn!(ctx.conn_id, error = %e, "error handling message");
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => {
-                        debug!(conn_id, "client disconnected");
+                        debug!(ctx.conn_id, "client disconnected");
                         break;
                     }
                     Some(Ok(Message::Ping(data))) => {
@@ -93,7 +109,7 @@ pub async fn handle_connection<S: NostrEventStore>(
                     }
                     Some(Ok(_)) => {} // Binary, Pong, Frame — ignore
                     Some(Err(e)) => {
-                        debug!(conn_id, error = %e, "websocket error");
+                        debug!(ctx.conn_id, error = %e, "websocket error");
                         break;
                     }
                 }
@@ -104,14 +120,14 @@ pub async fn handle_connection<S: NostrEventStore>(
                 match event {
                     Ok(event) => {
                         if let Err(e) = push_matching_event(
-                            conn_id, &event, &registry, &mut ws_tx,
+                            ctx.conn_id, &event, &ctx.registry, &mut ws_tx,
                         ).await {
-                            debug!(conn_id, error = %e, "error pushing event");
+                            debug!(ctx.conn_id, error = %e, "error pushing event");
                             break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
-                        debug!(conn_id, skipped = n, "broadcast lagged");
+                        debug!(ctx.conn_id, skipped = n, "broadcast lagged");
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
@@ -119,39 +135,33 @@ pub async fn handle_connection<S: NostrEventStore>(
 
             // Cancellation
             _ = cancel.cancelled() => {
-                debug!(conn_id, "connection cancelled");
+                debug!(ctx.conn_id, "connection cancelled");
                 break;
             }
         }
     }
 
     // Cleanup
-    registry.remove_connection(conn_id).await;
+    ctx.registry.remove_connection(ctx.conn_id).await;
     let _ = ws_tx.close().await;
-    info!(conn_id, "nostr client session ended");
+    info!(ctx.conn_id, "nostr client session ended");
 }
 
 /// Process a single NIP-01 client message.
-#[allow(clippy::too_many_arguments)]
 async fn handle_message<S: NostrEventStore>(
     text: &str,
-    conn_id: ConnectionId,
-    store: &Arc<S>,
-    registry: &Arc<SubscriptionRegistry>,
+    ctx: &ConnectionContext<S>,
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
     auth_state: &mut AuthState,
-    write_policy: WritePolicy,
-    relay_url: Option<&str>,
-    rate_limit: Option<&(Arc<RateLimiter>, IpAddr)>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage<'_> = ClientMessage::from_json(text)?;
 
     match client_msg {
         ClientMessage::Event(event) => {
             // IP rate limit check — before event validation to minimize wasted work
-            if let Some((limiter, ip)) = rate_limit
-                && limiter.is_enabled()
-                && !limiter.check_ip(*ip)
+            if let Some((ref ip_throttle, ip)) = ctx.throttle
+                && ip_throttle.is_enabled()
+                && !ip_throttle.check_ip(ip)
             {
                 let event_id = event.id;
                 let msg = RelayMessage::Ok {
@@ -162,7 +172,7 @@ async fn handle_message<S: NostrEventStore>(
                 ws_tx.send(Message::Text(msg.as_json().into())).await?;
                 return Ok(());
             }
-            handle_event(event.into_owned(), store, registry, ws_tx, auth_state, write_policy, rate_limit).await?;
+            handle_event(event.into_owned(), ctx, ws_tx, auth_state).await?;
         }
         ClientMessage::Req {
             subscription_id,
@@ -170,13 +180,13 @@ async fn handle_message<S: NostrEventStore>(
         } => {
             let sub_id = subscription_id.into_owned();
             let filters: Vec<Filter> = filters.into_iter().map(|f| f.into_owned()).collect();
-            handle_req(conn_id, sub_id, filters, store, registry, ws_tx).await?;
+            handle_req(ctx.conn_id, sub_id, filters, &ctx.store, &ctx.registry, ws_tx).await?;
         }
         ClientMessage::Close(sub_id) => {
-            handle_close(conn_id, &sub_id, registry).await;
+            handle_close(ctx.conn_id, &sub_id, &ctx.registry).await;
         }
         ClientMessage::Auth(event) => {
-            handle_auth(event.into_owned(), auth_state, relay_url, ws_tx).await?;
+            handle_auth(event.into_owned(), auth_state, ctx.relay_url.as_deref(), ws_tx).await?;
         }
         _ => {
             // negentropy, count — not supported yet
@@ -224,38 +234,16 @@ async fn handle_auth(
 /// Handle EVENT: check write policy, validate, store, broadcast, respond with OK.
 async fn handle_event<S: NostrEventStore>(
     event: Event,
-    store: &Arc<S>,
-    registry: &Arc<SubscriptionRegistry>,
+    ctx: &ConnectionContext<S>,
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
     auth_state: &AuthState,
-    write_policy: WritePolicy,
-    rate_limit: Option<&(Arc<RateLimiter>, IpAddr)>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let event_id = event.id;
 
     // Write policy check
-    match write_policy {
-        WritePolicy::ReadOnly => {
-            let msg = RelayMessage::Ok {
-                event_id,
-                status: false,
-                message: Cow::Borrowed("blocked: relay is read-only"),
-            };
-            ws_tx.send(Message::Text(msg.as_json().into())).await?;
-            return Ok(());
-        }
-        WritePolicy::AuthRequired if !auth_state.is_authenticated() => {
-            let msg = RelayMessage::Ok {
-                event_id,
-                status: false,
-                message: Cow::Borrowed("auth-required: please authenticate"),
-            };
-            ws_tx.send(Message::Text(msg.as_json().into())).await?;
-            return Ok(());
-        }
-        WritePolicy::AuthRequired | WritePolicy::Open => {
-            // Allowed — proceed to validation
-        }
+    if let Some(rejection) = check_write_policy(ctx.write_policy, auth_state, event_id) {
+        ws_tx.send(Message::Text(rejection.into())).await?;
+        return Ok(());
     }
 
     // Validate signature
@@ -271,9 +259,9 @@ async fn handle_event<S: NostrEventStore>(
 
     // Pubkey rate limit check — after signature verification so unsigned events
     // don't consume the author's rate budget
-    if let Some((limiter, _)) = rate_limit
-        && limiter.is_enabled()
-        && !limiter.check_pubkey(&event.pubkey.to_hex())
+    if let Some((ref pk_throttle, _)) = ctx.throttle
+        && pk_throttle.is_enabled()
+        && !pk_throttle.check_pubkey(&event.pubkey.to_hex())
     {
         let msg = RelayMessage::Ok {
             event_id,
@@ -284,11 +272,45 @@ async fn handle_event<S: NostrEventStore>(
         return Ok(());
     }
 
-    // Store
+    // Store and respond
+    let response = store_and_respond(&ctx.store, &ctx.registry, event, event_id).await;
+    ws_tx.send(Message::Text(response.into())).await?;
+    Ok(())
+}
+
+/// Check write policy and return a rejection message if the event is not allowed.
+fn check_write_policy(policy: WritePolicy, auth_state: &AuthState, event_id: EventId) -> Option<String> {
+    match policy {
+        WritePolicy::ReadOnly => {
+            let msg = RelayMessage::Ok {
+                event_id,
+                status: false,
+                message: Cow::Borrowed("blocked: relay is read-only"),
+            };
+            Some(msg.as_json())
+        }
+        WritePolicy::AuthRequired if !auth_state.is_authenticated() => {
+            let msg = RelayMessage::Ok {
+                event_id,
+                status: false,
+                message: Cow::Borrowed("auth-required: please authenticate"),
+            };
+            Some(msg.as_json())
+        }
+        WritePolicy::AuthRequired | WritePolicy::Open => None,
+    }
+}
+
+/// Store an event and return the relay response JSON.
+async fn store_and_respond<S: NostrEventStore>(
+    store: &Arc<S>,
+    registry: &Arc<SubscriptionRegistry>,
+    event: Event,
+    event_id: EventId,
+) -> String {
     match store.store_event(&event).await {
         Ok(is_new) => {
             if is_new {
-                // Broadcast to subscribers
                 registry.broadcast_event(Arc::new(event));
             }
             let msg = RelayMessage::Ok {
@@ -296,7 +318,7 @@ async fn handle_event<S: NostrEventStore>(
                 status: true,
                 message: Cow::Borrowed(""),
             };
-            ws_tx.send(Message::Text(msg.as_json().into())).await?;
+            msg.as_json()
         }
         Err(e) => {
             let msg = RelayMessage::Ok {
@@ -304,11 +326,9 @@ async fn handle_event<S: NostrEventStore>(
                 status: false,
                 message: Cow::Owned(format!("error: {e}")),
             };
-            ws_tx.send(Message::Text(msg.as_json().into())).await?;
+            msg.as_json()
         }
     }
-
-    Ok(())
 }
 
 /// Handle REQ: register subscription, send stored events, send EOSE.
@@ -365,8 +385,8 @@ async fn push_matching_event(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let subs = registry.get_connection_subscriptions(conn_id).await;
     for (sub_id, filters) in &subs {
-        let matches = filters.iter().any(|f| f.match_event(event, MatchEventOptions::default()));
-        if matches {
+        let is_match = filters.iter().any(|f| f.match_event(event, MatchEventOptions::default()));
+        if is_match {
             let msg = RelayMessage::Event {
                 subscription_id: Cow::Borrowed(sub_id),
                 event: Cow::Borrowed(event),

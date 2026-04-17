@@ -61,7 +61,7 @@ pub struct RateLimiter {
     ip_burst: f64,
     pubkey_rate: f64,
     pubkey_burst: f64,
-    enabled: bool,
+    is_enabled: bool,
 }
 
 impl RateLimiter {
@@ -74,21 +74,21 @@ impl RateLimiter {
         events_per_second_per_pubkey: u32,
         events_burst_per_pubkey: u32,
     ) -> Self {
-        let enabled = events_per_second_per_ip > 0 || events_per_second_per_pubkey > 0;
+        let is_enabled = events_per_second_per_ip > 0 || events_per_second_per_pubkey > 0;
         Self {
             ip_buckets: DashMap::new(),
             pubkey_buckets: DashMap::new(),
-            ip_rate: events_per_second_per_ip as f64,
-            ip_burst: events_burst_per_ip as f64,
-            pubkey_rate: events_per_second_per_pubkey as f64,
-            pubkey_burst: events_burst_per_pubkey as f64,
-            enabled,
+            ip_rate: f64::from(events_per_second_per_ip),
+            ip_burst: f64::from(events_burst_per_ip),
+            pubkey_rate: f64::from(events_per_second_per_pubkey),
+            pubkey_burst: f64::from(events_burst_per_pubkey),
+            is_enabled,
         }
     }
 
     /// Whether rate limiting is active.
     pub fn is_enabled(&self) -> bool {
-        self.enabled
+        self.is_enabled
     }
 
     /// Check IP rate limit. Returns `true` if allowed.
@@ -97,8 +97,10 @@ impl RateLimiter {
             return true;
         }
         let now = Instant::now();
+        let ip_rate = self.ip_rate;
+        let ip_burst = self.ip_burst;
         let mut entry = self.ip_buckets.entry(addr).or_insert_with(|| BucketEntry {
-            bucket: TokenBucket::new(self.ip_rate, self.ip_burst),
+            bucket: TokenBucket::new(ip_rate, ip_burst),
             last_access: now,
         });
         entry.last_access = now;
@@ -111,8 +113,10 @@ impl RateLimiter {
             return true;
         }
         let now = Instant::now();
+        let pk_rate = self.pubkey_rate;
+        let pk_burst = self.pubkey_burst;
         let mut entry = self.pubkey_buckets.entry(pubkey_hex.to_string()).or_insert_with(|| BucketEntry {
-            bucket: TokenBucket::new(self.pubkey_rate, self.pubkey_burst),
+            bucket: TokenBucket::new(pk_rate, pk_burst),
             last_access: now,
         });
         entry.last_access = now;
@@ -121,20 +125,20 @@ impl RateLimiter {
 
     /// Spawn a background task that periodically evicts stale buckets.
     pub fn start_cleanup_task(self: &Arc<Self>, cancel: CancellationToken) {
-        let limiter = Arc::clone(self);
+        let rate_limiter_ref = Arc::clone(self);
         tokio::spawn(async move {
-            let interval = std::time::Duration::from_secs(constants::RATE_LIMIT_CLEANUP_INTERVAL_SECS);
-            let ttl = std::time::Duration::from_secs(constants::RATE_LIMIT_BUCKET_TTL_SECS);
-            loop {
+            let sweep_period = std::time::Duration::from_secs(constants::RATE_LIMIT_CLEANUP_INTERVAL_SECS);
+            let bucket_ttl = std::time::Duration::from_secs(constants::RATE_LIMIT_BUCKET_TTL_SECS);
+            while !cancel.is_cancelled() {
                 tokio::select! {
-                    _ = tokio::time::sleep(interval) => {
+                    _ = tokio::time::sleep(sweep_period) => {
                         let now = Instant::now();
-                        let ip_before = limiter.ip_buckets.len();
-                        let pk_before = limiter.pubkey_buckets.len();
-                        limiter.ip_buckets.retain(|_, e| now.duration_since(e.last_access) < ttl);
-                        limiter.pubkey_buckets.retain(|_, e| now.duration_since(e.last_access) < ttl);
-                        let ip_evicted = ip_before - limiter.ip_buckets.len();
-                        let pk_evicted = pk_before - limiter.pubkey_buckets.len();
+                        let ip_before = rate_limiter_ref.ip_buckets.len();
+                        let pk_before = rate_limiter_ref.pubkey_buckets.len();
+                        rate_limiter_ref.ip_buckets.retain(|_, e| now.duration_since(e.last_access) < bucket_ttl);
+                        rate_limiter_ref.pubkey_buckets.retain(|_, e| now.duration_since(e.last_access) < bucket_ttl);
+                        let ip_evicted = ip_before.saturating_sub(rate_limiter_ref.ip_buckets.len());
+                        let pk_evicted = pk_before.saturating_sub(rate_limiter_ref.pubkey_buckets.len());
                         if ip_evicted > 0 || pk_evicted > 0 {
                             debug!(ip_evicted, pk_evicted, "rate limit bucket cleanup");
                         }

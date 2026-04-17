@@ -124,9 +124,13 @@ impl NetworkPartition {
 
         for target_ip in &self.target_ips {
             // Remove DROP rules
-            let _ = run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"]);
+            if let Err(e) = run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"]) {
+                debug!(error = %e, target_ip, "failed to remove forward rule (source→target)");
+            }
 
-            let _ = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]);
+            if let Err(e) = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]) {
+                debug!(error = %e, target_ip, "failed to remove reverse rule (target→source)");
+            }
         }
 
         self.is_active = false;
@@ -249,10 +253,14 @@ impl AsymmetricPartition {
         for target_ip in &self.target_ips {
             match self.direction {
                 PartitionDirection::OutboundOnly => {
-                    let _ = run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"]);
+                    if let Err(e) = run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"]) {
+                        debug!(error = %e, target_ip, "failed to remove outbound rule");
+                    }
                 }
                 PartitionDirection::InboundOnly => {
-                    let _ = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]);
+                    if let Err(e) = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]) {
+                        debug!(error = %e, target_ip, "failed to remove inbound rule");
+                    }
                 }
             }
         }
@@ -371,7 +379,9 @@ impl LatencyInjection {
         );
 
         // Remove the qdisc
-        let _ = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]);
+        if let Err(e) = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]) {
+            debug!(error = %e, interface = %self.interface, "failed to remove latency qdisc");
+        }
 
         self.is_active = false;
         Ok(())
@@ -476,7 +486,9 @@ impl PacketLossInjection {
         );
 
         // Remove the qdisc
-        let _ = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]);
+        if let Err(e) = run_tc(&["qdisc", "del", "dev", &self.interface, "root"]) {
+            debug!(error = %e, interface = %self.interface, "failed to remove packet loss qdisc");
+        }
 
         self.is_active = false;
         Ok(())
@@ -611,9 +623,9 @@ impl FaultScenario {
     }
 
     /// Add a latency injection to the scenario.
-    pub fn with_latency(mut self, interface: &str, latency_ms: u32, jitter_ms: u32) -> Result<Self, FaultError> {
-        let latency = LatencyInjection::create(interface, latency_ms, jitter_ms)?;
-        self.latencies.push(latency);
+    pub fn with_latency(mut self, interface: &str, delay_ms: u32, jitter_ms: u32) -> Result<Self, FaultError> {
+        let injection = LatencyInjection::create(interface, delay_ms, jitter_ms)?;
+        self.latencies.push(injection);
         Ok(self)
     }
 
