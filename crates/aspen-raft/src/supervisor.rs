@@ -47,10 +47,7 @@ fn current_supervisor_instant() -> Instant {
 
 #[inline]
 fn restart_times_len_u32(restart_times: &[Instant]) -> u32 {
-    match u32::try_from(restart_times.len()) {
-        Ok(count) => count,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(restart_times.len()).unwrap_or(u32::MAX)
 }
 
 /// Supervisor for async tasks.

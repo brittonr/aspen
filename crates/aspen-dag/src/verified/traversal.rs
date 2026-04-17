@@ -14,6 +14,8 @@
 /// Known heads represent boundaries where the receiver already has
 /// all data below. Visited nodes should never be re-traversed in a DAG.
 #[inline]
+#[allow(unknown_lints)]
+#[allow(ambiguous_params, reason = "verified pure function with well-named bool parameters")]
 pub fn should_visit(is_visited: bool, is_known_head: bool) -> bool {
     !is_visited && !is_known_head
 }

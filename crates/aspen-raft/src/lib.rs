@@ -135,10 +135,7 @@ pub enum StateMachineVariant {
 
 #[inline]
 fn scan_result_limit_usize(limit_results: u32) -> usize {
-    match usize::try_from(limit_results) {
-        Ok(limit_results_usize) => limit_results_usize,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(limit_results).unwrap_or(usize::MAX)
 }
 
 impl StateMachineVariant {

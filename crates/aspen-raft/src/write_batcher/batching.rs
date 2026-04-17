@@ -20,18 +20,12 @@ fn current_batch_start_instant() -> Instant {
 
 #[inline]
 fn string_len_u64(value: &str) -> u64 {
-    match u64::try_from(value.len()) {
-        Ok(length_bytes) => length_bytes,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(value.len()).unwrap_or(u64::MAX)
 }
 
 #[inline]
 fn pending_len_u32(state: &BatcherState) -> u32 {
-    match u32::try_from(state.pending.len()) {
-        Ok(pending_count) => pending_count,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(state.pending.len()).unwrap_or(u32::MAX)
 }
 
 struct SetPayloadRef<'a> {

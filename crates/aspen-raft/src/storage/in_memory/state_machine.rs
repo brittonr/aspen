@@ -75,10 +75,7 @@ fn empty_response() -> AppResponse {
 
 #[inline]
 fn saturating_count_u32(count_items: usize) -> u32 {
-    match u32::try_from(count_items) {
-        Ok(count_items_u32) => count_items_u32,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(count_items).unwrap_or(u32::MAX)
 }
 
 /// Apply a Set operation to the state machine.

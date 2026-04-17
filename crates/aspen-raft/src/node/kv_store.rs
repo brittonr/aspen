@@ -25,18 +25,12 @@ pub fn read_index_retry_success_count() -> u64 {
 
 #[inline]
 fn duration_ms_u64(duration: Duration) -> u64 {
-    match u64::try_from(duration.as_millis()) {
-        Ok(duration_ms) => duration_ms,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 #[inline]
 fn saturating_result_count_u32(count_items: usize) -> u32 {
-    match u32::try_from(count_items) {
-        Ok(count_items_u32) => count_items_u32,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(count_items).unwrap_or(u32::MAX)
 }
 
 #[inline]
@@ -46,19 +40,13 @@ fn bounded_scan_limit_items_u32(limit_results: Option<u32>) -> u32 {
 
 #[inline]
 fn scan_limit_items_usize(limit_items_u32: u32) -> usize {
-    match usize::try_from(limit_items_u32) {
-        Ok(limit_items) => limit_items,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(limit_items_u32).unwrap_or(usize::MAX)
 }
 
 #[inline]
 fn redb_scan_limit_items_u32(max_results_items: usize) -> u32 {
     let max_scan_items_u32 = u32::MAX.saturating_sub(1);
-    match u32::try_from(max_results_items) {
-        Ok(max_results_items_u32) => max_results_items_u32.min(max_scan_items_u32),
-        Err(_) => max_scan_items_u32,
-    }
+    u32::try_from(max_results_items).map(|v| v.min(max_scan_items_u32)).unwrap_or(max_scan_items_u32)
 }
 
 use aspen_constants::api::DEFAULT_SCAN_LIMIT;

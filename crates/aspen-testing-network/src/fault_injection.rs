@@ -253,12 +253,16 @@ impl AsymmetricPartition {
         for target_ip in &self.target_ips {
             match self.direction {
                 PartitionDirection::OutboundOnly => {
-                    if let Err(e) = run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"]) {
+                    if let Err(e) =
+                        run_iptables(&["-D", "FORWARD", "-s", &self.source_ip, "-d", target_ip, "-j", "DROP"])
+                    {
                         debug!(error = %e, target_ip, "failed to remove outbound rule");
                     }
                 }
                 PartitionDirection::InboundOnly => {
-                    if let Err(e) = run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"]) {
+                    if let Err(e) =
+                        run_iptables(&["-D", "FORWARD", "-s", target_ip, "-d", &self.source_ip, "-j", "DROP"])
+                    {
                         debug!(error = %e, target_ip, "failed to remove inbound rule");
                     }
                 }

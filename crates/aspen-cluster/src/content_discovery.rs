@@ -136,7 +136,7 @@ mod tests {
         let relay_url = url::Url::parse("https://relay.example.com").unwrap();
         let direct_addrs = vec!["127.0.0.1:1234".parse().unwrap()];
 
-        let addr = DhtNodeAddr::new(public_key, Some(&relay_url), direct_addrs, 2048, BlobFormat::Raw).unwrap();
+        let addr = DhtNodeAddr::new(public_key, Some(&relay_url), direct_addrs, 2048, BlobFormat::Raw);
 
         assert_eq!(addr.version, 1);
         assert_eq!(addr.blob_size, 2048);
@@ -149,7 +149,7 @@ mod tests {
     fn test_dht_node_addr_no_relay() {
         let public_key = SecretKey::generate(&mut rand::rng()).public();
 
-        let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 1024, BlobFormat::HashSeq).unwrap();
+        let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 1024, BlobFormat::HashSeq);
 
         assert!(addr.relay_url.is_none());
         assert!(addr.direct_addrs.is_empty());
@@ -159,8 +159,7 @@ mod tests {
     fn test_dht_node_addr_roundtrip() {
         let public_key = SecretKey::generate(&mut rand::rng()).public();
 
-        let addr = DhtNodeAddr::new(public_key, None, vec!["192.168.1.1:5000".parse().unwrap()], 512, BlobFormat::Raw)
-            .unwrap();
+        let addr = DhtNodeAddr::new(public_key, None, vec!["192.168.1.1:5000".parse().unwrap()], 512, BlobFormat::Raw);
 
         let bytes = addr.to_bytes().unwrap();
         let decoded = DhtNodeAddr::from_bytes(&bytes).unwrap();
@@ -175,7 +174,7 @@ mod tests {
         let secret_key = SecretKey::generate(&mut rand::rng());
         let public_key = secret_key.public();
 
-        let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 0, BlobFormat::Raw).unwrap();
+        let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 0, BlobFormat::Raw);
 
         let recovered = addr.iroh_public_key().unwrap();
         assert_eq!(recovered, public_key);

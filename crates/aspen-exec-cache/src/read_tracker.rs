@@ -78,10 +78,7 @@ fn session_started_at() -> Instant {
 }
 
 fn session_limit(value: u32) -> usize {
-    match usize::try_from(value) {
-        Ok(limit) => limit,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(value).unwrap_or(usize::MAX)
 }
 
 impl ReadTracker {

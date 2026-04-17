@@ -6,10 +6,7 @@ use super::*;
 
 #[inline]
 fn index_scan_limit_usize(limit_results: u32) -> usize {
-    match usize::try_from(limit_results) {
-        Ok(limit_result_slots) => limit_result_slots,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(limit_results).unwrap_or(usize::MAX)
 }
 
 // ====================================================================================

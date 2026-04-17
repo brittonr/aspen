@@ -27,15 +27,16 @@ pub fn merge_scan(
     dirty_sorted: &[(String, BranchEntry)],
     parent_entries: &[KeyValueWithRevision],
     prefix: &str,
-    limit: u32,
+    limit_entries: u32,
 ) -> Vec<KeyValueWithRevision> {
-    let limit = limit as usize;
-    let mut result = Vec::with_capacity(limit.min(dirty_sorted.len() + parent_entries.len()));
+    let limit = usize::try_from(limit_entries).unwrap_or(usize::MAX);
+    let total_inputs = dirty_sorted.len().saturating_add(parent_entries.len());
+    let mut result = Vec::with_capacity(limit.min(total_inputs));
 
     // Collect tombstoned keys for quick lookup during parent iteration.
     // Also collect branch writes that match the prefix.
-    let mut branch_writes: Vec<(&str, &str)> = Vec::new();
-    let mut tombstones: Vec<&str> = Vec::new();
+    let mut branch_writes: Vec<(&str, &str)> = Vec::with_capacity(dirty_sorted.len());
+    let mut tombstones: Vec<&str> = Vec::with_capacity(dirty_sorted.len());
 
     for (key, entry) in dirty_sorted {
         if !key.starts_with(prefix) {

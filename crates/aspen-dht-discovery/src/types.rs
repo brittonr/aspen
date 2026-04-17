@@ -10,6 +10,16 @@ use iroh_blobs::Hash;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Clock boundary helper for wall-clock microsecond timestamps.
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "DHT records need wall-clock microseconds for freshness")]
+fn unix_epoch_micros() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
+}
+
 /// Information about a content provider.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderInfo {
@@ -46,19 +56,16 @@ pub(crate) struct DhtAnnounce {
 impl DhtAnnounce {
     pub(crate) const VERSION: u8 = 1;
 
-    pub(crate) fn new(blob_hash: Hash, blob_size: u64, blob_format: BlobFormat) -> Result<Self> {
-        let timestamp_micros = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .context("system time before Unix epoch")?
-            .as_micros() as u64;
+    pub(crate) fn new(blob_hash: Hash, blob_size: u64, blob_format: BlobFormat) -> Self {
+        let timestamp_micros = unix_epoch_micros();
 
-        Ok(Self {
+        Self {
             version: Self::VERSION,
             blob_hash,
             blob_size,
             blob_format,
             timestamp_micros,
-        })
+        }
     }
 
     pub(crate) fn to_bytes(&self) -> Result<Vec<u8>> {
@@ -111,13 +118,10 @@ impl DhtNodeAddr {
         direct_addrs: impl IntoIterator<Item = std::net::SocketAddr>,
         blob_size: u64,
         blob_format: BlobFormat,
-    ) -> Result<Self> {
-        let timestamp_micros = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .context("system time before Unix epoch")?
-            .as_micros() as u64;
+    ) -> Self {
+        let timestamp_micros = unix_epoch_micros();
 
-        Ok(Self {
+        Self {
             version: Self::VERSION,
             public_key: *public_key.as_bytes(),
             relay_url: relay_url.map(|u| u.to_string()),
@@ -125,7 +129,7 @@ impl DhtNodeAddr {
             blob_size,
             blob_format,
             timestamp_micros,
-        })
+        }
     }
 
     /// Serialize to bytes for DHT storage.

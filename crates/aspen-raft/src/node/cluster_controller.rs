@@ -24,10 +24,7 @@ use crate::types::RaftMemberInfo;
 
 #[inline]
 fn duration_ms_u64(duration: std::time::Duration) -> u64 {
-    match u64::try_from(duration.as_millis()) {
-        Ok(duration_ms) => duration_ms,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 #[async_trait]

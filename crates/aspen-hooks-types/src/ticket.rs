@@ -126,6 +126,13 @@ pub struct AspenHookTicket {
 /// Current ticket protocol version.
 const TICKET_VERSION: u8 = 1;
 
+/// Clock boundary helper for wall-clock reads in ticket operations.
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "ticket expiry needs current wall-clock seconds")]
+fn unix_epoch_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
 impl AspenHookTicket {
     /// Create a new hook ticket.
     ///
@@ -196,8 +203,8 @@ impl AspenHookTicket {
     ///
     /// * `hours` - Hours from now until expiration
     pub fn with_expiry_hours(mut self, hours: u64) -> Self {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        self.expires_at_secs = now.saturating_add(hours * 3600);
+        let now = unix_epoch_secs();
+        self.expires_at_secs = now.saturating_add(hours.saturating_mul(3600));
         self
     }
 
@@ -235,7 +242,7 @@ impl AspenHookTicket {
         if self.expires_at_secs == 0 {
             return false; // 0 means no expiry
         }
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let now = unix_epoch_secs();
         now >= self.expires_at_secs
     }
 
@@ -343,12 +350,12 @@ impl AspenHookTicket {
         if self.expires_at_secs == 0 {
             "never".to_string()
         } else {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let now = unix_epoch_secs();
 
             if now >= self.expires_at_secs {
                 "expired".to_string()
             } else {
-                let remaining = self.expires_at_secs - now;
+                let remaining = self.expires_at_secs.saturating_sub(now);
                 if remaining < 60 {
                     format!("{}s", remaining)
                 } else if remaining < 3600 {

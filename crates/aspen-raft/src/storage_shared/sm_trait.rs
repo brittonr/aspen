@@ -22,18 +22,12 @@ use super::*;
 
 #[inline]
 fn snapshot_entry_count_u32(entry_count: usize) -> u32 {
-    match u32::try_from(entry_count) {
-        Ok(entry_count_u32) => entry_count_u32,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(entry_count).unwrap_or(u32::MAX)
 }
 
 #[inline]
 fn max_snapshot_entries_usize() -> usize {
-    match usize::try_from(MAX_SNAPSHOT_ENTRIES) {
-        Ok(max_entries) => max_entries,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_SNAPSHOT_ENTRIES).unwrap_or(usize::MAX)
 }
 
 // ====================================================================================

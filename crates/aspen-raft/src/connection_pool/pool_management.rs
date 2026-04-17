@@ -25,10 +25,7 @@ use crate::types::NodeId;
 
 #[inline]
 fn max_peers_usize() -> usize {
-    match usize::try_from(MAX_PEERS) {
-        Ok(max_peers) => max_peers,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_PEERS).unwrap_or(usize::MAX)
 }
 
 impl<T> RaftConnectionPool<T>

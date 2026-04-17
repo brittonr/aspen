@@ -408,7 +408,7 @@ impl ContentDiscoveryService {
         }
 
         // Create signed announce for local verification
-        let announce = DhtAnnounce::new(hash, size, format)?;
+        let announce = DhtAnnounce::new(hash, size, format);
         let signed = SignedDhtAnnounce::sign(announce, secret_key)?;
         let bytes = signed.to_bytes()?;
 
@@ -436,7 +436,7 @@ impl ContentDiscoveryService {
                 }),
                 size,
                 format,
-            )?;
+            );
 
             // Convert iroh SecretKey to mainline SigningKey for BEP-44
             let signing_key = iroh_secret_to_signing_key(secret_key);

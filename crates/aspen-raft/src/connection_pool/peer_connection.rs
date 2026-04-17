@@ -36,10 +36,7 @@ fn current_connection_instant() -> Instant {
 
 #[inline]
 fn max_streams_per_connection_usize() -> usize {
-    match usize::try_from(MAX_STREAMS_PER_CONNECTION) {
-        Ok(max_streams) => max_streams,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_STREAMS_PER_CONNECTION).unwrap_or(usize::MAX)
 }
 
 /// A persistent connection to a peer node.

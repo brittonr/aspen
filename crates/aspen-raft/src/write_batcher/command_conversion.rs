@@ -115,10 +115,7 @@ enum AdvancedWriteCommand<'a> {
 
 #[inline]
 fn max_setmulti_keys_usize() -> usize {
-    match usize::try_from(MAX_SETMULTI_KEYS) {
-        Ok(max_keys) => max_keys,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_SETMULTI_KEYS).unwrap_or(usize::MAX)
 }
 
 #[inline]

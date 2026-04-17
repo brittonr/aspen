@@ -24,12 +24,12 @@ pub const MAX_TRAVERSAL_NODES: u32 = 5_000_000;
 ///
 /// Bounds the request payload. A visited set of 100K hashes at 32 bytes
 /// each is ~3.2 MB, well within this limit.
-pub const MAX_DAG_SYNC_REQUEST_SIZE: u32 = 16 * 1024 * 1024;
+pub const MAX_DAG_SYNC_REQUEST_SIZE: u32 = 16_u32.saturating_mul(1024).saturating_mul(1024);
 
 /// Maximum total bytes transferred in a single DAG sync response (10 GiB).
 ///
 /// Prevents a single sync from consuming unbounded bandwidth.
-pub const MAX_DAG_SYNC_TRANSFER_SIZE: u64 = 10 * 1024 * 1024 * 1024;
+pub const MAX_DAG_SYNC_TRANSFER_SIZE: u64 = 10_u64.saturating_mul(1024).saturating_mul(1024).saturating_mul(1024);
 
 /// Maximum number of known heads in a DagSyncRequest.
 ///

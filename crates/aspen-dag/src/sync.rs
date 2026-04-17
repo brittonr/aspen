@@ -72,13 +72,16 @@ pub async fn write_data_inline<W: AsyncWrite + Unpin>(
     let header = ResponseFrameHeader::data_inline(hash);
     writer.write_all(&header.to_bytes()).await.map_err(|e| ProtocolError::Io { source: e })?;
 
-    let size = data.len() as u64;
-    writer.write_all(&size.to_le_bytes()).await.map_err(|e| ProtocolError::Io { source: e })?;
+    let data_size_bytes = data.len() as u64;
+    writer
+        .write_all(&data_size_bytes.to_le_bytes())
+        .await
+        .map_err(|e| ProtocolError::Io { source: e })?;
 
     writer.write_all(data).await.map_err(|e| ProtocolError::Io { source: e })?;
 
     // Header + size field + data
-    Ok(RESPONSE_FRAME_HEADER_SIZE as u64 + 8 + size)
+    Ok((RESPONSE_FRAME_HEADER_SIZE as u64).saturating_add(8).saturating_add(data_size_bytes))
 }
 
 // ============================================================================
@@ -122,11 +125,11 @@ pub async fn read_frame<R: AsyncRead + Unpin>(
         }
         FrameType::DataInline => {
             // Read u64 LE size
-            let size = reader.read_u64_le().await.map_err(|e| ProtocolError::Io { source: e })?;
+            let data_size_bytes = reader.read_u64_le().await.map_err(|e| ProtocolError::Io { source: e })?;
             *bytes_received = bytes_received.saturating_add(8);
 
             // Transfer limit check
-            let projected = bytes_received.saturating_add(size);
+            let projected = bytes_received.saturating_add(data_size_bytes);
             if projected > MAX_DAG_SYNC_TRANSFER_SIZE {
                 return Err(ProtocolError::TransferLimitExceeded {
                     size: projected,
@@ -135,9 +138,13 @@ pub async fn read_frame<R: AsyncRead + Unpin>(
             }
 
             // Read data
-            let mut data = vec![0u8; size as usize];
+            let data_len = usize::try_from(data_size_bytes).map_err(|_| ProtocolError::TransferLimitExceeded {
+                size: data_size_bytes,
+                max: MAX_DAG_SYNC_TRANSFER_SIZE,
+            })?;
+            let mut data = vec![0u8; data_len];
             reader.read_exact(&mut data).await.map_err(|e| ProtocolError::Io { source: e })?;
-            *bytes_received = bytes_received.saturating_add(size);
+            *bytes_received = bytes_received.saturating_add(data_size_bytes);
 
             // Verify BLAKE3 hash
             let actual_hash = blake3::hash(&data);
@@ -148,7 +155,7 @@ pub async fn read_frame<R: AsyncRead + Unpin>(
                 });
             }
 
-            debug!(hash = hex::encode(header.hash), size, "received data-inline frame");
+            debug!(hash = hex::encode(header.hash), data_size_bytes, "received data-inline frame");
             Ok(Some(ReceivedFrame::Data {
                 hash: header.hash,
                 data,

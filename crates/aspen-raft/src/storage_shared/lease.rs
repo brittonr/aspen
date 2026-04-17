@@ -7,26 +7,17 @@ use super::*;
 
 #[inline]
 fn remaining_ttl_seconds_u32(remaining_ms: u64) -> u32 {
-    match u32::try_from(remaining_ms / 1000) {
-        Ok(remaining_seconds) => remaining_seconds,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(remaining_ms / 1000).unwrap_or(u32::MAX)
 }
 
 #[inline]
 fn batch_limit_usize(batch_limit: u32) -> usize {
-    match usize::try_from(batch_limit) {
-        Ok(batch_limit) => batch_limit,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(batch_limit).unwrap_or(usize::MAX)
 }
 
 #[inline]
 fn active_lease_capacity(storage: &SharedRedbStorage) -> Result<usize, SharedStorageError> {
-    match usize::try_from(storage.count_active_leases()?) {
-        Ok(active_leases) => Ok(active_leases),
-        Err(_) => Ok(usize::MAX),
-    }
+    Ok(usize::try_from(storage.count_active_leases()?).unwrap_or(usize::MAX))
 }
 
 impl SharedRedbStorage {

@@ -56,26 +56,17 @@ use crate::verified::maybe_prefix_shard_id;
 
 #[inline]
 fn max_rpc_message_size_usize() -> usize {
-    match usize::try_from(MAX_RPC_MESSAGE_SIZE) {
-        Ok(max_message_size) => max_message_size,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_RPC_MESSAGE_SIZE).unwrap_or(usize::MAX)
 }
 
 #[inline]
 fn duration_ms_u64(duration: std::time::Duration) -> u64 {
-    match u64::try_from(duration.as_millis()) {
-        Ok(duration_ms) => duration_ms,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 #[inline]
 fn snapshot_bytes_u64(snapshot_data: &[u8]) -> u64 {
-    match u64::try_from(snapshot_data.len()) {
-        Ok(snapshot_size_bytes) => snapshot_size_bytes,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(snapshot_data.len()).unwrap_or(u64::MAX)
 }
 
 #[allow(unknown_lints)]
@@ -86,10 +77,7 @@ fn snapshot_bytes_u64(snapshot_data: &[u8]) -> u64 {
 #[inline]
 fn current_time_us() -> u64 {
     match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-        Ok(duration_since_epoch) => match u64::try_from(duration_since_epoch.as_micros()) {
-            Ok(timestamp_us) => timestamp_us,
-            Err(_) => u64::MAX,
-        },
+        Ok(duration_since_epoch) => u64::try_from(duration_since_epoch.as_micros()).unwrap_or(u64::MAX),
         Err(_) => 0,
     }
 }
@@ -570,10 +558,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 
             // Read in chunks, checking size limit to prevent unbounded memory allocation
             const SNAPSHOT_READ_BUFFER_SIZE_BYTES: usize = 8192;
-            let snapshot_read_buffer_bytes_u64 = match u64::try_from(SNAPSHOT_READ_BUFFER_SIZE_BYTES) {
-                Ok(snapshot_read_buffer_bytes_u64) => snapshot_read_buffer_bytes_u64,
-                Err(_) => 8192,
-            };
+            let snapshot_read_buffer_bytes_u64 = u64::try_from(SNAPSHOT_READ_BUFFER_SIZE_BYTES).unwrap_or(8192);
             let max_snapshot_read_chunks = max_snapshot_chunks(snapshot_read_buffer_bytes_u64);
             let mut buffer = [0u8; SNAPSHOT_READ_BUFFER_SIZE_BYTES];
             for _chunk_index in 0..=max_snapshot_read_chunks {
@@ -586,10 +571,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
                 }
 
                 let current_snapshot_size_bytes = snapshot_bytes_u64(&snapshot_data);
-                let bytes_read_u64 = match u64::try_from(bytes_read) {
-                    Ok(bytes_read_u64) => bytes_read_u64,
-                    Err(_) => u64::MAX,
-                };
+                let bytes_read_u64 = u64::try_from(bytes_read).unwrap_or(u64::MAX);
                 if current_snapshot_size_bytes.saturating_add(bytes_read_u64) > MAX_SNAPSHOT_SIZE {
                     return Err(StreamingError::StorageError(StorageError::read_snapshot(
                         Some(snapshot.meta.signature()),

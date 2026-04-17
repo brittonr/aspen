@@ -30,18 +30,12 @@ fn empty_response() -> AppResponse {
 
 #[inline]
 fn max_setmulti_keys_usize() -> usize {
-    match usize::try_from(MAX_SETMULTI_KEYS) {
-        Ok(max_keys) => max_keys,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_SETMULTI_KEYS).unwrap_or(usize::MAX)
 }
 
 #[inline]
 fn saturating_count_u32(count_items: usize) -> u32 {
-    match u32::try_from(count_items) {
-        Ok(count_u32) => count_u32,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(count_items).unwrap_or(u32::MAX)
 }
 
 impl SharedRedbStorage {

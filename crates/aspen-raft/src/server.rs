@@ -60,26 +60,17 @@ use crate::types::AppTypeConfig;
 
 #[inline]
 fn max_concurrent_connections_usize() -> usize {
-    match usize::try_from(MAX_CONCURRENT_CONNECTIONS) {
-        Ok(max_connections) => max_connections,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_CONCURRENT_CONNECTIONS).unwrap_or(usize::MAX)
 }
 
 #[inline]
 fn max_streams_per_connection_usize() -> usize {
-    match usize::try_from(MAX_STREAMS_PER_CONNECTION) {
-        Ok(max_streams) => max_streams,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_STREAMS_PER_CONNECTION).unwrap_or(usize::MAX)
 }
 
 #[inline]
 fn max_rpc_message_size_usize() -> usize {
-    match usize::try_from(MAX_RPC_MESSAGE_SIZE) {
-        Ok(max_message_size) => max_message_size,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_RPC_MESSAGE_SIZE).unwrap_or(usize::MAX)
 }
 
 fn snapshot_from_request(snapshot_req: crate::rpc::RaftSnapshotRequest) -> openraft::Snapshot<AppTypeConfig> {
@@ -177,7 +168,7 @@ async fn run_server(
     task_tracker: TaskTracker,
     is_expunged: Arc<AtomicBool>,
 ) -> Result<()> {
-    debug_assert!(MAX_CONCURRENT_CONNECTIONS > 0, "SERVER: max connections must be positive");
+    const { assert!(MAX_CONCURRENT_CONNECTIONS > 0, "SERVER: max connections must be positive") };
 
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
     let connection_semaphore = Arc::new(Semaphore::new(max_concurrent_connections_usize()));
@@ -251,7 +242,7 @@ async fn handle_connection(
     task_tracker: TaskTracker,
 ) -> Result<()> {
     async move {
-        debug_assert!(MAX_STREAMS_PER_CONNECTION > 0, "SERVER: max streams per connection must be positive");
+        const { assert!(MAX_STREAMS_PER_CONNECTION > 0, "SERVER: max streams per connection must be positive") };
         info!("awaiting incoming connection completion");
         let connection = connecting.await.context("failed to accept connection")?;
         let remote_node_id = connection.remote_id();

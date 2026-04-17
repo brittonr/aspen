@@ -7,10 +7,7 @@ use super::*;
 
 #[inline]
 fn bounded_batch_limit_usize(batch_limit: u32) -> usize {
-    match usize::try_from(batch_limit) {
-        Ok(batch_limit_usize) => batch_limit_usize,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(batch_limit).unwrap_or(usize::MAX)
 }
 
 #[inline]

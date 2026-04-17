@@ -124,17 +124,11 @@ fn cache_lookup_started_at() -> Instant {
 }
 
 fn elapsed_lookup_time_us(started_at: Instant) -> u64 {
-    match u64::try_from(started_at.elapsed().as_micros()) {
-        Ok(lookup_time_us) => lookup_time_us,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
 }
 
 fn output_file_limit() -> usize {
-    match usize::try_from(MAX_OUTPUT_FILES) {
-        Ok(output_file_limit) => output_file_limit,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_OUTPUT_FILES).unwrap_or(usize::MAX)
 }
 
 impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {

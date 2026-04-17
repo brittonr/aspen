@@ -24,6 +24,7 @@ use crate::constants::MAX_VISITED_SET_SIZE;
 use crate::error::TraversalError;
 use crate::error::TraversalResult;
 use crate::link::LinkExtractor;
+use crate::verified::traversal::compute_child_depth;
 use crate::verified::traversal::is_within_count_bound;
 use crate::verified::traversal::is_within_depth_bound;
 use crate::verified::traversal::should_visit;
@@ -170,17 +171,14 @@ where
             }
 
             // Push children in reverse order so left-to-right pops first.
-            let parent_depth = self.last_depth;
+            let child_depth = compute_child_depth(self.last_depth);
+            self.stack.reserve(children.len());
             for child in children.into_iter().rev() {
-                self.stack.push((child, parent_depth + 1));
+                self.stack.push((child, child_depth));
             }
         }
 
-        loop {
-            let Some((hash, depth)) = self.stack.pop() else {
-                return Ok(None);
-            };
-
+        while let Some((hash, depth)) = self.stack.pop() {
             // Depth bound check (verified pure function).
             if !is_within_depth_bound(depth, MAX_DAG_TRAVERSAL_DEPTH) {
                 return Err(TraversalError::DepthExceeded {
@@ -190,10 +188,10 @@ where
             }
 
             // Visited set bound check.
-            let visited_size = self.visited.len() as u32;
-            if visited_size >= MAX_VISITED_SET_SIZE {
+            let visited_count = u32::try_from(self.visited.len()).unwrap_or(u32::MAX);
+            if visited_count >= MAX_VISITED_SET_SIZE {
                 return Err(TraversalError::VisitedSetExceeded {
-                    size: visited_size,
+                    size: visited_count,
                     max: MAX_VISITED_SET_SIZE,
                 });
             }
@@ -208,6 +206,7 @@ where
             self.last_depth = depth;
             return Ok(Some(hash));
         }
+        Ok(None)
     }
 
     fn db_mut(&mut self) -> &mut D {

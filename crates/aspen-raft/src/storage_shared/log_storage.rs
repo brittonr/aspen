@@ -21,10 +21,7 @@ use super::*;
 
 #[inline]
 fn max_batch_size_usize() -> usize {
-    match usize::try_from(MAX_BATCH_SIZE) {
-        Ok(max_batch_size) => max_batch_size,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_BATCH_SIZE).unwrap_or(usize::MAX)
 }
 
 #[inline]
@@ -119,7 +116,7 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
         let last_log_id = table
             .iter()
             .context(RangeSnafu)?
-            .last()
+            .next_back()
             .transpose()
             .context(GetSnafu)?
             .map(|(_key, value)| {

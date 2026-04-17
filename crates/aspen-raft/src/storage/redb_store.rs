@@ -72,10 +72,7 @@ use crate::types::AppTypeConfig;
 
 #[inline]
 fn max_batch_size_usize() -> usize {
-    match usize::try_from(MAX_BATCH_SIZE) {
-        Ok(max_batch_size) => max_batch_size,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_BATCH_SIZE).unwrap_or(usize::MAX)
 }
 
 #[inline]
@@ -87,10 +84,7 @@ fn inclusive_range_len_usize(range: std::ops::RangeInclusive<u64>) -> usize {
     }
 
     let item_count = end_index.saturating_sub(start_index).saturating_add(1);
-    match usize::try_from(item_count) {
-        Ok(item_count_usize) => item_count_usize,
-        Err(_) => max_batch_size_usize(),
-    }
+    usize::try_from(item_count).unwrap_or(max_batch_size_usize())
 }
 
 /// Persistent Raft log backed by redb with chain hashing.
@@ -225,7 +219,7 @@ impl RedbLogStore {
                 let hash_table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
                 // Get the last entry's hash
-                if let Some(last) = hash_table.iter().context(RangeSnafu)?.last() {
+                if let Some(last) = hash_table.iter().context(RangeSnafu)?.next_back() {
                     let (key, value) = last.context(GetSnafu)?;
                     let index = key.value();
                     let bytes = value.value();
@@ -449,7 +443,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         let last_log_id = table
             .iter()
             .context(RangeSnafu)?
-            .last()
+            .next_back()
             .transpose()
             .context(GetSnafu)?
             .map(|(_key, value)| {
@@ -813,7 +807,7 @@ impl RedbLogStore {
         let log_table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
         let first = log_table.iter().context(RangeSnafu)?.next();
-        let last = log_table.iter().context(RangeSnafu)?.last();
+        let last = log_table.iter().context(RangeSnafu)?.next_back();
 
         match (first, last) {
             (Some(first_result), Some(last_result)) => {

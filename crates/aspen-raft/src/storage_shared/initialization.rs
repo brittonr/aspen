@@ -177,7 +177,7 @@ impl SharedRedbStorage {
                 // Check if we have any chain hashes
                 let hash_table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
 
-                if let Some(last) = hash_table.iter().context(RangeSnafu)?.last() {
+                if let Some(last) = hash_table.iter().context(RangeSnafu)?.next_back() {
                     let (key, value) = last.context(GetSnafu)?;
                     let index = key.value();
                     let bytes = value.value();

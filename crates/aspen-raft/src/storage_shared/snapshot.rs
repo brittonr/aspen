@@ -16,26 +16,17 @@ use super::*;
 
 #[inline]
 fn max_snapshot_entries_usize() -> usize {
-    match usize::try_from(MAX_SNAPSHOT_ENTRIES) {
-        Ok(max_entries) => max_entries,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_SNAPSHOT_ENTRIES).unwrap_or(usize::MAX)
 }
 
 #[inline]
 fn snapshot_entry_count_u32(entry_count: usize) -> u32 {
-    match u32::try_from(entry_count) {
-        Ok(entry_count_u32) => entry_count_u32,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(entry_count).unwrap_or(u32::MAX)
 }
 
 #[inline]
 fn size_bytes_u64(size_bytes: usize) -> u64 {
-    match u64::try_from(size_bytes) {
-        Ok(size_bytes_u64) => size_bytes_u64,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(size_bytes).unwrap_or(u64::MAX)
 }
 
 #[inline]

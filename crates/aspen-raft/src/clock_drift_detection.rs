@@ -63,10 +63,7 @@ fn current_observation_instant() -> Instant {
 
 #[inline]
 fn max_drift_observations_usize() -> usize {
-    match usize::try_from(MAX_DRIFT_OBSERVATIONS) {
-        Ok(max_observations) => max_observations,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(MAX_DRIFT_OBSERVATIONS).unwrap_or(usize::MAX)
 }
 
 /// Observation state for a single peer's clock drift.

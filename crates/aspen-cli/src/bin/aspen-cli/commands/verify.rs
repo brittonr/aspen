@@ -153,24 +153,15 @@ fn current_instant() -> Instant {
 }
 
 fn elapsed_ms_u64(started_at: Instant) -> u64 {
-    match u64::try_from(started_at.elapsed().as_millis()) {
-        Ok(duration_ms) => duration_ms,
-        Err(_) => u64::MAX,
-    }
+    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 fn usize_from_u32(value: u32) -> usize {
-    match usize::try_from(value) {
-        Ok(value_usize) => value_usize,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(value).unwrap_or(usize::MAX)
 }
 
 fn u32_from_usize(value: usize) -> u32 {
-    match u32::try_from(value) {
-        Ok(value_u32) => value_u32,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 #[derive(Clone, Copy)]

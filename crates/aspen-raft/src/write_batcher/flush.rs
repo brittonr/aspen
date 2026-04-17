@@ -23,18 +23,12 @@ fn current_flush_instant() -> Instant {
 
 #[inline]
 fn batch_len_u32(batch: &[PendingWrite]) -> u32 {
-    match u32::try_from(batch.len()) {
-        Ok(batch_len) => batch_len,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(batch.len()).unwrap_or(u32::MAX)
 }
 
 #[inline]
 fn pending_len_u32(state: &BatcherState) -> u32 {
-    match u32::try_from(state.pending.len()) {
-        Ok(pending_count) => pending_count,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(state.pending.len()).unwrap_or(u32::MAX)
 }
 
 impl WriteBatcher {

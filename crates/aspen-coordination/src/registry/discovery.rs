@@ -12,10 +12,7 @@ use crate::verified;
 
 #[inline]
 fn discovery_limit_usize(limit: u32) -> usize {
-    match usize::try_from(limit) {
-        Ok(limit_usize) => limit_usize,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(limit).unwrap_or(usize::MAX)
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {

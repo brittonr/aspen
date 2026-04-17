@@ -225,19 +225,16 @@ async fn process_message<S: NostrEventStore>(
     };
 
     match client_msg {
-        ClientMessage::Event(event) => {
-            process_event_message(event, ctx, auth_state).await
-        }
-        ClientMessage::Req { subscription_id, filters } => {
-            process_req_message(subscription_id, filters, ctx).await
-        }
+        ClientMessage::Event(event) => process_event_message(event, ctx, auth_state).await,
+        ClientMessage::Req {
+            subscription_id,
+            filters,
+        } => process_req_message(subscription_id, filters, ctx).await,
         ClientMessage::Close(sub_id) => {
             ctx.registry.unsubscribe(ctx.conn_id, &sub_id).await;
             Vec::new()
         }
-        ClientMessage::Auth(event) => {
-            process_auth_message(event, auth_state, ctx.relay_url.as_deref())
-        }
+        ClientMessage::Auth(event) => process_auth_message(event, auth_state, ctx.relay_url.as_deref()),
         _ => {
             vec![RelayMessage::Notice(Cow::Borrowed("unsupported message type")).as_json()]
         }
@@ -270,7 +267,11 @@ async fn process_event_message<S: NostrEventStore>(
     }
 
     if ctx.throttle.is_enabled() && !ctx.throttle.check_pubkey(&event.pubkey.to_hex()) {
-        return vec![ok_response(event_id, false, "rate-limited: too many events from this author")];
+        return vec![ok_response(
+            event_id,
+            false,
+            "rate-limited: too many events from this author",
+        )];
     }
 
     match ctx.store.store_event(&event).await {
@@ -315,11 +316,7 @@ async fn process_req_message<S: NostrEventStore>(
 }
 
 /// Process an AUTH client message over iroh.
-fn process_auth_message(
-    event: Cow<'_, Event>,
-    auth_state: &mut AuthState,
-    relay_url: Option<&str>,
-) -> Vec<String> {
+fn process_auth_message(event: Cow<'_, Event>, auth_state: &mut AuthState, relay_url: Option<&str>) -> Vec<String> {
     let event_id = event.id;
     let now_secs = Timestamp::now().as_secs();
     match auth_state.verify_and_authenticate(&event, relay_url, now_secs) {

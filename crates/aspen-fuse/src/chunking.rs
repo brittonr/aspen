@@ -139,10 +139,7 @@ impl ChunkManifest {
             if remainder == 0 {
                 self.chunk_size
             } else {
-                match u32::try_from(remainder) {
-                    Ok(remainder_bytes) => remainder_bytes,
-                    Err(_) => self.chunk_size,
-                }
+                u32::try_from(remainder).unwrap_or(self.chunk_size)
             }
         } else {
             self.chunk_size
@@ -157,10 +154,8 @@ impl ChunkManifest {
         let Some(index) = offset.checked_div(u64::from(self.chunk_size)) else {
             return 0;
         };
-        match u32::try_from(index.min(u64::from(self.chunk_count.saturating_sub(1)))) {
-            Ok(chunk_index) => chunk_index,
-            Err(_) => self.chunk_count.saturating_sub(1),
-        }
+        u32::try_from(index.min(u64::from(self.chunk_count.saturating_sub(1))))
+            .unwrap_or(self.chunk_count.saturating_sub(1))
     }
 
     /// Calculate the byte offset within a chunk for a given file offset.
@@ -171,10 +166,7 @@ impl ChunkManifest {
         let Some(chunk_offset_u64) = offset.checked_rem(u64::from(self.chunk_size)) else {
             return 0;
         };
-        match u32::try_from(chunk_offset_u64) {
-            Ok(chunk_offset) => chunk_offset,
-            Err(_) => 0,
-        }
+        u32::try_from(chunk_offset_u64).unwrap_or(0)
     }
 }
 

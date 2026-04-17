@@ -172,10 +172,7 @@ struct ReplayRange {
 
 #[inline]
 fn usize_from_u32(value_u32: u32) -> usize {
-    match usize::try_from(value_u32) {
-        Ok(value_usize) => value_usize,
-        Err(_) => usize::MAX,
-    }
+    usize::try_from(value_u32).unwrap_or(usize::MAX)
 }
 
 #[inline]
@@ -185,10 +182,7 @@ fn should_replay_historical_entries(replay_range: ReplayRange) -> bool {
 
 #[inline]
 fn historical_batch_end(replay_range: ReplayRange) -> u64 {
-    let max_batch_span = match u64::try_from(MAX_HISTORICAL_BATCH_SIZE) {
-        Ok(max_batch_size_u64) => max_batch_size_u64.saturating_sub(1),
-        Err(_) => u64::MAX,
-    };
+    let max_batch_span = u64::try_from(MAX_HISTORICAL_BATCH_SIZE).map(|v| v.saturating_sub(1)).unwrap_or(u64::MAX);
     replay_range.start_index.saturating_add(max_batch_span).min(replay_range.committed_index)
 }
 
@@ -483,7 +477,7 @@ async fn handle_log_subscriber_authenticate(
     use anyhow::Context;
 
     debug_assert!(subscriber_id > 0, "subscriber_id must be positive during auth");
-    debug_assert!(MAX_AUTH_MESSAGE_SIZE > 0, "auth message limit must be positive");
+    const { assert!(MAX_AUTH_MESSAGE_SIZE > 0, "auth message limit must be positive") };
 
     // Step 1: Send challenge
     let challenge = auth_context.generate_challenge();
@@ -670,7 +664,7 @@ async fn handle_log_subscriber_replay(
     send: &mut iroh::endpoint::SendStream,
 ) -> anyhow::Result<()> {
     debug_assert!(subscriber_id > 0, "subscriber_id must be positive during replay");
-    debug_assert!(MAX_HISTORICAL_BATCH_SIZE > 0, "historical batch size must be positive");
+    const { assert!(MAX_HISTORICAL_BATCH_SIZE > 0, "historical batch size must be positive") };
     if !should_replay_historical_entries(ReplayRange {
         start_index: sub_request.start_index,
         committed_index: current_committed_index,

@@ -152,10 +152,7 @@ pub(crate) mod test_store {
     use super::CacheKvStore;
 
     fn scan_limit(limit: u32) -> usize {
-        match usize::try_from(limit) {
-            Ok(scan_limit) => scan_limit,
-            Err(_) => usize::MAX,
-        }
+        usize::try_from(limit).unwrap_or(usize::MAX)
     }
 
     pub struct InMemoryKvStore {
