@@ -14,6 +14,44 @@ use snafu::ResultExt;
 
 use super::*;
 
+#[inline]
+fn max_snapshot_entries_usize() -> usize {
+    match usize::try_from(MAX_SNAPSHOT_ENTRIES) {
+        Ok(max_entries) => max_entries,
+        Err(_) => usize::MAX,
+    }
+}
+
+#[inline]
+fn snapshot_entry_count_u32(entry_count: usize) -> u32 {
+    match u32::try_from(entry_count) {
+        Ok(entry_count_u32) => entry_count_u32,
+        Err(_) => u32::MAX,
+    }
+}
+
+#[inline]
+fn size_bytes_u64(size_bytes: usize) -> u64 {
+    match u64::try_from(size_bytes) {
+        Ok(size_bytes_u64) => size_bytes_u64,
+        Err(_) => u64::MAX,
+    }
+}
+
+#[inline]
+fn insert_snapshot_entry(
+    kv_entries: &mut BTreeMap<String, KvEntry>,
+    key: String,
+    entry: KvEntry,
+    max_snapshot_entries: usize,
+) {
+    debug_assert!(
+        kv_entries.len() < max_snapshot_entries,
+        "SNAPSHOT: insert must stay within max snapshot entry bound"
+    );
+    kv_entries.insert(key, entry);
+}
+
 // ====================================================================================
 // Snapshot Builder
 // ====================================================================================
@@ -66,6 +104,7 @@ impl SharedRedbSnapshotBuilder {
     ) -> Result<BTreeMap<String, KvEntry>, std::io::Error> {
         let mut kv_entries = BTreeMap::new();
         let now_ms = now_unix_ms();
+        let max_snapshot_entries = max_snapshot_entries_usize();
 
         for item in kv_table.iter().context(RangeSnafu)? {
             let (key_guard, value_guard) = item.context(GetSnafu)?;
@@ -86,16 +125,16 @@ impl SharedRedbSnapshotBuilder {
                 continue;
             }
 
-            kv_entries.insert(key_str, entry);
-
-            if kv_entries.len() >= MAX_SNAPSHOT_ENTRIES as usize {
+            if kv_entries.len() >= max_snapshot_entries {
                 tracing::warn!(limit = MAX_SNAPSHOT_ENTRIES, "snapshot truncated at max entries");
                 break;
             }
+
+            insert_snapshot_entry(&mut kv_entries, key_str, entry, max_snapshot_entries);
         }
 
         assert!(
-            kv_entries.len() <= MAX_SNAPSHOT_ENTRIES as usize,
+            kv_entries.len() <= max_snapshot_entries,
             "SNAPSHOT: {} entries exceeds MAX_SNAPSHOT_ENTRIES {}",
             kv_entries.len(),
             MAX_SNAPSHOT_ENTRIES
@@ -153,7 +192,9 @@ impl SharedRedbSnapshotBuilder {
                 entry_count,
                 size_bytes,
             };
-            let _ = tx.send(event);
+            if tx.send(event).is_err() {
+                tracing::debug!("snapshot event dropped: no broadcast subscribers");
+            }
         }
     }
 }
@@ -193,9 +234,9 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
             snapshot_id,
         };
 
-        let entry_count = snapshot_data.kv_entries.len().min(u32::MAX as usize) as u32;
+        let entry_count = snapshot_entry_count_u32(snapshot_data.kv_entries.len());
         self.build_snapshot_store(&meta, &data, entry_count)?;
-        self.build_snapshot_emit_event(&meta, entry_count as u64, data.len() as u64);
+        self.build_snapshot_emit_event(&meta, u64::from(entry_count), size_bytes_u64(data.len()));
 
         proof! {
             // INVARIANT 7 verified by SnapshotIntegrity::compute()

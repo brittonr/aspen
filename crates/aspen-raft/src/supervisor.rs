@@ -35,6 +35,24 @@ const RESTART_WINDOW: Duration = Duration::from_secs(600);
 /// Backoff durations for restarts.
 const BACKOFF_DURATIONS: [Duration; 3] = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "supervisor restart windows use local monotonic time for task lifecycle accounting"
+)]
+#[inline]
+fn current_supervisor_instant() -> Instant {
+    Instant::now()
+}
+
+#[inline]
+fn restart_times_len_u32(restart_times: &[Instant]) -> u32 {
+    match u32::try_from(restart_times.len()) {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
+    }
+}
+
 /// Supervisor for async tasks.
 ///
 /// Provides automatic restart with exponential backoff and circuit breaker.
@@ -130,21 +148,21 @@ impl Supervisor {
         use crate::verified::should_allow_restart;
 
         let mut times = self.restart_times.lock().await;
-        let now = Instant::now();
+        let now = current_supervisor_instant();
 
         // Remove old restart times outside the window
         times.retain(|&t| now.duration_since(t) < RESTART_WINDOW);
 
         // Check if we've exceeded max restarts in the window (extracted pure logic)
-        should_allow_restart(times.len().min(u32::MAX as usize) as u32, MAX_RESTARTS)
+        should_allow_restart(restart_times_len_u32(&times), MAX_RESTARTS)
     }
 
     /// Record a restart attempt.
     async fn record_restart(&self) {
         let mut times = self.restart_times.lock().await;
-        times.push(Instant::now());
+        times.push(current_supervisor_instant());
 
-        let count = self.restart_count.fetch_add(1, Ordering::AcqRel) + 1;
+        let count = self.restart_count.fetch_add(1, Ordering::AcqRel).saturating_add(1);
         warn!(
             name = %self.name,
             restart_count = count,
@@ -177,9 +195,9 @@ impl Supervisor {
     /// that might require intervention. Tracks failures for rate limiting.
     pub async fn record_health_failure(&self, reason: &str) {
         let mut times = self.restart_times.lock().await;
-        times.push(Instant::now());
+        times.push(current_supervisor_instant());
 
-        let count = self.restart_count.fetch_add(1, Ordering::AcqRel) + 1;
+        let count = self.restart_count.fetch_add(1, Ordering::AcqRel).saturating_add(1);
         error!(
             name = %self.name,
             restart_count = count,
