@@ -126,7 +126,7 @@ pub struct TicketArgs {
 pub struct ListArgs {
     /// Maximum number of blobs to return.
     #[arg(long, default_value = "100")]
-    pub limit: u32,
+    pub limit_results: u32,
 
     /// Continuation token from previous list.
     #[arg(long)]
@@ -245,13 +245,13 @@ impl Outputable for AddBlobOutput {
     fn to_human(&self) -> String {
         if self.is_success {
             let hash = self.hash.as_deref().unwrap_or("unknown");
-            let size = self.size_bytes.unwrap_or(0);
+            let size_bytes = self.size_bytes.unwrap_or(0);
             let status = if self.was_new.unwrap_or(false) {
                 "added"
             } else {
                 "exists"
             };
-            format!("{} ({} bytes, {})", hash, size, status)
+            format!("{} ({} bytes, {})", hash, size_bytes, status)
         } else {
             format!("Add failed: {}", self.error.as_deref().unwrap_or("unknown error"))
         }
@@ -464,8 +464,8 @@ impl Outputable for DownloadBlobOutput {
     fn to_human(&self) -> String {
         if self.is_success {
             let hash = self.hash.as_deref().unwrap_or("unknown");
-            let size = self.size_bytes.unwrap_or(0);
-            format!("Downloaded {} ({} bytes)", hash, size)
+            let size_bytes = self.size_bytes.unwrap_or(0);
+            format!("Downloaded {} ({} bytes)", hash, size_bytes)
         } else {
             format!("Download failed: {}", self.error.as_deref().unwrap_or("unknown error"))
         }
@@ -503,7 +503,10 @@ impl Outputable for BlobStatusOutput {
         }
 
         let hash = self.hash.as_deref().unwrap_or("unknown");
-        let size = self.size_bytes.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown size".to_string());
+        let size_bytes = self
+            .size_bytes
+            .map(|size_bytes| format!("{} bytes", size_bytes))
+            .unwrap_or_else(|| "unknown size".to_string());
         let complete = if self.complete.unwrap_or(false) {
             "complete"
         } else {
@@ -515,7 +518,7 @@ impl Outputable for BlobStatusOutput {
             .map(|t| if t.is_empty() { "none".to_string() } else { t.join(", ") })
             .unwrap_or_else(|| "unknown".to_string());
 
-        format!("Hash: {}\nSize: {}\nStatus: {}\nTags: {}", hash, size, complete, tags)
+        format!("Hash: {}\nSize: {}\nStatus: {}\nTags: {}", hash, size_bytes, complete, tags)
     }
 }
 
@@ -558,7 +561,10 @@ impl Outputable for BlobReplicationStatusOutput {
         }
 
         let hash = self.hash.as_deref().unwrap_or("unknown");
-        let size = self.size_bytes.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown".to_string());
+        let size_bytes = self
+            .size_bytes
+            .map(|size_bytes| format!("{} bytes", size_bytes))
+            .unwrap_or_else(|| "unknown".to_string());
         let status = self.status.as_deref().unwrap_or("unknown");
         let factor = self.replication_factor.unwrap_or(0);
         let min = self.min_replicas.unwrap_or(0);
@@ -575,7 +581,7 @@ impl Outputable for BlobReplicationStatusOutput {
             .unwrap_or_else(|| "unknown".to_string());
         let updated = self.updated_at.as_deref().unwrap_or("unknown");
 
-        let mut output = format!("Hash: {}\nSize: {}\n", hash, size);
+        let mut output = format!("Hash: {}\nSize: {}\n", hash, size_bytes);
         output.push_str(&format!(
             "Replication Factor: {}/{}\n",
             self.replica_nodes.as_ref().map(|n| n.len()).unwrap_or(0),
@@ -622,9 +628,12 @@ impl Outputable for BlobRepairOutput {
             let hash = self.hash.as_deref().unwrap_or("unknown");
             let successful = self.successful_nodes.as_ref().map(|n| n.len()).unwrap_or(0);
             let failed = self.failed_nodes.as_ref().map(|n| n.len()).unwrap_or(0);
-            let duration = self.duration_ms.map(|d| format!("{}ms", d)).unwrap_or_else(|| "unknown".to_string());
+            let duration_ms = self
+                .duration_ms
+                .map(|duration_ms| format!("{}ms", duration_ms))
+                .unwrap_or_else(|| "unknown".to_string());
 
-            let mut output = format!("Repair successful: {} ({})\n", hash, duration);
+            let mut output = format!("Repair successful: {} ({})\n", hash, duration_ms);
             output.push_str(&format!("Successful nodes: {}\n", successful));
             if failed > 0 {
                 output.push_str(&format!("Failed nodes: {}", failed));
@@ -661,28 +670,28 @@ impl Outputable for BlobRepairCycleOutput {
 
 impl BlobCommand {
     /// Execute the blob command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            BlobCommand::Add(args) => blob_add(client, args, json).await,
-            BlobCommand::Get(args) => blob_get(client, args, json).await,
-            BlobCommand::Has(args) => blob_has(client, args, json).await,
-            BlobCommand::Ticket(args) => blob_ticket(client, args, json).await,
-            BlobCommand::List(args) => blob_list(client, args, json).await,
-            BlobCommand::Protect(args) => blob_protect(client, args, json).await,
-            BlobCommand::Unprotect(args) => blob_unprotect(client, args, json).await,
-            BlobCommand::Delete(args) => blob_delete(client, args, json).await,
-            BlobCommand::Download(args) => blob_download(client, args, json).await,
-            BlobCommand::DownloadByHash(args) => blob_download_by_hash(client, args, json).await,
-            BlobCommand::DownloadByProvider(args) => blob_download_by_provider(client, args, json).await,
-            BlobCommand::Status(args) => blob_status(client, args, json).await,
-            BlobCommand::ReplicationStatus(args) => blob_replication_status(client, args, json).await,
-            BlobCommand::Repair(args) => blob_repair(client, args, json).await,
-            BlobCommand::RepairCycle => blob_repair_cycle(client, json).await,
+            BlobCommand::Add(args) => blob_add(client, args, is_json_output).await,
+            BlobCommand::Get(args) => blob_get(client, args, is_json_output).await,
+            BlobCommand::Has(args) => blob_has(client, args, is_json_output).await,
+            BlobCommand::Ticket(args) => blob_ticket(client, args, is_json_output).await,
+            BlobCommand::List(args) => blob_list(client, args, is_json_output).await,
+            BlobCommand::Protect(args) => blob_protect(client, args, is_json_output).await,
+            BlobCommand::Unprotect(args) => blob_unprotect(client, args, is_json_output).await,
+            BlobCommand::Delete(args) => blob_delete(client, args, is_json_output).await,
+            BlobCommand::Download(args) => blob_download(client, args, is_json_output).await,
+            BlobCommand::DownloadByHash(args) => blob_download_by_hash(client, args, is_json_output).await,
+            BlobCommand::DownloadByProvider(args) => blob_download_by_provider(client, args, is_json_output).await,
+            BlobCommand::Status(args) => blob_status(client, args, is_json_output).await,
+            BlobCommand::ReplicationStatus(args) => blob_replication_status(client, args, is_json_output).await,
+            BlobCommand::Repair(args) => blob_repair(client, args, is_json_output).await,
+            BlobCommand::RepairCycle => blob_repair_cycle(client, is_json_output).await,
         }
     }
 }
 
-async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()> {
+async fn blob_add(client: &AspenClient, args: AddArgs, is_json_output: bool) -> Result<()> {
     // Get data from file, stdin, or --data argument
     let data = if let Some(ref path) = args.file {
         if path.as_os_str() == "-" {
@@ -709,7 +718,7 @@ async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
                 was_new: result.was_new,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -720,7 +729,7 @@ async fn blob_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
     }
 }
 
-async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
+async fn blob_get(client: &AspenClient, args: GetArgs, is_json_output: bool) -> Result<()> {
     // Use streaming path when output file is specified (handles large blobs)
     let response = client.send_get_blob(args.hash, args.output.as_deref()).await?;
 
@@ -729,7 +738,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
             // Streaming path already wrote the file, just report success
             if result.is_streaming {
                 if let Some(output_path) = &args.output {
-                    if !json {
+                    if !is_json_output {
                         println!("Wrote {} bytes to {}", result.size_bytes, output_path.display());
                     }
                     return Ok(());
@@ -740,7 +749,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
             if let (Some(output_path), true, Some(data)) = (&args.output, result.was_found, &result.data) {
                 std::fs::write(output_path, data)
                     .with_context(|| format!("failed to write blob to {}", output_path.display()))?;
-                if !json {
+                if !is_json_output {
                     println!("Wrote {} bytes to {}", data.len(), output_path.display());
                 }
                 return Ok(());
@@ -751,7 +760,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
                 data: result.data,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.was_found {
                 std::process::exit(1);
             }
@@ -762,7 +771,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
     }
 }
 
-async fn blob_has(client: &AspenClient, args: HasArgs, json: bool) -> Result<()> {
+async fn blob_has(client: &AspenClient, args: HasArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::HasBlob {
             hash: args.hash.clone(),
@@ -776,7 +785,7 @@ async fn blob_has(client: &AspenClient, args: HasArgs, json: bool) -> Result<()>
                 does_exist: result.does_exist,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.does_exist {
                 std::process::exit(1);
             }
@@ -787,7 +796,7 @@ async fn blob_has(client: &AspenClient, args: HasArgs, json: bool) -> Result<()>
     }
 }
 
-async fn blob_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Result<()> {
+async fn blob_ticket(client: &AspenClient, args: TicketArgs, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetBlobTicket { hash: args.hash }).await?;
 
     match response {
@@ -797,7 +806,7 @@ async fn blob_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
                 ticket: result.ticket,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -808,10 +817,10 @@ async fn blob_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
     }
 }
 
-async fn blob_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
+async fn blob_list(client: &AspenClient, args: ListArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::ListBlobs {
-            limit: args.limit,
+            limit: args.limit_results,
             continuation_token: args.token,
         })
         .await?;
@@ -834,7 +843,7 @@ async fn blob_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<(
                 continuation_token: result.continuation_token,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -842,7 +851,7 @@ async fn blob_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<(
     }
 }
 
-async fn blob_protect(client: &AspenClient, args: ProtectArgs, json: bool) -> Result<()> {
+async fn blob_protect(client: &AspenClient, args: ProtectArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::ProtectBlob {
             hash: args.hash,
@@ -857,7 +866,7 @@ async fn blob_protect(client: &AspenClient, args: ProtectArgs, json: bool) -> Re
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -868,7 +877,7 @@ async fn blob_protect(client: &AspenClient, args: ProtectArgs, json: bool) -> Re
     }
 }
 
-async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, json: bool) -> Result<()> {
+async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::UnprotectBlob { tag: args.tag }).await?;
 
     match response {
@@ -878,7 +887,7 @@ async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, json: bool) -
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -889,7 +898,7 @@ async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, json: bool) -
     }
 }
 
-async fn blob_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result<()> {
+async fn blob_delete(client: &AspenClient, args: DeleteArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::DeleteBlob {
             hash: args.hash,
@@ -903,7 +912,7 @@ async fn blob_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -914,7 +923,7 @@ async fn blob_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
     }
 }
 
-async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> Result<()> {
+async fn blob_download(client: &AspenClient, args: DownloadArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::DownloadBlob {
             ticket: args.blob_ticket,
@@ -930,7 +939,7 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> 
                 size_bytes: result.size_bytes,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -941,7 +950,7 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, json: bool) -> 
     }
 }
 
-async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, json: bool) -> Result<()> {
+async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::DownloadBlobByHash {
             hash: args.hash,
@@ -957,7 +966,7 @@ async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, j
                 size_bytes: result.size_bytes,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -968,7 +977,11 @@ async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, j
     }
 }
 
-async fn blob_download_by_provider(client: &AspenClient, args: DownloadByProviderArgs, json: bool) -> Result<()> {
+async fn blob_download_by_provider(
+    client: &AspenClient,
+    args: DownloadByProviderArgs,
+    is_json_output: bool,
+) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::DownloadBlobByProvider {
             hash: args.hash,
@@ -985,7 +998,7 @@ async fn blob_download_by_provider(client: &AspenClient, args: DownloadByProvide
                 size_bytes: result.size_bytes,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -996,7 +1009,7 @@ async fn blob_download_by_provider(client: &AspenClient, args: DownloadByProvide
     }
 }
 
-async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
+async fn blob_status(client: &AspenClient, args: StatusArgs, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetBlobStatus { hash: args.hash }).await?;
 
     match response {
@@ -1009,7 +1022,7 @@ async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
                 tags: result.tags,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.was_found {
                 std::process::exit(1);
             }
@@ -1020,7 +1033,11 @@ async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
     }
 }
 
-async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusArgs, json: bool) -> Result<()> {
+async fn blob_replication_status(
+    client: &AspenClient,
+    args: ReplicationStatusArgs,
+    is_json_output: bool,
+) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetBlobReplicationStatus { hash: args.hash }).await?;
 
     match response {
@@ -1037,7 +1054,7 @@ async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusAr
                 updated_at: result.updated_at,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.was_found {
                 std::process::exit(1);
             }
@@ -1048,7 +1065,7 @@ async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusAr
     }
 }
 
-async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Result<()> {
+async fn blob_repair(client: &AspenClient, args: RepairArgs, is_json_output: bool) -> Result<()> {
     // Parse target nodes if provided
     let target_nodes: Vec<u64> = if let Some(targets_str) = args.targets {
         targets_str
@@ -1078,7 +1095,7 @@ async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Resu
                 duration_ms: result.duration_ms,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -1089,7 +1106,7 @@ async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Resu
     }
 }
 
-async fn blob_repair_cycle(client: &AspenClient, json: bool) -> Result<()> {
+async fn blob_repair_cycle(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::RunBlobRepairCycle).await?;
 
     match response {
@@ -1098,7 +1115,7 @@ async fn blob_repair_cycle(client: &AspenClient, json: bool) -> Result<()> {
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
