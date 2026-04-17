@@ -71,8 +71,8 @@ pub struct CreateCalArgs {
 #[derive(Args)]
 pub struct ListCalArgs {
     /// Maximum number of calendars to return.
-    #[arg(long)]
-    pub limit: Option<u32>,
+    #[arg(long = "limit")]
+    pub max_results: Option<u32>,
 }
 
 #[derive(Args)]
@@ -136,8 +136,8 @@ pub struct ListEventsArgs {
     #[arg(long)]
     pub end: Option<u64>,
     /// Maximum number of events.
-    #[arg(long)]
-    pub limit: Option<u32>,
+    #[arg(long = "limit")]
+    pub max_results: Option<u32>,
 }
 
 #[derive(Args)]
@@ -148,8 +148,8 @@ pub struct SearchEventsArgs {
     #[arg(long)]
     pub calendar: Option<String>,
     /// Maximum number of results.
-    #[arg(long)]
-    pub limit: Option<u32>,
+    #[arg(long = "limit")]
+    pub max_results: Option<u32>,
 }
 
 #[derive(Args)]
@@ -182,25 +182,25 @@ pub struct ExportIcalArgs {
 }
 
 impl CalendarCommand {
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            Self::Create(a) => create_calendar(client, a, json).await,
-            Self::List(a) => list_calendars(client, a, json).await,
-            Self::Delete(a) => delete_calendar(client, a, json).await,
-            Self::AddEvent(a) => add_event(client, a, json).await,
-            Self::GetEvent(a) => get_event(client, a, json).await,
-            Self::UpdateEvent(a) => update_event(client, a, json).await,
-            Self::DeleteEvent(a) => delete_event(client, a, json).await,
-            Self::ListEvents(a) => list_events(client, a, json).await,
-            Self::Search(a) => search_events(client, a, json).await,
-            Self::FreeBusy(a) => free_busy(client, a, json).await,
-            Self::Import(a) => import_ical(client, a, json).await,
-            Self::Export(a) => export_ical(client, a, json).await,
+            Self::Create(a) => create_calendar(client, a, is_json_output).await,
+            Self::List(a) => list_calendars(client, a, is_json_output).await,
+            Self::Delete(a) => delete_calendar(client, a, is_json_output).await,
+            Self::AddEvent(a) => add_event(client, a, is_json_output).await,
+            Self::GetEvent(a) => get_event(client, a, is_json_output).await,
+            Self::UpdateEvent(a) => update_event(client, a, is_json_output).await,
+            Self::DeleteEvent(a) => delete_event(client, a, is_json_output).await,
+            Self::ListEvents(a) => list_events(client, a, is_json_output).await,
+            Self::Search(a) => search_events(client, a, is_json_output).await,
+            Self::FreeBusy(a) => free_busy(client, a, is_json_output).await,
+            Self::Import(a) => import_ical(client, a, is_json_output).await,
+            Self::Export(a) => export_ical(client, a, is_json_output).await,
         }
     }
 }
 
-async fn create_calendar(client: &AspenClient, args: CreateCalArgs, json: bool) -> Result<()> {
+async fn create_calendar(client: &AspenClient, args: CreateCalArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarCreate {
             name: args.name,
@@ -219,7 +219,7 @@ async fn create_calendar(client: &AspenClient, args: CreateCalArgs, json: bool) 
                     error: r.error,
                     label: "calendar",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -228,15 +228,19 @@ async fn create_calendar(client: &AspenClient, args: CreateCalArgs, json: bool) 
     }
 }
 
-async fn list_calendars(client: &AspenClient, args: ListCalArgs, json: bool) -> Result<()> {
-    let resp = client.send(ClientRpcRequest::CalendarList { limit: args.limit }).await?;
+async fn list_calendars(client: &AspenClient, args: ListCalArgs, is_json_output: bool) -> Result<()> {
+    let resp = client
+        .send(ClientRpcRequest::CalendarList {
+            limit: args.max_results,
+        })
+        .await?;
     match resp {
         ClientRpcResponse::CalendarListResult(r) => {
             let output = CalListOutput {
                 calendars: r.calendars,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -244,7 +248,7 @@ async fn list_calendars(client: &AspenClient, args: ListCalArgs, json: bool) -> 
     }
 }
 
-async fn delete_calendar(client: &AspenClient, args: DeleteCalArgs, json: bool) -> Result<()> {
+async fn delete_calendar(client: &AspenClient, args: DeleteCalArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarDelete {
             calendar_id: args.calendar_id,
@@ -260,7 +264,7 @@ async fn delete_calendar(client: &AspenClient, args: DeleteCalArgs, json: bool) 
                     error: r.error,
                     label: "calendar",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -269,7 +273,15 @@ async fn delete_calendar(client: &AspenClient, args: DeleteCalArgs, json: bool) 
     }
 }
 
-async fn add_event(client: &AspenClient, args: AddEventArgs, json: bool) -> Result<()> {
+#[allow(
+    ambient_clock,
+    reason = "CLI calendar event creation uses wall-clock time to mint a local VEVENT UID"
+)]
+fn current_calendar_uid_millis() -> u128 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+}
+
+async fn add_event(client: &AspenClient, args: AddEventArgs, is_json_output: bool) -> Result<()> {
     // Build a minimal VEVENT from CLI args.
     let dtstart = args.start.replace(['-', ':'], "");
     let mut ical = format!("BEGIN:VEVENT\r\nSUMMARY:{}\r\nDTSTART:{dtstart}\r\n", args.summary);
@@ -283,10 +295,9 @@ async fn add_event(client: &AspenClient, args: AddEventArgs, json: bool) -> Resu
     if let Some(desc) = &args.description {
         ical.push_str(&format!("DESCRIPTION:{desc}\r\n"));
     }
-    ical.push_str(&format!(
-        "UID:cli-{}\r\nEND:VEVENT\r\n",
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-    ));
+    debug_assert!(!dtstart.is_empty());
+    debug_assert!(ical.starts_with("BEGIN:VEVENT\r\n"));
+    ical.push_str(&format!("UID:cli-{}\r\nEND:VEVENT\r\n", current_calendar_uid_millis()));
 
     let resp = client
         .send(ClientRpcRequest::CalendarCreateEvent {
@@ -304,7 +315,7 @@ async fn add_event(client: &AspenClient, args: AddEventArgs, json: bool) -> Resu
                     error: r.error,
                     label: "event",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -313,7 +324,7 @@ async fn add_event(client: &AspenClient, args: AddEventArgs, json: bool) -> Resu
     }
 }
 
-async fn get_event(client: &AspenClient, args: GetEventArgs, json: bool) -> Result<()> {
+async fn get_event(client: &AspenClient, args: GetEventArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarGetEvent {
             event_id: args.event_id,
@@ -321,14 +332,14 @@ async fn get_event(client: &AspenClient, args: GetEventArgs, json: bool) -> Resu
         .await?;
     match resp {
         ClientRpcResponse::CalendarEventResult(r) => {
-            if json {
+            if is_json_output {
                 print_output(
                     &IcalOutput {
                         ical_data: r.ical_data,
                         event_id: r.event_id,
                         error: r.error,
                     },
-                    json,
+                    is_json_output,
                 );
             } else if let Some(ical) = &r.ical_data {
                 println!("{ical}");
@@ -342,7 +353,7 @@ async fn get_event(client: &AspenClient, args: GetEventArgs, json: bool) -> Resu
     }
 }
 
-async fn update_event(client: &AspenClient, args: UpdateEventArgs, json: bool) -> Result<()> {
+async fn update_event(client: &AspenClient, args: UpdateEventArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarUpdateEvent {
             event_id: args.event_id,
@@ -359,7 +370,7 @@ async fn update_event(client: &AspenClient, args: UpdateEventArgs, json: bool) -
                     error: r.error,
                     label: "event",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -368,7 +379,7 @@ async fn update_event(client: &AspenClient, args: UpdateEventArgs, json: bool) -
     }
 }
 
-async fn delete_event(client: &AspenClient, args: DeleteEventArgs, json: bool) -> Result<()> {
+async fn delete_event(client: &AspenClient, args: DeleteEventArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarDeleteEvent {
             event_id: args.event_id,
@@ -384,7 +395,7 @@ async fn delete_event(client: &AspenClient, args: DeleteEventArgs, json: bool) -
                     error: r.error,
                     label: "event",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -393,13 +404,13 @@ async fn delete_event(client: &AspenClient, args: DeleteEventArgs, json: bool) -
     }
 }
 
-async fn list_events(client: &AspenClient, args: ListEventsArgs, json: bool) -> Result<()> {
+async fn list_events(client: &AspenClient, args: ListEventsArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarListEvents {
             calendar_id: args.calendar,
             start_ms: args.start,
             end_ms: args.end,
-            limit: args.limit,
+            limit: args.max_results,
             continuation_token: None,
         })
         .await?;
@@ -410,7 +421,7 @@ async fn list_events(client: &AspenClient, args: ListEventsArgs, json: bool) -> 
                 total: r.total,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -418,12 +429,12 @@ async fn list_events(client: &AspenClient, args: ListEventsArgs, json: bool) -> 
     }
 }
 
-async fn search_events(client: &AspenClient, args: SearchEventsArgs, json: bool) -> Result<()> {
+async fn search_events(client: &AspenClient, args: SearchEventsArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarSearchEvents {
             query: args.query,
             calendar_id: args.calendar,
-            limit: args.limit,
+            limit: args.max_results,
         })
         .await?;
     match resp {
@@ -433,7 +444,7 @@ async fn search_events(client: &AspenClient, args: SearchEventsArgs, json: bool)
                 total: r.total,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -441,7 +452,7 @@ async fn search_events(client: &AspenClient, args: SearchEventsArgs, json: bool)
     }
 }
 
-async fn free_busy(client: &AspenClient, args: FreeBusyArgs, json: bool) -> Result<()> {
+async fn free_busy(client: &AspenClient, args: FreeBusyArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarFreeBusy {
             calendar_id: args.calendar,
@@ -455,7 +466,7 @@ async fn free_busy(client: &AspenClient, args: FreeBusyArgs, json: bool) -> Resu
                 periods: r.busy_periods,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -463,7 +474,7 @@ async fn free_busy(client: &AspenClient, args: FreeBusyArgs, json: bool) -> Resu
     }
 }
 
-async fn import_ical(client: &AspenClient, args: ImportIcalArgs, json: bool) -> Result<()> {
+async fn import_ical(client: &AspenClient, args: ImportIcalArgs, is_json_output: bool) -> Result<()> {
     let ical_data =
         std::fs::read_to_string(&args.file).map_err(|e| anyhow::anyhow!("failed to read {}: {}", args.file, e))?;
     let resp = client
@@ -481,7 +492,7 @@ async fn import_ical(client: &AspenClient, args: ImportIcalArgs, json: bool) -> 
                     error: r.error,
                     op: "imported",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -490,7 +501,7 @@ async fn import_ical(client: &AspenClient, args: ImportIcalArgs, json: bool) -> 
     }
 }
 
-async fn export_ical(client: &AspenClient, args: ExportIcalArgs, json: bool) -> Result<()> {
+async fn export_ical(client: &AspenClient, args: ExportIcalArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::CalendarExportIcal {
             calendar_id: args.calendar,
@@ -498,7 +509,7 @@ async fn export_ical(client: &AspenClient, args: ExportIcalArgs, json: bool) -> 
         .await?;
     match resp {
         ClientRpcResponse::CalendarExportResult(r) => {
-            if json {
+            if is_json_output {
                 print_output(
                     &ImportExportOutput {
                         count: r.count,
@@ -506,7 +517,7 @@ async fn export_ical(client: &AspenClient, args: ExportIcalArgs, json: bool) -> 
                         error: r.error,
                         op: "exported",
                     },
-                    json,
+                    is_json_output,
                 );
             } else if let Some(data) = &r.ical_data {
                 print!("{data}");

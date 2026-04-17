@@ -33,9 +33,63 @@ use super::types::SubscribeRequest;
 use super::types::SubscribeResponse;
 use super::wire::write_message;
 
-async fn send_auth_failure(send: &mut SendStream) {
-    let _ = write_message(send, &AuthResult::Failed, MAX_AUTH_MESSAGE_SIZE).await;
-    let _ = send.finish();
+struct SubscriptionAcceptContext {
+    subscriber_id: u64,
+    node_id: u64,
+}
+
+struct HistoricalReplayBounds {
+    start_index: u64,
+    committed_index: u64,
+}
+
+struct LiveStreamContext<'a> {
+    committed_index: &'a Arc<AtomicU64>,
+    hlc: &'a aspen_core::hlc::HLC,
+    key_prefix: &'a [u8],
+    subscriber_id: u64,
+}
+
+pub(super) struct LogSubscriberConnectionContext<'a> {
+    pub auth_context: AuthContext,
+    pub log_receiver: broadcast::Receiver<LogEntryPayload>,
+    pub node_id: u64,
+    pub subscriber_id: u64,
+    pub committed_index: Arc<AtomicU64>,
+    pub historical_reader: Option<Arc<dyn HistoricalLogReader>>,
+    pub hlc: &'a aspen_core::hlc::HLC,
+    pub watch_registry: Option<Arc<dyn aspen_core::WatchRegistry>>,
+}
+
+const _: () = {
+    assert!(MAX_AUTH_MESSAGE_SIZE > 0);
+    assert!(MAX_HISTORICAL_BATCH_SIZE > 0);
+    assert!(MAX_LOG_ENTRY_MESSAGE_SIZE > 0);
+    assert!(MAX_LOG_ENTRY_MESSAGE_SIZE >= MAX_AUTH_MESSAGE_SIZE);
+};
+
+fn historical_batch_span() -> u64 {
+    u64::try_from(MAX_HISTORICAL_BATCH_SIZE).unwrap_or(u64::MAX).saturating_sub(1)
+}
+
+fn historical_replay_max_batches(bounds: HistoricalReplayBounds) -> u64 {
+    let batch_width = historical_batch_span().saturating_add(1);
+    let entry_count = bounds.committed_index.saturating_sub(bounds.start_index).saturating_add(1);
+    debug_assert!(batch_width >= 1);
+    entry_count.saturating_add(batch_width.saturating_sub(1)) / batch_width
+}
+
+fn next_log_index(index: u64) -> u64 {
+    index.saturating_add(1)
+}
+
+async fn send_auth_failure(send: &mut SendStream, subscriber_id: u64) {
+    if let Err(error) = write_message(send, &AuthResult::Failed, MAX_AUTH_MESSAGE_SIZE).await {
+        debug!(subscriber_id = subscriber_id, error = %error, "failed to send auth failure");
+    }
+    if let Err(error) = send.finish() {
+        debug!(subscriber_id = subscriber_id, error = %error, "failed to finish auth failure stream");
+    }
 }
 
 async fn read_auth_response(recv: &mut RecvStream) -> anyhow::Result<AuthResponse> {
@@ -53,6 +107,8 @@ async fn authenticate_subscriber(
     auth_context: &AuthContext,
     subscriber_id: u64,
 ) -> anyhow::Result<()> {
+    debug_assert!(AUTH_HANDSHAKE_TIMEOUT > std::time::Duration::ZERO);
+
     let (mut auth_send, mut auth_recv) = connection.accept_bi().await.context("failed to accept auth stream")?;
     let challenge = auth_context.generate_challenge();
     write_message(&mut auth_send, &challenge, MAX_AUTH_MESSAGE_SIZE)
@@ -63,7 +119,7 @@ async fn authenticate_subscriber(
         Ok(response) => response,
         Err(error) => {
             warn!(error = %error, subscriber_id = subscriber_id, "subscriber auth failed");
-            send_auth_failure(&mut auth_send).await;
+            send_auth_failure(&mut auth_send, subscriber_id).await;
             return Err(error);
         }
     };
@@ -83,12 +139,16 @@ async fn authenticate_subscriber(
     Ok(())
 }
 
-async fn reject_subscription(send: &mut SendStream) {
+async fn reject_subscription(send: &mut SendStream, subscriber_id: u64) {
     let response = SubscribeResponse::Rejected {
         reason: SubscribeRejectReason::InternalError,
     };
-    let _ = write_message(send, &response, MAX_AUTH_MESSAGE_SIZE).await;
-    let _ = send.finish();
+    if let Err(error) = write_message(send, &response, MAX_AUTH_MESSAGE_SIZE).await {
+        debug!(subscriber_id = subscriber_id, error = %error, "failed to send subscription rejection");
+    }
+    if let Err(error) = send.finish() {
+        debug!(subscriber_id = subscriber_id, error = %error, "failed to finish subscription rejection stream");
+    }
 }
 
 async fn read_subscription_request(recv: &mut RecvStream) -> anyhow::Result<SubscribeRequest> {
@@ -104,24 +164,30 @@ async fn read_subscription_request(recv: &mut RecvStream) -> anyhow::Result<Subs
 
 async fn accept_subscription(
     connection: &Connection,
-    subscriber_id: u64,
-    node_id: u64,
+    context: SubscriptionAcceptContext,
     committed_index: &Arc<AtomicU64>,
 ) -> anyhow::Result<(SendStream, SubscribeRequest, u64)> {
+    debug_assert!(SUBSCRIBE_HANDSHAKE_TIMEOUT > std::time::Duration::ZERO);
+
     let (mut send, mut recv) = connection.accept_bi().await.context("failed to accept subscribe stream")?;
     let sub_request = match read_subscription_request(&mut recv).await {
         Ok(request) => request,
         Err(error) => {
-            reject_subscription(&mut send).await;
+            reject_subscription(&mut send, context.subscriber_id).await;
             return Err(error);
         }
     };
 
-    debug!(subscriber_id = subscriber_id, start_index = sub_request.start_index, prefix = ?sub_request.key_prefix, "processing subscription request");
+    debug!(
+        subscriber_id = context.subscriber_id,
+        start_index = sub_request.start_index,
+        prefix = ?sub_request.key_prefix,
+        "processing subscription request"
+    );
     let current_committed_index = committed_index.load(Ordering::Acquire);
     let response = SubscribeResponse::Accepted {
         current_index: current_committed_index,
-        node_id,
+        node_id: context.node_id,
     };
     write_message(&mut send, &response, MAX_AUTH_MESSAGE_SIZE)
         .await
@@ -152,9 +218,15 @@ async fn replay_historical_entries(
     );
     let mut current_start = sub_request.start_index;
     let mut total_replayed = 0u64;
-    while current_start <= current_committed_index {
-        let batch_end =
-            std::cmp::min(current_start.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64 - 1), current_committed_index);
+    let max_replay_batches = historical_replay_max_batches(HistoricalReplayBounds {
+        start_index: sub_request.start_index,
+        committed_index: current_committed_index,
+    });
+    debug_assert!(current_start <= current_committed_index);
+    debug_assert!(max_replay_batches >= 1);
+
+    for _batch_idx in 0..max_replay_batches {
+        let batch_end = current_start.saturating_add(historical_batch_span()).min(current_committed_index);
         match reader.read_entries(current_start, batch_end).await {
             Ok(entries) => {
                 if entries.is_empty() {
@@ -174,7 +246,7 @@ async fn replay_historical_entries(
                         .await
                         .map_err(|_| anyhow::anyhow!("subscriber disconnected during replay"))?;
                     total_replayed = total_replayed.saturating_add(1);
-                    current_start = entry.index + 1;
+                    current_start = next_log_index(entry.index);
                 }
             }
             Err(error) => {
@@ -193,44 +265,55 @@ async fn replay_historical_entries(
 async fn stream_live_entries(
     send: &mut SendStream,
     log_receiver: &mut broadcast::Receiver<LogEntryPayload>,
-    committed_index: &Arc<AtomicU64>,
-    hlc: &aspen_core::hlc::HLC,
-    key_prefix: &[u8],
-    subscriber_id: u64,
+    context: LiveStreamContext<'_>,
 ) {
-    let mut keepalive_interval = tokio::time::interval(SUBSCRIBE_KEEPALIVE_INTERVAL);
-    keepalive_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    debug_assert!(SUBSCRIBE_KEEPALIVE_INTERVAL > std::time::Duration::ZERO);
+
+    let mut keepalive_tick = tokio::time::interval(SUBSCRIBE_KEEPALIVE_INTERVAL);
+    keepalive_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
         tokio::select! {
             entry_result = log_receiver.recv() => match entry_result {
                 Ok(entry) => {
-                    if !key_prefix.is_empty() && !entry.operation.matches_prefix(key_prefix) {
+                    if !context.key_prefix.is_empty() && !entry.operation.matches_prefix(context.key_prefix) {
                         continue;
                     }
                     if let Err(error) = write_message(send, &LogEntryMessage::Entry(entry), MAX_LOG_ENTRY_MESSAGE_SIZE).await {
-                        debug!(subscriber_id = subscriber_id, error = %error, "subscriber disconnected");
+                        debug!(subscriber_id = context.subscriber_id, error = %error, "subscriber disconnected");
                         break;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(count)) => {
-                    warn!(subscriber_id = subscriber_id, lagged_count = count, "subscriber lagged, disconnecting");
-                    let _ = write_message(send, &LogEntryMessage::EndOfStream { reason: EndOfStreamReason::Lagged }, MAX_AUTH_MESSAGE_SIZE).await;
+                    warn!(subscriber_id = context.subscriber_id, lagged_count = count, "subscriber lagged, disconnecting");
+                    if let Err(error) = write_message(
+                        send,
+                        &LogEntryMessage::EndOfStream { reason: EndOfStreamReason::Lagged },
+                        MAX_AUTH_MESSAGE_SIZE,
+                    ).await {
+                        debug!(subscriber_id = context.subscriber_id, error = %error, "failed to send lagged end-of-stream");
+                    }
                     break;
                 }
                 Err(broadcast::error::RecvError::Closed) => {
-                    info!(subscriber_id = subscriber_id, "log broadcast channel closed");
-                    let _ = write_message(send, &LogEntryMessage::EndOfStream { reason: EndOfStreamReason::ServerShutdown }, MAX_AUTH_MESSAGE_SIZE).await;
+                    info!(subscriber_id = context.subscriber_id, "log broadcast channel closed");
+                    if let Err(error) = write_message(
+                        send,
+                        &LogEntryMessage::EndOfStream { reason: EndOfStreamReason::ServerShutdown },
+                        MAX_AUTH_MESSAGE_SIZE,
+                    ).await {
+                        debug!(subscriber_id = context.subscriber_id, error = %error, "failed to send shutdown end-of-stream");
+                    }
                     break;
                 }
             },
-            _ = keepalive_interval.tick() => {
+            _ = keepalive_tick.tick() => {
                 let keepalive = LogEntryMessage::Keepalive {
-                    committed_index: committed_index.load(Ordering::Acquire),
-                    hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
+                    committed_index: context.committed_index.load(Ordering::Acquire),
+                    hlc_timestamp: SerializableTimestamp::from(context.hlc.new_timestamp()),
                 };
                 if write_message(send, &keepalive, MAX_AUTH_MESSAGE_SIZE).await.is_err() {
-                    debug!(subscriber_id = subscriber_id, "subscriber disconnected during keepalive");
+                    debug!(subscriber_id = context.subscriber_id, "subscriber disconnected during keepalive");
                     break;
                 }
             }
@@ -239,57 +322,58 @@ async fn stream_live_entries(
 }
 
 /// Handle a log subscriber connection.
-#[allow(clippy::too_many_arguments)]
-#[instrument(skip(
-    connection,
-    auth_context,
-    log_receiver,
-    committed_index,
-    historical_reader,
-    hlc,
-    watch_registry
-))]
+#[instrument(skip(connection, context))]
 pub(super) async fn handle_log_subscriber_connection(
     connection: Connection,
-    auth_context: AuthContext,
-    mut log_receiver: broadcast::Receiver<LogEntryPayload>,
-    node_id: u64,
-    subscriber_id: u64,
-    committed_index: Arc<AtomicU64>,
-    historical_reader: Option<Arc<dyn HistoricalLogReader>>,
-    hlc: &aspen_core::hlc::HLC,
-    watch_registry: Option<Arc<dyn aspen_core::WatchRegistry>>,
+    mut context: LogSubscriberConnectionContext<'_>,
 ) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
-    authenticate_subscriber(&connection, &auth_context, subscriber_id).await?;
-    let (mut send, sub_request, current_committed_index) =
-        accept_subscription(&connection, subscriber_id, node_id, &committed_index).await?;
+    authenticate_subscriber(&connection, &context.auth_context, context.subscriber_id).await?;
+    let (mut send, sub_request, current_committed_index) = accept_subscription(
+        &connection,
+        SubscriptionAcceptContext {
+            subscriber_id: context.subscriber_id,
+            node_id: context.node_id,
+        },
+        &context.committed_index,
+    )
+    .await?;
 
     info!(
-        subscriber_id = subscriber_id,
+        subscriber_id = context.subscriber_id,
         remote = %remote_node_id,
         start_index = sub_request.start_index,
         current_index = current_committed_index,
         "log subscription active"
     );
 
-    let watch_id = watch_registry.as_ref().map(|registry| {
+    let watch_id = context.watch_registry.as_ref().map(|registry| {
         let prefix = String::from_utf8_lossy(&sub_request.key_prefix).to_string();
         registry.register_watch(prefix, false)
     });
 
-    let _ =
-        replay_historical_entries(&mut send, subscriber_id, &sub_request, current_committed_index, &historical_reader)
-            .await?;
-    stream_live_entries(&mut send, &mut log_receiver, &committed_index, hlc, &sub_request.key_prefix, subscriber_id)
-        .await;
+    replay_historical_entries(
+        &mut send,
+        context.subscriber_id,
+        &sub_request,
+        current_committed_index,
+        &context.historical_reader,
+    )
+    .await?;
+    stream_live_entries(&mut send, &mut context.log_receiver, LiveStreamContext {
+        committed_index: &context.committed_index,
+        hlc: context.hlc,
+        key_prefix: &sub_request.key_prefix,
+        subscriber_id: context.subscriber_id,
+    })
+    .await;
 
     if let Err(finish_err) = send.finish() {
-        debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+        debug!(subscriber_id = context.subscriber_id, error = %finish_err, "failed to finish log subscription stream");
     }
-    if let (Some(registry), Some(id)) = (&watch_registry, watch_id) {
+    if let (Some(registry), Some(id)) = (&context.watch_registry, watch_id) {
         registry.unregister_watch(id);
     }
-    info!(subscriber_id = subscriber_id, "log subscription ended");
+    info!(subscriber_id = context.subscriber_id, "log subscription ended");
     Ok(())
 }

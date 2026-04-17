@@ -150,8 +150,8 @@ pub struct DeployArgs {
     pub max_concurrent: u32,
 
     /// Seconds to wait for a node to become healthy after upgrade.
-    #[arg(long, default_value_t = 120)]
-    pub health_timeout: u64,
+    #[arg(long = "health-timeout", default_value_t = 120)]
+    pub health_timeout_secs: u64,
 
     /// Block until the deployment reaches a terminal state (completed/failed/rolled_back).
     #[arg(long)]
@@ -159,30 +159,30 @@ pub struct DeployArgs {
 
     /// Maximum seconds to wait for deployment completion (requires --wait).
     #[arg(long = "deploy-timeout", default_value_t = 3600)]
-    pub deploy_timeout: u64,
+    pub deploy_timeout_secs: u64,
 }
 
 impl ClusterCommand {
     /// Execute the cluster command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            ClusterCommand::Init(args) => init_cluster(client, json, &args).await,
-            ClusterCommand::Status => cluster_status(client, json).await,
-            ClusterCommand::Health => health_check(client, json).await,
-            ClusterCommand::Metrics => raft_metrics(client, json).await,
-            ClusterCommand::Prometheus => prometheus_metrics(client, json).await,
-            ClusterCommand::AddLearner(args) => add_learner(client, args, json).await,
-            ClusterCommand::Promote(args) => promote_learner(client, args, json).await,
-            ClusterCommand::ChangeMembership(args) => change_membership(client, args, json).await,
-            ClusterCommand::Snapshot => trigger_snapshot(client, json).await,
-            ClusterCommand::CheckpointWal => checkpoint_wal(client, json).await,
-            ClusterCommand::Ticket => get_ticket(client, json).await,
-            ClusterCommand::Deploy(args) => deploy(client, args, json).await,
-            ClusterCommand::DeployStatus => deploy_status(client, json).await,
-            ClusterCommand::Rollback => rollback(client, json).await,
-            ClusterCommand::UpdatePeer(args) => update_peer(client, args, json).await,
-            ClusterCommand::Network => network_metrics(client, json).await,
-            ClusterCommand::Expunge(args) => expunge_node(client, args, json).await,
+            ClusterCommand::Init(args) => init_cluster(client, is_json_output, &args).await,
+            ClusterCommand::Status => cluster_status(client, is_json_output).await,
+            ClusterCommand::Health => health_check(client, is_json_output).await,
+            ClusterCommand::Metrics => raft_metrics(client, is_json_output).await,
+            ClusterCommand::Prometheus => prometheus_metrics(client, is_json_output).await,
+            ClusterCommand::AddLearner(args) => add_learner(client, args, is_json_output).await,
+            ClusterCommand::Promote(args) => promote_learner(client, args, is_json_output).await,
+            ClusterCommand::ChangeMembership(args) => change_membership(client, args, is_json_output).await,
+            ClusterCommand::Snapshot => trigger_snapshot(client, is_json_output).await,
+            ClusterCommand::CheckpointWal => checkpoint_wal(client, is_json_output).await,
+            ClusterCommand::Ticket => get_ticket(client, is_json_output).await,
+            ClusterCommand::Deploy(args) => deploy(client, args, is_json_output).await,
+            ClusterCommand::DeployStatus => deploy_status(client, is_json_output).await,
+            ClusterCommand::Rollback => rollback(client, is_json_output).await,
+            ClusterCommand::UpdatePeer(args) => update_peer(client, args, is_json_output).await,
+            ClusterCommand::Network => network_metrics(client, is_json_output).await,
+            ClusterCommand::Expunge(args) => expunge_node(client, args, is_json_output).await,
         }
     }
 }
@@ -200,7 +200,7 @@ pub struct InitArgs {
     pub trust_threshold: Option<u8>,
 }
 
-async fn init_cluster(client: &AspenClient, json: bool, args: &InitArgs) -> Result<()> {
+async fn init_cluster(client: &AspenClient, is_json_output: bool, args: &InitArgs) -> Result<()> {
     let request = if args.trust {
         ClientRpcRequest::InitClusterWithTrust {
             threshold: args.trust_threshold,
@@ -212,7 +212,7 @@ async fn init_cluster(client: &AspenClient, json: bool, args: &InitArgs) -> Resu
 
     match response {
         ClientRpcResponse::InitResult(result) => {
-            if json {
+            if is_json_output {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -233,7 +233,7 @@ async fn init_cluster(client: &AspenClient, json: bool, args: &InitArgs) -> Resu
     }
 }
 
-async fn cluster_status(client: &AspenClient, json: bool) -> Result<()> {
+async fn cluster_status(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetClusterState).await?;
 
     match response {
@@ -250,7 +250,7 @@ async fn cluster_status(client: &AspenClient, json: bool) -> Result<()> {
                     })
                     .collect(),
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -260,7 +260,7 @@ async fn cluster_status(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn health_check(client: &AspenClient, json: bool) -> Result<()> {
+async fn health_check(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetHealth).await?;
 
     match response {
@@ -272,7 +272,7 @@ async fn health_check(client: &AspenClient, json: bool) -> Result<()> {
                 uptime_seconds: health.uptime_seconds,
                 iroh_node_id: health.iroh_node_id,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -282,7 +282,7 @@ async fn health_check(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn raft_metrics(client: &AspenClient, json: bool) -> Result<()> {
+async fn raft_metrics(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetRaftMetrics).await?;
 
     match response {
@@ -295,7 +295,7 @@ async fn raft_metrics(client: &AspenClient, json: bool) -> Result<()> {
                 last_applied: metrics.last_applied_index.unwrap_or(0),
                 snapshot_index: metrics.snapshot_index.unwrap_or(0),
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -305,12 +305,12 @@ async fn raft_metrics(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn prometheus_metrics(client: &AspenClient, json: bool) -> Result<()> {
+async fn prometheus_metrics(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetMetrics).await?;
 
     match response {
         ClientRpcResponse::Metrics(metrics) => {
-            if json {
+            if is_json_output {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -331,12 +331,12 @@ async fn prometheus_metrics(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn network_metrics(client: &AspenClient, json: bool) -> Result<()> {
+async fn network_metrics(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetNetworkMetrics).await?;
 
     match response {
         ClientRpcResponse::NetworkMetrics(m) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&m)?);
             } else {
                 println!("Connection Pool");
@@ -371,7 +371,7 @@ async fn network_metrics(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn expunge_node(client: &AspenClient, args: ExpungeArgs, json: bool) -> Result<()> {
+async fn expunge_node(client: &AspenClient, args: ExpungeArgs, is_json_output: bool) -> Result<()> {
     if !args.confirm {
         anyhow::bail!(
             "This will permanently remove node {} from the cluster. \
@@ -391,7 +391,7 @@ async fn expunge_node(client: &AspenClient, args: ExpungeArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::ExpungeNodeResult(result) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
                 println!("Node {} has been permanently expunged from the cluster.", result.node_id);
@@ -405,7 +405,7 @@ async fn expunge_node(client: &AspenClient, args: ExpungeArgs, json: bool) -> Re
     }
 }
 
-async fn add_learner(client: &AspenClient, args: AddLearnerArgs, json: bool) -> Result<()> {
+async fn add_learner(client: &AspenClient, args: AddLearnerArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::AddLearner {
             node_id: args.node_id,
@@ -418,7 +418,7 @@ async fn add_learner(client: &AspenClient, args: AddLearnerArgs, json: bool) -> 
             if !result.is_success {
                 anyhow::bail!("add-learner failed: {}", result.error.unwrap_or_else(|| "unknown error".to_string()));
             }
-            print_success(&format!("Learner {} added at {}", args.node_id, args.addr), json);
+            print_success(&format!("Learner {} added at {}", args.node_id, args.addr), is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -428,7 +428,7 @@ async fn add_learner(client: &AspenClient, args: AddLearnerArgs, json: bool) -> 
     }
 }
 
-async fn update_peer(client: &AspenClient, args: UpdatePeerArgs, json: bool) -> Result<()> {
+async fn update_peer(client: &AspenClient, args: UpdatePeerArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::AddPeer {
             node_id: args.node_id,
@@ -442,7 +442,7 @@ async fn update_peer(client: &AspenClient, args: UpdatePeerArgs, json: bool) -> 
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !output.is_success {
                 anyhow::bail!("update-peer failed: {}", output.error.as_deref().unwrap_or("unknown error"));
             }
@@ -455,7 +455,7 @@ async fn update_peer(client: &AspenClient, args: UpdatePeerArgs, json: bool) -> 
     }
 }
 
-async fn promote_learner(client: &AspenClient, args: PromoteArgs, json: bool) -> Result<()> {
+async fn promote_learner(client: &AspenClient, args: PromoteArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::PromoteLearner {
             learner_id: args.learner_id,
@@ -466,7 +466,7 @@ async fn promote_learner(client: &AspenClient, args: PromoteArgs, json: bool) ->
 
     match response {
         ClientRpcResponse::PromoteLearnerResult(result) => {
-            if json {
+            if is_json_output {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -490,7 +490,7 @@ async fn promote_learner(client: &AspenClient, args: PromoteArgs, json: bool) ->
     }
 }
 
-async fn change_membership(client: &AspenClient, args: ChangeMembershipArgs, json: bool) -> Result<()> {
+async fn change_membership(client: &AspenClient, args: ChangeMembershipArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::ChangeMembership {
             members: args.members.clone(),
@@ -505,7 +505,7 @@ async fn change_membership(client: &AspenClient, args: ChangeMembershipArgs, jso
                     result.error.unwrap_or_else(|| "unknown error".to_string())
                 );
             }
-            print_success(&format!("Membership changed to voters: {:?}", args.members), json);
+            print_success(&format!("Membership changed to voters: {:?}", args.members), is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -515,12 +515,12 @@ async fn change_membership(client: &AspenClient, args: ChangeMembershipArgs, jso
     }
 }
 
-async fn trigger_snapshot(client: &AspenClient, json: bool) -> Result<()> {
+async fn trigger_snapshot(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::TriggerSnapshot).await?;
 
     match response {
         ClientRpcResponse::SnapshotResult(_) => {
-            print_success("Snapshot triggered successfully", json);
+            print_success("Snapshot triggered successfully", is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -530,12 +530,12 @@ async fn trigger_snapshot(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn checkpoint_wal(client: &AspenClient, json: bool) -> Result<()> {
+async fn checkpoint_wal(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::CheckpointWal).await?;
 
     match response {
         ClientRpcResponse::CheckpointWalResult(result) => {
-            if json {
+            if is_json_output {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -560,12 +560,12 @@ async fn checkpoint_wal(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn get_ticket(client: &AspenClient, json: bool) -> Result<()> {
+async fn get_ticket(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetClusterTicket).await?;
 
     match response {
         ClientRpcResponse::ClusterTicket(ticket_response) => {
-            if json {
+            if is_json_output {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -584,16 +584,16 @@ async fn get_ticket(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn deploy(client: &AspenClient, args: DeployArgs, json: bool) -> Result<()> {
-    let wait = args.wait;
-    let timeout_secs = args.deploy_timeout;
+async fn deploy(client: &AspenClient, args: DeployArgs, is_json_output: bool) -> Result<()> {
+    let should_wait = args.wait;
+    let timeout_secs = args.deploy_timeout_secs;
 
     let response = client
         .send(ClientRpcRequest::ClusterDeploy {
             artifact: args.artifact,
             strategy: args.strategy,
             max_concurrent: args.max_concurrent,
-            health_timeout_secs: args.health_timeout,
+            health_timeout_secs: args.health_timeout_secs,
             expected_binary: None,
         })
         .await?;
@@ -607,14 +607,14 @@ async fn deploy(client: &AspenClient, args: DeployArgs, json: bool) -> Result<()
             };
 
             if !result.is_accepted {
-                print_output(&output, json);
+                print_output(&output, is_json_output);
                 anyhow::bail!("deployment rejected: {}", result.error.as_deref().unwrap_or("unknown error"));
             }
 
-            print_output(&output, json);
+            print_output(&output, is_json_output);
 
-            if wait {
-                deploy_wait(client, result.deploy_id.as_deref(), timeout_secs, json).await
+            if should_wait {
+                deploy_wait(client, result.deploy_id.as_deref(), timeout_secs, is_json_output).await
             } else {
                 Ok(())
             }
@@ -626,7 +626,7 @@ async fn deploy(client: &AspenClient, args: DeployArgs, json: bool) -> Result<()
     }
 }
 
-async fn deploy_status(client: &AspenClient, json: bool) -> Result<()> {
+async fn deploy_status(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ClusterDeployStatus).await?;
 
     match response {
@@ -649,7 +649,7 @@ async fn deploy_status(client: &AspenClient, json: bool) -> Result<()> {
                 elapsed_ms: result.elapsed_ms,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -659,7 +659,7 @@ async fn deploy_status(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn rollback(client: &AspenClient, json: bool) -> Result<()> {
+async fn rollback(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ClusterRollback).await?;
 
     match response {
@@ -669,7 +669,7 @@ async fn rollback(client: &AspenClient, json: bool) -> Result<()> {
                 deploy_id: result.deploy_id,
                 error: result.error.clone(),
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_accepted {
                 anyhow::bail!("rollback rejected: {}", result.error.as_deref().unwrap_or("unknown error"));
             }
@@ -682,6 +682,26 @@ async fn rollback(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
+fn deploy_wait_max_attempts(timeout_secs: u64) -> u64 {
+    timeout_secs.saturating_div(5).saturating_add(2)
+}
+
+#[allow(
+    ambient_clock,
+    reason = "CLI deploy wait needs a monotonic start instant while polling restart progress"
+)]
+fn deploy_wait_start() -> tokio::time::Instant {
+    tokio::time::Instant::now()
+}
+
+#[allow(
+    ambient_clock,
+    reason = "CLI deploy wait compares elapsed monotonic time against a timeout deadline"
+)]
+fn has_deploy_wait_timed_out(deadline: tokio::time::Instant) -> bool {
+    tokio::time::Instant::now() >= deadline
+}
+
 /// Poll deployment status until a terminal state or timeout.
 ///
 /// Diffs per-node statuses against a snapshot and prints transitions.
@@ -691,7 +711,12 @@ async fn rollback(client: &AspenClient, json: bool) -> Result<()> {
 /// During a rolling deploy, nodes restart — connection failures are expected.
 /// This function tolerates errors for the entire deploy timeout duration,
 /// using backoff to reduce QUIC pressure when nodes are temporarily down.
-async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs: u64, json: bool) -> Result<()> {
+async fn deploy_wait(
+    client: &AspenClient,
+    deploy_id: Option<&str>,
+    timeout_secs: u64,
+    is_json_output: bool,
+) -> Result<()> {
     use std::collections::HashMap;
 
     const BASE_POLL_INTERVAL_SECS: u64 = 5;
@@ -701,27 +726,32 @@ async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs
     /// Print a warning every N consecutive errors (every ~50s at error interval).
     const WARN_EVERY_N_ERRORS: u32 = 5;
 
-    let base_interval = std::time::Duration::from_secs(BASE_POLL_INTERVAL_SECS);
-    let error_interval = std::time::Duration::from_secs(ERROR_POLL_INTERVAL_SECS);
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    const MAX_DEPLOY_STATUS_ENTRIES: usize = 1_000;
+
+    let base_sleep = std::time::Duration::from_secs(BASE_POLL_INTERVAL_SECS);
+    let error_sleep = std::time::Duration::from_secs(ERROR_POLL_INTERVAL_SECS);
+    let deadline = deploy_wait_start() + std::time::Duration::from_secs(timeout_secs);
+
+    debug_assert!(BASE_POLL_INTERVAL_SECS >= 1);
+    debug_assert!(ERROR_POLL_INTERVAL_SECS >= BASE_POLL_INTERVAL_SECS);
 
     // Track per-node status for diff-based output.
-    let mut prev_statuses: HashMap<u64, String> = HashMap::new();
+    let mut prev_statuses: HashMap<u64, String> = HashMap::with_capacity(MAX_DEPLOY_STATUS_ENTRIES);
     // Count consecutive RPC errors for logging.
     let mut consecutive_errors: u32 = 0;
 
-    loop {
+    for _poll_attempt in 0..deploy_wait_max_attempts(timeout_secs) {
         // Use longer interval when errors persist — nodes are restarting
         // and hammering QUIC makes reconnection slower.
-        let interval = if consecutive_errors > 0 {
-            error_interval
+        let current_sleep = if consecutive_errors > 0 {
+            error_sleep
         } else {
-            base_interval
+            base_sleep
         };
-        tokio::time::sleep(interval).await;
+        tokio::time::sleep(current_sleep).await;
 
         // Check timeout.
-        if tokio::time::Instant::now() >= deadline {
+        if has_deploy_wait_timed_out(deadline) {
             let final_nodes: Vec<DeployNodeStatusEntry> = prev_statuses
                 .iter()
                 .map(|(id, status)| DeployNodeStatusEntry {
@@ -737,28 +767,28 @@ async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs
                 nodes: final_nodes,
                 error: Some(format!("timed out after {}s", timeout_secs)),
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             // Exit code 2 for timeout — caller uses process::exit(2).
             std::process::exit(2);
         }
 
         let response = match client.send(ClientRpcRequest::ClusterDeployStatus).await {
-            Ok(r) => {
-                if consecutive_errors > 0 && !json {
+            Ok(response) => {
+                if consecutive_errors > 0 && !is_json_output {
                     eprintln!("info: reconnected after {} consecutive errors", consecutive_errors);
                 }
                 consecutive_errors = 0;
-                r
+                response
             }
-            Err(e) => {
-                consecutive_errors += 1;
+            Err(error) => {
+                consecutive_errors = consecutive_errors.saturating_add(1);
                 // Periodic warnings — not a hard failure. During a rolling
                 // deploy, the node we're connected to may be the one
                 // restarting. The deploy timeout is the real deadline.
-                if !json && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
+                if !is_json_output && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
                     eprintln!(
                         "warning: status poll error ({} consecutive, will retry until deploy timeout): {}",
-                        consecutive_errors, e
+                        consecutive_errors, error
                     );
                 }
                 continue;
@@ -776,31 +806,32 @@ async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs
                         nodes: vec![],
                         error: None,
                     };
-                    print_output(&output, json);
+                    print_output(&output, is_json_output);
                     return Ok(());
                 }
 
                 // Verify we're tracking the right deployment.
-                if let (Some(expected), Some(actual)) = (deploy_id, &result.deploy_id) {
-                    if expected != actual {
-                        anyhow::bail!("deployment ID mismatch: expected {}, found {}", expected, actual);
-                    }
+                if let (Some(expected), Some(actual)) = (deploy_id, &result.deploy_id)
+                    && expected != actual
+                {
+                    anyhow::bail!("deployment ID mismatch: expected {}, found {}", expected, actual);
                 }
 
                 let elapsed_secs = result.elapsed_ms.unwrap_or(0) / 1000;
 
                 // Emit per-node status diffs.
+                debug_assert!(result.nodes.len() <= MAX_DEPLOY_STATUS_ENTRIES);
                 for node in &result.nodes {
-                    let prev = prev_statuses.get(&node.node_id).cloned().unwrap_or_default();
-                    if prev != node.status {
+                    let previous_status = prev_statuses.get(&node.node_id).cloned().unwrap_or_default();
+                    if previous_status != node.status {
                         let transition = DeployWaitOutput {
                             node_id: node.node_id,
-                            old_status: prev,
+                            old_status: previous_status,
                             new_status: node.status.clone(),
                             error: node.error.clone(),
                             elapsed_secs,
                         };
-                        print_output(&transition, json);
+                        print_output(&transition, is_json_output);
                         prev_statuses.insert(node.node_id, node.status.clone());
                     }
                 }
@@ -816,15 +847,15 @@ async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs
                             nodes: result
                                 .nodes
                                 .iter()
-                                .map(|n| DeployNodeStatusEntry {
-                                    node_id: n.node_id,
-                                    status: n.status.clone(),
-                                    error: n.error.clone(),
+                                .map(|node| DeployNodeStatusEntry {
+                                    node_id: node.node_id,
+                                    status: node.status.clone(),
+                                    error: node.error.clone(),
                                 })
                                 .collect(),
                             error: None,
                         };
-                        print_output(&output, json);
+                        print_output(&output, is_json_output);
                         return Ok(());
                     }
                     "failed" | "rolled_back" => {
@@ -835,42 +866,44 @@ async fn deploy_wait(client: &AspenClient, deploy_id: Option<&str>, timeout_secs
                             nodes: result
                                 .nodes
                                 .iter()
-                                .map(|n| DeployNodeStatusEntry {
-                                    node_id: n.node_id,
-                                    status: n.status.clone(),
-                                    error: n.error.clone(),
+                                .map(|node| DeployNodeStatusEntry {
+                                    node_id: node.node_id,
+                                    status: node.status.clone(),
+                                    error: node.error.clone(),
                                 })
                                 .collect(),
                             error: result.error.clone(),
                         };
-                        print_output(&output, json);
+                        print_output(&output, is_json_output);
                         anyhow::bail!("deployment {}: {}", status, result.error.as_deref().unwrap_or("unknown error"));
                     }
                     _ => { /* still in progress */ }
                 }
             }
-            ClientRpcResponse::Error(e) => {
-                if e.code.contains("DEPLOY_UNAVAILABLE") {
+            ClientRpcResponse::Error(error) => {
+                if error.code.contains("DEPLOY_UNAVAILABLE") {
                     anyhow::bail!("deploy feature not enabled on server");
                 }
                 // RPC-level errors during deploy are expected — the node
                 // may be mid-restart. Track for logging but don't bail;
                 // the deploy timeout is the real deadline.
-                consecutive_errors += 1;
-                if !json && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
+                consecutive_errors = consecutive_errors.saturating_add(1);
+                if !is_json_output && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
                     eprintln!(
                         "warning: status poll RPC error ({} consecutive): {}: {}",
-                        consecutive_errors, e.code, e.message
+                        consecutive_errors, error.code, error.message
                     );
                 }
             }
             _ => {
-                if !json {
+                if !is_json_output {
                     eprintln!("warning: unexpected response during status poll");
                 }
             }
         }
     }
+
+    anyhow::bail!("deployment polling exceeded bounded attempts after {}s", timeout_secs)
 }
 
 #[cfg(test)]
@@ -910,7 +943,7 @@ mod tests {
                     assert_eq!(args.artifact, "/nix/store/abc123-aspen-node");
                     assert_eq!(args.strategy, "rolling");
                     assert_eq!(args.max_concurrent, 3);
-                    assert_eq!(args.health_timeout, 60);
+                    assert_eq!(args.health_timeout_secs, 60);
                 }
                 other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
             },
@@ -929,7 +962,7 @@ mod tests {
                 ClusterCommand::Deploy(args) => {
                     assert_eq!(args.strategy, "rolling");
                     assert_eq!(args.max_concurrent, 1);
-                    assert_eq!(args.health_timeout, 120);
+                    assert_eq!(args.health_timeout_secs, 120);
                 }
                 other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
             },
@@ -1000,7 +1033,7 @@ mod tests {
             crate::cli::Commands::Cluster(cmd) => match cmd {
                 ClusterCommand::Deploy(args) => {
                     assert!(args.wait);
-                    assert_eq!(args.deploy_timeout, 3600); // default
+                    assert_eq!(args.deploy_timeout_secs, 3600); // default
                 }
                 other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
             },
@@ -1026,7 +1059,7 @@ mod tests {
             crate::cli::Commands::Cluster(cmd) => match cmd {
                 ClusterCommand::Deploy(args) => {
                     assert!(args.wait);
-                    assert_eq!(args.deploy_timeout, 120);
+                    assert_eq!(args.deploy_timeout_secs, 120);
                 }
                 other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
             },
@@ -1052,7 +1085,7 @@ mod tests {
             crate::cli::Commands::Cluster(cmd) => match cmd {
                 ClusterCommand::Deploy(args) => {
                     assert!(!args.wait);
-                    assert_eq!(args.deploy_timeout, 60);
+                    assert_eq!(args.deploy_timeout_secs, 60);
                 }
                 other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
             },
@@ -1070,7 +1103,7 @@ mod tests {
             crate::cli::Commands::Cluster(cmd) => match cmd {
                 ClusterCommand::Deploy(args) => {
                     assert!(!args.wait);
-                    assert_eq!(args.deploy_timeout, 3600);
+                    assert_eq!(args.deploy_timeout_secs, 3600);
                 }
                 other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
             },
@@ -1104,9 +1137,9 @@ mod tests {
                     assert_eq!(args.artifact, "/nix/store/abc");
                     assert_eq!(args.strategy, "rolling");
                     assert_eq!(args.max_concurrent, 2);
-                    assert_eq!(args.health_timeout, 60);
+                    assert_eq!(args.health_timeout_secs, 60);
                     assert!(args.wait);
-                    assert_eq!(args.deploy_timeout, 900);
+                    assert_eq!(args.deploy_timeout_secs, 900);
                 }
                 other => panic!("expected Deploy, got {:?}", std::mem::discriminant(&other)),
             },

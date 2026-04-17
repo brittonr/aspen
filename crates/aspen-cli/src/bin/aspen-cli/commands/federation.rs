@@ -98,8 +98,8 @@ pub struct SyncArgs {
     pub addr: Option<String>,
 
     /// After discovering refs, also fetch ref objects and persist locally.
-    #[arg(long)]
-    pub fetch: bool,
+    #[arg(long = "fetch")]
+    pub is_fetch: bool,
 
     /// Repo ID (hex-encoded) for bidirectional sync. When set, compares
     /// local and remote ref heads and transfers objects in both directions.
@@ -107,8 +107,8 @@ pub struct SyncArgs {
     pub repo: Option<String>,
 
     /// On divergent refs, local wins (push to remote). Default: remote wins (pull).
-    #[arg(long)]
-    pub push_wins: bool,
+    #[arg(long = "push-wins")]
+    pub is_push_wins: bool,
 }
 
 /// Arguments for federation fetch command.
@@ -346,29 +346,29 @@ impl Outputable for FederationSuccessOutput {
 
 impl FederationCommand {
     /// Execute the federation command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            FederationCommand::Status => federation_status(client, json).await,
-            FederationCommand::Peers => federation_peers(client, json).await,
-            FederationCommand::Peer(args) => federation_peer(client, args, json).await,
-            FederationCommand::Trust(args) => federation_trust(client, args, json).await,
-            FederationCommand::Untrust(args) => federation_untrust(client, args, json).await,
-            FederationCommand::Federate(args) => federation_federate(client, args, json).await,
-            FederationCommand::ListFederated => federation_list_federated(client, json).await,
-            FederationCommand::Sync(args) => federation_sync(client, args, json).await,
-            FederationCommand::Fetch(args) => federation_fetch(client, args, json).await,
-            FederationCommand::Pull(args) => federation_pull(client, args, json).await,
-            FederationCommand::Push(args) => federation_push(client, args, json).await,
-            FederationCommand::Grant(args) => federation_grant(client, args, json).await,
+            FederationCommand::Status => federation_status(client, is_json_output).await,
+            FederationCommand::Peers => federation_peers(client, is_json_output).await,
+            FederationCommand::Peer(args) => federation_peer(client, args, is_json_output).await,
+            FederationCommand::Trust(args) => federation_trust(client, args, is_json_output).await,
+            FederationCommand::Untrust(args) => federation_untrust(client, args, is_json_output).await,
+            FederationCommand::Federate(args) => federation_federate(client, args, is_json_output).await,
+            FederationCommand::ListFederated => federation_list_federated(client, is_json_output).await,
+            FederationCommand::Sync(args) => federation_sync(client, args, is_json_output).await,
+            FederationCommand::Fetch(args) => federation_fetch(client, args, is_json_output).await,
+            FederationCommand::Pull(args) => federation_pull(client, args, is_json_output).await,
+            FederationCommand::Push(args) => federation_push(client, args, is_json_output).await,
+            FederationCommand::Grant(args) => federation_grant(client, args, is_json_output).await,
             FederationCommand::Token(cmd) => match cmd {
-                TokenCommand::List => federation_token_list(client, json).await,
-                TokenCommand::Inspect(args) => federation_token_inspect(args, json).await,
+                TokenCommand::List => federation_token_list(client, is_json_output).await,
+                TokenCommand::Inspect(args) => federation_token_inspect(args, is_json_output).await,
             },
         }
     }
 }
 
-async fn federation_status(client: &AspenClient, json: bool) -> Result<()> {
+async fn federation_status(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetFederationStatus).await?;
 
     match response {
@@ -383,7 +383,7 @@ async fn federation_status(client: &AspenClient, json: bool) -> Result<()> {
                 federated_repos: status.federated_repos,
                 error: status.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -391,7 +391,7 @@ async fn federation_status(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn federation_peers(client: &AspenClient, json: bool) -> Result<()> {
+async fn federation_peers(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ListDiscoveredClusters).await?;
 
     match response {
@@ -413,7 +413,7 @@ async fn federation_peers(client: &AspenClient, json: bool) -> Result<()> {
                 count: result.count,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -421,7 +421,7 @@ async fn federation_peers(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn federation_peer(client: &AspenClient, args: PeerArgs, json: bool) -> Result<()> {
+async fn federation_peer(client: &AspenClient, args: PeerArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::GetDiscoveredCluster {
             cluster_key: args.cluster_key.clone(),
@@ -437,12 +437,12 @@ async fn federation_peer(client: &AspenClient, args: PeerArgs, json: bool) -> Re
                     message: None,
                     error: Some(format!("Cluster not found: {}", args.cluster_key)),
                 };
-                print_output(&output, json);
+                print_output(&output, is_json_output);
                 std::process::exit(1);
             }
 
             // For now, just show the raw JSON
-            if json {
+            if is_json_output {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -470,7 +470,7 @@ async fn federation_peer(client: &AspenClient, args: PeerArgs, json: bool) -> Re
     }
 }
 
-async fn federation_trust(client: &AspenClient, args: TrustArgs, json: bool) -> Result<()> {
+async fn federation_trust(client: &AspenClient, args: TrustArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::TrustCluster {
             cluster_key: args.cluster_key.clone(),
@@ -489,7 +489,7 @@ async fn federation_trust(client: &AspenClient, args: TrustArgs, json: bool) -> 
                 },
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -500,7 +500,7 @@ async fn federation_trust(client: &AspenClient, args: TrustArgs, json: bool) -> 
     }
 }
 
-async fn federation_untrust(client: &AspenClient, args: UntrustArgs, json: bool) -> Result<()> {
+async fn federation_untrust(client: &AspenClient, args: UntrustArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::UntrustCluster {
             cluster_key: args.cluster_key.clone(),
@@ -519,7 +519,7 @@ async fn federation_untrust(client: &AspenClient, args: UntrustArgs, json: bool)
                 },
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -530,7 +530,7 @@ async fn federation_untrust(client: &AspenClient, args: UntrustArgs, json: bool)
     }
 }
 
-async fn federation_federate(client: &AspenClient, args: FederateArgs, json: bool) -> Result<()> {
+async fn federation_federate(client: &AspenClient, args: FederateArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::FederateRepository {
             repo_id: args.repo_id.clone(),
@@ -550,7 +550,7 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
                 },
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -561,18 +561,28 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
     }
 }
 
-async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<()> {
+async fn federation_sync(client: &AspenClient, args: SyncArgs, is_json_output: bool) -> Result<()> {
     // If --repo is set, dispatch to bidirectional sync
     if let Some(ref repo) = args.repo {
-        return federation_bidi_sync(client, &args.peer, args.addr.as_deref(), repo, args.push_wins, json).await;
+        return federation_bidi_sync(
+            client,
+            BidiSyncTarget {
+                peer: &args.peer,
+                addr: args.addr.as_deref(),
+                repo,
+                is_push_wins: args.is_push_wins,
+            },
+            is_json_output,
+        )
+        .await;
     }
 
     // Validate: --push-wins only makes sense with --repo
-    if args.push_wins {
+    if args.is_push_wins {
         anyhow::bail!("--push-wins requires --repo (bidirectional sync mode)");
     }
 
-    let do_fetch = args.fetch;
+    let should_fetch_refs = args.is_fetch;
     let peer = args.peer.clone();
     let addr = args.addr.clone();
 
@@ -585,7 +595,7 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::FederationSyncPeerResult(result) => {
-            if json && !do_fetch {
+            if is_json_output && !should_fetch_refs {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
                 println!("Federation sync successful!");
@@ -605,11 +615,11 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Re
                 }
 
                 // If --fetch was requested, fetch refs for each discovered resource
-                if do_fetch {
+                if should_fetch_refs {
                     println!();
                     for r in &result.resources {
                         if let Some(ref fid) = r.fed_id {
-                            print_fetch_result(client, &peer, addr.as_deref(), fid, json).await?;
+                            print_fetch_result(client, &peer, addr.as_deref(), fid, is_json_output).await?;
                         }
                     }
                 }
@@ -624,35 +634,39 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Re
     }
 }
 
-async fn federation_bidi_sync(
-    client: &AspenClient,
-    peer: &str,
-    addr: Option<&str>,
-    repo: &str,
-    push_wins: bool,
-    json: bool,
-) -> Result<()> {
+struct BidiSyncTarget<'a> {
+    peer: &'a str,
+    addr: Option<&'a str>,
+    repo: &'a str,
+    is_push_wins: bool,
+}
+
+async fn federation_bidi_sync(client: &AspenClient, target: BidiSyncTarget<'_>, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::FederationBidiSync {
-            peer_node_id: peer.to_string(),
-            peer_addr: addr.map(|s| s.to_string()),
-            repo_id: repo.to_string(),
-            push_wins,
+            peer_node_id: target.peer.to_string(),
+            peer_addr: target.addr.map(str::to_string),
+            repo_id: target.repo.to_string(),
+            push_wins: target.is_push_wins,
         })
         .await?;
 
     match response {
         ClientRpcResponse::FederationBidiSyncResult(result) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success || result.error.is_none() {
-                println!("Bidirectional sync complete for repo {}", repo);
+                println!("Bidirectional sync complete for repo {}", target.repo);
                 println!("  Pulled:             {} objects", result.pulled);
                 println!("  Pushed:             {} objects", result.pushed);
                 println!("  Pull refs updated:  {}", result.pull_refs_updated);
                 println!("  Push refs updated:  {}", result.push_refs_updated);
                 if !result.conflicts.is_empty() {
-                    let direction = if push_wins { "local wins" } else { "remote wins" };
+                    let direction = if target.is_push_wins {
+                        "local wins"
+                    } else {
+                        "remote wins"
+                    };
                     println!("  Conflicts ({}):  {}", direction, result.conflicts.join(", "));
                 }
                 if !result.errors.is_empty() {
@@ -672,8 +686,8 @@ async fn federation_bidi_sync(
     }
 }
 
-async fn federation_fetch(client: &AspenClient, args: FetchArgs, json: bool) -> Result<()> {
-    print_fetch_result(client, &args.peer, args.addr.as_deref(), &args.fed_id, json).await
+async fn federation_fetch(client: &AspenClient, args: FetchArgs, is_json_output: bool) -> Result<()> {
+    print_fetch_result(client, &args.peer, args.addr.as_deref(), &args.fed_id, is_json_output).await
 }
 
 async fn print_fetch_result(
@@ -681,7 +695,7 @@ async fn print_fetch_result(
     peer: &str,
     addr: Option<&str>,
     fed_id: &str,
-    json: bool,
+    is_json_output: bool,
 ) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::FederationFetchRefs {
@@ -693,7 +707,7 @@ async fn print_fetch_result(
 
     match response {
         ClientRpcResponse::FederationFetchRefsResult(result) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success || result.error.is_none() {
                 let short_id = if fed_id.len() > 24 { &fed_id[..24] } else { fed_id };
@@ -717,12 +731,12 @@ async fn print_fetch_result(
     }
 }
 
-async fn federation_list_federated(client: &AspenClient, json: bool) -> Result<()> {
+async fn federation_list_federated(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ListFederatedRepositories).await?;
 
     match response {
         ClientRpcResponse::FederatedRepositories(result) => {
-            if json {
+            if is_json_output {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -748,7 +762,7 @@ async fn federation_list_federated(client: &AspenClient, json: bool) -> Result<(
     }
 }
 
-async fn federation_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<()> {
+async fn federation_pull(client: &AspenClient, args: PullArgs, is_json_output: bool) -> Result<()> {
     // Validate: --addr only makes sense with --peer
     if args.addr.is_some() && args.peer.is_none() {
         anyhow::bail!("--addr requires --peer (cold-pull mode)");
@@ -780,7 +794,7 @@ async fn federation_pull(client: &AspenClient, args: PullArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::FederationPullResult(result) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success || result.error.is_none() {
                 println!("Pull complete for {} {}", label, args.repo);
@@ -803,7 +817,7 @@ async fn federation_pull(client: &AspenClient, args: PullArgs, json: bool) -> Re
     }
 }
 
-async fn federation_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
+async fn federation_push(client: &AspenClient, args: PushArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::FederationPush {
             peer_node_id: args.peer.clone(),
@@ -814,7 +828,7 @@ async fn federation_push(client: &AspenClient, args: PushArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::FederationPushResult(result) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
                 println!("Push complete!");
@@ -838,7 +852,7 @@ async fn federation_push(client: &AspenClient, args: PushArgs, json: bool) -> Re
     }
 }
 
-async fn federation_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Result<()> {
+async fn federation_grant(client: &AspenClient, args: GrantArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::FederationGrant {
             audience: args.audience.clone(),
@@ -849,7 +863,7 @@ async fn federation_grant(client: &AspenClient, args: GrantArgs, json: bool) -> 
 
     match response {
         ClientRpcResponse::FederationGrantResult(result) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
                 println!("Token issued successfully");
@@ -872,12 +886,12 @@ async fn federation_grant(client: &AspenClient, args: GrantArgs, json: bool) -> 
     }
 }
 
-async fn federation_token_list(client: &AspenClient, json: bool) -> Result<()> {
+async fn federation_token_list(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::FederationListTokens).await?;
 
     match response {
         ClientRpcResponse::FederationListTokensResult(result) => {
-            if json {
+            if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if let Some(ref err) = result.error {
                 eprintln!("Error: {}", err);
@@ -902,30 +916,41 @@ async fn federation_token_list(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
+#[allow(
+    ambient_clock,
+    reason = "CLI federation token inspection needs current wall-clock time for human expiry formatting"
+)]
+fn current_unix_time_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
+}
+
 fn format_expiry(expires_at: u64) -> String {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    if expires_at <= now {
-        "EXPIRED".to_string()
+    let now_secs = current_unix_time_secs();
+    if expires_at <= now_secs {
+        return "EXPIRED".to_string();
+    }
+
+    let remaining_secs = expires_at.saturating_sub(now_secs);
+    if remaining_secs < 3600 {
+        format!("in {} minutes", remaining_secs / 60)
+    } else if remaining_secs < 86400 {
+        format!("in {} hours", remaining_secs / 3600)
     } else {
-        let remaining = expires_at - now;
-        if remaining < 3600 {
-            format!("in {} minutes", remaining / 60)
-        } else if remaining < 86400 {
-            format!("in {} hours", remaining / 3600)
-        } else {
-            format!("in {} days", remaining / 86400)
-        }
+        format!("in {} days", remaining_secs / 86400)
     }
 }
 
-async fn federation_token_inspect(args: InspectArgs, json: bool) -> Result<()> {
+async fn federation_token_inspect(args: InspectArgs, is_json_output: bool) -> Result<()> {
     // Decode without verification — show credential fields
     let credential = aspen_auth::Credential::from_base64(&args.token_b64)
         .map_err(|e| anyhow::anyhow!("failed to decode credential: {}", e))?;
 
     let token = &credential.token;
 
-    if json {
+    if is_json_output {
         println!("{}", serde_json::to_string_pretty(&credential)?);
     } else {
         println!("Federation Credential (unverified)");

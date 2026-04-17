@@ -71,8 +71,8 @@ pub struct CreateBookArgs {
 #[derive(Args)]
 pub struct ListBooksArgs {
     /// Maximum number of books to return.
-    #[arg(long)]
-    pub limit: Option<u32>,
+    #[arg(long = "limit")]
+    pub max_results: Option<u32>,
 }
 
 #[derive(Args)]
@@ -127,8 +127,8 @@ pub struct ListContactsArgs {
     #[arg(long)]
     pub book: String,
     /// Maximum number of contacts to return.
-    #[arg(long)]
-    pub limit: Option<u32>,
+    #[arg(long = "limit")]
+    pub max_results: Option<u32>,
 }
 
 #[derive(Args)]
@@ -139,8 +139,8 @@ pub struct SearchContactsArgs {
     #[arg(long)]
     pub book: Option<String>,
     /// Maximum number of results.
-    #[arg(long)]
-    pub limit: Option<u32>,
+    #[arg(long = "limit")]
+    pub max_results: Option<u32>,
 }
 
 #[derive(Args)]
@@ -182,27 +182,27 @@ pub struct DeleteGroupArgs {
 }
 
 impl ContactsCommand {
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            Self::CreateBook(a) => create_book(client, a, json).await,
-            Self::ListBooks(a) => list_books(client, a, json).await,
-            Self::DeleteBook(a) => delete_book(client, a, json).await,
-            Self::Add(a) => add_contact(client, a, json).await,
-            Self::Get(a) => get_contact(client, a, json).await,
-            Self::Update(a) => update_contact(client, a, json).await,
-            Self::Delete(a) => delete_contact(client, a, json).await,
-            Self::List(a) => list_contacts(client, a, json).await,
-            Self::Search(a) => search_contacts(client, a, json).await,
-            Self::Import(a) => import_contacts(client, a, json).await,
-            Self::Export(a) => export_contacts(client, a, json).await,
-            Self::CreateGroup(a) => create_group(client, a, json).await,
-            Self::ListGroups(a) => list_groups(client, a, json).await,
-            Self::DeleteGroup(a) => delete_group(client, a, json).await,
+            Self::CreateBook(a) => create_book(client, a, is_json_output).await,
+            Self::ListBooks(a) => list_books(client, a, is_json_output).await,
+            Self::DeleteBook(a) => delete_book(client, a, is_json_output).await,
+            Self::Add(a) => add_contact(client, a, is_json_output).await,
+            Self::Get(a) => get_contact(client, a, is_json_output).await,
+            Self::Update(a) => update_contact(client, a, is_json_output).await,
+            Self::Delete(a) => delete_contact(client, a, is_json_output).await,
+            Self::List(a) => list_contacts(client, a, is_json_output).await,
+            Self::Search(a) => search_contacts(client, a, is_json_output).await,
+            Self::Import(a) => import_contacts(client, a, is_json_output).await,
+            Self::Export(a) => export_contacts(client, a, is_json_output).await,
+            Self::CreateGroup(a) => create_group(client, a, is_json_output).await,
+            Self::ListGroups(a) => list_groups(client, a, is_json_output).await,
+            Self::DeleteGroup(a) => delete_group(client, a, is_json_output).await,
         }
     }
 }
 
-async fn create_book(client: &AspenClient, args: CreateBookArgs, json: bool) -> Result<()> {
+async fn create_book(client: &AspenClient, args: CreateBookArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsCreateBook {
             name: args.name,
@@ -219,7 +219,7 @@ async fn create_book(client: &AspenClient, args: CreateBookArgs, json: bool) -> 
                     error: r.error,
                     label: "book",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -228,15 +228,19 @@ async fn create_book(client: &AspenClient, args: CreateBookArgs, json: bool) -> 
     }
 }
 
-async fn list_books(client: &AspenClient, args: ListBooksArgs, json: bool) -> Result<()> {
-    let resp = client.send(ClientRpcRequest::ContactsListBooks { limit: args.limit }).await?;
+async fn list_books(client: &AspenClient, args: ListBooksArgs, is_json_output: bool) -> Result<()> {
+    let resp = client
+        .send(ClientRpcRequest::ContactsListBooks {
+            limit: args.max_results,
+        })
+        .await?;
     match resp {
         ClientRpcResponse::ContactsBookListResult(r) => {
             let output = BookListOutput {
                 books: r.books,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -244,7 +248,7 @@ async fn list_books(client: &AspenClient, args: ListBooksArgs, json: bool) -> Re
     }
 }
 
-async fn delete_book(client: &AspenClient, args: DeleteBookArgs, json: bool) -> Result<()> {
+async fn delete_book(client: &AspenClient, args: DeleteBookArgs, is_json_output: bool) -> Result<()> {
     let resp = client.send(ClientRpcRequest::ContactsDeleteBook { book_id: args.book_id }).await?;
     match resp {
         ClientRpcResponse::ContactsBookResult(r) => {
@@ -256,7 +260,7 @@ async fn delete_book(client: &AspenClient, args: DeleteBookArgs, json: bool) -> 
                     error: r.error,
                     label: "book",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -265,7 +269,7 @@ async fn delete_book(client: &AspenClient, args: DeleteBookArgs, json: bool) -> 
     }
 }
 
-async fn add_contact(client: &AspenClient, args: AddContactArgs, json: bool) -> Result<()> {
+async fn add_contact(client: &AspenClient, args: AddContactArgs, is_json_output: bool) -> Result<()> {
     // Build a minimal vCard from CLI args.
     let mut vcard = format!("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:{}\r\n", args.name);
     if let Some(email) = &args.email {
@@ -295,7 +299,7 @@ async fn add_contact(client: &AspenClient, args: AddContactArgs, json: bool) -> 
                     error: r.error,
                     label: "contact",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -304,7 +308,7 @@ async fn add_contact(client: &AspenClient, args: AddContactArgs, json: bool) -> 
     }
 }
 
-async fn get_contact(client: &AspenClient, args: GetContactArgs, json: bool) -> Result<()> {
+async fn get_contact(client: &AspenClient, args: GetContactArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsGetContact {
             contact_id: args.contact_id,
@@ -312,14 +316,14 @@ async fn get_contact(client: &AspenClient, args: GetContactArgs, json: bool) -> 
         .await?;
     match resp {
         ClientRpcResponse::ContactsResult(r) => {
-            if json {
+            if is_json_output {
                 print_output(
                     &VcardOutput {
                         vcard_data: r.vcard_data,
                         contact_id: r.contact_id,
                         error: r.error,
                     },
-                    json,
+                    is_json_output,
                 );
             } else if let Some(vcard) = &r.vcard_data {
                 println!("{vcard}");
@@ -333,7 +337,7 @@ async fn get_contact(client: &AspenClient, args: GetContactArgs, json: bool) -> 
     }
 }
 
-async fn update_contact(client: &AspenClient, args: UpdateContactArgs, json: bool) -> Result<()> {
+async fn update_contact(client: &AspenClient, args: UpdateContactArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsUpdateContact {
             contact_id: args.contact_id,
@@ -350,7 +354,7 @@ async fn update_contact(client: &AspenClient, args: UpdateContactArgs, json: boo
                     error: r.error,
                     label: "contact",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -359,7 +363,7 @@ async fn update_contact(client: &AspenClient, args: UpdateContactArgs, json: boo
     }
 }
 
-async fn delete_contact(client: &AspenClient, args: DeleteContactArgs, json: bool) -> Result<()> {
+async fn delete_contact(client: &AspenClient, args: DeleteContactArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsDeleteContact {
             contact_id: args.contact_id,
@@ -375,7 +379,7 @@ async fn delete_contact(client: &AspenClient, args: DeleteContactArgs, json: boo
                     error: r.error,
                     label: "contact",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -384,11 +388,11 @@ async fn delete_contact(client: &AspenClient, args: DeleteContactArgs, json: boo
     }
 }
 
-async fn list_contacts(client: &AspenClient, args: ListContactsArgs, json: bool) -> Result<()> {
+async fn list_contacts(client: &AspenClient, args: ListContactsArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsListContacts {
             book_id: args.book,
-            limit: args.limit,
+            limit: args.max_results,
             continuation_token: None,
         })
         .await?;
@@ -399,7 +403,7 @@ async fn list_contacts(client: &AspenClient, args: ListContactsArgs, json: bool)
                 total: r.total,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -407,12 +411,12 @@ async fn list_contacts(client: &AspenClient, args: ListContactsArgs, json: bool)
     }
 }
 
-async fn search_contacts(client: &AspenClient, args: SearchContactsArgs, json: bool) -> Result<()> {
+async fn search_contacts(client: &AspenClient, args: SearchContactsArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsSearchContacts {
             query: args.query,
             book_id: args.book,
-            limit: args.limit,
+            limit: args.max_results,
         })
         .await?;
     match resp {
@@ -422,7 +426,7 @@ async fn search_contacts(client: &AspenClient, args: SearchContactsArgs, json: b
                 total: r.total,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -430,7 +434,7 @@ async fn search_contacts(client: &AspenClient, args: SearchContactsArgs, json: b
     }
 }
 
-async fn import_contacts(client: &AspenClient, args: ImportArgs, json: bool) -> Result<()> {
+async fn import_contacts(client: &AspenClient, args: ImportArgs, is_json_output: bool) -> Result<()> {
     let vcard_data =
         std::fs::read_to_string(&args.file).map_err(|e| anyhow::anyhow!("failed to read {}: {}", args.file, e))?;
     let resp = client
@@ -448,7 +452,7 @@ async fn import_contacts(client: &AspenClient, args: ImportArgs, json: bool) -> 
                     error: r.error,
                     op: "imported",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -457,11 +461,11 @@ async fn import_contacts(client: &AspenClient, args: ImportArgs, json: bool) -> 
     }
 }
 
-async fn export_contacts(client: &AspenClient, args: ExportArgs, json: bool) -> Result<()> {
+async fn export_contacts(client: &AspenClient, args: ExportArgs, is_json_output: bool) -> Result<()> {
     let resp = client.send(ClientRpcRequest::ContactsExportVcard { book_id: args.book }).await?;
     match resp {
         ClientRpcResponse::ContactsExportResult(r) => {
-            if json {
+            if is_json_output {
                 print_output(
                     &ImportExportOutput {
                         count: r.count,
@@ -469,7 +473,7 @@ async fn export_contacts(client: &AspenClient, args: ExportArgs, json: bool) -> 
                         error: r.error,
                         op: "exported",
                     },
-                    json,
+                    is_json_output,
                 );
             } else if let Some(data) = &r.vcard_data {
                 print!("{data}");
@@ -483,7 +487,7 @@ async fn export_contacts(client: &AspenClient, args: ExportArgs, json: bool) -> 
     }
 }
 
-async fn create_group(client: &AspenClient, args: CreateGroupArgs, json: bool) -> Result<()> {
+async fn create_group(client: &AspenClient, args: CreateGroupArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsCreateGroup {
             book_id: args.book,
@@ -501,7 +505,7 @@ async fn create_group(client: &AspenClient, args: CreateGroupArgs, json: bool) -
                     error: r.error,
                     label: "group",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }
@@ -510,7 +514,7 @@ async fn create_group(client: &AspenClient, args: CreateGroupArgs, json: bool) -
     }
 }
 
-async fn list_groups(client: &AspenClient, args: ListGroupsArgs, json: bool) -> Result<()> {
+async fn list_groups(client: &AspenClient, args: ListGroupsArgs, is_json_output: bool) -> Result<()> {
     let resp = client.send(ClientRpcRequest::ContactsListGroups { book_id: args.book }).await?;
     match resp {
         ClientRpcResponse::ContactsGroupListResult(r) => {
@@ -518,7 +522,7 @@ async fn list_groups(client: &AspenClient, args: ListGroupsArgs, json: bool) -> 
                 groups: r.groups,
                 error: r.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -526,7 +530,7 @@ async fn list_groups(client: &AspenClient, args: ListGroupsArgs, json: bool) -> 
     }
 }
 
-async fn delete_group(client: &AspenClient, args: DeleteGroupArgs, json: bool) -> Result<()> {
+async fn delete_group(client: &AspenClient, args: DeleteGroupArgs, is_json_output: bool) -> Result<()> {
     let resp = client
         .send(ClientRpcRequest::ContactsDeleteGroup {
             group_id: args.group_id,
@@ -542,7 +546,7 @@ async fn delete_group(client: &AspenClient, args: DeleteGroupArgs, json: bool) -
                     error: r.error,
                     label: "group",
                 },
-                json,
+                is_json_output,
             );
             Ok(())
         }

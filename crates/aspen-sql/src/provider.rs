@@ -128,7 +128,7 @@ impl TableProvider for RedbTableProvider {
         _state: &dyn Session,
         projection: Option<&Vec<usize>>,
         filters: &[Expr],
-        limit: Option<usize>,
+        max_rows: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         // Extract scan strategy from filters
         let strategy = extract_scan_strategy(filters);
@@ -138,7 +138,7 @@ impl TableProvider for RedbTableProvider {
             self.index_registry.clone(),
             projection.cloned(),
             strategy,
-            limit,
+            max_rows,
         )))
     }
 }
@@ -189,19 +189,19 @@ fn can_pushdown_filter(expr: &Expr) -> bool {
     match expr {
         // key = 'value' -> exact lookup
         Expr::BinaryExpr(binary) => {
-            let left_key = is_key_column(&binary.left);
-            let right_key = is_key_column(&binary.right);
-            let left_indexed = is_indexed_column(&binary.left);
-            let right_indexed = is_indexed_column(&binary.right);
+            let is_left_key = is_key_column(&binary.left);
+            let is_right_key = is_key_column(&binary.right);
+            let is_left_indexed = is_indexed_column(&binary.left);
+            let is_right_indexed = is_indexed_column(&binary.right);
 
-            if left_key {
+            if is_left_key {
                 matches!(
                     binary.op,
                     Operator::Eq | Operator::Lt | Operator::LtEq | Operator::Gt | Operator::GtEq | Operator::LikeMatch
                 )
-            } else if right_key {
+            } else if is_right_key {
                 matches!(binary.op, Operator::Eq | Operator::Lt | Operator::LtEq | Operator::Gt | Operator::GtEq)
-            } else if left_indexed || right_indexed {
+            } else if is_left_indexed || is_right_indexed {
                 // Support indexed column predicates: mod_revision = 100, etc.
                 matches!(binary.op, Operator::Eq | Operator::Lt | Operator::LtEq | Operator::Gt | Operator::GtEq)
             } else {
@@ -247,9 +247,10 @@ fn index_name_for_column(col_name: &str) -> Option<&'static str> {
 /// Check if a LIKE pattern is a prefix pattern (ends with %).
 fn is_prefix_pattern(expr: &Expr) -> bool {
     if let Expr::Literal(scalar) = expr
-        && let Some(s) = scalar.try_as_str().flatten()
+        && let Some(pattern) = scalar.try_as_str().flatten()
     {
-        return s.ends_with('%') && !s[..s.len() - 1].contains('%');
+        let prefix_end = pattern.len().saturating_sub(1);
+        return pattern.ends_with('%') && !pattern[..prefix_end].contains('%');
     }
     false
 }
@@ -361,9 +362,12 @@ fn extract_key_range(filters: &[Expr]) -> KeyRange {
             Expr::Like(like) if is_key_column(&like.expr) => {
                 if let Some(pattern) = extract_string_literal(&like.pattern)
                     && pattern.ends_with('%')
-                    && !pattern[..pattern.len() - 1].contains('%')
                 {
-                    let prefix = &pattern[..pattern.len() - 1];
+                    let prefix_end = pattern.len().saturating_sub(1);
+                    if pattern[..prefix_end].contains('%') {
+                        continue;
+                    }
+                    let prefix = &pattern[..prefix_end];
                     range.start = Some(prefix.as_bytes().to_vec());
                     range.is_prefix = true;
                     // Compute end key using strinc
@@ -467,7 +471,7 @@ fn extract_index_scan(filters: &[Expr]) -> Option<IndexScanSpec> {
             }
 
             // Determine if the column is on the left or right
-            let col_on_left = get_column_name(&binary.left).is_some() && is_indexed_column(&binary.left);
+            let is_column_on_left = get_column_name(&binary.left).is_some() && is_indexed_column(&binary.left);
 
             match binary.op {
                 Operator::Eq => {
@@ -475,9 +479,9 @@ fn extract_index_scan(filters: &[Expr]) -> Option<IndexScanSpec> {
                     current.exact_value = Some(value_bytes);
                 }
                 Operator::Gt => {
-                    if col_on_left {
+                    if is_column_on_left {
                         // col > value: start = value + 1
-                        let start = (value + 1).to_be_bytes().to_vec();
+                        let start = value.saturating_add(1).to_be_bytes().to_vec();
                         current.start_value = Some(start);
                     } else {
                         // value > col: end = value
@@ -485,29 +489,29 @@ fn extract_index_scan(filters: &[Expr]) -> Option<IndexScanSpec> {
                     }
                 }
                 Operator::GtEq => {
-                    if col_on_left {
+                    if is_column_on_left {
                         // col >= value: start = value
                         current.start_value = Some(value_bytes);
                     } else {
                         // value >= col: end = value + 1
-                        let end = (value + 1).to_be_bytes().to_vec();
+                        let end = value.saturating_add(1).to_be_bytes().to_vec();
                         current.end_value = Some(end);
                     }
                 }
                 Operator::Lt => {
-                    if col_on_left {
+                    if is_column_on_left {
                         // col < value: end = value
                         current.end_value = Some(value_bytes);
                     } else {
                         // value < col: start = value + 1
-                        let start = (value + 1).to_be_bytes().to_vec();
+                        let start = value.saturating_add(1).to_be_bytes().to_vec();
                         current.start_value = Some(start);
                     }
                 }
                 Operator::LtEq => {
-                    if col_on_left {
+                    if is_column_on_left {
                         // col <= value: end = value + 1
-                        let end = (value + 1).to_be_bytes().to_vec();
+                        let end = value.saturating_add(1).to_be_bytes().to_vec();
                         current.end_value = Some(end);
                     } else {
                         // value <= col: start = value
@@ -555,7 +559,7 @@ impl Debug for RedbScanExec {
 
 impl RedbScanExec {
     /// Create a new scan execution plan.
-    pub fn new(
+    fn new(
         db: Arc<Database>,
         index_registry: Option<Arc<IndexRegistry>>,
         projection: Option<Vec<usize>>,
@@ -572,7 +576,11 @@ impl RedbScanExec {
             }
             // SAFETY: DataFusion provides projection indices that are valid for KV_SCHEMA.
             // Invalid indices would be a bug in DataFusion's query planning.
-            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("DataFusion projection indices must be valid")),
+            Some(indices) => {
+                let projected_schema = KV_SCHEMA.project(indices);
+                debug_assert!(projected_schema.is_ok(), "DataFusion projection indices must be valid");
+                Arc::new(projected_schema.unwrap_or_else(|_| KV_SCHEMA.as_ref().clone()))
+            }
             None => KV_SCHEMA.clone(),
         };
 

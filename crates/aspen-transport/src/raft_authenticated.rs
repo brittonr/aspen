@@ -13,6 +13,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
 use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
@@ -32,6 +34,44 @@ use tracing::warn;
 use crate::rpc::AppTypeConfig;
 use crate::rpc::RaftRpcProtocol;
 use crate::rpc::RaftRpcResponse;
+
+fn bounded_usize_limit(limit: u32) -> usize {
+    usize::try_from(limit).unwrap_or(usize::MAX)
+}
+
+fn elapsed_millis_u64(start: std::time::Instant) -> u64 {
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn snapshot_data_size_bytes(snapshot_data: &[u8]) -> u64 {
+    u64::try_from(snapshot_data.len()).unwrap_or(u64::MAX)
+}
+
+const _: () = {
+    assert!(MAX_STREAMS_PER_CONNECTION > 0);
+    assert!(MAX_RPC_MESSAGE_SIZE > 0);
+};
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "snapshot transfer timing uses a monotonic start instant for observability"
+)]
+fn snapshot_recv_start() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "snapshot transfer history records wall-clock timestamps for observability"
+)]
+fn current_unix_time_micros() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
+}
 
 // ============================================================================
 // TrustedPeersRegistry
@@ -156,7 +196,7 @@ impl AuthenticatedRaftProtocolHandler {
         Self {
             raft_core,
             trusted_peers,
-            connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize)),
+            connection_semaphore: Arc::new(Semaphore::new(bounded_usize_limit(MAX_CONCURRENT_CONNECTIONS))),
             snapshot_history: None,
             is_expunged: Arc::new(AtomicBool::new(false)),
         }
@@ -263,7 +303,7 @@ async fn handle_raft_connection(
     let remote_id = connection.remote_id();
 
     // Tiger Style: Fixed limit on concurrent streams per connection
-    let stream_semaphore = Arc::new(Semaphore::new(MAX_STREAMS_PER_CONNECTION as usize));
+    let stream_semaphore = Arc::new(Semaphore::new(bounded_usize_limit(MAX_STREAMS_PER_CONNECTION)));
     let active_streams = Arc::new(AtomicU32::new(0));
 
     // Accept bidirectional streams from this connection
@@ -319,7 +359,10 @@ async fn handle_raft_rpc_stream(
     use anyhow::Context;
 
     // Read the Raft RPC message
-    let buffer = recv.read_to_end(MAX_RPC_MESSAGE_SIZE as usize).await.context("failed to read RPC message")?;
+    let buffer = recv
+        .read_to_end(bounded_usize_limit(MAX_RPC_MESSAGE_SIZE))
+        .await
+        .context("failed to read RPC message")?;
 
     let request: RaftRpcProtocol = postcard::from_bytes(&buffer).context("failed to deserialize RPC request")?;
 
@@ -357,8 +400,8 @@ async fn handle_raft_rpc_stream(
             RaftRpcResponse::AppendEntries(result)
         }
         RaftRpcProtocol::InstallSnapshot(snapshot_req) => {
-            let recv_start = std::time::Instant::now();
-            let recv_size = snapshot_req.snapshot_data.len() as f64;
+            let recv_start = snapshot_recv_start();
+            let recv_size_bytes = snapshot_data_size_bytes(&snapshot_req.snapshot_data);
             let snapshot_cursor = Cursor::new(snapshot_req.snapshot_data);
             let snapshot = openraft::Snapshot {
                 meta: snapshot_req.snapshot_meta,
@@ -368,21 +411,21 @@ async fn handle_raft_rpc_stream(
                 .install_full_snapshot(snapshot_req.vote, snapshot)
                 .await
                 .map_err(openraft::error::RaftError::Fatal);
-            let recv_ms = recv_start.elapsed().as_secs_f64() * 1000.0;
+            let recv_duration_ms = elapsed_millis_u64(recv_start);
             let outcome = if result.is_ok() { "success" } else { "error" };
-            metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "receive").record(recv_size);
-            metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "receive").record(recv_ms);
+            metrics::histogram!("aspen.snapshot.transfer_size_bytes", "direction" => "receive")
+                .record(recv_size_bytes as f64);
+            metrics::histogram!("aspen.snapshot.transfer_duration_ms", "direction" => "receive")
+                .record(recv_duration_ms as f64);
             metrics::counter!("aspen.snapshot.transfers_total", "direction" => "receive", "outcome" => outcome)
                 .increment(1);
             if let Some(ref history) = snapshot_history {
-                let now_us =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
-                        as u64;
+                let now_us = current_unix_time_micros();
                 history.push(crate::snapshot_history::SnapshotTransferEntry {
                     peer_id: 0, // peer_id not available in this context
                     direction: "receive",
-                    size_bytes: recv_size as u64,
-                    duration_ms: recv_ms as u64,
+                    size_bytes: recv_size_bytes,
+                    duration_ms: recv_duration_ms,
                     outcome,
                     timestamp_us: now_us,
                 });

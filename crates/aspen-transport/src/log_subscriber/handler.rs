@@ -310,17 +310,16 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
         );
 
         // Handle the subscriber connection
-        let result = handle_log_subscriber_connection(
-            connection,
-            self.auth_context.clone(),
-            self.log_sender.subscribe(),
-            self.node_id,
+        let result = handle_log_subscriber_connection(connection, super::connection::LogSubscriberConnectionContext {
+            auth_context: self.auth_context.clone(),
+            log_receiver: self.log_sender.subscribe(),
+            node_id: self.node_id,
             subscriber_id,
-            self.committed_index.clone(),
-            self.historical_reader.clone(),
-            &self.hlc,
-            self.watch_registry.clone(),
-        )
+            committed_index: self.committed_index.clone(),
+            historical_reader: self.historical_reader.clone(),
+            hlc: &self.hlc,
+            watch_registry: self.watch_registry.clone(),
+        })
         .await;
 
         drop(permit);

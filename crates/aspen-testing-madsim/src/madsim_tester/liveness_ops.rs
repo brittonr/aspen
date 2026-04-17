@@ -13,6 +13,19 @@ use super::liveness::LivenessReport;
 use super::liveness::LivenessViolation;
 use super::liveness::ViolationType;
 
+fn duration_ms_u64(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "madsim liveness tracking needs monotonic instants to measure elections and blocked time"
+)]
+fn current_instant() -> Instant {
+    Instant::now()
+}
+
 impl AspenRaftTester {
     /// Enable liveness tracking at runtime.
     ///
@@ -57,8 +70,8 @@ impl AspenRaftTester {
             return true; // Not tracking, always passes
         }
 
-        let now = Instant::now();
-        let elapsed_from_start = now.duration_since(self.start_time).as_millis() as u64;
+        let now = current_instant();
+        let elapsed_from_start = duration_ms_u64(now.duration_since(self.start_time));
         let has_leader = self.has_leader_now();
 
         self.metrics.liveness.liveness_checks += 1;
@@ -82,12 +95,12 @@ impl AspenRaftTester {
 
         // If we were leaderless, record recovery time
         if let Some(leaderless_start) = self.liveness_state.leaderless_since {
-            let recovery_time = now.duration_since(leaderless_start).as_millis() as u64;
-            self.metrics.liveness.leaderless_duration_ms += recovery_time;
+            let recovery_time_ms = duration_ms_u64(now.duration_since(leaderless_start));
+            self.metrics.liveness.leaderless_duration_ms += recovery_time_ms;
             self.metrics.liveness.max_leader_recovery_ms =
-                self.metrics.liveness.max_leader_recovery_ms.max(recovery_time);
+                self.metrics.liveness.max_leader_recovery_ms.max(recovery_time_ms);
             self.liveness_state.leaderless_since = None;
-            self.add_event(format!("liveness: leader recovered after {}ms", recovery_time));
+            self.add_event(format!("liveness: leader recovered after {}ms", recovery_time_ms));
         }
 
         self.liveness_state.last_leader_time = Some(now);
@@ -104,27 +117,30 @@ impl AspenRaftTester {
         }
 
         // Check for violations based on mode
-        let leaderless_duration =
-            self.liveness_state.leaderless_since.map(|t| now.duration_since(t).as_millis() as u64).unwrap_or(0);
+        let leaderless_duration_ms = self
+            .liveness_state
+            .leaderless_since
+            .map(|leaderless_start| duration_ms_u64(now.duration_since(leaderless_start)))
+            .unwrap_or(0);
 
         let violation_threshold = match self.liveness_config.mode {
-            LivenessMode::Disabled => u64::MAX,                                 // Never violate
-            LivenessMode::Strict => self.liveness_config.check_interval_ms * 2, // Very short
+            LivenessMode::Disabled => u64::MAX, // Never violate
+            LivenessMode::Strict => self.liveness_config.check_interval_ms.saturating_mul(2),
             LivenessMode::Eventual => self.liveness_config.recovery_timeout_ms,
             LivenessMode::CustomTimeout(ms) => ms,
         };
 
-        if leaderless_duration > violation_threshold {
+        if leaderless_duration_ms > violation_threshold {
             self.liveness_state.violations.push(LivenessViolation {
-                started_at_ms: elapsed_from_start - leaderless_duration,
-                duration_ms: leaderless_duration,
+                started_at_ms: elapsed_from_start.saturating_sub(leaderless_duration_ms),
+                duration_ms: leaderless_duration_ms,
                 violation_type: ViolationType::LeaderlessTimeout,
                 context: format!(
                     "Cluster leaderless for {}ms (threshold: {}ms)",
-                    leaderless_duration, violation_threshold
+                    leaderless_duration_ms, violation_threshold
                 ),
             });
-            self.add_event(format!("liveness: VIOLATION - leaderless for {}ms", leaderless_duration));
+            self.add_event(format!("liveness: VIOLATION - leaderless for {}ms", leaderless_duration_ms));
             false
         } else {
             self.metrics.liveness.liveness_checks_passed += 1;
@@ -141,8 +157,8 @@ impl AspenRaftTester {
         F: FnOnce(&mut Self) -> Fut,
         Fut: std::future::Future<Output = Result<()>>,
     {
-        let start = Instant::now();
-        let check_interval = Duration::from_millis(self.liveness_config.check_interval_ms);
+        let start = current_instant();
+        let check_sleep = Duration::from_millis(self.liveness_config.check_interval_ms);
 
         // Initial liveness check
         self.check_liveness_tick();
@@ -153,7 +169,7 @@ impl AspenRaftTester {
         // Continue checking until duration expires
         while start.elapsed() < duration {
             self.check_liveness_tick();
-            madsim::time::sleep(check_interval).await;
+            madsim::time::sleep(check_sleep).await;
         }
 
         // Final check
@@ -168,10 +184,10 @@ impl AspenRaftTester {
     /// Combines BUGGIFY fault injection with liveness checking.
     /// This is the most comprehensive test mode.
     pub async fn run_with_liveness_and_buggify(&mut self, duration: Duration) -> LivenessReport {
-        let start = Instant::now();
-        let check_interval = Duration::from_millis(self.liveness_config.check_interval_ms);
-        let fault_interval = Duration::from_secs(1);
-        let mut last_fault_time = Instant::now();
+        let start = current_instant();
+        let check_sleep = Duration::from_millis(self.liveness_config.check_interval_ms);
+        let fault_sleep = Duration::from_secs(1);
+        let mut last_fault_instant = current_instant();
 
         self.add_event("liveness: starting combined BUGGIFY + liveness test");
 
@@ -180,12 +196,12 @@ impl AspenRaftTester {
             self.check_liveness_tick();
 
             // Apply BUGGIFY faults periodically
-            if last_fault_time.elapsed() >= fault_interval {
+            if last_fault_instant.elapsed() >= fault_sleep {
                 self.apply_buggify_faults().await;
-                last_fault_time = Instant::now();
+                last_fault_instant = current_instant();
             }
 
-            madsim::time::sleep(check_interval).await;
+            madsim::time::sleep(check_sleep).await;
         }
 
         // Final check
@@ -198,9 +214,9 @@ impl AspenRaftTester {
 
     /// Generate a liveness report from current state.
     fn generate_liveness_report(&mut self, test_result: Result<()>) -> LivenessReport {
-        let passed = self.liveness_state.violations.is_empty() && test_result.is_ok();
+        let is_passed = self.liveness_state.violations.is_empty() && test_result.is_ok();
 
-        let summary = if passed {
+        let summary = if is_passed {
             format!(
                 "Liveness test PASSED: {} checks, {}ms leaderless total, {}ms max recovery",
                 self.metrics.liveness.liveness_checks,
@@ -216,13 +232,13 @@ impl AspenRaftTester {
         self.add_event(format!("liveness: {}", summary));
 
         // Copy metrics for report
-        let report_metrics = self.metrics.liveness.clone();
-        self.metrics.liveness = report_metrics.clone();
+        let metrics_snapshot = self.metrics.liveness.clone();
+        self.metrics.liveness = metrics_snapshot.clone();
 
         LivenessReport {
-            passed,
+            passed: is_passed,
             mode: self.liveness_config.mode,
-            metrics: report_metrics,
+            metrics: metrics_snapshot,
             violations: self.liveness_state.violations.clone(),
             summary,
         }
@@ -247,23 +263,23 @@ impl AspenRaftTester {
     ///
     /// If the write fails due to no leader, this is tracked as blocked time.
     pub async fn write_with_liveness(&mut self, key: String, value: String) -> Result<()> {
-        let start = Instant::now();
+        let start = current_instant();
         let result = self.write(key.clone(), value).await;
 
         if result.is_ok() {
             self.metrics.liveness.writes_completed += 1;
         } else {
-            let blocked_time = start.elapsed().as_millis() as u64;
+            let blocked_time_ms = duration_ms_u64(start.elapsed());
             self.metrics.liveness.writes_blocked += 1;
-            self.metrics.liveness.blocked_duration_ms += blocked_time;
+            self.metrics.liveness.blocked_duration_ms += blocked_time_ms;
 
             if self.liveness_state.active {
-                let elapsed = Instant::now().duration_since(self.start_time).as_millis() as u64;
+                let elapsed_ms = duration_ms_u64(current_instant().duration_since(self.start_time));
                 self.liveness_state.violations.push(LivenessViolation {
-                    started_at_ms: elapsed - blocked_time,
-                    duration_ms: blocked_time,
+                    started_at_ms: elapsed_ms.saturating_sub(blocked_time_ms),
+                    duration_ms: blocked_time_ms,
                     violation_type: ViolationType::OperationBlocked,
-                    context: format!("Write blocked for {}ms on key '{}'", blocked_time, key),
+                    context: format!("Write blocked for {}ms on key '{}'", blocked_time_ms, key),
                 });
             }
         }

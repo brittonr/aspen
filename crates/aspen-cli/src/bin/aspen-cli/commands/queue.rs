@@ -446,26 +446,26 @@ impl Outputable for QueueStatusOutput {
 
 impl QueueCommand {
     /// Execute the queue command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            QueueCommand::Create(args) => queue_create(client, args, json).await,
-            QueueCommand::Delete(args) => queue_delete(client, args, json).await,
-            QueueCommand::Enqueue(args) => queue_enqueue(client, args, json).await,
-            QueueCommand::EnqueueBatch(args) => queue_enqueue_batch(client, args, json).await,
-            QueueCommand::Dequeue(args) => queue_dequeue(client, args, json).await,
-            QueueCommand::DequeueWait(args) => queue_dequeue_wait(client, args, json).await,
-            QueueCommand::Peek(args) => queue_peek(client, args, json).await,
-            QueueCommand::Ack(args) => queue_ack(client, args, json).await,
-            QueueCommand::Nack(args) => queue_nack(client, args, json).await,
-            QueueCommand::Extend(args) => queue_extend(client, args, json).await,
-            QueueCommand::Status(args) => queue_status(client, args, json).await,
-            QueueCommand::Dlq(args) => queue_dlq(client, args, json).await,
-            QueueCommand::Redrive(args) => queue_redrive(client, args, json).await,
+            QueueCommand::Create(args) => queue_create(client, args, is_json_output).await,
+            QueueCommand::Delete(args) => queue_delete(client, args, is_json_output).await,
+            QueueCommand::Enqueue(args) => queue_enqueue(client, args, is_json_output).await,
+            QueueCommand::EnqueueBatch(args) => queue_enqueue_batch(client, args, is_json_output).await,
+            QueueCommand::Dequeue(args) => queue_dequeue(client, args, is_json_output).await,
+            QueueCommand::DequeueWait(args) => queue_dequeue_wait(client, args, is_json_output).await,
+            QueueCommand::Peek(args) => queue_peek(client, args, is_json_output).await,
+            QueueCommand::Ack(args) => queue_ack(client, args, is_json_output).await,
+            QueueCommand::Nack(args) => queue_nack(client, args, is_json_output).await,
+            QueueCommand::Extend(args) => queue_extend(client, args, is_json_output).await,
+            QueueCommand::Status(args) => queue_status(client, args, is_json_output).await,
+            QueueCommand::Dlq(args) => queue_dlq(client, args, is_json_output).await,
+            QueueCommand::Redrive(args) => queue_redrive(client, args, is_json_output).await,
         }
     }
 }
 
-async fn queue_create(client: &AspenClient, args: CreateArgs, json: bool) -> Result<()> {
+async fn queue_create(client: &AspenClient, args: CreateArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueCreate {
             queue_name: args.queue_name,
@@ -482,7 +482,7 @@ async fn queue_create(client: &AspenClient, args: CreateArgs, json: bool) -> Res
                 was_created: result.was_created,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -493,7 +493,7 @@ async fn queue_create(client: &AspenClient, args: CreateArgs, json: bool) -> Res
     }
 }
 
-async fn queue_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result<()> {
+async fn queue_delete(client: &AspenClient, args: DeleteArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueDelete {
             queue_name: args.queue_name,
@@ -507,7 +507,7 @@ async fn queue_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Res
                 items_deleted: result.items_deleted,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -518,7 +518,7 @@ async fn queue_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Res
     }
 }
 
-async fn queue_enqueue(client: &AspenClient, args: EnqueueArgs, json: bool) -> Result<()> {
+async fn queue_enqueue(client: &AspenClient, args: EnqueueArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueEnqueue {
             queue_name: args.queue_name,
@@ -536,7 +536,7 @@ async fn queue_enqueue(client: &AspenClient, args: EnqueueArgs, json: bool) -> R
                 item_id: result.item_id,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -547,7 +547,7 @@ async fn queue_enqueue(client: &AspenClient, args: EnqueueArgs, json: bool) -> R
     }
 }
 
-async fn queue_enqueue_batch(client: &AspenClient, args: EnqueueBatchArgs, json: bool) -> Result<()> {
+async fn queue_enqueue_batch(client: &AspenClient, args: EnqueueBatchArgs, is_json_output: bool) -> Result<()> {
     // Parse JSON items
     let items: Vec<serde_json::Value> =
         serde_json::from_str(&args.items).map_err(|e| anyhow::anyhow!("invalid items JSON: {}", e))?;
@@ -576,7 +576,7 @@ async fn queue_enqueue_batch(client: &AspenClient, args: EnqueueBatchArgs, json:
                 item_ids: result.item_ids,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -587,7 +587,7 @@ async fn queue_enqueue_batch(client: &AspenClient, args: EnqueueBatchArgs, json:
     }
 }
 
-async fn queue_dequeue(client: &AspenClient, args: DequeueArgs, json: bool) -> Result<()> {
+async fn queue_dequeue(client: &AspenClient, args: DequeueArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueDequeue {
             queue_name: args.queue_name,
@@ -615,7 +615,7 @@ async fn queue_dequeue(client: &AspenClient, args: DequeueArgs, json: bool) -> R
                 items,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -626,7 +626,7 @@ async fn queue_dequeue(client: &AspenClient, args: DequeueArgs, json: bool) -> R
     }
 }
 
-async fn queue_dequeue_wait(client: &AspenClient, args: DequeueWaitArgs, json: bool) -> Result<()> {
+async fn queue_dequeue_wait(client: &AspenClient, args: DequeueWaitArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueDequeueWait {
             queue_name: args.queue_name,
@@ -655,7 +655,7 @@ async fn queue_dequeue_wait(client: &AspenClient, args: DequeueWaitArgs, json: b
                 items,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -666,7 +666,7 @@ async fn queue_dequeue_wait(client: &AspenClient, args: DequeueWaitArgs, json: b
     }
 }
 
-async fn queue_peek(client: &AspenClient, args: PeekArgs, json: bool) -> Result<()> {
+async fn queue_peek(client: &AspenClient, args: PeekArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueuePeek {
             queue_name: args.queue_name,
@@ -692,7 +692,7 @@ async fn queue_peek(client: &AspenClient, args: PeekArgs, json: bool) -> Result<
                 items,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -703,7 +703,7 @@ async fn queue_peek(client: &AspenClient, args: PeekArgs, json: bool) -> Result<
     }
 }
 
-async fn queue_ack(client: &AspenClient, args: AckArgs, json: bool) -> Result<()> {
+async fn queue_ack(client: &AspenClient, args: AckArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueAck {
             queue_name: args.queue_name,
@@ -718,7 +718,7 @@ async fn queue_ack(client: &AspenClient, args: AckArgs, json: bool) -> Result<()
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -729,7 +729,7 @@ async fn queue_ack(client: &AspenClient, args: AckArgs, json: bool) -> Result<()
     }
 }
 
-async fn queue_nack(client: &AspenClient, args: NackArgs, json: bool) -> Result<()> {
+async fn queue_nack(client: &AspenClient, args: NackArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueNack {
             queue_name: args.queue_name,
@@ -746,7 +746,7 @@ async fn queue_nack(client: &AspenClient, args: NackArgs, json: bool) -> Result<
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -757,7 +757,7 @@ async fn queue_nack(client: &AspenClient, args: NackArgs, json: bool) -> Result<
     }
 }
 
-async fn queue_extend(client: &AspenClient, args: ExtendArgs, json: bool) -> Result<()> {
+async fn queue_extend(client: &AspenClient, args: ExtendArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueExtendVisibility {
             queue_name: args.queue_name,
@@ -773,7 +773,7 @@ async fn queue_extend(client: &AspenClient, args: ExtendArgs, json: bool) -> Res
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -784,7 +784,7 @@ async fn queue_extend(client: &AspenClient, args: ExtendArgs, json: bool) -> Res
     }
 }
 
-async fn queue_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
+async fn queue_status(client: &AspenClient, args: StatusArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueStatus {
             queue_name: args.queue_name.clone(),
@@ -801,7 +801,7 @@ async fn queue_status(client: &AspenClient, args: StatusArgs, json: bool) -> Res
                 dlq_count: result.dlq_count,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -812,7 +812,7 @@ async fn queue_status(client: &AspenClient, args: StatusArgs, json: bool) -> Res
     }
 }
 
-async fn queue_dlq(client: &AspenClient, args: DlqArgs, json: bool) -> Result<()> {
+async fn queue_dlq(client: &AspenClient, args: DlqArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueGetDLQ {
             queue_name: args.queue_name,
@@ -838,7 +838,7 @@ async fn queue_dlq(client: &AspenClient, args: DlqArgs, json: bool) -> Result<()
                 items,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -849,7 +849,7 @@ async fn queue_dlq(client: &AspenClient, args: DlqArgs, json: bool) -> Result<()
     }
 }
 
-async fn queue_redrive(client: &AspenClient, args: RedriveArgs, json: bool) -> Result<()> {
+async fn queue_redrive(client: &AspenClient, args: RedriveArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::QueueRedriveDLQ {
             queue_name: args.queue_name,
@@ -864,7 +864,7 @@ async fn queue_redrive(client: &AspenClient, args: RedriveArgs, json: bool) -> R
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }

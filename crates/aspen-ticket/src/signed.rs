@@ -44,6 +44,27 @@ pub struct SignedAspenClusterTicket {
     pub signature: Signature,
 }
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "signed tickets need current wall-clock seconds to stamp issuance and expiry"
+)]
+fn current_unix_time_secs_result() -> Result<u64> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("system time before Unix epoch")
+        .map(|duration| duration.as_secs())
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "signed ticket verification compares stored wall-clock timestamps against the current time"
+)]
+fn current_unix_time_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_secs()).unwrap_or(0)
+}
+
 impl SignedAspenClusterTicket {
     /// Create and sign a new cluster ticket.
     ///
@@ -67,7 +88,7 @@ impl SignedAspenClusterTicket {
     /// * `secret_key` - The signer's Iroh secret key
     /// * `validity_secs` - How long the ticket is valid (in seconds)
     pub fn sign_with_validity(ticket: AspenClusterTicket, secret_key: &SecretKey, validity_secs: u64) -> Result<Self> {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before Unix epoch")?.as_secs();
+        let now = current_unix_time_secs_result()?;
 
         // Generate random nonce for replay prevention
         let mut nonce = [0u8; 16];
@@ -178,7 +199,7 @@ impl SignedAspenClusterTicket {
 
     /// Check if the timestamp is valid (not expired, not in future).
     fn is_timestamp_valid(&self) -> bool {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let now = current_unix_time_secs();
 
         // Check not issued in the future (with clock skew tolerance)
         if self.issued_at_secs > now.saturating_add(CLOCK_SKEW_TOLERANCE_SECS) {
@@ -195,7 +216,7 @@ impl SignedAspenClusterTicket {
 
     /// Verify timestamps with detailed error messages.
     fn verify_timestamps(&self) -> Result<()> {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).context("system time before Unix epoch")?.as_secs();
+        let now = current_unix_time_secs_result()?;
 
         // Check not issued in the future (with clock skew tolerance)
         if self.issued_at_secs > now.saturating_add(CLOCK_SKEW_TOLERANCE_SECS) {
@@ -242,7 +263,7 @@ impl SignedAspenClusterTicket {
 
     /// Returns whether the ticket has expired.
     pub fn is_expired(&self) -> bool {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let now = current_unix_time_secs();
         self.expires_at_secs < now
     }
 }
@@ -254,8 +275,10 @@ impl Ticket for SignedAspenClusterTicket {
         // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
         // All fields are fixed-size or bounded (version: u8, Signature: 64 bytes,
         // PublicKey: 32 bytes, nonce: 16 bytes, timestamps: u64, inner ticket bounded by
-        // AspenClusterTicket::MAX_BOOTSTRAP_PEERS=16). Postcard serialization is infallible.
-        postcard::to_stdvec(&self).expect("SignedAspenClusterTicket serialization is infallible for bounded fields")
+        // AspenClusterTicket::MAX_BOOTSTRAP_PEERS=16). Postcard serialization should be infallible.
+        let encoded = postcard::to_stdvec(&self);
+        debug_assert!(encoded.is_ok(), "SignedAspenClusterTicket serialization unexpectedly failed");
+        encoded.unwrap_or_default()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {

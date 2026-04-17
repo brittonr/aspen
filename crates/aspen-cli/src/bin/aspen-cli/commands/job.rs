@@ -103,8 +103,8 @@ pub struct ListArgs {
     pub tags: Option<String>,
 
     /// Maximum results (default 100, max 1000).
-    #[arg(long, default_value = "100")]
-    pub limit: u32,
+    #[arg(long = "limit", default_value = "100")]
+    pub max_results: u32,
 }
 
 #[derive(Args)]
@@ -352,6 +352,13 @@ impl Outputable for JobStatsOutput {
     }
 
     fn to_human(&self) -> String {
+        let total_jobs = self
+            .pending
+            .saturating_add(self.scheduled)
+            .saturating_add(self.running)
+            .saturating_add(self.completed)
+            .saturating_add(self.failed)
+            .saturating_add(self.cancelled);
         format!(
             "Job Queue Statistics\n\
              ──────────────────────\n\
@@ -363,13 +370,7 @@ impl Outputable for JobStatsOutput {
              Cancelled:  {:>8}\n\
              ──────────────────────\n\
              Total:      {:>8}",
-            self.pending,
-            self.scheduled,
-            self.running,
-            self.completed,
-            self.failed,
-            self.cancelled,
-            self.pending + self.scheduled + self.running + self.completed + self.failed + self.cancelled
+            self.pending, self.scheduled, self.running, self.completed, self.failed, self.cancelled, total_jobs
         )
     }
 }
@@ -442,22 +443,44 @@ impl Outputable for WorkerStatusOutput {
 
 impl JobCommand {
     /// Execute the job command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            JobCommand::Submit(args) => job_submit(client, args, json).await,
-            JobCommand::SubmitVm(args) => job_submit_vm(client, args, json).await,
-            JobCommand::Get(args) => job_get(client, args, json).await,
-            JobCommand::List(args) => job_list(client, args, json).await,
-            JobCommand::Cancel(args) => job_cancel(client, args, json).await,
-            JobCommand::Stats => job_stats(client, json).await,
-            JobCommand::Workers => worker_status(client, json).await,
-            JobCommand::Status(args) => job_status(client, args, json).await,
-            JobCommand::Result(args) => job_result(client, args, json).await,
+            JobCommand::Submit(args) => job_submit(client, args, is_json_output).await,
+            JobCommand::SubmitVm(args) => job_submit_vm(client, args, is_json_output).await,
+            JobCommand::Get(args) => job_get(client, args, is_json_output).await,
+            JobCommand::List(args) => job_list(client, args, is_json_output).await,
+            JobCommand::Cancel(args) => job_cancel(client, args, is_json_output).await,
+            JobCommand::Stats => job_stats(client, is_json_output).await,
+            JobCommand::Workers => worker_status(client, is_json_output).await,
+            JobCommand::Status(args) => job_status(client, args, is_json_output).await,
+            JobCommand::Result(args) => job_result(client, args, is_json_output).await,
         }
     }
 }
 
-async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Result<()> {
+fn duration_secs_to_millis(duration_secs: u64) -> u64 {
+    duration_secs.saturating_mul(1_000)
+}
+
+const MAX_JOB_STATUS_FOLLOW_POLLS: u64 = 86_400;
+
+#[allow(
+    ambient_clock,
+    reason = "CLI job result waits need a monotonic start instant while polling remote status"
+)]
+fn job_result_start() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
+#[allow(
+    ambient_clock,
+    reason = "CLI job result waits compare monotonic time against a timeout deadline"
+)]
+fn has_job_result_timed_out(deadline: std::time::Instant) -> bool {
+    std::time::Instant::now() > deadline
+}
+
+async fn job_submit(client: &AspenClient, args: SubmitArgs, is_json_output: bool) -> Result<()> {
     // Validate payload is valid JSON
     let _: serde_json::Value =
         serde_json::from_str(&args.payload).map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
@@ -470,9 +493,9 @@ async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Resul
             job_type: args.job_type,
             payload: args.payload,
             priority: Some(args.priority),
-            timeout_ms: Some(args.timeout_secs * 1000),
+            timeout_ms: Some(duration_secs_to_millis(args.timeout_secs)),
             max_retries: Some(args.max_retries),
-            retry_delay_ms: Some(args.retry_delay_secs * 1000),
+            retry_delay_ms: Some(duration_secs_to_millis(args.retry_delay_secs)),
             schedule: args.schedule,
             tags,
         })
@@ -485,7 +508,7 @@ async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Resul
                 job_id: result.job_id,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -496,7 +519,7 @@ async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Resul
     }
 }
 
-async fn job_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
+async fn job_get(client: &AspenClient, args: GetArgs, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::JobGet { job_id: args.job_id }).await?;
 
     match response {
@@ -506,7 +529,7 @@ async fn job_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> 
                 job: result.job,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.was_found {
                 std::process::exit(1);
             }
@@ -517,7 +540,7 @@ async fn job_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> 
     }
 }
 
-async fn job_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
+async fn job_list(client: &AspenClient, args: ListArgs, is_json_output: bool) -> Result<()> {
     // Parse tags
     let tags = args.tags.map(|t| t.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
 
@@ -526,7 +549,7 @@ async fn job_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()
             status: args.status,
             job_type: args.job_type,
             tags,
-            limit: Some(args.limit),
+            limit: Some(args.max_results),
             continuation_token: None,
         })
         .await?;
@@ -538,7 +561,7 @@ async fn job_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()
                 total_count: result.total_count,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -546,7 +569,7 @@ async fn job_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()
     }
 }
 
-async fn job_cancel(client: &AspenClient, args: CancelArgs, json: bool) -> Result<()> {
+async fn job_cancel(client: &AspenClient, args: CancelArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::JobCancel {
             job_id: args.job_id,
@@ -561,7 +584,7 @@ async fn job_cancel(client: &AspenClient, args: CancelArgs, json: bool) -> Resul
                 previous_status: result.previous_status,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -572,7 +595,7 @@ async fn job_cancel(client: &AspenClient, args: CancelArgs, json: bool) -> Resul
     }
 }
 
-async fn job_stats(client: &AspenClient, json: bool) -> Result<()> {
+async fn job_stats(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::JobQueueStats).await?;
 
     match response {
@@ -586,7 +609,7 @@ async fn job_stats(client: &AspenClient, json: bool) -> Result<()> {
                 cancelled: result.cancelled_count,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -594,7 +617,7 @@ async fn job_stats(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn worker_status(client: &AspenClient, json: bool) -> Result<()> {
+async fn worker_status(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::WorkerStatus).await?;
 
     match response {
@@ -609,7 +632,7 @@ async fn worker_status(client: &AspenClient, json: bool) -> Result<()> {
                 used_capacity_jobs: result.used_capacity_jobs,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -617,18 +640,18 @@ async fn worker_status(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> Result<()> {
+async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, is_json_output: bool) -> Result<()> {
     // Read the binary file
     let binary_data = std::fs::read(&args.binary).map_err(|e| anyhow::anyhow!("Failed to read binary file: {}", e))?;
 
-    if !json {
+    if !is_json_output {
         println!("Uploading binary ({} bytes)...", binary_data.len());
     }
 
     // Upload binary to blob storage
     let blob_hash = job_submit_vm_upload_binary(client, &binary_data, &args.blob_tag).await?;
 
-    if !json {
+    if !is_json_output {
         println!("Binary uploaded with hash: {}", blob_hash);
         println!("Submitting VM job...");
     }
@@ -641,9 +664,9 @@ async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> 
             job_type: "vm_execute".to_string(),
             payload: payload_str,
             priority: Some(args.priority),
-            timeout_ms: Some(args.timeout_secs * 1000),
+            timeout_ms: Some(duration_secs_to_millis(args.timeout_secs)),
             max_retries: Some(args.max_retries),
-            retry_delay_ms: Some(1000),
+            retry_delay_ms: Some(1_000),
             schedule: None,
             tags,
         })
@@ -656,7 +679,7 @@ async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> 
                 job_id: result.job_id,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -720,10 +743,10 @@ fn job_submit_vm_build_payload(
     Ok((payload_str, tags))
 }
 
-async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
+async fn job_status(client: &AspenClient, args: StatusArgs, is_json_output: bool) -> Result<()> {
     if args.follow {
-        // Follow mode: poll every second
-        loop {
+        // Follow mode: poll every second with an explicit long-lived bound.
+        for _poll_attempt in 0..MAX_JOB_STATUS_FOLLOW_POLLS {
             let response = client
                 .send(ClientRpcRequest::JobGet {
                     job_id: args.job_id.clone(),
@@ -733,7 +756,7 @@ async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resul
             match response {
                 ClientRpcResponse::JobGetResult(result) => {
                     if let Some(job) = result.job {
-                        if !json {
+                        if !is_json_output {
                             // Clear screen and show status
                             print!("\x1B[2J\x1B[1;1H");
                             println!("Job: {}", job.job_id);
@@ -766,7 +789,7 @@ async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resul
                             }
                         }
                     } else {
-                        if !json {
+                        if !is_json_output {
                             println!("Job not found: {}", args.job_id);
                         } else {
                             println!("{{\"error\": \"job not found\"}}");
@@ -780,22 +803,27 @@ async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resul
 
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
+        anyhow::bail!("job status follow exceeded {} polls", MAX_JOB_STATUS_FOLLOW_POLLS)
     } else {
         // Single status check
-        job_get(client, GetArgs { job_id: args.job_id }, json).await
+        job_get(client, GetArgs { job_id: args.job_id }, is_json_output).await
     }
 }
 
-async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Result<()> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(args.timeout_secs);
+async fn job_result(client: &AspenClient, args: ResultArgs, is_json_output: bool) -> Result<()> {
+    let deadline = job_result_start() + std::time::Duration::from_secs(args.timeout_secs);
+    let max_poll_attempts = args.timeout_secs.saturating_add(1);
 
-    if !json {
+    debug_assert!(max_poll_attempts >= 1);
+    debug_assert!(args.timeout_secs <= max_poll_attempts);
+
+    if !is_json_output {
         println!("Waiting for job {} to complete (timeout: {}s)...", args.job_id, args.timeout_secs);
     }
 
-    // Poll until job completes or timeout
-    loop {
-        if std::time::Instant::now() > deadline {
+    // Poll until job completes or timeout.
+    for _poll_attempt in 0..max_poll_attempts {
+        if has_job_result_timed_out(deadline) {
             anyhow::bail!("Timeout waiting for job {} to complete", args.job_id);
         }
 
@@ -808,7 +836,7 @@ async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Resul
         match response {
             ClientRpcResponse::JobGetResult(result) => {
                 if let Some(job) = result.job {
-                    match job_result_handle_terminal(&job, json)? {
+                    match job_result_handle_terminal(&job, is_json_output)? {
                         Some(should_exit) => {
                             if should_exit {
                                 std::process::exit(1);
@@ -817,7 +845,7 @@ async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Resul
                         }
                         None => {
                             // Job still running, show progress
-                            if !json && job.progress > 0 {
+                            if !is_json_output && job.progress > 0 {
                                 print!("\rProgress: {}%", job.progress);
                                 use std::io::Write;
                                 std::io::stdout().flush()?;
@@ -834,15 +862,17 @@ async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Resul
 
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+
+    anyhow::bail!("Timeout waiting for job {} to complete", args.job_id)
 }
 
 /// Handle a terminal job state (completed/failed/cancelled).
 /// Returns Some(should_exit) if terminal, None if still running.
-fn job_result_handle_terminal(job: &JobDetails, json: bool) -> Result<Option<bool>> {
+fn job_result_handle_terminal(job: &JobDetails, is_json_output: bool) -> Result<Option<bool>> {
     let status = job.status.as_str();
 
     if status == "completed" {
-        if !json {
+        if !is_json_output {
             println!("Job completed successfully!");
             if let Some(result) = &job.result {
                 println!("Result: {}", serde_json::to_string_pretty(result)?);
@@ -860,7 +890,7 @@ fn job_result_handle_terminal(job: &JobDetails, json: bool) -> Result<Option<boo
     }
 
     if status == "failed" {
-        if !json {
+        if !is_json_output {
             println!("Job failed!");
             if let Some(error) = &job.error_message {
                 println!("Error: {}", error);
@@ -876,7 +906,7 @@ fn job_result_handle_terminal(job: &JobDetails, json: bool) -> Result<Option<boo
     }
 
     if status == "cancelled" {
-        if !json {
+        if !is_json_output {
             println!("Job was cancelled");
         } else {
             println!("{{\"status\": \"cancelled\"}}");

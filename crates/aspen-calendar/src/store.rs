@@ -20,6 +20,7 @@ use crate::CalendarEvent;
 use crate::CalendarMeta;
 use crate::ical::parse_vcalendar;
 use crate::ical::parse_vevent;
+use crate::ical::rrule::RecurrenceExpansionRequest;
 use crate::ical::rrule::RecurrenceInstance;
 use crate::ical::rrule::expand_rrule;
 use crate::ical::serialize_vcalendar;
@@ -35,6 +36,7 @@ const MAX_LIST_LIMIT: u32 = 1_000;
 const DEFAULT_LIST_LIMIT: u32 = 100;
 /// Maximum recurrence instances to expand.
 const MAX_RECURRENCE_INSTANCES: u32 = 1_000;
+const MAX_SCAN_PAGES: u32 = 1_024;
 
 /// Calendar store backed by a distributed `KeyValueStore`.
 pub struct CalendarStore<S: KeyValueStore + ?Sized> {
@@ -66,7 +68,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
             });
         }
 
-        let id = generate_id("cal", name);
+        let id = generate_id(IdSeed {
+            prefix: "cal",
+            seed: name,
+        });
         let calendar = CalendarMeta {
             id: id.clone(),
             name: name.to_string(),
@@ -132,13 +137,13 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
     }
 
     /// List all calendars.
-    pub async fn list_calendars(&self, limit: Option<u32>) -> Result<Vec<CalendarMeta>, CalendarError> {
-        let limit = clamp_limit(limit);
+    pub async fn list_calendars(&self, max_results: Option<u32>) -> Result<Vec<CalendarMeta>, CalendarError> {
+        let max_results = clamp_limit(max_results);
         let scan = self
             .store
             .scan(ScanRequest {
                 prefix: CAL_PREFIX.to_string(),
-                limit_results: Some(limit),
+                limit_results: Some(max_results),
                 continuation_token: None,
             })
             .await
@@ -178,7 +183,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
             } else {
                 event.uid.clone()
             };
-            event.id = generate_id("event", &seed);
+            event.id = generate_id(IdSeed {
+                prefix: "event",
+                seed: &seed,
+            });
         }
         event.created_at_ms = now_ms;
         event.updated_at_ms = now_ms;
@@ -241,7 +249,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
     /// Delete an event by ID.
     pub async fn delete_event(&self, event_id: &str) -> Result<(), CalendarError> {
         let event = self.get_event(event_id).await?;
-        let key = event_key(&event.calendar_id, &event.id);
+        let key = event_key(EventKeyParts {
+            calendar_id: &event.calendar_id,
+            event_id: &event.id,
+        });
         self.store
             .delete(DeleteRequest::new(&key))
             .await
@@ -260,9 +271,9 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
         calendar_id: &str,
         start_ms: Option<u64>,
         end_ms: Option<u64>,
-        limit: Option<u32>,
+        max_results: Option<u32>,
     ) -> Result<(Vec<CalendarEvent>, Option<String>), CalendarError> {
-        let limit = clamp_limit(limit);
+        let max_results = clamp_limit(max_results);
         let prefix = format!("{EVENT_PREFIX}{calendar_id}:");
 
         // Scan all events and filter by time range client-side.
@@ -276,9 +287,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
             .await
             .map_err(|e| CalendarError::StorageError { reason: e.to_string() })?;
 
-        let mut events = Vec::new();
+        let max_result_entries = usize::try_from(max_results).unwrap_or(usize::MAX);
+        let mut events = Vec::with_capacity(scan.entries.len().min(max_result_entries));
         for entry in &scan.entries {
-            if events.len() as u32 >= limit {
+            if events.len() >= max_result_entries {
                 break;
             }
             let event: CalendarEvent = serde_json::from_str(&entry.value).map_err(|e| CalendarError::StorageError {
@@ -298,9 +310,9 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
         &self,
         query: &str,
         calendar_id: Option<&str>,
-        limit: Option<u32>,
+        max_results: Option<u32>,
     ) -> Result<Vec<CalendarEvent>, CalendarError> {
-        let limit = clamp_limit(limit);
+        let max_results = clamp_limit(max_results);
         let prefix = match calendar_id {
             Some(cid) => format!("{EVENT_PREFIX}{cid}:"),
             None => EVENT_PREFIX.to_string(),
@@ -317,10 +329,11 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
             .map_err(|e| CalendarError::StorageError { reason: e.to_string() })?;
 
         let query_lower = query.to_lowercase();
-        let mut results = Vec::new();
+        let max_result_entries = usize::try_from(max_results).unwrap_or(usize::MAX);
+        let mut results = Vec::with_capacity(scan.entries.len().min(max_result_entries));
 
         for entry in &scan.entries {
-            if results.len() as u32 >= limit {
+            if results.len() >= max_result_entries {
                 break;
             }
             let event: CalendarEvent = serde_json::from_str(&entry.value).map_err(|e| CalendarError::StorageError {
@@ -345,7 +358,7 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
         let prefix = format!("{EVENT_PREFIX}{calendar_id}:");
         let entries = self.scan_all(&prefix).await?;
 
-        let mut busy_periods = Vec::new();
+        let mut busy_periods = Vec::with_capacity(entries.len());
         for entry in &entries {
             let event: CalendarEvent = serde_json::from_str(&entry.value).map_err(|e| CalendarError::StorageError {
                 reason: format!("deserialize event: {e}"),
@@ -391,8 +404,16 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
 
         let duration_ms = event.dtend_ms.unwrap_or(event.dtstart_ms).saturating_sub(event.dtstart_ms);
 
-        let instances = expand_rrule(event.dtstart_ms, duration_ms, rrule, &event.exdates, start_ms, end_ms, max)
-            .map_err(|e| CalendarError::InvalidRrule { reason: e.to_string() })?;
+        let instances = expand_rrule(RecurrenceExpansionRequest {
+            dtstart_ms: event.dtstart_ms,
+            duration_ms,
+            rrule,
+            exdates: &event.exdates,
+            range_start_ms: start_ms,
+            range_end_ms: end_ms,
+            max_instances: max,
+        })
+        .map_err(|e| CalendarError::InvalidRrule { reason: e.to_string() })?;
 
         Ok(instances)
     }
@@ -417,7 +438,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
                 } else {
                     event.uid.clone()
                 };
-                event.id = generate_id("event", &seed);
+                event.id = generate_id(IdSeed {
+                    prefix: "event",
+                    seed: &seed,
+                });
             }
             event.created_at_ms = now_ms;
             event.updated_at_ms = now_ms;
@@ -427,7 +451,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
         let pairs: Vec<(String, String)> = events
             .iter()
             .map(|e| {
-                let key = event_key(&e.calendar_id, &e.id);
+                let key = event_key(EventKeyParts {
+                    calendar_id: &e.calendar_id,
+                    event_id: &e.id,
+                });
                 let value = serde_json::to_string(e).unwrap_or_default();
                 (key, value)
             })
@@ -471,7 +498,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
 
     /// Write an event to the KV store.
     async fn write_event(&self, event: &CalendarEvent) -> Result<(), CalendarError> {
-        let key = event_key(&event.calendar_id, &event.id);
+        let key = event_key(EventKeyParts {
+            calendar_id: &event.calendar_id,
+            event_id: &event.id,
+        });
         let value = serde_json::to_string(event).map_err(|e| CalendarError::StorageError {
             reason: format!("serialize event: {e}"),
         })?;
@@ -493,10 +523,10 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
 
     /// Scan all entries matching a prefix (paginating through all results).
     async fn scan_all(&self, prefix: &str) -> Result<Vec<aspen_kv_types::KeyValueWithRevision>, CalendarError> {
-        let mut all_entries = Vec::new();
+        let mut all_entries = Vec::with_capacity(usize::try_from(MAX_LIST_LIMIT).unwrap_or(usize::MAX));
         let mut continuation_token = None;
 
-        loop {
+        for _ in 0..MAX_SCAN_PAGES {
             let scan = self
                 .store
                 .scan(ScanRequest {
@@ -511,12 +541,14 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
 
             if scan.is_truncated {
                 continuation_token = scan.continuation_token;
-            } else {
-                break;
+                continue;
             }
+            return Ok(all_entries);
         }
 
-        Ok(all_entries)
+        Err(CalendarError::StorageError {
+            reason: format!("scan pagination exceeded {MAX_SCAN_PAGES} pages for prefix {prefix}"),
+        })
     }
 }
 
@@ -524,20 +556,30 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
 // Free functions
 // ============================================================================
 
+struct EventKeyParts<'a> {
+    calendar_id: &'a str,
+    event_id: &'a str,
+}
+
 /// Build the KV key for an event.
-fn event_key(calendar_id: &str, event_id: &str) -> String {
-    format!("{EVENT_PREFIX}{calendar_id}:{event_id}")
+fn event_key(parts: EventKeyParts<'_>) -> String {
+    format!("{EVENT_PREFIX}{}:{}", parts.calendar_id, parts.event_id)
+}
+
+struct IdSeed<'a> {
+    prefix: &'a str,
+    seed: &'a str,
 }
 
 /// Generate a deterministic ID from a seed.
-fn generate_id(prefix: &str, seed: &str) -> String {
+fn generate_id(id_seed: IdSeed<'_>) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hash;
     use std::hash::Hasher;
 
     let mut hasher = DefaultHasher::new();
-    prefix.hash(&mut hasher);
-    seed.hash(&mut hasher);
+    id_seed.prefix.hash(&mut hasher);
+    id_seed.seed.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
 }
 
