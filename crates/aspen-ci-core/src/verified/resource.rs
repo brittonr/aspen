@@ -2,7 +2,11 @@
 //!
 //! These functions compute resource limits for CI jobs without
 //! accessing system resources.
-//!
+#![allow(unknown_lints)]
+#![allow(
+    ambiguous_params,
+    reason = "verified pure functions with well-named numeric parameters"
+)]
 //! # Tiger Style
 //!
 //! - Pure calculation functions

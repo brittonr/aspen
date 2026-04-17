@@ -2,7 +2,11 @@
 //!
 //! These functions compute timeouts and deadlines without accessing
 //! system time. Time is passed as an explicit parameter.
-//!
+#![allow(unknown_lints)]
+#![allow(
+    ambiguous_params,
+    reason = "verified pure functions with well-named numeric parameters"
+)]
 //! # Tiger Style
 //!
 //! - All time values in milliseconds (u64)

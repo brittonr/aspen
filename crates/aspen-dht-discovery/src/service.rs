@@ -5,6 +5,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+/// Monotonic clock boundary for tracker operations.
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "announce tracker measures monotonic elapsed time for rate limiting and republish"
+)]
+fn monotonic_now() -> Instant {
+    Instant::now()
+}
+
 use anyhow::Context;
 use anyhow::Result;
 use iroh::Endpoint;
@@ -88,7 +98,7 @@ impl AnnounceTracker {
         // Evict oldest entries if at capacity
         if self.announces.len() >= self.max_size {
             // Remove entries older than republish interval
-            let cutoff = Instant::now() - REPUBLISH_INTERVAL;
+            let cutoff = monotonic_now() - REPUBLISH_INTERVAL;
             self.announces.retain(|_, (t, _, _)| *t > cutoff);
 
             // If still at capacity, remove oldest
@@ -99,12 +109,12 @@ impl AnnounceTracker {
             }
         }
 
-        self.announces.insert(hash, (Instant::now(), size, format));
+        self.announces.insert(hash, (monotonic_now(), size, format));
     }
 
     /// Get hashes that need republishing along with their metadata.
     pub(crate) fn get_stale_announces(&self) -> Vec<(Hash, u64, BlobFormat)> {
-        let cutoff = Instant::now() - REPUBLISH_INTERVAL;
+        let cutoff = monotonic_now() - REPUBLISH_INTERVAL;
         self.announces
             .iter()
             .filter(|(_, (t, _, _))| *t < cutoff)
@@ -354,7 +364,7 @@ impl ContentDiscoveryService {
                                 }
                             }
                             info!(count = announced, "bulk announced local blobs to DHT");
-                            drop(reply.send(Ok(announced as usize)));
+                            drop(reply.send(Ok(usize::try_from(announced).unwrap_or(usize::MAX))));
                         }
 
                         DiscoveryCommand::FindProviderByKey { public_key, hash, format, reply } => {
@@ -556,6 +566,8 @@ impl ContentDiscoveryService {
 // ============================================================================
 
 /// Current wall-clock time as seconds since Unix epoch.
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "DHT announce timestamps need current wall-clock time")]
 fn unix_epoch_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -564,6 +576,8 @@ fn unix_epoch_secs() -> i64 {
 }
 
 /// Current wall-clock time as microseconds since Unix epoch.
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "DHT node address timestamps need current wall-clock time")]
 fn unix_epoch_micros() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
