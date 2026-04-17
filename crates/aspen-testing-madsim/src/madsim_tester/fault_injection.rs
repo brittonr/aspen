@@ -150,47 +150,48 @@ impl AspenRaftTester {
             return;
         }
         // Find current leader without blocking retries
-        let leader_idx = self
+        let leader_slot = self
             .nodes
             .iter()
             .enumerate()
-            .find_map(|(i, node)| {
+            .find_map(|(node_slot, node)| {
                 if node.connected().load(Ordering::Relaxed) {
                     let metrics = node.raft().metrics().borrow().clone();
-                    metrics.current_leader.map(|_| i)
+                    metrics.current_leader.map(|_| node_slot)
                 } else {
                     None
                 }
             })
             .unwrap_or(0);
+        let leader_index = u32::try_from(leader_slot).unwrap_or(u32::MAX);
 
-        self.disconnect(leader_idx);
-        self.add_event(format!("buggify: partitioned leader {} to force re-election", leader_idx));
+        self.disconnect(leader_index);
+        self.add_event(format!("buggify: partitioned leader {} to force re-election", leader_index));
         self.metrics.buggify_triggers += 1;
 
         // Restore after election timeout - reduced from 5s to 2s for faster tests
         // This is still longer than election_timeout_max (3s) so elections can complete
         madsim::time::sleep(Duration::from_secs(2)).await;
-        self.connect(leader_idx);
-        self.add_event(format!("buggify: restored node {} connectivity", leader_idx));
+        self.connect(leader_index);
+        self.add_event(format!("buggify: restored node {} connectivity", leader_index));
     }
 
     async fn apply_buggify_network_partition(&mut self) {
         if !self.buggify.should_trigger(BuggifyFault::NetworkPartition) {
             return;
         }
-        let mid = self.nodes.len() / 2;
-        for i in 0..mid {
-            self.disconnect(i);
+        let midpoint = u32::try_from(self.nodes.len() / 2).unwrap_or(u32::MAX);
+        for node_index in 0..midpoint {
+            self.disconnect(node_index);
         }
-        self.add_event(format!("buggify: created network partition (nodes 0-{} isolated)", mid - 1));
+        self.add_event(format!("buggify: created network partition (nodes 0-{} isolated)", midpoint.saturating_sub(1)));
         self.metrics.buggify_triggers += 1;
 
         // Heal after some time - reduced from 10s to 3s for faster tests
         // while still being long enough to force leader re-election
         madsim::time::sleep(Duration::from_secs(3)).await;
-        for i in 0..mid {
-            self.connect(i);
+        for node_index in 0..midpoint {
+            self.connect(node_index);
         }
         self.add_event("buggify: healed network partition");
     }
