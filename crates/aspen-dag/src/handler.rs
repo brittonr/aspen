@@ -195,6 +195,9 @@ pub async fn connect_dag_sync(
 ) -> Result<DagSyncConnection, ProtocolError> {
     use crate::protocol::DAG_SYNC_ALPN;
 
+    debug_assert!(!DAG_SYNC_ALPN.is_empty(), "ALPN must not be empty");
+    debug_assert!(std::mem::size_of_val(request) > 0, "request must be non-zero size");
+
     let connection = endpoint.connect(remote, DAG_SYNC_ALPN).await.map_err(|e| ProtocolError::Io {
         source: std::io::Error::other(e.to_string()),
     })?;

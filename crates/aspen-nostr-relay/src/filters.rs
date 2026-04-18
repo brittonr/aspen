@@ -13,6 +13,9 @@ use crate::constants;
 /// loads events from these prefixes and then applies full `Filter::match_event()`
 /// for precise matching.
 pub fn filter_scan_prefixes(filter: &Filter) -> Vec<String> {
+    debug_assert!(!constants::KV_PREFIX_EVENT.is_empty(), "event prefix must not be empty");
+    debug_assert!(!constants::KV_PREFIX_KIND.is_empty(), "kind prefix must not be empty");
+
     // Direct event ID lookups — most selective
     if let Some(ref ids) = filter.ids {
         return ids.iter().map(|id| format!("{}{}", constants::KV_PREFIX_EVENT, id.to_hex())).collect();

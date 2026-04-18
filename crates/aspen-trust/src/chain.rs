@@ -71,6 +71,9 @@ pub fn encrypt_chain(
     cluster_id: &[u8],
     epoch: u64,
 ) -> Result<EncryptedSecretChain, ChainError> {
+    debug_assert!(epoch > 0, "chain encryption epoch must be positive");
+    debug_assert!(!new_secret.iter().all(|&b| b == 0), "new secret must not be all zeros");
+
     // Generate random salt
     let mut salt = [0u8; 32];
     rand::fill(&mut salt);

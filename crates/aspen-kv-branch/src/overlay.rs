@@ -279,9 +279,8 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
         let request = WriteRequest { command };
 
         let timeout_ms = self.config.commit_timeout_ms.unwrap_or(BRANCH_COMMIT_TIMEOUT_MS);
-        let commit_timeout = std::time::Duration::from_millis(timeout_ms);
 
-        let result = tokio::time::timeout(commit_timeout, self.parent.write(request))
+        let result = tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), self.parent.write(request))
             .await
             .map_err(|_| BranchError::CommitTimeout { timeout_ms })?
             .map_err(|e| BranchError::StoreError { reason: e.to_string() })?;
@@ -396,9 +395,8 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
         let request = WriteRequest { command };
 
         let timeout_ms = self.config.commit_timeout_ms.unwrap_or(BRANCH_COMMIT_TIMEOUT_MS);
-        let commit_timeout = std::time::Duration::from_millis(timeout_ms);
 
-        let result = tokio::time::timeout(commit_timeout, self.parent.write(request))
+        let result = tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), self.parent.write(request))
             .await
             .map_err(|_| BranchError::CommitTimeout { timeout_ms })?
             .map_err(|e| BranchError::StoreError { reason: e.to_string() })?;
@@ -661,16 +659,16 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for BranchOverlay<S> {
             self.dirty.iter().map(|entry| (entry.key().clone(), entry.value().clone())).collect();
         dirty_entries.sort_by(|a, b| a.0.cmp(&b.0));
 
-        let limit_results = request.limit_results.unwrap_or(aspen_constants::api::MAX_SCAN_RESULTS);
+        let max_results = request.limit_results.unwrap_or(aspen_constants::api::MAX_SCAN_RESULTS);
 
         // Use verified merge function.
-        let merged = merge_scan(&dirty_entries, &parent_result.entries, &request.prefix, limit_results);
+        let merged = merge_scan(&dirty_entries, &parent_result.entries, &request.prefix, max_results);
 
         let result_count = merged.len() as u32;
         Ok(ScanResult {
             entries: merged,
             result_count,
-            is_truncated: parent_result.is_truncated || result_count >= limit_results,
+            is_truncated: parent_result.is_truncated || result_count >= max_results,
             continuation_token: parent_result.continuation_token,
         })
     }

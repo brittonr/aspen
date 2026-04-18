@@ -113,6 +113,9 @@ fn verify_auth_event(
     relay_url: Option<&str>,
     now_secs: u64,
 ) -> Result<PublicKey, AuthError> {
+    debug_assert!(!expected_challenge.is_empty(), "challenge must not be empty");
+    debug_assert!(now_secs > 0, "now_secs must be positive");
+
     // 1. Kind check
     if event.kind != Kind::Custom(constants::AUTH_EVENT_KIND) {
         return Err(AuthError::WrongKind);

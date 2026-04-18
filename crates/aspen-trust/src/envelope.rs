@@ -63,6 +63,10 @@ pub enum EnvelopeError {
     /// Value was encrypted at a different epoch than the current key.
     #[snafu(display("epoch mismatch: value encrypted at epoch {stored}, current key is epoch {current}"))]
     EpochMismatch { stored: u64, current: u64 },
+
+    /// No key available for the requested epoch.
+    #[snafu(display("no key for epoch {epoch}"))]
+    MissingEpochKey { epoch: u64 },
 }
 
 /// Encrypt plaintext under the given key and epoch.
@@ -131,7 +135,10 @@ impl EncryptedValue {
             return Err(EnvelopeError::UnsupportedVersion { version });
         }
 
-        let epoch = u64::from_be_bytes(bytes[5..13].try_into().expect("8 bytes for u64"));
+        let epoch_bytes: [u8; 8] = [
+            bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12],
+        ];
+        let epoch = u64::from_be_bytes(epoch_bytes);
         let mut nonce = [0u8; 12];
         nonce.copy_from_slice(&bytes[13..25]);
         let ciphertext = bytes[25..].to_vec();

@@ -64,7 +64,7 @@ impl SecretsEncryption {
     /// Returns the serialized `EncryptedValue` bytes.
     /// The nonce counter value is returned for persistence.
     pub fn wrap_write(&self, plaintext: &[u8]) -> Result<(Vec<u8>, u64), EnvelopeError> {
-        let key = self.keys.get(&self.epoch).expect("current epoch key must exist");
+        let key = self.keys.get(&self.epoch).ok_or(EnvelopeError::MissingEpochKey { epoch: self.epoch })?;
         let (nonce, counter) = self.nonce_gen.next_nonce();
         let encrypted = envelope::encrypt_value(key, self.epoch, &nonce, plaintext)?;
         Ok((encrypted.to_bytes(), counter))
