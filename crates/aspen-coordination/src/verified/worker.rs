@@ -538,10 +538,9 @@ pub fn calculate_worker_load_factor(current_load: u32, max_capacity: u32) -> f32
     }
     let result = (current_load as f32 / max_capacity as f32).clamp(0.0, 1.0);
     assert!((0.0..=1.0).contains(&result), "WORKER: load factor must be in [0.0, 1.0], got {result}");
-    assert!(
-        current_load <= max_capacity || result == 1.0,
-        "WORKER: load {current_load} exceeds capacity {max_capacity} but factor is not 1.0"
-    );
+    if current_load > max_capacity {
+        assert!(result == 1.0, "WORKER: load {current_load} exceeds capacity {max_capacity} but factor is not 1.0");
+    }
     result
 }
 

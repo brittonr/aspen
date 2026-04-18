@@ -2,6 +2,29 @@
 
 use super::super::*;
 
+#[inline]
+fn empty_response() -> AppResponse {
+    AppResponse {
+        value: None,
+        deleted: None,
+        cas_succeeded: None,
+        batch_applied: None,
+        failed_condition_index: None,
+        conditions_met: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+        occ_conflict: None,
+        topology_version: None,
+    }
+}
+
 impl SharedRedbStorage {
     /// Apply a single AppRequest to the state machine tables within a transaction.
     #[allow(clippy::too_many_arguments)]
@@ -176,7 +199,7 @@ impl SharedRedbStorage {
                 payload,
             ),
             #[cfg(not(feature = "trust"))]
-            AppRequest::TrustInitialize(_) => Ok(AppResponse::default()),
+            AppRequest::TrustInitialize(_) => Ok(empty_response()),
             #[cfg(feature = "trust")]
             AppRequest::TrustReconfiguration(payload) => self.apply_trust_reconfiguration_in_txn(
                 trust_shares_table,
@@ -187,10 +210,10 @@ impl SharedRedbStorage {
                 payload,
             ),
             #[cfg(not(feature = "trust"))]
-            AppRequest::TrustReconfiguration(_) => Ok(AppResponse::default()),
+            AppRequest::TrustReconfiguration(_) => Ok(empty_response()),
             // Shard operations - pass through without state changes
             AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
-                Ok(AppResponse::default())
+                Ok(empty_response())
             }
         }
     }

@@ -309,6 +309,11 @@ impl From<StorageError> for io::Error {
     }
 }
 
+#[inline]
+fn default_snapshot_integrity() -> Option<SnapshotIntegrity> {
+    None
+}
+
 /// Snapshot blob stored in memory for testing.
 ///
 /// Contains both the snapshot metadata (last log ID, membership) and
@@ -321,7 +326,7 @@ pub struct StoredSnapshot {
     /// Serialized state machine data (JSON-encoded KV map).
     pub data: Vec<u8>,
     /// Optional integrity hash for corruption detection (Tiger Style).
-    #[serde(default)]
+    #[serde(default = "default_snapshot_integrity")]
     pub integrity: Option<SnapshotIntegrity>,
 }
 

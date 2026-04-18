@@ -99,6 +99,11 @@ pub struct LeaseEntry {
     pub keys: Vec<String>,
 }
 
+#[inline]
+fn default_snapshot_integrity() -> Option<SnapshotIntegrity> {
+    None
+}
+
 /// Stored snapshot format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredSnapshot {
@@ -107,7 +112,7 @@ pub struct StoredSnapshot {
     /// Serialized snapshot data.
     pub data: Vec<u8>,
     /// Optional integrity hash.
-    #[serde(default)]
+    #[serde(default = "default_snapshot_integrity")]
     pub integrity: Option<SnapshotIntegrity>,
 }
 

@@ -132,10 +132,10 @@ pub fn classify_drift_severity(
     warning_threshold_ms: u64,
     alert_threshold_ms: u64,
 ) -> DriftSeverity {
-    let abs_offset = ewma_offset_ms.abs() as u64;
-    if abs_offset >= alert_threshold_ms {
+    let abs_offset_ms = ewma_offset_ms.abs() as u64;
+    if abs_offset_ms >= alert_threshold_ms {
         DriftSeverity::Alert
-    } else if abs_offset >= warning_threshold_ms {
+    } else if abs_offset_ms >= warning_threshold_ms {
         DriftSeverity::Warning
     } else {
         DriftSeverity::Normal
@@ -200,9 +200,15 @@ pub fn compute_ewma(new_value: f64, old_avg: f64, alpha: f64) -> f64 {
 /// assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(10)); // capped
 /// ```
 #[inline]
+fn backoff_index(restart_count: u32, duration_count: usize) -> usize {
+    let requested_index = usize::try_from(restart_count).unwrap_or(usize::MAX);
+    requested_index.min(duration_count.saturating_sub(1))
+}
+
+#[inline]
 pub fn calculate_backoff_duration(restart_count: u32, backoff_durations: &[Duration]) -> Duration {
     debug_assert!(!backoff_durations.is_empty(), "backoff_durations must not be empty");
-    let idx = (restart_count as usize).min(backoff_durations.len().saturating_sub(1));
+    let idx = backoff_index(restart_count, backoff_durations.len());
     backoff_durations[idx]
 }
 
@@ -266,7 +272,7 @@ pub fn transition_connection_health(
                     ConnectionHealth::Failed
                 } else {
                     ConnectionHealth::Degraded {
-                        consecutive_failures: consecutive_failures + 1,
+                        consecutive_failures: consecutive_failures.saturating_add(1),
                     }
                 }
             }

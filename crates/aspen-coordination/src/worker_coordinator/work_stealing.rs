@@ -169,7 +169,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             })
             .await?;
 
-        let mut hints = Vec::new();
+        let mut hints = Vec::with_capacity(scan_result.entries.len());
         for entry in scan_result.entries {
             match serde_json::from_str::<StealHint>(&entry.value) {
                 Ok(hint) => {

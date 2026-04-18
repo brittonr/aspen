@@ -45,6 +45,7 @@ pub use error::Result;
 pub use log_writer::CiLogChunk;
 pub use log_writer::CiLogCompleteMarker;
 pub use verified::{
+    PipelineLimits,
     // Pipeline validation
     StageValidationError,
     // Trigger matching
@@ -52,7 +53,7 @@ pub use verified::{
     are_dependencies_met,
     // Resource limits
     are_resource_limits_valid,
-    check_pipeline_limits, PipelineLimits,
+    check_pipeline_limits,
     // Timeout calculations
     compute_deadline_ms,
     compute_effective_cpu_weight,

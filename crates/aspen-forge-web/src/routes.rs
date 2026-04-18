@@ -89,6 +89,56 @@ fn parse_form(body: &Bytes) -> HashMap<String, String> {
     form_urlencoded::parse(body).map(|(k, v)| (k.into_owned(), v.into_owned())).collect()
 }
 
+#[derive(Clone, Copy)]
+struct RepoRefPath<'a> {
+    repo_id: &'a str,
+    ref_name: &'a str,
+    path: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct RefPath<'a> {
+    ref_name: &'a str,
+    path: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct RepoHashRoute<'a> {
+    repo_id: &'a str,
+    hash: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct RepoIssueRoute<'a> {
+    repo_id: &'a str,
+    issue_id: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct RepoPatchRoute<'a> {
+    repo_id: &'a str,
+    patch_id: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct RepoRunRoute<'a> {
+    repo_id: &'a str,
+    run_id: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct RepoRunJobRoute<'a> {
+    repo_id: &'a str,
+    run_id: &'a str,
+    job_id: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct TreeLookupPath<'a> {
+    root_tree: &'a str,
+    path: &'a str,
+}
+
 pub fn method_not_allowed() -> RouteResponse {
     RouteResponse::Html {
         status: StatusCode::METHOD_NOT_ALLOWED,
@@ -119,13 +169,21 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
         let form = parse_form(body);
         return match segments.as_slice() {
             [repo_id, "issues", "new"] => create_issue_post(state, repo_id, &form).await,
-            [repo_id, "issues", id, "comment"] => comment_issue_post(state, repo_id, id, &form).await,
-            [repo_id, "issues", id, "close"] => close_issue_post(state, repo_id, id).await,
-            [repo_id, "issues", id, "reopen"] => reopen_issue_post(state, repo_id, id).await,
-            [repo_id, "patches", id, "merge"] => merge_patch_post(state, repo_id, id, &form).await,
-            [repo_id, "patches", id, "approve"] => approve_patch_post(state, repo_id, id).await,
-            [repo_id, "ci", run_id, "cancel"] => ci_cancel_post(state, repo_id, run_id).await,
-            [repo_id, "ci", run_id, "retrigger"] => ci_retrigger_post(state, repo_id, run_id).await,
+            [repo_id, "issues", id, "comment"] => {
+                comment_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }, &form).await
+            }
+            [repo_id, "issues", id, "close"] => close_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }).await,
+            [repo_id, "issues", id, "reopen"] => {
+                reopen_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }).await
+            }
+            [repo_id, "patches", id, "merge"] => {
+                merge_patch_post(state, RepoPatchRoute { repo_id, patch_id: id }, &form).await
+            }
+            [repo_id, "patches", id, "approve"] => {
+                approve_patch_post(state, RepoPatchRoute { repo_id, patch_id: id }).await
+            }
+            [repo_id, "ci", run_id, "cancel"] => ci_cancel_post(state, RepoRunRoute { repo_id, run_id }).await,
+            [repo_id, "ci", run_id, "retrigger"] => ci_retrigger_post(state, RepoRunRoute { repo_id, run_id }).await,
             ["login", "verify"] => login_verify_post(state, &form).await,
             _ => method_not_allowed(),
         };
@@ -142,27 +200,53 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
         [repo_id, "tree"] => tree_root(state, repo_id).await,
         [repo_id, "tree", ref_name, rest @ ..] => {
             let sub = rest.join("/");
-            tree_path(state, repo_id, ref_name, &sub).await
+            tree_path(state, RepoRefPath {
+                repo_id,
+                ref_name,
+                path: &sub,
+            })
+            .await
         }
         [repo_id, "blob", ref_name, rest @ ..] if !rest.is_empty() => {
             let sub = rest.join("/");
-            blob_view(state, repo_id, ref_name, &sub).await
+            blob_view(state, RepoRefPath {
+                repo_id,
+                ref_name,
+                path: &sub,
+            })
+            .await
         }
         [repo_id, "raw", ref_name, rest @ ..] if !rest.is_empty() => {
             let sub = rest.join("/");
-            raw_blob(state, repo_id, ref_name, &sub).await
+            raw_blob(state, RepoRefPath {
+                repo_id,
+                ref_name,
+                path: &sub,
+            })
+            .await
         }
         [repo_id, "search"] => search(state, repo_id, &query).await,
-        [repo_id, "commit", hash] => commit_detail(state, repo_id, hash).await,
+        [repo_id, "commit", hash] => commit_detail(state, RepoHashRoute { repo_id, hash }).await,
         [repo_id, "commits"] => commits(state, repo_id).await,
         [repo_id, "issues"] => issues(state, repo_id).await,
         [repo_id, "issues", "new"] => new_issue_form(state, repo_id).await,
-        [repo_id, "issues", id] => issue_detail(state, repo_id, id).await,
+        [repo_id, "issues", id] => issue_detail(state, RepoIssueRoute { repo_id, issue_id: id }).await,
         [repo_id, "patches"] => patches(state, repo_id).await,
-        [repo_id, "patches", id] => patch_detail(state, repo_id, id).await,
+        [repo_id, "patches", id] => patch_detail(state, RepoPatchRoute { repo_id, patch_id: id }).await,
         [repo_id, "ci"] => ci_list_repo(state, repo_id, &query).await,
-        [repo_id, "ci", run_id] => ci_run_detail(state, repo_id, run_id).await,
-        [repo_id, "ci", run_id, job_id] => ci_job_logs(state, repo_id, run_id, job_id, &query).await,
+        [repo_id, "ci", run_id] => ci_run_detail(state, RepoRunRoute { repo_id, run_id }).await,
+        [repo_id, "ci", run_id, job_id] => {
+            ci_job_logs(
+                state,
+                RepoRunJobRoute {
+                    repo_id,
+                    run_id,
+                    job_id,
+                },
+                &query,
+            )
+            .await
+        }
         _ => not_found(path),
     }
 }
@@ -191,7 +275,8 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
     let ticket = st.ticket_str();
 
     // Fetch per-branch CI status (best-effort, cap at 20 branches)
-    let mut branch_ci: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut branch_ci: std::collections::HashMap<String, String> =
+        std::collections::HashMap::with_capacity(branches.len().min(20));
     for branch in branches.iter().take(20) {
         if let Some(ref_status) = st.get_ref_status(repo_id, &branch.name).await
             && let Some(ref status) = ref_status.status
@@ -216,25 +301,27 @@ async fn tree_root(st: &AppState, repo_id: &str) -> RouteResponse {
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    let ref_name = &repo.default_branch;
-    tree_at(st, &repo, ref_name, "").await
+    tree_at(st, &repo, RefPath {
+        ref_name: &repo.default_branch,
+        path: "",
+    })
+    .await
 }
 
-async fn tree_path(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {
-    let repo = match st.get_repo(repo_id).await {
+async fn tree_path(st: &AppState, route: RepoRefPath<'_>) -> RouteResponse {
+    let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    tree_at(st, &repo, ref_name, path).await
+    tree_at(st, &repo, RefPath {
+        ref_name: route.ref_name,
+        path: route.path,
+    })
+    .await
 }
 
-async fn tree_at(
-    st: &AppState,
-    repo: &aspen_forge_protocol::ForgeRepoInfo,
-    ref_name: &str,
-    path: &str,
-) -> RouteResponse {
-    let commit_hash = match st.resolve_ref(&repo.id, ref_name).await {
+async fn tree_at(st: &AppState, repo: &aspen_forge_protocol::ForgeRepoInfo, route: RefPath<'_>) -> RouteResponse {
+    let commit_hash = match st.resolve_ref(&repo.id, route.ref_name).await {
         Ok(h) => h,
         Err(e) => return err(e),
     };
@@ -242,22 +329,27 @@ async fn tree_at(
         Ok(c) => c,
         Err(e) => return err(e),
     };
-    let tree_hash = match walk_tree(st, &commit.tree, path).await {
+    let tree_hash = match walk_tree(st, TreeLookupPath {
+        root_tree: &commit.tree,
+        path: route.path,
+    })
+    .await
+    {
         Ok(h) => h,
         Err(e) => return err(e),
     };
     match st.get_tree(&tree_hash).await {
-        Ok(entries) => ok(templates::file_browser(repo, ref_name, path, &entries)),
+        Ok(entries) => ok(templates::file_browser(repo, route.ref_name, route.path, &entries)),
         Err(e) => err(e),
     }
 }
 
-async fn blob_view(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {
-    let repo = match st.get_repo(repo_id).await {
+async fn blob_view(st: &AppState, route: RepoRefPath<'_>) -> RouteResponse {
+    let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    let commit_hash = match st.resolve_ref(repo_id, ref_name).await {
+    let commit_hash = match st.resolve_ref(route.repo_id, route.ref_name).await {
         Ok(h) => h,
         Err(e) => return err(e),
     };
@@ -265,15 +357,20 @@ async fn blob_view(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> 
         Ok(c) => c,
         Err(e) => return err(e),
     };
-    let blob_hash = match walk_to_blob(st, &commit.tree, path).await {
+    let blob_hash = match walk_to_blob(st, TreeLookupPath {
+        root_tree: &commit.tree,
+        path: route.path,
+    })
+    .await
+    {
         Ok(h) => h,
         Err(e) => return err(e),
     };
     match st.get_blob(&blob_hash).await {
         Ok(blob) => {
             let content = blob.content.as_deref();
-            let size = blob.size.unwrap_or(0);
-            ok(templates::file_view(&repo, ref_name, path, content, size))
+            let size_bytes = blob.size.unwrap_or(0);
+            ok(templates::file_view(&repo, route.ref_name, route.path, content, size_bytes))
         }
         Err(e) => err(e),
     }
@@ -294,12 +391,12 @@ async fn search(st: &AppState, repo_id: &str, query: &HashMap<String, String>) -
     }
 }
 
-async fn commit_detail(st: &AppState, repo_id: &str, hash: &str) -> RouteResponse {
-    let repo = match st.get_repo(repo_id).await {
+async fn commit_detail(st: &AppState, route: RepoHashRoute<'_>) -> RouteResponse {
+    let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    let commit = match st.get_commit(hash).await {
+    let commit = match st.get_commit(route.hash).await {
         Ok(c) => c,
         Err(e) => return err(e),
     };
@@ -317,7 +414,7 @@ async fn commit_detail(st: &AppState, repo_id: &str, hash: &str) -> RouteRespons
         Err(e) => return err(e),
     };
 
-    let truncated = files.len() >= crate::state::AppState::MAX_DIFF_FILES;
+    let is_truncated = files.len() >= crate::state::AppState::MAX_DIFF_FILES;
 
     // Compute line-level diffs for each file
     let mut file_diffs = Vec::with_capacity(files.len());
@@ -327,9 +424,9 @@ async fn commit_detail(st: &AppState, repo_id: &str, hash: &str) -> RouteRespons
     }
 
     // Fetch CI statuses for this commit (best-effort)
-    let ci_statuses = st.get_commit_statuses(repo_id, hash).await;
+    let ci_statuses = st.get_commit_statuses(route.repo_id, route.hash).await;
 
-    ok(templates::commit_detail(&repo, &commit, &file_diffs, truncated, &ci_statuses))
+    ok(templates::commit_detail(&repo, &commit, &file_diffs, is_truncated, &ci_statuses))
 }
 
 async fn commits(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -354,12 +451,12 @@ async fn issues(st: &AppState, repo_id: &str) -> RouteResponse {
     }
 }
 
-async fn issue_detail(st: &AppState, repo_id: &str, issue_id: &str) -> RouteResponse {
-    let repo = match st.get_repo(repo_id).await {
+async fn issue_detail(st: &AppState, route: RepoIssueRoute<'_>) -> RouteResponse {
+    let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    match st.get_issue_with_comments(repo_id, issue_id).await {
+    match st.get_issue_with_comments(route.repo_id, route.issue_id).await {
         Ok((issue, comments)) => ok(templates::issue_detail(&repo, &issue, &comments)),
         Err(e) => err(e),
     }
@@ -376,19 +473,19 @@ async fn patches(st: &AppState, repo_id: &str) -> RouteResponse {
     }
 }
 
-async fn patch_detail(st: &AppState, repo_id: &str, patch_id: &str) -> RouteResponse {
-    let repo = match st.get_repo(repo_id).await {
+async fn patch_detail(st: &AppState, route: RepoPatchRoute<'_>) -> RouteResponse {
+    let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    let patch = match st.get_patch(repo_id, patch_id).await {
+    let patch = match st.get_patch(route.repo_id, route.patch_id).await {
         Ok(p) => p,
         Err(e) => return err(e),
     };
 
     // Fetch merge check and diff in parallel (best-effort)
     let merge_check = if patch.state == "open" {
-        st.check_merge(repo_id, patch_id).await.ok()
+        st.check_merge(route.repo_id, route.patch_id).await.ok()
     } else {
         None
     };
@@ -430,49 +527,39 @@ async fn create_issue_post(st: &AppState, repo_id: &str, form: &HashMap<String, 
     redirect(&format!("/{repo_id}/issues"))
 }
 
-async fn comment_issue_post(
-    st: &AppState,
-    repo_id: &str,
-    issue_id: &str,
-    form: &HashMap<String, String>,
-) -> RouteResponse {
+async fn comment_issue_post(st: &AppState, route: RepoIssueRoute<'_>, form: &HashMap<String, String>) -> RouteResponse {
     let body = form.get("body").map(|s| s.as_str()).unwrap_or("");
 
     if body.is_empty() {
         // Redirect back to the issue — the form is still on the page.
-        return redirect(&format!("/{repo_id}/issues/{issue_id}"));
+        return redirect(&format!("/{}/issues/{}", route.repo_id, route.issue_id));
     }
 
-    if let Err(e) = st.comment_issue(repo_id, issue_id, body).await {
+    if let Err(e) = st.comment_issue(route.repo_id, route.issue_id, body).await {
         return err(e);
     }
 
-    redirect(&format!("/{repo_id}/issues/{issue_id}"))
+    redirect(&format!("/{}/issues/{}", route.repo_id, route.issue_id))
 }
 
-async fn close_issue_post(st: &AppState, repo_id: &str, issue_id: &str) -> RouteResponse {
-    if let Err(e) = st.close_issue(repo_id, issue_id).await {
+async fn close_issue_post(st: &AppState, route: RepoIssueRoute<'_>) -> RouteResponse {
+    if let Err(e) = st.close_issue(route.repo_id, route.issue_id).await {
         return err(e);
     }
-    redirect(&format!("/{repo_id}/issues/{issue_id}"))
+    redirect(&format!("/{}/issues/{}", route.repo_id, route.issue_id))
 }
 
-async fn reopen_issue_post(st: &AppState, repo_id: &str, issue_id: &str) -> RouteResponse {
-    if let Err(e) = st.reopen_issue(repo_id, issue_id).await {
+async fn reopen_issue_post(st: &AppState, route: RepoIssueRoute<'_>) -> RouteResponse {
+    if let Err(e) = st.reopen_issue(route.repo_id, route.issue_id).await {
         return err(e);
     }
-    redirect(&format!("/{repo_id}/issues/{issue_id}"))
+    redirect(&format!("/{}/issues/{}", route.repo_id, route.issue_id))
 }
 
-async fn merge_patch_post(
-    st: &AppState,
-    repo_id: &str,
-    patch_id: &str,
-    form: &HashMap<String, String>,
-) -> RouteResponse {
+async fn merge_patch_post(st: &AppState, route: RepoPatchRoute<'_>, form: &HashMap<String, String>) -> RouteResponse {
     let strategy = form.get("strategy").map(|s| s.as_str());
-    match st.merge_patch(repo_id, patch_id, strategy).await {
-        Ok(result) if result.is_success => redirect(&format!("/{repo_id}/patches/{patch_id}")),
+    match st.merge_patch(route.repo_id, route.patch_id, strategy).await {
+        Ok(result) if result.is_success => redirect(&format!("/{}/patches/{}", route.repo_id, route.patch_id)),
         Ok(result) => {
             let msg = result.error.unwrap_or_else(|| "merge failed".into());
             err(anyhow::anyhow!(msg))
@@ -481,11 +568,11 @@ async fn merge_patch_post(
     }
 }
 
-async fn approve_patch_post(st: &AppState, repo_id: &str, patch_id: &str) -> RouteResponse {
-    if let Err(e) = st.approve_patch(repo_id, patch_id).await {
+async fn approve_patch_post(st: &AppState, route: RepoPatchRoute<'_>) -> RouteResponse {
+    if let Err(e) = st.approve_patch(route.repo_id, route.patch_id).await {
         return err(e);
     }
-    redirect(&format!("/{repo_id}/patches/{patch_id}"))
+    redirect(&format!("/{}/patches/{}", route.repo_id, route.patch_id))
 }
 
 // ── CI handlers ─────────────────────────────────────────────────────
@@ -530,26 +617,20 @@ async fn ci_list_repo(st: &AppState, repo_id: &str, query: &HashMap<String, Stri
     }
 }
 
-async fn ci_run_detail(st: &AppState, repo_id: &str, run_id: &str) -> RouteResponse {
-    let repo = match st.get_repo(repo_id).await {
+async fn ci_run_detail(st: &AppState, route: RepoRunRoute<'_>) -> RouteResponse {
+    let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
-    match st.get_run_status(run_id).await {
-        Ok(resp) if !resp.was_found => not_found(&format!("/{repo_id}/ci/{run_id}")),
-        Ok(resp) => ok(templates::pipeline_detail(repo_id, &repo.name, &resp)),
+    match st.get_run_status(route.run_id).await {
+        Ok(resp) if !resp.was_found => not_found(&format!("/{}/ci/{}", route.repo_id, route.run_id)),
+        Ok(resp) => ok(templates::pipeline_detail(route.repo_id, &repo.name, &resp)),
         Err(e) => err(e),
     }
 }
 
-async fn ci_job_logs(
-    st: &AppState,
-    repo_id: &str,
-    run_id: &str,
-    job_id: &str,
-    query: &HashMap<String, String>,
-) -> RouteResponse {
-    let repo = match st.get_repo(repo_id).await {
+async fn ci_job_logs(st: &AppState, route: RepoRunJobRoute<'_>, query: &HashMap<String, String>) -> RouteResponse {
+    let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
@@ -557,28 +638,28 @@ async fn ci_job_logs(
     let start_index: u32 = query.get("start").and_then(|s| s.parse().ok()).unwrap_or(0);
 
     // Get job info from the run status
-    let run_status = match st.get_run_status(run_id).await {
+    let run_status = match st.get_run_status(route.run_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
 
-    let job = run_status.stages.iter().flat_map(|s| s.jobs.iter()).find(|j| j.id == job_id);
+    let job = run_status.stages.iter().flat_map(|s| s.jobs.iter()).find(|j| j.id == route.job_id);
 
     let (job_name, job_status, job_started, job_ended) = match job {
         Some(j) => (j.name.as_str(), j.status.as_str(), j.started_at_ms, j.ended_at_ms),
-        None => return not_found(&format!("/{repo_id}/ci/{run_id}/{job_id}")),
+        None => return not_found(&format!("/{}/ci/{}/{}", route.repo_id, route.run_id, route.job_id)),
     };
 
     // Full output mode: ?full=1
     let is_full = query.get("full").is_some_and(|v| v == "1");
     if is_full {
-        match st.get_job_output(run_id, job_id).await {
+        match st.get_job_output(route.run_id, route.job_id).await {
             Ok(output) => {
                 return ok(templates::job_full_output_viewer(&templates::JobFullOutputParams {
-                    repo_id,
+                    repo_id: route.repo_id,
                     repo_name: &repo.name,
-                    run_id,
-                    job_id,
+                    run_id: route.run_id,
+                    job_id: route.job_id,
                     job_name,
                     job_status,
                     job_started_ms: job_started,
@@ -591,15 +672,15 @@ async fn ci_job_logs(
     }
 
     // Fetch artifacts (best-effort)
-    let artifacts = st.list_artifacts(job_id, Some(run_id)).await.ok();
+    let artifacts = st.list_artifacts(route.job_id, Some(route.run_id)).await.ok();
 
-    match st.get_job_logs(run_id, job_id, start_index, Some(100)).await {
+    match st.get_job_logs(route.run_id, route.job_id, start_index, Some(100)).await {
         Ok(logs) => ok(templates::job_log_viewer_with_artifacts(
             &templates::JobLogParams {
-                repo_id,
+                repo_id: route.repo_id,
                 repo_name: &repo.name,
-                run_id,
-                job_id,
+                run_id: route.run_id,
+                job_id: route.job_id,
                 job_name,
                 job_status,
                 job_started_ms: job_started,
@@ -613,9 +694,9 @@ async fn ci_job_logs(
     }
 }
 
-async fn ci_cancel_post(st: &AppState, repo_id: &str, run_id: &str) -> RouteResponse {
-    match st.cancel_run(run_id).await {
-        Ok(resp) if resp.is_success => redirect(&format!("/{repo_id}/ci/{run_id}")),
+async fn ci_cancel_post(st: &AppState, route: RepoRunRoute<'_>) -> RouteResponse {
+    match st.cancel_run(route.run_id).await {
+        Ok(resp) if resp.is_success => redirect(&format!("/{}/ci/{}", route.repo_id, route.run_id)),
         Ok(resp) => {
             let msg = resp.error.unwrap_or_else(|| "cancel failed".into());
             err(anyhow::anyhow!(msg))
@@ -624,17 +705,17 @@ async fn ci_cancel_post(st: &AppState, repo_id: &str, run_id: &str) -> RouteResp
     }
 }
 
-async fn ci_retrigger_post(st: &AppState, repo_id: &str, run_id: &str) -> RouteResponse {
+async fn ci_retrigger_post(st: &AppState, route: RepoRunRoute<'_>) -> RouteResponse {
     // Fetch the original run to get ref_name
-    let run_status = match st.get_run_status(run_id).await {
+    let run_status = match st.get_run_status(route.run_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
     let ref_name = run_status.ref_name.as_deref().unwrap_or("main");
-    match st.retrigger_run(repo_id, ref_name).await {
+    match st.retrigger_run(route.repo_id, ref_name).await {
         Ok(resp) if resp.is_success => {
-            let new_id = resp.run_id.as_deref().unwrap_or(run_id);
-            redirect(&format!("/{repo_id}/ci/{new_id}"))
+            let new_id = resp.run_id.as_deref().unwrap_or(route.run_id);
+            redirect(&format!("/{}/ci/{}", route.repo_id, new_id))
         }
         Ok(resp) => {
             let msg = resp.error.unwrap_or_else(|| "retrigger failed".into());
@@ -721,8 +802,8 @@ async fn login_verify_post(st: &AppState, form: &HashMap<String, String>) -> Rou
     }
 }
 
-async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> RouteResponse {
-    let commit_hash = match st.resolve_ref(repo_id, ref_name).await {
+async fn raw_blob(st: &AppState, route: RepoRefPath<'_>) -> RouteResponse {
+    let commit_hash = match st.resolve_ref(route.repo_id, route.ref_name).await {
         Ok(h) => h,
         Err(e) => return err(e),
     };
@@ -730,7 +811,12 @@ async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> R
         Ok(c) => c,
         Err(e) => return err(e),
     };
-    let blob_hash = match walk_to_blob(st, &commit.tree, path).await {
+    let blob_hash = match walk_to_blob(st, TreeLookupPath {
+        root_tree: &commit.tree,
+        path: route.path,
+    })
+    .await
+    {
         Ok(h) => h,
         Err(e) => return err(e),
     };
@@ -738,10 +824,10 @@ async fn raw_blob(st: &AppState, repo_id: &str, ref_name: &str, path: &str) -> R
         Ok(blob) => match blob.content {
             Some(data) => RouteResponse::Raw {
                 status: StatusCode::OK,
-                content_type: content_type_for_path(path),
+                content_type: content_type_for_path(route.path),
                 body: data,
             },
-            None => not_found(path),
+            None => not_found(route.path),
         },
         Err(e) => err(e),
     }
@@ -755,9 +841,9 @@ fn render_markdown(source: &str) -> String {
 
 // ── Tree walking ────────────────────────────────────────────────────
 
-async fn walk_tree(st: &AppState, root_tree: &str, path: &str) -> anyhow::Result<String> {
-    let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
-    let mut current = root_tree.to_string();
+async fn walk_tree(st: &AppState, route: TreeLookupPath<'_>) -> anyhow::Result<String> {
+    let parts: Vec<&str> = route.path.split('/').filter(|p| !p.is_empty()).collect();
+    let mut current = route.root_tree.to_string();
     for part in parts {
         let entries = st.get_tree(&current).await?;
         let entry = entries
@@ -769,13 +855,12 @@ async fn walk_tree(st: &AppState, root_tree: &str, path: &str) -> anyhow::Result
     Ok(current)
 }
 
-async fn walk_to_blob(st: &AppState, root_tree: &str, path: &str) -> anyhow::Result<String> {
-    let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
-    if parts.is_empty() {
+async fn walk_to_blob(st: &AppState, route: TreeLookupPath<'_>) -> anyhow::Result<String> {
+    let parts: Vec<&str> = route.path.split('/').filter(|p| !p.is_empty()).collect();
+    let Some((file, dirs)) = parts.split_last() else {
         anyhow::bail!("empty path");
-    }
-    let (dirs, file) = parts.split_at(parts.len() - 1);
-    let mut current = root_tree.to_string();
+    };
+    let mut current = route.root_tree.to_string();
     for dir in dirs {
         let entries = st.get_tree(&current).await?;
         let entry = entries
@@ -787,8 +872,8 @@ async fn walk_to_blob(st: &AppState, root_tree: &str, path: &str) -> anyhow::Res
     let entries = st.get_tree(&current).await?;
     let entry = entries
         .iter()
-        .find(|e| e.name == file[0])
-        .ok_or_else(|| anyhow::anyhow!("file not found: {}", file[0]))?;
+        .find(|e| e.name == *file)
+        .ok_or_else(|| anyhow::anyhow!("file not found: {}", *file))?;
     Ok(entry.hash.clone())
 }
 

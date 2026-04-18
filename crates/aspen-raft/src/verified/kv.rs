@@ -13,6 +13,11 @@
 
 use super::calculate_expires_at_ms;
 
+#[inline]
+fn bounded_len_u32(len: usize) -> u32 {
+    u32::try_from(len).unwrap_or(u32::MAX)
+}
+
 // ============================================================================
 // KV Entry Version Computation
 // ============================================================================
@@ -93,10 +98,9 @@ pub fn compute_kv_versions(
         },
     };
     debug_assert!(versions.version >= 1, "version must be >= 1");
-    debug_assert!(
-        existing_version.is_none() || versions.version >= existing_version.unwrap().1,
-        "version must be monotonically increasing"
-    );
+    if let Some((_, previous_version)) = existing_version {
+        debug_assert!(versions.version >= previous_version, "version must be monotonically increasing");
+    }
     versions
 }
 
@@ -225,8 +229,8 @@ pub fn validate_cas_precondition(
                 Ok(())
             } else {
                 Err(CasValidationError::ValueMismatch {
-                    expected_len: expected_value.len().min(u32::MAX as usize) as u32,
-                    actual_len: actual.len().min(u32::MAX as usize) as u32,
+                    expected_len: bounded_len_u32(expected_value.len()),
+                    actual_len: bounded_len_u32(actual.len()),
                 })
             }
         }
@@ -517,7 +521,7 @@ pub fn time_remaining_exec(expires_at_ms: Option<u64>, current_time_ms: u64) -> 
             if current_time_ms >= expires_at {
                 Some(0)
             } else {
-                Some(expires_at - current_time_ms)
+                Some(expires_at.saturating_sub(current_time_ms))
             }
         }
     }
@@ -545,7 +549,7 @@ pub fn time_remaining_exec(expires_at_ms: Option<u64>, current_time_ms: u64) -> 
 #[inline]
 #[allow(dead_code)]
 pub const fn is_ttl_valid(ttl_seconds: u64) -> bool {
-    const MAX_TTL_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days
+    const MAX_TTL_SECONDS: u64 = 2_592_000; // 30 days
     ttl_seconds <= MAX_TTL_SECONDS
 }
 

@@ -164,6 +164,10 @@ pub fn verify_append_preserves_invariants(
         return Err("last_applied is not monotonic".to_string());
     }
 
+    assert!(storage_invariant(&post), "append post-state must satisfy storage invariant");
+    assert!(chain_tip_synchronized(&post), "append post-state chain tip must be synchronized");
+    assert!(last_applied_monotonic(pre, &post), "append must preserve last_applied monotonicity");
+
     Ok(())
 }
 

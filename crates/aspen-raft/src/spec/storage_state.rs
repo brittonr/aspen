@@ -93,7 +93,7 @@ impl StorageStateSpec {
 
     /// Get the first log index (after purging).
     pub fn first_log_index(&self) -> u64 {
-        self.last_purged.map(|p| p + 1).unwrap_or(1)
+        self.last_purged.map(|purged_index| purged_index.saturating_add(1)).unwrap_or(1)
     }
 
     /// Get the last log index.

@@ -9,6 +9,11 @@ use super::constants::STEAL_HINT_TTL_MS;
 use crate::registry::HealthStatus;
 use crate::types::now_unix_ms;
 
+#[inline]
+fn default_raft_log_lag() -> Option<u64> {
+    None
+}
+
 /// Worker information stored in the coordinator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerInfo {
@@ -284,7 +289,7 @@ pub struct WorkerStats {
     pub disk_free_store_pct: f64,
     /// Raft log lag relative to the leader (None if metrics unavailable).
     /// Used by the coordinator to determine worker readiness.
-    #[serde(default)]
+    #[serde(default = "default_raft_log_lag")]
     pub raft_log_lag: Option<u64>,
     /// Total import time across all nix builds (ms).
     pub total_import_time_ms: u64,

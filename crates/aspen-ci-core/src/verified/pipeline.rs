@@ -461,15 +461,24 @@ mod tests {
 
     #[test]
     fn test_within_limits() {
-        assert!(check_pipeline_limits(PipelineLimits {
-            stage_count: 5, job_count: 20, max_stages: 10, max_jobs: 100,
-        }).is_ok());
+        assert!(
+            check_pipeline_limits(PipelineLimits {
+                stage_count: 5,
+                job_count: 20,
+                max_stages: 10,
+                max_jobs: 100,
+            })
+            .is_ok()
+        );
     }
 
     #[test]
     fn test_too_many_stages() {
         match check_pipeline_limits(PipelineLimits {
-            stage_count: 15, job_count: 20, max_stages: 10, max_jobs: 100,
+            stage_count: 15,
+            job_count: 20,
+            max_stages: 10,
+            max_jobs: 100,
         }) {
             Err(StageValidationError::TooManyStages { count, max }) => {
                 assert_eq!(count, 15);
@@ -482,7 +491,10 @@ mod tests {
     #[test]
     fn test_too_many_jobs() {
         match check_pipeline_limits(PipelineLimits {
-            stage_count: 5, job_count: 150, max_stages: 10, max_jobs: 100,
+            stage_count: 5,
+            job_count: 150,
+            max_stages: 10,
+            max_jobs: 100,
         }) {
             Err(StageValidationError::TooManyJobs { count, max }) => {
                 assert_eq!(count, 150);

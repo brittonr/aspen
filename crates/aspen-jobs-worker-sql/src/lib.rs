@@ -38,6 +38,56 @@ pub struct SqlQueryWorker {
     blob_store: Option<Arc<dyn BlobStore>>,
 }
 
+#[inline]
+fn len_u64(len: usize) -> u64 {
+    u64::try_from(len).unwrap_or(u64::MAX)
+}
+
+#[inline]
+fn len_i64(len: usize) -> i64 {
+    i64::try_from(len).unwrap_or(i64::MAX)
+}
+
+#[inline]
+fn limit_usize(limit: u32) -> usize {
+    usize::try_from(limit).unwrap_or(usize::MAX)
+}
+
+#[inline]
+fn bounded_job_limit_u32(limit: Option<u64>) -> Option<u32> {
+    limit.map(|raw_limit| u32::try_from(raw_limit).unwrap_or(u32::MAX))
+}
+
+#[inline]
+fn default_query_limit_usize(limit: Option<u32>) -> usize {
+    limit_usize(limit.unwrap_or(1000).min(10_000))
+}
+
+#[inline]
+fn elapsed_ms(start: Instant) -> u64 {
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+#[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "SQL worker shell boundary needs monotonic timings for query execution"
+)]
+fn monotonic_now() -> Instant {
+    Instant::now()
+}
+
+#[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "SQL worker shell boundary needs wall-clock timestamps for expiry checks and metadata"
+)]
+fn current_time_ms() -> u64 {
+    u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or(0)
+}
+
 impl SqlQueryWorker {
     /// Create a new SQL query worker with database access.
     pub fn new(node_id: u64, db: Arc<Database>) -> Self {
@@ -61,9 +111,9 @@ impl SqlQueryWorker {
         limit: Option<u32>,
         timeout_secs: u64,
     ) -> Result<(Vec<Vec<serde_json::Value>>, Vec<String>, u64), String> {
-        let start = Instant::now();
-        let effective_limit = limit.unwrap_or(1000).min(10000) as usize;
-        let _effective_timeout = timeout_secs.min(300);
+        let start = monotonic_now();
+        let max_result_rows = default_query_limit_usize(limit);
+        let _max_timeout_secs = timeout_secs.min(300);
 
         // For simple queries, use direct Redb access for better performance
         // Complex queries would need the full DataFusion executor
@@ -78,7 +128,7 @@ impl SqlQueryWorker {
 
         if query_lower.starts_with("select") {
             // General SELECT query - execute via scan
-            return self.execute_select_query(&query_lower, effective_limit, start).await;
+            return self.execute_select_query(&query_lower, max_result_rows, start).await;
         }
 
         Err(format!("unsupported query type, only SELECT queries are allowed: {}", query))
@@ -96,7 +146,7 @@ impl SqlQueryWorker {
 
         // Extract optional WHERE clause prefix filter
         let prefix = self.extract_prefix_from_where(query);
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
 
         let mut count: i64 = 0;
 
@@ -129,7 +179,7 @@ impl SqlQueryWorker {
             count += 1;
         }
 
-        let execution_time_ms = start.elapsed().as_millis() as u64;
+        let execution_time_ms = elapsed_ms(start);
 
         Ok((vec![vec![json!(count)]], vec!["count(*)".to_string()], execution_time_ms))
     }
@@ -147,7 +197,7 @@ impl SqlQueryWorker {
 
         // Extract optional WHERE clause prefix filter
         let prefix = self.extract_prefix_from_where(query);
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
 
         let mut rows: Vec<Vec<serde_json::Value>> = Vec::with_capacity(limit.min(1000));
 
@@ -200,7 +250,7 @@ impl SqlQueryWorker {
             ]);
         }
 
-        let execution_time_ms = start.elapsed().as_millis() as u64;
+        let execution_time_ms = elapsed_ms(start);
 
         let columns = vec![
             "key".to_string(),
@@ -219,15 +269,17 @@ impl SqlQueryWorker {
     fn extract_prefix_from_where(&self, query: &str) -> Option<String> {
         // Simple regex-like extraction for "key LIKE 'prefix%'" pattern
         if let Some(like_pos) = query.find("key like '") {
-            let start = like_pos + 10; // len("key like '")
+            let start = like_pos.saturating_add(10); // len("key like '")
             if let Some(end) = query[start..].find('%') {
-                return Some(query[start..start + end].to_string());
+                let end_index = start.saturating_add(end);
+                return Some(query[start..end_index].to_string());
             }
         }
         if let Some(like_pos) = query.find("key = '") {
-            let start = like_pos + 7; // len("key = '")
+            let start = like_pos.saturating_add(7); // len("key = '")
             if let Some(end) = query[start..].find('\'') {
-                return Some(query[start..start + end].to_string());
+                let end_index = start.saturating_add(end);
+                return Some(query[start..end_index].to_string());
             }
         }
         None
@@ -235,13 +287,13 @@ impl SqlQueryWorker {
 
     /// Get table statistics by scanning the entire table.
     async fn analyze_table_stats(&self, table_name: &str) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = monotonic_now();
 
         let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
 
         let mut row_count: u64 = 0;
         let mut total_key_bytes: u64 = 0;
@@ -269,13 +321,13 @@ impl SqlQueryWorker {
             if let Some(expires_at) = kv.expires_at_ms
                 && now_ms > expires_at
             {
-                expired_count += 1;
+                expired_count = expired_count.saturating_add(1);
                 continue;
             }
 
-            row_count += 1;
-            total_key_bytes += key_bytes.len() as u64;
-            total_value_bytes += kv.value.len() as u64;
+            row_count = row_count.saturating_add(1);
+            total_key_bytes = total_key_bytes.saturating_add(len_u64(key_bytes.len()));
+            total_value_bytes = total_value_bytes.saturating_add(len_u64(kv.value.len()));
 
             min_version = min_version.min(kv.version);
             max_version = max_version.max(kv.version);
@@ -283,11 +335,11 @@ impl SqlQueryWorker {
             max_mod_rev = max_mod_rev.max(kv.mod_revision);
 
             if kv.lease_id.is_some() {
-                with_lease_count += 1;
+                with_lease_count = with_lease_count.saturating_add(1);
             }
         }
 
-        let execution_time_ms = start.elapsed().as_millis() as u64;
+        let execution_time_ms = elapsed_ms(start);
 
         // Handle empty table case
         if row_count == 0 {
@@ -302,7 +354,7 @@ impl SqlQueryWorker {
             "row_count": row_count,
             "total_key_bytes": total_key_bytes,
             "total_value_bytes": total_value_bytes,
-            "total_size_bytes": total_key_bytes + total_value_bytes,
+            "total_size_bytes": total_key_bytes.saturating_add(total_value_bytes),
             "avg_key_size": total_key_bytes.checked_div(row_count).unwrap_or(0),
             "avg_value_size": total_value_bytes.checked_div(row_count).unwrap_or(0),
             "min_version": min_version,
@@ -312,7 +364,9 @@ impl SqlQueryWorker {
             "expired_keys_skipped": expired_count,
             "keys_with_lease": with_lease_count,
             "analysis_time_ms": execution_time_ms,
-            "analyzed_at": chrono::Utc::now().to_rfc3339()
+            "analyzed_at": chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
+                i64::try_from(current_time_ms()).unwrap_or(i64::MAX)
+            ).map(|timestamp| timestamp.to_rfc3339()).unwrap_or_else(|| "invalid-timestamp".to_string())
         }))
     }
 
@@ -350,7 +404,7 @@ impl SqlQueryWorker {
                 csv.into_bytes()
             }
             "json" | "jsonl" => {
-                let mut output = Vec::new();
+                let mut output = Vec::with_capacity(rows.len().saturating_mul(128));
                 for row in rows {
                     let obj: serde_json::Map<String, serde_json::Value> =
                         columns.iter().zip(row.iter()).map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -365,7 +419,7 @@ impl SqlQueryWorker {
             }
         };
 
-        let size = data.len() as u64;
+        let size_bytes = len_u64(data.len());
         let result = blob_store.add_bytes(&data).await.map_err(|e| format!("failed to store blob: {}", e))?;
 
         let hash = result.blob_ref.hash.to_hex().to_string();
@@ -373,13 +427,13 @@ impl SqlQueryWorker {
         info!(
             node_id = self.node_id,
             hash = %hash,
-            size = size,
+            size_bytes = size_bytes,
             format = format,
             rows = rows.len(),
             "exported query results to blob"
         );
 
-        Ok((hash, size))
+        Ok((hash, size_bytes))
     }
 
     /// Compute aggregate metrics.
@@ -389,20 +443,20 @@ impl SqlQueryWorker {
         column: Option<&str>,
         group_by: Option<&str>,
     ) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = monotonic_now();
 
         let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
 
         // Aggregation state
         let mut count: i64 = 0;
         let mut sum: i64 = 0;
         let mut min_val: Option<i64> = None;
         let mut max_val: Option<i64> = None;
-        let mut values: Vec<i64> = Vec::new(); // For percentile calculations
+        let mut values: Vec<i64> = Vec::with_capacity(100_000); // For percentile calculations
 
         // Determine which column to aggregate
         let target_col = column.unwrap_or("version");
@@ -427,12 +481,12 @@ impl SqlQueryWorker {
                 "version" => kv.version,
                 "create_revision" => kv.create_revision,
                 "mod_revision" => kv.mod_revision,
-                "value_length" => kv.value.len() as i64,
+                "value_length" => len_i64(kv.value.len()),
                 _ => kv.version, // Default to version
             };
 
-            count += 1;
-            sum += value;
+            count = count.saturating_add(1);
+            sum = sum.saturating_add(value);
             min_val = Some(min_val.map_or(value, |m| m.min(value)));
             max_val = Some(max_val.map_or(value, |m| m.max(value)));
 
@@ -442,7 +496,7 @@ impl SqlQueryWorker {
             }
         }
 
-        let execution_time_ms = start.elapsed().as_millis() as u64;
+        let execution_time_ms = elapsed_ms(start);
 
         // Compute requested metric
         let result = match metric {
@@ -522,21 +576,22 @@ impl Worker for SqlQueryWorker {
         match job.spec.job_type.as_str() {
             "execute_query" => {
                 let query = job.spec.payload["query"].as_str().unwrap_or("SELECT * FROM kv LIMIT 10");
-                let limit = job.spec.payload["limit"].as_u64().map(|v| v as u32);
+                let max_results = bounded_job_limit_u32(job.spec.payload["limit"].as_u64());
                 let timeout_secs = job.spec.payload["timeout_secs"].as_u64().unwrap_or(60);
 
                 info!(
                     node_id = self.node_id,
                     query_preview = &query[..query.len().min(100)],
-                    limit = ?limit,
+                    max_results = ?max_results,
                     timeout_secs = timeout_secs,
                     "executing SQL query"
                 );
 
-                match self.execute_sql_query(query, limit, timeout_secs).await {
+                match self.execute_sql_query(query, max_results, timeout_secs).await {
                     Ok((rows, columns, execution_time_ms)) => {
                         let row_count = rows.len();
-                        let is_truncated = limit.is_some_and(|l| rows.len() >= l as usize);
+                        let is_truncated =
+                            max_results.is_some_and(|limit_entries| row_count >= limit_usize(limit_entries));
 
                         debug!(
                             node_id = self.node_id,
@@ -584,12 +639,12 @@ impl Worker for SqlQueryWorker {
             "export_results" => {
                 let query = job.spec.payload["query"].as_str().unwrap_or("SELECT * FROM kv LIMIT 100");
                 let format = job.spec.payload["format"].as_str().unwrap_or("csv");
-                let limit = job.spec.payload["limit"].as_u64().map(|v| v as u32);
+                let max_results = bounded_job_limit_u32(job.spec.payload["limit"].as_u64());
 
                 info!(node_id = self.node_id, format = format, "exporting query results to blob");
 
                 // First execute the query
-                match self.execute_sql_query(query, limit, 120).await {
+                match self.execute_sql_query(query, max_results, 120).await {
                     Ok((rows, columns, query_time_ms)) => {
                         // Then export to blob
                         match self.export_to_blob(&rows, &columns, format).await {

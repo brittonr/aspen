@@ -123,16 +123,23 @@ impl KeyValueStore for RaftNode {
                 // If we're a follower with a write forwarder, forward to the leader
                 // instead of returning NotLeader. This prevents job ack failures
                 // and pipeline stalls during leader elections.
-                if let Some(forward_info) = err.forward_to_leader()
-                    && let Some(forwarder) = self.write_forwarder()
-                    && let Some(leader_id) = forward_info.leader_id
-                    && leader_id != self.node_id()
-                    && let Some(leader_node) = &forward_info.leader_node
-                {
-                    let leader_addr = leader_node.iroh_addr.clone();
-                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding write to leader");
-                    metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
-                    return forwarder.forward_write(leader_id, leader_addr, request).await;
+                if let Some(forward_info) = err.forward_to_leader() {
+                    if let Some(forwarder) = self.write_forwarder() {
+                        if let Some(leader_id) = forward_info.leader_id {
+                            if leader_id != self.node_id() {
+                                if let Some(leader_node) = &forward_info.leader_node {
+                                    let leader_addr = leader_node.iroh_addr.clone();
+                                    debug!(
+                                        node_id = self.node_id().0,
+                                        leader_id = leader_id.0,
+                                        "forwarding write to leader"
+                                    );
+                                    metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
+                                    return forwarder.forward_write(leader_id, leader_addr, request).await;
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(map_raft_write_error(err))
             }
@@ -195,25 +202,32 @@ impl KeyValueStore for RaftNode {
             }
             Err(err) => {
                 // Forward to leader if this is a ForwardToLeader error
-                if let Some(forward_info) = err.forward_to_leader()
-                    && let Some(forwarder) = self.write_forwarder()
-                    && let Some(leader_id) = forward_info.leader_id
-                    && leader_id != self.node_id()
-                    && let Some(leader_node) = &forward_info.leader_node
-                {
-                    let leader_addr = leader_node.iroh_addr.clone();
-                    debug!(node_id = self.node_id().0, leader_id = leader_id.0, "forwarding delete to leader");
-                    let write_request = WriteRequest {
-                        command: WriteCommand::Delete {
-                            key: request.key.clone(),
-                        },
-                    };
-                    let _forwarded_write_result =
-                        forwarder.forward_write(leader_id, leader_addr, write_request).await?;
-                    return Ok(DeleteResult {
-                        key: request.key,
-                        is_deleted: true,
-                    });
+                if let Some(forward_info) = err.forward_to_leader() {
+                    if let Some(forwarder) = self.write_forwarder() {
+                        if let Some(leader_id) = forward_info.leader_id {
+                            if leader_id != self.node_id() {
+                                if let Some(leader_node) = &forward_info.leader_node {
+                                    let leader_addr = leader_node.iroh_addr.clone();
+                                    debug!(
+                                        node_id = self.node_id().0,
+                                        leader_id = leader_id.0,
+                                        "forwarding delete to leader"
+                                    );
+                                    let write_request = WriteRequest {
+                                        command: WriteCommand::Delete {
+                                            key: request.key.clone(),
+                                        },
+                                    };
+                                    let _forwarded_write_result =
+                                        forwarder.forward_write(leader_id, leader_addr, write_request).await?;
+                                    return Ok(DeleteResult {
+                                        key: request.key,
+                                        is_deleted: true,
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(map_raft_write_error(err))
             }

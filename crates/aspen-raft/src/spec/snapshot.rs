@@ -87,6 +87,9 @@ pub fn verify_snapshot_integrity(
         return Err("Combined hash mismatch".to_string());
     }
 
+    assert!(computed_data_hash == integrity.data_hash, "snapshot data hash must match integrity record");
+    assert!(computed_combined == integrity.combined_hash, "snapshot combined hash must match integrity record");
+
     Ok(())
 }
 

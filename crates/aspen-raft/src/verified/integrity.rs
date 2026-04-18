@@ -273,12 +273,12 @@ impl SnapshotIntegrity {
         let data_hash = *blake3::hash(data).as_bytes();
         let meta_hash = *blake3::hash(meta_bytes).as_bytes();
 
-        let basic_valid =
+        let is_hash_pair_valid =
             constant_time_compare(&self.data_hash, &data_hash) && constant_time_compare(&self.meta_hash, &meta_hash);
 
         match expected_chain_hash {
-            Some(expected) => basic_valid && constant_time_compare(&self.chain_hash_at_snapshot, expected),
-            None => basic_valid,
+            Some(expected) => is_hash_pair_valid && constant_time_compare(&self.chain_hash_at_snapshot, expected),
+            None => is_hash_pair_valid,
         }
     }
 
@@ -432,7 +432,7 @@ pub const fn is_valid_chain_range(first_index: u64, last_index: u64) -> bool {
 #[allow(dead_code)]
 pub fn compute_chain_length(first_index: u64, last_index: u64) -> u64 {
     if first_index <= last_index {
-        (last_index - first_index).saturating_add(1)
+        last_index.saturating_sub(first_index).saturating_add(1)
     } else {
         0
     }

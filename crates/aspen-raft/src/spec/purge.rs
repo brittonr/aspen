@@ -84,6 +84,10 @@ pub fn verify_purge_preserves_invariants(pre: &StorageStateSpec, purge_up_to: u6
         return Err("Log entries <= purge_up_to still exist".to_string());
     }
 
+    assert!(storage_invariant(&post), "purge post-state must satisfy storage invariant");
+    assert!(purge_monotonic(pre, &post), "purge must preserve last_purged monotonicity");
+    assert!(post.log.keys().all(|&idx| idx > purge_up_to), "purged log entries must stay removed");
+
     Ok(())
 }
 

@@ -45,8 +45,8 @@ impl BatchConfig {
     /// which allows more concurrent writes to batch together.
     pub fn high_throughput() -> Self {
         Self {
-            max_entries: 100,           // Capped at MAX_SETMULTI_KEYS
-            max_bytes: 4 * 1024 * 1024, // 4 MB (u64)
+            max_entries: 100,     // Capped at MAX_SETMULTI_KEYS
+            max_bytes: 4_194_304, // 4 MB
             max_wait_ms: 5,
             max_wait: Duration::from_millis(5),
         }

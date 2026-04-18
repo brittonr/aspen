@@ -537,8 +537,9 @@ pub fn compute_rebalance_pairs(
     }
 
     // Identify overloaded and underloaded workers
-    let mut overloaded: Vec<(u32, f32)> = Vec::new();
-    let mut underloaded: Vec<(u32, f32)> = Vec::new();
+    let worker_count = workers.len();
+    let mut overloaded: Vec<(u32, f32)> = Vec::with_capacity(worker_count);
+    let mut underloaded: Vec<(u32, f32)> = Vec::with_capacity(worker_count);
 
     for worker in workers {
         let deviation = worker.load - target_avg_load;
