@@ -44,6 +44,17 @@ fn current_time_ms() -> u64 {
     }
 }
 
+struct SubmitJobArgs {
+    job_type: String,
+    payload_str: String,
+    priority_opt: Option<u8>,
+    timeout_ms: Option<u64>,
+    max_retries: Option<u32>,
+    retry_delay_ms: Option<u64>,
+    schedule: Option<String>,
+    tags: Vec<String>,
+}
+
 struct CompleteJobArgs {
     worker_id: String,
     job_id: String,
@@ -52,6 +63,16 @@ struct CompleteJobArgs {
     is_success: bool,
     error_message: Option<String>,
     output_data: Option<Vec<u8>>,
+}
+
+#[inline]
+fn default_retry_policy() -> RetryPolicy {
+    RetryPolicy::exponential(3)
+}
+
+#[inline]
+fn limit_usize(limit_opt: Option<u32>) -> usize {
+    usize::try_from(limit_opt.unwrap_or(100).min(1000)).unwrap_or(1000)
 }
 
 /// Service executor for job queue operations.
@@ -125,8 +146,17 @@ impl ServiceExecutor for JobServiceExecutor {
                 schedule,
                 tags,
             } => {
-                self.handle_submit(job_type, payload, priority, timeout_ms, max_retries, retry_delay_ms, schedule, tags)
-                    .await
+                self.handle_submit(SubmitJobArgs {
+                    job_type,
+                    payload_str: payload,
+                    priority_opt: priority,
+                    timeout_ms,
+                    max_retries,
+                    retry_delay_ms,
+                    schedule,
+                    tags,
+                })
+                .await
             }
             ClientRpcRequest::JobGet { job_id } => self.handle_get(job_id).await,
             ClientRpcRequest::JobList {
@@ -249,51 +279,44 @@ fn job_to_details(job: &aspen_jobs::Job) -> JobDetails {
 // =============================================================================
 
 impl JobServiceExecutor {
-    #[allow(clippy::too_many_arguments)]
-    async fn handle_submit(
-        &self,
-        job_type: String,
-        payload_str: String,
-        priority_opt: Option<u8>,
-        timeout_ms: Option<u64>,
-        max_retries: Option<u32>,
-        retry_delay_ms: Option<u64>,
-        schedule: Option<String>,
-        tags: Vec<String>,
-    ) -> Result<ClientRpcResponse> {
-        debug!("Submitting job: type={}", job_type);
+    async fn handle_submit(&self, args: SubmitJobArgs) -> Result<ClientRpcResponse> {
+        debug!("Submitting job: type={}", args.job_type);
 
         let payload: serde_json::Value =
-            serde_json::from_str(&payload_str).map_err(|e| anyhow::anyhow!("invalid JSON payload: {e}"))?;
+            serde_json::from_str(&args.payload_str).map_err(|e| anyhow::anyhow!("invalid JSON payload: {e}"))?;
 
-        let priority = match priority_opt.unwrap_or(1) {
+        let priority = match args.priority_opt.unwrap_or(1) {
             0 => Priority::Low,
             2 => Priority::High,
             3 => Priority::Critical,
             _ => Priority::Normal,
         };
 
-        let retry_policy = match max_retries {
+        let retry_policy = match args.max_retries {
             Some(0) => RetryPolicy::none(),
-            Some(n) => RetryPolicy::fixed(n, std::time::Duration::from_millis(retry_delay_ms.unwrap_or(1000))),
-            None => RetryPolicy::default(),
+            Some(attempt_count) => {
+                RetryPolicy::fixed(attempt_count, std::time::Duration::from_millis(args.retry_delay_ms.unwrap_or(1000)))
+            }
+            None => default_retry_policy(),
         };
 
-        let timeout = timeout_ms.map(std::time::Duration::from_millis);
+        let timeout = args.timeout_ms.map(std::time::Duration::from_millis);
 
-        let parsed_schedule = match schedule {
-            Some(s) => Some(aspen_jobs::parse_schedule(&s).map_err(|e| anyhow::anyhow!("invalid schedule: {e}"))?),
+        let parsed_schedule = match args.schedule {
+            Some(schedule_spec) => {
+                Some(aspen_jobs::parse_schedule(&schedule_spec).map_err(|e| anyhow::anyhow!("invalid schedule: {e}"))?)
+            }
             None => None,
         };
 
         let spec = JobSpec {
-            job_type,
+            job_type: args.job_type,
             payload,
             config: JobConfig {
                 priority,
                 retry_policy,
                 timeout,
-                tags: tags.into_iter().collect(),
+                tags: args.tags.into_iter().collect(),
                 dependencies: vec![],
                 save_result: true,
                 ttl_after_completion: None,
@@ -352,7 +375,7 @@ impl JobServiceExecutor {
         tags: Vec<String>,
         limit_opt: Option<u32>,
     ) -> Result<ClientRpcResponse> {
-        let limit = limit_opt.unwrap_or(100).min(1000) as usize;
+        let limit = limit_usize(limit_opt);
 
         let status_filter = status_str.as_deref().and_then(|s| match s {
             "pending" => Some(JobStatus::Pending),
@@ -369,13 +392,13 @@ impl JobServiceExecutor {
             .kv_store
             .scan(aspen_core::ScanRequest {
                 prefix: prefix.to_string(),
-                limit_results: Some(limit as u32),
+                limit_results: Some(u32::try_from(limit).unwrap_or(1000)),
                 continuation_token: None,
             })
             .await
         {
             Ok(scan_result) => {
-                let mut jobs = Vec::new();
+                let mut jobs = Vec::with_capacity(scan_result.entries.len().min(limit));
 
                 for entry in scan_result.entries.iter() {
                     if let Some(job_id_str) = entry.key.strip_prefix(prefix) {
