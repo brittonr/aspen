@@ -20,6 +20,7 @@ use aspen_trust::protocol::ShareResponse;
 use aspen_trust::protocol::TrustResponse;
 use aspen_trust::reconfig::ReconfigAction;
 use aspen_trust::reconfig::ReconfigCoordinator;
+use aspen_trust::reconfig::ReconfigParams;
 use aspen_trust::secret::ClusterSecret;
 use aspen_trust::secret::Threshold;
 use aspen_trust::shamir;
@@ -220,17 +221,17 @@ fn proposal_from_actions(
 }
 
 fn build_timeout_error(context: &TimeoutContext, collected_shares: &BTreeMap<u64, shamir::Share>) -> String {
-    let mut coordinator = ReconfigCoordinator::new(
-        context.old_epoch,
-        context.membership_epoch,
-        context.old_threshold,
-        context.new_threshold,
-        context.old_members.clone(),
-        context.new_members.clone(),
-        context.expected_digests.clone(),
-        context.cluster_id.clone(),
-        BTreeMap::new(),
-    );
+    let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+        old_epoch: context.old_epoch,
+        new_epoch: context.membership_epoch,
+        old_threshold: context.old_threshold,
+        new_threshold: context.new_threshold,
+        old_members: context.old_members.clone(),
+        new_members: context.new_members.clone(),
+        expected_digests: context.expected_digests.clone(),
+        cluster_id: context.cluster_id.clone(),
+        prior_secrets: BTreeMap::new(),
+    });
 
     for (node_id, share) in collected_shares {
         if let Err(error) = coordinator.on_share_received(*node_id, share.clone()) {
@@ -660,17 +661,17 @@ impl RaftNode {
             BTreeMap::new()
         };
 
-        let mut coordinator = ReconfigCoordinator::new(
-            context.old_epoch,
-            membership_epoch,
-            context.old_threshold,
-            context.new_threshold,
-            old_members.clone(),
-            new_members.clone(),
-            context.expected_digests.clone(),
-            context.cluster_id.clone(),
+        let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: context.old_epoch,
+            new_epoch: membership_epoch,
+            old_threshold: context.old_threshold,
+            new_threshold: context.new_threshold,
+            old_members: old_members.clone(),
+            new_members: new_members.clone(),
+            expected_digests: context.expected_digests.clone(),
+            cluster_id: context.cluster_id.clone(),
             prior_secrets,
-        );
+        });
         let mut actions = Vec::new();
         for (node_id, share) in old_shares {
             let new_actions = coordinator.on_share_received(node_id, share).map_err(|e| e.to_string())?;

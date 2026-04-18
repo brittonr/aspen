@@ -123,33 +123,44 @@ pub struct ReconfigCoordinator {
     prior_secrets: BTreeMap<u64, [u8; 32]>,
 }
 
+/// Parameters for creating a reconfiguration coordinator.
+pub struct ReconfigParams {
+    /// Old epoch we're rotating from.
+    pub old_epoch: u64,
+    /// New epoch we're rotating to.
+    pub new_epoch: u64,
+    /// Threshold for reconstruction from the old configuration.
+    pub old_threshold: u8,
+    /// Threshold for new shares in the next configuration.
+    pub new_threshold: u8,
+    /// Nodes in the old configuration.
+    pub old_members: BTreeSet<u64>,
+    /// Nodes in the new configuration.
+    pub new_members: BTreeSet<u64>,
+    /// Expected digests (from stored state).
+    pub expected_digests: BTreeMap<u64, ShareDigest>,
+    /// Cluster identifier.
+    pub cluster_id: Vec<u8>,
+    /// Prior secrets (for chain construction). Empty on first reconfig.
+    pub prior_secrets: BTreeMap<u64, [u8; 32]>,
+}
+
 impl ReconfigCoordinator {
     /// Create a new coordinator for a membership change.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        old_epoch: u64,
-        new_epoch: u64,
-        old_threshold: u8,
-        new_threshold: u8,
-        old_members: BTreeSet<u64>,
-        new_members: BTreeSet<u64>,
-        expected_digests: BTreeMap<u64, ShareDigest>,
-        cluster_id: Vec<u8>,
-        prior_secrets: BTreeMap<u64, [u8; 32]>,
-    ) -> Self {
+    pub fn new(params: ReconfigParams) -> Self {
         Self {
             state: ReconfigState::CollectingOldShares,
-            old_epoch,
-            new_epoch,
-            old_threshold,
-            new_threshold,
-            old_members,
-            new_members,
+            old_epoch: params.old_epoch,
+            new_epoch: params.new_epoch,
+            old_threshold: params.old_threshold,
+            new_threshold: params.new_threshold,
+            old_members: params.old_members,
+            new_members: params.new_members,
             collected_shares: Vec::new(),
             share_sources: BTreeSet::new(),
-            expected_digests,
-            cluster_id,
-            prior_secrets,
+            expected_digests: params.expected_digests,
+            cluster_id: params.cluster_id,
+            prior_secrets: params.prior_secrets,
         }
     }
 
@@ -354,17 +365,17 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 4].into();
 
-        let mut coordinator = ReconfigCoordinator::new(
-            1,
-            2,
-            2,
-            2,
-            old_members,
-            new_members,
-            digests,
-            b"test-cluster".to_vec(),
-            BTreeMap::new(),
-        );
+        let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: 1,
+            new_epoch: 2,
+            old_threshold: 2,
+            new_threshold: 2,
+            old_members: old_members,
+            new_members: new_members,
+            expected_digests: digests,
+            cluster_id: b"test-cluster".to_vec(),
+            prior_secrets: BTreeMap::new(),
+        });
 
         let actions = coordinator.start();
         assert_eq!(actions.len(), 3);
@@ -398,17 +409,17 @@ mod tests {
         let (shares, digests, old_secret) = setup_3node();
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 4].into();
-        let mut coordinator = ReconfigCoordinator::new(
-            10,
-            22,
-            2,
-            2,
-            old_members.clone(),
+        let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: 10,
+            new_epoch: 22,
+            old_threshold: 2,
+            new_threshold: 2,
+            old_members: old_members.clone(),
             new_members,
-            digests,
-            b"ctx-cluster".to_vec(),
-            BTreeMap::from([(5, [0x55; 32])]),
-        );
+            expected_digests: digests,
+            cluster_id: b"ctx-cluster".to_vec(),
+            prior_secrets: BTreeMap::from([(5, [0x55; 32])]),
+        });
         let mut ctx = TestReconfigCtx::new(old_members.clone());
 
         dispatch_actions(&mut ctx, coordinator.start());
@@ -445,17 +456,17 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 4].into();
 
-        let mut coordinator = ReconfigCoordinator::new(
-            1,
-            2,
-            2,
-            2,
-            old_members,
-            new_members,
-            digests,
-            b"cluster".to_vec(),
-            BTreeMap::new(),
-        );
+        let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: 1,
+            new_epoch: 2,
+            old_threshold: 2,
+            new_threshold: 2,
+            old_members: old_members,
+            new_members: new_members,
+            expected_digests: digests,
+            cluster_id: b"cluster".to_vec(),
+            prior_secrets: BTreeMap::new(),
+        });
 
         let err = coordinator.on_timeout().unwrap_err();
         assert!(matches!(err, ReconfigError::Timeout {
@@ -472,17 +483,17 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 3].into();
 
-        let mut coordinator = ReconfigCoordinator::new(
-            1,
-            2,
-            2,
-            2,
-            old_members,
-            new_members,
-            digests,
-            b"cluster".to_vec(),
-            BTreeMap::new(),
-        );
+        let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: 1,
+            new_epoch: 2,
+            old_threshold: 2,
+            new_threshold: 2,
+            old_members: old_members,
+            new_members: new_members,
+            expected_digests: digests,
+            cluster_id: b"cluster".to_vec(),
+            prior_secrets: BTreeMap::new(),
+        });
 
         let result = coordinator.on_share_received(2, shares[0].clone());
         assert!(matches!(result, Err(ReconfigError::InvalidShare { node_id: 2 })));
@@ -495,17 +506,17 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let new_members: BTreeSet<u64> = [1, 2, 3].into();
 
-        let mut coordinator = ReconfigCoordinator::new(
-            1,
-            2,
-            2,
-            2,
-            old_members,
-            new_members,
-            digests,
-            b"cluster".to_vec(),
-            BTreeMap::new(),
-        );
+        let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: 1,
+            new_epoch: 2,
+            old_threshold: 2,
+            new_threshold: 2,
+            old_members: old_members,
+            new_members: new_members,
+            expected_digests: digests,
+            cluster_id: b"cluster".to_vec(),
+            prior_secrets: BTreeMap::new(),
+        });
 
         coordinator.on_share_received(1, shares[0].clone()).unwrap();
         let actions = coordinator.on_share_received(1, shares[0].clone()).unwrap();
@@ -551,17 +562,17 @@ mod tests {
                 old_members.iter().zip(shares.iter()).map(|(&node_id, share)| (node_id, shamir::share_digest(share))).collect();
 
             let old_epoch = 7u64;
-            let mut coordinator = ReconfigCoordinator::new(
-                old_epoch,
-                19,
-                old_threshold,
-                new_threshold,
-                old_members.clone(),
-                new_members.clone(),
-                expected_digests,
-                b"prop-cluster".to_vec(),
-                BTreeMap::new(),
-            );
+            let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: old_epoch,
+            new_epoch: 19,
+            old_threshold: old_threshold,
+            new_threshold: new_threshold,
+            old_members: old_members.clone(),
+            new_members: new_members.clone(),
+            expected_digests: expected_digests,
+            cluster_id: b"prop-cluster".to_vec(),
+            prior_secrets: BTreeMap::new(),
+        });
 
             let mut proposal = None;
             for (&node_id, share) in old_members.iter().zip(shares.iter()).take(usize::from(old_threshold)) {
