@@ -142,22 +142,22 @@ mod tests {
     // Queue response types
     use aspen_client_api::QueueAckResultResponse;
     use aspen_client_api::QueueCreateResultResponse;
-    use aspen_client_api::QueueDLQItemResponse;
     use aspen_client_api::QueueDeleteResultResponse;
     use aspen_client_api::QueueDequeueResultResponse;
     use aspen_client_api::QueueDequeuedItemResponse;
+    use aspen_client_api::QueueDlqItemResponse;
     use aspen_client_api::QueueEnqueueBatchResultResponse;
     use aspen_client_api::QueueEnqueueResultResponse;
     use aspen_client_api::QueueExtendVisibilityResultResponse;
-    use aspen_client_api::QueueGetDLQResultResponse;
+    use aspen_client_api::QueueGetDlqResultResponse;
     use aspen_client_api::QueueItemResponse;
     use aspen_client_api::QueueNackResultResponse;
     use aspen_client_api::QueuePeekResultResponse;
-    use aspen_client_api::QueueRedriveDLQResultResponse;
+    use aspen_client_api::QueueRedriveDlqResultResponse;
     use aspen_client_api::QueueStatusResultResponse;
-    // RWLock response types
-    use aspen_client_api::RWLockResultResponse;
     use aspen_client_api::RateLimiterResultResponse;
+    // RWLock response types
+    use aspen_client_api::RwLockResultResponse;
     // Semaphore response types
     use aspen_client_api::SemaphoreResultResponse;
     use aspen_client_api::SequenceResultResponse;
@@ -799,9 +799,9 @@ mod tests {
     #[tokio::test]
     async fn test_queue_get_dlq() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueGetDLQResult(QueueGetDlqResultResponse {
                 is_success: true,
-                items: vec![QueueDLQItemResponse {
+                items: vec![QueueDlqItemResponse {
                     item_id: 99,
                     payload: b"failed".to_vec(),
                     enqueued_at_ms: 1000,
@@ -824,7 +824,7 @@ mod tests {
     #[tokio::test]
     async fn test_queue_redrive_dlq() {
         let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::QueueRedriveDLQResult(
-            QueueRedriveDLQResultResponse {
+            QueueRedriveDlqResultResponse {
                 is_success: true,
                 error: None,
             },
@@ -969,7 +969,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_acquire_read_success() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireReadResult(RwLockResultResponse {
                 is_success: true,
                 mode: Some("read".to_string()),
                 fencing_token: Some(1),
@@ -989,7 +989,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_acquire_read_failure() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireReadResult(RwLockResultResponse {
                 is_success: false,
                 mode: None,
                 fencing_token: None,
@@ -1010,7 +1010,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_try_acquire_read_success() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireReadResult(RwLockResultResponse {
                 is_success: true,
                 mode: Some("read".to_string()),
                 fencing_token: Some(2),
@@ -1029,7 +1029,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_try_acquire_read_not_available() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireReadResult(RwLockResultResponse {
                 is_success: false,
                 mode: None,
                 fencing_token: None,
@@ -1047,7 +1047,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_acquire_write_success() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockAcquireWriteResult(RwLockResultResponse {
                 is_success: true,
                 mode: Some("write".to_string()),
                 fencing_token: Some(10),
@@ -1066,7 +1066,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_try_acquire_write_success() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireWriteResult(RwLockResultResponse {
                 is_success: true,
                 mode: Some("write".to_string()),
                 fencing_token: Some(11),
@@ -1085,7 +1085,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_try_acquire_write_not_available() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockTryAcquireWriteResult(RwLockResultResponse {
                 is_success: false,
                 mode: None,
                 fencing_token: None,
@@ -1103,7 +1103,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_release_read_success() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockReleaseReadResult(RwLockResultResponse {
                 is_success: true,
                 mode: None,
                 fencing_token: None,
@@ -1121,7 +1121,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_release_write_success() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockReleaseWriteResult(RwLockResultResponse {
                 is_success: true,
                 mode: None,
                 fencing_token: None,
@@ -1139,7 +1139,7 @@ mod tests {
     #[tokio::test]
     async fn test_rwlock_downgrade_success() {
         let client =
-            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+            Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockDowngradeResult(RwLockResultResponse {
                 is_success: true,
                 mode: Some("read".to_string()),
                 fencing_token: Some(10),
@@ -1157,7 +1157,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rwlock_status_success() {
-        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+        let client = Arc::new(MockRpcClient::new(vec![ClientRpcResponse::RWLockStatusResult(RwLockResultResponse {
             is_success: true,
             mode: Some("read".to_string()),
             fencing_token: Some(5),

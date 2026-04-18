@@ -65,7 +65,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         ttl: Duration,
         timeout: Option<Duration>,
     ) -> Result<RWLockReadResult> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
         let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
@@ -81,7 +81,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+            ClientRpcResponse::RWLockAcquireReadResult(RwLockResultResponse {
                 is_success,
                 fencing_token,
                 deadline_ms,
@@ -112,7 +112,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         holder_id: &str,
         ttl: Duration,
     ) -> Result<Option<RWLockReadResult>> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
 
@@ -126,7 +126,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+            ClientRpcResponse::RWLockTryAcquireReadResult(RwLockResultResponse {
                 is_success,
                 fencing_token,
                 deadline_ms,
@@ -161,7 +161,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         ttl: Duration,
         timeout: Option<Duration>,
     ) -> Result<RWLockWriteResult> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
         let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
@@ -177,7 +177,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+            ClientRpcResponse::RWLockAcquireWriteResult(RwLockResultResponse {
                 is_success,
                 fencing_token,
                 deadline_ms,
@@ -206,7 +206,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         holder_id: &str,
         ttl: Duration,
     ) -> Result<Option<RWLockWriteResult>> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
 
@@ -220,7 +220,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+            ClientRpcResponse::RWLockTryAcquireWriteResult(RwLockResultResponse {
                 is_success,
                 fencing_token,
                 deadline_ms,
@@ -244,7 +244,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
     /// Release a read lock.
     pub async fn release_read(&self, name: &str, holder_id: &str) -> Result<()> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let response = self
             .client
@@ -255,7 +255,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse { is_success, error, .. }) => {
+            ClientRpcResponse::RWLockReleaseReadResult(RwLockResultResponse { is_success, error, .. }) => {
                 if is_success {
                     Ok(())
                 } else {
@@ -270,7 +270,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
     ///
     /// Requires the fencing token from acquisition for verification.
     pub async fn release_write(&self, name: &str, holder_id: &str, fencing_token: u64) -> Result<()> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let response = self
             .client
@@ -282,7 +282,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse { is_success, error, .. }) => {
+            ClientRpcResponse::RWLockReleaseWriteResult(RwLockResultResponse { is_success, error, .. }) => {
                 if is_success {
                     Ok(())
                 } else {
@@ -304,7 +304,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         fencing_token: u64,
         ttl: Duration,
     ) -> Result<RWLockReadResult> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
 
@@ -319,7 +319,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+            ClientRpcResponse::RWLockDowngradeResult(RwLockResultResponse {
                 is_success,
                 fencing_token: new_token,
                 deadline_ms,
@@ -343,7 +343,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
     /// Get lock status.
     pub async fn status(&self, name: &str) -> Result<RWLockStatusResult> {
-        use aspen_client_api::RWLockResultResponse;
+        use aspen_client_api::RwLockResultResponse;
 
         let response = self
             .client
@@ -351,7 +351,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
             .await?;
 
         match response {
-            ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+            ClientRpcResponse::RWLockStatusResult(RwLockResultResponse {
                 is_success,
                 mode,
                 fencing_token,

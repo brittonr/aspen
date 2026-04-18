@@ -175,7 +175,7 @@ pub struct SemaphoreResultResponse {
 /// Used for RWLockAcquireRead, RWLockAcquireWrite, RWLockRelease, RWLockDowngrade, and
 /// RWLockStatus.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RWLockResultResponse {
+pub struct RwLockResultResponse {
     /// Whether the operation succeeded.
     pub is_success: bool,
     /// Current lock mode: "free", "read", or "write".
@@ -359,7 +359,7 @@ pub struct QueueStatusResultResponse {
 
 /// A DLQ item response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueueDLQItemResponse {
+pub struct QueueDlqItemResponse {
     /// Item ID.
     pub item_id: u64,
     /// Item payload.
@@ -378,18 +378,18 @@ pub struct QueueDLQItemResponse {
 
 /// Queue get DLQ operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueueGetDLQResultResponse {
+pub struct QueueGetDlqResultResponse {
     /// Whether the operation succeeded.
     pub is_success: bool,
     /// DLQ items.
-    pub items: Vec<QueueDLQItemResponse>,
+    pub items: Vec<QueueDlqItemResponse>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
 
 /// Queue redrive DLQ operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueueRedriveDLQResultResponse {
+pub struct QueueRedriveDlqResultResponse {
     /// Whether the operation succeeded.
     pub is_success: bool,
     /// Error message if the operation failed.
@@ -704,7 +704,7 @@ mod tests {
 
     #[test]
     fn rwlock_result_roundtrip() {
-        roundtrip(&RWLockResultResponse {
+        roundtrip(&RwLockResultResponse {
             is_success: true,
             mode: Some("write".into()),
             fencing_token: Some(7),
@@ -713,7 +713,7 @@ mod tests {
             writer_holder: Some("writer-1".into()),
             error: None,
         });
-        roundtrip(&RWLockResultResponse {
+        roundtrip(&RwLockResultResponse {
             is_success: true,
             mode: Some("read".into()),
             fencing_token: None,
@@ -859,9 +859,9 @@ mod tests {
 
     #[test]
     fn queue_dlq_roundtrip() {
-        roundtrip(&QueueGetDLQResultResponse {
+        roundtrip(&QueueGetDlqResultResponse {
             is_success: true,
-            items: vec![QueueDLQItemResponse {
+            items: vec![QueueDlqItemResponse {
                 item_id: 99,
                 payload: vec![1, 2, 3],
                 enqueued_at_ms: 1_700_000_000_000,
@@ -876,7 +876,7 @@ mod tests {
 
     #[test]
     fn queue_redrive_dlq_roundtrip() {
-        roundtrip(&QueueRedriveDLQResultResponse {
+        roundtrip(&QueueRedriveDlqResultResponse {
             is_success: true,
             error: None,
         });

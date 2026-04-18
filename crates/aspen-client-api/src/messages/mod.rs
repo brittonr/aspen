@@ -182,22 +182,22 @@ pub use coordination::LockSetMemberTokenWire;
 pub use coordination::LockSetResultResponse;
 pub use coordination::QueueAckResultResponse;
 pub use coordination::QueueCreateResultResponse;
-pub use coordination::QueueDLQItemResponse;
 pub use coordination::QueueDeleteResultResponse;
 pub use coordination::QueueDequeueResultResponse;
 pub use coordination::QueueDequeuedItemResponse;
+pub use coordination::QueueDlqItemResponse;
 pub use coordination::QueueEnqueueBatchResultResponse;
 pub use coordination::QueueEnqueueItem;
 pub use coordination::QueueEnqueueResultResponse;
 pub use coordination::QueueExtendVisibilityResultResponse;
-pub use coordination::QueueGetDLQResultResponse;
+pub use coordination::QueueGetDlqResultResponse;
 pub use coordination::QueueItemResponse;
 pub use coordination::QueueNackResultResponse;
 pub use coordination::QueuePeekResultResponse;
-pub use coordination::QueueRedriveDLQResultResponse;
+pub use coordination::QueueRedriveDlqResultResponse;
 pub use coordination::QueueStatusResultResponse;
-pub use coordination::RWLockResultResponse;
 pub use coordination::RateLimiterResultResponse;
+pub use coordination::RwLockResultResponse;
 pub use coordination::SemaphoreResultResponse;
 pub use coordination::SequenceResultResponse;
 pub use coordination::ServiceDeregisterResultResponse;
@@ -4221,28 +4221,28 @@ pub enum ClientRpcResponse {
     // Read-Write Lock responses
     // =========================================================================
     /// RWLock acquire read result.
-    RWLockAcquireReadResult(RWLockResultResponse),
+    RWLockAcquireReadResult(RwLockResultResponse),
 
     /// RWLock try-acquire read result.
-    RWLockTryAcquireReadResult(RWLockResultResponse),
+    RWLockTryAcquireReadResult(RwLockResultResponse),
 
     /// RWLock acquire write result.
-    RWLockAcquireWriteResult(RWLockResultResponse),
+    RWLockAcquireWriteResult(RwLockResultResponse),
 
     /// RWLock try-acquire write result.
-    RWLockTryAcquireWriteResult(RWLockResultResponse),
+    RWLockTryAcquireWriteResult(RwLockResultResponse),
 
     /// RWLock release read result.
-    RWLockReleaseReadResult(RWLockResultResponse),
+    RWLockReleaseReadResult(RwLockResultResponse),
 
     /// RWLock release write result.
-    RWLockReleaseWriteResult(RWLockResultResponse),
+    RWLockReleaseWriteResult(RwLockResultResponse),
 
     /// RWLock downgrade result.
-    RWLockDowngradeResult(RWLockResultResponse),
+    RWLockDowngradeResult(RwLockResultResponse),
 
     /// RWLock status result.
-    RWLockStatusResult(RWLockResultResponse),
+    RWLockStatusResult(RwLockResultResponse),
 
     // =========================================================================
     // Queue responses
@@ -4278,10 +4278,10 @@ pub enum ClientRpcResponse {
     QueueStatusResult(QueueStatusResultResponse),
 
     /// Queue get DLQ result.
-    QueueGetDLQResult(QueueGetDLQResultResponse),
+    QueueGetDLQResult(QueueGetDlqResultResponse),
 
     /// Queue redrive DLQ result.
-    QueueRedriveDLQResult(QueueRedriveDLQResultResponse),
+    QueueRedriveDLQResult(QueueRedriveDlqResultResponse),
 
     // =========================================================================
     // Service Registry responses

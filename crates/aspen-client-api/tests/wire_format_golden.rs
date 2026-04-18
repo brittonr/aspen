@@ -749,7 +749,7 @@ fn test_response_discriminants_golden() {
     // Section: rwlock (79-86)
     assert_response_disc(
         &map,
-        &ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+        &ClientRpcResponse::RWLockAcquireReadResult(RwLockResultResponse {
             is_success: false,
             mode: None,
             fencing_token: None,
