@@ -313,9 +313,9 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
     let domain = String::from_utf8_lossy(&domain_bytes).to_string();
 
     // Read port
-    let port = read_u16(stream).await?;
+    let port_number = read_u16(stream).await?;
 
-    debug!("SOCKS5 CONNECT from {addr}: {domain}:{port}");
+    debug!("SOCKS5 CONNECT from {addr}: {domain}:{port_number}");
 
     // Reject non-.aspen domains
     if !domain.ends_with(".aspen") {
@@ -341,15 +341,15 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
     };
 
     // Use client-specified port (per spec: SOCKS5 CONNECT with explicit port override)
-    let remote_port = port;
+    let remote_port_number = port_number;
 
     // Token authorization check
-    if let Err(e) = auth.check_connect(service_name, remote_port) {
+    if let Err(e) = auth.check_connect(service_name, remote_port_number) {
         send_reply(stream, REPLY_CONNECTION_REFUSED).await?;
         return Err(Socks5Error::Auth { source: e });
     }
 
-    Ok((domain, port, endpoint_id, remote_port))
+    Ok((domain, port_number, endpoint_id, remote_port_number))
 }
 
 /// Send a SOCKS5 reply.
