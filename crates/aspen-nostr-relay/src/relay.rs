@@ -201,17 +201,15 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                             let conn_throttle = Arc::clone(&inner.throttle);
 
                             tokio::spawn(async move {
-                                handle_connection(
-                                    ws,
+                                let ctx = crate::connection::ConnectionContext {
                                     conn_id,
-                                    Arc::clone(&inner.store),
-                                    Arc::clone(&inner.registry),
-                                    event_rx,
-                                    cancel,
+                                    store: Arc::clone(&inner.store),
+                                    registry: Arc::clone(&inner.registry),
                                     write_policy,
                                     relay_url,
-                                    Some((conn_throttle, peer.ip())),
-                                ).await;
+                                    throttle: Some((conn_throttle, peer.ip())),
+                                };
+                                handle_connection(ws, ctx, event_rx, cancel).await;
                                 inner.active_connections.fetch_sub(1, Ordering::Relaxed);
                             });
                         }

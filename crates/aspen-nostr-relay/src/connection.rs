@@ -34,13 +34,13 @@ use crate::subscriptions::ConnectionId;
 use crate::subscriptions::SubscriptionRegistry;
 
 /// Connection-scoped context shared across message handlers.
-struct ConnectionContext<S: ?Sized> {
-    conn_id: ConnectionId,
-    store: Arc<S>,
-    registry: Arc<SubscriptionRegistry>,
-    write_policy: WritePolicy,
-    relay_url: Option<String>,
-    throttle: Option<(Arc<RateLimiter>, IpAddr)>,
+pub struct ConnectionContext<S: ?Sized> {
+    pub conn_id: ConnectionId,
+    pub store: Arc<S>,
+    pub registry: Arc<SubscriptionRegistry>,
+    pub write_policy: WritePolicy,
+    pub relay_url: Option<String>,
+    pub throttle: Option<(Arc<RateLimiter>, IpAddr)>,
 }
 
 /// Handle a single WebSocket connection.
@@ -50,28 +50,14 @@ struct ConnectionContext<S: ?Sized> {
 ///
 /// On connect, sends an AUTH challenge per NIP-42. The `write_policy`
 /// determines whether EVENT submissions require authentication.
-#[allow(clippy::too_many_arguments)]
 pub async fn handle_connection<S: NostrEventStore>(
     ws: WebSocketStream<TcpStream>,
-    conn_id: ConnectionId,
-    store: Arc<S>,
-    registry: Arc<SubscriptionRegistry>,
+    ctx: ConnectionContext<S>,
     mut event_rx: broadcast::Receiver<Arc<Event>>,
     cancel: tokio_util::sync::CancellationToken,
-    write_policy: WritePolicy,
-    relay_url: Option<String>,
-    rate_limit: Option<(Arc<RateLimiter>, IpAddr)>,
 ) {
     debug_assert!(!cancel.is_cancelled(), "should not start a cancelled connection handler");
     let (mut ws_tx, mut ws_rx) = ws.split();
-    let ctx = ConnectionContext {
-        conn_id,
-        store,
-        registry,
-        write_policy,
-        relay_url,
-        throttle: rate_limit,
-    };
 
     info!(ctx.conn_id, "nostr client connected");
 
@@ -185,7 +171,7 @@ async fn handle_message<S: NostrEventStore>(
         } => {
             let sub_id = subscription_id.into_owned();
             let filters: Vec<Filter> = filters.into_iter().map(|f| f.into_owned()).collect();
-            handle_req(ctx.conn_id, sub_id, filters, &ctx.store, &ctx.registry, ws_tx).await?;
+            handle_req(ctx, sub_id, filters, ws_tx).await?;
         }
         ClientMessage::Close(sub_id) => {
             handle_close(ctx.conn_id, &sub_id, &ctx.registry).await;
@@ -340,16 +326,14 @@ async fn store_and_respond<S: NostrEventStore>(
 
 /// Handle REQ: register subscription, send stored events, send EOSE.
 async fn handle_req<S: NostrEventStore>(
-    conn_id: ConnectionId,
+    ctx: &ConnectionContext<S>,
     sub_id: SubscriptionId,
     filters: Vec<Filter>,
-    store: &Arc<S>,
-    registry: &Arc<SubscriptionRegistry>,
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     debug_assert!(!filters.is_empty(), "REQ must include at least one filter per NIP-01");
     // Register subscription (replaces existing with same ID)
-    if let Err(e) = registry.subscribe(conn_id, sub_id.clone(), filters.clone()).await {
+    if let Err(e) = ctx.registry.subscribe(ctx.conn_id, sub_id.clone(), filters.clone()).await {
         let msg = RelayMessage::Closed {
             subscription_id: Cow::Borrowed(&sub_id),
             message: Cow::Owned(format!("error: {e}")),
@@ -359,7 +343,7 @@ async fn handle_req<S: NostrEventStore>(
     }
 
     // Query stored events
-    let events = store.query_events(&filters).await.unwrap_or_default();
+    let events = ctx.store.query_events(&filters).await.unwrap_or_default();
 
     // Send matching stored events
     for event in &events {
@@ -374,7 +358,7 @@ async fn handle_req<S: NostrEventStore>(
     let eose = RelayMessage::EndOfStoredEvents(Cow::Borrowed(&sub_id));
     ws_tx.send(Message::Text(eose.as_json().into())).await?;
 
-    debug!(conn_id, sub_id = %sub_id, stored = events.len(), "subscription registered");
+    debug!(ctx.conn_id, sub_id = %sub_id, stored = events.len(), "subscription registered");
     Ok(())
 }
 

@@ -88,17 +88,15 @@ impl<S: KeyValueStore + 'static> ProtocolHandler for NostrProtocolHandler<S> {
         debug!(conn_id, "accepted nostr iroh connection");
 
         tokio::spawn(async move {
-            let result = handle_iroh_connection(
-                connection,
+            let ctx = IrohConnectionContext {
                 conn_id,
                 store,
-                registry.clone(),
-                event_rx,
-                conn_throttle,
+                registry: registry.clone(),
+                throttle: conn_throttle,
                 write_policy,
                 relay_url,
-            )
-            .await;
+            };
+            let result = handle_iroh_connection(connection, ctx, event_rx).await;
             if let Err(e) = result {
                 debug!(conn_id, error = %e, "nostr iroh connection ended with error");
             }
@@ -111,7 +109,7 @@ impl<S: KeyValueStore + 'static> ProtocolHandler for NostrProtocolHandler<S> {
 }
 
 /// Connection-scoped context for iroh Nostr connections.
-struct IrohConnectionContext<S: ?Sized> {
+pub(crate) struct IrohConnectionContext<S: ?Sized> {
     conn_id: u64,
     store: Arc<S>,
     registry: Arc<SubscriptionRegistry>,
@@ -122,30 +120,15 @@ struct IrohConnectionContext<S: ?Sized> {
 
 /// Handle a single iroh connection: accept a bidirectional stream and
 /// process length-prefixed Nostr messages.
-#[allow(clippy::too_many_arguments)]
 async fn handle_iroh_connection<S: NostrEventStore>(
     connection: Connection,
-    conn_id: u64,
-    store: Arc<S>,
-    registry: Arc<SubscriptionRegistry>,
+    ctx: IrohConnectionContext<S>,
     mut event_rx: broadcast::Receiver<Arc<Event>>,
-    conn_throttle: Arc<RateLimiter>,
-    write_policy: WritePolicy,
-    relay_url: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     const { assert!(MAX_SUBSCRIPTIONS_PER_CONNECTION > 0, "max subscriptions per connection must be positive") };
     const { assert!(MAX_EVENT_SIZE > 0, "max event size must be positive") };
 
     let (mut send, mut recv) = connection.accept_bi().await?;
-    let ctx = IrohConnectionContext {
-        conn_id,
-        store,
-        registry,
-        throttle: conn_throttle,
-        write_policy,
-        relay_url,
-    };
-
     let mut auth_state = AuthState::new();
 
     // Send AUTH challenge
