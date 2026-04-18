@@ -218,7 +218,13 @@ async fn handle_add_peer(
     // Tiger Style: add_peer is bounded by MAX_PEERS (1000)
     // Use JSON serialization for the address (matches CoreNetworkFactory::add_peer expectation)
     let addr_json = serde_json::to_string(&parsed_addr).unwrap_or_default();
-    let _ = network_factory.add_peer(node_id, addr_json).await;
+    if let Err(error) = network_factory.add_peer(node_id, addr_json).await {
+        warn!(node_id, endpoint_id = %parsed_addr.id, error = %error, "AddPeer: failed to register peer in network factory");
+        return Ok(ClientRpcResponse::AddPeerResult(AddPeerResultResponse {
+            is_success: false,
+            error: Some(format!("failed to add peer to network factory: {error}")),
+        }));
+    }
 
     info!(
         node_id = node_id,

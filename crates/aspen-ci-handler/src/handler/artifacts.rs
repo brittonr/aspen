@@ -12,6 +12,11 @@ use aspen_client_api::ClientRpcResponse;
 use tracing::info;
 use tracing::warn;
 
+#[inline]
+fn default_extra_metadata() -> HashMap<String, String> {
+    HashMap::new()
+}
+
 /// Internal artifact metadata structure stored in KV.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ArtifactMetadata {
@@ -28,7 +33,7 @@ pub(crate) struct ArtifactMetadata {
     /// Optional run_id for filtering.
     pub run_id: Option<String>,
     /// Additional metadata.
-    #[serde(default)]
+    #[serde(default = "default_extra_metadata")]
     pub extra: HashMap<String, String>,
 }
 
@@ -70,7 +75,7 @@ pub async fn handle_list_artifacts(
     };
 
     // Parse artifact metadata from KV entries
-    let mut artifacts = Vec::new();
+    let mut artifacts = Vec::with_capacity(entries.len());
     for entry in entries {
         // Try to parse as artifact metadata
         if let Ok(metadata) = serde_json::from_str::<ArtifactMetadata>(&entry.value) {

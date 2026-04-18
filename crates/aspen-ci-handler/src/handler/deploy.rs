@@ -9,6 +9,8 @@
 //! via the cluster's `DeploymentCoordinator`, and re-exports the monitoring types.
 
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use aspen_ci::DeployDispatcher;
 use aspen_ci::DeployInitResult;
@@ -27,6 +29,19 @@ use tracing::info;
 // ============================================================================
 // RpcDeployDispatcher — implements DeployDispatcher via DeploymentCoordinator
 // ============================================================================
+
+#[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "CI deploy dispatcher stores wall-clock timestamps in deployment records"
+)]
+fn current_time_ms() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+        Err(_) => 0,
+    }
+}
 
 /// Bridges `DeployDispatcher` to the cluster's `DeploymentCoordinator`.
 ///
@@ -83,8 +98,7 @@ impl DeployDispatcher for RpcDeployDispatcher {
             });
         }
 
-        let now_ms =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let now_ms = current_time_ms();
         let deploy_id = format!("deploy-{now_ms}");
 
         let rpc_client = Arc::new(IrohNodeRpcClient::new(self.endpoint.clone(), self.controller.clone(), self.node_id));
@@ -148,9 +162,7 @@ impl DeployDispatcher for RpcDeployDispatcher {
 
         match coordinator.get_status().await {
             Ok(record) => {
-                let now_ms =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                        as u64;
+                let now_ms = current_time_ms();
 
                 let nodes: Vec<aspen_ci::DeployNodeStatus> = record
                     .nodes

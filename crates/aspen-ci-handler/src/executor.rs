@@ -197,7 +197,7 @@ impl ServiceExecutor for CiServiceExecutor {
                 Ok(ClientRpcResponse::error("CI_FEATURE_UNAVAILABLE", "CI job output requires blob feature"))
             }
 
-            _ => unreachable!("CiServiceExecutor received unhandled request"),
+            _ => Ok(ClientRpcResponse::error("INVALID_REQUEST", "request not handled by CI service")),
         }
     }
 }

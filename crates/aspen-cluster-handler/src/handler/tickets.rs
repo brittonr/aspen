@@ -12,6 +12,11 @@ use iroh::EndpointId;
 use iroh_gossip::proto::TopicId;
 use tracing::debug;
 
+#[inline]
+fn bootstrap_peer_limit_reached(added_peers: u32) -> bool {
+    usize::try_from(added_peers).unwrap_or(usize::MAX) >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS
+}
+
 pub(crate) async fn handle_get_cluster_ticket(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
@@ -26,7 +31,7 @@ pub(crate) async fn handle_get_cluster_ticket(ctx: &ClientProtocolContext) -> an
     // but has no other peer to rotate to — retry loops hit the same follower.
     if let Ok(cluster_state) = ctx.controller.current_state().await {
         for node in cluster_state.nodes.iter().take(AspenClusterTicket::MAX_BOOTSTRAP_PEERS) {
-            if added_peers as usize >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
+            if bootstrap_peer_limit_reached(added_peers) {
                 break;
             }
             if let Some(iroh_addr) = node.iroh_addr() {
@@ -74,7 +79,7 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
     if let Some(ids_str) = &endpoint_ids {
         for id_str in ids_str.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
             // Skip if we've hit the limit (Tiger Style: MAX_BOOTSTRAP_PEERS = 16)
-            if added_peers as usize >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
+            if bootstrap_peer_limit_reached(added_peers) {
                 debug!(
                     max_peers = AspenClusterTicket::MAX_BOOTSTRAP_PEERS,
                     "GetClusterTicketCombined: reached max bootstrap peers, skipping remaining"
@@ -97,7 +102,7 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
     // Also try to add peers from cluster state (using full addresses for better connectivity)
     if let Ok(cluster_state) = ctx.controller.current_state().await {
         for node in cluster_state.nodes.iter().take(AspenClusterTicket::MAX_BOOTSTRAP_PEERS) {
-            if added_peers as usize >= AspenClusterTicket::MAX_BOOTSTRAP_PEERS {
+            if bootstrap_peer_limit_reached(added_peers) {
                 break;
             }
 
