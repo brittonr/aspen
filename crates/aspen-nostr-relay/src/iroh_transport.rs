@@ -20,6 +20,7 @@ use tracing::debug;
 use crate::auth::AuthState;
 use crate::config::WritePolicy;
 use crate::constants::MAX_EVENT_SIZE;
+use crate::constants::MAX_SUBSCRIPTIONS_PER_CONNECTION;
 use crate::rate_limit::RateLimiter;
 use crate::storage::KvEventStore;
 use crate::storage::NostrEventStore;
@@ -132,6 +133,9 @@ async fn handle_iroh_connection<S: NostrEventStore>(
     write_policy: WritePolicy,
     relay_url: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    const { assert!(MAX_SUBSCRIPTIONS_PER_CONNECTION > 0, "max subscriptions per connection must be positive") };
+    const { assert!(MAX_EVENT_SIZE > 0, "max event size must be positive") };
+
     let (mut send, mut recv) = connection.accept_bi().await?;
     let ctx = IrohConnectionContext {
         conn_id,

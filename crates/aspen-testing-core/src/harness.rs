@@ -106,6 +106,9 @@ where
         tokio::time::Instant::now()
     }
 
+    debug_assert!(!timeout.is_zero(), "wait_until timeout must be positive");
+    debug_assert!(!poll_interval.is_zero(), "poll interval must be positive");
+
     let start = current_instant();
     let deadline = start + timeout;
 
