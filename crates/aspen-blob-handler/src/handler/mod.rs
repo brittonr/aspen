@@ -99,7 +99,7 @@ impl RequestHandler for BlobHandler {
             } => handle_trigger_blob_replication(ctx, hash, target_nodes, replication_factor).await,
             ClientRpcRequest::RunBlobRepairCycle => handle_run_blob_repair_cycle(ctx).await,
 
-            _ => Err(anyhow::anyhow!("request not handled by BlobHandler")),
+            _ => Ok(ClientRpcResponse::error("INVALID_REQUEST", "request not handled by blob handler")),
         }
     }
 

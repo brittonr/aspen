@@ -149,7 +149,7 @@ impl RequestHandler for ClusterHandler {
                 Ok(ClientRpcResponse::error("DEPLOY_UNAVAILABLE", "deploy feature not enabled"))
             }
 
-            _ => Err(anyhow::anyhow!("request not handled by ClusterHandler")),
+            _ => Ok(ClientRpcResponse::error("INVALID_REQUEST", "request not handled by cluster handler")),
         }
     }
 

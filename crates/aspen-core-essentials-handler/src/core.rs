@@ -196,7 +196,7 @@ impl RequestHandler for CoreHandler {
             ClientRpcRequest::AlertList => handle_alert_list(ctx).await,
             ClientRpcRequest::AlertGet { name } => handle_alert_get(ctx, name).await,
             ClientRpcRequest::AlertEvaluate { name, now_us } => handle_alert_evaluate(ctx, name, now_us).await,
-            _ => Err(anyhow::anyhow!("request not handled by CoreHandler")),
+            _ => Ok(ClientRpcResponse::error("INVALID_REQUEST", "request not handled by core handler")),
         }
     }
 
