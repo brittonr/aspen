@@ -410,7 +410,7 @@ impl<S: KeyValueStore + ?Sized> KvEventStore<S> {
         let mut matched = Vec::with_capacity(candidate_ids.len());
         for id in &candidate_ids {
             if let Some(event) = self.get_event(id).await?
-                && filter.match_event(&event, nostr::filter::MatchEventOptions::default())
+                && filter.match_event(&event, nostr::filter::MatchEventOptions::new())
             {
                 matched.push(event);
             }
