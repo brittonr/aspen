@@ -21,7 +21,7 @@ const _: () = assert!(SIGNED_TICKET_VERSION > 0);
 
 // Ticket validity must be positive and reasonable
 const _: () = assert!(DEFAULT_TICKET_VALIDITY_SECS > 0);
-const _: () = assert!(DEFAULT_TICKET_VALIDITY_SECS <= 7 * 24 * 3600); // max 1 week (sanity check)
+const _: () = assert!(DEFAULT_TICKET_VALIDITY_SECS <= 7_u64.saturating_mul(24).saturating_mul(3600)); // max 1 week
 
 // Clock skew tolerance must be positive and reasonable
 const _: () = assert!(CLOCK_SKEW_TOLERANCE_SECS > 0);

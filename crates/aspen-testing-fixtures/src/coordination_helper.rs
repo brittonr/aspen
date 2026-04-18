@@ -93,7 +93,8 @@ impl CoordinationTestHelper {
 
     /// Advance simulated time by the given duration.
     pub fn advance_time(&mut self, duration: Duration) {
-        self.current_time_ms += duration.as_millis() as u64;
+        self.current_time_ms =
+            self.current_time_ms.saturating_add(u64::try_from(duration.as_millis()).unwrap_or(u64::MAX));
     }
 
     /// Set the simulated time to a specific value.
