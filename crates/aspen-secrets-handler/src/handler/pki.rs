@@ -31,6 +31,25 @@ fn ttl_days_u32(max_ttl_secs: u64) -> u32 {
     u32::try_from(ttl_days).unwrap_or(u32::MAX)
 }
 
+#[inline]
+fn ttl_secs_u64(ttl_days: u32) -> u64 {
+    u64::from(ttl_days).saturating_mul(SECONDS_PER_DAY)
+}
+
+#[inline]
+fn optional_ttl_secs(ttl_days: Option<u32>) -> Option<u64> {
+    ttl_days.map(ttl_secs_u64)
+}
+
+struct CreateRoleArgs {
+    name: String,
+    allowed_domains: Vec<String>,
+    max_ttl_days: u32,
+    allow_bare_domains: bool,
+    is_wildcards_allowed: bool,
+    is_subdomains_allowed: bool,
+}
+
 /// Sub-handler for PKI secrets operations.
 pub(crate) struct PkiSecretsHandler;
 
@@ -77,16 +96,14 @@ impl PkiSecretsHandler {
                 allow_wildcards,
                 allow_subdomains,
             } => {
-                handle_pki_create_role(
-                    service,
-                    &mount,
+                handle_pki_create_role(service, &mount, CreateRoleArgs {
                     name,
                     allowed_domains,
                     max_ttl_days,
                     allow_bare_domains,
-                    allow_wildcards,
-                    allow_subdomains,
-                )
+                    is_wildcards_allowed: allow_wildcards,
+                    is_subdomains_allowed: allow_subdomains,
+                })
                 .await
             }
             ClientRpcRequest::SecretsPkiIssue {
@@ -209,29 +226,23 @@ async fn handle_pki_set_signed_intermediate(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn handle_pki_create_role(
     service: &SecretsService,
     mount: &str,
-    name: String,
-    allowed_domains: Vec<String>,
-    max_ttl_days: u32,
-    allow_bare_domains: bool,
-    allow_wildcards: bool,
-    allow_subdomains: bool,
+    args: CreateRoleArgs,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(mount = %mount, name = %name, "PKI create role request");
+    debug!(mount = %mount, name = %args.name, "PKI create role request");
 
     let store = service.get_pki_store(mount).await?;
-    let mut role = PkiRole::new(name.clone());
-    role.allowed_domains = allowed_domains.clone();
-    role.max_ttl_secs = max_ttl_days as u64 * 24 * 3600;
-    role.allow_bare_domains = allow_bare_domains;
-    role.allow_wildcard_certificates = allow_wildcards;
-    role.allow_subdomains = allow_subdomains;
+    let mut role = PkiRole::new(args.name.clone());
+    role.allowed_domains = args.allowed_domains.clone();
+    role.max_ttl_secs = ttl_secs_u64(args.max_ttl_days);
+    role.allow_bare_domains = args.allow_bare_domains;
+    role.allow_wildcard_certificates = args.is_wildcards_allowed;
+    role.allow_subdomains = args.is_subdomains_allowed;
 
     let request = CreateRoleRequest {
-        name: name.clone(),
+        name: args.name.clone(),
         config: role,
     };
 
@@ -241,7 +252,7 @@ async fn handle_pki_create_role(
             role: Some(SecretsPkiRoleConfig {
                 name: created_role.name,
                 allowed_domains: created_role.allowed_domains,
-                max_ttl_days: (created_role.max_ttl_secs / (24 * 3600)) as u32,
+                max_ttl_days: ttl_days_u32(created_role.max_ttl_secs),
                 allow_bare_domains: created_role.allow_bare_domains,
                 allow_wildcards: created_role.allow_wildcard_certificates,
             }),
@@ -275,7 +286,7 @@ async fn handle_pki_issue(
         alt_names,
         ip_sans: vec![],
         uri_sans: vec![],
-        ttl_secs: ttl_days.map(|d| d as u64 * 24 * 3600),
+        ttl_secs: optional_ttl_secs(ttl_days),
         exclude_cn_from_sans: false,
     };
 
