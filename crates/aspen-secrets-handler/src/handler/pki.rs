@@ -23,6 +23,14 @@ use tracing::warn;
 use super::SecretsService;
 use super::sanitize_secrets_error;
 
+const SECONDS_PER_DAY: u64 = 86_400;
+
+#[inline]
+fn ttl_days_u32(max_ttl_secs: u64) -> u32 {
+    let ttl_days = max_ttl_secs.checked_div(SECONDS_PER_DAY).unwrap_or(0);
+    u32::try_from(ttl_days).unwrap_or(u32::MAX)
+}
+
 /// Sub-handler for PKI secrets operations.
 pub(crate) struct PkiSecretsHandler;
 
@@ -378,7 +386,7 @@ async fn handle_pki_get_role(service: &SecretsService, mount: &str, name: String
             role: Some(SecretsPkiRoleConfig {
                 name: role.name,
                 allowed_domains: role.allowed_domains,
-                max_ttl_days: (role.max_ttl_secs / (24 * 3600)) as u32,
+                max_ttl_days: ttl_days_u32(role.max_ttl_secs),
                 allow_bare_domains: role.allow_bare_domains,
                 allow_wildcards: role.allow_wildcard_certificates,
             }),

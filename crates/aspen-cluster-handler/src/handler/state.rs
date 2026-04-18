@@ -20,8 +20,8 @@ pub(crate) async fn handle_get_cluster_state(ctx: &ClientProtocolContext) -> any
 
     // Convert ClusterNode to NodeDescriptor with membership info
     // Tiger Style: Bounded to MAX_CLUSTER_NODES
-    let mut nodes: Vec<NodeDescriptor> =
-        Vec::with_capacity((cluster_state.nodes.len() + cluster_state.learners.len()).min(MAX_CLUSTER_NODES));
+    let node_capacity = cluster_state.nodes.len().saturating_add(cluster_state.learners.len()).min(MAX_CLUSTER_NODES);
+    let mut nodes: Vec<NodeDescriptor> = Vec::with_capacity(node_capacity);
 
     // Track which nodes are voters (members)
     let member_ids: std::collections::HashSet<u64> = cluster_state.members.iter().copied().collect();
@@ -48,7 +48,8 @@ pub(crate) async fn handle_get_cluster_state(ctx: &ClientProtocolContext) -> any
     }
 
     // Add learners that weren't in the nodes list
-    for learner in cluster_state.learners.iter().take(MAX_CLUSTER_NODES - nodes.len()) {
+    let remaining_learner_slots = MAX_CLUSTER_NODES.saturating_sub(nodes.len());
+    for learner in cluster_state.learners.iter().take(remaining_learner_slots) {
         // Skip if already added
         if nodes.iter().any(|n| n.node_id == learner.id) {
             continue;

@@ -7,6 +7,11 @@ use aspen_client_api::ClientTicketResponse;
 use aspen_client_api::DocsTicketResponse;
 use aspen_rpc_core::ClientProtocolContext;
 
+#[inline]
+fn client_priority_u8(priority: u32) -> u8 {
+    u8::try_from(priority).unwrap_or(u8::MAX)
+}
+
 pub(crate) async fn handle_get_client_ticket(
     ctx: &ClientProtocolContext,
     access: String,
@@ -22,7 +27,7 @@ pub(crate) async fn handle_get_client_ticket(
     };
 
     // Tiger Style: saturate priority to u8 range
-    let priority_u8 = priority.min(255) as u8;
+    let priority_u8 = client_priority_u8(priority);
 
     let ticket = AspenClientTicket::new(&ctx.cluster_cookie, vec![endpoint_addr])
         .with_access(access_level)
