@@ -39,22 +39,22 @@ impl NixCacheSecretsHandler {
         service: &SecretsService,
         kv_store: &Arc<dyn aspen_core::KeyValueStore>,
     ) -> anyhow::Result<ClientRpcResponse> {
-        match request {
-            ClientRpcRequest::SecretsNixCacheCreateKey { mount, cache_name } => {
-                handle_nix_cache_create_key(service, &mount, cache_name).await
-            }
-            ClientRpcRequest::SecretsNixCacheGetPublicKey { mount, cache_name } => {
-                handle_nix_cache_get_public_key(service, &mount, cache_name, kv_store).await
-            }
-            ClientRpcRequest::SecretsNixCacheRotateKey { mount, cache_name } => {
-                handle_nix_cache_rotate_key(service, &mount, cache_name).await
-            }
-            ClientRpcRequest::SecretsNixCacheDeleteKey { mount, cache_name } => {
-                handle_nix_cache_delete_key(service, &mount, cache_name).await
-            }
-            ClientRpcRequest::SecretsNixCacheListKeys { mount } => handle_nix_cache_list_keys(service, &mount).await,
-            _ => Err(anyhow::anyhow!("request not handled by NixCacheSecretsHandler")),
+        if let ClientRpcRequest::SecretsNixCacheCreateKey { mount, cache_name } = request {
+            return handle_nix_cache_create_key(service, &mount, cache_name).await;
         }
+        if let ClientRpcRequest::SecretsNixCacheGetPublicKey { mount, cache_name } = request {
+            return handle_nix_cache_get_public_key(service, &mount, cache_name, kv_store).await;
+        }
+        if let ClientRpcRequest::SecretsNixCacheRotateKey { mount, cache_name } = request {
+            return handle_nix_cache_rotate_key(service, &mount, cache_name).await;
+        }
+        if let ClientRpcRequest::SecretsNixCacheDeleteKey { mount, cache_name } = request {
+            return handle_nix_cache_delete_key(service, &mount, cache_name).await;
+        }
+        if let ClientRpcRequest::SecretsNixCacheListKeys { mount } = request {
+            return handle_nix_cache_list_keys(service, &mount).await;
+        }
+        Err(anyhow::anyhow!("request not handled by NixCacheSecretsHandler"))
     }
 }
 

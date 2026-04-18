@@ -82,6 +82,6 @@ impl ServiceExecutor for SecretsServiceExecutor {
             return nix_cache.handle(request, &self.secrets_service, &self.kv_store).await;
         }
 
-        unreachable!("SecretsServiceExecutor received unhandled request")
+        Ok(ClientRpcResponse::error("INVALID_REQUEST", "request not handled by secrets service"))
     }
 }

@@ -95,19 +95,19 @@ impl TunnelAcceptor {
         recv.read_exact(&mut target_port_bytes)
             .await
             .map_err(|e| TunnelError::ReadPort { reason: e.to_string() })?;
-        let target_port = u16::from_be_bytes(target_port_bytes);
+        let target_port_u16 = u16::from_be_bytes(target_port_bytes);
 
-        debug!(target_port, "tunnel: connecting to local service");
+        debug!(target_port_u16, "tunnel: connecting to local service");
 
         // Connect to the local service
-        let mut tcp = TcpStream::connect(SocketAddr::from(([127, 0, 0, 1], target_port))).await.map_err(|e| {
+        let mut tcp = TcpStream::connect(SocketAddr::from(([127, 0, 0, 1], target_port_u16))).await.map_err(|e| {
             TunnelError::LocalConnect {
-                port: target_port,
+                port: target_port_u16,
                 reason: e.to_string(),
             }
         })?;
 
-        debug!(target_port, "tunnel: connected, starting bidirectional copy");
+        debug!(target_port_u16, "tunnel: connected, starting bidirectional copy");
 
         // Split TCP stream
         let (mut tcp_read, mut tcp_write) = tcp.split();
@@ -115,7 +115,7 @@ impl TunnelAcceptor {
         // Copy bidirectionally until either side closes or cancel fires
         tokio::select! {
             _ = cancel.cancelled() => {
-                debug!(target_port, "tunnel: cancelled");
+                debug!(target_port_u16, "tunnel: cancelled");
             }
             result = async {
                 let client_to_server = tokio::io::copy(recv, &mut tcp_write);
@@ -124,10 +124,10 @@ impl TunnelAcceptor {
             } => {
                 match result {
                     Ok((c2s, s2c)) => {
-                        debug!(target_port, c2s, s2c, "tunnel: copy complete");
+                        debug!(target_port_u16, c2s, s2c, "tunnel: copy complete");
                     }
                     Err(e) => {
-                        debug!(target_port, error = %e, "tunnel: copy ended with error");
+                        debug!(target_port_u16, error = %e, "tunnel: copy ended with error");
                     }
                 }
             }
@@ -135,7 +135,7 @@ impl TunnelAcceptor {
 
         // Best-effort shutdown
         if let Err(error) = send.finish() {
-            debug!(target_port, error = ?error, "tunnel: finish failed");
+            debug!(target_port_u16, error = ?error, "tunnel: finish failed");
         }
 
         Ok(())

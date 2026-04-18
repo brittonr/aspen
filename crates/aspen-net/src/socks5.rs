@@ -310,12 +310,13 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
     let domain_len = usize::from(read_u8(stream).await?);
     let mut domain_bytes = vec![0u8; domain_len];
     stream.read_exact(&mut domain_bytes).await.context(IoSnafu)?;
+    debug_assert_eq!(domain_bytes.len(), domain_len, "SOCKS5 domain buffer length must match declared length");
     let domain = String::from_utf8_lossy(&domain_bytes).to_string();
 
     // Read port
-    let port_number = read_u16(stream).await?;
+    let port_u16 = read_u16(stream).await?;
 
-    debug!("SOCKS5 CONNECT from {addr}: {domain}:{port_number}");
+    debug!("SOCKS5 CONNECT from {addr}: {domain}:{port_u16}");
 
     // Reject non-.aspen domains
     if !domain.ends_with(".aspen") {
@@ -325,6 +326,8 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
             reason: format!("non-.aspen destination not supported: {domain}"),
         });
     }
+
+    debug_assert!(domain.ends_with(".aspen"), "validated SOCKS5 domain must keep .aspen suffix");
 
     // Resolve service name (strips .aspen suffix)
     let service_name = domain.strip_suffix(".aspen").unwrap_or(&domain);
@@ -341,15 +344,15 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
     };
 
     // Use client-specified port (per spec: SOCKS5 CONNECT with explicit port override)
-    let remote_port_number = port_number;
+    let remote_port_u16 = port_u16;
 
     // Token authorization check
-    if let Err(e) = auth.check_connect(service_name, remote_port_number) {
+    if let Err(e) = auth.check_connect(service_name, remote_port_u16) {
         send_reply(stream, REPLY_CONNECTION_REFUSED).await?;
         return Err(Socks5Error::Auth { source: e });
     }
 
-    Ok((domain, port_number, endpoint_id, remote_port_number))
+    Ok((domain, port_u16, endpoint_id, remote_port_u16))
 }
 
 /// Send a SOCKS5 reply.
