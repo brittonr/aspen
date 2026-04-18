@@ -10,6 +10,8 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use aspen_client::AspenClient;
 use aspen_client::AuthToken;
@@ -27,6 +29,19 @@ use crate::resolver::NameResolver;
 use crate::socks5::Socks5Server;
 use crate::tunnel::TunnelAcceptor;
 use crate::types::ServiceEntry;
+
+#[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "net daemon auto-publish metadata stores wall-clock timestamps"
+)]
+fn current_time_ms() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+        Err(_) => 0,
+    }
+}
 
 /// Configuration for the service mesh daemon.
 #[derive(Debug, Clone)]
@@ -139,10 +154,7 @@ impl NetDaemon {
                 proto,
                 tags: config.tags.clone(),
                 hostname: None,
-                published_at_ms: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64,
+                published_at_ms: current_time_ms(),
             };
             match registry.publish(entry).await {
                 Ok(()) => info!(name, port, "auto-published service"),

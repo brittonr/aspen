@@ -84,7 +84,7 @@ pub(crate) async fn handle_add_blob(
 /// Must be well below `MAX_CLIENT_MESSAGE_SIZE` (16 MB) to leave room for
 /// postcard framing and other response fields.
 /// Threshold for inline blob responses (4 MB).
-pub const BLOB_INLINE_THRESHOLD: u64 = 4 * 1024 * 1024;
+pub const BLOB_INLINE_THRESHOLD: u64 = 4_194_304;
 
 /// Result of a blob get operation, separating metadata from potentially large data.
 pub enum GetBlobOutcome {

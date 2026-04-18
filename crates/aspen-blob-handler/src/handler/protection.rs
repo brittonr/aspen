@@ -82,7 +82,7 @@ pub(crate) async fn handle_unprotect_blob(
 pub(crate) async fn handle_delete_blob(
     ctx: &ClientProtocolContext,
     hash: String,
-    force: bool,
+    is_forced: bool,
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
@@ -115,7 +115,7 @@ pub(crate) async fn handle_delete_blob(
     match blob_store.delete_user_tags_for_hash(&hash).await {
         Ok(deleted_count) => {
             if deleted_count > 0 {
-                info!(hash = %hash, deleted_tags = deleted_count, force, "blob user tags deleted, blob eligible for GC");
+                info!(hash = %hash, deleted_tags = deleted_count, is_forced, "blob user tags deleted, blob eligible for GC");
             } else {
                 // No user tags found - blob may already be unprotected or only has KV tags
                 info!(hash = %hash, "no user tags found for blob (may have KV tags or be unprotected)");

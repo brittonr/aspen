@@ -45,7 +45,8 @@ pub async fn handle_get_job_logs(
     let continuation_token = if start_index > 0 {
         // continuation_token is exclusive (key > token), so use the key
         // just before start_index to include start_index in results.
-        Some(format!("{}{:010}", prefix, start_index - 1))
+        let previous_index = start_index.saturating_sub(1);
+        Some(format!("{}{:010}", prefix, previous_index))
     } else {
         None
     };

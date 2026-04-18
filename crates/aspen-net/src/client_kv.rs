@@ -38,15 +38,40 @@ impl ClientKvAdapter {
     }
 }
 
+#[derive(Clone, Copy)]
+struct RpcErrorMessage<'a> {
+    code: &'a str,
+    message: &'a str,
+}
+
 /// Map an RPC transport error to a KV store error.
 fn rpc_err(e: impl std::fmt::Display) -> KeyValueStoreError {
     KeyValueStoreError::Failed { reason: e.to_string() }
 }
 
 /// Map an application-level error response to a KV store error.
-fn resp_err(code: &str, message: &str) -> KeyValueStoreError {
+fn resp_err(error: RpcErrorMessage<'_>) -> KeyValueStoreError {
     KeyValueStoreError::Failed {
-        reason: format!("{code}: {message}"),
+        reason: format!("{}: {}", error.code, error.message),
+    }
+}
+
+fn empty_write_result() -> WriteResult {
+    WriteResult {
+        command: None,
+        batch_applied: None,
+        conditions_met: None,
+        failed_condition_index: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        occ_conflict: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
     }
 }
 
@@ -73,10 +98,13 @@ impl KeyValueStore for ClientKvAdapter {
                 Ok(WriteResult {
                     command: Some(request.command),
                     succeeded: Some(r.is_success),
-                    ..Default::default()
+                    ..empty_write_result()
                 })
             }
-            ClientRpcResponse::Error(e) => Err(resp_err(&e.code, &e.message)),
+            ClientRpcResponse::Error(e) => Err(resp_err(RpcErrorMessage {
+                code: &e.code,
+                message: &e.message,
+            })),
             other => Err(KeyValueStoreError::Failed {
                 reason: format!("unexpected response: {other:?}"),
             }),
@@ -106,7 +134,10 @@ impl KeyValueStore for ClientKvAdapter {
                 };
                 Ok(ReadResult { kv })
             }
-            ClientRpcResponse::Error(e) => Err(resp_err(&e.code, &e.message)),
+            ClientRpcResponse::Error(e) => Err(resp_err(RpcErrorMessage {
+                code: &e.code,
+                message: &e.message,
+            })),
             other => Err(KeyValueStoreError::Failed {
                 reason: format!("unexpected response: {other:?}"),
             }),
@@ -128,7 +159,10 @@ impl KeyValueStore for ClientKvAdapter {
                     is_deleted: r.was_deleted,
                 })
             }
-            ClientRpcResponse::Error(e) => Err(resp_err(&e.code, &e.message)),
+            ClientRpcResponse::Error(e) => Err(resp_err(RpcErrorMessage {
+                code: &e.code,
+                message: &e.message,
+            })),
             other => Err(KeyValueStoreError::Failed {
                 reason: format!("unexpected response: {other:?}"),
             }),
@@ -166,7 +200,10 @@ impl KeyValueStore for ClientKvAdapter {
                     continuation_token: r.continuation_token,
                 })
             }
-            ClientRpcResponse::Error(e) => Err(resp_err(&e.code, &e.message)),
+            ClientRpcResponse::Error(e) => Err(resp_err(RpcErrorMessage {
+                code: &e.code,
+                message: &e.message,
+            })),
             other => Err(KeyValueStoreError::Failed {
                 reason: format!("unexpected response: {other:?}"),
             }),
