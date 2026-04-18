@@ -208,8 +208,9 @@ impl<S: KeyValueStore + ?Sized + 'static> NostrRelayService<S> {
                                     write_policy,
                                     relay_url,
                                     throttle: Some((conn_throttle, peer.ip())),
+                                    cancel,
                                 };
-                                handle_connection(ws, ctx, event_rx, cancel).await;
+                                handle_connection(ws, ctx, event_rx).await;
                                 inner.active_connections.fetch_sub(1, Ordering::Relaxed);
                             });
                         }

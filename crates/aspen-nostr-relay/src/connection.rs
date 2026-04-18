@@ -41,6 +41,7 @@ pub struct ConnectionContext<S: ?Sized> {
     pub write_policy: WritePolicy,
     pub relay_url: Option<String>,
     pub throttle: Option<(Arc<RateLimiter>, IpAddr)>,
+    pub cancel: tokio_util::sync::CancellationToken,
 }
 
 /// Handle a single WebSocket connection.
@@ -54,9 +55,8 @@ pub async fn handle_connection<S: NostrEventStore>(
     ws: WebSocketStream<TcpStream>,
     ctx: ConnectionContext<S>,
     mut event_rx: broadcast::Receiver<Arc<Event>>,
-    cancel: tokio_util::sync::CancellationToken,
 ) {
-    debug_assert!(!cancel.is_cancelled(), "should not start a cancelled connection handler");
+    debug_assert!(!ctx.cancel.is_cancelled(), "should not start a cancelled connection handler");
     let (mut ws_tx, mut ws_rx) = ws.split();
 
     info!(ctx.conn_id, "nostr client connected");
@@ -71,7 +71,7 @@ pub async fn handle_connection<S: NostrEventStore>(
         return;
     }
 
-    connection_event_loop(&ctx, &mut ws_rx, &mut ws_tx, &mut event_rx, &cancel, &mut auth_state).await;
+    connection_event_loop(&ctx, &mut ws_rx, &mut ws_tx, &mut event_rx, &mut auth_state).await;
 
     // Cleanup
     ctx.registry.remove_connection(ctx.conn_id).await;
@@ -85,10 +85,9 @@ async fn connection_event_loop<S: NostrEventStore>(
     ws_rx: &mut futures::stream::SplitStream<WebSocketStream<TcpStream>>,
     ws_tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>,
     event_rx: &mut broadcast::Receiver<Arc<Event>>,
-    cancel: &tokio_util::sync::CancellationToken,
     auth_state: &mut AuthState,
 ) {
-    while !cancel.is_cancelled() {
+    while !ctx.cancel.is_cancelled() {
         tokio::select! {
             msg = ws_rx.next() => {
                 match msg {
@@ -129,7 +128,7 @@ async fn connection_event_loop<S: NostrEventStore>(
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
-            _ = cancel.cancelled() => {
+            _ = ctx.cancel.cancelled() => {
                 debug!(ctx.conn_id, "connection cancelled");
                 break;
             }
