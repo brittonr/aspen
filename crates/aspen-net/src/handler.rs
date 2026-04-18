@@ -4,6 +4,9 @@
 //! NetLookup, and NetList requests through the `ServiceRegistry`.
 
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
@@ -21,6 +24,24 @@ use tracing::debug;
 
 use crate::registry::ServiceRegistry;
 use crate::types::ServiceEntry;
+
+#[inline]
+fn duration_millis_u64(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+#[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "net publish stores wall-clock timestamps for service registry metadata"
+)]
+fn current_time_ms() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration_millis_u64(duration),
+        Err(_) => 0,
+    }
+}
 
 /// Handler for net service mesh RPC requests.
 pub struct NetHandler<S: KeyValueStore + ?Sized> {
@@ -63,10 +84,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RequestHandler for NetHandler<S> {
                     proto,
                     tags,
                     hostname: None,
-                    published_at_ms: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as u64,
+                    published_at_ms: current_time_ms(),
                 };
                 match self.registry.publish(entry).await {
                     Ok(()) => Ok(ClientRpcResponse::NetPublishResult(NetPublishResponse {

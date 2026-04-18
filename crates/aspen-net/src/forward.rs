@@ -86,6 +86,12 @@ pub async fn resolve_forward<S: KeyValueStore + 'static>(
     })
 }
 
+#[derive(Clone, Copy)]
+struct PortSpec<'a> {
+    value: &'a str,
+    spec: &'a str,
+}
+
 /// Parse a forward specification string.
 ///
 /// Format: `[bind_addr:]local_port:service[:remote_port]`
@@ -100,7 +106,7 @@ pub fn parse_forward_spec(spec: &str) -> Result<(SocketAddr, String, Option<u16>
     match parts.len() {
         // local_port:service
         2 => {
-            let local_port = parse_port(parts[0], spec)?;
+            let local_port = parse_port(PortSpec { value: parts[0], spec })?;
             let service = parts[1].to_string();
             let addr = SocketAddr::from(([127, 0, 0, 1], local_port));
             Ok((addr, service, None))
@@ -120,7 +126,7 @@ pub fn parse_forward_spec(spec: &str) -> Result<(SocketAddr, String, Option<u16>
                 spec: spec.to_string(),
                 reason: format!("'{}' is not a valid IP address or port", parts[0]),
             })?;
-            let local_port = parse_port(parts[1], spec)?;
+            let local_port = parse_port(PortSpec { value: parts[1], spec })?;
             let service = parts[2].to_string();
             let addr = SocketAddr::new(bind_addr, local_port);
             Ok((addr, service, None))
@@ -131,9 +137,9 @@ pub fn parse_forward_spec(spec: &str) -> Result<(SocketAddr, String, Option<u16>
                 spec: spec.to_string(),
                 reason: format!("'{}' is not a valid IP address", parts[0]),
             })?;
-            let local_port = parse_port(parts[1], spec)?;
+            let local_port = parse_port(PortSpec { value: parts[1], spec })?;
             let service = parts[2].to_string();
-            let remote_port = parse_port(parts[3], spec)?;
+            let remote_port = parse_port(PortSpec { value: parts[3], spec })?;
             let addr = SocketAddr::new(bind_addr, local_port);
             Ok((addr, service, Some(remote_port)))
         }
@@ -144,10 +150,10 @@ pub fn parse_forward_spec(spec: &str) -> Result<(SocketAddr, String, Option<u16>
     }
 }
 
-fn parse_port(s: &str, spec: &str) -> Result<u16, ForwardError> {
-    s.parse().map_err(|_| ForwardError::InvalidSpec {
-        spec: spec.to_string(),
-        reason: format!("'{s}' is not a valid port number"),
+fn parse_port(input: PortSpec<'_>) -> Result<u16, ForwardError> {
+    input.value.parse().map_err(|_| ForwardError::InvalidSpec {
+        spec: input.spec.to_string(),
+        reason: format!("'{}' is not a valid port number", input.value),
     })
 }
 

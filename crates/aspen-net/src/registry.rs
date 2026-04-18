@@ -151,7 +151,7 @@ impl<S: KeyValueStore + ?Sized> ServiceRegistry<S> {
             .await
             .context(KvSnafu)?;
 
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(scan_result.entries.len());
         for kv in &scan_result.entries {
             let entry: ServiceEntry = serde_json::from_str(&kv.value).context(JsonSnafu)?;
             if let Some(tag) = tag_filter {
@@ -178,7 +178,7 @@ impl<S: KeyValueStore + ?Sized> ServiceRegistry<S> {
             .await
             .context(KvSnafu)?;
 
-        let mut nodes = Vec::new();
+        let mut nodes = Vec::with_capacity(scan_result.entries.len());
         for kv in &scan_result.entries {
             let node: NodeEntry = serde_json::from_str(&kv.value).context(JsonSnafu)?;
             nodes.push(node);

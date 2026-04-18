@@ -31,6 +31,16 @@ struct CacheState {
     last_refresh: Option<Instant>,
 }
 
+#[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "net resolver cache refresh stores monotonic timestamps for staleness checks"
+)]
+fn monotonic_now() -> Instant {
+    Instant::now()
+}
+
 /// Name resolver with local cache.
 ///
 /// Resolves service names to (endpoint_id, port) tuples.
@@ -94,7 +104,7 @@ impl<S: KeyValueStore + 'static> NameResolver<S> {
 
         let mut cache = self.cache.write().await;
         cache.entries = map;
-        cache.last_refresh = Some(Instant::now());
+        cache.last_refresh = Some(monotonic_now());
 
         Ok(())
     }

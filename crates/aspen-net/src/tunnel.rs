@@ -132,7 +132,9 @@ impl TunnelAcceptor {
         }
 
         // Best-effort shutdown
-        let _ = send.finish();
+        if let Err(error) = send.finish() {
+            debug!(port, error = ?error, "tunnel: finish failed");
+        }
 
         Ok(())
     }
