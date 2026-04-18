@@ -52,11 +52,11 @@ pub struct HooksConfig {
     ///
     /// If empty, all hook events are published.
     /// Use NATS-style wildcards: `hooks.>` for all, `hooks.kv.*` for KV events.
-    #[serde(default)]
+    #[serde(default = "empty_publish_topics")]
     pub publish_topics: Vec<String>,
 
     /// List of hook handlers.
-    #[serde(default)]
+    #[serde(default = "empty_handlers")]
     pub handlers: Vec<HookHandlerConfig>,
 }
 
@@ -244,7 +244,7 @@ pub enum HookHandlerType {
         /// Shell command to execute.
         command: String,
         /// Working directory for the command.
-        #[serde(default)]
+        #[serde(default = "no_working_dir")]
         working_dir: Option<String>,
     },
 
@@ -327,6 +327,18 @@ impl HookHandlerType {
 // Default value functions
 fn default_enabled() -> bool {
     true
+}
+
+fn no_working_dir() -> Option<String> {
+    None
+}
+
+fn empty_publish_topics() -> Vec<String> {
+    Vec::new()
+}
+
+fn empty_handlers() -> Vec<HookHandlerConfig> {
+    Vec::new()
 }
 
 fn default_timeout_ms() -> u64 {

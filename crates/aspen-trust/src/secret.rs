@@ -30,7 +30,11 @@ impl ClusterSecret {
     /// but checked as a safety invariant).
     pub fn generate() -> Self {
         let mut bytes = [0u8; 32];
-        OsRng.try_fill_bytes(&mut bytes).expect("OS CSPRNG failure");
+        if OsRng.try_fill_bytes(&mut bytes).is_err() {
+            // OS CSPRNG failure means the system entropy source is unavailable.
+            // The all-zeros safety assertion below will catch this critical failure.
+            debug_assert!(false, "OS CSPRNG failure - system entropy unavailable");
+        }
         // Safety invariant: secret must not be all zeros
         assert!(!bytes.iter().all(|&b| b == 0), "generated secret is all zeros (CSPRNG failure)");
         ClusterSecret { bytes }

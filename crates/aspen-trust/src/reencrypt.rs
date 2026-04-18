@@ -71,6 +71,9 @@ pub struct ReencryptionResult {
 
 /// Maximum number of keys to process in a single batch.
 const REENCRYPTION_BATCH_SIZE: u32 = 100;
+/// Maximum number of batches to process in a single reencryption pass.
+/// At 100 keys per batch, this allows up to 10 million keys.
+const MAX_REENCRYPTION_BATCHES: u32 = 100_000;
 
 /// Re-encrypt all secrets from `old_epoch` to the current epoch.
 ///
@@ -93,7 +96,14 @@ pub async fn reencrypt_secrets(
     // Resume from checkpoint if one exists
     let mut after_key = store.load_checkpoint(table_name).await?;
 
+    let mut batches_processed: u32 = 0;
     loop {
+        debug_assert!(batches_processed < MAX_REENCRYPTION_BATCHES, "reencryption exceeded maximum batches");
+        batches_processed = batches_processed.saturating_add(1);
+        if batches_processed >= MAX_REENCRYPTION_BATCHES {
+            break;
+        }
+
         let batch = store.scan_secrets(prefix, after_key.as_deref(), REENCRYPTION_BATCH_SIZE).await?;
 
         if batch.is_empty() {

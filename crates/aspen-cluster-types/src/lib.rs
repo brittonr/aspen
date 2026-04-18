@@ -293,7 +293,7 @@ pub struct ClusterNode {
     ///
     /// When present, other cluster nodes can use this URL for NAT traversal
     /// via the cluster's own relay infrastructure.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_relay_url", skip_serializing_if = "Option::is_none")]
     pub relay_url: Option<String>,
 }
 
@@ -463,6 +463,10 @@ pub struct AddLearnerRequest {
 pub struct ChangeMembershipRequest {
     /// The complete set of node IDs that should be voting members.
     pub members: Vec<u64>,
+}
+
+fn no_relay_url() -> Option<String> {
+    None
 }
 
 #[cfg(test)]

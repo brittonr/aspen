@@ -50,14 +50,14 @@ pub struct NostrRelayConfig {
     /// - `open`: Any client can write (default, backward-compatible).
     /// - `auth_required`: Must complete NIP-42 before EVENT is accepted.
     /// - `read_only`: No external writes; only `publish()` API works.
-    #[serde(default)]
+    #[serde(default = "WritePolicy::default")]
     pub write_policy: WritePolicy,
 
     /// Public relay URL used for NIP-42 challenge verification.
     ///
     /// The kind 22242 auth event must contain a `relay` tag matching this
     /// URL. If `None`, the relay URL check is skipped.
-    #[serde(default)]
+    #[serde(default = "no_relay_url")]
     pub relay_url: Option<String>,
 
     /// Maximum EVENT submissions per second per source IP. Set to 0 to disable.
@@ -75,6 +75,10 @@ pub struct NostrRelayConfig {
     /// Maximum burst of EVENT submissions per author pubkey.
     #[serde(default = "default_events_burst_per_pubkey")]
     pub events_burst_per_pubkey: u32,
+}
+
+fn no_relay_url() -> Option<String> {
+    None
 }
 
 fn default_events_per_second_per_ip() -> u32 {

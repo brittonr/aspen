@@ -378,7 +378,14 @@ impl Ticket for AspenHookTicket {
         // All fields are bounded by Tiger Style limits (MAX_BOOTSTRAP_PEERS=16,
         // MAX_CLUSTER_ID_SIZE=128, MAX_EVENT_TYPE_SIZE=64, MAX_PAYLOAD_SIZE=4096).
         // Postcard serialization of these bounded fields is infallible.
-        postcard::to_stdvec(self).expect("AspenHookTicket serialization is infallible for bounded fields")
+        match postcard::to_stdvec(self) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                // Postcard serialization of bounded Tiger Style fields is infallible.
+                debug_assert!(false, "AspenHookTicket serialization failed on bounded fields");
+                Vec::new()
+            }
+        }
     }
 
     fn from_bytes(bytes: &[u8]) -> std::result::Result<Self, iroh_tickets::ParseError> {

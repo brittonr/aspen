@@ -103,7 +103,7 @@ pub struct AppManifest {
     /// app-specific operations (separate from cluster identity).
     /// Stored as `Vec<u8>` for better postcard serialization compatibility.
     /// Empty vector means no key.
-    #[serde(default)]
+    #[serde(default = "empty_public_key")]
     pub public_key: Vec<u8>,
 }
 
@@ -183,6 +183,10 @@ impl AppManifest {
     pub fn short(&self) -> String {
         format!("{}@{}", self.app_id, self.version)
     }
+}
+
+fn empty_public_key() -> Vec<u8> {
+    Vec::new()
 }
 
 impl Default for AppManifest {

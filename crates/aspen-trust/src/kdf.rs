@@ -47,7 +47,11 @@ pub fn derive_key(secret: &[u8; 32], context: &[u8], cluster_id: &[u8], epoch: u
     // HKDF-SHA3-256: extract then expand
     let hk = Hkdf::<Sha3_256>::new(None, secret);
     let mut output = [0u8; 32];
-    hk.expand(&info, &mut output).expect("32-byte output is within HKDF-SHA3-256 limits");
+    if hk.expand(&info, &mut output).is_err() {
+        // HKDF-SHA3-256 with 32-byte output cannot fail (max: 255 × 32 = 8160 bytes).
+        // The all-zeros safety assertion below will catch this impossible case.
+        debug_assert!(false, "HKDF-SHA3-256 with 32-byte output cannot fail");
+    }
 
     // Safety invariant: derived key must not be all zeros
     assert!(!output.iter().all(|&b| b == 0), "derived key is all zeros (HKDF implementation bug)");
