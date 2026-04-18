@@ -31,6 +31,16 @@ use async_trait::async_trait;
 use serde_json;
 use tracing::warn;
 
+#[inline]
+fn list_limit_usize(limit: Option<u32>) -> usize {
+    usize::try_from(limit.unwrap_or(100)).unwrap_or(usize::MAX)
+}
+
+#[inline]
+fn peer_priority_u8(priority: u32) -> u8 {
+    u8::try_from(priority).unwrap_or(u8::MAX)
+}
+
 /// Service executor for docs/sync operations.
 ///
 /// Handles the same operations as the former native `DocsHandler`:
@@ -106,7 +116,7 @@ impl ServiceExecutor for DocsServiceExecutor {
             ClientRpcRequest::SetPeerClusterEnabled { cluster_id, is_enabled } => {
                 self.op_set_enabled(cluster_id, is_enabled).await
             }
-            _ => unreachable!("DocsServiceExecutor received unhandled request"),
+            _ => Ok(ClientRpcResponse::error("INVALID_REQUEST", "request not handled by docs service")),
         }
     }
 }
@@ -182,7 +192,7 @@ impl DocsServiceExecutor {
     async fn op_list(&self, prefix: Option<String>, limit: Option<u32>) -> Result<ClientRpcResponse> {
         match self.docs_sync.list_entries(prefix, limit).await {
             Ok(entries) => {
-                let max_entries = limit.unwrap_or(100) as usize;
+                let max_entries = list_limit_usize(limit);
                 let has_more = entries.len() > max_entries;
                 let mut result_entries = entries;
                 if has_more {
@@ -264,7 +274,7 @@ impl DocsServiceExecutor {
             }
         };
 
-        let importer = match peer_manager.importer() {
+        let peer_importer = match peer_manager.importer() {
             Some(imp) => imp,
             None => {
                 return Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
@@ -278,7 +288,7 @@ impl DocsServiceExecutor {
             }
         };
 
-        match importer.get_key_origin(&key).await {
+        match peer_importer.get_key_origin(&key).await {
             Some(origin) => {
                 let is_local = origin.is_local();
                 Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
@@ -325,7 +335,7 @@ impl DocsServiceExecutor {
 
         let docs_ticket = aspen_core::AspenDocsTicket {
             cluster_id: cluster_id.clone(),
-            priority: priority as u8,
+            priority: peer_priority_u8(priority),
         };
 
         match peer_manager.add_peer(docs_ticket).await {
@@ -497,7 +507,7 @@ impl DocsServiceExecutor {
             }
         };
 
-        let importer = match peer_manager.importer() {
+        let peer_importer = match peer_manager.importer() {
             Some(imp) => imp,
             None => {
                 return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
@@ -509,7 +519,7 @@ impl DocsServiceExecutor {
             }
         };
 
-        match importer.update_filter(&cluster_id, filter).await {
+        match peer_importer.update_filter(&cluster_id, filter).await {
             Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
                 is_success: true,
                 cluster_id,
@@ -547,7 +557,7 @@ impl DocsServiceExecutor {
         let previous_priority =
             peer_manager.list_peers().await.into_iter().find(|p| p.cluster_id == cluster_id).map(|p| p.priority);
 
-        let importer = match peer_manager.importer() {
+        let peer_importer = match peer_manager.importer() {
             Some(imp) => imp,
             None => {
                 return Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
@@ -562,7 +572,7 @@ impl DocsServiceExecutor {
             }
         };
 
-        match importer.update_priority(&cluster_id, priority).await {
+        match peer_importer.update_priority(&cluster_id, priority).await {
             Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
                 is_success: true,
                 cluster_id,
@@ -583,7 +593,7 @@ impl DocsServiceExecutor {
         }
     }
 
-    async fn op_set_enabled(&self, cluster_id: String, enabled: bool) -> Result<ClientRpcResponse> {
+    async fn op_set_enabled(&self, cluster_id: String, is_enabled: bool) -> Result<ClientRpcResponse> {
         let peer_manager = match &self.peer_manager {
             Some(pm) => pm,
             None => {
@@ -596,7 +606,7 @@ impl DocsServiceExecutor {
             }
         };
 
-        let importer = match peer_manager.importer() {
+        let peer_importer = match peer_manager.importer() {
             Some(imp) => imp,
             None => {
                 return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
@@ -608,11 +618,11 @@ impl DocsServiceExecutor {
             }
         };
 
-        match importer.set_enabled(&cluster_id, enabled).await {
+        match peer_importer.set_enabled(&cluster_id, is_enabled).await {
             Ok(()) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
                 is_success: true,
                 cluster_id,
-                is_enabled: Some(enabled),
+                is_enabled: Some(is_enabled),
                 error: None,
             })),
             Err(e) => {
