@@ -69,6 +69,29 @@ use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
+/// Create a `WriteResult` with all fields explicitly set to `None`.
+///
+/// Avoids `..Default::default()` which triggers the Tiger Style `explicit_defaults`
+/// lint since `WriteResult` is from a foreign crate.
+fn empty_write_result() -> WriteResult {
+    WriteResult {
+        command: None,
+        batch_applied: None,
+        conditions_met: None,
+        failed_condition_index: None,
+        lease_id: None,
+        ttl_seconds: None,
+        keys_deleted: None,
+        succeeded: None,
+        txn_results: None,
+        header_revision: None,
+        occ_conflict: None,
+        conflict_key: None,
+        conflict_expected_version: None,
+        conflict_actual_version: None,
+    }
+}
+
 /// Value with version tracking for OCC support.
 #[derive(Clone, Debug)]
 struct VersionedValue {
@@ -427,13 +450,13 @@ impl DeterministicKeyValueStore {
                 batch_applied: Some(operations.len() as u32),
                 conditions_met: Some(true),
                 header_revision: Some(revision),
-                ..Default::default()
+                ..empty_write_result()
             }
         } else {
             WriteResult {
                 conditions_met: Some(false),
                 failed_condition_index: failed_index,
-                ..Default::default()
+                ..empty_write_result()
             }
         }
     }
@@ -457,7 +480,7 @@ impl DeterministicKeyValueStore {
                     conflict_key: Some(key.clone()),
                     conflict_expected_version: Some(*expected_version),
                     conflict_actual_version: Some(current_version),
-                    ..Default::default()
+                    ..empty_write_result()
                 };
             }
         }
@@ -478,7 +501,7 @@ impl DeterministicKeyValueStore {
             occ_conflict: Some(false),
             batch_applied: Some(write_set.len() as u32),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         }
     }
 
@@ -492,7 +515,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             command: Some(WriteCommand::Set { key, value }),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -506,7 +529,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             command: Some(WriteCommand::Set { key, value }),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -522,7 +545,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             command: Some(command),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -534,7 +557,7 @@ impl DeterministicKeyValueStore {
         inner.remove(key);
         Ok(WriteResult {
             command: Some(command),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -548,7 +571,7 @@ impl DeterministicKeyValueStore {
         }
         Ok(WriteResult {
             command: Some(command),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -574,7 +597,7 @@ impl DeterministicKeyValueStore {
                     new_value,
                 }),
                 header_revision: Some(revision),
-                ..Default::default()
+                ..empty_write_result()
             })
         } else {
             Err(KeyValueStoreError::CompareAndSwapFailed {
@@ -598,7 +621,7 @@ impl DeterministicKeyValueStore {
             Ok(WriteResult {
                 command: Some(WriteCommand::CompareAndDelete { key, expected }),
                 header_revision: Some(revision),
-                ..Default::default()
+                ..empty_write_result()
             })
         } else {
             Err(KeyValueStoreError::CompareAndSwapFailed {
@@ -627,7 +650,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             batch_applied: Some(operations.len() as u32),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -642,7 +665,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             command: Some(WriteCommand::SetWithLease { key, value, lease_id }),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -661,7 +684,7 @@ impl DeterministicKeyValueStore {
                 lease_id,
             }),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -669,7 +692,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             lease_id: Some(lease_id),
             ttl_seconds: Some(ttl_seconds),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -677,7 +700,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             lease_id: Some(lease_id),
             keys_deleted: Some(0),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -685,7 +708,7 @@ impl DeterministicKeyValueStore {
         Ok(WriteResult {
             lease_id: Some(lease_id),
             ttl_seconds: Some(60),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 
@@ -704,7 +727,7 @@ impl DeterministicKeyValueStore {
             succeeded: Some(is_all_passed),
             txn_results: Some(results),
             header_revision: Some(revision),
-            ..Default::default()
+            ..empty_write_result()
         })
     }
 }
