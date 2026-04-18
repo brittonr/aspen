@@ -4,7 +4,10 @@
 //! worker operations via the `ServiceHandler` wrapper.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
@@ -27,6 +30,29 @@ use aspen_rpc_core::ServiceExecutor;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::warn;
+
+#[inline]
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "job handler needs wall-clock timestamps for worker coordination and visibility leases"
+)]
+fn current_time_ms() -> u64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+        Err(_) => 0,
+    }
+}
+
+struct CompleteJobArgs {
+    worker_id: String,
+    job_id: String,
+    receipt_handle: String,
+    execution_token: String,
+    is_success: bool,
+    error_message: Option<String>,
+    output_data: Option<Vec<u8>>,
+}
 
 /// Service executor for job queue operations.
 pub struct JobServiceExecutor {
@@ -141,9 +167,9 @@ impl ServiceExecutor for JobServiceExecutor {
                 is_success,
                 error_message,
                 output_data,
-                processing_time_ms,
+                processing_time_ms: _,
             } => {
-                self.handle_worker_complete_job(
+                self.handle_worker_complete_job(CompleteJobArgs {
                     worker_id,
                     job_id,
                     receipt_handle,
@@ -151,8 +177,7 @@ impl ServiceExecutor for JobServiceExecutor {
                     is_success,
                     error_message,
                     output_data,
-                    processing_time_ms,
-                )
+                })
                 .await
             }
             _ => anyhow::bail!("unhandled request for jobs service"),
@@ -558,8 +583,7 @@ impl JobServiceExecutor {
             }));
         };
 
-        let now_ms =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let now_ms = current_time_ms();
 
         let info = CoordWorkerInfo {
             worker_id: worker_id.clone(),
@@ -577,7 +601,7 @@ impl JobServiceExecutor {
             total_processed: 0,
             total_failed: 0,
             avg_processing_time_ms: 0,
-            groups: Default::default(),
+            groups: HashSet::new(),
             cpu_pressure_avg10: 0.0,
             memory_pressure_avg10: 0.0,
             io_pressure_avg10: 0.0,
@@ -690,8 +714,7 @@ impl JobServiceExecutor {
             }
         };
 
-        let now_ms =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let now_ms = current_time_ms();
 
         // Mark each dequeued job as started to generate an execution token.
         // The in-process worker calls mark_started after dequeue (worker.rs),
@@ -739,63 +762,55 @@ impl JobServiceExecutor {
         }))
     }
 
-    #[allow(clippy::too_many_arguments)]
-    async fn handle_worker_complete_job(
-        &self,
-        worker_id: String,
-        job_id: String,
-        receipt_handle: String,
-        execution_token: String,
-        is_success: bool,
-        error_message: Option<String>,
-        output_data: Option<Vec<u8>>,
-        _processing_time_ms: u64,
-    ) -> Result<ClientRpcResponse> {
+    async fn handle_worker_complete_job(&self, args: CompleteJobArgs) -> Result<ClientRpcResponse> {
         // Validate before calling ack_job to avoid panicking on empty strings.
         // The poll handler may return empty execution_token when the job didn't
         // have one set (unwrap_or_default), which would trigger an assert! in
         // ack_job and kill the handler task — leaving the client with no response.
-        if receipt_handle.is_empty() || execution_token.is_empty() {
+        if args.receipt_handle.is_empty() || args.execution_token.is_empty() {
             warn!(
-                worker_id,
-                job_id,
-                receipt_empty = receipt_handle.is_empty(),
-                token_empty = execution_token.is_empty(),
+                worker_id = args.worker_id,
+                job_id = args.job_id,
+                receipt_empty = args.receipt_handle.is_empty(),
+                token_empty = args.execution_token.is_empty(),
                 "job completion rejected: empty receipt_handle or execution_token"
             );
             return Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
                 is_success: false,
-                worker_id,
-                job_id,
+                worker_id: args.worker_id,
+                job_id: args.job_id,
                 error: Some("empty receipt_handle or execution_token".to_string()),
             }));
         }
 
-        let jid = JobId::from_string(job_id.clone());
+        let jid = JobId::from_string(args.job_id.clone());
 
-        let result = if is_success {
-            let data = output_data.and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or(serde_json::Value::Null);
+        let result = if args.is_success {
+            let data = args
+                .output_data
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                .unwrap_or(serde_json::Value::Null);
             JobResult::success(data)
         } else {
-            JobResult::failure(error_message.unwrap_or_else(|| "unknown error".to_string()))
+            JobResult::failure(args.error_message.unwrap_or_else(|| "unknown error".to_string()))
         };
 
-        match self.job_manager.ack_job(&jid, &receipt_handle, &execution_token, result).await {
+        match self.job_manager.ack_job(&jid, &args.receipt_handle, &args.execution_token, result).await {
             Ok(()) => {
-                debug!(worker_id, job_id, "job completed successfully");
+                debug!(worker_id = args.worker_id, job_id = args.job_id, "job completed successfully");
                 Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
                     is_success: true,
-                    worker_id,
-                    job_id,
+                    worker_id: args.worker_id,
+                    job_id: args.job_id,
                     error: None,
                 }))
             }
             Err(e) => {
-                warn!(worker_id, job_id, error = %e, "job completion failed");
+                warn!(worker_id = args.worker_id, job_id = args.job_id, error = %e, "job completion failed");
                 Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
                     is_success: false,
-                    worker_id,
-                    job_id,
+                    worker_id: args.worker_id,
+                    job_id: args.job_id,
                     error: Some(e.to_string()),
                 }))
             }
