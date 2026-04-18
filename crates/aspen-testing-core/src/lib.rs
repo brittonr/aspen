@@ -386,11 +386,11 @@ impl DeterministicKeyValueStore {
                 }
                 TxnOp::Range { prefix, limit } => {
                     let matching: Vec<_> = inner.iter().filter(|(k, _)| k.starts_with(prefix)).collect();
-                    let limit_entries = usize::try_from(*limit).unwrap_or(usize::MAX);
-                    let is_more_results = matching.len() > limit_entries;
+                    let max_results = usize::try_from(*limit).unwrap_or(usize::MAX);
+                    let is_more_results = matching.len() > max_results;
                     let kvs: Vec<_> = matching
                         .into_iter()
-                        .take(limit_entries)
+                        .take(max_results)
                         .map(|(k, v)| KeyValueWithRevision {
                             key: k.clone(),
                             value: v.value.clone(),
@@ -823,7 +823,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let inner = self.inner.lock().await;
 
         // Apply Tiger Style bounded limit
-        let limit_entries = usize::try_from(request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS))
+        let max_results = usize::try_from(request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS))
             .unwrap_or(usize::MAX);
 
         // Decode continuation token (format: base64(last_key))
@@ -851,10 +851,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
         matching.sort_by(|a, b| a.0.cmp(&b.0));
 
         // Take limit + 1 to check if there are more results
-        let is_truncated = matching.len() > limit_entries;
+        let is_truncated = matching.len() > max_results;
         let entries: Vec<KeyValueWithRevision> = matching
             .into_iter()
-            .take(limit_entries)
+            .take(max_results)
             .map(|(key, versioned)| KeyValueWithRevision {
                 key,
                 value: versioned.value,

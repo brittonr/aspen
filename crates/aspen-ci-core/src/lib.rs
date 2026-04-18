@@ -52,7 +52,7 @@ pub use verified::{
     are_dependencies_met,
     // Resource limits
     are_resource_limits_valid,
-    check_pipeline_limits,
+    check_pipeline_limits, PipelineLimits,
     // Timeout calculations
     compute_deadline_ms,
     compute_effective_cpu_weight,

@@ -108,6 +108,7 @@ pub use aspen_ci_core::any_path_matches;
 pub use aspen_ci_core::are_dependencies_met;
 pub use aspen_ci_core::are_resource_limits_valid;
 pub use aspen_ci_core::check_pipeline_limits;
+pub use aspen_ci_core::PipelineLimits;
 pub use aspen_ci_core::compute_deadline_ms;
 pub use aspen_ci_core::compute_effective_cpu_weight;
 pub use aspen_ci_core::compute_effective_memory_limit;

@@ -206,12 +206,20 @@ pub fn count_total_jobs(jobs_per_stage: &[u32]) -> u32 {
 
 /// Check if pipeline size is within limits.
 ///
-/// # Arguments
-///
-/// * `stage_count` - Number of stages
-/// * `job_count` - Total number of jobs
-/// * `max_stages` - Maximum allowed stages
-/// * `max_jobs` - Maximum allowed jobs
+/// Pipeline counts and limits for validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PipelineLimits {
+    /// Number of stages in the pipeline.
+    pub stage_count: u32,
+    /// Total number of jobs across all stages.
+    pub job_count: u32,
+    /// Maximum allowed stages.
+    pub max_stages: u32,
+    /// Maximum allowed jobs.
+    pub max_jobs: u32,
+}
+
+/// Validate that pipeline stage/job counts are within limits.
 ///
 /// # Returns
 ///
@@ -220,33 +228,32 @@ pub fn count_total_jobs(jobs_per_stage: &[u32]) -> u32 {
 /// # Example
 ///
 /// ```
-/// use aspen_ci_core::verified::{check_pipeline_limits, StageValidationError};
+/// use aspen_ci_core::verified::{check_pipeline_limits, PipelineLimits, StageValidationError};
 ///
-/// assert!(check_pipeline_limits(5, 20, 10, 100).is_ok());
+/// assert!(check_pipeline_limits(PipelineLimits {
+///     stage_count: 5, job_count: 20, max_stages: 10, max_jobs: 100,
+/// }).is_ok());
 ///
 /// assert!(matches!(
-///     check_pipeline_limits(15, 20, 10, 100),
+///     check_pipeline_limits(PipelineLimits {
+///         stage_count: 15, job_count: 20, max_stages: 10, max_jobs: 100,
+///     }),
 ///     Err(StageValidationError::TooManyStages { count: 15, max: 10 })
 /// ));
 /// ```
 #[inline]
-pub fn check_pipeline_limits(
-    stage_count: u32,
-    job_count: u32,
-    max_stages: u32,
-    max_jobs: u32,
-) -> Result<(), StageValidationError> {
-    if stage_count > max_stages {
+pub fn check_pipeline_limits(limits: PipelineLimits) -> Result<(), StageValidationError> {
+    if limits.stage_count > limits.max_stages {
         return Err(StageValidationError::TooManyStages {
-            count: stage_count,
-            max: max_stages,
+            count: limits.stage_count,
+            max: limits.max_stages,
         });
     }
 
-    if job_count > max_jobs {
+    if limits.job_count > limits.max_jobs {
         return Err(StageValidationError::TooManyJobs {
-            count: job_count,
-            max: max_jobs,
+            count: limits.job_count,
+            max: limits.max_jobs,
         });
     }
 
@@ -454,12 +461,16 @@ mod tests {
 
     #[test]
     fn test_within_limits() {
-        assert!(check_pipeline_limits(5, 20, 10, 100).is_ok());
+        assert!(check_pipeline_limits(PipelineLimits {
+            stage_count: 5, job_count: 20, max_stages: 10, max_jobs: 100,
+        }).is_ok());
     }
 
     #[test]
     fn test_too_many_stages() {
-        match check_pipeline_limits(15, 20, 10, 100) {
+        match check_pipeline_limits(PipelineLimits {
+            stage_count: 15, job_count: 20, max_stages: 10, max_jobs: 100,
+        }) {
             Err(StageValidationError::TooManyStages { count, max }) => {
                 assert_eq!(count, 15);
                 assert_eq!(max, 10);
@@ -470,7 +481,9 @@ mod tests {
 
     #[test]
     fn test_too_many_jobs() {
-        match check_pipeline_limits(5, 150, 10, 100) {
+        match check_pipeline_limits(PipelineLimits {
+            stage_count: 5, job_count: 150, max_stages: 10, max_jobs: 100,
+        }) {
             Err(StageValidationError::TooManyJobs { count, max }) => {
                 assert_eq!(count, 150);
                 assert_eq!(max, 100);
