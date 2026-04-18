@@ -41,6 +41,8 @@ fn optional_ttl_secs(ttl_days: Option<u32>) -> Option<u64> {
     ttl_days.map(ttl_secs_u64)
 }
 
+const DEFAULT_ROOT_TTL_DAYS: u32 = 3_650;
+
 struct CreateRoleArgs {
     name: String,
     allowed_domains: Vec<String>,
@@ -48,6 +50,13 @@ struct CreateRoleArgs {
     allow_bare_domains: bool,
     is_wildcards_allowed: bool,
     is_subdomains_allowed: bool,
+}
+
+struct IssueCertificateArgs {
+    role: String,
+    common_name: String,
+    alt_names: Vec<String>,
+    ttl_days: Option<u32>,
 }
 
 /// Sub-handler for PKI secrets operations.
@@ -75,51 +84,72 @@ impl PkiSecretsHandler {
         request: ClientRpcRequest,
         service: &SecretsService,
     ) -> anyhow::Result<ClientRpcResponse> {
-        match request {
-            ClientRpcRequest::SecretsPkiGenerateRoot {
-                mount,
-                common_name,
-                ttl_days,
-            } => handle_pki_generate_root(service, &mount, common_name, ttl_days).await,
-            ClientRpcRequest::SecretsPkiGenerateIntermediate { mount, common_name } => {
-                handle_pki_generate_intermediate(service, &mount, common_name).await
-            }
-            ClientRpcRequest::SecretsPkiSetSignedIntermediate { mount, certificate } => {
-                handle_pki_set_signed_intermediate(service, &mount, certificate).await
-            }
-            ClientRpcRequest::SecretsPkiCreateRole {
-                mount,
+        if let ClientRpcRequest::SecretsPkiGenerateRoot {
+            mount,
+            common_name,
+            ttl_days,
+        } = request
+        {
+            return handle_pki_generate_root(service, &mount, common_name, ttl_days).await;
+        }
+        if let ClientRpcRequest::SecretsPkiGenerateIntermediate { mount, common_name } = request {
+            return handle_pki_generate_intermediate(service, &mount, common_name).await;
+        }
+        if let ClientRpcRequest::SecretsPkiSetSignedIntermediate { mount, certificate } = request {
+            return handle_pki_set_signed_intermediate(service, &mount, certificate).await;
+        }
+        if let ClientRpcRequest::SecretsPkiCreateRole {
+            mount,
+            name,
+            allowed_domains,
+            max_ttl_days,
+            allow_bare_domains,
+            allow_wildcards,
+            allow_subdomains,
+        } = request
+        {
+            return handle_pki_create_role(service, &mount, CreateRoleArgs {
                 name,
                 allowed_domains,
                 max_ttl_days,
                 allow_bare_domains,
-                allow_wildcards,
-                allow_subdomains,
-            } => {
-                handle_pki_create_role(service, &mount, CreateRoleArgs {
-                    name,
-                    allowed_domains,
-                    max_ttl_days,
-                    allow_bare_domains,
-                    is_wildcards_allowed: allow_wildcards,
-                    is_subdomains_allowed: allow_subdomains,
-                })
-                .await
-            }
-            ClientRpcRequest::SecretsPkiIssue {
-                mount,
+                is_wildcards_allowed: allow_wildcards,
+                is_subdomains_allowed: allow_subdomains,
+            })
+            .await;
+        }
+        if let ClientRpcRequest::SecretsPkiIssue {
+            mount,
+            role,
+            common_name,
+            alt_names,
+            ttl_days,
+        } = request
+        {
+            return handle_pki_issue(service, &mount, IssueCertificateArgs {
                 role,
                 common_name,
                 alt_names,
                 ttl_days,
-            } => handle_pki_issue(service, &mount, role, common_name, alt_names, ttl_days).await,
-            ClientRpcRequest::SecretsPkiRevoke { mount, serial } => handle_pki_revoke(service, &mount, serial).await,
-            ClientRpcRequest::SecretsPkiGetCrl { mount } => handle_pki_get_crl(service, &mount).await,
-            ClientRpcRequest::SecretsPkiListCerts { mount } => handle_pki_list_certs(service, &mount).await,
-            ClientRpcRequest::SecretsPkiGetRole { mount, name } => handle_pki_get_role(service, &mount, name).await,
-            ClientRpcRequest::SecretsPkiListRoles { mount } => handle_pki_list_roles(service, &mount).await,
-            _ => Err(anyhow::anyhow!("request not handled by PkiSecretsHandler")),
+            })
+            .await;
         }
+        if let ClientRpcRequest::SecretsPkiRevoke { mount, serial } = request {
+            return handle_pki_revoke(service, &mount, serial).await;
+        }
+        if let ClientRpcRequest::SecretsPkiGetCrl { mount } = request {
+            return handle_pki_get_crl(service, &mount).await;
+        }
+        if let ClientRpcRequest::SecretsPkiListCerts { mount } = request {
+            return handle_pki_list_certs(service, &mount).await;
+        }
+        if let ClientRpcRequest::SecretsPkiGetRole { mount, name } = request {
+            return handle_pki_get_role(service, &mount, name).await;
+        }
+        if let ClientRpcRequest::SecretsPkiListRoles { mount } = request {
+            return handle_pki_list_roles(service, &mount).await;
+        }
+        Err(anyhow::anyhow!("request not handled by PkiSecretsHandler"))
     }
 }
 
@@ -132,7 +162,7 @@ async fn handle_pki_generate_root(
     debug!(mount = %mount, common_name = %common_name, ttl_days = ?ttl_days, "PKI generate root request");
 
     let store = service.get_pki_store(mount).await?;
-    let ttl_secs = ttl_days.map(|d| d as u64 * 24 * 3600).unwrap_or(10 * 365 * 24 * 3600);
+    let ttl_secs = optional_ttl_secs(ttl_days).unwrap_or(ttl_secs_u64(DEFAULT_ROOT_TTL_DAYS));
     let request = GenerateRootRequest::new(common_name).with_ttl_secs(ttl_secs);
 
     match store.generate_root(request).await {
@@ -272,21 +302,18 @@ async fn handle_pki_create_role(
 async fn handle_pki_issue(
     service: &SecretsService,
     mount: &str,
-    role: String,
-    common_name: String,
-    alt_names: Vec<String>,
-    ttl_days: Option<u32>,
+    args: IssueCertificateArgs,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(mount = %mount, role = %role, common_name = %common_name, "PKI issue request");
+    debug!(mount = %mount, role = %args.role, common_name = %args.common_name, "PKI issue request");
 
     let store = service.get_pki_store(mount).await?;
     let request = IssueCertificateRequest {
-        role,
-        common_name,
-        alt_names,
+        role: args.role,
+        common_name: args.common_name,
+        alt_names: args.alt_names,
         ip_sans: vec![],
         uri_sans: vec![],
-        ttl_secs: optional_ttl_secs(ttl_days),
+        ttl_secs: optional_ttl_secs(args.ttl_days),
         exclude_cn_from_sans: false,
     };
 
