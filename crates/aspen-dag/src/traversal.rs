@@ -216,7 +216,8 @@ where
     fn roots(&self) -> Vec<H> {
         // The initial root is either still on the stack or already visited.
         // Return whatever is on the bottom of the stack plus pending.
-        let mut roots = Vec::new();
+        let capacity = self.stack.len().saturating_add(usize::from(self.pending.is_some()));
+        let mut roots = Vec::with_capacity(capacity);
         if let Some(h) = self.pending {
             roots.push(h);
         }
