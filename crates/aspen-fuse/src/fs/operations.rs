@@ -19,6 +19,7 @@ use fuse_backend_rs::api::filesystem::SetattrValid;
 use fuse_backend_rs::api::filesystem::ZeroCopyReader;
 use fuse_backend_rs::api::filesystem::ZeroCopyWriter;
 use tracing::debug;
+use tracing::warn;
 
 use super::AspenFs;
 use crate::constants::ATTR_TTL;
@@ -35,6 +36,16 @@ use crate::constants::SYMLINK_SUFFIX;
 use crate::constants::XATTR_PREFIX;
 use crate::inode::EntryType;
 use crate::metadata::FileMetadata;
+
+const STATFS_TOTAL_BLOCKS: u64 = 1024u64.saturating_mul(1024).saturating_mul(1024);
+const STATFS_FREE_BLOCKS: u64 = 1024u64.saturating_mul(1024).saturating_mul(512);
+
+fn is_internal_child_name(child_name: &str) -> bool {
+    child_name.ends_with(META_SUFFIX)
+        || child_name.ends_with(SYMLINK_SUFFIX)
+        || child_name.contains(crate::constants::XATTR_PREFIX)
+        || child_name.contains(crate::constants::CHUNK_KEY_SUFFIX)
+}
 
 impl FileSystem for AspenFs {
     type Inode = u64;
@@ -166,7 +177,9 @@ impl FileSystem for AspenFs {
         // Handle truncation / extension (e.g., O_TRUNC sends setattr with SIZE)
         if valid.contains(SetattrValid::SIZE) && entry.entry_type == EntryType::File {
             let mut value = self.kv_read(&key)?.unwrap_or_default();
-            value.resize(attr.st_size as usize, 0);
+            let file_size_bytes = usize::try_from(attr.st_size)
+                .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "file size must fit in usize"))?;
+            value.resize(file_size_bytes, 0);
             self.kv_write(&key, &value)?;
         }
 
@@ -263,11 +276,7 @@ impl FileSystem for AspenFs {
                 };
 
                 // Filter out internal keys: .meta, .symlink, .xattr., .chunk.
-                if child.ends_with(META_SUFFIX)
-                    || child.ends_with(SYMLINK_SUFFIX)
-                    || child.contains(crate::constants::XATTR_PREFIX)
-                    || child.contains(crate::constants::CHUNK_KEY_SUFFIX)
-                {
+                if is_internal_child_name(child) {
                     continue;
                 }
 
@@ -276,7 +285,7 @@ impl FileSystem for AspenFs {
         }
 
         // Build directory entries (skip to offset)
-        let mut current_offset = 0u64;
+        let mut dir_entry_index = 0u64;
         let mut bytes_written = 0u32;
 
         // Add . and .. entries
@@ -288,7 +297,7 @@ impl FileSystem for AspenFs {
                 name: b".",
             };
             bytes_written += add_entry(entry)? as u32;
-            current_offset = 1;
+            dir_entry_index = 1;
         }
 
         if offset <= 1 && bytes_written < size {
@@ -310,7 +319,7 @@ impl FileSystem for AspenFs {
                 name: b"..",
             };
             bytes_written += add_entry(entry)? as u32;
-            current_offset = 2;
+            dir_entry_index = 2;
         }
 
         // Snapshot names for prefetch before the loop consumes children
@@ -319,9 +328,9 @@ impl FileSystem for AspenFs {
         // Add child entries
         let mut entry_count = 0u32;
         for child_name in children {
-            current_offset += 1;
+            dir_entry_index += 1;
 
-            if current_offset <= offset {
+            if dir_entry_index <= offset {
                 continue;
             }
 
@@ -348,7 +357,7 @@ impl FileSystem for AspenFs {
 
             let entry = DirEntry {
                 ino: child_inode,
-                offset: current_offset,
+                offset: dir_entry_index,
                 type_: dtype,
                 name: child_name.as_bytes(),
             };
@@ -442,11 +451,14 @@ impl FileSystem for AspenFs {
         let buffered = self.write_buffer.read_buffered(&key, offset, size);
         if let Some(overlaps) = buffered {
             for (buf_offset, buf_data) in overlaps {
-                let start_in_data = buf_offset.saturating_sub(offset) as usize;
+                let start_in_data = usize::try_from(buf_offset.saturating_sub(offset)).map_err(|_| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "buffered read offset must fit in usize")
+                })?;
                 let end_in_data = start_in_data.saturating_add(buf_data.len()).min(data.len());
                 if start_in_data < data.len() {
                     let copy_len = end_in_data.saturating_sub(start_in_data).min(buf_data.len());
-                    data[start_in_data..start_in_data + copy_len].copy_from_slice(&buf_data[..copy_len]);
+                    let slice_end = start_in_data.saturating_add(copy_len).min(data.len());
+                    data[start_in_data..slice_end].copy_from_slice(&buf_data[..copy_len]);
                 }
             }
         }
@@ -464,7 +476,9 @@ impl FileSystem for AspenFs {
                     offset: o,
                     size: s,
                 } => {
-                    let _ = crate::chunking::chunked_read_range(self, &k, o, s);
+                    if let Err(error) = crate::chunking::chunked_read_range(self, &k, o, s) {
+                        debug!(%error, prefetch_key = %k, prefetch_offset = o, prefetch_size = s, "readahead prefetch failed");
+                    }
                 }
                 crate::prefetch::PrefetchRequest::DirMeta { .. } => {
                     // Dir prefetch handled by execute_pending
@@ -510,7 +524,9 @@ impl FileSystem for AspenFs {
         let key = Self::path_to_key(&entry.path)?;
 
         // Read new data from the FUSE client
-        let mut buf = vec![0u8; size as usize];
+        let write_size_bytes = usize::try_from(size)
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "write size must fit in usize"))?;
+        let mut buf = vec![0u8; write_size_bytes];
         r.read_exact(&mut buf)?;
 
         // Buffer the write — may trigger auto-flush
@@ -526,7 +542,7 @@ impl FileSystem for AspenFs {
         self.write_metadata(&key, &meta)?;
         self.cache.invalidate_meta(&entry.path);
 
-        Ok(size as usize)
+        Ok(write_size_bytes)
     }
 
     fn release(
@@ -542,8 +558,9 @@ impl FileSystem for AspenFs {
         // Flush any buffered writes for this file
         if let Ok(Some(entry)) = self.inodes.get_path(inode)
             && let Ok(key) = Self::path_to_key(&entry.path)
+            && let Err(error) = self.write_buffer.flush_file(self, &key)
         {
-            let _ = self.write_buffer.flush_file(self, &key);
+            debug!(%error, file_key = %key, "failed to flush buffered writes on release");
         }
 
         // Release locks held by this owner
@@ -619,7 +636,9 @@ impl FileSystem for AspenFs {
         let key = Self::path_to_key(&child_path)?;
 
         // Discard any buffered writes (file is being deleted)
-        let _ = self.write_buffer.discard_file(&key);
+        if let Err(error) = self.write_buffer.discard_file(&key) {
+            debug!(%error, file_key = %key, "failed to discard buffered file writes during unlink");
+        }
 
         // Release all locks on this inode before removing it
         if let Ok(Some(child_inode)) = self.inodes.get_inode(&child_path) {
@@ -628,7 +647,9 @@ impl FileSystem for AspenFs {
 
         // Delete from KV (data + all chunks + metadata)
         crate::chunking::chunked_delete(self, &key)?;
-        let _ = self.delete_metadata(&key);
+        if let Err(error) = self.delete_metadata(&key) {
+            debug!(%error, file_key = %key, "failed to delete file metadata during unlink");
+        }
 
         // Remove from inode cache
         self.inodes.remove_path(&child_path)?;
@@ -697,7 +718,9 @@ impl FileSystem for AspenFs {
 
         // Clean up directory metadata
         let key = Self::path_to_key(&dir_path)?;
-        let _ = self.delete_metadata(&key);
+        if let Err(error) = self.delete_metadata(&key) {
+            debug!(%error, dir_key = %key, "failed to delete directory metadata during rmdir");
+        }
 
         // Remove from inode cache
         self.inodes.remove_path(&dir_path)?;
@@ -869,9 +892,9 @@ impl FileSystem for AspenFs {
 
         st.f_bsize = u64::from(BLOCK_SIZE); // Filesystem block size
         st.f_frsize = u64::from(BLOCK_SIZE); // Fragment size
-        st.f_blocks = 1024 * 1024 * 1024; // Total blocks (1 TB at 4K blocks)
-        st.f_bfree = 1024 * 1024 * 512; // Free blocks (512 GB)
-        st.f_bavail = 1024 * 1024 * 512; // Available blocks
+        st.f_blocks = STATFS_TOTAL_BLOCKS; // Total blocks (1 TB at 4K blocks)
+        st.f_bfree = STATFS_FREE_BLOCKS; // Free blocks (512 GB)
+        st.f_bavail = STATFS_FREE_BLOCKS; // Available blocks
         st.f_files = 1_000_000; // Total inodes
         st.f_ffree = 900_000; // Free inodes
         st.f_favail = 900_000; // Available inodes
@@ -925,18 +948,18 @@ impl FileSystem for AspenFs {
         debug!(key, name_str, value_len = value.len(), "setxattr");
 
         // Check flags: XATTR_CREATE (1) = fail if exists, XATTR_REPLACE (2) = fail if missing
-        let exists = self.kv_read(&xattr_key)?.is_some();
+        let has_xattr = self.kv_read(&xattr_key)?.is_some();
 
-        if flags & libc::XATTR_CREATE as u32 != 0 && exists {
+        if flags & libc::XATTR_CREATE as u32 != 0 && has_xattr {
             return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "xattr already exists"));
         }
 
-        if flags & libc::XATTR_REPLACE as u32 != 0 && !exists {
+        if flags & libc::XATTR_REPLACE as u32 != 0 && !has_xattr {
             return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "xattr not found"));
         }
 
         // Check xattr count limit
-        if !exists {
+        if !has_xattr {
             let prefix = format!("{}{}", key, XATTR_PREFIX);
             let xattrs = self.kv_scan(&prefix)?;
             if xattrs.len() >= MAX_XATTRS_PER_FILE {
@@ -1009,7 +1032,11 @@ impl FileSystem for AspenFs {
         let xattr_keys = self.kv_scan(&prefix)?;
 
         // Build null-terminated list of names
-        let mut result = Vec::new();
+        let estimated_result_len = xattr_keys.iter().fold(0usize, |acc, xattr_key| {
+            let name_len = xattr_key.len().saturating_sub(prefix.len()).saturating_add(1);
+            acc.saturating_add(name_len)
+        });
+        let mut result = Vec::with_capacity(estimated_result_len);
         for xattr_key in xattr_keys {
             // Extract name part after prefix
             if xattr_key.len() > prefix.len() {
@@ -1062,7 +1089,9 @@ impl FileSystem for AspenFs {
 
     fn fsyncdir(&self, _ctx: &Context, _inode: u64, _datasync: bool, _handle: u64) -> std::io::Result<()> {
         // Flush expired write buffers opportunistically
-        let _ = self.write_buffer.flush_expired(self);
+        if let Err(error) = self.write_buffer.flush_expired(self) {
+            warn!(%error, "failed to flush expired write buffers during fsyncdir");
+        }
         // Clean up expired prefetch trackers
         self.prefetcher.cleanup_expired();
         Ok(())
@@ -1130,7 +1159,9 @@ impl AspenFs {
         if let Ok(Some(meta)) = self.read_metadata(old_key) {
             let updated = meta.touch_ctime();
             self.write_metadata(new_key, &updated)?;
-            let _ = self.delete_metadata(old_key);
+            if let Err(error) = self.delete_metadata(old_key) {
+                debug!(%error, old_key, "failed to delete old metadata during rename");
+            }
         }
 
         // Copy xattrs
@@ -1157,7 +1188,9 @@ impl AspenFs {
         if let Ok(Some(meta)) = self.read_metadata(old_key) {
             let updated = meta.touch_ctime();
             self.write_metadata(new_key, &updated)?;
-            let _ = self.delete_metadata(old_key);
+            if let Err(error) = self.delete_metadata(old_key) {
+                debug!(%error, old_key, "failed to delete old directory metadata during rename");
+            }
         }
 
         let children = self.kv_scan(&old_prefix)?;
