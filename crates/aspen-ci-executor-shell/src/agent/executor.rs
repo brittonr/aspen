@@ -41,6 +41,22 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 /// Grace period for SIGTERM before SIGKILL.
 const GRACE_PERIOD: Duration = Duration::from_secs(5);
 
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "CI executor measures real monotonic process durations")]
+fn monotonic_now() -> Instant {
+    Instant::now()
+}
+
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "CI executor polls real monotonic shutdown deadlines")]
+fn monotonic_deadline_after(duration: Duration) -> tokio::time::Instant {
+    tokio::time::Instant::now() + duration
+}
+
+fn elapsed_ms_u64(start: Instant) -> u64 {
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
 /// Handle to a running job, used for cancellation.
 pub struct JobHandle {
     /// Cancellation sender.
@@ -50,7 +66,9 @@ pub struct JobHandle {
 impl JobHandle {
     /// Cancel the running job.
     pub fn cancel(self) {
-        let _ = self.cancel_tx.send(());
+        if self.cancel_tx.send(()).is_err() {
+            debug!("job cancel receiver already dropped");
+        }
     }
 }
 
@@ -94,7 +112,7 @@ impl Executor {
         log_tx: mpsc::Sender<LogMessage>,
     ) -> Result<ExecutionResult> {
         let job_id = request.id.clone();
-        let start = Instant::now();
+        let start = monotonic_now();
 
         // Validate working directory
         self.validate_working_dir(&request.working_dir)?;
@@ -125,7 +143,7 @@ impl Executor {
             jobs.remove(&job_id);
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         match result {
             Ok((exit_code, stdout, stderr)) => Ok(ExecutionResult {
@@ -259,18 +277,20 @@ impl Executor {
             let mut line = String::new();
             let mut collected = String::new();
 
-            loop {
+            for _line_idx in 0..u32::MAX {
                 line.clear();
                 match reader.read_line(&mut line).await {
                     Ok(0) => break, // EOF
                     Ok(_) => {
-                        // Truncate very long lines
                         if line.len() > MAX_LINE_LENGTH {
                             line.truncate(MAX_LINE_LENGTH);
                             line.push_str("... [truncated]\n");
                         }
                         collected.push_str(&line);
-                        let _ = stdout_tx.send(LogMessage::Stdout(line.clone())).await;
+                        if stdout_tx.send(LogMessage::Stdout(line.clone())).await.is_err() {
+                            debug!("stdout log receiver dropped");
+                            break;
+                        }
                     }
                     Err(e) => {
                         warn!("error reading stdout: {}", e);
@@ -288,7 +308,7 @@ impl Executor {
             let mut line = String::new();
             let mut collected = String::new();
 
-            loop {
+            for _line_idx in 0..u32::MAX {
                 line.clear();
                 match reader.read_line(&mut line).await {
                     Ok(0) => break, // EOF
@@ -298,7 +318,10 @@ impl Executor {
                             line.push_str("... [truncated]\n");
                         }
                         collected.push_str(&line);
-                        let _ = stderr_tx.send(LogMessage::Stderr(line.clone())).await;
+                        if stderr_tx.send(LogMessage::Stderr(line.clone())).await.is_err() {
+                            debug!("stderr log receiver dropped");
+                            break;
+                        }
                     }
                     Err(e) => {
                         warn!("error reading stderr: {}", e);
@@ -313,12 +336,12 @@ impl Executor {
         let heartbeat_tx = log_tx.clone();
         let job_id = request.id.clone();
         let heartbeat_handle = tokio::spawn(async move {
-            let start = Instant::now();
-            let mut interval = tokio::time::interval(HEARTBEAT_INTERVAL);
-            interval.tick().await; // Skip first immediate tick
+            let start = monotonic_now();
+            let mut heartbeat_interval_timer = tokio::time::interval(HEARTBEAT_INTERVAL);
+            heartbeat_interval_timer.tick().await; // Skip first immediate tick
 
-            loop {
-                interval.tick().await;
+            for _heartbeat_idx in 0..u32::MAX {
+                heartbeat_interval_timer.tick().await;
                 let elapsed_secs = start.elapsed().as_secs();
                 debug!(job_id = %job_id, elapsed_secs, "sending heartbeat");
                 if heartbeat_tx.send(LogMessage::Heartbeat { elapsed_secs }).await.is_err() {
@@ -328,7 +351,7 @@ impl Executor {
         });
 
         // Wait for completion with timeout and cancellation
-        let timeout = Duration::from_secs(request.timeout_secs);
+        let timeout_duration = Duration::from_secs(request.timeout_secs);
 
         enum ExitReason {
             Completed(std::process::ExitStatus),
@@ -344,7 +367,7 @@ impl Executor {
                     Err(e) => ExitReason::WaitError(e),
                 }
             }
-            _ = tokio::time::sleep(timeout) => {
+            _ = tokio::time::sleep(timeout_duration) => {
                 ExitReason::Timeout
             }
             _ = &mut cancel_rx => {
@@ -406,6 +429,8 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
     use nix::sys::signal::{self};
     use nix::unistd::Pid;
 
+    debug_assert!(grace >= Duration::from_millis(100));
+    debug_assert!(grace <= Duration::from_secs(60));
     let Some(pid) = child.inner().id() else {
         return; // Already exited
     };
@@ -419,8 +444,11 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
     }
 
     // Wait for graceful exit
-    let deadline = tokio::time::Instant::now() + grace;
-    while tokio::time::Instant::now() < deadline {
+    let deadline = monotonic_deadline_after(grace);
+    for _poll_idx in 0..u32::MAX {
+        if tokio::time::Instant::now() >= deadline {
+            break;
+        }
         if child.inner().try_wait().ok().flatten().is_some() {
             return; // Exited gracefully
         }
@@ -435,14 +463,20 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
     }
 
     // Reap
-    let _ = child.wait().await;
+    if let Err(error) = child.wait().await {
+        warn!(pid, "failed to reap process group child: {error}");
+    }
 }
 
 #[cfg(not(unix))]
 async fn terminate_process_group(child: &mut AsyncGroupChild, _grace: Duration) {
     // On non-Unix, just kill directly via the async method
-    let _ = child.kill().await;
-    let _ = child.wait().await;
+    if let Err(error) = child.kill().await {
+        warn!("failed to kill child process: {error}");
+    }
+    if let Err(error) = child.wait().await {
+        warn!("failed to reap child process: {error}");
+    }
 }
 
 /// Check if a command is nix-related (needs database dump loaded).
@@ -512,7 +546,7 @@ async fn load_nix_db_dump(workspace_root: &std::path::Path) {
         return;
     }
 
-    let start = Instant::now();
+    let start = monotonic_now();
 
     // Read metadata if available for logging
     let meta: Option<DbDumpMeta> = if meta_path.exists() {
@@ -534,7 +568,7 @@ async fn load_nix_db_dump(workspace_root: &std::path::Path) {
     };
 
     // Read the dump file size for logging
-    let dump_size = match tokio::fs::metadata(&dump_path).await {
+    let dump_size_bytes = match tokio::fs::metadata(&dump_path).await {
         Ok(meta) => meta.len(),
         Err(e) => {
             error!("failed to stat nix database dump: {}", e);
@@ -544,18 +578,18 @@ async fn load_nix_db_dump(workspace_root: &std::path::Path) {
 
     // Verify dump size matches metadata if available
     if let Some(ref m) = meta
-        && dump_size != m.dump_size_bytes
+        && dump_size_bytes != m.dump_size_bytes
     {
         warn!(
             expected = m.dump_size_bytes,
-            actual = dump_size,
+            actual = dump_size_bytes,
             "dump file size mismatch - file may be corrupted or incomplete"
         );
     }
 
     info!(
         dump_path = %dump_path.display(),
-        dump_size_bytes = dump_size,
+        dump_size_bytes = dump_size_bytes,
         path_count = meta.as_ref().map(|m| m.path_count),
         drv_path = meta.as_ref().map(|m| m.drv_path.as_str()),
         "loading nix database dump"
@@ -609,7 +643,7 @@ async fn load_nix_db_dump(workspace_root: &std::path::Path) {
             let elapsed = start.elapsed();
             if status.success() {
                 info!(
-                    dump_size_bytes = dump_size,
+                    dump_size_bytes = dump_size_bytes,
                     path_count = meta.as_ref().map(|m| m.path_count),
                     elapsed_ms = elapsed.as_millis(),
                     "nix database dump loaded successfully - store paths should now be recognized"

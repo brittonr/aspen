@@ -27,6 +27,50 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "maintenance worker reports wall-clock timestamps and TTL state"
+)]
+fn current_time_ms() -> u64 {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    if now_ms <= 0 {
+        0
+    } else {
+        u64::try_from(now_ms).unwrap_or(u64::MAX)
+    }
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "maintenance worker emits wall-clock timestamps in JSON output"
+)]
+fn current_time_rfc3339() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "maintenance worker measures local monotonic task duration")]
+fn monotonic_now() -> Instant {
+    Instant::now()
+}
+
+fn elapsed_ms_u64(start_time: Instant) -> u64 {
+    u64::try_from(start_time.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn usize_to_u64(value_count: usize) -> u64 {
+    u64::try_from(value_count).unwrap_or(u64::MAX)
+}
+
+fn extract_blob_hash(value: &str) -> Option<String> {
+    let hash_json = value.strip_prefix("__blob:")?;
+    let blob_ref = serde_json::from_str::<serde_json::Value>(hash_json).ok()?;
+    let hash = blob_ref["hash"].as_str()?;
+    Some(hash.to_string())
+}
+
 /// Worker for system maintenance tasks.
 ///
 /// This worker requires access to:
@@ -71,7 +115,7 @@ impl MaintenanceWorker {
     ///
     /// This reclaims space from deleted entries and optimizes the database layout.
     async fn compact_storage(&self) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = monotonic_now();
 
         // Get database stats before compaction
         let stats_before = self.get_database_stats()?;
@@ -86,7 +130,7 @@ impl MaintenanceWorker {
 
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
         let mut expired_count: u64 = 0;
         let mut total_count: u64 = 0;
         let mut total_bytes: u64 = 0;
@@ -99,8 +143,10 @@ impl MaintenanceWorker {
                 Err(_) => continue,
             };
 
-            total_count += 1;
-            total_bytes += key_guard.value().len() as u64 + value_guard.value().len() as u64;
+            total_count = total_count.saturating_add(1);
+            let key_bytes = usize_to_u64(key_guard.value().len());
+            let value_bytes = usize_to_u64(value_guard.value().len());
+            total_bytes = total_bytes.saturating_add(key_bytes.saturating_add(value_bytes));
 
             if let Some(expires_at) = kv.expires_at_ms
                 && now_ms > expires_at
@@ -109,7 +155,7 @@ impl MaintenanceWorker {
             }
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -137,10 +183,10 @@ impl MaintenanceWorker {
         let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin read: {}", e))?;
 
         // Try to get table stats
-        let table_exists = read_txn.open_table(SM_KV_TABLE).is_ok();
+        let is_table_present = read_txn.open_table(SM_KV_TABLE).is_ok();
 
         Ok(json!({
-            "table_exists": table_exists,
+            "table_exists": is_table_present,
             "engine": "redb",
         }))
     }
@@ -149,7 +195,7 @@ impl MaintenanceWorker {
     ///
     /// Lists all blobs and checks if they're still referenced.
     async fn cleanup_blobs(&self) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = monotonic_now();
 
         let blob_store = self.blob_store.as_ref().ok_or("blob store not configured for cleanup")?;
 
@@ -169,14 +215,8 @@ impl MaintenanceWorker {
                 Err(_) => continue,
             };
 
-            // Check if value looks like a blob reference
-            if kv.value.starts_with("__blob:")
-                && let Some(hash_str) = kv.value.strip_prefix("__blob:")
-                // Parse the JSON blob reference
-                && let Ok(blob_ref) = serde_json::from_str::<serde_json::Value>(hash_str)
-                && let Some(hash) = blob_ref["hash"].as_str()
-            {
-                referenced_blobs.insert(hash.to_string());
+            if let Some(hash) = extract_blob_hash(&kv.value) {
+                referenced_blobs.insert(hash);
             }
         }
 
@@ -185,20 +225,20 @@ impl MaintenanceWorker {
 
         let mut orphaned_count = 0;
         let mut orphaned_bytes: u64 = 0;
-        let mut orphaned_hashes: Vec<String> = Vec::new();
+        let mut orphaned_hashes: Vec<String> = Vec::with_capacity(100);
 
         for blob in &blob_list.blobs {
             let hash_str = blob.hash.to_hex().to_string();
             if !referenced_blobs.contains(&hash_str) {
                 orphaned_count += 1;
-                orphaned_bytes += blob.size_bytes;
+                orphaned_bytes = orphaned_bytes.saturating_add(blob.size_bytes);
                 if orphaned_hashes.len() < 100 {
                     orphaned_hashes.push(hash_str);
                 }
             }
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -230,13 +270,13 @@ impl MaintenanceWorker {
 
     /// Perform a comprehensive health check.
     async fn health_check(&self) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = monotonic_now();
 
         let mut checks = serde_json::Map::new();
-        let mut all_healthy = true;
+        let mut is_healthy = true;
 
         // Check 1: Database health
-        let db_health = match self.db.begin_read() {
+        let is_database_healthy = match self.db.begin_read() {
             Ok(_) => {
                 checks.insert("database".to_string(), json!({"status": "healthy", "engine": "redb"}));
                 true
@@ -246,7 +286,7 @@ impl MaintenanceWorker {
                 false
             }
         };
-        all_healthy &= db_health;
+        is_healthy &= is_database_healthy;
 
         // Check 2: Blob store health (if available)
         if let Some(blob_store) = &self.blob_store {
@@ -256,7 +296,7 @@ impl MaintenanceWorker {
                 }
                 Err(e) => {
                     checks.insert("blob_store".to_string(), json!({"status": "unhealthy", "error": e.to_string()}));
-                    all_healthy = false;
+                    is_healthy = false;
                 }
             }
         } else {
@@ -282,7 +322,7 @@ impl MaintenanceWorker {
                 }
                 Err(e) => {
                     checks.insert("cluster".to_string(), json!({"status": "unhealthy", "error": e.to_string()}));
-                    all_healthy = false;
+                    is_healthy = false;
                 }
             }
         } else {
@@ -325,25 +365,25 @@ impl MaintenanceWorker {
             );
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
-        let overall_status = if all_healthy { "healthy" } else { "degraded" };
+        let overall_status = if is_healthy { "healthy" } else { "degraded" };
 
         info!(node_id = self.node_id, status = overall_status, "health check completed");
 
         Ok(json!({
             "node_id": self.node_id,
-            "healthy": all_healthy,
+            "healthy": is_healthy,
             "status": overall_status,
             "checks": checks,
             "duration_ms": duration_ms,
-            "timestamp": chrono::Utc::now().to_rfc3339()
+            "timestamp": current_time_rfc3339()
         }))
     }
 
     /// Collect node metrics.
     async fn collect_metrics(&self) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = monotonic_now();
 
         let mut metrics = serde_json::Map::new();
 
@@ -351,7 +391,7 @@ impl MaintenanceWorker {
         if let Ok(read_txn) = self.db.begin_read()
             && let Ok(table) = read_txn.open_table(SM_KV_TABLE)
         {
-            let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+            let now_ms = current_time_ms();
             let mut entry_count: u64 = 0;
             let mut total_key_bytes: u64 = 0;
             let mut total_value_bytes: u64 = 0;
@@ -366,9 +406,9 @@ impl MaintenanceWorker {
                     Err(_) => continue,
                 };
 
-                entry_count += 1;
-                total_key_bytes += key_guard.value().len() as u64;
-                total_value_bytes += kv.value.len() as u64;
+                entry_count = entry_count.saturating_add(1);
+                total_key_bytes = total_key_bytes.saturating_add(usize_to_u64(key_guard.value().len()));
+                total_value_bytes = total_value_bytes.saturating_add(usize_to_u64(kv.value.len()));
 
                 if let Some(expires_at) = kv.expires_at_ms
                     && now_ms > expires_at
@@ -387,7 +427,7 @@ impl MaintenanceWorker {
                     "entry_count": entry_count,
                     "total_key_bytes": total_key_bytes,
                     "total_value_bytes": total_value_bytes,
-                    "total_size_bytes": total_key_bytes + total_value_bytes,
+                    "total_size_bytes": total_key_bytes.saturating_add(total_value_bytes),
                     "expired_entries": expired_count,
                     "entries_with_lease": with_lease,
                     "avg_key_size": total_key_bytes.checked_div(entry_count).unwrap_or(0),
@@ -400,7 +440,8 @@ impl MaintenanceWorker {
         if let Some(blob_store) = &self.blob_store
             && let Ok(list) = blob_store.list(10000, None).await
         {
-            let total_blob_bytes: u64 = list.blobs.iter().map(|b| b.size_bytes).sum();
+            let total_blob_bytes: u64 =
+                list.blobs.iter().fold(0u64, |sum_bytes, blob| sum_bytes.saturating_add(blob.size_bytes));
             metrics.insert(
                 "blob_store".to_string(),
                 json!({
@@ -467,20 +508,20 @@ impl MaintenanceWorker {
                         json!({
                             "user_ticks": utime,
                             "system_ticks": stime,
-                            "total_ticks": utime + stime,
+                            "total_ticks": utime.saturating_add(stime),
                         }),
                     );
                 }
             }
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(node_id = self.node_id, "metrics collection completed");
 
         Ok(json!({
             "node_id": self.node_id,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": current_time_rfc3339(),
             "metrics": metrics,
             "collection_time_ms": duration_ms
         }))

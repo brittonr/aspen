@@ -48,7 +48,7 @@ use crate::commands::plugin::PluginCommand;
 use crate::commands::proxy::ProxyCommand;
 use crate::commands::queue::QueueCommand;
 use crate::commands::ratelimit::RateLimitCommand;
-use crate::commands::rwlock::RWLockCommand;
+use crate::commands::rwlock::RwLockCommand;
 #[cfg(feature = "secrets")]
 use crate::commands::secrets::SecretsCommand;
 use crate::commands::semaphore::SemaphoreCommand;
@@ -277,7 +277,7 @@ pub enum Commands {
 
     /// Read-write lock operations.
     #[command(subcommand)]
-    Rwlock(RWLockCommand),
+    Rwlock(RwLockCommand),
 
     /// Secrets engine operations.
     ///
@@ -422,7 +422,7 @@ impl Cli {
             #[cfg(feature = "plugins-rpc")]
             Commands::Plugin(cmd) => cmd.run(&client, self.global.is_json).await,
             #[cfg(feature = "proxy")]
-            Commands::Proxy(_) => unreachable!("handled above"),
+            Commands::Proxy(_) => anyhow::bail!("proxy command handled before cluster connection"),
             Commands::Queue(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Ratelimit(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Rwlock(cmd) => cmd.run(&client, self.global.is_json).await,
@@ -434,7 +434,7 @@ impl Cli {
             #[cfg(feature = "sql")]
             Commands::Sql(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Tag(cmd) => cmd.run(&client, self.global.is_json).await,
-            Commands::Token(_) => unreachable!("handled above"),
+            Commands::Token(_) => anyhow::bail!("token command handled before cluster connection"),
             Commands::Trace(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Metric(cmd) => cmd.run(&client, self.global.is_json).await,
             Commands::Alert(cmd) => cmd.run(&client, self.global.is_json).await,

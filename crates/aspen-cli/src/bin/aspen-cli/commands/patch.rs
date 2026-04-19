@@ -5,6 +5,11 @@
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::messages::ForgeCommentInfo;
+use aspen_client_api::messages::ForgePatchApproval;
+use aspen_client_api::messages::ForgePatchInfo;
+use aspen_client_api::messages::ForgePatchResultResponse;
+use aspen_client_api::messages::ForgePatchRevision;
 use clap::Args;
 use clap::Subcommand;
 
@@ -50,8 +55,8 @@ pub struct PatchListArgs {
     pub state: String,
 
     /// Maximum patches to show.
-    #[arg(short = 'n', long, default_value = "20")]
-    pub limit: u32,
+    #[arg(short = 'n', long = "limit", default_value = "20")]
+    pub max_results: u32,
 }
 
 #[derive(Args)]
@@ -153,71 +158,186 @@ pub struct PatchCloseArgs {
 
 impl PatchCommand {
     /// Execute the patch command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            PatchCommand::List(args) => patch_list(client, args, json).await,
-            PatchCommand::Create(args) => patch_create(client, args, json).await,
-            PatchCommand::Show(args) => patch_show(client, args, json).await,
-            PatchCommand::Update(args) => patch_update(client, args, json).await,
-            PatchCommand::Approve(args) => patch_approve(client, args, json).await,
-            PatchCommand::Merge(args) => patch_merge(client, args, json).await,
-            PatchCommand::Close(args) => patch_close(client, args, json).await,
+            PatchCommand::List(args) => patch_list(client, args, is_json).await,
+            PatchCommand::Create(args) => patch_create(client, args, is_json).await,
+            PatchCommand::Show(args) => patch_show(client, args, is_json).await,
+            PatchCommand::Update(args) => patch_update(client, args, is_json).await,
+            PatchCommand::Approve(args) => patch_approve(client, args, is_json).await,
+            PatchCommand::Merge(args) => patch_merge(client, args, is_json).await,
+            PatchCommand::Close(args) => patch_close(client, args, is_json).await,
         }
     }
 }
 
-async fn patch_list(client: &AspenClient, args: PatchListArgs, json: bool) -> Result<()> {
+fn build_patch_output(patch: ForgePatchInfo) -> PatchOutput {
+    PatchOutput {
+        id: patch.id,
+        title: patch.title,
+        state: patch.state,
+        base: patch.base,
+        head: patch.head,
+        labels: patch.labels,
+        revision_count: patch.revision_count,
+        approval_count: patch.approval_count,
+        created_at_ms: patch.created_at_ms,
+        updated_at_ms: patch.updated_at_ms,
+    }
+}
+
+fn comment_output(comment: ForgeCommentInfo) -> crate::output::CommentOutput {
+    crate::output::CommentOutput {
+        hash: comment.hash,
+        author: comment.author,
+        body: comment.body,
+        timestamp_ms: comment.timestamp_ms,
+    }
+}
+
+fn revision_output(revision: ForgePatchRevision) -> crate::output::RevisionOutput {
+    crate::output::RevisionOutput {
+        hash: revision.hash,
+        head: revision.head,
+        message: revision.message,
+        author: revision.author,
+        timestamp_ms: revision.timestamp_ms,
+    }
+}
+
+fn approval_output(approval: ForgePatchApproval) -> crate::output::ApprovalOutput {
+    crate::output::ApprovalOutput {
+        author: approval.author,
+        commit: approval.commit,
+        message: approval.message,
+        timestamp_ms: approval.timestamp_ms,
+    }
+}
+
+fn build_patch_detail_output(result: ForgePatchResultResponse, patch: ForgePatchInfo) -> PatchDetailOutput {
+    PatchDetailOutput {
+        id: patch.id,
+        title: patch.title,
+        description: patch.description,
+        state: patch.state,
+        base: patch.base,
+        head: patch.head,
+        labels: patch.labels,
+        assignees: patch.assignees,
+        revision_count: patch.revision_count,
+        approval_count: patch.approval_count,
+        created_at_ms: patch.created_at_ms,
+        updated_at_ms: patch.updated_at_ms,
+        comments: result.comments.map(|comments| comments.into_iter().map(comment_output).collect()),
+        revisions: result.revisions.map(|revisions| revisions.into_iter().map(revision_output).collect()),
+        approvals: result.approvals.map(|approvals| approvals.into_iter().map(approval_output).collect()),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum PatchAction {
+    Updated,
+    Approved,
+    Closed,
+}
+
+impl PatchAction {
+    fn json_key(self) -> &'static str {
+        match self {
+            Self::Updated => "updated",
+            Self::Approved => "approved",
+            Self::Closed => "closed",
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::Updated => "updated",
+            Self::Approved => "approved",
+            Self::Closed => "closed",
+        }
+    }
+}
+
+fn print_patch_status(action: PatchAction, patch_id: &str, is_json: bool) {
+    debug_assert!(!patch_id.is_empty());
+    debug_assert!(!action.message().is_empty());
+    if is_json {
+        println!(r#"{{"{}": true, "patch": "{}"}}"#, action.json_key(), patch_id);
+        return;
+    }
+    println!("Patch {} {}", patch_id, action.message());
+}
+
+fn print_merge_status(patch_id: &str, merge_commit: Option<&str>, is_json: bool) {
+    debug_assert!(!patch_id.is_empty());
+    debug_assert!(!is_json || merge_commit.is_none() || !merge_commit.unwrap_or_default().is_empty());
+    if is_json {
+        let merge_commit_json =
+            merge_commit.map(|commit| format!(r#""{commit}""#)).unwrap_or_else(|| "null".to_string());
+        println!(r#"{{"merged": true, "patch": "{}", "merge_commit": {}}}"#, patch_id, merge_commit_json);
+        return;
+    }
+    if let Some(commit) = merge_commit {
+        println!("Patch {} merged ({})", patch_id, commit);
+        return;
+    }
+    println!("Patch {} merged", patch_id);
+}
+
+fn print_patch_created(is_json: bool) {
+    if !is_json {
+        println!("Patch created");
+    }
+}
+
+fn print_patch_not_found(is_json: bool) {
+    if !is_json {
+        println!("Patch not found");
+    }
+}
+
+async fn patch_list(client: &AspenClient, args: PatchListArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(args.max_results > 0);
     let state = match args.state.as_str() {
         "all" => None,
-        s => Some(s.to_string()),
+        state_name => Some(state_name.to_string()),
     };
+    debug_assert!(state.is_none() || !state.as_deref().unwrap_or_default().is_empty());
 
     let response = client
         .send(ClientRpcRequest::ForgeListPatches {
             repo_id: args.repo,
             state,
-            limit: Some(args.limit),
+            limit: Some(args.max_results),
         })
         .await?;
 
     match response {
         ClientRpcResponse::ForgePatchListResult(result) => {
             if result.is_success {
-                let patches: Vec<PatchOutput> = result
-                    .patches
-                    .into_iter()
-                    .map(|p| PatchOutput {
-                        id: p.id,
-                        title: p.title,
-                        state: p.state,
-                        base: p.base,
-                        head: p.head,
-                        labels: p.labels,
-                        revision_count: p.revision_count,
-                        approval_count: p.approval_count,
-                        created_at_ms: p.created_at_ms,
-                        updated_at_ms: p.updated_at_ms,
-                    })
-                    .collect();
+                let patches = result.patches.into_iter().map(build_patch_output).collect();
                 let output = PatchListOutput {
                     patches,
                     count: result.count,
                 };
-                print_output(&output, json);
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+                print_output(&output, is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
         }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        ClientRpcResponse::Error(error) => anyhow::bail!("{}: {}", error.code, error.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn patch_create(client: &AspenClient, args: PatchCreateArgs, json: bool) -> Result<()> {
+async fn patch_create(client: &AspenClient, args: PatchCreateArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.title.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeCreatePatch {
             repo_id: args.repo,
@@ -232,41 +352,27 @@ async fn patch_create(client: &AspenClient, args: PatchCreateArgs, json: bool) -
         ClientRpcResponse::ForgePatchResult(result) => {
             if result.is_success {
                 if let Some(patch) = result.patch {
-                    let output = PatchOutput {
-                        id: patch.id,
-                        title: patch.title,
-                        state: patch.state,
-                        base: patch.base,
-                        head: patch.head,
-                        labels: patch.labels,
-                        revision_count: patch.revision_count,
-                        approval_count: patch.approval_count,
-                        created_at_ms: patch.created_at_ms,
-                        updated_at_ms: patch.updated_at_ms,
-                    };
-                    print_output(&output, json);
+                    print_output(&build_patch_output(patch), is_json);
                 }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
-                    println!("Patch created");
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
+                print_patch_created(is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
         }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        ClientRpcResponse::Error(error) => anyhow::bail!("{}: {}", error.code, error.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn patch_show(client: &AspenClient, args: PatchShowArgs, json: bool) -> Result<()> {
+async fn patch_show(client: &AspenClient, args: PatchShowArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.patch.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeGetPatch {
             repo_id: args.repo,
@@ -277,74 +383,32 @@ async fn patch_show(client: &AspenClient, args: PatchShowArgs, json: bool) -> Re
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
             if result.is_success {
-                if let Some(patch) = result.patch {
-                    let output = PatchDetailOutput {
-                        id: patch.id,
-                        title: patch.title,
-                        description: patch.description,
-                        state: patch.state,
-                        base: patch.base,
-                        head: patch.head,
-                        labels: patch.labels,
-                        assignees: patch.assignees,
-                        revision_count: patch.revision_count,
-                        approval_count: patch.approval_count,
-                        created_at_ms: patch.created_at_ms,
-                        updated_at_ms: patch.updated_at_ms,
-                        comments: result.comments.map(|cs| {
-                            cs.into_iter()
-                                .map(|c| crate::output::CommentOutput {
-                                    hash: c.hash,
-                                    author: c.author,
-                                    body: c.body,
-                                    timestamp_ms: c.timestamp_ms,
-                                })
-                                .collect()
-                        }),
-                        revisions: result.revisions.map(|rs| {
-                            rs.into_iter()
-                                .map(|r| crate::output::RevisionOutput {
-                                    hash: r.hash,
-                                    head: r.head,
-                                    message: r.message,
-                                    author: r.author,
-                                    timestamp_ms: r.timestamp_ms,
-                                })
-                                .collect()
-                        }),
-                        approvals: result.approvals.map(|as_| {
-                            as_.into_iter()
-                                .map(|a| crate::output::ApprovalOutput {
-                                    author: a.author,
-                                    commit: a.commit,
-                                    message: a.message,
-                                    timestamp_ms: a.timestamp_ms,
-                                })
-                                .collect()
-                        }),
-                    };
-                    print_output(&output, json);
-                } else if !json {
-                    println!("Patch not found");
+                if let Some(patch) = result.patch.clone() {
+                    let output = build_patch_detail_output(result, patch);
+                    print_output(&output, is_json);
+                } else {
+                    print_patch_not_found(is_json);
                 }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             anyhow::bail!("{}", result.error.unwrap_or_else(|| "not found".to_string()))
         }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        ClientRpcResponse::Error(error) => anyhow::bail!("{}: {}", error.code, error.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn patch_update(client: &AspenClient, args: PatchUpdateArgs, json: bool) -> Result<()> {
+async fn patch_update(client: &AspenClient, args: PatchUpdateArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.patch.is_empty());
+    let patch_id = args.patch.clone();
     let response = client
         .send(ClientRpcRequest::ForgeUpdatePatch {
             repo_id: args.repo,
-            patch_id: args.patch.clone(),
+            patch_id: patch_id.clone(),
             head: args.head,
             message: args.message,
         })
@@ -354,44 +418,29 @@ async fn patch_update(client: &AspenClient, args: PatchUpdateArgs, json: bool) -
         ClientRpcResponse::ForgePatchResult(result) => {
             if result.is_success {
                 if let Some(patch) = result.patch {
-                    let output = PatchOutput {
-                        id: patch.id,
-                        title: patch.title,
-                        state: patch.state,
-                        base: patch.base,
-                        head: patch.head,
-                        labels: patch.labels,
-                        revision_count: patch.revision_count,
-                        approval_count: patch.approval_count,
-                        created_at_ms: patch.created_at_ms,
-                        updated_at_ms: patch.updated_at_ms,
-                    };
-                    print_output(&output, json);
-                } else if !json {
-                    println!("Patch {} updated", args.patch);
+                    print_output(&build_patch_output(patch), is_json);
+                } else {
+                    print_patch_status(PatchAction::Updated, &patch_id, is_json);
                 }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
-                    println!("Patch {} updated", args.patch);
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
+                print_patch_status(PatchAction::Updated, &patch_id, is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
         }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        ClientRpcResponse::Error(error) => anyhow::bail!("{}: {}", error.code, error.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn patch_approve(client: &AspenClient, args: PatchApproveArgs, json: bool) -> Result<()> {
-    // First get the patch to find current head
+async fn patch_approve(client: &AspenClient, args: PatchApproveArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.patch.is_empty());
     let show_response = client
         .send(ClientRpcRequest::ForgeGetPatch {
             repo_id: args.repo.clone(),
@@ -412,6 +461,7 @@ async fn patch_approve(client: &AspenClient, args: PatchApproveArgs, json: bool)
         }
         _ => anyhow::bail!("unexpected response type"),
     };
+    debug_assert!(!commit.is_empty());
 
     let response = client
         .send(ClientRpcRequest::ForgeApprovePatch {
@@ -425,36 +475,31 @@ async fn patch_approve(client: &AspenClient, args: PatchApproveArgs, json: bool)
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
             if result.is_success {
-                if !json {
-                    println!("Patch {} approved", args.patch);
-                } else {
-                    println!(r#"{{"approved": true, "patch": "{}"}}"#, args.patch);
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+                print_patch_status(PatchAction::Approved, &args.patch, is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
-                    println!("Patch {} approved", args.patch);
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
+                print_patch_status(PatchAction::Approved, &args.patch, is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
         }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        ClientRpcResponse::Error(error) => anyhow::bail!("{}: {}", error.code, error.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn patch_merge(client: &AspenClient, args: PatchMergeArgs, json: bool) -> Result<()> {
+async fn patch_merge(client: &AspenClient, args: PatchMergeArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.patch.is_empty());
+    let patch_id = args.patch.clone();
     let response = client
         .send(ClientRpcRequest::ForgeMergePatch {
             repo_id: args.repo,
-            patch_id: args.patch.clone(),
+            patch_id: patch_id.clone(),
             strategy: args.strategy,
             message: args.message,
         })
@@ -463,48 +508,31 @@ async fn patch_merge(client: &AspenClient, args: PatchMergeArgs, json: bool) -> 
     match response {
         ClientRpcResponse::ForgeMergeCheckResult(result) => {
             if result.is_success {
-                if !json {
-                    if let Some(commit) = &result.merge_commit {
-                        println!("Patch {} merged ({})", args.patch, commit);
-                    } else {
-                        println!("Patch {} merged", args.patch);
-                    }
-                } else {
-                    println!(
-                        r#"{{"merged": true, "patch": "{}", "merge_commit": {}}}"#,
-                        args.patch,
-                        result
-                            .merge_commit
-                            .as_deref()
-                            .map(|c| format!(r#""{c}""#))
-                            .unwrap_or_else(|| "null".to_string())
-                    );
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "merge failed".to_string()))
+                print_merge_status(&patch_id, result.merge_commit.as_deref(), is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "merge failed".to_string()))
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
-                    println!("Patch {} merged", args.patch);
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
+                print_merge_status(&patch_id, None, is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
         }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        ClientRpcResponse::Error(error) => anyhow::bail!("{}: {}", error.code, error.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn patch_close(client: &AspenClient, args: PatchCloseArgs, json: bool) -> Result<()> {
+async fn patch_close(client: &AspenClient, args: PatchCloseArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.patch.is_empty());
+    let patch_id = args.patch.clone();
     let response = client
         .send(ClientRpcRequest::ForgeClosePatch {
             repo_id: args.repo,
-            patch_id: args.patch.clone(),
+            patch_id: patch_id.clone(),
             reason: args.reason,
         })
         .await?;
@@ -512,27 +540,19 @@ async fn patch_close(client: &AspenClient, args: PatchCloseArgs, json: bool) -> 
     match response {
         ClientRpcResponse::ForgePatchResult(result) => {
             if result.is_success {
-                if !json {
-                    println!("Patch {} closed", args.patch);
-                } else {
-                    println!(r#"{{"closed": true, "patch": "{}"}}"#, args.patch);
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+                print_patch_status(PatchAction::Closed, &patch_id, is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
-                    println!("Patch {} closed", args.patch);
-                }
-                Ok(())
-            } else {
-                anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
+                print_patch_status(PatchAction::Closed, &patch_id, is_json);
+                return Ok(());
             }
+            anyhow::bail!("{}", result.error.unwrap_or_else(|| "operation failed".to_string()))
         }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        ClientRpcResponse::Error(error) => anyhow::bail!("{}: {}", error.code, error.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }

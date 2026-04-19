@@ -371,6 +371,8 @@ impl FederationCommand {
 async fn federation_status(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::GetFederationStatus).await?;
 
+    debug_assert!(!is_json_output || is_json_output);
+
     match response {
         ClientRpcResponse::FederationStatus(status) => {
             let output = FederationStatusOutput {
@@ -383,6 +385,8 @@ async fn federation_status(client: &AspenClient, is_json_output: bool) -> Result
                 federated_repos: status.federated_repos,
                 error: status.error,
             };
+            debug_assert!(output.error.is_none() || !output.is_enabled);
+            debug_assert!(output.discovered_clusters == 0 || output.is_enabled || output.error.is_some());
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -393,6 +397,8 @@ async fn federation_status(client: &AspenClient, is_json_output: bool) -> Result
 
 async fn federation_peers(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ListDiscoveredClusters).await?;
+
+    debug_assert!(!is_json_output || is_json_output);
 
     match response {
         ClientRpcResponse::DiscoveredClusters(result) => {
@@ -413,6 +419,8 @@ async fn federation_peers(client: &AspenClient, is_json_output: bool) -> Result<
                 count: result.count,
                 error: result.error,
             };
+            debug_assert!(usize::try_from(output.count).unwrap_or(usize::MAX) >= output.clusters.len());
+            debug_assert!(output.clusters.iter().all(|cluster| !cluster.cluster_key.is_empty()));
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -422,6 +430,7 @@ async fn federation_peers(client: &AspenClient, is_json_output: bool) -> Result<
 }
 
 async fn federation_peer(client: &AspenClient, args: PeerArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.cluster_key.is_empty(), "cluster key must not be empty");
     let response = client
         .send(ClientRpcRequest::GetDiscoveredCluster {
             cluster_key: args.cluster_key.clone(),
@@ -430,6 +439,8 @@ async fn federation_peer(client: &AspenClient, args: PeerArgs, is_json_output: b
 
     match response {
         ClientRpcResponse::DiscoveredCluster(result) => {
+            debug_assert!(result.cluster_key.is_some() || !result.was_found);
+            debug_assert!(result.name.is_some() || !result.was_found);
             if !result.was_found {
                 let output = FederationSuccessOutput {
                     operation: "get_peer".to_string(),
@@ -471,6 +482,7 @@ async fn federation_peer(client: &AspenClient, args: PeerArgs, is_json_output: b
 }
 
 async fn federation_trust(client: &AspenClient, args: TrustArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.cluster_key.is_empty(), "cluster key must not be empty");
     let response = client
         .send(ClientRpcRequest::TrustCluster {
             cluster_key: args.cluster_key.clone(),
@@ -489,6 +501,8 @@ async fn federation_trust(client: &AspenClient, args: TrustArgs, is_json_output:
                 },
                 error: result.error,
             };
+            debug_assert!(output.message.is_some() == output.is_success);
+            debug_assert!(!output.operation.is_empty());
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -501,6 +515,7 @@ async fn federation_trust(client: &AspenClient, args: TrustArgs, is_json_output:
 }
 
 async fn federation_untrust(client: &AspenClient, args: UntrustArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.cluster_key.is_empty(), "cluster key must not be empty");
     let response = client
         .send(ClientRpcRequest::UntrustCluster {
             cluster_key: args.cluster_key.clone(),
@@ -519,6 +534,8 @@ async fn federation_untrust(client: &AspenClient, args: UntrustArgs, is_json_out
                 },
                 error: result.error,
             };
+            debug_assert!(output.message.is_some() == output.is_success);
+            debug_assert!(!output.operation.is_empty());
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -531,6 +548,8 @@ async fn federation_untrust(client: &AspenClient, args: UntrustArgs, is_json_out
 }
 
 async fn federation_federate(client: &AspenClient, args: FederateArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo_id.is_empty(), "repo id must not be empty");
+    debug_assert!(!args.mode.is_empty(), "mode must not be empty");
     let response = client
         .send(ClientRpcRequest::FederateRepository {
             repo_id: args.repo_id.clone(),
@@ -550,6 +569,8 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, is_json_o
                 },
                 error: result.error,
             };
+            debug_assert!(output.message.is_some() == output.is_success);
+            debug_assert!(!output.operation.is_empty());
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -562,6 +583,7 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, is_json_o
 }
 
 async fn federation_sync(client: &AspenClient, args: SyncArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.peer.is_empty(), "peer must not be empty");
     // If --repo is set, dispatch to bidirectional sync
     if let Some(ref repo) = args.repo {
         return federation_bidi_sync(
@@ -595,6 +617,8 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, is_json_output: b
 
     match response {
         ClientRpcResponse::FederationSyncPeerResult(result) => {
+            debug_assert!(result.resources.iter().all(|resource| !resource.resource_type.is_empty()));
+            debug_assert!(result.remote_cluster_key.is_some() || !result.is_success);
             if is_json_output && !should_fetch_refs {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
@@ -604,25 +628,17 @@ async fn federation_sync(client: &AspenClient, args: SyncArgs, is_json_output: b
                     result.remote_cluster_name.as_deref().unwrap_or("unknown"),
                     result.remote_cluster_key.as_deref().unwrap_or("?"),
                 );
-                println!("  Trusted: {}", result.trusted.map(|t| if t { "yes" } else { "no" }).unwrap_or("unknown"));
-                if result.resources.is_empty() {
-                    println!("  No resources discovered");
-                } else {
-                    println!("  Resources: {}", result.resources.len());
-                    for r in &result.resources {
-                        println!("    - {} (refs: {})", r.resource_type, r.ref_count);
-                    }
-                }
+                println!("  Trusted: {}", trusted_status_label(result.trusted));
+                print_sync_resources(&result.resources);
 
-                // If --fetch was requested, fetch refs for each discovered resource
-                if should_fetch_refs {
-                    println!();
-                    for r in &result.resources {
-                        if let Some(ref fid) = r.fed_id {
-                            print_fetch_result(client, &peer, addr.as_deref(), fid, is_json_output).await?;
-                        }
-                    }
-                }
+                fetch_discovered_refs(client, FetchDiscoveredRefsInput {
+                    should_fetch_refs,
+                    peer: &peer,
+                    addr: addr.as_deref(),
+                    resources: &result.resources,
+                    is_json_output,
+                })
+                .await?;
             } else {
                 eprintln!("Federation sync failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
@@ -642,6 +658,8 @@ struct BidiSyncTarget<'a> {
 }
 
 async fn federation_bidi_sync(client: &AspenClient, target: BidiSyncTarget<'_>, is_json_output: bool) -> Result<()> {
+    debug_assert!(!target.peer.is_empty(), "peer must not be empty");
+    debug_assert!(!target.repo.is_empty(), "repo must not be empty");
     let response = client
         .send(ClientRpcRequest::FederationBidiSync {
             peer_node_id: target.peer.to_string(),
@@ -653,6 +671,8 @@ async fn federation_bidi_sync(client: &AspenClient, target: BidiSyncTarget<'_>, 
 
     match response {
         ClientRpcResponse::FederationBidiSyncResult(result) => {
+            debug_assert!(result.conflicts.iter().all(|conflict| !conflict.is_empty()));
+            debug_assert!(result.errors.iter().all(|error| !error.is_empty()));
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success || result.error.is_none() {
@@ -661,20 +681,8 @@ async fn federation_bidi_sync(client: &AspenClient, target: BidiSyncTarget<'_>, 
                 println!("  Pushed:             {} objects", result.pushed);
                 println!("  Pull refs updated:  {}", result.pull_refs_updated);
                 println!("  Push refs updated:  {}", result.push_refs_updated);
-                if !result.conflicts.is_empty() {
-                    let direction = if target.is_push_wins {
-                        "local wins"
-                    } else {
-                        "remote wins"
-                    };
-                    println!("  Conflicts ({}):  {}", direction, result.conflicts.join(", "));
-                }
-                if !result.errors.is_empty() {
-                    println!("  Warnings:");
-                    for e in &result.errors {
-                        println!("    - {}", e);
-                    }
-                }
+                print_sync_conflicts(&result.conflicts, target.is_push_wins);
+                print_string_list_if_any("Warnings", &result.errors);
             } else {
                 eprintln!("Sync failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
@@ -697,6 +705,8 @@ async fn print_fetch_result(
     fed_id: &str,
     is_json_output: bool,
 ) -> Result<()> {
+    debug_assert!(!peer.is_empty(), "peer must not be empty");
+    debug_assert!(!fed_id.is_empty(), "federated id must not be empty");
     let response = client
         .send(ClientRpcRequest::FederationFetchRefs {
             peer_node_id: peer.to_string(),
@@ -707,19 +717,15 @@ async fn print_fetch_result(
 
     match response {
         ClientRpcResponse::FederationFetchRefsResult(result) => {
+            debug_assert!(result.errors.iter().all(|error| !error.is_empty()));
+            debug_assert!(result.is_success || result.error.is_some());
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success || result.error.is_none() {
-                let short_id = if fed_id.len() > 24 { &fed_id[..24] } else { fed_id };
-                println!("Fetch {}:", short_id);
+                println!("Fetch {}:", shorten_federated_id(fed_id));
                 println!("  Fetched:         {}", result.fetched);
                 println!("  Already present: {}", result.already_present);
-                if !result.errors.is_empty() {
-                    println!("  Errors:");
-                    for e in &result.errors {
-                        println!("    - {}", e);
-                    }
-                }
+                print_string_list_if_any("Errors", &result.errors);
             } else {
                 eprintln!("Fetch failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
@@ -734,8 +740,12 @@ async fn print_fetch_result(
 async fn federation_list_federated(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ListFederatedRepositories).await?;
 
+    debug_assert!(!is_json_output || is_json_output);
+
     match response {
         ClientRpcResponse::FederatedRepositories(result) => {
+            debug_assert!(usize::try_from(result.count).unwrap_or(usize::MAX) >= result.repositories.len());
+            debug_assert!(result.repositories.iter().all(|repo| !repo.repo_id.is_empty() && !repo.fed_id.is_empty()));
             if is_json_output {
                 println!(
                     "{}",
@@ -763,6 +773,7 @@ async fn federation_list_federated(client: &AspenClient, is_json_output: bool) -
 }
 
 async fn federation_pull(client: &AspenClient, args: PullArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty(), "repo must not be empty");
     // Validate: --addr only makes sense with --peer
     if args.addr.is_some() && args.peer.is_none() {
         anyhow::bail!("--addr requires --peer (cold-pull mode)");
@@ -794,18 +805,15 @@ async fn federation_pull(client: &AspenClient, args: PullArgs, is_json_output: b
 
     match response {
         ClientRpcResponse::FederationPullResult(result) => {
+            debug_assert!(result.errors.iter().all(|error| !error.is_empty()));
+            debug_assert!(result.is_success || result.error.is_some());
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success || result.error.is_none() {
                 println!("Pull complete for {} {}", label, args.repo);
                 println!("  Fetched:         {}", result.fetched);
                 println!("  Already present: {}", result.already_present);
-                if !result.errors.is_empty() {
-                    println!("  Errors:");
-                    for e in &result.errors {
-                        println!("    - {}", e);
-                    }
-                }
+                print_string_list_if_any("Errors", &result.errors);
             } else {
                 eprintln!("Pull failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
@@ -818,6 +826,8 @@ async fn federation_pull(client: &AspenClient, args: PullArgs, is_json_output: b
 }
 
 async fn federation_push(client: &AspenClient, args: PushArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.peer.is_empty(), "peer must not be empty");
+    debug_assert!(!args.repo.is_empty(), "repo must not be empty");
     let response = client
         .send(ClientRpcRequest::FederationPush {
             peer_node_id: args.peer.clone(),
@@ -828,6 +838,8 @@ async fn federation_push(client: &AspenClient, args: PushArgs, is_json_output: b
 
     match response {
         ClientRpcResponse::FederationPushResult(result) => {
+            debug_assert!(result.errors.iter().all(|error| !error.is_empty()));
+            debug_assert!(result.is_success || result.error.is_some());
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
@@ -835,12 +847,7 @@ async fn federation_push(client: &AspenClient, args: PushArgs, is_json_output: b
                 println!("  Imported:     {}", result.imported);
                 println!("  Skipped:      {}", result.skipped);
                 println!("  Refs updated: {}", result.refs_updated);
-                if !result.errors.is_empty() {
-                    println!("  Warnings:");
-                    for e in &result.errors {
-                        println!("    - {}", e);
-                    }
-                }
+                print_string_list_if_any("Warnings", &result.errors);
             } else {
                 eprintln!("Push failed: {}", result.error.as_deref().unwrap_or("unknown error"));
                 std::process::exit(1);
@@ -853,6 +860,8 @@ async fn federation_push(client: &AspenClient, args: PushArgs, is_json_output: b
 }
 
 async fn federation_grant(client: &AspenClient, args: GrantArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.audience.is_empty(), "audience must not be empty");
+    debug_assert!(!args.caps.is_empty(), "capabilities must not be empty");
     let response = client
         .send(ClientRpcRequest::FederationGrant {
             audience: args.audience.clone(),
@@ -863,16 +872,14 @@ async fn federation_grant(client: &AspenClient, args: GrantArgs, is_json_output:
 
     match response {
         ClientRpcResponse::FederationGrantResult(result) => {
+            debug_assert!(result.token_b64.is_some() == result.is_success || result.token_b64.is_none());
+            debug_assert!(result.token_hash.is_some() == result.is_success || result.token_hash.is_none());
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
                 println!("Token issued successfully");
-                if let Some(ref token_b64) = result.token_b64 {
-                    println!("  Token: {}", token_b64);
-                }
-                if let Some(ref hash) = result.token_hash {
-                    println!("  Hash:  {}", hash);
-                }
+                print_optional_field("Token", result.token_b64.as_deref());
+                print_optional_field("Hash", result.token_hash.as_deref());
                 println!("\nShare this token with the remote cluster operator.");
                 println!("They can import it with: aspen-cli federation token import <token>");
             } else {
@@ -886,28 +893,106 @@ async fn federation_grant(client: &AspenClient, args: GrantArgs, is_json_output:
     }
 }
 
+struct FetchDiscoveredRefsInput<'a> {
+    should_fetch_refs: bool,
+    peer: &'a str,
+    addr: Option<&'a str>,
+    resources: &'a [aspen_client_api::SyncPeerResourceInfo],
+    is_json_output: bool,
+}
+
+async fn fetch_discovered_refs(client: &AspenClient, input: FetchDiscoveredRefsInput<'_>) -> Result<()> {
+    if !input.should_fetch_refs {
+        return Ok(());
+    }
+    println!();
+    for resource in input.resources {
+        if let Some(ref fed_id) = resource.fed_id {
+            print_fetch_result(client, input.peer, input.addr, fed_id, input.is_json_output).await?;
+        }
+    }
+    Ok(())
+}
+
+fn trusted_status_label(is_trusted: Option<bool>) -> &'static str {
+    match is_trusted {
+        Some(true) => "yes",
+        Some(false) => "no",
+        None => "unknown",
+    }
+}
+
+fn print_sync_resources(resources: &[aspen_client_api::SyncPeerResourceInfo]) {
+    if resources.is_empty() {
+        println!("  No resources discovered");
+        return;
+    }
+    println!("  Resources: {}", resources.len());
+    for resource in resources {
+        println!("    - {} (refs: {})", resource.resource_type, resource.ref_count);
+    }
+}
+
+fn sync_conflict_resolution_label(is_push_wins: bool) -> &'static str {
+    if is_push_wins { "local wins" } else { "remote wins" }
+}
+
+fn shorten_federated_id(fed_id: &str) -> &str {
+    if fed_id.len() > 24 { &fed_id[..24] } else { fed_id }
+}
+
+fn print_sync_conflicts(conflicts: &[String], is_push_wins: bool) {
+    if conflicts.is_empty() {
+        return;
+    }
+    println!("  Conflicts ({}):  {}", sync_conflict_resolution_label(is_push_wins), conflicts.join(", "));
+}
+
+fn print_string_list_if_any(label: &str, values: &[String]) {
+    if values.is_empty() {
+        return;
+    }
+    println!("  {label}:");
+    for value in values {
+        println!("    - {}", value);
+    }
+}
+
+fn print_optional_field(label: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        println!("  {label}: {}", value);
+    }
+}
+
 async fn federation_token_list(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::FederationListTokens).await?;
 
+    debug_assert!(!is_json_output || is_json_output);
+
     match response {
         ClientRpcResponse::FederationListTokensResult(result) => {
+            debug_assert!(result.tokens.iter().all(|token| !token.token_hash.is_empty() && !token.audience.is_empty()));
+            debug_assert!(result.error.is_none() || result.tokens.is_empty());
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
-            } else if let Some(ref err) = result.error {
+                return Ok(());
+            }
+            if let Some(ref err) = result.error {
                 eprintln!("Error: {}", err);
                 std::process::exit(1);
-            } else if result.tokens.is_empty() {
+            }
+            if result.tokens.is_empty() {
                 println!("No active federation tokens.");
-            } else {
-                println!("Active Federation Tokens ({}):", result.tokens.len());
-                for t in &result.tokens {
-                    println!();
-                    println!("  Hash:         {}", t.token_hash);
-                    println!("  Audience:     {}", t.audience);
-                    println!("  Capabilities: {}", t.capabilities);
-                    println!("  Expires:      {}", format_expiry(t.expires_at));
-                    println!("  Delegation:   depth {}", t.delegation_depth);
-                }
+                return Ok(());
+            }
+            println!("Active Federation Tokens ({}):", result.tokens.len());
+            for t in &result.tokens {
+                println!();
+                println!("  Hash:         {}", t.token_hash);
+                println!("  Audience:     {}", t.audience);
+                println!("  Capabilities: {}", t.capabilities);
+                println!("  Expires:      {}", format_expiry(t.expires_at));
+                println!("  Delegation:   depth {}", t.delegation_depth);
             }
             Ok(())
         }
@@ -944,11 +1029,14 @@ fn format_expiry(expires_at: u64) -> String {
 }
 
 async fn federation_token_inspect(args: InspectArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.token_b64.is_empty(), "token must not be empty");
     // Decode without verification — show credential fields
     let credential = aspen_auth::Credential::from_base64(&args.token_b64)
         .map_err(|e| anyhow::anyhow!("failed to decode credential: {}", e))?;
 
     let token = &credential.token;
+    debug_assert!(token.expires_at >= token.issued_at, "token expiry should not predate issue time");
+    debug_assert!(credential.proofs.len() <= usize::MAX);
 
     if is_json_output {
         println!("{}", serde_json::to_string_pretty(&credential)?);

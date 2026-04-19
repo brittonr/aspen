@@ -49,8 +49,8 @@ pub struct DiscussionListArgs {
     pub state: String,
 
     /// Maximum discussions to show.
-    #[arg(short = 'n', long, default_value = "20")]
-    pub limit: u32,
+    #[arg(short = 'n', long = "limit", default_value = "20")]
+    pub max_discussions: u32,
 }
 
 #[derive(Args, Clone)]
@@ -145,34 +145,38 @@ pub struct DiscussionUnlockArgs {
 }
 
 impl DiscussionCommand {
-    pub async fn execute(&self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn execute(&self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            Self::List(args) => discussion_list(client, args.clone(), json).await,
-            Self::Create(args) => discussion_create(client, args.clone(), json).await,
-            Self::Show(args) => discussion_show(client, args.clone(), json).await,
-            Self::Reply(args) => discussion_reply(client, args.clone(), json).await,
-            Self::Close(args) => discussion_close(client, args.clone(), json).await,
-            Self::Reopen(args) => discussion_reopen(client, args.clone(), json).await,
-            Self::Lock(args) => discussion_lock(client, args.clone(), json).await,
-            Self::Unlock(args) => discussion_unlock(client, args.clone(), json).await,
+            Self::List(args) => discussion_list(client, args.clone(), is_json).await,
+            Self::Create(args) => discussion_create(client, args.clone(), is_json).await,
+            Self::Show(args) => discussion_show(client, args.clone(), is_json).await,
+            Self::Reply(args) => discussion_reply(client, args.clone(), is_json).await,
+            Self::Close(args) => discussion_close(client, args.clone(), is_json).await,
+            Self::Reopen(args) => discussion_reopen(client, args.clone(), is_json).await,
+            Self::Lock(args) => discussion_lock(client, args.clone(), is_json).await,
+            Self::Unlock(args) => discussion_unlock(client, args.clone(), is_json).await,
         }
     }
 }
 
-async fn discussion_list(client: &AspenClient, args: DiscussionListArgs, json: bool) -> Result<()> {
+async fn discussion_list(client: &AspenClient, args: DiscussionListArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(args.max_discussions > 0);
     let state = if args.state == "all" { None } else { Some(args.state) };
 
     let response = client
         .send(ClientRpcRequest::ForgeListDiscussions {
             repo_id: args.repo,
             state,
-            limit: Some(args.limit),
+            limit: Some(args.max_discussions),
         })
         .await?;
 
     match response {
         ClientRpcResponse::ForgeDiscussionListResult(result) => {
-            if json {
+            debug_assert!(result.discussions.iter().all(|discussion| !discussion.id.is_empty()));
+            debug_assert!(result.discussions.iter().all(|discussion| !discussion.state.is_empty()));
+            if is_json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
                 for discussion in &result.discussions {
@@ -189,7 +193,9 @@ async fn discussion_list(client: &AspenClient, args: DiscussionListArgs, json: b
     }
 }
 
-async fn discussion_create(client: &AspenClient, args: DiscussionCreateArgs, json: bool) -> Result<()> {
+async fn discussion_create(client: &AspenClient, args: DiscussionCreateArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.title.is_empty());
     let labels: Vec<String> = args
         .labels
         .map(|s| s.split(',').map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
@@ -206,7 +212,9 @@ async fn discussion_create(client: &AspenClient, args: DiscussionCreateArgs, jso
 
     match response {
         ClientRpcResponse::ForgeDiscussionResult(result) => {
-            if json {
+            debug_assert!(!result.discussion.id.is_empty());
+            debug_assert!(!result.discussion.title.is_empty());
+            if is_json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
                 let discussion = &result.discussion;
@@ -216,7 +224,7 @@ async fn discussion_create(client: &AspenClient, args: DiscussionCreateArgs, jso
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
+                if !is_json {
                     println!("Discussion created");
                 }
                 Ok(())
@@ -229,7 +237,9 @@ async fn discussion_create(client: &AspenClient, args: DiscussionCreateArgs, jso
     }
 }
 
-async fn discussion_show(client: &AspenClient, args: DiscussionShowArgs, json: bool) -> Result<()> {
+async fn discussion_show(client: &AspenClient, args: DiscussionShowArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.discussion.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeGetDiscussion {
             repo_id: args.repo,
@@ -239,7 +249,9 @@ async fn discussion_show(client: &AspenClient, args: DiscussionShowArgs, json: b
 
     match response {
         ClientRpcResponse::ForgeDiscussionResult(result) => {
-            if json {
+            debug_assert!(!result.discussion.id.is_empty());
+            debug_assert!(!result.discussion.state.is_empty());
+            if is_json {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else {
                 let discussion = &result.discussion;
@@ -257,7 +269,9 @@ async fn discussion_show(client: &AspenClient, args: DiscussionShowArgs, json: b
     }
 }
 
-async fn discussion_reply(client: &AspenClient, args: DiscussionReplyArgs, json: bool) -> Result<()> {
+async fn discussion_reply(client: &AspenClient, args: DiscussionReplyArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.discussion.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeReplyDiscussion {
             repo_id: args.repo,
@@ -269,8 +283,10 @@ async fn discussion_reply(client: &AspenClient, args: DiscussionReplyArgs, json:
 
     match response {
         ClientRpcResponse::ForgeOperationResult(result) => {
+            debug_assert!(!args.discussion.is_empty());
+            debug_assert!(!result.is_success || result.error.is_none());
             if result.is_success {
-                if !json {
+                if !is_json {
                     println!("Reply added to discussion {}", args.discussion);
                 }
                 Ok(())
@@ -283,7 +299,9 @@ async fn discussion_reply(client: &AspenClient, args: DiscussionReplyArgs, json:
     }
 }
 
-async fn discussion_close(client: &AspenClient, args: DiscussionCloseArgs, json: bool) -> Result<()> {
+async fn discussion_close(client: &AspenClient, args: DiscussionCloseArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.discussion.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeCloseDiscussion {
             repo_id: args.repo,
@@ -294,8 +312,10 @@ async fn discussion_close(client: &AspenClient, args: DiscussionCloseArgs, json:
 
     match response {
         ClientRpcResponse::ForgeOperationResult(result) => {
+            debug_assert!(!args.discussion.is_empty());
+            debug_assert!(!result.is_success || result.error.is_none());
             if result.is_success {
-                if !json {
+                if !is_json {
                     println!("Discussion {} closed", args.discussion);
                 }
                 Ok(())
@@ -308,7 +328,9 @@ async fn discussion_close(client: &AspenClient, args: DiscussionCloseArgs, json:
     }
 }
 
-async fn discussion_reopen(client: &AspenClient, args: DiscussionReopenArgs, json: bool) -> Result<()> {
+async fn discussion_reopen(client: &AspenClient, args: DiscussionReopenArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.discussion.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeReopenDiscussion {
             repo_id: args.repo,
@@ -318,8 +340,10 @@ async fn discussion_reopen(client: &AspenClient, args: DiscussionReopenArgs, jso
 
     match response {
         ClientRpcResponse::ForgeOperationResult(result) => {
+            debug_assert!(!args.discussion.is_empty());
+            debug_assert!(!result.is_success || result.error.is_none());
             if result.is_success {
-                if !json {
+                if !is_json {
                     println!("Discussion {} reopened", args.discussion);
                 }
                 Ok(())
@@ -332,7 +356,9 @@ async fn discussion_reopen(client: &AspenClient, args: DiscussionReopenArgs, jso
     }
 }
 
-async fn discussion_lock(client: &AspenClient, args: DiscussionLockArgs, json: bool) -> Result<()> {
+async fn discussion_lock(client: &AspenClient, args: DiscussionLockArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.discussion.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeLockDiscussion {
             repo_id: args.repo,
@@ -342,8 +368,10 @@ async fn discussion_lock(client: &AspenClient, args: DiscussionLockArgs, json: b
 
     match response {
         ClientRpcResponse::ForgeOperationResult(result) => {
+            debug_assert!(!args.discussion.is_empty());
+            debug_assert!(!result.is_success || result.error.is_none());
             if result.is_success {
-                if !json {
+                if !is_json {
                     println!("Discussion {} locked", args.discussion);
                 }
                 Ok(())
@@ -356,7 +384,9 @@ async fn discussion_lock(client: &AspenClient, args: DiscussionLockArgs, json: b
     }
 }
 
-async fn discussion_unlock(client: &AspenClient, args: DiscussionUnlockArgs, json: bool) -> Result<()> {
+async fn discussion_unlock(client: &AspenClient, args: DiscussionUnlockArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.discussion.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeUnlockDiscussion {
             repo_id: args.repo,
@@ -366,8 +396,10 @@ async fn discussion_unlock(client: &AspenClient, args: DiscussionUnlockArgs, jso
 
     match response {
         ClientRpcResponse::ForgeOperationResult(result) => {
+            debug_assert!(!args.discussion.is_empty());
+            debug_assert!(!result.is_success || result.error.is_none());
             if result.is_success {
-                if !json {
+                if !is_json {
                     println!("Discussion {} unlocked", args.discussion);
                 }
                 Ok(())

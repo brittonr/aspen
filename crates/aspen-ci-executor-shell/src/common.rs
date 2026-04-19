@@ -31,13 +31,13 @@ use tracing::warn;
 
 // Tiger Style: Bounded resources
 /// Maximum size of a single artifact file (100 MB).
-const MAX_ARTIFACT_SIZE: u64 = 100 * 1024 * 1024;
+const MAX_ARTIFACT_SIZE: u64 = 100_u64 << 20;
 /// Maximum total size of all artifacts (500 MB).
-const MAX_TOTAL_ARTIFACT_SIZE: u64 = 500 * 1024 * 1024;
+const MAX_TOTAL_ARTIFACT_SIZE: u64 = 500_u64 << 20;
 /// Maximum number of artifact files to collect.
 const MAX_ARTIFACT_COUNT: usize = 1000;
 /// Maximum source archive size (1 GB).
-const MAX_SOURCE_ARCHIVE_SIZE: u64 = 1024 * 1024 * 1024;
+const MAX_SOURCE_ARCHIVE_SIZE: u64 = 1_u64 << 30;
 /// Maximum files in source archive.
 /// Maximum files in source archive.
 #[allow(dead_code)]
@@ -78,6 +78,43 @@ pub enum WorkerUtilError {
 
 /// Result type for common CI worker utilities.
 pub type Result<T> = std::result::Result<T, WorkerUtilError>;
+
+#[derive(Copy, Clone)]
+struct LogChunkTarget<'a> {
+    run_id: &'a str,
+    job_id: &'a str,
+}
+
+fn len_u64(len: usize) -> u64 {
+    u64::try_from(len).unwrap_or(u64::MAX)
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "CI log timestamps must reflect wall-clock time for client streaming"
+)]
+fn current_time_ms() -> u64 {
+    let epoch_elapsed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    u64::try_from(epoch_elapsed.as_millis()).unwrap_or(u64::MAX)
+}
+
+fn canonicalize_workspace(workspace_dir: &Path) -> Result<PathBuf> {
+    workspace_dir.canonicalize().map_err(|error| WorkerUtilError::WorkspaceSeed {
+        reason: format!("failed to canonicalize workspace {}: {}", workspace_dir.display(), error),
+    })
+}
+
+fn should_skip_artifact(result: &ArtifactCollectionResult, path: &Path, size_bytes: u64) -> bool {
+    debug_assert!(path.is_absolute());
+    if size_bytes > MAX_ARTIFACT_SIZE {
+        return true;
+    }
+    if result.total_size_bytes.saturating_add(size_bytes) > MAX_TOTAL_ARTIFACT_SIZE {
+        return true;
+    }
+    result.artifacts.len() >= MAX_ARTIFACT_COUNT
+}
 
 // ============================================================================
 // Artifact Collection
@@ -141,86 +178,62 @@ pub struct ArtifactUploadResult {
 /// Files exceeding size limits are skipped.
 pub async fn collect_artifacts(workspace_dir: &Path, patterns: &[String]) -> Result<ArtifactCollectionResult> {
     let mut result = ArtifactCollectionResult::default();
+    let workspace_canonical = canonicalize_workspace(workspace_dir)?;
 
     for pattern in patterns {
         let full_pattern = workspace_dir.join(pattern);
         let pattern_str = full_pattern.to_string_lossy();
-
         let entries = glob(&pattern_str).context(GlobPatternSnafu {
             pattern: pattern.clone(),
         })?;
 
-        let mut matched = false;
+        let mut has_pattern_match = false;
         for entry in entries.flatten() {
-            matched = true;
-
-            // Ensure path is within workspace (prevent path traversal)
+            has_pattern_match = true;
             let canonical = match entry.canonicalize() {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!(path = ?entry, error = ?e, "failed to canonicalize artifact path");
+                Ok(path) => path,
+                Err(error) => {
+                    warn!(path = ?entry, error = ?error, "failed to canonicalize artifact path");
                     continue;
                 }
             };
-
-            let workspace_canonical = match workspace_dir.canonicalize() {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!(workspace = ?workspace_dir, error = ?e, "failed to canonicalize workspace");
-                    continue;
-                }
-            };
-
             if !canonical.starts_with(&workspace_canonical) {
                 return ArtifactEscapesWorkspaceSnafu { path: entry }.fail();
             }
 
-            // Get file metadata
             let metadata = match tokio::fs::metadata(&canonical).await {
-                Ok(m) => m,
-                Err(e) => {
-                    warn!(path = ?canonical, error = ?e, "failed to stat artifact");
+                Ok(metadata) => metadata,
+                Err(error) => {
+                    warn!(path = ?canonical, error = ?error, "failed to stat artifact");
                     continue;
                 }
             };
-
             if !metadata.is_file() {
                 continue;
             }
 
-            let size = metadata.len();
-
-            // Check size limits
-            if size > MAX_ARTIFACT_SIZE {
-                result.skipped_files.push((canonical.clone(), size));
-                continue;
-            }
-
-            if result.total_size_bytes + size > MAX_TOTAL_ARTIFACT_SIZE {
-                result.skipped_files.push((canonical.clone(), size));
-                continue;
-            }
-
-            if result.artifacts.len() >= MAX_ARTIFACT_COUNT {
-                result.skipped_files.push((canonical.clone(), size));
+            let size_bytes = metadata.len();
+            if should_skip_artifact(&result, &canonical, size_bytes) {
+                result.skipped_files.push((canonical.clone(), size_bytes));
                 continue;
             }
 
             let relative_path = canonical.strip_prefix(&workspace_canonical).unwrap_or(&canonical).to_path_buf();
-
             result.artifacts.push(CollectedArtifact {
                 relative_path,
                 absolute_path: canonical,
-                size_bytes: size,
+                size_bytes,
             });
-            result.total_size_bytes += size;
+            result.total_size_bytes = result.total_size_bytes.saturating_add(size_bytes);
         }
 
-        if !matched {
+        if !has_pattern_match {
             result.unmatched_patterns.push(pattern.clone());
         }
     }
 
+    debug_assert!(result.total_size_bytes <= MAX_TOTAL_ARTIFACT_SIZE);
+    debug_assert!(result.artifacts.len() <= MAX_ARTIFACT_COUNT);
     debug!(
         artifacts = result.artifacts.len(),
         total_size_bytes = result.total_size_bytes,
@@ -228,7 +241,6 @@ pub async fn collect_artifacts(workspace_dir: &Path, patterns: &[String]) -> Res
         unmatched = result.unmatched_patterns.len(),
         "artifact collection complete"
     );
-
     Ok(result)
 }
 
@@ -244,41 +256,44 @@ pub async fn upload_artifacts_to_blob_store(
         match tokio::fs::read(&artifact.absolute_path).await {
             Ok(content) => match blob_store.add_bytes(&content).await {
                 Ok(add_result) => {
+                    let content_size_bytes = len_u64(content.len());
                     info!(
                         job_id = %job_id,
                         path = ?artifact.relative_path,
                         hash = %add_result.blob_ref.hash.to_hex(),
-                        size = content.len(),
+                        size_bytes = content_size_bytes,
                         "uploaded artifact to blob store"
                     );
-                    result.total_bytes += content.len() as u64;
+                    result.total_bytes = result.total_bytes.saturating_add(content_size_bytes);
                     result.uploaded.push(UploadedArtifact {
                         relative_path: artifact.relative_path.clone(),
                         blob_ref: add_result.blob_ref,
                     });
                 }
-                Err(e) => {
+                Err(error) => {
                     error!(
                         job_id = %job_id,
                         path = ?artifact.relative_path,
-                        error = ?e,
+                        error = ?error,
                         "failed to upload artifact to blob store"
                     );
-                    result.failed.push((artifact.relative_path.clone(), e.to_string()));
+                    result.failed.push((artifact.relative_path.clone(), error.to_string()));
                 }
             },
-            Err(e) => {
+            Err(error) => {
                 error!(
                     job_id = %job_id,
                     path = ?artifact.absolute_path,
-                    error = ?e,
+                    error = ?error,
                     "failed to read artifact file"
                 );
-                result.failed.push((artifact.relative_path.clone(), e.to_string()));
+                result.failed.push((artifact.relative_path.clone(), error.to_string()));
             }
         }
     }
 
+    debug_assert!(result.uploaded.len().saturating_add(result.failed.len()) <= collected.artifacts.len());
+    debug_assert!(result.total_bytes <= MAX_TOTAL_ARTIFACT_SIZE);
     result
 }
 
@@ -303,49 +318,30 @@ pub async fn seed_workspace_from_blob(
     source_hash: &str,
     workspace_dir: &Path,
 ) -> Result<u64> {
-    // Parse the hash
     let hash = parse_hash(source_hash)?;
+    info!(hash = %source_hash, workspace = ?workspace_dir, "seeding workspace from blob");
 
-    info!(
-        hash = %source_hash,
-        workspace = ?workspace_dir,
-        "seeding workspace from blob"
-    );
-
-    // Download the blob content
     let content = blob_store.get_bytes(&hash).await.map_err(|e| WorkerUtilError::WorkspaceSeed {
         reason: format!("failed to download blob {}: {}", source_hash, e),
     })?;
-
     let content = content.ok_or_else(|| WorkerUtilError::WorkspaceSeed {
         reason: format!("blob {} not found in store", source_hash),
     })?;
-
-    let content_len = content.len() as u64;
-
-    // Ensure workspace directory exists
+    let content_len = len_u64(content.len());
     tokio::fs::create_dir_all(workspace_dir).await.map_err(|e| WorkerUtilError::WorkspaceSeed {
         reason: format!("failed to create workspace directory: {}", e),
     })?;
 
-    // Decompress and extract the tar.gz archive
-    // This runs in a blocking context since tar is synchronous
     let workspace_path = workspace_dir.to_path_buf();
     let bytes_extracted = tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(&content);
         let decoder = GzDecoder::new(cursor);
         let mut archive = tar::Archive::new(decoder);
-
-        // Don't try to preserve ownership or permissions — the workspace
-        // is on a virtiofs mount inside a VM where chown/chmod may fail.
         archive.set_preserve_permissions(false);
         archive.set_unpack_xattrs(false);
         archive.set_preserve_mtime(false);
         archive.set_overwrite(true);
 
-        // Extract entry-by-entry to handle errors gracefully.
-        // Some entries (device files, hard links across mounts) may fail
-        // on virtiofs — skip those and continue with the rest.
         let mut extracted = 0u64;
         let mut skipped = 0u64;
         for entry_result in archive.entries().map_err(|e| WorkerUtilError::WorkspaceSeed {
@@ -361,28 +357,17 @@ pub async fn seed_workspace_from_blob(
             };
 
             let path = entry.path().map(|p| p.to_path_buf()).unwrap_or_default();
-
-            // Skip directories that aren't needed for the build and cause
-            // issues in VMs:
-            // - target/: cargo build artifacts with hard links that fail on virtiofs
-            // - .git/: nix tries `git ls-files` when .git exists, which can fail if the checkout from Forge has
-            //   an incomplete git repo. Without .git nix uses builtins.path which hashes the directory
-            //   directly.
             let skip_prefixes: &[&str] = &["target", "./target", ".git", "./.git"];
             if skip_prefixes.iter().any(|p| path.starts_with(p)) {
-                // Drain the entry so the reader advances
-                let _ = std::io::copy(&mut entry, &mut std::io::sink());
+                if let Err(error) = std::io::copy(&mut entry, &mut std::io::sink()) {
+                    tracing::warn!(path = %path.display(), error = %error, "failed to drain skipped tar entry");
+                }
                 skipped += 1;
                 continue;
             }
 
             if let Err(e) = entry.unpack_in(&workspace_path) {
-                tracing::warn!(
-                    path = %path.display(),
-                    error = %e,
-                    kind = ?e.kind(),
-                    "skipping tar entry that failed to extract"
-                );
+                tracing::warn!(path = %path.display(), error = %e, kind = ?e.kind(), "skipping tar entry that failed to extract");
                 skipped += 1;
                 continue;
             }
@@ -390,7 +375,6 @@ pub async fn seed_workspace_from_blob(
         }
 
         tracing::info!(extracted, skipped, "tar extraction complete");
-
         Ok::<u64, WorkerUtilError>(content_len)
     })
     .await
@@ -398,12 +382,9 @@ pub async fn seed_workspace_from_blob(
         reason: format!("extract task panicked: {}", e),
     })??;
 
-    debug!(
-        hash = %source_hash,
-        bytes = bytes_extracted,
-        "workspace seeded successfully"
-    );
-
+    debug_assert!(bytes_extracted <= content_len);
+    debug_assert!(workspace_dir.exists());
+    debug!(hash = %source_hash, bytes = bytes_extracted, "workspace seeded successfully");
     Ok(bytes_extracted)
 }
 
@@ -492,16 +473,18 @@ pub async fn create_source_archive(source_dir: &Path, blob_store: &Arc<dyn BlobS
         }
 
         // Check size limit
-        if buffer.len() as u64 > MAX_SOURCE_ARCHIVE_SIZE {
+        let archive_size_bytes = len_u64(buffer.len());
+        if archive_size_bytes > MAX_SOURCE_ARCHIVE_SIZE {
             return Err(WorkerUtilError::SourceArchive {
                 reason: format!(
                     "source archive too large: {} bytes (max: {} bytes)",
-                    buffer.len(),
-                    MAX_SOURCE_ARCHIVE_SIZE
+                    archive_size_bytes, MAX_SOURCE_ARCHIVE_SIZE
                 ),
             });
         }
 
+        debug_assert!(archive_size_bytes <= MAX_SOURCE_ARCHIVE_SIZE);
+        debug_assert!(!buffer.is_empty() || source_path.exists());
         Ok(buffer)
     })
     .await
@@ -509,7 +492,7 @@ pub async fn create_source_archive(source_dir: &Path, blob_store: &Arc<dyn BlobS
         reason: format!("archive task panicked: {}", e),
     })??;
 
-    let archive_size = archive_bytes.len();
+    let archive_size_bytes = archive_bytes.len();
 
     // Upload to blob store
     let add_result = blob_store.add_bytes(&archive_bytes).await.map_err(|e| WorkerUtilError::BlobUpload {
@@ -521,7 +504,7 @@ pub async fn create_source_archive(source_dir: &Path, blob_store: &Arc<dyn BlobS
     info!(
         source = ?source_dir,
         hash = %hash_hex,
-        size = archive_size,
+        size_bytes = archive_size_bytes,
         "created and uploaded source archive"
     );
 
@@ -561,10 +544,14 @@ pub async fn log_bridge(
 
     let mut chunk_index: u32 = 0;
     let mut buffer = String::new();
-    let mut flush_interval = interval(Duration::from_millis(LOG_FLUSH_INTERVAL_MS));
+    let mut flush_timer = interval(Duration::from_millis(LOG_FLUSH_INTERVAL_MS));
+    let log_target = LogChunkTarget {
+        run_id: &run_id,
+        job_id: &job_id,
+    };
 
     // Skip the immediate first tick
-    flush_interval.tick().await;
+    flush_timer.tick().await;
 
     loop {
         tokio::select! {
@@ -574,71 +561,80 @@ pub async fn log_bridge(
                 match msg {
                     Some(line) => {
                         buffer.push_str(&line);
-
-                        // Flush when buffer exceeds threshold
                         if buffer.len() >= LOG_FLUSH_THRESHOLD {
-                            log_bridge_flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+                            flush_log_chunk(log_target, &kv_store, &mut chunk_index, &mut buffer).await;
                         }
                     }
-                    None => {
-                        // Channel closed — job finished
-                        break;
-                    }
+                    None => break,
                 }
             }
-            _ = flush_interval.tick() => {
-                // Periodic flush: write partial buffer to KV so streaming
-                // clients see output in real-time, not just at 8KB boundaries.
+            _ = flush_timer.tick() => {
                 if !buffer.is_empty() {
-                    log_bridge_flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+                    flush_log_chunk(log_target, &kv_store, &mut chunk_index, &mut buffer).await;
                 }
             }
         }
     }
 
-    // Flush remaining buffer
     if !buffer.is_empty() {
-        log_bridge_flush_chunk(&kv_store, &run_id, &job_id, &mut chunk_index, &mut buffer).await;
+        flush_log_chunk(log_target, &kv_store, &mut chunk_index, &mut buffer).await;
     }
 
-    // Write completion marker
     let marker_key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{CI_LOG_COMPLETE_MARKER}");
-    let now_ms =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
     let marker = CiLogCompleteMarker {
         total_chunks: chunk_index,
-        timestamp_ms: now_ms,
+        timestamp_ms: current_time_ms(),
         status: "done".to_string(),
     };
     if let Ok(json) = serde_json::to_string(&marker) {
-        let _ = kv_store.write(WriteRequest::set(marker_key, json)).await;
+        if let Err(error) = kv_store.write(WriteRequest::set(marker_key, json)).await {
+            tracing::warn!(run_id = %run_id, job_id = %job_id, error = %error, "failed to write log completion marker");
+        }
     }
+
+    debug_assert!(buffer.is_empty());
+    debug_assert!(chunk_index <= u32::MAX);
 }
 
 /// Flush the current buffer as a log chunk to KV.
 pub async fn log_bridge_flush_chunk(
     kv_store: &Arc<dyn KeyValueStore>,
     run_id: &str,
-    job_id: &str,
+    job_id_value: impl AsRef<str>,
     chunk_index: &mut u32,
     buffer: &mut String,
 ) {
-    let now_ms =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+    flush_log_chunk(
+        LogChunkTarget {
+            run_id,
+            job_id: job_id_value.as_ref(),
+        },
+        kv_store,
+        chunk_index,
+        buffer,
+    )
+    .await;
+}
 
+async fn flush_log_chunk(
+    target: LogChunkTarget<'_>,
+    kv_store: &Arc<dyn KeyValueStore>,
+    chunk_index: &mut u32,
+    buffer: &mut String,
+) {
     let chunk = CiLogChunk {
         index: *chunk_index,
         content: buffer.clone(),
-        timestamp_ms: now_ms,
+        timestamp_ms: current_time_ms(),
     };
 
     if let Ok(json) = serde_json::to_string(&chunk) {
-        let key = format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{:010}", *chunk_index);
-        if let Err(e) = kv_store.write(WriteRequest::set(key, json)).await {
-            tracing::warn!(run_id = %run_id, job_id = %job_id, chunk = *chunk_index, error = %e, "Failed to write log chunk");
+        let key = format!("{CI_LOG_KV_PREFIX}{}:{}:{:010}", target.run_id, target.job_id, *chunk_index);
+        if let Err(error) = kv_store.write(WriteRequest::set(key, json)).await {
+            tracing::warn!(run_id = %target.run_id, job_id = %target.job_id, chunk = *chunk_index, error = %error, "Failed to write log chunk");
         }
     }
 
-    *chunk_index += 1;
+    *chunk_index = chunk_index.saturating_add(1);
     buffer.clear();
 }

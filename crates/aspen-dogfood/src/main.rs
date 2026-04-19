@@ -63,29 +63,36 @@ enum Command {
     Full,
 }
 
-#[tokio::main]
-async fn main() {
-    // Note: ASPEN_RELAY_DISABLED is set on spawned node processes only (in spawn_node),
-    // NOT globally. The client endpoint needs relay enabled for QUIC signaling even
-    // when connecting to local nodes.
-
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
-
-    let cli = Cli::parse();
-
-    if let Err(e) = run(cli).await {
-        tracing::error!("❌ {e}");
+fn main() {
+    if let Err(error) = run_main() {
+        tracing::error!("❌ {error}");
         std::process::exit(1);
     }
 }
 
-async fn run(cli: Cli) -> DogfoodResult<()> {
-    let config = RunConfig {
+fn run_main() -> DogfoodResult<()> {
+    // Note: ASPEN_RELAY_DISABLED is set on spawned node processes only (in spawn_node),
+    // NOT globally. The client endpoint needs relay enabled for QUIC signaling even
+    // when connecting to local nodes.
+    tracing_subscriber::fmt().with_env_filter(build_env_filter()).init();
+    let cli = Cli::parse();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| std::io::Error::new(error.kind(), format!("failed to build tokio runtime: {error}")))
+        .map_err(|source| crate::error::DogfoodError::ProcessSpawn {
+            binary: "tokio-runtime".to_string(),
+            source,
+        })?;
+    runtime.block_on(run(cli))
+}
+
+fn build_env_filter() -> tracing_subscriber::EnvFilter {
+    tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+}
+
+fn build_run_config(cli: &Cli) -> RunConfig {
+    RunConfig {
         cluster_dir: cli.cluster_dir.clone(),
         federation: cli.federation,
         vm_ci: cli.vm_ci,
@@ -94,18 +101,25 @@ async fn run(cli: Cli) -> DogfoodResult<()> {
         project_dir: std::env::var("PROJECT_DIR").unwrap_or_else(|_| ".".to_string()),
         nix_cache_gateway_bin: std::env::var("ASPEN_NIX_CACHE_GATEWAY_BIN").ok(),
         ci_timeout_secs: 600,
-    };
+    }
+}
 
-    match cli.command {
-        Command::Start => cmd_start(&config).await,
-        Command::Stop => cmd_stop(&config).await,
-        Command::Status => cmd_status(&config).await,
-        Command::Push => cmd_push(&config).await,
-        Command::Build => cmd_build(&config).await,
-        Command::Deploy => cmd_deploy(&config).await,
-        Command::Verify => cmd_verify(&config).await,
-        Command::FullLoop => cmd_full_loop(&config).await,
-        Command::Full => cmd_full(&config).await,
+async fn run(cli: Cli) -> DogfoodResult<()> {
+    let config = build_run_config(&cli);
+    dispatch_command(&config, cli.command).await
+}
+
+async fn dispatch_command(config: &RunConfig, command: Command) -> DogfoodResult<()> {
+    match command {
+        Command::Start => cmd_start(config).await,
+        Command::Stop => cmd_stop(config).await,
+        Command::Status => cmd_status(config).await,
+        Command::Push => cmd_push(config).await,
+        Command::Build => cmd_build(config).await,
+        Command::Deploy => cmd_deploy(config).await,
+        Command::Verify => cmd_verify(config).await,
+        Command::FullLoop => cmd_full_loop(config).await,
+        Command::Full => cmd_full(config).await,
     }
 }
 
@@ -128,21 +142,27 @@ impl RunConfig {
 
     /// Cookie for the primary (or only) cluster.
     pub fn cookie(&self) -> String {
-        let date = chrono::Local::now().format("%Y%m%d");
-        format!("dogfood-{date}")
+        format!("dogfood-{}", current_cookie_date())
     }
 
     /// Cookie for alice's cluster in federation mode.
     pub fn alice_cookie(&self) -> String {
-        let date = chrono::Local::now().format("%Y%m%d");
-        format!("fed-alice-{date}")
+        format!("fed-alice-{}", current_cookie_date())
     }
 
     /// Cookie for bob's cluster in federation mode.
     pub fn bob_cookie(&self) -> String {
-        let date = chrono::Local::now().format("%Y%m%d");
-        format!("fed-bob-{date}")
+        format!("fed-bob-{}", current_cookie_date())
     }
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "dogfood cookie prefixes intentionally encode local run date"
+)]
+fn current_cookie_date() -> String {
+    chrono::Local::now().format("%Y%m%d").to_string()
 }
 
 // ── Subcommand implementations ───────────────────────────────────────
@@ -204,8 +224,11 @@ async fn cmd_stop(config: &RunConfig) -> DogfoodResult<()> {
     node::stop_nodes_by_pids(&state.node_pids()).await?;
     state::delete_state(&config.state_file_path())?;
 
-    // Clean up cluster directory
-    let _ = tokio::fs::remove_dir_all(&config.cluster_dir).await;
+    if let Err(error) = tokio::fs::remove_dir_all(&config.cluster_dir).await
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!(cluster_dir = %config.cluster_dir, "failed to clean up cluster directory: {error}");
+    }
 
     info!("✅ Cluster stopped and cleaned up");
     Ok(())
@@ -214,27 +237,41 @@ async fn cmd_stop(config: &RunConfig) -> DogfoodResult<()> {
 async fn cmd_status(config: &RunConfig) -> DogfoodResult<()> {
     let state = state::read_state(&config.state_file_path())?;
 
-    for (i, ticket) in state.tickets().iter().enumerate() {
-        let label = if state.is_federation {
-            if i == 0 { "alice" } else { "bob" }
-        } else {
-            "node"
-        };
-
-        match cluster::check_health(ticket).await {
-            Ok(health) => {
-                info!(
-                    "✅ {label}: status={}, node_id={}, uptime={}s",
-                    health.status, health.node_id, health.uptime_seconds
-                );
-            }
-            Err(e) => {
-                tracing::warn!("⚠️  {label}: unreachable — {e}");
-            }
-        }
+    for (index, ticket) in state.tickets().iter().enumerate() {
+        log_node_status(NodeStatusTarget {
+            ticket,
+            label: status_label(state.is_federation, index),
+        })
+        .await;
     }
 
     Ok(())
+}
+
+fn status_label(is_federation: bool, index: usize) -> &'static str {
+    if !is_federation {
+        return "node";
+    }
+    if index == 0 { "alice" } else { "bob" }
+}
+
+struct NodeStatusTarget<'a> {
+    ticket: &'a str,
+    label: &'a str,
+}
+
+async fn log_node_status(target: NodeStatusTarget<'_>) {
+    match cluster::check_health(target.ticket).await {
+        Ok(health) => {
+            info!(
+                "✅ {}: status={}, node_id={}, uptime={}s",
+                target.label, health.status, health.node_id, health.uptime_seconds
+            );
+        }
+        Err(error) => {
+            tracing::warn!("⚠️  {}: unreachable — {error}", target.label);
+        }
+    }
 }
 
 async fn cmd_push(config: &RunConfig) -> DogfoodResult<()> {
@@ -255,17 +292,26 @@ async fn cmd_build(config: &RunConfig) -> DogfoodResult<()> {
     info!("🔨 Waiting for CI build...");
 
     let state = state::read_state(&config.state_file_path())?;
-    let (ticket, repo_name) = if state.is_federation {
-        let repo_name = federation::prepare_build(config, &state).await?;
-        (state.bob_ticket().to_string(), repo_name)
-    } else {
-        (state.primary_ticket().to_string(), "aspen".to_string())
-    };
-
-    let run_id = ci::wait_for_pipeline(&ticket, &repo_name, config.ci_timeout_secs).await?;
+    let (ticket, repo_name) = build_wait_pipeline_parts(config, &state).await?;
+    let run_id = ci::wait_for_pipeline(
+        ci::WaitPipelineTarget {
+            ticket: &ticket,
+            repo_name: &repo_name,
+        },
+        config.ci_timeout_secs,
+    )
+    .await?;
 
     info!("✅ CI build completed (run_id: {run_id})");
     Ok(())
+}
+
+async fn build_wait_pipeline_parts(config: &RunConfig, state: &DogfoodState) -> DogfoodResult<(String, String)> {
+    if state.is_federation {
+        let repo_name = federation::prepare_build(config, state).await?;
+        return Ok((state.bob_ticket().to_string(), repo_name));
+    }
+    Ok((state.primary_ticket().to_string(), "aspen".to_string()))
 }
 
 async fn cmd_deploy(config: &RunConfig) -> DogfoodResult<()> {
@@ -301,35 +347,47 @@ async fn cmd_full_loop(config: &RunConfig) -> DogfoodResult<()> {
 
 async fn cmd_full(config: &RunConfig) -> DogfoodResult<()> {
     cmd_start(config).await?;
+    install_ctrl_c_shutdown(config);
+    let result = run_full_pipeline(config).await;
+    let stop_result = cmd_stop(config).await;
+    result?;
+    stop_result
+}
 
-    // Install signal handler so we stop the cluster on ctrl-c even during the pipeline.
+fn install_ctrl_c_shutdown(config: &RunConfig) {
     let config_dir = config.cluster_dir.clone();
     let state_path = config.state_file_path();
     tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        tracing::warn!("⚠️  Caught SIGINT — stopping cluster...");
-        if let Ok(state) = state::read_state(&state_path) {
-            let _ = node::stop_nodes_by_pids(&state.node_pids()).await;
-        }
-        let _ = tokio::fs::remove_dir_all(&config_dir).await;
-        std::process::exit(130);
+        handle_ctrl_c_shutdown(config_dir, state_path).await;
     });
+}
 
-    let result = async {
-        cmd_push(config).await?;
-        cmd_build(config).await?;
-        cmd_deploy(config).await?;
-        cmd_verify(config).await?;
-        Ok(())
+async fn handle_ctrl_c_shutdown(config_dir: String, state_path: String) {
+    if let Err(error) = tokio::signal::ctrl_c().await {
+        tracing::warn!("failed to wait for ctrl-c: {error}");
+        return;
     }
-    .await;
 
-    // Always stop the cluster, even on failure
-    let stop_result = cmd_stop(config).await;
+    tracing::warn!("⚠️  Caught SIGINT — stopping cluster...");
+    if let Ok(state) = state::read_state(&state_path)
+        && let Err(error) = node::stop_nodes_by_pids(&state.node_pids()).await
+    {
+        tracing::warn!("failed to stop dogfood nodes after ctrl-c: {error}");
+    }
+    if let Err(error) = tokio::fs::remove_dir_all(&config_dir).await
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("failed to clean dogfood directory after ctrl-c: {error}");
+    }
+    std::process::exit(130);
+}
 
-    // Return the pipeline error if there was one, otherwise the stop error
-    result?;
-    stop_result
+async fn run_full_pipeline(config: &RunConfig) -> DogfoodResult<()> {
+    cmd_push(config).await?;
+    cmd_build(config).await?;
+    cmd_deploy(config).await?;
+    cmd_verify(config).await?;
+    Ok(())
 }
 
 #[cfg(test)]

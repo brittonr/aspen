@@ -15,7 +15,7 @@ use crate::output::print_output;
 
 /// Read-write lock operations.
 #[derive(Subcommand)]
-pub enum RWLockCommand {
+pub enum RwLockCommand {
     /// Acquire read lock (blocking with timeout).
     Read(ReadArgs),
 
@@ -154,7 +154,7 @@ pub struct StatusArgs {
 }
 
 /// RWLock operation output.
-pub struct RWLockOutput {
+pub struct RwLockOutput {
     pub operation: String,
     pub name: String,
     pub is_success: bool,
@@ -166,7 +166,7 @@ pub struct RWLockOutput {
     pub error: Option<String>,
 }
 
-impl Outputable for RWLockOutput {
+impl Outputable for RwLockOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "operation": self.operation,
@@ -216,23 +216,25 @@ impl Outputable for RWLockOutput {
     }
 }
 
-impl RWLockCommand {
+impl RwLockCommand {
     /// Execute the rwlock command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            RWLockCommand::Read(args) => rwlock_read(client, args, json).await,
-            RWLockCommand::TryRead(args) => rwlock_try_read(client, args, json).await,
-            RWLockCommand::Write(args) => rwlock_write(client, args, json).await,
-            RWLockCommand::TryWrite(args) => rwlock_try_write(client, args, json).await,
-            RWLockCommand::ReleaseRead(args) => rwlock_release_read(client, args, json).await,
-            RWLockCommand::ReleaseWrite(args) => rwlock_release_write(client, args, json).await,
-            RWLockCommand::Downgrade(args) => rwlock_downgrade(client, args, json).await,
-            RWLockCommand::Status(args) => rwlock_status(client, args, json).await,
+            RwLockCommand::Read(args) => rwlock_read(client, args, is_json).await,
+            RwLockCommand::TryRead(args) => rwlock_try_read(client, args, is_json).await,
+            RwLockCommand::Write(args) => rwlock_write(client, args, is_json).await,
+            RwLockCommand::TryWrite(args) => rwlock_try_write(client, args, is_json).await,
+            RwLockCommand::ReleaseRead(args) => rwlock_release_read(client, args, is_json).await,
+            RwLockCommand::ReleaseWrite(args) => rwlock_release_write(client, args, is_json).await,
+            RwLockCommand::Downgrade(args) => rwlock_downgrade(client, args, is_json).await,
+            RwLockCommand::Status(args) => rwlock_status(client, args, is_json).await,
         }
     }
 }
 
-async fn rwlock_read(client: &AspenClient, args: ReadArgs, json: bool) -> Result<()> {
+async fn rwlock_read(client: &AspenClient, args: ReadArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(!args.holder.is_empty());
     let response = client
         .send(ClientRpcRequest::RWLockAcquireRead {
             name: args.name.clone(),
@@ -244,7 +246,7 @@ async fn rwlock_read(client: &AspenClient, args: ReadArgs, json: bool) -> Result
 
     match response {
         ClientRpcResponse::RWLockAcquireReadResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "read".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -255,7 +257,9 @@ async fn rwlock_read(client: &AspenClient, args: ReadArgs, json: bool) -> Result
                 writer_holder: result.writer_holder,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -266,7 +270,9 @@ async fn rwlock_read(client: &AspenClient, args: ReadArgs, json: bool) -> Result
     }
 }
 
-async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, json: bool) -> Result<()> {
+async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(!args.holder.is_empty());
     let response = client
         .send(ClientRpcRequest::RWLockTryAcquireRead {
             name: args.name.clone(),
@@ -277,7 +283,7 @@ async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, json: bool) ->
 
     match response {
         ClientRpcResponse::RWLockTryAcquireReadResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "try_read".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -288,7 +294,9 @@ async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, json: bool) ->
                 writer_holder: result.writer_holder,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -299,7 +307,9 @@ async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, json: bool) ->
     }
 }
 
-async fn rwlock_write(client: &AspenClient, args: WriteArgs, json: bool) -> Result<()> {
+async fn rwlock_write(client: &AspenClient, args: WriteArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(!args.holder.is_empty());
     let response = client
         .send(ClientRpcRequest::RWLockAcquireWrite {
             name: args.name.clone(),
@@ -311,7 +321,7 @@ async fn rwlock_write(client: &AspenClient, args: WriteArgs, json: bool) -> Resu
 
     match response {
         ClientRpcResponse::RWLockAcquireWriteResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "write".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -322,7 +332,9 @@ async fn rwlock_write(client: &AspenClient, args: WriteArgs, json: bool) -> Resu
                 writer_holder: result.writer_holder,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -333,7 +345,9 @@ async fn rwlock_write(client: &AspenClient, args: WriteArgs, json: bool) -> Resu
     }
 }
 
-async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, json: bool) -> Result<()> {
+async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(!args.holder.is_empty());
     let response = client
         .send(ClientRpcRequest::RWLockTryAcquireWrite {
             name: args.name.clone(),
@@ -344,7 +358,7 @@ async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, json: bool) 
 
     match response {
         ClientRpcResponse::RWLockTryAcquireWriteResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "try_write".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -355,7 +369,9 @@ async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, json: bool) 
                 writer_holder: result.writer_holder,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -366,7 +382,9 @@ async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, json: bool) 
     }
 }
 
-async fn rwlock_release_read(client: &AspenClient, args: ReleaseReadArgs, json: bool) -> Result<()> {
+async fn rwlock_release_read(client: &AspenClient, args: ReleaseReadArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(!args.holder.is_empty());
     let response = client
         .send(ClientRpcRequest::RWLockReleaseRead {
             name: args.name.clone(),
@@ -376,7 +394,7 @@ async fn rwlock_release_read(client: &AspenClient, args: ReleaseReadArgs, json: 
 
     match response {
         ClientRpcResponse::RWLockReleaseReadResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "release_read".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -387,7 +405,9 @@ async fn rwlock_release_read(client: &AspenClient, args: ReleaseReadArgs, json: 
                 writer_holder: None,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -398,7 +418,9 @@ async fn rwlock_release_read(client: &AspenClient, args: ReleaseReadArgs, json: 
     }
 }
 
-async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, json: bool) -> Result<()> {
+async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(!args.holder.is_empty());
     let response = client
         .send(ClientRpcRequest::RWLockReleaseWrite {
             name: args.name.clone(),
@@ -409,7 +431,7 @@ async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, json
 
     match response {
         ClientRpcResponse::RWLockReleaseWriteResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "release_write".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -420,7 +442,9 @@ async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, json
                 writer_holder: None,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -431,7 +455,9 @@ async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, json
     }
 }
 
-async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool) -> Result<()> {
+async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(!args.holder.is_empty());
     let response = client
         .send(ClientRpcRequest::RWLockDowngrade {
             name: args.name.clone(),
@@ -443,7 +469,7 @@ async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool)
 
     match response {
         ClientRpcResponse::RWLockDowngradeResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "downgrade".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -454,7 +480,9 @@ async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool)
                 writer_holder: None,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -465,7 +493,9 @@ async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool)
     }
 }
 
-async fn rwlock_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
+async fn rwlock_status(client: &AspenClient, args: StatusArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(args.name.len() <= 1024);
     let response = client
         .send(ClientRpcRequest::RWLockStatus {
             name: args.name.clone(),
@@ -474,7 +504,7 @@ async fn rwlock_status(client: &AspenClient, args: StatusArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::RWLockStatusResult(result) => {
-            let output = RWLockOutput {
+            let output = RwLockOutput {
                 operation: "status".to_string(),
                 name: args.name,
                 is_success: result.is_success,
@@ -485,7 +515,9 @@ async fn rwlock_status(client: &AspenClient, args: StatusArgs, json: bool) -> Re
                 writer_holder: result.writer_holder,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.name.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }

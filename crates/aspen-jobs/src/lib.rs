@@ -111,11 +111,11 @@ pub use distributed_pool::DistributedPoolConfig;
 pub use distributed_pool::DistributedWorkerPool;
 pub use distributed_pool::GroupMessage;
 pub use distributed_pool::WorkerGroupHandle;
-pub use dlq_inspector::DLQAnalysis;
-pub use dlq_inspector::DLQExport;
-pub use dlq_inspector::DLQExportEntry;
-pub use dlq_inspector::DLQInspector;
-pub use dlq_inspector::DLQRecommendation;
+pub use dlq_inspector::DlqAnalysis;
+pub use dlq_inspector::DlqExport;
+pub use dlq_inspector::DlqExportEntry;
+pub use dlq_inspector::DlqInspector;
+pub use dlq_inspector::DlqRecommendation;
 pub use dlq_inspector::RecommendationSeverity;
 // Durable workflow executor
 pub use durable_executor::DurableWorkflowExecutor;

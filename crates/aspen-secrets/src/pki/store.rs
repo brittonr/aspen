@@ -95,6 +95,9 @@ pub struct DefaultPkiStore {
 }
 
 impl DefaultPkiStore {
+    const MILLIS_PER_SECOND: u64 = 1_000;
+    const CRL_REFRESH_INTERVAL_MS: u64 = 86_400_000;
+
     /// Create a new PKI store with the given backend and mount point.
     pub fn new(backend: Arc<dyn SecretsBackend>) -> Self {
         Self::with_mount(backend, "pki")
@@ -108,9 +111,51 @@ impl DefaultPkiStore {
         }
     }
 
+    #[allow(unknown_lints)]
+    #[allow(
+        ambient_clock,
+        reason = "PKI issuance and revocation timestamps come from wall clock time."
+    )]
+    fn current_system_time() -> SystemTime {
+        SystemTime::now()
+    }
+
+    fn duration_to_unix_ms(duration: Duration) -> u64 {
+        u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+    }
+
+    fn add_ttl_secs_as_ms(base_unix_ms: u64, ttl_secs: u64) -> u64 {
+        base_unix_ms.saturating_add(ttl_secs.saturating_mul(Self::MILLIS_PER_SECOND))
+    }
+
+    fn max_san_count_usize() -> usize {
+        match usize::try_from(MAX_SAN_COUNT) {
+            Ok(max_count) => max_count,
+            Err(_) => usize::MAX,
+        }
+    }
+
+    fn usize_to_u32_saturating(value: usize) -> u32 {
+        u32::try_from(value).unwrap_or(u32::MAX)
+    }
+
+    fn empty_certificate_params() -> Result<CertificateParams> {
+        CertificateParams::new(Vec::<String>::new())
+            .map_err(|e| SecretsError::CertificateGeneration { reason: e.to_string() })
+    }
+
+    fn system_time_to_rcgen_date(system_time: SystemTime) -> time::OffsetDateTime {
+        let date_time = time::OffsetDateTime::from(system_time);
+        rcgen::date_time_ymd(date_time.year(), u8::from(date_time.month()), date_time.day())
+    }
+
     /// Get current timestamp in milliseconds.
     fn now_unix_ms() -> u64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+        let since_epoch = match Self::current_system_time().duration_since(UNIX_EPOCH) {
+            Ok(duration) => duration,
+            Err(_) => Duration::ZERO,
+        };
+        Self::duration_to_unix_ms(since_epoch)
     }
 
     /// Load CA from storage.
@@ -266,8 +311,8 @@ impl DefaultPkiStore {
         let validity = &cert.tbs_certificate.validity;
 
         // Convert to Unix timestamps in milliseconds
-        let not_before = validity.not_before.to_unix_duration().as_millis() as u64;
-        let not_after = validity.not_after.to_unix_duration().as_millis() as u64;
+        let not_before = Self::duration_to_unix_ms(validity.not_before.to_unix_duration());
+        let not_after = Self::duration_to_unix_ms(validity.not_after.to_unix_duration());
 
         Ok((not_before, not_after))
     }
@@ -276,7 +321,7 @@ impl DefaultPkiStore {
     ///
     /// This recreates the CA Certificate object needed for signing new certificates.
     fn recreate_ca_cert(ca: &CertificateAuthority, ca_key: &KeyPair) -> Result<Certificate> {
-        let mut params = CertificateParams::default();
+        let mut params = Self::empty_certificate_params()?;
         params.distinguished_name.push(DnType::CommonName, &ca.common_name);
 
         if let Some(org) = &ca.organization {
@@ -335,13 +380,13 @@ impl PkiStore for DefaultPkiStore {
         }
 
         let now = Self::now_unix_ms();
-        let expiry_ms = now + (request.ttl_secs * 1000);
+        let expiry_ms = Self::add_ttl_secs_as_ms(now, request.ttl_secs);
 
         // Generate key pair
         let key_pair = Self::generate_key_pair(request.key_type)?;
 
         // Create certificate params
-        let mut params = CertificateParams::default();
+        let mut params = Self::empty_certificate_params()?;
         params.distinguished_name.push(DnType::CommonName, &request.common_name);
 
         if let Some(org) = &request.organization {
@@ -368,18 +413,10 @@ impl PkiStore for DefaultPkiStore {
         ];
 
         // Set validity
-        let not_before = std::time::SystemTime::now();
+        let not_before = Self::current_system_time();
         let not_after = not_before + Duration::from_secs(request.ttl_secs);
-        params.not_before = rcgen::date_time_ymd(
-            time::OffsetDateTime::from(not_before).year(),
-            time::OffsetDateTime::from(not_before).month() as u8,
-            time::OffsetDateTime::from(not_before).day(),
-        );
-        params.not_after = rcgen::date_time_ymd(
-            time::OffsetDateTime::from(not_after).year(),
-            time::OffsetDateTime::from(not_after).month() as u8,
-            time::OffsetDateTime::from(not_after).day(),
-        );
+        params.not_before = Self::system_time_to_rcgen_date(not_before);
+        params.not_after = Self::system_time_to_rcgen_date(not_after);
 
         let serial = Self::generate_serial();
 
@@ -440,7 +477,7 @@ impl PkiStore for DefaultPkiStore {
         // NOTE: CSRs only support distinguished name and SANs.
         // The CA extensions (is_ca, key_usages) are added by the signing CA,
         // not included in the CSR itself.
-        let mut params = CertificateParams::default();
+        let mut params = Self::empty_certificate_params()?;
         params.distinguished_name.push(DnType::CommonName, &request.common_name);
 
         if let Some(org) = &request.organization {
@@ -608,10 +645,11 @@ impl PkiStore for DefaultPkiStore {
         Self::validate_cn(&request.common_name)?;
 
         // Validate SAN count
-        let total_sans = request.alt_names.len() + request.ip_sans.len() + request.uri_sans.len();
-        if total_sans > MAX_SAN_COUNT as usize {
+        let total_sans =
+            request.alt_names.len().saturating_add(request.ip_sans.len()).saturating_add(request.uri_sans.len());
+        if total_sans > Self::max_san_count_usize() {
             return Err(SecretsError::TooManySans {
-                count: total_sans as u32,
+                count: Self::usize_to_u32_saturating(total_sans),
                 max: MAX_SAN_COUNT,
             });
         }
@@ -661,13 +699,13 @@ impl PkiStore for DefaultPkiStore {
         }
 
         let now = Self::now_unix_ms();
-        let expiry_ms = now + (ttl * 1000);
+        let expiry_ms = Self::add_ttl_secs_as_ms(now, ttl);
 
         // Generate key pair for the certificate
         let key_pair = Self::generate_key_pair(role.key_type)?;
 
         // Create certificate params
-        let mut params = CertificateParams::default();
+        let mut params = Self::empty_certificate_params()?;
         params.distinguished_name.push(DnType::CommonName, &request.common_name);
 
         for org in &role.organization {
@@ -681,7 +719,8 @@ impl PkiStore for DefaultPkiStore {
         }
 
         // Add SANs
-        let mut sans = Vec::new();
+        let san_slots = total_sans.saturating_add(usize::from(!request.exclude_cn_from_sans));
+        let mut sans = Vec::with_capacity(san_slots);
         if !request.exclude_cn_from_sans {
             sans.push(SanType::DnsName(request.common_name.clone().try_into().map_err(|_| {
                 SecretsError::CommonNameNotAllowed {
@@ -712,18 +751,10 @@ impl PkiStore for DefaultPkiStore {
         params.is_ca = IsCa::NoCa;
 
         // Set validity
-        let not_before = std::time::SystemTime::now();
+        let not_before = Self::current_system_time();
         let not_after = not_before + Duration::from_secs(ttl);
-        params.not_before = rcgen::date_time_ymd(
-            time::OffsetDateTime::from(not_before).year(),
-            time::OffsetDateTime::from(not_before).month() as u8,
-            time::OffsetDateTime::from(not_before).day(),
-        );
-        params.not_after = rcgen::date_time_ymd(
-            time::OffsetDateTime::from(not_after).year(),
-            time::OffsetDateTime::from(not_after).month() as u8,
-            time::OffsetDateTime::from(not_after).day(),
-        );
+        params.not_before = Self::system_time_to_rcgen_date(not_before);
+        params.not_after = Self::system_time_to_rcgen_date(not_after);
 
         // Load CA key pair
         let ca_key_pem = String::from_utf8(ca.private_key.clone()).map_err(|e| SecretsError::Internal {
@@ -809,7 +840,7 @@ impl PkiStore for DefaultPkiStore {
             reason: None,
         });
         crl.last_update_unix_ms = now;
-        crl.next_update_unix_ms = now + (24 * 60 * 60 * 1000); // 24 hours
+        crl.next_update_unix_ms = now.saturating_add(Self::CRL_REFRESH_INTERVAL_MS);
         self.save_crl(&crl).await?;
 
         debug!(serial = %request.serial, "Revoked certificate");

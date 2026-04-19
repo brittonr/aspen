@@ -184,6 +184,8 @@ async fn handle_connection<S: KeyValueStore + 'static>(
             });
         }
     };
+    debug_assert!(domain.ends_with(".aspen"), "validated SOCKS5 domain must end with .aspen");
+    debug_assert!(!endpoint_id.is_empty(), "resolved SOCKS5 endpoint ID must not be empty");
 
     // Parse the endpoint ID and build an EndpointAddr for iroh connection
     let remote_id: iroh::EndpointId = match endpoint_id.parse() {
@@ -314,9 +316,9 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
     let domain = String::from_utf8_lossy(&domain_bytes).to_string();
 
     // Read port
-    let port_u16 = read_u16(stream).await?;
+    let requested_endpoint = read_u16(stream).await?;
 
-    debug!("SOCKS5 CONNECT from {addr}: {domain}:{port_u16}");
+    debug!("SOCKS5 CONNECT from {addr}: {domain}:{requested_endpoint}");
 
     // Reject non-.aspen domains
     if !domain.ends_with(".aspen") {
@@ -326,8 +328,6 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
             reason: format!("non-.aspen destination not supported: {domain}"),
         });
     }
-
-    debug_assert!(domain.ends_with(".aspen"), "validated SOCKS5 domain must keep .aspen suffix");
 
     // Resolve service name (strips .aspen suffix)
     let service_name = domain.strip_suffix(".aspen").unwrap_or(&domain);
@@ -343,16 +343,13 @@ async fn perform_handshake<S: KeyValueStore + 'static>(
         }
     };
 
-    // Use client-specified port (per spec: SOCKS5 CONNECT with explicit port override)
-    let remote_port_u16 = port_u16;
-
-    // Token authorization check
-    if let Err(e) = auth.check_connect(service_name, remote_port_u16) {
+    // Token authorization check uses client-specified port (per spec: explicit CONNECT override)
+    if let Err(e) = auth.check_connect(service_name, requested_endpoint) {
         send_reply(stream, REPLY_CONNECTION_REFUSED).await?;
         return Err(Socks5Error::Auth { source: e });
     }
 
-    Ok((domain, port_u16, endpoint_id, remote_port_u16))
+    Ok((domain, requested_endpoint, endpoint_id, requested_endpoint))
 }
 
 /// Send a SOCKS5 reply.

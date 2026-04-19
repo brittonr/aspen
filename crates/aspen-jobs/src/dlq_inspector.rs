@@ -17,40 +17,52 @@ use crate::job::JobId;
 use crate::manager::JobManager;
 use crate::types::Priority;
 
-/// DLQ Inspector for analyzing failed jobs.
-pub struct DLQInspector<S: KeyValueStore + ?Sized> {
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "DLQ inspection reports wall-clock ages and export timestamps"
+)]
+fn current_time_utc() -> DateTime<Utc> {
+    Utc::now()
+}
+
+fn expanded_limit(limit: u32) -> u32 {
+    limit.saturating_mul(2)
+}
+
+fn limit_to_usize(limit: u32) -> usize {
+    usize::try_from(limit).unwrap_or(usize::MAX)
+}
+
+/// DLQ inspector for analyzing failed jobs.
+pub struct DlqInspector<S: KeyValueStore + ?Sized> {
     manager: Arc<JobManager<S>>,
 }
 
-impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
+impl<S: KeyValueStore + ?Sized + 'static> DlqInspector<S> {
     /// Create a new DLQ inspector.
     pub fn new(manager: Arc<JobManager<S>>) -> Self {
         Self { manager }
     }
 
     /// Get detailed analysis of DLQ contents.
-    pub async fn analyze(&self, limit: u32) -> Result<DLQAnalysis> {
+    pub async fn analyze(&self, limit: u32) -> Result<DlqAnalysis> {
         let jobs = self.manager.get_dlq_jobs(None, limit).await?;
+        let current_time = current_time_utc();
 
-        let mut analysis = DLQAnalysis {
-            total_jobs: jobs.len() as u64,
+        let mut analysis = DlqAnalysis {
+            total_jobs: u64::try_from(jobs.len()).unwrap_or(u64::MAX),
             ..Default::default()
         };
 
         for job in &jobs {
-            // Count by priority
             *analysis.by_priority.entry(job.spec.config.priority).or_insert(0) += 1;
-
-            // Count by job type
             *analysis.by_job_type.entry(job.spec.job_type.clone()).or_insert(0) += 1;
 
-            // Analyze DLQ metadata
-            if let Some(ref dlq_meta) = job.dlq_metadata {
-                // Count by reason
+            if let Some(dlq_meta) = job.dlq_metadata.as_ref() {
                 *analysis.by_reason.entry(format!("{:?}", dlq_meta.reason)).or_insert(0) += 1;
 
-                // Track age
-                let age = Utc::now() - dlq_meta.entered_at;
+                let age = current_time - dlq_meta.entered_at;
                 if analysis.oldest_entry.is_none_or(|oldest| dlq_meta.entered_at < oldest) {
                     analysis.oldest_entry = Some(dlq_meta.entered_at);
                 }
@@ -58,43 +70,41 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
                     analysis.newest_entry = Some(dlq_meta.entered_at);
                 }
 
-                analysis.total_age_seconds += age.num_seconds() as u64;
+                analysis.total_age_seconds =
+                    analysis.total_age_seconds.saturating_add(u64::try_from(age.num_seconds()).unwrap_or(0));
 
-                // Count redriven jobs
                 if dlq_meta.redrive_count > 0 {
                     analysis.redriven_jobs += 1;
-                    analysis.total_redrive_attempts += dlq_meta.redrive_count as u64;
+                    analysis.total_redrive_attempts += u64::from(dlq_meta.redrive_count);
                 }
 
-                // Collect error patterns
                 let error = dlq_meta.final_error.clone();
                 *analysis.error_patterns.entry(error).or_insert(0) += 1;
             }
         }
 
-        // Calculate averages
         analysis.avg_age_seconds = analysis.total_age_seconds.checked_div(analysis.total_jobs).unwrap_or(0);
         if analysis.redriven_jobs > 0 {
             analysis.avg_redrive_attempts = analysis.total_redrive_attempts as f64 / analysis.redriven_jobs as f64;
         }
 
-        // Find most common errors
         analysis.top_errors =
             analysis.error_patterns.iter().map(|(error, count)| (error.clone(), *count)).collect::<Vec<_>>();
-        analysis.top_errors.sort_by_key(|b| std::cmp::Reverse(b.1));
+        analysis.top_errors.sort_by_key(|entry| std::cmp::Reverse(entry.1));
         analysis.top_errors.truncate(10);
+        debug_assert!(analysis.top_errors.len() <= 10);
 
         Ok(analysis)
     }
 
     /// Find jobs with specific error patterns.
     pub async fn find_by_error_pattern(&self, pattern: &str, limit: u32) -> Result<Vec<Job>> {
-        let jobs = self.manager.get_dlq_jobs(None, limit * 2).await?;
+        let jobs = self.manager.get_dlq_jobs(None, expanded_limit(limit)).await?;
 
         let matching_jobs: Vec<Job> = jobs
             .into_iter()
             .filter(|job| job.dlq_metadata.as_ref().map(|meta| meta.final_error.contains(pattern)).unwrap_or(false))
-            .take(limit as usize)
+            .take(limit_to_usize(limit))
             .collect();
 
         info!(pattern, count = matching_jobs.len(), "found jobs with error pattern");
@@ -104,13 +114,13 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
 
     /// Find jobs that have been in DLQ longer than specified duration.
     pub async fn find_stale_jobs(&self, age_threshold: Duration, limit: u32) -> Result<Vec<Job>> {
-        let jobs = self.manager.get_dlq_jobs(None, limit * 2).await?;
-        let now = Utc::now();
+        let jobs = self.manager.get_dlq_jobs(None, expanded_limit(limit)).await?;
+        let now = current_time_utc();
 
         let stale_jobs: Vec<Job> = jobs
             .into_iter()
             .filter(|job| job.dlq_metadata.as_ref().map(|meta| now - meta.entered_at > age_threshold).unwrap_or(false))
-            .take(limit as usize)
+            .take(limit_to_usize(limit))
             .collect();
 
         info!(threshold_hours = age_threshold.num_hours(), count = stale_jobs.len(), "found stale DLQ jobs");
@@ -124,7 +134,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
         let mut grouped = HashMap::new();
 
         for job in jobs {
-            if let Some(ref dlq_meta) = job.dlq_metadata {
+            if let Some(dlq_meta) = job.dlq_metadata.as_ref() {
                 let reason = format!("{:?}", dlq_meta.reason);
                 grouped.entry(reason).or_insert_with(Vec::new).push(job.id);
             }
@@ -135,50 +145,52 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
 
     /// Get jobs that have been redriven multiple times.
     pub async fn find_problematic_jobs(&self, min_redrive_count: u32, limit: u32) -> Result<Vec<Job>> {
-        let jobs = self.manager.get_dlq_jobs(None, limit * 2).await?;
+        let jobs = self.manager.get_dlq_jobs(None, expanded_limit(limit)).await?;
 
-        let problematic: Vec<Job> = jobs
+        let problematic_jobs: Vec<Job> = jobs
             .into_iter()
             .filter(|job| {
                 job.dlq_metadata.as_ref().map(|meta| meta.redrive_count >= min_redrive_count).unwrap_or(false)
             })
-            .take(limit as usize)
+            .take(limit_to_usize(limit))
             .collect();
 
         info!(
             min_redrive_count,
-            count = problematic.len(),
+            count = problematic_jobs.len(),
             "found problematic jobs with multiple redrive attempts"
         );
 
-        Ok(problematic)
+        Ok(problematic_jobs)
     }
 
     /// Export DLQ contents to JSON.
     pub async fn export_to_json(&self, limit: u32) -> Result<String> {
         let jobs = self.manager.get_dlq_jobs(None, limit).await?;
-        let export = DLQExport {
-            exported_at: Utc::now(),
-            total_jobs: jobs.len() as u64,
-            jobs: jobs.into_iter().map(DLQExportEntry::from_job).collect(),
-        };
+        let total_jobs = u64::try_from(jobs.len()).unwrap_or(u64::MAX);
+        debug_assert!(total_jobs >= u64::try_from(jobs.len()).unwrap_or(u64::MAX));
+        debug_assert!(jobs.len() <= limit_to_usize(limit));
 
-        let json = serde_json::to_string_pretty(&export)
-            .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+        let json = serde_json::to_string_pretty(&DlqExport {
+            exported_at: current_time_utc(),
+            total_jobs,
+            jobs: jobs.into_iter().map(DlqExportEntry::from_job).collect(),
+        })
+        .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
         Ok(json)
     }
 
     /// Get recommendations for DLQ management.
-    pub async fn get_recommendations(&self) -> Result<Vec<DLQRecommendation>> {
+    pub async fn get_recommendations(&self) -> Result<Vec<DlqRecommendation>> {
         let analysis = self.analyze(1000).await?;
+        let current_time = current_time_utc();
         let mut recommendations = Vec::new();
 
-        // Check for stale jobs
         if let Some(oldest) = analysis.oldest_entry {
-            let age = Utc::now() - oldest;
+            let age = current_time - oldest;
             if age > Duration::days(7) {
-                recommendations.push(DLQRecommendation {
+                recommendations.push(DlqRecommendation {
                     severity: RecommendationSeverity::Warning,
                     category: "Stale Jobs".to_string(),
                     message: format!(
@@ -190,12 +202,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
             }
         }
 
-        // Check for high redrive failures
-        // Decomposed: check if redrives exist first, then check average
         let has_redrives = analysis.redriven_jobs > 0;
         let has_high_avg_attempts = analysis.avg_redrive_attempts > 3.0;
         if has_redrives && has_high_avg_attempts {
-            recommendations.push(DLQRecommendation {
+            recommendations.push(DlqRecommendation {
                 severity: RecommendationSeverity::High,
                 category: "Redrive Failures".to_string(),
                 message: format!(
@@ -206,11 +216,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
             });
         }
 
-        // Check for common error patterns
         if !analysis.top_errors.is_empty() {
             let (top_error, count) = &analysis.top_errors[0];
             if *count > 10 {
-                recommendations.push(DLQRecommendation {
+                recommendations.push(DlqRecommendation {
                     severity: RecommendationSeverity::High,
                     category: "Error Pattern".to_string(),
                     message: format!(
@@ -223,24 +232,23 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
             }
         }
 
-        // Check for job type concentration
         let max_by_type = analysis.by_job_type.values().max().copied().unwrap_or(0);
-        if max_by_type > analysis.total_jobs / 2 {
+        let has_jobs = analysis.total_jobs > 0;
+        let type_majority_threshold = analysis.total_jobs.checked_div(2).unwrap_or(0);
+        if has_jobs && max_by_type > type_majority_threshold {
             let problem_type = analysis
                 .by_job_type
                 .iter()
                 .find(|&(_, &count)| count == max_by_type)
-                .map(|(typ, _)| typ.clone())
+                .map(|(job_type, _)| job_type.clone())
                 .unwrap_or_default();
+            let job_share_percent =
+                max_by_type.checked_mul(100).and_then(|scaled| scaled.checked_div(analysis.total_jobs)).unwrap_or(0);
 
-            recommendations.push(DLQRecommendation {
+            recommendations.push(DlqRecommendation {
                 severity: RecommendationSeverity::Warning,
                 category: "Job Type Issue".to_string(),
-                message: format!(
-                    "Job type '{}' represents {}% of DLQ jobs",
-                    problem_type,
-                    (max_by_type * 100) / analysis.total_jobs
-                ),
+                message: format!("Job type '{}' represents {}% of DLQ jobs", problem_type, job_share_percent),
                 action: format!("Review implementation of '{}' job handler", problem_type),
             });
         }
@@ -251,7 +259,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
 
 /// Analysis results for DLQ contents.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct DLQAnalysis {
+pub struct DlqAnalysis {
     /// Total number of jobs in DLQ.
     pub total_jobs: u64,
     /// Jobs grouped by priority.
@@ -282,18 +290,18 @@ pub struct DLQAnalysis {
 
 /// DLQ export format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DLQExport {
+pub struct DlqExport {
     /// Export timestamp.
     pub exported_at: DateTime<Utc>,
     /// Total jobs exported.
     pub total_jobs: u64,
     /// Job entries.
-    pub jobs: Vec<DLQExportEntry>,
+    pub jobs: Vec<DlqExportEntry>,
 }
 
 /// Individual DLQ export entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DLQExportEntry {
+pub struct DlqExportEntry {
     /// Job ID.
     pub job_id: String,
     /// Job type.
@@ -314,7 +322,7 @@ pub struct DLQExportEntry {
     pub payload: serde_json::Value,
 }
 
-impl DLQExportEntry {
+impl DlqExportEntry {
     /// Create from a Job.
     pub fn from_job(job: Job) -> Self {
         let dlq_meta = job.dlq_metadata.clone();
@@ -322,11 +330,11 @@ impl DLQExportEntry {
             job_id: job.id.to_string(),
             job_type: job.spec.job_type,
             priority: job.spec.config.priority,
-            entered_dlq_at: dlq_meta.as_ref().map(|m| m.entered_at),
-            reason: dlq_meta.as_ref().map(|m| format!("{:?}", m.reason)),
-            final_error: dlq_meta.as_ref().map(|m| m.final_error.clone()),
+            entered_dlq_at: dlq_meta.as_ref().map(|meta| meta.entered_at),
+            reason: dlq_meta.as_ref().map(|meta| format!("{:?}", meta.reason)),
+            final_error: dlq_meta.as_ref().map(|meta| meta.final_error.clone()),
             attempts: job.attempts,
-            redrive_count: dlq_meta.as_ref().map(|m| m.redrive_count).unwrap_or(0),
+            redrive_count: dlq_meta.as_ref().map(|meta| meta.redrive_count).unwrap_or(0),
             payload: job.spec.payload,
         }
     }
@@ -334,7 +342,7 @@ impl DLQExportEntry {
 
 /// DLQ management recommendation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DLQRecommendation {
+pub struct DlqRecommendation {
     /// Severity of the recommendation.
     pub severity: RecommendationSeverity,
     /// Category of the issue.

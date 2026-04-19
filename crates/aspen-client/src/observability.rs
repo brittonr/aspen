@@ -37,6 +37,32 @@ use tokio::sync::RwLock;
 
 use crate::AspenClient;
 
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "observability spans need explicit monotonic and wall-clock boundaries"
+)]
+fn monotonic_now() -> Instant {
+    Instant::now()
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "observability spans serialize wall-clock timestamps for wire transport"
+)]
+fn wall_clock_now() -> SystemTime {
+    SystemTime::now()
+}
+
+fn duration_to_u64(value: Duration) -> u64 {
+    u64::try_from(value.as_micros()).unwrap_or(u64::MAX)
+}
+
+fn u32_to_usize(value_count: u32) -> usize {
+    usize::try_from(value_count).unwrap_or(usize::MAX)
+}
+
 /// W3C Trace Context for distributed tracing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceContext {
@@ -139,8 +165,8 @@ impl Span {
         Self {
             context,
             operation: operation.into(),
-            start_time: Instant::now(),
-            start_system_time: SystemTime::now(),
+            start_time: monotonic_now(),
+            start_system_time: wall_clock_now(),
             end_time: None,
             attributes: HashMap::new(),
             events: Vec::new(),
@@ -156,7 +182,7 @@ impl Span {
     /// Add an event to the span.
     pub fn add_event(&mut self, name: impl Into<String>, attributes: HashMap<String, String>) {
         self.events.push(SpanEvent {
-            timestamp: Instant::now(),
+            timestamp: monotonic_now(),
             name: name.into(),
             attributes,
         });
@@ -169,7 +195,7 @@ impl Span {
 
     /// End the span.
     pub fn end(&mut self) {
-        self.end_time = Some(Instant::now());
+        self.end_time = Some(monotonic_now());
     }
 
     /// Get the span duration.
@@ -203,6 +229,7 @@ pub enum SpanStatus {
 /// Metrics collector for client operations.
 pub struct MetricsCollector {
     /// Counter metrics.
+    /// Lock order: `counters` -> `gauges` -> `histograms` when multiple metric maps are needed.
     counters: Arc<RwLock<HashMap<String, u64>>>,
     /// Gauge metrics.
     gauges: Arc<RwLock<HashMap<String, f64>>>,
@@ -330,7 +357,9 @@ impl MetricsCollector {
     /// Snapshot all in-memory metrics as data points for server-side ingest.
     pub async fn to_data_points(&self, timestamp_us: u64) -> Vec<MetricDataPoint> {
         let labels: Vec<(String, String)> = self.labels.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        let mut points = Vec::new();
+        let counter_count = self.counters.read().await.len();
+        let gauge_count = self.gauges.read().await.len();
+        let mut points = Vec::with_capacity(counter_count.saturating_add(gauge_count));
 
         // Counters
         for (name, value) in self.counters.read().await.iter() {
@@ -390,7 +419,8 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
     if sorted.is_empty() {
         return 0.0;
     }
-    let idx = ((sorted.len() - 1) as f64 * p) as usize;
+    let max_index = sorted.len().saturating_sub(1);
+    let idx = (max_index as f64 * p) as usize;
     sorted[idx]
 }
 
@@ -398,9 +428,11 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 ///
 /// Pure function: converts monotonic Instant to absolute SystemTime for transport.
 fn span_to_ingest(span: &Span) -> IngestSpan {
-    let start_time_us = span.start_system_time.duration_since(UNIX_EPOCH).unwrap_or_default().as_micros() as u64;
+    debug_assert!(!span.context.trace_id.is_empty());
+    debug_assert!(!span.context.span_id.is_empty());
+    let start_time_us = duration_to_u64(span.start_system_time.duration_since(UNIX_EPOCH).unwrap_or_default());
 
-    let duration_us = span.duration().unwrap_or_default().as_micros() as u64;
+    let duration_us = duration_to_u64(span.duration().unwrap_or_default());
 
     let status = match &span.status {
         SpanStatus::Unset => SpanStatusWire::Unset,
@@ -408,8 +440,8 @@ fn span_to_ingest(span: &Span) -> IngestSpan {
         SpanStatus::Error(msg) => SpanStatusWire::Error(msg.clone()),
     };
 
-    let max_attrs = aspen_constants::MAX_SPAN_ATTRIBUTES as usize;
-    let max_events = aspen_constants::MAX_SPAN_EVENTS as usize;
+    let max_attrs = u32_to_usize(aspen_constants::MAX_SPAN_ATTRIBUTES);
+    let max_events = u32_to_usize(aspen_constants::MAX_SPAN_EVENTS);
 
     let attributes: Vec<(String, String)> =
         span.attributes.iter().take(max_attrs).map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -419,9 +451,8 @@ fn span_to_ingest(span: &Span) -> IngestSpan {
         .iter()
         .take(max_events)
         .map(|e| {
-            // Approximate event timestamp: start_system_time + (event.timestamp - start_time)
-            let offset = e.timestamp.duration_since(span.start_time);
-            let event_us = start_time_us.saturating_add(offset.as_micros() as u64);
+            let elapsed_since_span_start = e.timestamp.duration_since(span.start_time);
+            let event_us = start_time_us.saturating_add(duration_to_u64(elapsed_since_span_start));
             SpanEventWire {
                 name: e.name.clone(),
                 timestamp_us: event_us,
@@ -446,6 +477,7 @@ fn span_to_ingest(span: &Span) -> IngestSpan {
 /// Observability client for distributed tracing and metrics.
 pub struct ObservabilityClient<'a> {
     /// Active spans.
+    /// Lock order: `spans` -> `pending_spans` when both buffers are touched in one operation.
     spans: Arc<RwLock<Vec<Span>>>,
     /// Pending spans awaiting flush to server.
     pending_spans: Arc<RwLock<Vec<IngestSpan>>>,
@@ -486,7 +518,7 @@ impl<'a> ObservabilityClient<'a> {
 
         // Record span duration
         if let Some(duration) = span.duration() {
-            self.metrics.histogram("span_duration_ms", duration.as_millis() as f64).await;
+            self.metrics.histogram("span_duration_ms", duration.as_secs_f64() * 1000.0).await;
         }
 
         // Update span status metrics
@@ -501,7 +533,7 @@ impl<'a> ObservabilityClient<'a> {
         let should_flush = {
             let mut pending = self.pending_spans.write().await;
             pending.push(ingest_span);
-            pending.len() >= aspen_constants::MAX_TRACE_BATCH_SIZE as usize
+            pending.len() >= u32_to_usize(aspen_constants::MAX_TRACE_BATCH_SIZE)
         };
 
         // Auto-flush when batch is full
@@ -697,27 +729,17 @@ impl<'a> ObservabilityClient<'a> {
     }
 
     /// Query metric data points by name and optional filters.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn query_metrics(
-        &self,
-        name: &str,
-        start_time_us: Option<u64>,
-        end_time_us: Option<u64>,
-        label_filters: Vec<(String, String)>,
-        aggregation: Option<&str>,
-        step_us: Option<u64>,
-        limit: Option<u32>,
-    ) -> Result<MetricQueryResultResponse> {
+    pub async fn query_metrics(&self, request: MetricQueryRequest<'_>) -> Result<MetricQueryResultResponse> {
         let response = self
             .client
             .send(ClientRpcRequest::MetricQuery {
-                name: name.to_string(),
-                start_time_us,
-                end_time_us,
-                label_filters,
-                aggregation: aggregation.map(String::from),
-                step_us,
-                limit,
+                name: request.name.to_string(),
+                start_time_us: request.start_time_us,
+                end_time_us: request.end_time_us,
+                label_filters: request.label_filters,
+                aggregation: request.aggregation.map(String::from),
+                step_us: request.step_us,
+                limit: request.limit,
             })
             .await?;
 
@@ -819,6 +841,16 @@ impl AspenClientObservabilityExt for AspenClient {
     }
 }
 
+pub struct MetricQueryRequest<'a> {
+    pub name: &'a str,
+    pub start_time_us: Option<u64>,
+    pub end_time_us: Option<u64>,
+    pub label_filters: Vec<(String, String)>,
+    pub aggregation: Option<&'a str>,
+    pub step_us: Option<u64>,
+    pub limit: Option<u32>,
+}
+
 /// Builder for configuring observability.
 pub struct ObservabilityBuilder {
     /// Enable tracing.
@@ -830,7 +862,7 @@ pub struct ObservabilityBuilder {
     /// Export interval.
     pub export_interval: Duration,
     /// Maximum spans to keep in memory.
-    pub max_spans: usize,
+    pub max_spans: u32,
 }
 
 impl Default for ObservabilityBuilder {
@@ -871,8 +903,8 @@ impl ObservabilityBuilder {
     }
 
     /// Set the maximum number of spans to keep.
-    pub fn with_max_spans(mut self, max: usize) -> Self {
-        self.max_spans = max;
+    pub fn with_max_spans(mut self, max_spans: u32) -> Self {
+        self.max_spans = max_spans;
         self
     }
 }

@@ -16,18 +16,37 @@ use tracing::debug;
 use crate::manifest::SecretEntry;
 use crate::manifest::TemplateEntry;
 
+pub struct GenerationPaths<'a> {
+    pub mount_point: &'a str,
+    pub symlink_path: &'a str,
+}
+
+struct SymlinkOwnership {
+    uid: u32,
+    gid: u32,
+}
+
+pub struct ChangeDetection<'a> {
+    pub symlink_path: &'a str,
+    pub gen_dir: &'a Path,
+    pub secrets: &'a [SecretEntry],
+    pub templates: &'a [TemplateEntry],
+    pub is_dry: bool,
+    pub should_log_changes: bool,
+}
+
 // ── Mount ──────────────────────────────────────────────────────────────
 
 /// Mount a ramfs or tmpfs at the secrets mount point.
 pub fn mount_secrets_fs(mount_point: &str, keys_gid: u32, use_tmpfs: bool) -> Result<()> {
+    debug_assert!(!mount_point.is_empty());
+    debug_assert!(Path::new(mount_point).is_absolute());
     let path = Path::new(mount_point);
 
-    // Create mount point if it doesn't exist
     if !path.exists() {
         fs::create_dir_all(path).with_context(|| format!("cannot create mount point '{mount_point}'"))?;
     }
 
-    // Check if already mounted
     if is_mounted(mount_point)? {
         debug!("secrets filesystem already mounted at {mount_point}");
         return Ok(());
@@ -35,6 +54,7 @@ pub fn mount_secrets_fs(mount_point: &str, keys_gid: u32, use_tmpfs: bool) -> Re
 
     let fs_type = if use_tmpfs { "tmpfs" } else { "ramfs" };
     let source = if use_tmpfs { "tmpfs" } else { "ramfs" };
+    debug_assert_eq!(fs_type, source);
 
     nix::mount::mount(
         Some(source),
@@ -45,12 +65,12 @@ pub fn mount_secrets_fs(mount_point: &str, keys_gid: u32, use_tmpfs: bool) -> Re
     )
     .with_context(|| format!("cannot mount {fs_type} at '{mount_point}'"))?;
 
-    // Set ownership to root:<keys_gid> with mode 0751
     nix::unistd::chown(path, Some(nix::unistd::Uid::from_raw(0)), Some(nix::unistd::Gid::from_raw(keys_gid)))
         .with_context(|| format!("cannot chown '{mount_point}'"))?;
 
     fs::set_permissions(path, fs::Permissions::from_mode(0o751))
         .with_context(|| format!("cannot set permissions on '{mount_point}'"))?;
+    debug_assert!(path.exists());
 
     debug!("mounted {fs_type} at {mount_point}");
     Ok(())
@@ -65,29 +85,27 @@ fn is_mounted(path: &str) -> Result<bool> {
 // ── Generation management ──────────────────────────────────────────────
 
 /// Prepare a new generation directory. Returns the path and generation number.
-pub fn prepare_generation(mount_point: &str, symlink_path: &str, keys_gid: u32) -> Result<(PathBuf, u64)> {
-    // Read current generation from existing symlink
-    let current_gen = match fs::read_link(symlink_path) {
-        Ok(target) => {
-            if let Some(name) = target.file_name().and_then(|n| n.to_str()) {
-                name.parse::<u64>().unwrap_or(0)
-            } else {
-                0
-            }
-        }
+pub fn prepare_generation(paths: GenerationPaths<'_>, keys_gid: u32) -> Result<(PathBuf, u64)> {
+    debug_assert!(!paths.mount_point.is_empty());
+    debug_assert!(!paths.symlink_path.is_empty());
+    let current_gen = match fs::read_link(paths.symlink_path) {
+        Ok(target) => target
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.parse::<u64>().ok())
+            .unwrap_or(0),
         Err(_) => {
-            // Symlink doesn't exist or isn't a symlink — might be a directory from stage-2-init
-            if Path::new(symlink_path).exists() {
-                fs::remove_dir_all(symlink_path).ok();
+            if Path::new(paths.symlink_path).exists() {
+                fs::remove_dir_all(paths.symlink_path).ok();
             }
             0
         }
     };
 
-    let new_gen = current_gen + 1;
-    let gen_dir = PathBuf::from(mount_point).join(new_gen.to_string());
+    let new_gen = current_gen.saturating_add(1);
+    debug_assert!(new_gen >= current_gen);
+    let gen_dir = PathBuf::from(paths.mount_point).join(new_gen.to_string());
 
-    // Remove stale generation directory if it exists
     if gen_dir.exists() {
         fs::remove_dir_all(&gen_dir).with_context(|| format!("cannot remove existing '{}'", gen_dir.display()))?;
     }
@@ -103,6 +121,7 @@ pub fn prepare_generation(mount_point: &str, symlink_path: &str, keys_gid: u32) 
 
     fs::set_permissions(&gen_dir, fs::Permissions::from_mode(0o751))
         .with_context(|| format!("cannot set permissions on '{}'", gen_dir.display()))?;
+    debug_assert!(gen_dir.exists());
 
     Ok((gen_dir, new_gen))
 }
@@ -117,6 +136,8 @@ pub fn write_secret(
     keys_gid: u32,
     ignore_passwd: bool,
 ) -> Result<()> {
+    debug_assert!(!secret.name.is_empty());
+    debug_assert!(!gen_dir.as_os_str().is_empty());
     let file_path = gen_dir.join(&secret.name);
 
     // Create parent directories
@@ -138,15 +159,16 @@ pub fn write_secret(
 
     // Set ownership
     if !ignore_passwd {
-        let (uid, gid) = resolve_ownership(secret.owner.as_deref(), secret.uid, secret.group.as_deref(), secret.gid)?;
+        let ownership = resolve_ownership(secret.owner.as_deref(), secret.uid, secret.group.as_deref(), secret.gid)?;
 
         nix::unistd::chown(
             file_path.as_path(),
-            Some(nix::unistd::Uid::from_raw(uid)),
-            Some(nix::unistd::Gid::from_raw(gid)),
+            Some(nix::unistd::Uid::from_raw(ownership.uid)),
+            Some(nix::unistd::Gid::from_raw(ownership.gid)),
         )
         .with_context(|| format!("cannot chown '{}'", file_path.display()))?;
     }
+    debug_assert!(file_path.exists());
 
     Ok(())
 }
@@ -159,6 +181,8 @@ pub fn write_template(
     keys_gid: u32,
     ignore_passwd: bool,
 ) -> Result<()> {
+    debug_assert!(!template.name.is_empty());
+    debug_assert!(!gen_dir.as_os_str().is_empty());
     let rendered_dir = gen_dir.join("rendered");
     create_parent_dirs(&rendered_dir, keys_gid)?;
 
@@ -185,14 +209,19 @@ pub fn write_template(
     fs::set_permissions(tmp.path(), fs::Permissions::from_mode(mode))?;
 
     if !ignore_passwd {
-        let (uid, gid) =
+        let ownership =
             resolve_ownership(template.owner.as_deref(), template.uid, template.group.as_deref(), template.gid)?;
 
-        nix::unistd::chown(tmp.path(), Some(nix::unistd::Uid::from_raw(uid)), Some(nix::unistd::Gid::from_raw(gid)))?;
+        nix::unistd::chown(
+            tmp.path(),
+            Some(nix::unistd::Uid::from_raw(ownership.uid)),
+            Some(nix::unistd::Gid::from_raw(ownership.gid)),
+        )?;
     }
 
     tmp.persist(&file_path)
         .with_context(|| format!("cannot rename temp file to '{}'", file_path.display()))?;
+    debug_assert!(file_path.exists());
 
     Ok(())
 }
@@ -234,6 +263,8 @@ pub fn create_secret_symlinks(
     secrets: &[SecretEntry],
     ignore_passwd: bool,
 ) -> Result<()> {
+    debug_assert!(!symlink_path.is_empty());
+    debug_assert!(!gen_dir.as_os_str().is_empty());
     for secret in secrets {
         let target_file = gen_dir.join(&secret.name);
 
@@ -268,10 +299,10 @@ pub fn create_secret_symlinks(
 
         // Create the symlink via secure method (temp dir + chown + rename)
         if !ignore_passwd {
-            let (uid, gid) =
+            let ownership =
                 resolve_ownership(secret.owner.as_deref(), secret.uid, secret.group.as_deref(), secret.gid)?;
 
-            secure_symlink_chown(&target_file, link_path, uid, gid)?;
+            secure_symlink_chown(&target_file, link_path, ownership)?;
         } else {
             std::os::unix::fs::symlink(&target_file, link_path)
                 .with_context(|| format!("cannot create symlink '{}'", secret.path))?;
@@ -282,28 +313,32 @@ pub fn create_secret_symlinks(
 }
 
 /// Create symlink with specific ownership (matching Go's SecureSymlinkChown).
-fn secure_symlink_chown(target: &Path, link_path: &Path, uid: u32, gid: u32) -> Result<()> {
+fn secure_symlink_chown(target: &Path, link_path: &Path, ownership: SymlinkOwnership) -> Result<()> {
+    debug_assert!(!target.as_os_str().is_empty());
+    debug_assert!(!link_path.as_os_str().is_empty());
     let parent = link_path.parent().unwrap_or(Path::new("/tmp"));
     let tmp_dir = tempfile::tempdir_in(parent).context("cannot create temp dir for symlink chown")?;
 
     let tmp_link = tmp_dir.path().join(link_path.file_name().unwrap_or_default());
     std::os::unix::fs::symlink(target, &tmp_link)?;
 
-    // lchown the symlink (best effort — may fail for non-root)
     nix::unistd::chown(
         tmp_link.as_path(),
-        Some(nix::unistd::Uid::from_raw(uid)),
-        Some(nix::unistd::Gid::from_raw(gid)),
+        Some(nix::unistd::Uid::from_raw(ownership.uid)),
+        Some(nix::unistd::Gid::from_raw(ownership.gid)),
     )
     .ok();
 
     fs::rename(&tmp_link, link_path).with_context(|| format!("cannot move symlink to '{}'", link_path.display()))?;
+    debug_assert!(link_path.symlink_metadata().is_ok());
 
     Ok(())
 }
 
 /// Create per-template symlinks at their configured paths.
 pub fn create_template_symlinks(gen_dir: &Path, templates: &[TemplateEntry], ignore_passwd: bool) -> Result<()> {
+    debug_assert!(!gen_dir.as_os_str().is_empty());
+    debug_assert!(templates.iter().all(|template| !template.name.is_empty()));
     for template in templates {
         let target_file = gen_dir.join("rendered").join(&template.name);
 
@@ -324,9 +359,9 @@ pub fn create_template_symlinks(gen_dir: &Path, templates: &[TemplateEntry], ign
         }
 
         if !ignore_passwd {
-            let (uid, gid) =
+            let ownership =
                 resolve_ownership(template.owner.as_deref(), template.uid, template.group.as_deref(), template.gid)?;
-            secure_symlink_chown(&target_file, link_path, uid, gid)?;
+            secure_symlink_chown(&target_file, link_path, ownership)?;
         } else {
             std::os::unix::fs::symlink(&target_file, link_path)?;
         }
@@ -339,6 +374,8 @@ pub fn create_template_symlinks(gen_dir: &Path, templates: &[TemplateEntry], ign
 
 /// Remove old generation directories, keeping at most `keep` generations.
 pub fn prune_generations(mount_point: &str, current_gen: u64, keep: u32) -> Result<()> {
+    debug_assert!(!mount_point.is_empty());
+    debug_assert!(Path::new(mount_point).is_absolute());
     if keep == 0 {
         return Ok(());
     }
@@ -359,11 +396,12 @@ pub fn prune_generations(mount_point: &str, current_gen: u64, keep: u32) -> Resu
             continue;
         }
 
-        if current_gen.saturating_sub(keep as u64) >= gen_num {
+        if current_gen.saturating_sub(u64::from(keep)) >= gen_num {
             fs::remove_dir_all(entry.path()).ok();
             debug!("pruned generation {gen_num}");
         }
     }
+    debug_assert!(keep > 0);
 
     Ok(())
 }
@@ -371,65 +409,70 @@ pub fn prune_generations(mount_point: &str, current_gen: u64, keep: u32) -> Resu
 // ── Change detection ───────────────────────────────────────────────────
 
 /// Detect changes between old and new generation and collect affected units.
-pub fn detect_changes(
-    symlink_path: &str,
-    gen_dir: &Path,
-    secrets: &[SecretEntry],
-    templates: &[TemplateEntry],
-    is_dry: bool,
-    log_changes: bool,
-) -> Result<()> {
-    // If the symlink doesn't exist yet, we're in stage-2-init — no restarts needed
-    if !Path::new(symlink_path).exists() {
+pub fn detect_changes(input: ChangeDetection<'_>) -> Result<()> {
+    debug_assert!(!input.symlink_path.is_empty());
+    debug_assert!(!input.gen_dir.as_os_str().is_empty());
+    if !Path::new(input.symlink_path).exists() {
         return Ok(());
     }
 
-    let mut restart_units: Vec<String> = Vec::new();
-    let mut reload_units: Vec<String> = Vec::new();
+    let restart_unit_slots = input
+        .secrets
+        .iter()
+        .map(|secret| secret.restart_units.len())
+        .sum::<usize>()
+        .saturating_add(input.templates.iter().map(|template| template.restart_units.len()).sum::<usize>());
+    let reload_unit_slots = input
+        .secrets
+        .iter()
+        .map(|secret| secret.reload_units.len())
+        .sum::<usize>()
+        .saturating_add(input.templates.iter().map(|template| template.reload_units.len()).sum::<usize>());
+    let mut restart_units: Vec<String> = Vec::with_capacity(restart_unit_slots);
+    let mut reload_units: Vec<String> = Vec::with_capacity(reload_unit_slots);
 
-    // Check secrets
-    for secret in secrets {
-        let old_path = PathBuf::from(symlink_path).join(&secret.name);
-        let new_path = gen_dir.join(&secret.name);
+    for secret in input.secrets {
+        let old_path = PathBuf::from(input.symlink_path).join(&secret.name);
+        let new_path = input.gen_dir.join(&secret.name);
 
-        let changed = match (fs::read(&old_path), fs::read(&new_path)) {
-            (Ok(old), Ok(new)) => old != new,
-            (Err(_), Ok(_)) => true, // new secret
-            _ => false,
-        };
-
-        if changed {
-            restart_units.extend(secret.restart_units.iter().cloned());
-            reload_units.extend(secret.reload_units.iter().cloned());
-            if log_changes {
-                eprintln!("sops-install-secrets: secret '{}' changed", secret.name);
-            }
-        }
-    }
-
-    // Check templates
-    for template in templates {
-        let old_path = PathBuf::from(symlink_path).join("rendered").join(&template.name);
-        let new_path = gen_dir.join("rendered").join(&template.name);
-
-        let changed = match (fs::read(&old_path), fs::read(&new_path)) {
+        let is_changed = match (fs::read(&old_path), fs::read(&new_path)) {
             (Ok(old), Ok(new)) => old != new,
             (Err(_), Ok(_)) => true,
             _ => false,
         };
 
-        if changed {
+        if is_changed {
+            restart_units.extend(secret.restart_units.iter().cloned());
+            reload_units.extend(secret.reload_units.iter().cloned());
+            if input.should_log_changes {
+                eprintln!("sops-install-secrets: secret '{}' changed", secret.name);
+            }
+        }
+    }
+
+    for template in input.templates {
+        let old_path = PathBuf::from(input.symlink_path).join("rendered").join(&template.name);
+        let new_path = input.gen_dir.join("rendered").join(&template.name);
+
+        let is_changed = match (fs::read(&old_path), fs::read(&new_path)) {
+            (Ok(old), Ok(new)) => old != new,
+            (Err(_), Ok(_)) => true,
+            _ => false,
+        };
+
+        if is_changed {
             restart_units.extend(template.restart_units.iter().cloned());
             reload_units.extend(template.reload_units.iter().cloned());
         }
     }
 
-    // Write unit lists
-    let prefix = if is_dry {
+    let prefix = if input.is_dry {
         "/run/nixos/dry-activation"
     } else {
         "/run/nixos/activation"
     };
+    debug_assert!(restart_units.len() <= restart_unit_slots);
+    debug_assert!(reload_units.len() <= reload_unit_slots);
 
     write_unit_list(&format!("{prefix}-restart-list"), &restart_units)?;
     write_unit_list(&format!("{prefix}-reload-list"), &reload_units)?;
@@ -464,10 +507,12 @@ fn write_unit_list(path: &str, units: &[String]) -> Result<()> {
 // ── Helpers ────────────────────────────────────────────────────────────
 
 /// Resolve owner/group to numeric UID/GID.
-fn resolve_ownership(owner: Option<&str>, uid: u32, group: Option<&str>, gid: u32) -> Result<(u32, u32)> {
+fn resolve_ownership(owner: Option<&str>, uid: u32, group: Option<&str>, gid: u32) -> Result<SymlinkOwnership> {
+    debug_assert!(owner.is_none_or(|name| !name.is_empty()));
+    debug_assert!(group.is_none_or(|name| !name.is_empty()));
     let resolved_uid = if let Some(name) = owner {
         match nix::unistd::User::from_name(name) {
-            Ok(Some(u)) => u.uid.as_raw(),
+            Ok(Some(user)) => user.uid.as_raw(),
             Ok(None) => bail!("user '{name}' not found"),
             Err(e) => bail!("failed to lookup user '{name}': {e}"),
         }
@@ -477,15 +522,20 @@ fn resolve_ownership(owner: Option<&str>, uid: u32, group: Option<&str>, gid: u3
 
     let resolved_gid = if let Some(name) = group {
         match nix::unistd::Group::from_name(name) {
-            Ok(Some(g)) => g.gid.as_raw(),
+            Ok(Some(group_entry)) => group_entry.gid.as_raw(),
             Ok(None) => bail!("group '{name}' not found"),
             Err(e) => bail!("failed to lookup group '{name}': {e}"),
         }
     } else {
         gid
     };
+    debug_assert!(owner.is_some() || resolved_uid == uid);
+    debug_assert!(group.is_some() || resolved_gid == gid);
 
-    Ok((resolved_uid, resolved_gid))
+    Ok(SymlinkOwnership {
+        uid: resolved_uid,
+        gid: resolved_gid,
+    })
 }
 
 /// Look up the "keys" group GID (falling back to "nogroup").

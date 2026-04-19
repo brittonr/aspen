@@ -101,8 +101,8 @@ pub struct DiscoverArgs {
     pub version_prefix: Option<String>,
 
     /// Maximum instances to return.
-    #[arg(long, default_value = "100")]
-    pub limit: u32,
+    #[arg(long = "limit", default_value = "100")]
+    pub max_instances: u32,
 }
 
 #[derive(Args)]
@@ -112,8 +112,8 @@ pub struct ListArgs {
     pub prefix: String,
 
     /// Maximum services to return.
-    #[arg(long, default_value = "100")]
-    pub limit: u32,
+    #[arg(long = "limit", default_value = "100")]
+    pub max_services: u32,
 }
 
 #[derive(Args)]
@@ -390,21 +390,23 @@ impl Outputable for GetInstanceOutput {
 
 impl ServiceCommand {
     /// Execute the service command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            ServiceCommand::Register(args) => service_register(client, args, json).await,
-            ServiceCommand::Deregister(args) => service_deregister(client, args, json).await,
-            ServiceCommand::Discover(args) => service_discover(client, args, json).await,
-            ServiceCommand::List(args) => service_list(client, args, json).await,
-            ServiceCommand::Get(args) => service_get(client, args, json).await,
-            ServiceCommand::Heartbeat(args) => service_heartbeat(client, args, json).await,
-            ServiceCommand::Health(args) => service_health(client, args, json).await,
-            ServiceCommand::Update(args) => service_update(client, args, json).await,
+            ServiceCommand::Register(args) => service_register(client, args, is_json).await,
+            ServiceCommand::Deregister(args) => service_deregister(client, args, is_json).await,
+            ServiceCommand::Discover(args) => service_discover(client, args, is_json).await,
+            ServiceCommand::List(args) => service_list(client, args, is_json).await,
+            ServiceCommand::Get(args) => service_get(client, args, is_json).await,
+            ServiceCommand::Heartbeat(args) => service_heartbeat(client, args, is_json).await,
+            ServiceCommand::Health(args) => service_health(client, args, is_json).await,
+            ServiceCommand::Update(args) => service_update(client, args, is_json).await,
         }
     }
 }
 
-async fn service_register(client: &AspenClient, args: RegisterArgs, json: bool) -> Result<()> {
+async fn service_register(client: &AspenClient, args: RegisterArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.service_name.is_empty());
+    debug_assert!(!args.instance_id.is_empty());
     // Convert comma-separated tags to JSON array
     let tags_json = if args.tags.is_empty() {
         "[]".to_string()
@@ -434,7 +436,7 @@ async fn service_register(client: &AspenClient, args: RegisterArgs, json: bool) 
                 fencing_token: result.fencing_token,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -445,7 +447,9 @@ async fn service_register(client: &AspenClient, args: RegisterArgs, json: bool) 
     }
 }
 
-async fn service_deregister(client: &AspenClient, args: DeregisterArgs, json: bool) -> Result<()> {
+async fn service_deregister(client: &AspenClient, args: DeregisterArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.service_name.is_empty());
+    debug_assert!(!args.instance_id.is_empty());
     let response = client
         .send(ClientRpcRequest::ServiceDeregister {
             service_name: args.service_name,
@@ -461,7 +465,7 @@ async fn service_deregister(client: &AspenClient, args: DeregisterArgs, json: bo
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -472,7 +476,9 @@ async fn service_deregister(client: &AspenClient, args: DeregisterArgs, json: bo
     }
 }
 
-async fn service_discover(client: &AspenClient, args: DiscoverArgs, json: bool) -> Result<()> {
+async fn service_discover(client: &AspenClient, args: DiscoverArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.service_name.is_empty());
+    debug_assert!(args.max_instances > 0);
     // Convert comma-separated tags to JSON array
     let tags_json = match args.tags {
         Some(ref tags) if !tags.is_empty() => {
@@ -488,7 +494,7 @@ async fn service_discover(client: &AspenClient, args: DiscoverArgs, json: bool) 
             healthy_only: args.healthy_only,
             tags: tags_json,
             version_prefix: args.version_prefix,
-            limit: Some(args.limit),
+            limit: Some(args.max_instances),
         })
         .await?;
 
@@ -511,7 +517,7 @@ async fn service_discover(client: &AspenClient, args: DiscoverArgs, json: bool) 
                 instances,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -522,11 +528,13 @@ async fn service_discover(client: &AspenClient, args: DiscoverArgs, json: bool) 
     }
 }
 
-async fn service_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
+async fn service_list(client: &AspenClient, args: ListArgs, is_json: bool) -> Result<()> {
+    debug_assert!(args.max_services > 0);
+    debug_assert!(args.prefix.len() <= 1024);
     let response = client
         .send(ClientRpcRequest::ServiceList {
             prefix: args.prefix,
-            limit: args.limit,
+            limit: args.max_services,
         })
         .await?;
 
@@ -537,7 +545,7 @@ async fn service_list(client: &AspenClient, args: ListArgs, json: bool) -> Resul
                 services: result.services,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -548,7 +556,9 @@ async fn service_list(client: &AspenClient, args: ListArgs, json: bool) -> Resul
     }
 }
 
-async fn service_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
+async fn service_get(client: &AspenClient, args: GetArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.service_name.is_empty());
+    debug_assert!(!args.instance_id.is_empty());
     let response = client
         .send(ClientRpcRequest::ServiceGetInstance {
             service_name: args.service_name,
@@ -572,7 +582,7 @@ async fn service_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<
                 instance,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success || !result.was_found {
                 std::process::exit(1);
             }
@@ -583,7 +593,9 @@ async fn service_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<
     }
 }
 
-async fn service_heartbeat(client: &AspenClient, args: HeartbeatArgs, json: bool) -> Result<()> {
+async fn service_heartbeat(client: &AspenClient, args: HeartbeatArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.service_name.is_empty());
+    debug_assert!(!args.instance_id.is_empty());
     let response = client
         .send(ClientRpcRequest::ServiceHeartbeat {
             service_name: args.service_name,
@@ -599,7 +611,7 @@ async fn service_heartbeat(client: &AspenClient, args: HeartbeatArgs, json: bool
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -610,7 +622,9 @@ async fn service_heartbeat(client: &AspenClient, args: HeartbeatArgs, json: bool
     }
 }
 
-async fn service_health(client: &AspenClient, args: HealthArgs, json: bool) -> Result<()> {
+async fn service_health(client: &AspenClient, args: HealthArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.service_name.is_empty());
+    debug_assert!(!args.instance_id.is_empty());
     let response = client
         .send(ClientRpcRequest::ServiceUpdateHealth {
             service_name: args.service_name,
@@ -627,7 +641,7 @@ async fn service_health(client: &AspenClient, args: HealthArgs, json: bool) -> R
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -638,14 +652,16 @@ async fn service_health(client: &AspenClient, args: HealthArgs, json: bool) -> R
     }
 }
 
-async fn service_update(client: &AspenClient, args: UpdateArgs, json: bool) -> Result<()> {
+async fn service_update(client: &AspenClient, args: UpdateArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.service_name.is_empty());
+    debug_assert!(!args.instance_id.is_empty());
     // Convert comma-separated tags to JSON array if provided
     let tags_json = match args.tags {
         Some(ref tags) if !tags.is_empty() => {
             let tags: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
             Some(serde_json::to_string(&tags)?)
         }
-        _ => None,
+        Some(_) | None => None,
     };
 
     let response = client
@@ -667,7 +683,7 @@ async fn service_update(client: &AspenClient, args: UpdateArgs, json: bool) -> R
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }

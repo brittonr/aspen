@@ -63,8 +63,8 @@ pub struct ListArgs {
     pub prefix: Option<String>,
 
     /// Maximum entries to return.
-    #[arg(long, default_value = "100")]
-    pub limit: u32,
+    #[arg(long = "limit", default_value = "100")]
+    pub max_results: u32,
 }
 
 #[derive(Args)]
@@ -105,8 +105,8 @@ impl Outputable for DocsSetOutput {
             format!("error: {e}")
         } else if self.is_success {
             let key = self.key.as_deref().unwrap_or("?");
-            let size = self.size_bytes.unwrap_or(0);
-            format!("{key} ({size} bytes)")
+            let size_bytes = self.size_bytes.unwrap_or(0);
+            format!("{key} ({size_bytes} bytes)")
         } else {
             "failed".to_string()
         }
@@ -139,8 +139,8 @@ impl Outputable for DocsGetOutput {
             if let Some(ref v) = self.value {
                 String::from_utf8_lossy(v).to_string()
             } else {
-                let size = self.size_bytes.unwrap_or(0);
-                format!("(found, {size} bytes, content not available)")
+                let size_bytes = self.size_bytes.unwrap_or(0);
+                format!("(found, {size_bytes} bytes, content not available)")
             }
         } else {
             "(not found)".to_string()
@@ -218,7 +218,7 @@ impl Outputable for DocsListOutput {
             return "(no entries)".to_string();
         }
 
-        let mut lines: Vec<String> = Vec::new();
+        let mut lines: Vec<String> = Vec::with_capacity(self.entries.len().saturating_add(1));
         for entry in &self.entries {
             lines.push(format!("{} ({} bytes, {})", entry.key, entry.size_bytes, &entry.hash[..16]));
         }
@@ -321,19 +321,21 @@ impl Outputable for DocsTicketOutput {
 
 impl DocsCommand {
     /// Execute the docs command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            DocsCommand::Set(args) => docs_set(client, args, json).await,
-            DocsCommand::Get(args) => docs_get(client, args, json).await,
-            DocsCommand::Delete(args) => docs_delete(client, args, json).await,
-            DocsCommand::List(args) => docs_list(client, args, json).await,
-            DocsCommand::Status => docs_status(client, json).await,
-            DocsCommand::Ticket(args) => docs_ticket(client, args, json).await,
+            DocsCommand::Set(args) => docs_set(client, args, is_json).await,
+            DocsCommand::Get(args) => docs_get(client, args, is_json).await,
+            DocsCommand::Delete(args) => docs_delete(client, args, is_json).await,
+            DocsCommand::List(args) => docs_list(client, args, is_json).await,
+            DocsCommand::Status => docs_status(client, is_json).await,
+            DocsCommand::Ticket(args) => docs_ticket(client, args, is_json).await,
         }
     }
 }
 
-async fn docs_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
+async fn docs_set(client: &AspenClient, args: SetArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "docs set key must not be empty");
+    debug_assert!(!args.value.is_empty(), "docs set value must not be empty");
     let request = ClientRpcRequest::DocsSet {
         key: args.key,
         value: args.value.into_bytes(),
@@ -362,15 +364,17 @@ async fn docs_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()>
         },
     };
 
-    let failed = !output.is_success;
-    print_output(&output, json);
-    if failed {
+    debug_assert!(output.error.is_none() || !output.is_success, "docs set errors must not report success");
+    let has_failed = !output.is_success;
+    print_output(&output, is_json);
+    if has_failed {
         std::process::exit(1);
     }
     Ok(())
 }
 
-async fn docs_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
+async fn docs_get(client: &AspenClient, args: GetArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "docs get key must not be empty");
     let request = ClientRpcRequest::DocsGet { key: args.key };
 
     let response = client.send(request).await?;
@@ -396,15 +400,17 @@ async fn docs_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
         },
     };
 
-    let failed = output.error.is_some();
-    print_output(&output, json);
-    if failed {
+    debug_assert!(output.error.is_none() || !output.was_found, "docs get errors must not report found content");
+    let has_failed = output.error.is_some();
+    print_output(&output, is_json);
+    if has_failed {
         std::process::exit(1);
     }
     Ok(())
 }
 
-async fn docs_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result<()> {
+async fn docs_delete(client: &AspenClient, args: DeleteArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "docs delete key must not be empty");
     let request = ClientRpcRequest::DocsDelete { key: args.key };
 
     let response = client.send(request).await?;
@@ -424,33 +430,34 @@ async fn docs_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Resu
         },
     };
 
-    let failed = !output.is_success;
-    print_output(&output, json);
-    if failed {
+    debug_assert!(output.error.is_none() || !output.is_success, "docs delete errors must not report success");
+    let has_failed = !output.is_success;
+    print_output(&output, is_json);
+    if has_failed {
         std::process::exit(1);
     }
     Ok(())
 }
 
-async fn docs_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
+async fn docs_list(client: &AspenClient, args: ListArgs, is_json: bool) -> Result<()> {
+    debug_assert!(args.max_results > 0, "docs list max_results must be positive");
     let request = ClientRpcRequest::DocsList {
         prefix: args.prefix,
-        limit: Some(args.limit),
+        limit: Some(args.max_results),
     };
 
     let response = client.send(request).await?;
 
     let output = match response {
         ClientRpcResponse::DocsListResult(r) => {
-            let entries = r
-                .entries
-                .into_iter()
-                .map(|e| DocsListEntry {
-                    key: e.key,
-                    size_bytes: e.size_bytes,
-                    hash: e.hash,
-                })
-                .collect();
+            let mut entries = Vec::with_capacity(r.entries.len());
+            for entry in r.entries {
+                entries.push(DocsListEntry {
+                    key: entry.key,
+                    size_bytes: entry.size_bytes,
+                    hash: entry.hash,
+                });
+            }
             DocsListOutput {
                 entries,
                 count: r.count,
@@ -472,15 +479,19 @@ async fn docs_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<(
         },
     };
 
-    let failed = output.error.is_some();
-    print_output(&output, json);
-    if failed {
+    debug_assert!(
+        output.error.is_some() || u32::try_from(output.entries.len()).unwrap_or(u32::MAX) <= output.count,
+        "docs list count must cover emitted entries"
+    );
+    let has_failed = output.error.is_some();
+    print_output(&output, is_json);
+    if has_failed {
         std::process::exit(1);
     }
     Ok(())
 }
 
-async fn docs_status(client: &AspenClient, json: bool) -> Result<()> {
+async fn docs_status(client: &AspenClient, is_json: bool) -> Result<()> {
     let request = ClientRpcRequest::DocsStatus;
 
     let response = client.send(request).await?;
@@ -512,15 +523,20 @@ async fn docs_status(client: &AspenClient, json: bool) -> Result<()> {
         },
     };
 
-    let failed = output.error.is_some();
-    print_output(&output, json);
-    if failed {
+    debug_assert!(output.error.is_none() || !output.is_enabled, "docs status errors must not report enabled state");
+    debug_assert!(
+        output.is_enabled || output.namespace_id.is_none(),
+        "disabled docs status must not expose a namespace id"
+    );
+    let has_failed = output.error.is_some();
+    print_output(&output, is_json);
+    if has_failed {
         std::process::exit(1);
     }
     Ok(())
 }
 
-async fn docs_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Result<()> {
+async fn docs_ticket(client: &AspenClient, args: TicketArgs, is_json: bool) -> Result<()> {
     let request = ClientRpcRequest::GetDocsTicket {
         read_write: args.read_write,
         priority: args.priority,
@@ -555,9 +571,14 @@ async fn docs_ticket(client: &AspenClient, args: TicketArgs, json: bool) -> Resu
         },
     };
 
-    let failed = output.error.is_some();
-    print_output(&output, json);
-    if failed {
+    debug_assert!(output.error.is_none() || output.ticket.is_none(), "docs ticket errors must not return a ticket");
+    debug_assert!(
+        output.ticket.is_some() || output.error.is_some(),
+        "docs ticket output must contain a ticket or an error"
+    );
+    let has_failed = output.error.is_some();
+    print_output(&output, is_json);
+    if has_failed {
         std::process::exit(1);
     }
     Ok(())

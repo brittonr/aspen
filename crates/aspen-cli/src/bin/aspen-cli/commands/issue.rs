@@ -47,8 +47,8 @@ pub struct IssueListArgs {
     pub state: String,
 
     /// Maximum issues to show.
-    #[arg(short = 'n', long, default_value = "20")]
-    pub limit: u32,
+    #[arg(short = 'n', long = "limit", default_value = "20")]
+    pub max_issues: u32,
 }
 
 #[derive(Args)]
@@ -120,19 +120,21 @@ pub struct IssueCommentArgs {
 
 impl IssueCommand {
     /// Execute the issue command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            IssueCommand::List(args) => issue_list(client, args, json).await,
-            IssueCommand::Create(args) => issue_create(client, args, json).await,
-            IssueCommand::Show(args) => issue_show(client, args, json).await,
-            IssueCommand::Close(args) => issue_close(client, args, json).await,
-            IssueCommand::Reopen(args) => issue_reopen(client, args, json).await,
-            IssueCommand::Comment(args) => issue_comment(client, args, json).await,
+            IssueCommand::List(args) => issue_list(client, args, is_json).await,
+            IssueCommand::Create(args) => issue_create(client, args, is_json).await,
+            IssueCommand::Show(args) => issue_show(client, args, is_json).await,
+            IssueCommand::Close(args) => issue_close(client, args, is_json).await,
+            IssueCommand::Reopen(args) => issue_reopen(client, args, is_json).await,
+            IssueCommand::Comment(args) => issue_comment(client, args, is_json).await,
         }
     }
 }
 
-async fn issue_list(client: &AspenClient, args: IssueListArgs, json: bool) -> Result<()> {
+async fn issue_list(client: &AspenClient, args: IssueListArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(args.max_issues > 0);
     let state = match args.state.as_str() {
         "all" => None,
         s => Some(s.to_string()),
@@ -142,7 +144,7 @@ async fn issue_list(client: &AspenClient, args: IssueListArgs, json: bool) -> Re
         .send(ClientRpcRequest::ForgeListIssues {
             repo_id: args.repo,
             state,
-            limit: Some(args.limit),
+            limit: Some(args.max_issues),
         })
         .await?;
 
@@ -166,7 +168,9 @@ async fn issue_list(client: &AspenClient, args: IssueListArgs, json: bool) -> Re
                     issues,
                     count: result.count,
                 };
-                print_output(&output, json);
+                debug_assert!(output.count >= u32::try_from(output.issues.len()).unwrap_or(u32::MAX));
+                debug_assert!(output.issues.iter().all(|issue| !issue.id.is_empty()));
+                print_output(&output, is_json);
                 Ok(())
             } else {
                 anyhow::bail!("{}", result.error.unwrap_or_else(|| "unknown error".to_string()))
@@ -180,7 +184,9 @@ async fn issue_list(client: &AspenClient, args: IssueListArgs, json: bool) -> Re
     }
 }
 
-async fn issue_create(client: &AspenClient, args: IssueCreateArgs, json: bool) -> Result<()> {
+async fn issue_create(client: &AspenClient, args: IssueCreateArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.title.is_empty());
     let labels: Vec<String> = args
         .labels
         .map(|s| s.split(',').map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
@@ -208,7 +214,9 @@ async fn issue_create(client: &AspenClient, args: IssueCreateArgs, json: bool) -
                         created_at_ms: issue.created_at_ms,
                         updated_at_ms: issue.updated_at_ms,
                     };
-                    print_output(&output, json);
+                    debug_assert!(!output.id.is_empty());
+                    debug_assert!(!output.title.is_empty());
+                    print_output(&output, is_json);
                 }
                 Ok(())
             } else {
@@ -217,7 +225,7 @@ async fn issue_create(client: &AspenClient, args: IssueCreateArgs, json: bool) -
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
+                if !is_json {
                     println!("Issue created");
                 }
                 Ok(())
@@ -230,7 +238,9 @@ async fn issue_create(client: &AspenClient, args: IssueCreateArgs, json: bool) -
     }
 }
 
-async fn issue_show(client: &AspenClient, args: IssueShowArgs, json: bool) -> Result<()> {
+async fn issue_show(client: &AspenClient, args: IssueShowArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.issue.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeGetIssue {
             repo_id: args.repo,
@@ -263,8 +273,10 @@ async fn issue_show(client: &AspenClient, args: IssueShowArgs, json: bool) -> Re
                                 .collect()
                         }),
                     };
-                    print_output(&output, json);
-                } else if !json {
+                    debug_assert!(!output.id.is_empty());
+                    debug_assert!(!output.state.is_empty());
+                    print_output(&output, is_json);
+                } else if !is_json {
                     println!("Issue not found");
                 }
                 Ok(())
@@ -280,7 +292,9 @@ async fn issue_show(client: &AspenClient, args: IssueShowArgs, json: bool) -> Re
     }
 }
 
-async fn issue_close(client: &AspenClient, args: IssueCloseArgs, json: bool) -> Result<()> {
+async fn issue_close(client: &AspenClient, args: IssueCloseArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.issue.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeCloseIssue {
             repo_id: args.repo,
@@ -292,7 +306,9 @@ async fn issue_close(client: &AspenClient, args: IssueCloseArgs, json: bool) -> 
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
             if result.is_success {
-                if !json {
+                debug_assert!(!args.issue.is_empty());
+                debug_assert!(result.error.is_none());
+                if !is_json {
                     println!("Issue {} closed", args.issue);
                 } else {
                     println!(r#"{{"closed": true, "issue": "{}"}}"#, args.issue);
@@ -304,7 +320,9 @@ async fn issue_close(client: &AspenClient, args: IssueCloseArgs, json: bool) -> 
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
+                debug_assert!(!args.issue.is_empty());
+                debug_assert!(result.error.is_none());
+                if !is_json {
                     println!("Issue {} closed", args.issue);
                 }
                 Ok(())
@@ -317,7 +335,9 @@ async fn issue_close(client: &AspenClient, args: IssueCloseArgs, json: bool) -> 
     }
 }
 
-async fn issue_reopen(client: &AspenClient, args: IssueReopenArgs, json: bool) -> Result<()> {
+async fn issue_reopen(client: &AspenClient, args: IssueReopenArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.issue.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeReopenIssue {
             repo_id: args.repo,
@@ -328,7 +348,9 @@ async fn issue_reopen(client: &AspenClient, args: IssueReopenArgs, json: bool) -
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
             if result.is_success {
-                if !json {
+                debug_assert!(!args.issue.is_empty());
+                debug_assert!(result.error.is_none());
+                if !is_json {
                     println!("Issue {} reopened", args.issue);
                 } else {
                     println!(r#"{{"reopened": true, "issue": "{}"}}"#, args.issue);
@@ -340,7 +362,9 @@ async fn issue_reopen(client: &AspenClient, args: IssueReopenArgs, json: bool) -
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
+                debug_assert!(!args.issue.is_empty());
+                debug_assert!(result.error.is_none());
+                if !is_json {
                     println!("Issue {} reopened", args.issue);
                 }
                 Ok(())
@@ -353,7 +377,9 @@ async fn issue_reopen(client: &AspenClient, args: IssueReopenArgs, json: bool) -
     }
 }
 
-async fn issue_comment(client: &AspenClient, args: IssueCommentArgs, json: bool) -> Result<()> {
+async fn issue_comment(client: &AspenClient, args: IssueCommentArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.repo.is_empty());
+    debug_assert!(!args.issue.is_empty());
     let response = client
         .send(ClientRpcRequest::ForgeCommentIssue {
             repo_id: args.repo,
@@ -365,7 +391,9 @@ async fn issue_comment(client: &AspenClient, args: IssueCommentArgs, json: bool)
     match response {
         ClientRpcResponse::ForgeIssueResult(result) => {
             if result.is_success {
-                if !json {
+                debug_assert!(!args.issue.is_empty());
+                debug_assert!(result.error.is_none());
+                if !is_json {
                     println!("Comment added to issue {}", args.issue);
                 } else {
                     println!(r#"{{"commented": true, "issue": "{}"}}"#, args.issue);
@@ -377,7 +405,9 @@ async fn issue_comment(client: &AspenClient, args: IssueCommentArgs, json: bool)
         }
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.is_success {
-                if !json {
+                debug_assert!(!args.issue.is_empty());
+                debug_assert!(result.error.is_none());
+                if !is_json {
                     println!("Comment added to issue {}", args.issue);
                 }
                 Ok(())

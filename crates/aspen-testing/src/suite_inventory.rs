@@ -19,6 +19,23 @@ use walkdir::WalkDir;
 
 const SCHEMA_VERSION: u32 = 1;
 const GENERATED_STALE_MESSAGE: &str = "suite inventory is stale; run `scripts/test-harness.sh export`";
+const MANIFEST_PATH_DISCOVERY_CAPACITY: usize = 128;
+
+fn default_option_string() -> Option<String> {
+    None
+}
+
+fn default_string_vec() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_string_map() -> BTreeMap<String, String> {
+    BTreeMap::new()
+}
+
+fn default_register_flake_check() -> bool {
+    false
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InventoryPaths {
@@ -127,16 +144,16 @@ pub enum RunIgnoredMode {
 #[derive(Debug, Clone, Deserialize)]
 struct SuiteManifest {
     id: String,
-    #[serde(default)]
+    #[serde(default = "default_option_string")]
     display_name: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_option_string")]
     description: Option<String>,
     layer: String,
     owner: String,
     runtime_class: String,
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     prerequisites: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     tags: Vec<String>,
     target: RawSuiteTarget,
 }
@@ -147,23 +164,25 @@ struct RawSuiteTarget {
     package: Option<String>,
     test: Option<String>,
     profile: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_string_vec")]
     features: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_option_string")]
     run_ignored: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_option_string")]
     flake_attr: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_option_string")]
     check_attr: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_option_string")]
     nix_file: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_string_map")]
     package_presets: BTreeMap<String, String>,
-    #[serde(default)]
+    #[serde(default = "default_register_flake_check")]
     register_flake_check: bool,
 }
 
 pub fn load_inventory(paths: &InventoryPaths) -> Result<SuiteInventory> {
+    debug_assert!(paths.schema_path.is_absolute());
+    debug_assert!(paths.manifest_root.is_absolute());
     let schema_source = fs::read_to_string(&paths.schema_path)
         .with_context(|| format!("failed to read schema {}", paths.schema_path.display()))?;
     let manifest_paths = discover_manifest_paths(&paths.manifest_root)?;
@@ -188,6 +207,8 @@ pub fn load_inventory(paths: &InventoryPaths) -> Result<SuiteInventory> {
         suites.push(record);
     }
     suites.sort_by(|left, right| left.id.cmp(&right.id));
+    debug_assert!(!suites.is_empty());
+    debug_assert!(suites.windows(2).all(|pair| pair[0].id <= pair[1].id));
 
     Ok(SuiteInventory {
         schema_version: SCHEMA_VERSION,
@@ -203,7 +224,7 @@ fn build_inventory_metadata(paths: &InventoryPaths, manifest_paths: &[PathBuf]) 
         .map(|path| repo_relative_path(path, &paths.repo_root))
         .collect::<Result<Vec<_>>>()?;
 
-    let mut input_lines = Vec::with_capacity(manifest_paths.len() + 1);
+    let mut input_lines = Vec::with_capacity(manifest_paths.len().saturating_add(1));
     input_lines.push(format!("{schema_path}:{}", compute_file_sha256(&paths.schema_path)?));
     let mut manifest_entries = discover_manifest_hashes(paths, &manifest_paths)?;
     input_lines.append(&mut manifest_entries);
@@ -258,7 +279,7 @@ pub fn ensure_inventory_is_current(inventory: &SuiteInventory, output_path: &Pat
 }
 
 fn discover_manifest_paths(manifest_root: &Path) -> Result<Vec<PathBuf>> {
-    let mut manifest_paths = Vec::new();
+    let mut manifest_paths = Vec::with_capacity(MANIFEST_PATH_DISCOVERY_CAPACITY);
     for entry in WalkDir::new(manifest_root) {
         let entry = entry.with_context(|| format!("failed to walk {}", manifest_root.display()))?;
         if entry.file_type().is_file() && entry.path().extension().and_then(|ext| ext.to_str()) == Some("ncl") {
@@ -266,6 +287,8 @@ fn discover_manifest_paths(manifest_root: &Path) -> Result<Vec<PathBuf>> {
         }
     }
     manifest_paths.sort();
+    debug_assert!(manifest_paths.windows(2).all(|pair| pair[0] <= pair[1]));
+    debug_assert!(manifest_paths.iter().all(|path| path.extension().and_then(|ext| ext.to_str()) == Some("ncl")));
     Ok(manifest_paths)
 }
 
@@ -289,6 +312,8 @@ let schema = {schema_source} in
 }
 
 fn validate_manifest(manifest: &SuiteManifest, manifest_path: &Path, repo_root: &Path) -> Result<()> {
+    debug_assert!(!manifest.id.is_empty());
+    debug_assert!(manifest_path.is_absolute());
     validate_suite_id(&manifest.id, manifest_path)?;
     let layer = parse_layer(&manifest.layer, manifest_path)?;
     let target_kind = parse_target_kind(&manifest.target.kind, manifest_path)?;
@@ -310,8 +335,10 @@ fn validate_manifest(manifest: &SuiteManifest, manifest_path: &Path, repo_root: 
             );
         }
     }
+    debug_assert!(matches!(layer, SuiteLayer::RustIntegration | SuiteLayer::Patchbay | SuiteLayer::Vm));
+    debug_assert!(matches!(target_kind, SuiteTargetKind::CargoNextest | SuiteTargetKind::NixBuild));
     match target_kind {
-        SuiteTargetKind::CargoNextest => validate_cargo_target(&manifest.target, manifest_path),
+        SuiteTargetKind::CargoNextest => validate_cargo_target(&manifest.target, manifest_path, repo_root),
         SuiteTargetKind::NixBuild => validate_nix_target(&manifest.target, manifest_path, repo_root),
     }
 }
@@ -327,7 +354,7 @@ fn validate_suite_id(id: &str, manifest_path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn validate_cargo_target(target: &RawSuiteTarget, manifest_path: &Path) -> Result<()> {
+fn validate_cargo_target(target: &RawSuiteTarget, manifest_path: &Path, _repo_root: &Path) -> Result<()> {
     ensure!(target.package.is_some(), "{} is missing target.package", manifest_path.display());
     ensure!(target.test.is_some(), "{} is missing target.test", manifest_path.display());
     ensure!(
@@ -339,6 +366,8 @@ fn validate_cargo_target(target: &RawSuiteTarget, manifest_path: &Path) -> Resul
 }
 
 fn validate_nix_target(target: &RawSuiteTarget, manifest_path: &Path, repo_root: &Path) -> Result<()> {
+    debug_assert!(manifest_path.is_absolute());
+    debug_assert!(repo_root.is_absolute());
     let flake_attr = target
         .flake_attr
         .as_deref()
@@ -362,10 +391,14 @@ fn validate_nix_target(target: &RawSuiteTarget, manifest_path: &Path, repo_root:
 
     let nix_path = repo_root.join(nix_file);
     ensure!(nix_path.exists(), "{} references missing nix file {}", manifest_path.display(), nix_path.display());
+    debug_assert!(!flake_attr.is_empty());
+    debug_assert!(!check_attr.is_empty());
     validate_package_presets(&target.package_presets, manifest_path)
 }
 
 fn validate_package_presets(package_presets: &BTreeMap<String, String>, manifest_path: &Path) -> Result<()> {
+    debug_assert!(manifest_path.is_absolute());
+    debug_assert!(package_presets.len() <= 2);
     for (name, value) in package_presets {
         match name.as_str() {
             "aspenNodePackage" => ensure!(
@@ -383,6 +416,8 @@ fn validate_package_presets(package_presets: &BTreeMap<String, String>, manifest
             _ => bail!("{} uses unsupported target.package_presets key `{}`", manifest_path.display(), name),
         }
     }
+    debug_assert!(package_presets.keys().all(|name| !name.is_empty()));
+    debug_assert!(package_presets.values().all(|value| !value.is_empty()));
     Ok(())
 }
 
@@ -391,6 +426,8 @@ fn validate_generated_registration_keys(
     seen_check_attrs: &mut BTreeMap<String, String>,
     seen_flake_attrs: &mut BTreeMap<String, String>,
 ) -> Result<()> {
+    debug_assert!(!record.id.is_empty());
+    debug_assert!(seen_check_attrs.len() <= seen_flake_attrs.len().saturating_add(1));
     if !record.target.register_flake_check {
         return Ok(());
     }
@@ -417,6 +454,8 @@ fn validate_generated_registration_keys(
         );
     }
 
+    debug_assert!(record.target.check_attr.is_some() || !record.target.register_flake_check);
+    debug_assert!(record.target.flake_attr.is_some() || !record.target.register_flake_check);
     Ok(())
 }
 
@@ -425,6 +464,8 @@ fn to_inventory_record(
     manifest_path: &Path,
     repo_root: &Path,
 ) -> Result<SuiteInventoryRecord> {
+    debug_assert!(manifest_path.is_absolute());
+    debug_assert!(repo_root.is_absolute());
     let SuiteManifest {
         id,
         display_name,

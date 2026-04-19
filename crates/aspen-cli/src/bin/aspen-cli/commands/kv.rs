@@ -108,8 +108,8 @@ pub struct ScanArgs {
     pub prefix: String,
 
     /// Maximum number of results.
-    #[arg(long, default_value = "100")]
-    pub limit: u32,
+    #[arg(long = "limit", default_value = "100")]
+    pub max_results: u32,
 
     /// Continuation token from previous scan.
     #[arg(long)]
@@ -133,10 +133,15 @@ pub struct BatchWriteArgs {
 }
 
 /// Parse a key=value pair from command line argument.
-fn parse_kv_pair(s: &str) -> Result<(String, String), String> {
-    let pos = s.find('=').ok_or_else(|| format!("invalid KEY=VALUE pair: no '=' found in '{}'", s))?;
-    let key = s[..pos].to_string();
-    let value = s[pos + 1..].to_string();
+fn parse_kv_pair(input: &str) -> Result<(String, String), String> {
+    let separator_index =
+        input.find('=').ok_or_else(|| format!("invalid KEY=VALUE pair: no '=' found in '{}'", input))?;
+    let value_start = separator_index.checked_add(1).ok_or_else(|| "pair separator offset overflowed".to_string())?;
+    let key = input[..separator_index].to_string();
+    let value = input
+        .get(value_start..)
+        .ok_or_else(|| "pair value slice fell outside the argument bounds".to_string())?
+        .to_string();
     if key.is_empty() {
         return Err("key cannot be empty".to_string());
     }
@@ -145,21 +150,21 @@ fn parse_kv_pair(s: &str) -> Result<(String, String), String> {
 
 impl KvCommand {
     /// Execute the key-value command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            KvCommand::Get(args) => kv_get(client, args, json).await,
-            KvCommand::Set(args) => kv_set(client, args, json).await,
-            KvCommand::Delete(args) => kv_delete(client, args, json).await,
-            KvCommand::Cas(args) => kv_cas(client, args, json).await,
-            KvCommand::Cad(args) => kv_cad(client, args, json).await,
-            KvCommand::Scan(args) => kv_scan(client, args, json).await,
-            KvCommand::BatchRead(args) => kv_batch_read(client, args, json).await,
-            KvCommand::BatchWrite(args) => kv_batch_write(client, args, json).await,
+            KvCommand::Get(args) => kv_get(client, args, is_json).await,
+            KvCommand::Set(args) => kv_set(client, args, is_json).await,
+            KvCommand::Delete(args) => kv_delete(client, args, is_json).await,
+            KvCommand::Cas(args) => kv_cas(client, args, is_json).await,
+            KvCommand::Cad(args) => kv_cad(client, args, is_json).await,
+            KvCommand::Scan(args) => kv_scan(client, args, is_json).await,
+            KvCommand::BatchRead(args) => kv_batch_read(client, args, is_json).await,
+            KvCommand::BatchWrite(args) => kv_batch_write(client, args, is_json).await,
         }
     }
 }
 
-async fn kv_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
+async fn kv_get(client: &AspenClient, args: GetArgs, is_json: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ReadKey { key: args.key.clone() }).await?;
 
     match response {
@@ -169,7 +174,7 @@ async fn kv_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
                 value: result.value,
                 does_exist: result.was_found,
             };
-            print_output(&output, json);
+            print_output(&output, is_json);
             Ok(())
         }
         ClientRpcResponse::Error(e) => {
@@ -179,32 +184,36 @@ async fn kv_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
     }
 }
 
-async fn kv_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
-    // Get value from file or argument
+async fn kv_set(client: &AspenClient, args: SetArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty());
+    debug_assert!(!args.key.contains('\0'));
+    debug_assert!(args.file.is_some() || args.value.is_some());
+    let key = args.key;
+
     let value = if let Some(ref path) = args.file {
         std::fs::read(path).map_err(|e| anyhow::anyhow!("failed to read file '{}': {}", path.display(), e))?
     } else {
         match args.value {
-            Some(value) => value.into_bytes(),
+            Some(value_text) => value_text.into_bytes(),
             None => return Err(anyhow::anyhow!("value required when --file not provided")),
         }
     };
 
     let response = client
         .send(ClientRpcRequest::WriteKey {
-            key: args.key.clone(),
+            key: key.clone(),
             value,
         })
         .await?;
 
     match response {
         ClientRpcResponse::WriteResult(result) => {
-            if json {
+            if is_json {
                 println!(
                     "{}",
                     serde_json::json!({
                         "status": if result.is_success { "success" } else { "failed" },
-                        "key": args.key
+                        "key": key,
                     })
                 );
             } else if result.is_success {
@@ -214,25 +223,26 @@ async fn kv_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
             }
             Ok(())
         }
-        ClientRpcResponse::Error(e) => {
-            anyhow::bail!("{}: {}", e.code, e.message)
-        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn kv_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result<()> {
-    let response = client.send(ClientRpcRequest::DeleteKey { key: args.key.clone() }).await?;
+async fn kv_delete(client: &AspenClient, args: DeleteArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty());
+    debug_assert!(!args.key.contains('\0'));
+    let key = args.key;
+    let response = client.send(ClientRpcRequest::DeleteKey { key: key.clone() }).await?;
 
     match response {
         ClientRpcResponse::DeleteResult(result) => {
-            if json {
+            if is_json {
                 println!(
                     "{}",
                     serde_json::json!({
                         "status": "success",
-                        "key": args.key,
-                        "was_deleted": result.was_deleted
+                        "key": key,
+                        "was_deleted": result.was_deleted,
                     })
                 );
             } else if result.was_deleted {
@@ -242,20 +252,21 @@ async fn kv_delete(client: &AspenClient, args: DeleteArgs, json: bool) -> Result
             }
             Ok(())
         }
-        ClientRpcResponse::Error(e) => {
-            anyhow::bail!("{}: {}", e.code, e.message)
-        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn kv_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<()> {
-    let expected = args.expected.map(|s| s.into_bytes());
+async fn kv_cas(client: &AspenClient, args: CasArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty());
+    debug_assert!(!args.key.contains('\0'));
+    let key = args.key;
+    let expected = args.expected.map(|text| text.into_bytes());
     let new_value = args.new_value.into_bytes();
 
     let response = client
         .send(ClientRpcRequest::CompareAndSwapKey {
-            key: args.key.clone(),
+            key: key.clone(),
             expected,
             new_value,
         })
@@ -263,13 +274,13 @@ async fn kv_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<()> {
 
     match response {
         ClientRpcResponse::CompareAndSwapResult(result) => {
-            if json {
+            if is_json {
                 println!(
                     "{}",
                     serde_json::json!({
                         "status": if result.is_success { "success" } else { "conflict" },
-                        "key": args.key,
-                        "is_success": result.is_success
+                        "key": key,
+                        "is_success": result.is_success,
                     })
                 );
             } else if result.is_success {
@@ -280,33 +291,33 @@ async fn kv_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<()> {
             }
             Ok(())
         }
-        ClientRpcResponse::Error(e) => {
-            anyhow::bail!("{}: {}", e.code, e.message)
-        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn kv_cad(client: &AspenClient, args: CadArgs, json: bool) -> Result<()> {
+async fn kv_cad(client: &AspenClient, args: CadArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty());
+    debug_assert!(!args.key.contains('\0'));
+    let key = args.key;
     let expected = args.expected.into_bytes();
 
     let response = client
         .send(ClientRpcRequest::CompareAndDeleteKey {
-            key: args.key.clone(),
+            key: key.clone(),
             expected,
         })
         .await?;
 
-    // CompareAndDeleteKey returns CompareAndSwapResult (same response type)
     match response {
         ClientRpcResponse::CompareAndSwapResult(result) => {
-            if json {
+            if is_json {
                 println!(
                     "{}",
                     serde_json::json!({
                         "status": if result.is_success { "success" } else { "conflict" },
-                        "key": args.key,
-                        "is_success": result.is_success
+                        "key": key,
+                        "is_success": result.is_success,
                     })
                 );
             } else if result.is_success {
@@ -317,40 +328,39 @@ async fn kv_cad(client: &AspenClient, args: CadArgs, json: bool) -> Result<()> {
             }
             Ok(())
         }
-        ClientRpcResponse::Error(e) => {
-            anyhow::bail!("{}: {}", e.code, e.message)
-        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn kv_scan(client: &AspenClient, args: ScanArgs, json: bool) -> Result<()> {
+async fn kv_scan(client: &AspenClient, args: ScanArgs, is_json: bool) -> Result<()> {
+    debug_assert!(args.max_results > 0);
+    debug_assert!(!args.prefix.contains('\0'));
     let response = client
         .send(ClientRpcRequest::ScanKeys {
             prefix: args.prefix,
-            limit: Some(args.limit),
+            limit: Some(args.max_results),
             continuation_token: args.token,
         })
         .await?;
 
     match response {
         ClientRpcResponse::ScanResult(result) => {
-            // ScanEntry has value as String, convert to Vec<u8> for output
             let output = KvScanOutput {
-                entries: result.entries.into_iter().map(|e| (e.key, e.value.into_bytes())).collect(),
+                entries: result.entries.into_iter().map(|entry| (entry.key, entry.value.into_bytes())).collect(),
                 continuation_token: result.continuation_token,
             };
-            print_output(&output, json);
+            debug_assert!(output.continuation_token.as_deref().is_none_or(|token| !token.is_empty()));
+            debug_assert!(output.entries.iter().all(|(key, _)| !key.is_empty()));
+            print_output(&output, is_json);
             Ok(())
         }
-        ClientRpcResponse::Error(e) => {
-            anyhow::bail!("{}: {}", e.code, e.message)
-        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn kv_batch_read(client: &AspenClient, args: BatchReadArgs, json: bool) -> Result<()> {
+async fn kv_batch_read(client: &AspenClient, args: BatchReadArgs, is_json: bool) -> Result<()> {
     let keys = args.keys.clone();
     let response = client.send(ClientRpcRequest::BatchRead { keys: args.keys }).await?;
 
@@ -361,17 +371,17 @@ async fn kv_batch_read(client: &AspenClient, args: BatchReadArgs, json: bool) ->
             }
             let values = result.values.unwrap_or_default();
             let output = KvBatchReadOutput { keys, values };
-            print_output(&output, json);
+            print_output(&output, is_json);
             Ok(())
         }
-        ClientRpcResponse::Error(e) => {
-            anyhow::bail!("{}: {}", e.code, e.message)
-        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }
 
-async fn kv_batch_write(client: &AspenClient, args: BatchWriteArgs, json: bool) -> Result<()> {
+async fn kv_batch_write(client: &AspenClient, args: BatchWriteArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.pairs.is_empty());
+    debug_assert!(args.pairs.len() <= 100);
     let operations: Vec<BatchWriteOperation> = args
         .pairs
         .into_iter()
@@ -381,7 +391,7 @@ async fn kv_batch_write(client: &AspenClient, args: BatchWriteArgs, json: bool) 
         })
         .collect();
 
-    let op_count = operations.len() as u32;
+    let op_count = u32::try_from(operations.len()).unwrap_or(u32::MAX);
     let response = client.send(ClientRpcRequest::BatchWrite { operations }).await?;
 
     match response {
@@ -390,15 +400,15 @@ async fn kv_batch_write(client: &AspenClient, args: BatchWriteArgs, json: bool) 
                 is_success: result.is_success,
                 operations_applied: result.operations_applied.unwrap_or(op_count),
             };
-            print_output(&output, json);
+            debug_assert!(output.operations_applied <= op_count || !output.is_success);
+            debug_assert!(output.is_success || output.operations_applied <= op_count);
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
             Ok(())
         }
-        ClientRpcResponse::Error(e) => {
-            anyhow::bail!("{}: {}", e.code, e.message)
-        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
     }
 }

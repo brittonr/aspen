@@ -6,6 +6,30 @@
 
 use serde::Deserialize;
 
+fn default_vec<T>() -> Vec<T> {
+    Vec::new()
+}
+
+fn default_option<T>() -> Option<T> {
+    None
+}
+
+fn default_empty_string() -> String {
+    String::new()
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_placeholder_map() -> std::collections::HashMap<String, String> {
+    std::collections::HashMap::new()
+}
+
+fn default_logging() -> LoggingConfig {
+    LoggingConfig::default()
+}
+
 /// Top-level manifest produced by sops-nix.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,11 +38,11 @@ pub struct Manifest {
     pub secrets: Vec<SecretEntry>,
 
     /// Templates to render with decrypted secret values.
-    #[serde(default)]
+    #[serde(default = "default_vec")]
     pub templates: Vec<TemplateEntry>,
 
     /// Map of secret name → placeholder string used in templates.
-    #[serde(default)]
+    #[serde(default = "default_placeholder_map")]
     pub placeholder_by_secret_name: std::collections::HashMap<String, String>,
 
     /// Mount point for the secrets ramfs/tmpfs (e.g., `/run/secrets.d`).
@@ -31,34 +55,34 @@ pub struct Manifest {
     pub keep_generations: u32,
 
     /// GPG SSH key paths (for GPG key import — not supported, ignored).
-    #[serde(default)]
+    #[serde(default = "default_vec")]
     #[allow(dead_code)]
     pub ssh_key_paths: Vec<String>,
 
     /// GnuPG home directory (not supported, ignored).
-    #[serde(default)]
+    #[serde(default = "default_option")]
     #[allow(dead_code)]
     pub gnupg_home: Option<String>,
 
     /// Path to age key file.
-    #[serde(default)]
+    #[serde(default = "default_option")]
     pub age_key_file: Option<String>,
 
     /// SSH key paths to convert to age identities.
-    #[serde(default)]
+    #[serde(default = "default_vec")]
     pub age_ssh_key_paths: Vec<String>,
 
     /// Use tmpfs instead of ramfs.
-    #[serde(default)]
+    #[serde(default = "default_false")]
     pub use_tmpfs: bool,
 
     /// User-mode operation (non-root). Not supported in initial version.
-    #[serde(default)]
+    #[serde(default = "default_false")]
     #[allow(dead_code)]
     pub user_mode: bool,
 
     /// Logging configuration.
-    #[serde(default)]
+    #[serde(default = "default_logging")]
     pub logging: LoggingConfig,
 }
 
@@ -71,14 +95,14 @@ pub struct SecretEntry {
 
     /// Key path within the decrypted SOPS file (e.g., `database/password`).
     /// Empty string means use the entire file.
-    #[serde(default)]
+    #[serde(default = "default_empty_string")]
     pub key: String,
 
     /// Symlink path for the secret (e.g., `/run/secrets/db-password`).
     pub path: String,
 
     /// Owner username. Mutually exclusive with `uid`.
-    #[serde(default)]
+    #[serde(default = "default_option")]
     pub owner: Option<String>,
 
     /// Owner UID (used when `owner` is null).
@@ -86,7 +110,7 @@ pub struct SecretEntry {
     pub uid: u32,
 
     /// Group name. Mutually exclusive with `gid`.
-    #[serde(default)]
+    #[serde(default = "default_option")]
     pub group: Option<String>,
 
     /// Group GID (used when `group` is null).
@@ -104,11 +128,11 @@ pub struct SecretEntry {
     pub mode: String,
 
     /// systemd units to restart when this secret changes.
-    #[serde(default)]
+    #[serde(default = "default_vec")]
     pub restart_units: Vec<String>,
 
     /// systemd units to reload when this secret changes.
-    #[serde(default)]
+    #[serde(default = "default_vec")]
     pub reload_units: Vec<String>,
 }
 
@@ -120,11 +144,11 @@ pub struct TemplateEntry {
     pub name: String,
 
     /// Inline template content. Mutually exclusive with `file`.
-    #[serde(default)]
+    #[serde(default = "default_empty_string")]
     pub content: String,
 
     /// Path to template file. Mutually exclusive with `content`.
-    #[serde(default)]
+    #[serde(default = "default_empty_string")]
     pub file: String,
 
     /// Output path for the rendered template.
@@ -135,7 +159,7 @@ pub struct TemplateEntry {
     pub mode: String,
 
     /// Owner username.
-    #[serde(default)]
+    #[serde(default = "default_option")]
     pub owner: Option<String>,
 
     /// Owner UID.
@@ -143,7 +167,7 @@ pub struct TemplateEntry {
     pub uid: u32,
 
     /// Group name.
-    #[serde(default)]
+    #[serde(default = "default_option")]
     pub group: Option<String>,
 
     /// Group GID.
@@ -151,11 +175,11 @@ pub struct TemplateEntry {
     pub gid: u32,
 
     /// Template source file path (sops-nix >= 0.1).
-    #[serde(default)]
+    #[serde(default = "default_vec")]
     pub restart_units: Vec<String>,
 
     /// systemd units to reload when this template changes.
-    #[serde(default)]
+    #[serde(default = "default_vec")]
     pub reload_units: Vec<String>,
 }
 
@@ -194,11 +218,11 @@ impl std::fmt::Display for FormatType {
 #[serde(rename_all = "camelCase")]
 pub struct LoggingConfig {
     /// Log key import events.
-    #[serde(default)]
+    #[serde(default = "default_false")]
     pub key_import: bool,
 
     /// Log secret change summaries.
-    #[serde(default)]
+    #[serde(default = "default_false")]
     pub secret_changes: bool,
 }
 

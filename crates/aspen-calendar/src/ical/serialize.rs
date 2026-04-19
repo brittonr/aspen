@@ -6,95 +6,107 @@ use crate::types::AlarmAction;
 use crate::types::AttendeeRole;
 use crate::types::AttendeeStatus;
 use crate::types::CalendarEvent;
+use crate::types::EventAlarm;
+use crate::types::EventAttendee;
 use crate::types::EventStatus;
+
+const SECONDS_PER_DAY_I64: i64 = 86_400;
 
 /// Serialize a CalendarEvent to iCalendar VEVENT format.
 pub fn serialize_vevent(event: &CalendarEvent) -> String {
+    debug_assert!(!event.summary.is_empty(), "VEVENT summary should not be empty when serializing");
+    debug_assert!(event.dtend_ms.is_none() || event.dtend_ms >= Some(event.dtstart_ms));
     let mut lines = Vec::with_capacity(20);
 
     lines.push("BEGIN:VEVENT".to_string());
-
     if !event.uid.is_empty() {
         lines.push(format!("UID:{}", event.uid));
     }
-
     lines.push(format!("DTSTART:{}", unix_ms_to_ical(event.dtstart_ms, event.is_all_day)));
-
     if let Some(end_ms) = event.dtend_ms {
         lines.push(format!("DTEND:{}", unix_ms_to_ical(end_ms, event.is_all_day)));
     }
-
     lines.push(format!("SUMMARY:{}", event.summary));
 
-    if let Some(ref desc) = event.description {
-        lines.push(format!("DESCRIPTION:{desc}"));
-    }
-    if let Some(ref loc) = event.location {
-        lines.push(format!("LOCATION:{loc}"));
-    }
-    if let Some(ref rrule) = event.rrule {
-        lines.push(format!("RRULE:{rrule}"));
-    }
+    push_optional_line(&mut lines, "DESCRIPTION", event.description.as_deref());
+    push_optional_line(&mut lines, "LOCATION", event.location.as_deref());
+    push_optional_line(&mut lines, "RRULE", event.rrule.as_deref());
     for exdate_ms in &event.exdates {
         lines.push(format!("EXDATE:{}", unix_ms_to_ical(*exdate_ms, false)));
     }
-
-    match event.status {
-        EventStatus::Tentative => lines.push("STATUS:TENTATIVE".to_string()),
-        EventStatus::Cancelled => lines.push("STATUS:CANCELLED".to_string()),
-        EventStatus::Confirmed => {} // default, omit
-    }
-
-    if !event.categories.is_empty() {
-        lines.push(format!("CATEGORIES:{}", event.categories.join(",")));
-    }
-    if let Some(ref url) = event.url {
-        lines.push(format!("URL:{url}"));
-    }
+    push_status_line(&mut lines, &event.status);
+    push_categories_line(&mut lines, &event.categories);
+    push_optional_line(&mut lines, "URL", event.url.as_deref());
     if event.sequence > 0 {
         lines.push(format!("SEQUENCE:{}", event.sequence));
     }
 
     for attendee in &event.attendees {
-        let mut params = Vec::new();
-        if let Some(ref name) = attendee.name {
-            params.push(format!("CN=\"{name}\""));
-        }
-        let role_str = match attendee.role {
-            AttendeeRole::Required => "REQ-PARTICIPANT",
-            AttendeeRole::Optional => "OPT-PARTICIPANT",
-            AttendeeRole::Chair => "CHAIR",
-        };
-        params.push(format!("ROLE={role_str}"));
-        let status_str = match attendee.status {
-            AttendeeStatus::Accepted => "ACCEPTED",
-            AttendeeStatus::Declined => "DECLINED",
-            AttendeeStatus::Tentative => "TENTATIVE",
-            AttendeeStatus::NeedsAction => "NEEDS-ACTION",
-        };
-        params.push(format!("PARTSTAT={status_str}"));
-        let param_str = params.join(";");
-        lines.push(format!("ATTENDEE;{param_str}:mailto:{}", attendee.email));
+        lines.push(serialize_attendee(attendee));
     }
-
     for alarm in &event.alarms {
-        lines.push("BEGIN:VALARM".to_string());
-        let trigger = format_trigger(alarm.trigger_minutes_before);
-        lines.push(format!("TRIGGER:{trigger}"));
-        let action = match alarm.action {
-            AlarmAction::Display => "DISPLAY",
-            AlarmAction::Email => "EMAIL",
-        };
-        lines.push(format!("ACTION:{action}"));
-        if let Some(ref desc) = alarm.description {
-            lines.push(format!("DESCRIPTION:{desc}"));
-        }
-        lines.push("END:VALARM".to_string());
+        push_alarm_lines(&mut lines, alarm);
     }
 
     lines.push("END:VEVENT".to_string());
-
     lines.join("\r\n") + "\r\n"
+}
+
+fn push_optional_line(lines: &mut Vec<String>, name: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        lines.push(format!("{name}:{value}"));
+    }
+}
+
+fn push_status_line(lines: &mut Vec<String>, status: &EventStatus) {
+    match status {
+        EventStatus::Tentative => lines.push("STATUS:TENTATIVE".to_string()),
+        EventStatus::Cancelled => lines.push("STATUS:CANCELLED".to_string()),
+        EventStatus::Confirmed => {}
+    }
+}
+
+fn push_categories_line(lines: &mut Vec<String>, categories: &[String]) {
+    if !categories.is_empty() {
+        lines.push(format!("CATEGORIES:{}", categories.join(",")));
+    }
+}
+
+fn serialize_attendee(attendee: &EventAttendee) -> String {
+    debug_assert!(!attendee.email.is_empty(), "attendee email must not be empty");
+    let mut params = Vec::with_capacity(3);
+    if let Some(ref name) = attendee.name {
+        params.push(format!("CN=\"{name}\""));
+    }
+    let role_str = match attendee.role {
+        AttendeeRole::Required => "REQ-PARTICIPANT",
+        AttendeeRole::Optional => "OPT-PARTICIPANT",
+        AttendeeRole::Chair => "CHAIR",
+    };
+    params.push(format!("ROLE={role_str}"));
+    let status_str = match attendee.status {
+        AttendeeStatus::Accepted => "ACCEPTED",
+        AttendeeStatus::Declined => "DECLINED",
+        AttendeeStatus::Tentative => "TENTATIVE",
+        AttendeeStatus::NeedsAction => "NEEDS-ACTION",
+    };
+    params.push(format!("PARTSTAT={status_str}"));
+    debug_assert!(params.len() >= 2, "attendee serialization must include role and participation status");
+    let param_str = params.join(";");
+    format!("ATTENDEE;{param_str}:mailto:{}", attendee.email)
+}
+
+fn push_alarm_lines(lines: &mut Vec<String>, alarm: &EventAlarm) {
+    lines.push("BEGIN:VALARM".to_string());
+    let trigger = format_trigger(alarm.trigger_minutes_before);
+    lines.push(format!("TRIGGER:{trigger}"));
+    let action = match alarm.action {
+        AlarmAction::Display => "DISPLAY",
+        AlarmAction::Email => "EMAIL",
+    };
+    lines.push(format!("ACTION:{action}"));
+    push_optional_line(lines, "DESCRIPTION", alarm.description.as_deref());
+    lines.push("END:VALARM".to_string());
 }
 
 /// Wrap events in a VCALENDAR block.
@@ -123,29 +135,65 @@ fn unix_ms_to_ical(ms: u64, is_all_day: bool) -> String {
 ///
 /// Simplified Gregorian calendar. Accurate for 1970–2099.
 fn unix_secs_to_date(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
-    let sec_of_day = secs.rem_euclid(86400);
-    let hour = (sec_of_day / 3600) as u32;
-    let min = ((sec_of_day % 3600) / 60) as u32;
-    let sec = (sec_of_day % 60) as u32;
+    debug_assert!(secs >= 0, "serializer expects non-negative unix seconds");
+    let sec_of_day = secs.rem_euclid(SECONDS_PER_DAY_I64);
+    debug_assert!(sec_of_day >= 0);
+    debug_assert!(sec_of_day < SECONDS_PER_DAY_I64);
+    let hour = saturating_u32_from_i64(sec_of_day / 3_600);
+    let minute = saturating_u32_from_i64((sec_of_day % 3_600) / 60);
+    let second = saturating_u32_from_i64(sec_of_day % 60);
 
-    let mut days = secs / 86400;
-    if secs < 0 && secs % 86400 != 0 {
-        days -= 1;
+    let mut elapsed_days = secs / SECONDS_PER_DAY_I64;
+    if secs < 0 && secs % SECONDS_PER_DAY_I64 != 0 {
+        elapsed_days = elapsed_days.saturating_sub(1);
     }
-    // days from 1970-01-01
-    let days = days + 719468; // shift to 0000-03-01 epoch
+    let shifted_days = elapsed_days.saturating_add(719_468);
+    let era = if shifted_days >= 0 {
+        shifted_days
+    } else {
+        shifted_days.saturating_sub(146_096)
+    } / 146_097;
+    let day_of_era = shifted_days.saturating_sub(era.saturating_mul(146_097));
+    let year_of_era = day_of_era
+        .saturating_sub(day_of_era / 1_460)
+        .saturating_add(day_of_era / 36_524)
+        .saturating_sub(day_of_era / 146_096)
+        / 365;
+    let year_base = year_of_era.saturating_add(era.saturating_mul(400));
+    let day_of_year = day_of_era.saturating_sub(
+        365_i64
+            .saturating_mul(year_of_era)
+            .saturating_add(year_of_era / 4)
+            .saturating_sub(year_of_era / 100),
+    );
+    let month_phase = (5_i64.saturating_mul(day_of_year).saturating_add(2)) / 153;
+    let day = saturating_u32_from_i64(
+        day_of_year
+            .saturating_sub((153_i64.saturating_mul(month_phase).saturating_add(2)) / 5)
+            .saturating_add(1),
+    );
+    let month_i64 = if month_phase < 10 {
+        month_phase.saturating_add(3)
+    } else {
+        month_phase.saturating_sub(9)
+    };
+    let year = if month_i64 <= 2 {
+        year_base.saturating_add(1)
+    } else {
+        year_base
+    };
+    let month = saturating_u32_from_i64(month_i64);
+    debug_assert!((1..=12).contains(&month));
+    debug_assert!((1..=31).contains(&day));
+    (year, month, day, hour, minute, second)
+}
 
-    let era = if days >= 0 { days } else { days - 146096 } / 146097;
-    let doe = (days - era * 146097) as u32;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if month <= 2 { y + 1 } else { y };
-
-    (year, month, day, hour, min, sec)
+fn saturating_u32_from_i64(value: i64) -> u32 {
+    if value <= 0 {
+        0
+    } else {
+        u32::try_from(value).unwrap_or(u32::MAX)
+    }
 }
 
 /// Format trigger duration (minutes before → iCal TRIGGER string).

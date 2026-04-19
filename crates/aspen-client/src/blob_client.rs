@@ -142,7 +142,8 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob upload")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob upload: {response:?}")),
         }
     }
 
@@ -187,7 +188,8 @@ impl<'a> BlobClient<'a> {
                     Ok(None)
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob get")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob get: {response:?}")),
         }
     }
 
@@ -211,7 +213,8 @@ impl<'a> BlobClient<'a> {
             ClientRpcResponse::DownloadBlobResult(result) => {
                 if result.is_success {
                     let hash = result.hash.context("Blob downloaded but no hash returned")?;
-                    let _size = result.size_bytes.context("Blob downloaded but no size returned")?;
+                    let size_bytes = result.size_bytes.context("Blob downloaded but no size returned")?;
+                    debug_assert!(size_bytes > 0, "downloaded blobs should report a positive size");
 
                     // Now fetch the actual data
                     if let Some(download) = self.download(&hash).await? {
@@ -226,7 +229,8 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob download")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob download: {response:?}")),
         }
     }
 
@@ -244,7 +248,8 @@ impl<'a> BlobClient<'a> {
                     Ok(result.does_exist)
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob check")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob check: {response:?}")),
         }
     }
 
@@ -267,7 +272,8 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob ticket")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob ticket: {response:?}")),
         }
     }
 
@@ -289,9 +295,9 @@ impl<'a> BlobClient<'a> {
                         blobs: result
                             .blobs
                             .into_iter()
-                            .map(|e| BlobEntry {
-                                hash: e.hash,
-                                size_bytes: e.size_bytes,
+                            .map(|entry| BlobEntry {
+                                hash: entry.hash,
+                                size_bytes: entry.size_bytes,
                             })
                             .collect(),
                         has_more: result.has_more,
@@ -299,7 +305,8 @@ impl<'a> BlobClient<'a> {
                     })
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob list")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob list: {response:?}")),
         }
     }
 
@@ -324,7 +331,8 @@ impl<'a> BlobClient<'a> {
                     Ok(None)
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob status")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob status: {response:?}")),
         }
     }
 
@@ -348,7 +356,8 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob protect")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob protect: {response:?}")),
         }
     }
 
@@ -369,7 +378,8 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob unprotect")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob unprotect: {response:?}")),
         }
     }
 
@@ -393,7 +403,8 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!("Unexpected response type for blob delete")),
+            ClientRpcResponse::Error(error) => Err(anyhow::anyhow!("{}: {}", error.code, error.message)),
+            response => Err(anyhow::anyhow!("Unexpected response type for blob delete: {response:?}")),
         }
     }
 }
@@ -473,6 +484,36 @@ mod rpc_blob_store {
             })?;
             Ok(Hash::from(hash))
         }
+
+        fn data_len_bytes(data: &[u8]) -> u64 {
+            u64::try_from(data.len()).unwrap_or(u64::MAX)
+        }
+
+        fn wait_attempts(wait_budget: Duration) -> u32 {
+            const POLL_INTERVAL_MS: u64 = 100;
+            let wait_budget_ms = u64::try_from(wait_budget.as_millis()).unwrap_or(u64::MAX);
+            let poll_count = wait_budget_ms
+                .saturating_add(POLL_INTERVAL_MS.saturating_sub(1))
+                .checked_div(POLL_INTERVAL_MS)
+                .unwrap_or(u64::MAX)
+                .saturating_add(1);
+            let bounded_attempts = u32::try_from(poll_count).unwrap_or(u32::MAX);
+            debug_assert!(bounded_attempts >= 1, "poll count must include immediate check");
+            bounded_attempts
+        }
+
+        async fn collect_missing_hashes(
+            &self,
+            hashes: &std::collections::HashSet<Hash>,
+        ) -> Result<std::collections::HashSet<Hash>, BlobStoreError> {
+            let mut still_missing = std::collections::HashSet::with_capacity(hashes.len());
+            for hash in hashes {
+                if !self.has(hash).await? {
+                    still_missing.insert(*hash);
+                }
+            }
+            Ok(still_missing)
+        }
     }
 
     // BlobWrite: add_bytes, add_path, protect, unprotect
@@ -491,9 +532,9 @@ mod rpc_blob_store {
                             message: "Blob uploaded but no hash returned".to_string(),
                         })?;
                         let hash = Self::parse_hash(&hash_str)?;
-                        let size = result.size_bytes.unwrap_or(data.len() as u64);
+                        let size_bytes = result.size_bytes.unwrap_or(Self::data_len_bytes(data));
                         Ok(AddBlobResult {
-                            blob_ref: BlobRef::new(hash, size, BlobFormat::Raw),
+                            blob_ref: BlobRef::new(hash, size_bytes, BlobFormat::Raw),
                             was_new: result.was_new.unwrap_or(true),
                         })
                     } else {
@@ -716,8 +757,8 @@ mod rpc_blob_store {
                         let hash = Self::parse_hash(&hash_str).map_err(|e| BlobStoreError::Download {
                             message: format!("{}", e),
                         })?;
-                        let size = result.size_bytes.unwrap_or(0);
-                        Ok(BlobRef::new(hash, size, BlobFormat::Raw))
+                        let size_bytes = result.size_bytes.unwrap_or(0);
+                        Ok(BlobRef::new(hash, size_bytes, BlobFormat::Raw))
                     } else {
                         Err(BlobStoreError::Download {
                             message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
@@ -739,11 +780,11 @@ mod rpc_blob_store {
     impl BlobQuery for RpcBlobStore {
         async fn list(
             &self,
-            limit: u32,
+            max_results: u32,
             continuation_token: Option<&str>,
         ) -> Result<aspen_blob::BlobListResult, BlobStoreError> {
             let request = ClientRpcRequest::ListBlobs {
-                limit,
+                limit: max_results,
                 continuation_token: continuation_token.map(|s| s.to_string()),
             };
 
@@ -779,42 +820,39 @@ mod rpc_blob_store {
             }
         }
 
-        async fn wait_available(&self, hash: &Hash, timeout: Duration) -> Result<bool, BlobStoreError> {
-            // For RPC blob store, we poll until the blob is available or timeout
-            let start = std::time::Instant::now();
-            loop {
+        async fn wait_available(&self, hash: &Hash, wait_budget: Duration) -> Result<bool, BlobStoreError> {
+            const POLL_INTERVAL: Duration = Duration::from_millis(100);
+            let attempts = Self::wait_attempts(wait_budget);
+            for attempt_idx in 0..attempts {
                 if self.has(hash).await? {
                     return Ok(true);
                 }
-                if start.elapsed() >= timeout {
-                    return Ok(false);
+                if attempt_idx.saturating_add(1) < attempts {
+                    tokio::time::sleep(POLL_INTERVAL).await;
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
             }
+            Ok(false)
         }
 
-        async fn wait_available_all(&self, hashes: &[Hash], timeout: Duration) -> Result<Vec<Hash>, BlobStoreError> {
-            // Return hashes that are NOT available after waiting
-            let start = std::time::Instant::now();
+        async fn wait_available_all(
+            &self,
+            hashes: &[Hash],
+            wait_budget: Duration,
+        ) -> Result<Vec<Hash>, BlobStoreError> {
+            const POLL_INTERVAL: Duration = Duration::from_millis(100);
+            let attempts = Self::wait_attempts(wait_budget);
             let mut missing: std::collections::HashSet<Hash> = hashes.iter().copied().collect();
 
-            loop {
-                let mut still_missing = std::collections::HashSet::new();
-                for hash in &missing {
-                    if !self.has(hash).await? {
-                        still_missing.insert(*hash);
-                    }
-                }
-                missing = still_missing;
-
+            for attempt_idx in 0..attempts {
+                missing = self.collect_missing_hashes(&missing).await?;
                 if missing.is_empty() {
                     return Ok(Vec::new());
                 }
-                if start.elapsed() >= timeout {
-                    return Ok(missing.into_iter().collect());
+                if attempt_idx.saturating_add(1) < attempts {
+                    tokio::time::sleep(POLL_INTERVAL).await;
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
             }
+            Ok(missing.into_iter().collect())
         }
     }
 }

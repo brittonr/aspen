@@ -134,173 +134,91 @@ impl Outputable for CounterOutput {
 
 impl CounterCommand {
     /// Execute the counter command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            CounterCommand::Get(args) => counter_get(client, args, json).await,
-            CounterCommand::Incr(args) => counter_incr(client, args, json).await,
-            CounterCommand::Decr(args) => counter_decr(client, args, json).await,
-            CounterCommand::Add(args) => counter_add(client, args, json).await,
-            CounterCommand::Sub(args) => counter_sub(client, args, json).await,
-            CounterCommand::Set(args) => counter_set(client, args, json).await,
-            CounterCommand::Cas(args) => counter_cas(client, args, json).await,
+            CounterCommand::Get(args) => counter_get(client, args, is_json_output).await,
+            CounterCommand::Incr(args) => counter_incr(client, args, is_json_output).await,
+            CounterCommand::Decr(args) => counter_decr(client, args, is_json_output).await,
+            CounterCommand::Add(args) => counter_add(client, args, is_json_output).await,
+            CounterCommand::Sub(args) => counter_sub(client, args, is_json_output).await,
+            CounterCommand::Set(args) => counter_set(client, args, is_json_output).await,
+            CounterCommand::Cas(args) => counter_cas(client, args, is_json_output).await,
         }
     }
 }
 
-async fn counter_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
+fn print_counter_response(
+    response: ClientRpcResponse,
+    key: String,
+    operation: &str,
+    is_json_output: bool,
+) -> Result<()> {
+    match response {
+        ClientRpcResponse::CounterResult(result) => {
+            let output = CounterOutput {
+                key,
+                operation: operation.to_string(),
+                is_success: result.is_success,
+                value: result.value,
+                error: result.error,
+            };
+            print_output(&output, is_json_output);
+            if !result.is_success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn counter_get(client: &AspenClient, args: GetArgs, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::CounterGet { key: args.key.clone() }).await?;
-
-    match response {
-        ClientRpcResponse::CounterResult(result) => {
-            let output = CounterOutput {
-                key: args.key,
-                operation: "get".to_string(),
-                is_success: result.is_success,
-                value: result.value,
-                error: result.error,
-            };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    print_counter_response(response, args.key, "get", is_json_output)
 }
 
-async fn counter_incr(client: &AspenClient, args: IncrArgs, json: bool) -> Result<()> {
+async fn counter_incr(client: &AspenClient, args: IncrArgs, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::CounterIncrement { key: args.key.clone() }).await?;
-
-    match response {
-        ClientRpcResponse::CounterResult(result) => {
-            let output = CounterOutput {
-                key: args.key,
-                operation: "incr".to_string(),
-                is_success: result.is_success,
-                value: result.value,
-                error: result.error,
-            };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    print_counter_response(response, args.key, "incr", is_json_output)
 }
 
-async fn counter_decr(client: &AspenClient, args: DecrArgs, json: bool) -> Result<()> {
+async fn counter_decr(client: &AspenClient, args: DecrArgs, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::CounterDecrement { key: args.key.clone() }).await?;
-
-    match response {
-        ClientRpcResponse::CounterResult(result) => {
-            let output = CounterOutput {
-                key: args.key,
-                operation: "decr".to_string(),
-                is_success: result.is_success,
-                value: result.value,
-                error: result.error,
-            };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    print_counter_response(response, args.key, "decr", is_json_output)
 }
 
-async fn counter_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()> {
+async fn counter_add(client: &AspenClient, args: AddArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::CounterAdd {
             key: args.key.clone(),
             amount: args.amount,
         })
         .await?;
-
-    match response {
-        ClientRpcResponse::CounterResult(result) => {
-            let output = CounterOutput {
-                key: args.key,
-                operation: "add".to_string(),
-                is_success: result.is_success,
-                value: result.value,
-                error: result.error,
-            };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    print_counter_response(response, args.key, "add", is_json_output)
 }
 
-async fn counter_sub(client: &AspenClient, args: SubArgs, json: bool) -> Result<()> {
+async fn counter_sub(client: &AspenClient, args: SubArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::CounterSubtract {
             key: args.key.clone(),
             amount: args.amount,
         })
         .await?;
-
-    match response {
-        ClientRpcResponse::CounterResult(result) => {
-            let output = CounterOutput {
-                key: args.key,
-                operation: "sub".to_string(),
-                is_success: result.is_success,
-                value: result.value,
-                error: result.error,
-            };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    print_counter_response(response, args.key, "sub", is_json_output)
 }
 
-async fn counter_set(client: &AspenClient, args: SetArgs, json: bool) -> Result<()> {
+async fn counter_set(client: &AspenClient, args: SetArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::CounterSet {
             key: args.key.clone(),
             value: args.value,
         })
         .await?;
-
-    match response {
-        ClientRpcResponse::CounterResult(result) => {
-            let output = CounterOutput {
-                key: args.key,
-                operation: "set".to_string(),
-                is_success: result.is_success,
-                value: result.value,
-                error: result.error,
-            };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    print_counter_response(response, args.key, "set", is_json_output)
 }
 
-async fn counter_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<()> {
+async fn counter_cas(client: &AspenClient, args: CasArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::CounterCompareAndSet {
             key: args.key.clone(),
@@ -308,23 +226,5 @@ async fn counter_cas(client: &AspenClient, args: CasArgs, json: bool) -> Result<
             new_value: args.new_value,
         })
         .await?;
-
-    match response {
-        ClientRpcResponse::CounterResult(result) => {
-            let output = CounterOutput {
-                key: args.key,
-                operation: "cas".to_string(),
-                is_success: result.is_success,
-                value: result.value,
-                error: result.error,
-            };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
-            Ok(())
-        }
-        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
-        _ => anyhow::bail!("unexpected response type"),
-    }
+    print_counter_response(response, args.key, "cas", is_json_output)
 }

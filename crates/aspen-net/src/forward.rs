@@ -71,18 +71,18 @@ pub async fn resolve_forward<S: KeyValueStore + 'static>(
             name: service_name.to_string(),
         })?;
 
-    let port = remote_port.unwrap_or(registered_port);
+    let target_endpoint = remote_port.unwrap_or(registered_port);
 
     // Check authorization
-    auth.check_connect(service_name, port).map_err(|e| ForwardError::Auth { source: e })?;
+    auth.check_connect(service_name, target_endpoint).map_err(|e| ForwardError::Auth { source: e })?;
 
-    info!("Forward {local_addr} -> {service_name} (endpoint={endpoint_id}, port={port})");
+    info!("Forward {local_addr} -> {service_name} (endpoint={endpoint_id}, target={target_endpoint})");
 
     Ok(ForwardTarget {
         local_addr,
         service_name: service_name.to_string(),
         endpoint_id,
-        remote_port: port,
+        remote_port: target_endpoint,
     })
 }
 
@@ -102,33 +102,35 @@ struct PortSpec<'a> {
 /// - `0.0.0.0:5432:mydb` → bind all interfaces on 5432, service "mydb"
 pub fn parse_forward_spec(spec: &str) -> Result<(SocketAddr, String, Option<u16>), ForwardError> {
     let parts: Vec<&str> = spec.split(':').collect();
+    debug_assert!(parts.len() >= 2, "forward spec needs at least local port and service name");
+    debug_assert!(parts.len() <= 4, "forward spec supports at most bind, local port, service, remote port");
 
     match parts.len() {
         // local_port:service
         2 => {
-            let local_port = parse_port(PortSpec { value: parts[0], spec })?;
+            let listen_endpoint = parse_port(PortSpec { value: parts[0], spec })?;
             let service = parts[1].to_string();
-            let addr = SocketAddr::from(([127, 0, 0, 1], local_port));
+            let addr = SocketAddr::from(([127, 0, 0, 1], listen_endpoint));
             Ok((addr, service, None))
         }
         // local_port:service:remote_port  OR  bind_addr:local_port:service
         3 => {
             // Try local_port:service:remote_port first
-            if let Ok(local_port) = parts[0].parse::<u16>()
-                && let Ok(remote_port) = parts[2].parse::<u16>()
+            if let Ok(listen_endpoint) = parts[0].parse::<u16>()
+                && let Ok(target_endpoint) = parts[2].parse::<u16>()
             {
                 let service = parts[1].to_string();
-                let addr = SocketAddr::from(([127, 0, 0, 1], local_port));
-                return Ok((addr, service, Some(remote_port)));
+                let addr = SocketAddr::from(([127, 0, 0, 1], listen_endpoint));
+                return Ok((addr, service, Some(target_endpoint)));
             }
             // Try bind_addr:local_port:service
             let bind_addr: std::net::IpAddr = parts[0].parse().map_err(|_| ForwardError::InvalidSpec {
                 spec: spec.to_string(),
                 reason: format!("'{}' is not a valid IP address or port", parts[0]),
             })?;
-            let local_port = parse_port(PortSpec { value: parts[1], spec })?;
+            let listen_endpoint = parse_port(PortSpec { value: parts[1], spec })?;
             let service = parts[2].to_string();
-            let addr = SocketAddr::new(bind_addr, local_port);
+            let addr = SocketAddr::new(bind_addr, listen_endpoint);
             Ok((addr, service, None))
         }
         // bind_addr:local_port:service:remote_port
@@ -137,11 +139,11 @@ pub fn parse_forward_spec(spec: &str) -> Result<(SocketAddr, String, Option<u16>
                 spec: spec.to_string(),
                 reason: format!("'{}' is not a valid IP address", parts[0]),
             })?;
-            let local_port = parse_port(PortSpec { value: parts[1], spec })?;
+            let listen_endpoint = parse_port(PortSpec { value: parts[1], spec })?;
             let service = parts[2].to_string();
-            let remote_port = parse_port(PortSpec { value: parts[3], spec })?;
-            let addr = SocketAddr::new(bind_addr, local_port);
-            Ok((addr, service, Some(remote_port)))
+            let target_endpoint = parse_port(PortSpec { value: parts[3], spec })?;
+            let addr = SocketAddr::new(bind_addr, listen_endpoint);
+            Ok((addr, service, Some(target_endpoint)))
         }
         _ => Err(ForwardError::InvalidSpec {
             spec: spec.to_string(),

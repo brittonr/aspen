@@ -46,6 +46,52 @@ pub struct ReplicationWorker {
     blob_store: Option<Arc<dyn BlobStore>>,
 }
 
+const MAX_SYNC_PREVIEW_ENTRIES: usize = 1_000;
+const MAX_SAMPLE_HASHES: usize = 100;
+const MAX_RESTORE_ERRORS: usize = 10;
+const INITIAL_JSON_BUFFER_BYTES: usize = 4_096;
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "replication worker needs wall-clock milliseconds for TTL filtering"
+)]
+fn current_time_ms() -> u64 {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    u64::try_from(now_ms).unwrap_or_default()
+}
+
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "replication worker exports wall-clock RFC3339 metadata")]
+fn current_timestamp_rfc3339() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "replication worker measures operation latency through one boundary helper"
+)]
+fn current_instant() -> Instant {
+    Instant::now()
+}
+
+fn elapsed_ms_u64(start: Instant) -> u64 {
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn bytes_len_u64(bytes: &[u8]) -> u64 {
+    u64::try_from(bytes.len()).unwrap_or(u64::MAX)
+}
+
+fn str_len_u64(value: &str) -> u64 {
+    u64::try_from(value.len()).unwrap_or(u64::MAX)
+}
+
+fn should_skip_restore_entry(restore_revision: Option<i64>, entry_revision: Option<i64>) -> bool {
+    matches!((restore_revision, entry_revision), (Some(limit_revision), Some(entry_revision)) if entry_revision > limit_revision)
+}
+
 impl ReplicationWorker {
     /// Create a new replication worker.
     pub fn new(node_id: u64, cluster_id: String, db: Arc<Database>) -> Self {
@@ -79,17 +125,17 @@ impl ReplicationWorker {
         end_key: &str,
         target_cluster: &str,
     ) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
 
         let mut keys_synced: u64 = 0;
         let mut bytes_transferred: u64 = 0;
-        let mut sync_data: Vec<serde_json::Value> = Vec::new();
+        let mut sync_data: Vec<serde_json::Value> = Vec::with_capacity(MAX_SYNC_PREVIEW_ENTRIES.min(64));
 
         // Iterate over the range
         for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
@@ -122,11 +168,12 @@ impl ReplicationWorker {
                 continue;
             }
 
-            bytes_transferred += key_bytes.len() as u64 + kv.value.len() as u64;
+            bytes_transferred =
+                bytes_transferred.saturating_add(bytes_len_u64(key_bytes).saturating_add(str_len_u64(&kv.value)));
             keys_synced += 1;
 
             // Limit sync data to prevent memory issues
-            if sync_data.len() < 1000 {
+            if sync_data.len() < MAX_SYNC_PREVIEW_ENTRIES {
                 sync_data.push(json!({
                     "key": key_str,
                     "value": kv.value,
@@ -136,7 +183,7 @@ impl ReplicationWorker {
             }
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -157,25 +204,25 @@ impl ReplicationWorker {
             "bytes_transferred": bytes_transferred,
             "duration_ms": duration_ms,
             "sync_data": sync_data,
-            "data_truncated": keys_synced > 1000
+            "data_truncated": keys_synced > u64::try_from(MAX_SYNC_PREVIEW_ENTRIES).unwrap_or(u64::MAX)
         }))
     }
 
     /// Verify consistency between local data and a checksum.
     async fn verify_consistency(&self, target_cluster: &str, sample_rate: f64) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
         let effective_sample_rate = sample_rate.clamp(0.001, 1.0);
 
         let mut keys_checked: u64 = 0;
         let mut total_keys: u64 = 0;
         let mut checksum: u64 = 0;
-        let mut sample_hashes: Vec<String> = Vec::new();
+        let mut sample_hashes: Vec<String> = Vec::with_capacity(MAX_SAMPLE_HASHES);
 
         // Use a simple deterministic sampling based on key hash
         for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
@@ -208,13 +255,13 @@ impl ReplicationWorker {
                 checksum = checksum.wrapping_add(key_hash).wrapping_add(value_hash);
 
                 // Store sample for detailed verification
-                if sample_hashes.len() < 100 {
+                if sample_hashes.len() < MAX_SAMPLE_HASHES {
                     sample_hashes.push(format!("{:016x}", key_hash.wrapping_add(value_hash)));
                 }
             }
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -241,7 +288,7 @@ impl ReplicationWorker {
 
     /// Export a snapshot to blob store.
     async fn snapshot_export(&self, snapshot_id: &str) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let blob_store = self.blob_store.as_ref().ok_or("blob store not configured for snapshot export")?;
 
@@ -249,10 +296,10 @@ impl ReplicationWorker {
 
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
 
         // Build snapshot data
-        let mut snapshot_entries: Vec<serde_json::Value> = Vec::new();
+        let mut snapshot_data = Vec::with_capacity(INITIAL_JSON_BUFFER_BYTES);
         let mut key_count: u64 = 0;
 
         for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
@@ -279,7 +326,7 @@ impl ReplicationWorker {
 
             key_count += 1;
 
-            snapshot_entries.push(json!({
+            let line = serde_json::to_string(&json!({
                 "k": key_str,
                 "v": kv.value,
                 "ver": kv.version,
@@ -287,18 +334,13 @@ impl ReplicationWorker {
                 "mr": kv.mod_revision,
                 "exp": kv.expires_at_ms,
                 "lid": kv.lease_id,
-            }));
-        }
-
-        // Serialize snapshot as JSON Lines for streaming
-        let mut snapshot_data = Vec::new();
-        for entry in &snapshot_entries {
-            let line = serde_json::to_string(entry).map_err(|e| format!("serialization error: {}", e))?;
+            }))
+            .map_err(|e| format!("serialization error: {}", e))?;
             snapshot_data.extend_from_slice(line.as_bytes());
             snapshot_data.push(b'\n');
         }
 
-        let size_bytes = snapshot_data.len() as u64;
+        let size_bytes = bytes_len_u64(&snapshot_data);
 
         // Store in blob store
         let result =
@@ -313,7 +355,7 @@ impl ReplicationWorker {
             .await
             .map_err(|e| format!("failed to protect snapshot: {}", e))?;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -332,7 +374,7 @@ impl ReplicationWorker {
             "blob_hash": blob_hash,
             "size_bytes": size_bytes,
             "key_count": key_count,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": current_timestamp_rfc3339(),
             "duration_ms": duration_ms
         }))
     }
@@ -343,7 +385,7 @@ impl ReplicationWorker {
         backup_id: &str,
         last_mod_revision: Option<i64>,
     ) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let blob_store = self.blob_store.as_ref().ok_or("blob store not configured for backup")?;
 
@@ -351,11 +393,11 @@ impl ReplicationWorker {
 
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
-        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let now_ms = current_time_ms();
         let min_revision = last_mod_revision.unwrap_or(0);
 
         // Build incremental backup data
-        let mut backup_entries: Vec<serde_json::Value> = Vec::new();
+        let mut backup_data = Vec::with_capacity(INITIAL_JSON_BUFFER_BYTES);
         let mut changes_backed_up: u64 = 0;
         let mut max_mod_revision: i64 = min_revision;
 
@@ -389,7 +431,7 @@ impl ReplicationWorker {
             changes_backed_up += 1;
             max_mod_revision = max_mod_revision.max(kv.mod_revision);
 
-            backup_entries.push(json!({
+            let line = serde_json::to_string(&json!({
                 "k": key_str,
                 "v": kv.value,
                 "ver": kv.version,
@@ -397,18 +439,13 @@ impl ReplicationWorker {
                 "mr": kv.mod_revision,
                 "exp": kv.expires_at_ms,
                 "lid": kv.lease_id,
-            }));
-        }
-
-        // Serialize backup as JSON Lines
-        let mut backup_data = Vec::new();
-        for entry in &backup_entries {
-            let line = serde_json::to_string(entry).map_err(|e| format!("serialization error: {}", e))?;
+            }))
+            .map_err(|e| format!("serialization error: {}", e))?;
             backup_data.extend_from_slice(line.as_bytes());
             backup_data.push(b'\n');
         }
 
-        let size_bytes = backup_data.len() as u64;
+        let size_bytes = bytes_len_u64(&backup_data);
 
         // Store in blob store
         let result = blob_store.add_bytes(&backup_data).await.map_err(|e| format!("failed to store backup: {}", e))?;
@@ -422,7 +459,7 @@ impl ReplicationWorker {
             .await
             .map_err(|e| format!("failed to protect backup: {}", e))?;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,
@@ -442,14 +479,14 @@ impl ReplicationWorker {
             "size_bytes": size_bytes,
             "from_revision": min_revision,
             "to_revision": max_mod_revision,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "timestamp": current_timestamp_rfc3339(),
             "duration_ms": duration_ms
         }))
     }
 
     /// Restore data from a backup.
     async fn restore_data(&self, source: &str, restore_point: Option<&str>) -> Result<serde_json::Value, String> {
-        let start = Instant::now();
+        let start = current_instant();
 
         let blob_store = self.blob_store.as_ref().ok_or("blob store not configured for restore")?;
 
@@ -472,10 +509,11 @@ impl ReplicationWorker {
             .ok_or("backup blob not found")?;
 
         let backup_str = std::str::from_utf8(&backup_data).map_err(|e| format!("invalid backup format: {}", e))?;
+        let restore_revision = restore_point.and_then(|point| point.parse::<i64>().ok());
 
         let mut keys_restored: u64 = 0;
         let mut bytes_restored: u64 = 0;
-        let mut errors: Vec<String> = Vec::new();
+        let mut errors: Vec<String> = Vec::with_capacity(MAX_RESTORE_ERRORS);
 
         // Parse and restore each line
         for line in backup_str.lines() {
@@ -493,12 +531,7 @@ impl ReplicationWorker {
                 continue;
             }
 
-            // Skip entries after restore point if specified
-            if let Some(rp) = restore_point
-                && let Some(mr) = entry["mr"].as_i64()
-                && let Ok(rp_rev) = rp.parse::<i64>()
-                && mr > rp_rev
-            {
+            if should_skip_restore_entry(restore_revision, entry["mr"].as_i64()) {
                 continue;
             }
 
@@ -513,17 +546,17 @@ impl ReplicationWorker {
             match kv_store.write(request).await {
                 Ok(_) => {
                     keys_restored += 1;
-                    bytes_restored += key.len() as u64 + value.len() as u64;
+                    bytes_restored = bytes_restored.saturating_add(str_len_u64(key).saturating_add(str_len_u64(value)));
                 }
                 Err(e) => {
-                    if errors.len() < 10 {
+                    if errors.len() < MAX_RESTORE_ERRORS {
                         errors.push(format!("key {}: {}", key, e));
                     }
                 }
             }
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             node_id = self.node_id,

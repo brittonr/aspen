@@ -38,138 +38,189 @@ struct Cli {
     ignore_passwd: bool,
 }
 
-#[tokio::main]
-async fn main() {
-    // Go's `flag` package accepts single-dash long flags: `-check-mode=sopsfile`.
-    // sops-nix's manifest-for.nix calls us with that syntax. Clap expects `--`.
-    // Rewrite args before parsing.
-    let args: Vec<String> = std::env::args()
-        .map(|a| {
-            if let Some(rest) = a.strip_prefix("-check-mode") {
-                format!("--check-mode{rest}")
-            } else if let Some(rest) = a.strip_prefix("-ignore-passwd") {
-                format!("--ignore-passwd{rest}")
-            } else {
-                a
-            }
-        })
-        .collect();
-    let cli = Cli::parse_from(args);
-
-    let filter = tracing_subscriber::EnvFilter::from_default_env();
-    tracing_subscriber::fmt().with_env_filter(filter).with_target(false).init();
-
-    if let Err(e) = run(cli).await {
-        eprintln!("sops-install-secrets: {e:#}");
+fn main() {
+    if let Err(error) = run_main() {
+        eprintln!("sops-install-secrets: {error:#}");
         process::exit(1);
     }
 }
 
+fn run_main() -> Result<()> {
+    let cli = Cli::parse_from(normalize_args());
+    init_tracing();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("failed to build tokio runtime")?;
+    runtime.block_on(run(cli))
+}
+
+fn normalize_args() -> Vec<String> {
+    std::env::args()
+        .map(|arg| {
+            if let Some(rest) = arg.strip_prefix("-check-mode") {
+                format!("--check-mode{rest}")
+            } else if let Some(rest) = arg.strip_prefix("-ignore-passwd") {
+                format!("--ignore-passwd{rest}")
+            } else {
+                arg
+            }
+        })
+        .collect()
+}
+
+fn init_tracing() {
+    let filter = tracing_subscriber::EnvFilter::from_default_env();
+    tracing_subscriber::fmt().with_env_filter(filter).with_target(false).init();
+}
+
 async fn run(cli: Cli) -> Result<()> {
-    // Parse manifest
-    let manifest_contents =
-        fs::read_to_string(&cli.manifest).with_context(|| format!("failed to open manifest '{}'", cli.manifest))?;
-
-    let manifest: Manifest =
-        serde_json::from_str(&manifest_contents).with_context(|| "failed to parse manifest JSON")?;
-
+    let manifest = load_manifest(&cli.manifest)?;
     debug!(secrets = manifest.secrets.len(), templates = manifest.templates.len(), "manifest parsed");
 
-    // Check mode: manifest (structure validation only)
-    if cli.check_mode == "manifest" {
-        validate_manifest_structure(&manifest)?;
+    if handle_check_mode(&manifest, &cli.check_mode)? {
         return Ok(());
     }
 
-    // Check mode: sopsfile (validate SOPS files exist and contain keys)
-    if cli.check_mode == "sopsfile" {
-        validate_manifest_structure(&manifest)?;
+    install_manifest(&manifest, cli.ignore_passwd).await
+}
+
+fn load_manifest(manifest_path: &str) -> Result<Manifest> {
+    let manifest_contents =
+        fs::read_to_string(manifest_path).with_context(|| format!("failed to open manifest '{}'", manifest_path))?;
+    serde_json::from_str(&manifest_contents).with_context(|| "failed to parse manifest JSON")
+}
+
+fn handle_check_mode(manifest: &Manifest, check_mode: &str) -> Result<bool> {
+    if check_mode == "manifest" {
+        validate_manifest_structure(manifest)?;
+        return Ok(true);
+    }
+    if check_mode == "sopsfile" {
+        validate_manifest_structure(manifest)?;
         for secret in &manifest.secrets {
             decrypt::validate_sops_file(secret)?;
         }
-        return Ok(());
+        return Ok(true);
     }
+    Ok(false)
+}
 
-    // ── Normal mode: decrypt and install ──
-
-    let is_dry = std::env::var("NIXOS_ACTION").ok().is_some_and(|v| v == "dry-activate");
-
-    let ignore_passwd = cli.ignore_passwd || is_dry;
-
-    // Look up keys group
-    let keys_gid = if ignore_passwd {
-        0
-    } else {
-        filesystem::lookup_keys_gid()?
+async fn install_manifest(manifest: &Manifest, should_ignore_passwd: bool) -> Result<()> {
+    let is_dry = std::env::var("NIXOS_ACTION").ok().is_some_and(|value| value == "dry-activate");
+    let install = InstallGenerationOptions {
+        keys_gid: lookup_keys_gid(should_ignore_passwd || is_dry)?,
+        should_ignore_passwd: should_ignore_passwd || is_dry,
+        is_dry,
     };
 
-    // Mount secrets filesystem
-    filesystem::mount_secrets_fs(&manifest.secrets_mount_point, keys_gid, manifest.use_tmpfs)?;
+    filesystem::mount_secrets_fs(&manifest.secrets_mount_point, install.keys_gid, manifest.use_tmpfs)?;
+    let age_key_path = age_keys::import_age_keys(manifest, &manifest.secrets_mount_point, manifest.logging.key_import)?;
+    let decrypted = decrypt::decrypt_secrets(manifest, age_key_path.as_deref()).await?;
+    let rendered_templates = render_templates(manifest, &decrypted)?;
+    install_generation(manifest, &decrypted, &rendered_templates, install)?;
+    Ok(())
+}
 
-    // Import age keys (SSH-to-age conversion + age key file)
-    let age_key_path =
-        age_keys::import_age_keys(&manifest, &manifest.secrets_mount_point, manifest.logging.key_import)?;
+fn lookup_keys_gid(should_ignore_passwd: bool) -> Result<u32> {
+    if should_ignore_passwd {
+        return Ok(0);
+    }
+    filesystem::lookup_keys_gid()
+}
 
-    // Decrypt all secrets
-    let decrypted = decrypt::decrypt_secrets(&manifest, age_key_path.as_deref()).await?;
-
-    // Render templates
-    let mut rendered_templates = Vec::new();
+fn render_templates(
+    manifest: &Manifest,
+    decrypted: &std::collections::HashMap<String, Vec<u8>>,
+) -> Result<Vec<String>> {
+    let mut rendered_templates = Vec::with_capacity(manifest.templates.len());
     for template in &manifest.templates {
         let source = templates::load_template_source(template)?;
-        let rendered = templates::render_template(&source, &manifest.placeholder_by_secret_name, &decrypted);
+        let rendered = templates::render_template(&source, &manifest.placeholder_by_secret_name, decrypted);
         rendered_templates.push(rendered);
     }
+    Ok(rendered_templates)
+}
 
-    // Prepare new generation directory
-    let (gen_dir, gen_num) =
-        filesystem::prepare_generation(&manifest.secrets_mount_point, &manifest.symlink_path, keys_gid)?;
+struct InstallGenerationOptions {
+    keys_gid: u32,
+    should_ignore_passwd: bool,
+    is_dry: bool,
+}
 
-    // Write secrets
+fn install_generation(
+    manifest: &Manifest,
+    decrypted: &std::collections::HashMap<String, Vec<u8>>,
+    rendered_templates: &[String],
+    install: InstallGenerationOptions,
+) -> Result<()> {
+    let (gen_dir, gen_num) = filesystem::prepare_generation(
+        filesystem::GenerationPaths {
+            mount_point: &manifest.secrets_mount_point,
+            symlink_path: &manifest.symlink_path,
+        },
+        install.keys_gid,
+    )?;
+
+    write_generation_contents(manifest, decrypted, rendered_templates, &gen_dir, &install)?;
+    finalize_generation(manifest, &gen_dir, gen_num, install)?;
+    Ok(())
+}
+
+fn write_generation_contents(
+    manifest: &Manifest,
+    decrypted: &std::collections::HashMap<String, Vec<u8>>,
+    rendered_templates: &[String],
+    gen_dir: &std::path::Path,
+    install: &InstallGenerationOptions,
+) -> Result<()> {
     for secret in &manifest.secrets {
         let value = decrypted
             .get(&secret.name)
             .with_context(|| format!("no decrypted value for secret '{}'", secret.name))?;
-        filesystem::write_secret(&gen_dir, secret, value, keys_gid, ignore_passwd)?;
+        filesystem::write_secret(gen_dir, secret, value, install.keys_gid, install.should_ignore_passwd)?;
     }
-
-    // Write rendered templates
     for (template, rendered) in manifest.templates.iter().zip(rendered_templates.iter()) {
-        filesystem::write_template(&gen_dir, template, rendered, keys_gid, ignore_passwd)?;
+        filesystem::write_template(gen_dir, template, rendered, install.keys_gid, install.should_ignore_passwd)?;
     }
+    Ok(())
+}
 
-    // Detect changes and write restart/reload lists
-    filesystem::detect_changes(
-        &manifest.symlink_path,
-        &gen_dir,
-        &manifest.secrets,
-        &manifest.templates,
-        is_dry,
-        manifest.logging.secret_changes,
-    )?;
-
-    // Don't update symlinks during dry activation
-    if is_dry {
+fn finalize_generation(
+    manifest: &Manifest,
+    gen_dir: &std::path::Path,
+    gen_num: u64,
+    install: InstallGenerationOptions,
+) -> Result<()> {
+    debug_assert!(!manifest.symlink_path.is_empty());
+    debug_assert!(gen_num >= 1);
+    filesystem::detect_changes(filesystem::ChangeDetection {
+        symlink_path: &manifest.symlink_path,
+        gen_dir,
+        secrets: &manifest.secrets,
+        templates: &manifest.templates,
+        is_dry: install.is_dry,
+        should_log_changes: manifest.logging.secret_changes,
+    })?;
+    if install.is_dry {
         return Ok(());
     }
 
-    // Atomic symlink update
-    filesystem::atomic_symlink(&gen_dir, &manifest.symlink_path)?;
-
-    // Create per-secret and per-template symlinks
-    filesystem::create_secret_symlinks(&gen_dir, &manifest.symlink_path, &manifest.secrets, ignore_passwd)?;
-    filesystem::create_template_symlinks(&gen_dir, &manifest.templates, ignore_passwd)?;
-
-    // Prune old generations
+    filesystem::atomic_symlink(gen_dir, &manifest.symlink_path)?;
+    filesystem::create_secret_symlinks(
+        gen_dir,
+        &manifest.symlink_path,
+        &manifest.secrets,
+        install.should_ignore_passwd,
+    )?;
+    filesystem::create_template_symlinks(gen_dir, &manifest.templates, install.should_ignore_passwd)?;
     filesystem::prune_generations(&manifest.secrets_mount_point, gen_num, manifest.keep_generations)?;
-
     info!(
         secrets = manifest.secrets.len(),
         templates = manifest.templates.len(),
         generation = gen_num,
         "secrets installed"
     );
-
     Ok(())
 }
 

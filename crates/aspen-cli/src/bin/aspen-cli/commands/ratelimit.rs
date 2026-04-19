@@ -44,7 +44,7 @@ pub struct TryAcquireArgs {
 
     /// Maximum bucket capacity (in tokens).
     #[arg(long = "capacity")]
-    pub capacity_tokens: u64,
+    pub max_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -62,7 +62,7 @@ pub struct AcquireArgs {
 
     /// Maximum bucket capacity (in tokens).
     #[arg(long = "capacity")]
-    pub capacity_tokens: u64,
+    pub max_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -80,7 +80,7 @@ pub struct AvailableArgs {
 
     /// Maximum bucket capacity (in tokens).
     #[arg(long = "capacity")]
-    pub capacity_tokens: u64,
+    pub max_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -94,7 +94,7 @@ pub struct ResetArgs {
 
     /// Maximum bucket capacity (in tokens).
     #[arg(long = "capacity")]
-    pub capacity_tokens: u64,
+    pub max_tokens: u64,
 
     /// Token refill rate per second.
     #[arg(long)]
@@ -143,12 +143,12 @@ impl Outputable for RateLimitOutput {
 
 impl RateLimitCommand {
     /// Execute the rate limit command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            RateLimitCommand::TryAcquire(args) => ratelimit_try_acquire(client, args, json).await,
-            RateLimitCommand::Acquire(args) => ratelimit_acquire(client, args, json).await,
-            RateLimitCommand::Available(args) => ratelimit_available(client, args, json).await,
-            RateLimitCommand::Reset(args) => ratelimit_reset(client, args, json).await,
+            RateLimitCommand::TryAcquire(args) => ratelimit_try_acquire(client, args, is_json_output).await,
+            RateLimitCommand::Acquire(args) => ratelimit_acquire(client, args, is_json_output).await,
+            RateLimitCommand::Available(args) => ratelimit_available(client, args, is_json_output).await,
+            RateLimitCommand::Reset(args) => ratelimit_reset(client, args, is_json_output).await,
         }
     }
 }
@@ -161,13 +161,22 @@ fn validate_rate(rate: f64) -> Result<()> {
     Ok(())
 }
 
-async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, json: bool) -> Result<()> {
+fn print_checked_rate_limit_output(output: &RateLimitOutput, is_json_output: bool) {
+    print_output(output, is_json_output);
+    if !output.is_success {
+        std::process::exit(1);
+    }
+}
+
+async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "rate limiter key must not be empty");
+    debug_assert!(args.max_tokens >= args.tokens, "capacity must cover requested tokens");
     validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterTryAcquire {
             key: args.key.clone(),
             tokens: args.tokens,
-            capacity_tokens: args.capacity_tokens,
+            capacity_tokens: args.max_tokens,
             refill_rate: args.rate,
         })
         .await?;
@@ -182,10 +191,7 @@ async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
                 retry_after_ms: result.retry_after_ms,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_rate_limit_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -193,13 +199,15 @@ async fn ratelimit_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
     }
 }
 
-async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) -> Result<()> {
+async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "rate limiter key must not be empty");
+    debug_assert!(args.max_tokens >= args.tokens, "capacity must cover requested tokens");
     validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterAcquire {
             key: args.key.clone(),
             tokens: args.tokens,
-            capacity_tokens: args.capacity_tokens,
+            capacity_tokens: args.max_tokens,
             refill_rate: args.rate,
             timeout_ms: args.timeout_ms,
         })
@@ -215,10 +223,7 @@ async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
                 retry_after_ms: result.retry_after_ms,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_rate_limit_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -226,12 +231,14 @@ async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
     }
 }
 
-async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, json: bool) -> Result<()> {
+async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "rate limiter key must not be empty");
+    debug_assert!(args.max_tokens >= 1, "capacity must be positive");
     validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterAvailable {
             key: args.key.clone(),
-            capacity_tokens: args.capacity_tokens,
+            capacity_tokens: args.max_tokens,
             refill_rate: args.rate,
         })
         .await?;
@@ -246,10 +253,7 @@ async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, json: bo
                 retry_after_ms: None,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_rate_limit_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -257,12 +261,14 @@ async fn ratelimit_available(client: &AspenClient, args: AvailableArgs, json: bo
     }
 }
 
-async fn ratelimit_reset(client: &AspenClient, args: ResetArgs, json: bool) -> Result<()> {
+async fn ratelimit_reset(client: &AspenClient, args: ResetArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "rate limiter key must not be empty");
+    debug_assert!(args.max_tokens >= 1, "capacity must be positive");
     validate_rate(args.rate)?;
     let response = client
         .send(ClientRpcRequest::RateLimiterReset {
             key: args.key.clone(),
-            capacity_tokens: args.capacity_tokens,
+            capacity_tokens: args.max_tokens,
             refill_rate: args.rate,
         })
         .await?;
@@ -277,10 +283,7 @@ async fn ratelimit_reset(client: &AspenClient, args: ResetArgs, json: bool) -> R
                 retry_after_ms: None,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_rate_limit_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),

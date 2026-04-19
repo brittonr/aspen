@@ -157,17 +157,26 @@ impl Outputable for LockOutput {
 
 impl LockCommand {
     /// Execute the lock command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            LockCommand::Acquire(args) => lock_acquire(client, args, json).await,
-            LockCommand::TryAcquire(args) => lock_try_acquire(client, args, json).await,
-            LockCommand::Release(args) => lock_release(client, args, json).await,
-            LockCommand::Renew(args) => lock_renew(client, args, json).await,
+            LockCommand::Acquire(args) => lock_acquire(client, args, is_json_output).await,
+            LockCommand::TryAcquire(args) => lock_try_acquire(client, args, is_json_output).await,
+            LockCommand::Release(args) => lock_release(client, args, is_json_output).await,
+            LockCommand::Renew(args) => lock_renew(client, args, is_json_output).await,
         }
     }
 }
 
-async fn lock_acquire(client: &AspenClient, args: AcquireArgs, json: bool) -> Result<()> {
+fn print_checked_lock_output(output: &LockOutput, is_json_output: bool) {
+    print_output(output, is_json_output);
+    if !output.is_success {
+        std::process::exit(1);
+    }
+}
+
+async fn lock_acquire(client: &AspenClient, args: AcquireArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "lock key must not be empty");
+    debug_assert!(!args.holder.is_empty(), "holder id must not be empty");
     let response = client
         .send(ClientRpcRequest::LockAcquire {
             key: args.key.clone(),
@@ -188,10 +197,7 @@ async fn lock_acquire(client: &AspenClient, args: AcquireArgs, json: bool) -> Re
                 deadline_ms: result.deadline_ms,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_lock_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -199,7 +205,9 @@ async fn lock_acquire(client: &AspenClient, args: AcquireArgs, json: bool) -> Re
     }
 }
 
-async fn lock_try_acquire(client: &AspenClient, args: TryAcquireArgs, json: bool) -> Result<()> {
+async fn lock_try_acquire(client: &AspenClient, args: TryAcquireArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "lock key must not be empty");
+    debug_assert!(!args.holder.is_empty(), "holder id must not be empty");
     let response = client
         .send(ClientRpcRequest::LockTryAcquire {
             key: args.key.clone(),
@@ -219,10 +227,7 @@ async fn lock_try_acquire(client: &AspenClient, args: TryAcquireArgs, json: bool
                 deadline_ms: result.deadline_ms,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_lock_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -230,7 +235,9 @@ async fn lock_try_acquire(client: &AspenClient, args: TryAcquireArgs, json: bool
     }
 }
 
-async fn lock_release(client: &AspenClient, args: ReleaseArgs, json: bool) -> Result<()> {
+async fn lock_release(client: &AspenClient, args: ReleaseArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "lock key must not be empty");
+    debug_assert!(!args.holder.is_empty(), "holder id must not be empty");
     let response = client
         .send(ClientRpcRequest::LockRelease {
             key: args.key.clone(),
@@ -250,10 +257,7 @@ async fn lock_release(client: &AspenClient, args: ReleaseArgs, json: bool) -> Re
                 deadline_ms: None,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_lock_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -261,7 +265,9 @@ async fn lock_release(client: &AspenClient, args: ReleaseArgs, json: bool) -> Re
     }
 }
 
-async fn lock_renew(client: &AspenClient, args: RenewArgs, json: bool) -> Result<()> {
+async fn lock_renew(client: &AspenClient, args: RenewArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty(), "lock key must not be empty");
+    debug_assert!(!args.holder.is_empty(), "holder id must not be empty");
     let response = client
         .send(ClientRpcRequest::LockRenew {
             key: args.key.clone(),
@@ -282,10 +288,7 @@ async fn lock_renew(client: &AspenClient, args: RenewArgs, json: bool) -> Result
                 deadline_ms: result.deadline_ms,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_lock_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),

@@ -51,11 +51,11 @@ const MAX_ARG_LENGTH: usize = 4096;
 /// Maximum number of environment variables.
 const MAX_ENV_VARS: usize = 100;
 /// Output size threshold for inline storage (64 KB).
-pub const INLINE_OUTPUT_THRESHOLD: u64 = 64 * 1024;
+pub const INLINE_OUTPUT_THRESHOLD: u64 = 65_536;
 /// Default maximum output capture size (10 MB).
-const DEFAULT_MAX_OUTPUT_BYTES: u64 = 10 * 1024 * 1024;
+const DEFAULT_MAX_OUTPUT_BYTES: u64 = 10_485_760;
 /// Absolute maximum output capture size (100 MB).
-const ABSOLUTE_MAX_OUTPUT_BYTES: u64 = 100 * 1024 * 1024;
+const ABSOLUTE_MAX_OUTPUT_BYTES: u64 = 104_857_600;
 /// Maximum grace period allowed.
 const MAX_GRACE_PERIOD: Duration = Duration::from_secs(60);
 /// Interval for polling process exit status.
@@ -67,10 +67,10 @@ pub struct ShellCommandPayload {
     /// Command to execute (name or path).
     pub command: String,
     /// Command arguments.
-    #[serde(default)]
+    #[serde(default = "default_args")]
     pub args: Vec<String>,
     /// Environment variables to set.
-    #[serde(default)]
+    #[serde(default = "default_env")]
     pub env: HashMap<String, String>,
     /// Working directory for command execution.
     pub working_dir: Option<PathBuf>,
@@ -90,11 +90,51 @@ pub struct ShellCommandPayload {
 fn default_true() -> bool {
     true
 }
+
+fn default_args() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_env() -> HashMap<String, String> {
+    HashMap::new()
+}
+
 fn default_max_output() -> u64 {
     DEFAULT_MAX_OUTPUT_BYTES
 }
+
 fn default_grace_period() -> u64 {
     5
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "shell worker measures command latency through one monotonic helper"
+)]
+fn current_instant() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "shell worker uses a monotonic tokio deadline helper for graceful shutdown"
+)]
+fn current_tokio_instant() -> tokio::time::Instant {
+    tokio::time::Instant::now()
+}
+
+fn elapsed_ms_u64(start: std::time::Instant) -> u64 {
+    u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn u64_to_usize_saturating(value: u64) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
+
+fn bytes_len_u64(bytes: &[u8]) -> u64 {
+    u64::try_from(bytes.len()).unwrap_or(u64::MAX)
 }
 
 /// Configuration for ShellCommandWorker.
@@ -205,12 +245,12 @@ impl ShellCommandWorker {
 
             // Check ShellExecute capability
             let working_dir = payload.working_dir.as_ref().map(|p| p.to_string_lossy().to_string());
-            let authorized = token
+            let is_authorized = token
                 .capabilities
                 .iter()
                 .any(|cap| cap.authorizes_shell_command(&payload.command, working_dir.as_deref()));
 
-            if !authorized {
+            if !is_authorized {
                 return Err(JobError::InvalidJobSpec {
                     reason: format!(
                         "Token lacks ShellExecute capability for command '{}' in '{}'",
@@ -352,7 +392,7 @@ impl ShellCommandWorker {
 
     /// Store output, returning inline data or blob reference.
     async fn store_output(&self, data: Vec<u8>, job_id: &str, stream: &str) -> OutputRef {
-        if data.len() as u64 <= INLINE_OUTPUT_THRESHOLD {
+        if bytes_len_u64(&data) <= INLINE_OUTPUT_THRESHOLD {
             return OutputRef::Inline(String::from_utf8_lossy(&data).to_string());
         }
 
@@ -369,7 +409,7 @@ impl ShellCommandWorker {
                     );
                     return OutputRef::Blob {
                         hash: result.blob_ref.hash.to_hex().to_string(),
-                        size: data.len() as u64,
+                        size_bytes: bytes_len_u64(&data),
                     };
                 }
                 Err(e) => {
@@ -379,7 +419,7 @@ impl ShellCommandWorker {
         }
 
         // Fallback: inline with truncation note
-        let truncated_data = &data[..INLINE_OUTPUT_THRESHOLD as usize];
+        let truncated_data = &data[..u64_to_usize_saturating(INLINE_OUTPUT_THRESHOLD)];
         let truncated_str = String::from_utf8_lossy(truncated_data).to_string();
         OutputRef::Inline(format!("{}...[truncated, full size: {} bytes]", truncated_str, data.len()))
     }
@@ -388,7 +428,7 @@ impl ShellCommandWorker {
 #[async_trait]
 impl Worker for ShellCommandWorker {
     async fn execute(&self, job: Job) -> JobResult {
-        let start = std::time::Instant::now();
+        let start = current_instant();
         let job_id = job.id.to_string();
 
         // Validate and authorize
@@ -410,10 +450,10 @@ impl Worker for ShellCommandWorker {
             "Executing shell command"
         );
 
-        let timeout = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
+        let execution_window = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
 
         // Execute
-        let output = match self.execute_command(&payload, timeout).await {
+        let output = match self.execute_command(&payload, execution_window).await {
             Ok(o) => o,
             Err(e) => {
                 return JobResult::Failure(JobFailure {
@@ -430,8 +470,9 @@ impl Worker for ShellCommandWorker {
             // (e.g., nix outputs config messages at the start, actual error at the end)
             const STDERR_PREVIEW_BYTES: usize = 4096;
             let stderr_len = output.stderr.len();
-            let start_offset = stderr_len.saturating_sub(STDERR_PREVIEW_BYTES);
-            let stderr_preview = String::from_utf8_lossy(&output.stderr[start_offset..]).to_string();
+            let stderr_preview_start_offset_bytes = stderr_len.saturating_sub(STDERR_PREVIEW_BYTES);
+            let stderr_preview =
+                String::from_utf8_lossy(&output.stderr[stderr_preview_start_offset_bytes..]).to_string();
 
             return JobResult::Failure(JobFailure {
                 reason: format!("Command exited with code {}: {}", output.exit_code, stderr_preview),
@@ -445,7 +486,7 @@ impl Worker for ShellCommandWorker {
         let stdout_ref = self.store_output(output.stdout, &job_id, "stdout").await;
         let stderr_ref = self.store_output(output.stderr, &job_id, "stderr").await;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = elapsed_ms_u64(start);
 
         info!(
             job_id = %job_id,
@@ -497,7 +538,7 @@ pub enum OutputRef {
         /// BLAKE3 hash of the blob.
         hash: String,
         /// Size in bytes.
-        size: u64,
+        size_bytes: u64,
     },
 }
 
@@ -510,34 +551,37 @@ async fn capture_output<R: AsyncRead + Unpin + Send + 'static>(
         return Ok((vec![], 0, false));
     };
 
+    debug_assert!(max_bytes <= ABSOLUTE_MAX_OUTPUT_BYTES, "capture_output max_bytes must stay within configured bound");
     let mut buf_reader = BufReader::new(reader);
-    let mut captured = Vec::with_capacity(max_bytes.min(64 * 1024) as usize);
-    let mut total: u64 = 0;
-    let mut truncated = false;
+    let mut captured = Vec::with_capacity(u64_to_usize_saturating(max_bytes.min(INLINE_OUTPUT_THRESHOLD)));
+    let mut total_bytes: u64 = 0;
+    let mut is_truncated = false;
     let mut chunk = vec![0u8; 8192];
+    debug_assert!(!chunk.is_empty(), "capture_output read buffer must not be empty");
 
     loop {
-        let n = buf_reader.read(&mut chunk).await.map_err(|e| JobError::ExecutionFailed {
+        let bytes_read = buf_reader.read(&mut chunk).await.map_err(|e| JobError::ExecutionFailed {
             reason: format!("Output read error: {}", e),
         })?;
-        if n == 0 {
+        if bytes_read == 0 {
             break;
         }
 
-        total += n as u64;
+        total_bytes = total_bytes.saturating_add(u64::try_from(bytes_read).unwrap_or(u64::MAX));
 
-        if (captured.len() as u64) < max_bytes {
-            let remaining = (max_bytes - captured.len() as u64) as usize;
-            captured.extend_from_slice(&chunk[..n.min(remaining)]);
-            if n > remaining {
-                truncated = true;
+        if bytes_len_u64(&captured) < max_bytes {
+            let remaining_capture_bytes = max_bytes.saturating_sub(bytes_len_u64(&captured));
+            let remaining_capture_room = u64_to_usize_saturating(remaining_capture_bytes);
+            captured.extend_from_slice(&chunk[..bytes_read.min(remaining_capture_room)]);
+            if bytes_read > remaining_capture_room {
+                is_truncated = true;
             }
         } else {
-            truncated = true;
+            is_truncated = true;
         }
     }
 
-    Ok((captured, total, truncated))
+    Ok((captured, total_bytes, is_truncated))
 }
 
 /// Gracefully terminate a process group.
@@ -552,6 +596,7 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) -
     use nix::sys::signal::{self};
     use nix::unistd::Pid;
 
+    debug_assert!(grace <= MAX_GRACE_PERIOD, "grace period must stay within configured bound");
     let Some(pid) = child.inner().id() else {
         return Ok(()); // Already exited
     };
@@ -565,8 +610,8 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) -
     }
 
     // Wait for graceful exit
-    let deadline = tokio::time::Instant::now() + grace;
-    while tokio::time::Instant::now() < deadline {
+    let deadline = current_tokio_instant() + grace;
+    while current_tokio_instant() < deadline {
         if child.inner().try_wait().ok().flatten().is_some() {
             return Ok(());
         }
@@ -575,8 +620,14 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) -
 
     // Force kill
     warn!(pid, "Process did not exit gracefully, sending SIGKILL");
-    let _ = signal::kill(pgid, Signal::SIGKILL);
-    let _ = child.wait().await;
+    if let Err(error) = signal::kill(pgid, Signal::SIGKILL)
+        && error != nix::errno::Errno::ESRCH
+    {
+        warn!(pid, error = ?error, "SIGKILL to process group failed");
+    }
+    if let Err(error) = child.wait().await {
+        warn!(pid, error = ?error, "failed to reap killed process group");
+    }
 
     Ok(())
 }
@@ -584,8 +635,12 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) -
 #[cfg(not(unix))]
 async fn terminate_process_group(child: &mut AsyncGroupChild, _grace: Duration) -> Result<()> {
     // On non-Unix, just kill directly
-    let _ = child.kill();
-    let _ = child.wait().await;
+    if let Err(error) = child.kill() {
+        warn!(error = ?error, "failed to kill child process on non-Unix platform");
+    }
+    if let Err(error) = child.wait().await {
+        warn!(error = ?error, "failed to reap child process on non-Unix platform");
+    }
     Ok(())
 }
 

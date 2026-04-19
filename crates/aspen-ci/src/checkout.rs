@@ -45,7 +45,7 @@ use crate::error::WriteCheckoutFileSnafu;
 
 // Tiger Style: Bounded resource limits
 /// Maximum total checkout size (500 MB).
-const MAX_CHECKOUT_SIZE_BYTES: u64 = 500 * 1024 * 1024;
+const MAX_CHECKOUT_SIZE_BYTES: u64 = 524_288_000;
 /// Maximum number of files in checkout.
 const MAX_CHECKOUT_FILES: u32 = 50_000;
 /// Maximum file path length.
@@ -85,6 +85,8 @@ pub async fn checkout_repository<B: BlobStore, K: KeyValueStore + ?Sized>(
     commit_hash: &[u8; 32],
     target_dir: &Path,
 ) -> Result<PathBuf> {
+    debug_assert!(!target_dir.as_os_str().is_empty());
+    debug_assert!(target_dir.is_absolute());
     let blake3_hash = blake3::Hash::from_bytes(*commit_hash);
 
     info!(
@@ -95,10 +97,16 @@ pub async fn checkout_repository<B: BlobStore, K: KeyValueStore + ?Sized>(
 
     // Get the commit object with retry (handles replication latency)
     let commit_hash_str = hex::encode(commit_hash);
-    let commit = with_retry("commit", &commit_hash_str, || {
-        let forge = forge.clone();
-        async move { forge.git.get_commit(&blake3_hash).await }
-    })
+    let commit = with_retry(
+        RetryTarget {
+            object_type: "commit",
+            object_hash: &commit_hash_str,
+        },
+        || {
+            let forge = forge.clone();
+            async move { forge.git.get_commit(&blake3_hash).await }
+        },
+    )
     .await?;
 
     // Get the root tree
@@ -113,7 +121,7 @@ pub async fn checkout_repository<B: BlobStore, K: KeyValueStore + ?Sized>(
     let mut stats = CheckoutStats::default();
 
     // Recursively checkout the tree
-    checkout_tree(forge, &tree_hash, target_dir, "", &mut stats, 0).await?;
+    checkout_tree(forge, &tree_hash, target_dir, &mut stats, TreeVisit { prefix: None, depth: 0 }).await?;
 
     if stats.symlinks_skipped > 0 {
         info!(
@@ -157,14 +165,32 @@ fn classify_forge_error(err: &aspen_forge::ForgeError) -> Option<&'static str> {
     }
 }
 
+struct RetryTarget<'a> {
+    object_type: &'a str,
+    object_hash: &'a str,
+}
+
+struct TreeVisit<'a> {
+    prefix: Option<&'a str>,
+    depth: u32,
+}
+
+struct CheckoutFileWrite<'a> {
+    full_path: &'a Path,
+    entry_path: &'a str,
+    is_executable: bool,
+}
+
 /// Execute an async operation with exponential backoff retry.
 ///
 /// Used for fetching git objects that may not yet be replicated.
-async fn with_retry<T, F, Fut>(object_type: &str, object_hash: &str, operation: F) -> Result<T>
+async fn with_retry<T, F, Fut>(target: RetryTarget<'_>, operation: F) -> Result<T>
 where
     F: Fn() -> Fut,
     Fut: std::future::Future<Output = std::result::Result<T, aspen_forge::ForgeError>>,
 {
+    debug_assert!(!target.object_type.is_empty());
+    debug_assert!(!target.object_hash.is_empty());
     let mut attempt = 0u32;
     let mut backoff_ms = CHECKOUT_RETRY_INITIAL_BACKOFF_MS;
 
@@ -174,12 +200,11 @@ where
         match operation().await {
             Ok(value) => return Ok(value),
             Err(e) => {
-                // Check if error is retryable
                 if let Some(reason) = classify_forge_error(&e) {
                     if attempt < MAX_CHECKOUT_OBJECT_RETRIES {
                         debug!(
-                            object_type = object_type,
-                            hash = object_hash,
+                            object_type = target.object_type,
+                            hash = target.object_hash,
                             attempt = attempt,
                             max_attempts = MAX_CHECKOUT_OBJECT_RETRIES,
                             backoff_ms = backoff_ms,
@@ -187,25 +212,20 @@ where
                             "Retrying git object fetch"
                         );
 
-                        // Wait with exponential backoff
                         tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
-
-                        // Double backoff for next attempt, capped at max
-                        backoff_ms = (backoff_ms * 2).min(CHECKOUT_RETRY_MAX_BACKOFF_MS);
+                        backoff_ms = backoff_ms.saturating_mul(2).min(CHECKOUT_RETRY_MAX_BACKOFF_MS);
                         continue;
                     }
 
-                    // All retries exhausted
                     return Err(CiError::ObjectPermanentlyMissing {
-                        object_type: object_type.to_string(),
-                        hash: object_hash.to_string(),
+                        object_type: target.object_type.to_string(),
+                        hash: target.object_hash.to_string(),
                         attempts: attempt,
                     });
                 }
 
-                // Non-retryable error
                 return Err(CiError::ForgeOperation {
-                    reason: format!("Failed to load {}: {}", object_type, e),
+                    reason: format!("Failed to load {}: {}", target.object_type, e),
                 });
             }
         }
@@ -217,11 +237,12 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
     forge: &Arc<ForgeNode<B, K>>,
     tree_hash: &blake3::Hash,
     base_dir: &Path,
-    prefix: &str,
     stats: &mut CheckoutStats,
-    depth: u32,
+    visit: TreeVisit<'_>,
 ) -> Result<()> {
-    if depth > MAX_TREE_DEPTH {
+    debug_assert!(visit.depth <= MAX_TREE_DEPTH);
+    debug_assert!(!base_dir.as_os_str().is_empty());
+    if visit.depth > MAX_TREE_DEPTH {
         return CheckoutLimitExceededSnafu {
             reason: format!("Tree recursion depth exceeds limit of {}", MAX_TREE_DEPTH),
         }
@@ -229,15 +250,21 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
     }
 
     let tree_hash_str = tree_hash.to_hex().to_string();
-    let tree = with_retry("tree", &tree_hash_str, || {
-        let forge = forge.clone();
-        let tree_hash = *tree_hash;
-        async move { forge.git.get_tree(&tree_hash).await }
-    })
+    let tree = with_retry(
+        RetryTarget {
+            object_type: "tree",
+            object_hash: &tree_hash_str,
+        },
+        || {
+            let forge = forge.clone();
+            let tree_hash = *tree_hash;
+            async move { forge.git.get_tree(&tree_hash).await }
+        },
+    )
     .await?;
 
     for entry in &tree.entries {
-        let entry_path = checkout_tree_build_path(prefix, &entry.name);
+        let entry_path = checkout_tree_build_path(visit.prefix, &entry.name);
 
         if entry_path.len() > MAX_PATH_LENGTH {
             warn!(path = %entry_path, "Skipping file with path exceeding {} bytes", MAX_PATH_LENGTH);
@@ -251,9 +278,23 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
             fs::create_dir_all(&full_path).await.context(CreateCheckoutDirSnafu {
                 path: full_path.clone(),
             })?;
-            Box::pin(checkout_tree(forge, &entry_hash, base_dir, &entry_path, stats, depth + 1)).await?;
+            Box::pin(checkout_tree(forge, &entry_hash, base_dir, stats, TreeVisit {
+                prefix: Some(&entry_path),
+                depth: visit.depth.saturating_add(1),
+            }))
+            .await?;
         } else if entry.is_file() {
-            checkout_tree_write_file(forge, &entry_hash, &full_path, &entry_path, entry.is_executable(), stats).await?;
+            checkout_tree_write_file(
+                forge,
+                &entry_hash,
+                CheckoutFileWrite {
+                    full_path: &full_path,
+                    entry_path: &entry_path,
+                    is_executable: entry.is_executable(),
+                },
+                stats,
+            )
+            .await?;
         } else if entry.mode == 0o120000 {
             warn!(path = %entry_path, mode = entry.mode, "Skipping symlink during checkout (symlinks are not supported in CI builds)");
             stats.symlinks_skipped += 1;
@@ -264,11 +305,10 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
 }
 
 /// Build entry path for checkout tree traversal.
-fn checkout_tree_build_path(prefix: &str, name: &str) -> String {
-    if prefix.is_empty() {
-        name.to_string()
-    } else {
-        format!("{}/{}", prefix, name)
+fn checkout_tree_build_path(prefix: Option<&str>, name: &str) -> String {
+    match prefix {
+        Some(existing_prefix) if !existing_prefix.is_empty() => format!("{}/{}", existing_prefix, name),
+        Some(_) | None => name.to_string(),
     }
 }
 
@@ -276,11 +316,11 @@ fn checkout_tree_build_path(prefix: &str, name: &str) -> String {
 async fn checkout_tree_write_file<B: BlobStore, K: KeyValueStore + ?Sized>(
     forge: &Arc<ForgeNode<B, K>>,
     entry_hash: &blake3::Hash,
-    full_path: &Path,
-    entry_path: &str,
-    is_executable: bool,
+    file_write: CheckoutFileWrite<'_>,
     stats: &mut CheckoutStats,
 ) -> Result<()> {
+    debug_assert!(!file_write.entry_path.is_empty());
+    debug_assert!(stats.files_written <= MAX_CHECKOUT_FILES);
     if stats.files_written >= MAX_CHECKOUT_FILES {
         return CheckoutLimitExceededSnafu {
             reason: format!("Checkout exceeds maximum file count of {}", MAX_CHECKOUT_FILES),
@@ -289,11 +329,17 @@ async fn checkout_tree_write_file<B: BlobStore, K: KeyValueStore + ?Sized>(
     }
 
     let blob_hash_str = entry_hash.to_hex().to_string();
-    let content = with_retry("blob", &blob_hash_str, || {
-        let forge = forge.clone();
-        let hash = *entry_hash;
-        async move { forge.git.get_blob(&hash).await }
-    })
+    let content = with_retry(
+        RetryTarget {
+            object_type: "blob",
+            object_hash: &blob_hash_str,
+        },
+        || {
+            let forge = forge.clone();
+            let hash = *entry_hash;
+            async move { forge.git.get_blob(&hash).await }
+        },
+    )
     .await?;
 
     let new_total = stats.bytes_written.saturating_add(content.len() as u64);
@@ -304,30 +350,30 @@ async fn checkout_tree_write_file<B: BlobStore, K: KeyValueStore + ?Sized>(
         .fail();
     }
 
-    if let Some(parent) = full_path.parent() {
+    if let Some(parent) = file_write.full_path.parent() {
         fs::create_dir_all(parent).await.context(CreateCheckoutDirSnafu {
             path: parent.to_path_buf(),
         })?;
     }
 
-    fs::write(full_path, &content).await.context(WriteCheckoutFileSnafu {
-        path: full_path.to_path_buf(),
+    fs::write(file_write.full_path, &content).await.context(WriteCheckoutFileSnafu {
+        path: file_write.full_path.to_path_buf(),
     })?;
 
-    if is_executable {
+    if file_write.is_executable {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::Permissions::from_mode(0o755);
-            fs::set_permissions(full_path, perms).await.context(SetCheckoutPermissionsSnafu {
-                path: full_path.to_path_buf(),
+            fs::set_permissions(file_write.full_path, perms).await.context(SetCheckoutPermissionsSnafu {
+                path: file_write.full_path.to_path_buf(),
             })?;
         }
     }
 
     stats.files_written += 1;
     stats.bytes_written = new_total;
-    debug!(path = %entry_path, size = content.len(), "Checked out file");
+    debug!(path = %file_write.entry_path, size = content.len(), "Checked out file");
 
     Ok(())
 }
@@ -424,6 +470,8 @@ pub async fn prepare_for_ci_build(checkout_dir: &Path, commit_hash: &[u8; 32]) -
 pub async fn init_git_for_flake(checkout_dir: &Path, commit_hash: &[u8; 32]) -> Result<()> {
     use tokio::process::Command;
 
+    debug_assert!(checkout_dir.is_absolute());
+    debug_assert!(!checkout_dir.as_os_str().is_empty());
     let commit_hex = hex::encode(commit_hash);
 
     // Pre-flight: verify git is available
@@ -508,6 +556,8 @@ pub async fn init_git_for_flake(checkout_dir: &Path, commit_hash: &[u8; 32]) -> 
 
 /// Remove [patch.*] sections from .cargo/config.toml.
 async fn remove_cargo_patches(checkout_dir: &Path) -> Result<()> {
+    debug_assert!(checkout_dir.is_absolute());
+    debug_assert!(!checkout_dir.as_os_str().is_empty());
     let cargo_config = checkout_dir.join(".cargo/config.toml");
 
     if !cargo_config.exists() {
@@ -562,6 +612,8 @@ async fn remove_cargo_patches(checkout_dir: &Path) -> Result<()> {
 /// the `source` field from Cargo.lock for patched packages. This function
 /// adds them back so Nix/Crane can vendor the git dependencies.
 async fn add_snix_git_sources(checkout_dir: &Path) -> Result<()> {
+    debug_assert!(checkout_dir.is_absolute());
+    debug_assert!(!checkout_dir.as_os_str().is_empty());
     let cargo_lock = checkout_dir.join("Cargo.lock");
 
     if !cargo_lock.exists() {
@@ -582,7 +634,7 @@ async fn add_snix_git_sources(checkout_dir: &Path) -> Result<()> {
 
     // Process line by line, looking for snix package entries
     // We collect insertion points first to avoid borrow issues
-    let mut insertions: Vec<(usize, String)> = Vec::new();
+    let mut insertions: Vec<(usize, String)> = Vec::with_capacity(SNIX_PACKAGES.len());
 
     for i in 0..lines.len() {
         // Check if this line is a package name we care about
@@ -593,15 +645,14 @@ async fn add_snix_git_sources(checkout_dir: &Path) -> Result<()> {
             .unwrap_or(false);
 
         if is_snix_package {
-            // Check if next line is version = "0.1.0"
-            if i + 1 < lines.len() && lines[i + 1].starts_with("version = \"0.1.0\"") {
-                // Check if source line already exists
-                let has_source = i + 2 < lines.len() && lines[i + 2].starts_with("source = ");
+            let version_index = i.saturating_add(1);
+            let source_index = i.saturating_add(2);
+            let has_expected_version =
+                version_index < lines.len() && lines[version_index].starts_with("version = \"0.1.0\"");
+            let has_source = source_index < lines.len() && lines[source_index].starts_with("source = ");
 
-                if !has_source {
-                    // Record insertion point (will insert after processing)
-                    insertions.push((i + 2, source_line.clone()));
-                }
+            if has_expected_version && !has_source {
+                insertions.push((source_index, source_line.clone()));
             }
         }
     }

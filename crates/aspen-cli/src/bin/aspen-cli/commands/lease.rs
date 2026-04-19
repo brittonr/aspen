@@ -246,18 +246,25 @@ impl Outputable for LeaseListOutput {
 
 impl LeaseCommand {
     /// Execute the lease command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            LeaseCommand::Grant(args) => lease_grant(client, args, json).await,
-            LeaseCommand::Revoke(args) => lease_revoke(client, args, json).await,
-            LeaseCommand::Keepalive(args) => lease_keepalive(client, args, json).await,
-            LeaseCommand::Ttl(args) => lease_ttl(client, args, json).await,
-            LeaseCommand::List => lease_list(client, json).await,
+            LeaseCommand::Grant(args) => lease_grant(client, args, is_json_output).await,
+            LeaseCommand::Revoke(args) => lease_revoke(client, args, is_json_output).await,
+            LeaseCommand::Keepalive(args) => lease_keepalive(client, args, is_json_output).await,
+            LeaseCommand::Ttl(args) => lease_ttl(client, args, is_json_output).await,
+            LeaseCommand::List => lease_list(client, is_json_output).await,
         }
     }
 }
 
-async fn lease_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Result<()> {
+fn print_checked_output<T: Outputable>(output: &T, is_json_output: bool, is_success: bool) {
+    print_output(output, is_json_output);
+    if !is_success {
+        std::process::exit(1);
+    }
+}
+
+async fn lease_grant(client: &AspenClient, args: GrantArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::LeaseGrant {
             ttl_seconds: args.ttl_secs,
@@ -273,10 +280,7 @@ async fn lease_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Resul
                 ttl_seconds: result.ttl_seconds,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_output(&output, is_json_output, result.is_success);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -284,7 +288,7 @@ async fn lease_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Resul
     }
 }
 
-async fn lease_revoke(client: &AspenClient, args: RevokeArgs, json: bool) -> Result<()> {
+async fn lease_revoke(client: &AspenClient, args: RevokeArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::LeaseRevoke {
             lease_id: args.lease_id,
@@ -298,10 +302,7 @@ async fn lease_revoke(client: &AspenClient, args: RevokeArgs, json: bool) -> Res
                 keys_deleted: result.keys_deleted,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_output(&output, is_json_output, result.is_success);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -309,7 +310,7 @@ async fn lease_revoke(client: &AspenClient, args: RevokeArgs, json: bool) -> Res
     }
 }
 
-async fn lease_keepalive(client: &AspenClient, args: KeepaliveArgs, json: bool) -> Result<()> {
+async fn lease_keepalive(client: &AspenClient, args: KeepaliveArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::LeaseKeepalive {
             lease_id: args.lease_id,
@@ -324,10 +325,7 @@ async fn lease_keepalive(client: &AspenClient, args: KeepaliveArgs, json: bool) 
                 ttl_seconds: result.ttl_seconds,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_output(&output, is_json_output, result.is_success);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -335,7 +333,7 @@ async fn lease_keepalive(client: &AspenClient, args: KeepaliveArgs, json: bool) 
     }
 }
 
-async fn lease_ttl(client: &AspenClient, args: TtlArgs, json: bool) -> Result<()> {
+async fn lease_ttl(client: &AspenClient, args: TtlArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::LeaseTimeToLive {
             lease_id: args.lease_id,
@@ -353,10 +351,7 @@ async fn lease_ttl(client: &AspenClient, args: TtlArgs, json: bool) -> Result<()
                 keys: result.keys,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_output(&output, is_json_output, result.is_success);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -364,7 +359,7 @@ async fn lease_ttl(client: &AspenClient, args: TtlArgs, json: bool) -> Result<()
     }
 }
 
-async fn lease_list(client: &AspenClient, json: bool) -> Result<()> {
+async fn lease_list(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::LeaseList).await?;
 
     match response {
@@ -386,10 +381,7 @@ async fn lease_list(client: &AspenClient, json: bool) -> Result<()> {
                 leases,
                 error: result.error,
             };
-            print_output(&output, json);
-            if !result.is_success {
-                std::process::exit(1);
-            }
+            print_checked_output(&output, is_json_output, result.is_success);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),

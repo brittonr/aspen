@@ -371,22 +371,23 @@ impl Outputable for KeyOriginOutput {
 
 impl PeerCommand {
     /// Execute the peer command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json: bool) -> Result<()> {
         match self {
-            PeerCommand::Add(args) => peer_add(client, args, json).await,
-            PeerCommand::Remove(args) => peer_remove(client, args, json).await,
-            PeerCommand::List => peer_list(client, json).await,
-            PeerCommand::Status(args) => peer_status(client, args, json).await,
-            PeerCommand::Filter(args) => peer_filter(client, args, json).await,
-            PeerCommand::Priority(args) => peer_priority(client, args, json).await,
-            PeerCommand::Enable(args) => peer_enable(client, args, json).await,
-            PeerCommand::Disable(args) => peer_disable(client, args, json).await,
-            PeerCommand::Origin(args) => peer_origin(client, args, json).await,
+            PeerCommand::Add(args) => peer_add(client, args, is_json).await,
+            PeerCommand::Remove(args) => peer_remove(client, args, is_json).await,
+            PeerCommand::List => peer_list(client, is_json).await,
+            PeerCommand::Status(args) => peer_status(client, args, is_json).await,
+            PeerCommand::Filter(args) => peer_filter(client, args, is_json).await,
+            PeerCommand::Priority(args) => peer_priority(client, args, is_json).await,
+            PeerCommand::Enable(args) => peer_enable(client, args, is_json).await,
+            PeerCommand::Disable(args) => peer_disable(client, args, is_json).await,
+            PeerCommand::Origin(args) => peer_origin(client, args, is_json).await,
         }
     }
 }
 
-async fn peer_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()> {
+async fn peer_add(client: &AspenClient, args: AddArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.ticket.is_empty());
     let response = client.send(ClientRpcRequest::AddPeerCluster { ticket: args.ticket }).await?;
 
     match response {
@@ -397,7 +398,9 @@ async fn peer_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
                 priority: result.priority,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.is_success || output.cluster_id.is_some());
+            debug_assert!(!output.is_success || output.priority.is_some());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -408,7 +411,8 @@ async fn peer_add(client: &AspenClient, args: AddArgs, json: bool) -> Result<()>
     }
 }
 
-async fn peer_remove(client: &AspenClient, args: RemoveArgs, json: bool) -> Result<()> {
+async fn peer_remove(client: &AspenClient, args: RemoveArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.cluster_id.is_empty());
     let response = client
         .send(ClientRpcRequest::RemovePeerCluster {
             cluster_id: args.cluster_id.clone(),
@@ -422,7 +426,9 @@ async fn peer_remove(client: &AspenClient, args: RemoveArgs, json: bool) -> Resu
                 cluster_id: args.cluster_id,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.cluster_id.is_empty());
+            debug_assert!(!output.is_success || output.error.is_none());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -433,7 +439,7 @@ async fn peer_remove(client: &AspenClient, args: RemoveArgs, json: bool) -> Resu
     }
 }
 
-async fn peer_list(client: &AspenClient, json: bool) -> Result<()> {
+async fn peer_list(client: &AspenClient, is_json: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::ListPeerClusters).await?;
 
     match response {
@@ -457,7 +463,10 @@ async fn peer_list(client: &AspenClient, json: bool) -> Result<()> {
                 count: result.count,
                 error: result.error,
             };
-            print_output(&output, json);
+            let displayed_peer_count = u32::try_from(output.peers.len()).unwrap_or(u32::MAX);
+            debug_assert!(output.count >= displayed_peer_count || output.error.is_some());
+            debug_assert!(output.peers.iter().all(|peer| !peer.cluster_id.is_empty()));
+            print_output(&output, is_json);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -465,7 +474,8 @@ async fn peer_list(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn peer_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
+async fn peer_status(client: &AspenClient, args: StatusArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.cluster_id.is_empty());
     let response = client
         .send(ClientRpcRequest::GetPeerClusterStatus {
             cluster_id: args.cluster_id.clone(),
@@ -485,7 +495,9 @@ async fn peer_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
                 entries_filtered: result.entries_filtered,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.cluster_id.is_empty());
+            debug_assert!(!output.was_found || !output.state.is_empty());
+            print_output(&output, is_json);
             if !result.was_found {
                 std::process::exit(1);
             }
@@ -496,14 +508,15 @@ async fn peer_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
     }
 }
 
-async fn peer_filter(client: &AspenClient, args: FilterArgs, json: bool) -> Result<()> {
+async fn peer_filter(client: &AspenClient, args: FilterArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.cluster_id.is_empty());
     // Convert comma-separated prefixes to JSON array if provided
     let prefixes_json = match args.prefixes {
         Some(ref prefixes) if !prefixes.is_empty() => {
             let prefixes: Vec<&str> = prefixes.split(',').map(|p| p.trim()).collect();
             Some(serde_json::to_string(&prefixes)?)
         }
-        _ => None,
+        Some(_) | None => None,
     };
 
     let response = client
@@ -522,7 +535,9 @@ async fn peer_filter(client: &AspenClient, args: FilterArgs, json: bool) -> Resu
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.cluster_id.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -533,7 +548,8 @@ async fn peer_filter(client: &AspenClient, args: FilterArgs, json: bool) -> Resu
     }
 }
 
-async fn peer_priority(client: &AspenClient, args: PriorityArgs, json: bool) -> Result<()> {
+async fn peer_priority(client: &AspenClient, args: PriorityArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.cluster_id.is_empty());
     let response = client
         .send(ClientRpcRequest::UpdatePeerClusterPriority {
             cluster_id: args.cluster_id.clone(),
@@ -549,7 +565,9 @@ async fn peer_priority(client: &AspenClient, args: PriorityArgs, json: bool) -> 
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.cluster_id.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -560,7 +578,8 @@ async fn peer_priority(client: &AspenClient, args: PriorityArgs, json: bool) -> 
     }
 }
 
-async fn peer_enable(client: &AspenClient, args: EnableArgs, json: bool) -> Result<()> {
+async fn peer_enable(client: &AspenClient, args: EnableArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.cluster_id.is_empty());
     let response = client
         .send(ClientRpcRequest::SetPeerClusterEnabled {
             cluster_id: args.cluster_id.clone(),
@@ -576,7 +595,9 @@ async fn peer_enable(client: &AspenClient, args: EnableArgs, json: bool) -> Resu
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.cluster_id.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -587,7 +608,8 @@ async fn peer_enable(client: &AspenClient, args: EnableArgs, json: bool) -> Resu
     }
 }
 
-async fn peer_disable(client: &AspenClient, args: DisableArgs, json: bool) -> Result<()> {
+async fn peer_disable(client: &AspenClient, args: DisableArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.cluster_id.is_empty());
     let response = client
         .send(ClientRpcRequest::SetPeerClusterEnabled {
             cluster_id: args.cluster_id.clone(),
@@ -603,7 +625,9 @@ async fn peer_disable(client: &AspenClient, args: DisableArgs, json: bool) -> Re
                 is_success: result.is_success,
                 error: result.error,
             };
-            print_output(&output, json);
+            debug_assert!(!output.operation.is_empty());
+            debug_assert!(!output.cluster_id.is_empty());
+            print_output(&output, is_json);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -614,7 +638,8 @@ async fn peer_disable(client: &AspenClient, args: DisableArgs, json: bool) -> Re
     }
 }
 
-async fn peer_origin(client: &AspenClient, args: OriginArgs, json: bool) -> Result<()> {
+async fn peer_origin(client: &AspenClient, args: OriginArgs, is_json: bool) -> Result<()> {
+    debug_assert!(!args.key.is_empty());
     let response = client.send(ClientRpcRequest::GetKeyOrigin { key: args.key.clone() }).await?;
 
     match response {
@@ -627,7 +652,9 @@ async fn peer_origin(client: &AspenClient, args: OriginArgs, json: bool) -> Resu
                 timestamp_secs: result.timestamp_secs,
                 is_local: result.is_local,
             };
-            print_output(&output, json);
+            debug_assert!(!output.key.is_empty());
+            debug_assert!(!output.was_found || output.is_local.is_some());
+            print_output(&output, is_json);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),

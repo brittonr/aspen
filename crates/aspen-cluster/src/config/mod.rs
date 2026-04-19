@@ -175,7 +175,7 @@ pub struct NodeConfig {
     /// - InMemory: Fast, non-durable (data lost on restart), good for testing
     ///
     /// Default: Redb
-    #[serde(default)]
+    #[serde(default = "default_storage_backend")]
     pub storage_backend: StorageBackend,
 
     /// Path for redb-backed shared database (log + state machine).
@@ -193,7 +193,7 @@ pub struct NodeConfig {
 
     // Legacy HTTP field removed - all APIs now use Iroh Client RPC via QUIC
     /// Control-plane implementation to use for this node.
-    #[serde(default)]
+    #[serde(default = "default_control_backend")]
     pub control_backend: ControlBackend,
 
     /// Raft timing profile for quick configuration.
@@ -204,7 +204,7 @@ pub struct NodeConfig {
     /// - `conservative`: 500ms heartbeat, 1.5-3s elections (default, for production)
     /// - `balanced`: 100ms heartbeat, 0.5-1s elections (for LAN)
     /// - `fast`: 30ms heartbeat, 100-200ms elections (for testing)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "default_raft_timing_profile", skip_serializing_if = "Option::is_none")]
     pub raft_timing_profile: Option<RaftTimingProfile>,
 
     /// Raft heartbeat interval in milliseconds.
@@ -245,7 +245,7 @@ pub struct NodeConfig {
 
     /// Peer node addresses.
     /// Format: "node_id@endpoint_id:direct_addrs"
-    #[serde(default)]
+    #[serde(default = "default_peers")]
     pub peers: Vec<String>,
 
     /// Write batching configuration.
@@ -262,7 +262,7 @@ pub struct NodeConfig {
     ///
     /// When enabled, the node registers an upstream proxy handler that accepts
     /// authenticated peer connections and forwards TCP traffic to local services.
-    #[serde(default)]
+    #[serde(default = "default_proxy_config")]
     pub proxy: ProxyConfig,
 
     /// Global content discovery configuration.
@@ -285,7 +285,7 @@ pub struct NodeConfig {
     /// When enabled, KV operations and cluster events trigger registered handlers.
     /// Handlers can be in-process (async closures), shell commands, or cross-cluster
     /// forwarding. Supports NATS-style topic wildcards for flexible routing.
-    #[serde(default)]
+    #[serde(default = "default_hooks_config")]
     pub hooks: aspen_hooks_types::HooksConfig,
 
     /// CI/CD pipeline configuration.
@@ -349,11 +349,11 @@ impl Default for NodeConfig {
         Self {
             node_id: 0,
             data_dir: None,
-            storage_backend: StorageBackend::default(),
+            storage_backend: default_storage_backend(),
             redb_path: None,
             host: default_host(),
             cookie: default_cookie(),
-            control_backend: ControlBackend::default(),
+            control_backend: default_control_backend(),
             raft_timing_profile: None,
             heartbeat_interval_ms: default_heartbeat_interval_ms(),
             election_timeout_min_ms: default_election_timeout_min_ms(),
@@ -364,13 +364,13 @@ impl Default for NodeConfig {
             peer_sync: PeerSyncConfig::default(),
             federation: FederationConfig::default(),
             sharding: ShardingConfig::default(),
-            peers: vec![],
+            peers: default_peers(),
             batch_config: default_batch_config(),
-            proxy: ProxyConfig::default(),
+            proxy: default_proxy_config(),
             #[cfg(feature = "blob")]
             content_discovery: ContentDiscoveryConfig::default(),
             worker: WorkerConfig::default(),
-            hooks: aspen_hooks_types::HooksConfig::default(),
+            hooks: default_hooks_config(),
             ci: CiConfig::default(),
             nix_cache: NixCacheConfig::default(),
             snix: SnixConfig::default(),
@@ -430,7 +430,8 @@ impl NodeConfig {
             worker: from_env_worker(),
             hooks: aspen_hooks_types::HooksConfig {
                 is_enabled: parse_env("ASPEN_HOOKS_ENABLED").unwrap_or(false),
-                ..Default::default()
+                publish_topics: Vec::new(),
+                handlers: Vec::new(),
             },
             ci: from_env_ci(),
             nix_cache: from_env_nix_cache(),
@@ -574,7 +575,7 @@ impl NodeConfig {
                 if let Some(warning) = check_disk_usage(disk_space.usage_percent) {
                     warn!(
                         data_dir = %data_dir.display(),
-                        available_gb = disk_space.available_bytes / (1024 * 1024 * 1024),
+                        available_gb = disk_space.available_bytes / BYTES_PER_GIB,
                         "{}",
                         warning
                     );
@@ -595,8 +596,8 @@ impl NodeConfig {
                 // Ensure parent directory exists or can be created
                 if let Some(parent) = path.parent() {
                     let is_non_empty = !parent.as_os_str().is_empty();
-                    let does_not_exist = !parent.exists();
-                    if is_non_empty && does_not_exist {
+                    let is_missing_parent = !parent.exists();
+                    if is_non_empty && is_missing_parent {
                         if let Err(e) = std::fs::create_dir_all(parent) {
                             return Err(ConfigError::Validation {
                                 message: format!(
@@ -611,9 +612,9 @@ impl NodeConfig {
                 }
 
                 // Check path is not a directory
-                let does_exist = path.exists();
+                let is_existing_path = path.exists();
                 let is_directory = path.is_dir();
-                if does_exist && is_directory {
+                if is_existing_path && is_directory {
                     return Err(ConfigError::Validation {
                         message: format!("{} path {} exists but is a directory, expected a file", name, path.display()),
                     });
@@ -694,8 +695,8 @@ impl NodeConfig {
             // Warn if auto_trigger is enabled but no watched repos
             // Decomposed: check if auto_trigger is on, then check if repos are empty
             let is_auto_trigger_enabled = self.ci.auto_trigger;
-            let has_no_repos = self.ci.watched_repos.is_empty();
-            if is_auto_trigger_enabled && has_no_repos {
+            let has_watched_repos = !self.ci.watched_repos.is_empty();
+            if is_auto_trigger_enabled && !has_watched_repos {
                 warnings.push(
                     "CI auto_trigger is enabled but watched_repos is empty - no repositories will be automatically triggered"
                         .to_string(),
@@ -724,6 +725,11 @@ impl NodeConfig {
 
 /// Merge core node-level fields (node_id, data_dir, host, cookie, backends, raft timings).
 fn merge_core_config(target: &mut NodeConfig, other: &NodeConfig) {
+    debug_assert!(other.election_timeout_min_ms <= other.election_timeout_max_ms || other.election_timeout_max_ms == 0);
+    debug_assert!(
+        other.node_id == 0 || !other.host.is_empty(),
+        "configured node overrides should keep a non-empty host"
+    );
     if other.node_id != 0 {
         target.node_id = other.node_id;
     }
@@ -744,7 +750,7 @@ fn merge_core_config(target: &mut NodeConfig, other: &NodeConfig) {
     // Tiger Style: Only merge storage_backend if explicitly set (non-default)
     // Example: TOML sets `storage_backend = "inmemory"`, CLI doesn't override,
     // so InMemory is preserved instead of being overwritten by default Redb
-    if other.storage_backend != StorageBackend::default() {
+    if other.storage_backend != default_storage_backend() {
         target.storage_backend = other.storage_backend;
     }
     if other.redb_path.is_some() {
@@ -763,6 +769,8 @@ fn merge_core_config(target: &mut NodeConfig, other: &NodeConfig) {
 
 /// Merge Iroh P2P networking configuration.
 fn merge_iroh_config(target: &mut IrohConfig, other: IrohConfig) {
+    debug_assert!(other.bind_port <= u16::MAX.into(), "iroh bind_port must fit in u16");
+    debug_assert!(other.secret_key.is_none() || !other.bind_port.to_string().is_empty());
     if other.secret_key.is_some() {
         target.secret_key = other.secret_key;
     }
@@ -818,6 +826,8 @@ fn merge_iroh_config(target: &mut IrohConfig, other: IrohConfig) {
 
 /// Merge iroh-docs real-time synchronization configuration.
 fn merge_docs_config(target: &mut DocsConfig, other: DocsConfig) {
+    debug_assert!(other.background_sync_interval_secs > 0 || !other.enable_background_sync);
+    debug_assert!(other.namespace_secret.is_none() || other.author_secret.is_some() || other.author_secret.is_none());
     if other.is_enabled {
         target.is_enabled = other.is_enabled;
     }
@@ -924,6 +934,8 @@ fn merge_content_discovery_config(target: &mut ContentDiscoveryConfig, other: Co
 
 /// Merge worker pool configuration for distributed job execution.
 fn merge_worker_config(target: &mut WorkerConfig, other: WorkerConfig) {
+    debug_assert!(other.worker_count > 0 || !other.is_enabled);
+    debug_assert!(other.max_concurrent_jobs > 0 || !other.is_enabled);
     if other.is_enabled {
         target.is_enabled = other.is_enabled;
     }
@@ -1012,6 +1024,8 @@ fn merge_ci_config(target: &mut CiConfig, other: CiConfig) {
 
 /// Merge Nix binary cache configuration.
 fn merge_nix_cache_config(target: &mut NixCacheConfig, other: NixCacheConfig) {
+    debug_assert!(other.priority <= u32::MAX);
+    debug_assert!(other.cache_name.is_some() || other.signing_key_name.is_none() || other.signing_key_name.is_some());
     if other.is_enabled {
         target.is_enabled = other.is_enabled;
     }
@@ -1288,6 +1302,39 @@ fn default_host() -> String {
 /// This prevents multiple independent clusters from accidentally sharing gossip topics.
 const DEFAULT_COOKIE_MARKER: &str = "aspen-cookie-UNSAFE-CHANGE-ME";
 
+const BYTES_PER_GIB: u64 = 1_073_741_824;
+
+fn default_storage_backend() -> StorageBackend {
+    StorageBackend::Redb
+}
+
+fn default_control_backend() -> ControlBackend {
+    ControlBackend::Raft
+}
+
+fn default_raft_timing_profile() -> Option<RaftTimingProfile> {
+    None
+}
+
+fn default_peers() -> Vec<String> {
+    Vec::new()
+}
+
+fn default_proxy_config() -> ProxyConfig {
+    ProxyConfig {
+        is_enabled: false,
+        max_connections: default_proxy_max_connections(),
+    }
+}
+
+fn default_hooks_config() -> aspen_hooks_types::HooksConfig {
+    aspen_hooks_types::HooksConfig {
+        is_enabled: false,
+        publish_topics: Vec::new(),
+        handlers: Vec::new(),
+    }
+}
+
 fn default_cookie() -> String {
     DEFAULT_COOKIE_MARKER.into()
 }
@@ -1305,7 +1352,12 @@ fn default_election_timeout_max_ms() -> u64 {
 }
 
 fn default_batch_config() -> Option<aspen_raft::BatchConfig> {
-    Some(aspen_raft::BatchConfig::default())
+    Some(aspen_raft::BatchConfig {
+        max_entries: 100,
+        max_bytes: 1_048_576,
+        max_wait_ms: 2,
+        max_wait: std::time::Duration::from_millis(2),
+    })
 }
 
 // Helper functions for parsing environment variables

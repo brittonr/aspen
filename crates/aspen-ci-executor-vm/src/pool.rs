@@ -34,11 +34,18 @@ use crate::vm::SharedVm;
 use crate::vm::VmState;
 
 /// VM pool for managing warm VMs.
+///
+/// Lock ordering when multiple pool locks are needed:
+/// `idle_vms` -> `all_vms` -> `golden_snapshot` -> `snapshot_needs_regen` ->
+/// `shared_workspace_client`.
 pub struct VmPool {
     /// Pool configuration.
     config: CloudHypervisorWorkerConfig,
 
     /// Idle VMs ready for job assignment.
+    ///
+    /// Lock ordering: `idle_vms` -> `all_vms` -> `golden_snapshot` -> `snapshot_needs_regen` ->
+    /// `shared_workspace_client`.
     idle_vms: Mutex<VecDeque<SharedVm>>,
 
     /// All VMs managed by this pool.
@@ -78,6 +85,30 @@ pub struct VmPool {
 }
 
 impl VmPool {
+    fn checked_u32_to_usize(value: u32) -> usize {
+        usize::try_from(value).unwrap_or(usize::MAX)
+    }
+
+    fn checked_usize_to_u32(value: usize) -> u32 {
+        u32::try_from(value).unwrap_or(u32::MAX)
+    }
+
+    fn checked_u128_to_u64(value: u128) -> u64 {
+        u64::try_from(value).unwrap_or(u64::MAX)
+    }
+
+    fn max_vms_usize(max_vms: u32) -> usize {
+        Self::checked_u32_to_usize(max_vms)
+    }
+
+    fn next_vm_index_u32(&self) -> Result<u32> {
+        self.next_vm_index.fetch_add(1, Ordering::Relaxed).try_into().map_err(|_| {
+            CloudHypervisorError::CreateVmFailed {
+                reason: "VM index space exhausted u32 range".to_string(),
+            }
+        })
+    }
+
     /// Create a new VM pool.
     pub fn new(config: CloudHypervisorWorkerConfig) -> Self {
         Self::with_pressure_level(config, None)
@@ -92,12 +123,13 @@ impl VmPool {
     /// At Warning pressure, `maintain()` skips pre-warming.
     pub fn with_pressure_level(config: CloudHypervisorWorkerConfig, pressure_level: Option<Arc<AtomicU8>>) -> Self {
         let max_vms = config.max_vms.min(MAX_CI_VMS_PER_NODE);
+        let max_vm_slots = Self::max_vms_usize(max_vms);
 
         Self {
             config,
-            idle_vms: Mutex::new(VecDeque::with_capacity(max_vms as usize)),
+            idle_vms: Mutex::new(VecDeque::with_capacity(max_vm_slots)),
             all_vms: Mutex::new(Vec::new()),
-            vm_semaphore: Arc::new(Semaphore::new(max_vms as usize)),
+            vm_semaphore: Arc::new(Semaphore::new(max_vm_slots)),
             next_vm_index: AtomicU64::new(0),
             golden_snapshot: RwLock::new(None),
             restore_failure_count: AtomicU32::new(0),
@@ -122,9 +154,9 @@ impl VmPool {
     /// This boots `pool_size` VMs so they're ready for immediate use.
     /// Waits for the cluster ticket file to exist before starting VMs.
     pub async fn initialize(&self) -> Result<()> {
-        let target_size = self.config.pool_size.min(self.config.max_vms);
+        let target_vm_count = self.config.pool_size.min(self.config.max_vms);
 
-        info!(target_size = target_size, max_vms = self.config.max_vms, "initializing VM pool");
+        info!(target_vm_count = target_vm_count, max_vms = self.config.max_vms, "initializing VM pool");
 
         // Wait for the cluster ticket file to exist before starting VMs.
         // The ticket file is written after the Iroh endpoint is ready, which happens
@@ -224,9 +256,10 @@ impl VmPool {
         // If snapshots are enabled and no golden snapshot exists, the first VM
         // cold-boots, gets snapshotted at Idle, then joins the pool.
         let has_snapshot = self.golden_snapshot.read().await.is_some();
-        let need_golden = self.config.enable_snapshots && !has_snapshot && self.config.get_cluster_ticket().is_some();
+        let should_seed_golden_snapshot =
+            self.config.enable_snapshots && !has_snapshot && self.config.get_cluster_ticket().is_some();
 
-        for i in 0..target_size {
+        for i in 0..target_vm_count {
             let permit = match self.vm_semaphore.clone().try_acquire_owned() {
                 Ok(p) => p,
                 Err(_) => {
@@ -236,7 +269,7 @@ impl VmPool {
             };
 
             // First VM: cold-boot and snapshot (if needed)
-            if i == 0 && need_golden {
+            if i == 0 && should_seed_golden_snapshot {
                 match self.create_and_start_vm().await {
                     Ok(vm) => {
                         *vm.pool_permit.write().await = Some(permit);
@@ -274,13 +307,13 @@ impl VmPool {
             }
         }
 
-        let pool_size = self.idle_vms.lock().await.len();
+        let idle_vm_count = self.idle_vms.lock().await.len();
         let snapshot_status = if self.golden_snapshot.read().await.is_some() {
             "valid"
         } else {
             "none"
         };
-        info!(pool_size = pool_size, snapshot = snapshot_status, "VM pool initialized");
+        info!(idle_vm_count = idle_vm_count, snapshot = snapshot_status, "VM pool initialized");
 
         Ok(())
     }
@@ -297,22 +330,22 @@ impl VmPool {
     }
 
     /// Acquire a VM with explicit cold-boot control.
-    pub async fn acquire_with_options(&self, job_id: &str, force_cold_boot: bool) -> Result<SharedVm> {
-        self.acquire_inner(job_id, force_cold_boot).await
+    pub async fn acquire_with_options(&self, job_id: &str, is_force_cold_boot: bool) -> Result<SharedVm> {
+        self.acquire_inner(job_id, is_force_cold_boot).await
     }
 
     /// Inner acquire implementation.
-    async fn acquire_inner(&self, job_id: &str, force_cold_boot: bool) -> Result<SharedVm> {
-        debug!(job_id = %job_id, force_cold_boot = force_cold_boot, "acquiring VM from pool");
+    async fn acquire_inner(&self, job_id: &str, is_force_cold_boot: bool) -> Result<SharedVm> {
+        debug!(job_id = %job_id, is_force_cold_boot = is_force_cold_boot, "acquiring VM from pool");
 
         // Check memory pressure — reject at Critical
         let pressure = self.current_pressure_level();
-        let active_count = self.all_vms.lock().await.len() as u32;
-        if !crate::verified::should_allow_restore(pressure, active_count) {
+        let active_vm_count = Self::checked_usize_to_u32(self.all_vms.lock().await.len());
+        if !crate::verified::should_allow_restore(pressure, active_vm_count) {
             warn!(
                 job_id = %job_id,
                 pressure = pressure,
-                active_vms = active_count,
+                active_vms = active_vm_count,
                 "rejecting VM acquire due to critical memory pressure"
             );
             return Err(CloudHypervisorError::PoolAtCapacity {
@@ -322,12 +355,7 @@ impl VmPool {
 
         // Try to get a healthy idle VM. Loop because we may encounter dead VMs
         // that need to be evicted before finding a live one.
-        loop {
-            let vm = self.idle_vms.lock().await.pop_front();
-            let Some(vm) = vm else {
-                break; // No more idle VMs
-            };
-
+        while let Some(vm) = self.idle_vms.lock().await.pop_front() {
             // Check process liveness before using
             if !vm.is_process_alive().await {
                 warn!(vm_id = %vm.id, job_id = %job_id, "evicting dead VM encountered during acquire");
@@ -352,14 +380,14 @@ impl VmPool {
 
         // Try non-blocking acquire first
         match self.vm_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => return self.create_vm_with_permit(permit, job_id, force_cold_boot).await,
+            Ok(permit) => return self.create_vm_with_permit(permit, job_id, is_force_cold_boot).await,
             Err(_) => {
                 // Pool at capacity — wait up to ACQUIRE_WAIT_TIMEOUT for a permit
                 // (a VM being destroyed will release one).
                 debug!(job_id = %job_id, "pool at capacity, waiting for a VM to be released");
 
                 match tokio::time::timeout(ACQUIRE_WAIT_TIMEOUT, self.vm_semaphore.clone().acquire_owned()).await {
-                    Ok(Ok(permit)) => return self.create_vm_with_permit(permit, job_id, force_cold_boot).await,
+                    Ok(Ok(permit)) => return self.create_vm_with_permit(permit, job_id, is_force_cold_boot).await,
                     Ok(Err(_closed)) => {
                         // Semaphore closed — shouldn't happen
                         Err(CloudHypervisorError::PoolAtCapacity {
@@ -367,7 +395,7 @@ impl VmPool {
                         })
                     }
                     Err(_timeout) => Err(CloudHypervisorError::NoVmsAvailable {
-                        timeout_ms: ACQUIRE_WAIT_TIMEOUT.as_millis() as u64,
+                        timeout_ms: Self::checked_u128_to_u64(ACQUIRE_WAIT_TIMEOUT.as_millis()),
                     }),
                 }
             }
@@ -381,9 +409,9 @@ impl VmPool {
         &self,
         permit: tokio::sync::OwnedSemaphorePermit,
         job_id: &str,
-        force_cold_boot: bool,
+        is_force_cold_boot: bool,
     ) -> Result<SharedVm> {
-        let vm = self.create_or_restore_vm(force_cold_boot).await.map_err(|e| {
+        let vm = self.create_or_restore_vm(is_force_cold_boot).await.map_err(|e| {
             error!(error = ?e, "failed to create new VM");
             // Permit drops here automatically, releasing capacity
             e
@@ -398,10 +426,10 @@ impl VmPool {
     /// Create or restore a VM, preferring snapshot restore when available.
     ///
     /// If `force_cold_boot` is true, always cold-boots regardless of snapshot.
-    async fn create_or_restore_vm(&self, force_cold_boot: bool) -> Result<SharedVm> {
+    async fn create_or_restore_vm(&self, is_force_cold_boot: bool) -> Result<SharedVm> {
         // Try snapshot restore first (unless forced to cold-boot)
-        if !force_cold_boot && let Some(snapshot) = self.golden_snapshot.read().await.clone() {
-            let vm_index = self.next_vm_index.fetch_add(1, Ordering::Relaxed) as u32;
+        if !is_force_cold_boot && let Some(snapshot) = self.golden_snapshot.read().await.clone() {
+            let vm_index = self.next_vm_index_u32()?;
             let vm = Arc::new(ManagedCiVm::new(self.config.clone(), vm_index));
 
             // Inject shared workspace client so the VM reuses the pool's Iroh endpoint
@@ -425,7 +453,8 @@ impl VmPool {
                     self.all_vms.lock().await.retain(|v| !Arc::ptr_eq(v, &vm));
 
                     // Increment failure counter and check for invalidation
-                    let failures = self.restore_failure_count.fetch_add(1, Ordering::Relaxed) + 1;
+                    let previous_failures = self.restore_failure_count.fetch_add(1, Ordering::Relaxed);
+                    let failures = previous_failures.saturating_add(1);
                     let max_failures = self.config.max_restore_failures;
                     if crate::verified::should_invalidate_snapshot(failures, max_failures) {
                         warn!(
@@ -477,10 +506,10 @@ impl VmPool {
         }
 
         // Check if we should keep it in the pool
-        let target_size = self.config.pool_size as usize;
-        let kept = {
+        let target_vm_count = Self::checked_u32_to_usize(self.config.pool_size);
+        let is_kept = {
             let mut idle = self.idle_vms.lock().await;
-            if idle.len() < target_size {
+            if idle.len() < target_vm_count {
                 idle.push_back(vm.clone());
                 true
             } else {
@@ -488,7 +517,7 @@ impl VmPool {
             }
         };
 
-        if kept {
+        if is_kept {
             debug!(vm_id = %vm.id, "VM returned to pool");
         } else {
             debug!(vm_id = %vm.id, "pool full, destroying VM");
@@ -569,8 +598,9 @@ impl VmPool {
         // Check each idle VM's process liveness and remove any that have crashed.
         let dead_vms = {
             let mut idle = self.idle_vms.lock().await;
-            let mut alive = VecDeque::with_capacity(idle.len());
-            let mut dead = Vec::new();
+            let idle_vm_count = idle.len();
+            let mut alive = VecDeque::with_capacity(idle_vm_count);
+            let mut dead = Vec::with_capacity(idle_vm_count);
 
             for vm in idle.drain(..) {
                 if vm.is_process_alive().await {
@@ -637,14 +667,19 @@ impl VmPool {
         }
 
         let current_idle = self.idle_vms.lock().await.len();
-        let target = self.config.pool_size as usize;
+        let target_vm_count = Self::checked_u32_to_usize(self.config.pool_size);
 
-        if current_idle >= target {
+        if current_idle >= target_vm_count {
             return;
         }
 
-        let to_create = target - current_idle;
-        debug!(current_idle = current_idle, target = target, to_create = to_create, "replenishing pool");
+        let to_create = target_vm_count.saturating_sub(current_idle);
+        debug!(
+            current_idle = current_idle,
+            target_vm_count = target_vm_count,
+            to_create = to_create,
+            "replenishing pool"
+        );
 
         for _ in 0..to_create {
             let permit = match self.vm_semaphore.clone().try_acquire_owned() {
@@ -696,7 +731,7 @@ impl VmPool {
             "acquiring speculative VM group"
         );
 
-        let mut forks = Vec::with_capacity(effective_count as usize);
+        let mut forks = Vec::with_capacity(Self::checked_u32_to_usize(effective_count));
 
         for i in 0..effective_count {
             let permit = match self.vm_semaphore.clone().try_acquire_owned() {
@@ -744,7 +779,7 @@ impl VmPool {
     async fn create_and_start_vm(&self) -> Result<SharedVm> {
         // Monotonic: never wraps, never collides.
         // u64 overflow is effectively impossible (~18 quintillion VMs).
-        let vm_index = self.next_vm_index.fetch_add(1, Ordering::Relaxed) as u32;
+        let vm_index = self.next_vm_index_u32()?;
 
         let vm = Arc::new(ManagedCiVm::new(self.config.clone(), vm_index));
 
