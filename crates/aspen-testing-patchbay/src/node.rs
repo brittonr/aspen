@@ -26,12 +26,29 @@ use iroh::SecretKey;
 use openraft::Raft;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tracing::debug;
 use tracing::info;
 
 use crate::transport::TestTransport;
 
 /// Maximum pending commands in the node's command channel.
 const CMD_CHANNEL_CAPACITY: usize = 64;
+
+fn trust_disabled_config() -> aspen_cluster_types::TrustConfig {
+    aspen_cluster_types::TrustConfig {
+        enabled: false,
+        threshold: None,
+    }
+}
+
+struct CommandLoopContext {
+    node_id: NodeId,
+    raft: Raft<AppTypeConfig>,
+    raft_node: RaftNode,
+    network_factory: IrpcRaftNetworkFactory<TestTransport>,
+    endpoint_addr: EndpointAddr,
+    _raft_server: aspen_raft::server::RaftRpcServer,
+}
 
 /// Commands sent from the test thread to a spawned node.
 pub enum NodeCommand {
@@ -141,8 +158,13 @@ impl NodeHandle {
     /// Shut down the node.
     pub async fn shutdown(&self) -> Result<()> {
         let (tx, rx) = oneshot::channel();
-        let _ = self.cmd_tx.send(NodeCommand::Shutdown { reply: tx }).await;
-        let _ = rx.await;
+        if let Err(error) = self.cmd_tx.send(NodeCommand::Shutdown { reply: tx }).await {
+            debug!(%error, node_id = self.node_id.0, "patchbay node already stopped before shutdown signal");
+            return Ok(());
+        }
+        if let Err(error) = rx.await {
+            debug!(%error, node_id = self.node_id.0, "patchbay node dropped shutdown reply channel");
+        }
         Ok(())
     }
 }
@@ -174,26 +196,29 @@ pub async fn bootstrap_node(node_id: NodeId) -> Result<(NodeHandle, impl std::fu
     );
 
     // Create in-memory storage (sufficient for network-layer testing)
-    let log_store = InMemoryLogStore::default();
+    let log_store = InMemoryLogStore::new();
     let state_machine = InMemoryStateMachine::new();
     let sm_variant = StateMachineVariant::InMemory(Arc::clone(&state_machine));
 
     // Create test transport wrapper
-    let transport = Arc::new(TestTransport::new(endpoint.clone(), node_addr.clone(), secret_key));
+    let raft_network_backend = Arc::new(TestTransport::new(endpoint.clone(), node_addr.clone(), secret_key));
 
     // Create Raft network factory with empty initial peers
-    let network_factory = IrpcRaftNetworkFactory::new(transport.clone(), HashMap::new(), false);
+    let network_factory = IrpcRaftNetworkFactory::new(raft_network_backend.clone(), HashMap::new(), false);
 
     // Raft config tuned for test speed
     let config = Arc::new(
-        openraft::Config {
-            cluster_name: "patchbay-test".to_string(),
-            heartbeat_interval: 1000,
-            election_timeout_min: 3000,
-            election_timeout_max: 5000,
-            ..Default::default()
-        }
-        .validate()
+        openraft::Config::build(&[
+            "patchbay-test",
+            "--cluster-name",
+            "patchbay-test",
+            "--heartbeat-interval",
+            "1000",
+            "--election-timeout-min",
+            "3000",
+            "--election-timeout-max",
+            "5000",
+        ])
         .context("invalid raft config")?,
     );
 
@@ -210,6 +235,8 @@ pub async fn bootstrap_node(node_id: NodeId) -> Result<(NodeHandle, impl std::fu
 
     // Start Raft RPC server for incoming connections
     let raft_server = aspen_raft::server::RaftRpcServer::spawn(Arc::new(endpoint.clone()), raft.clone());
+    debug_assert!(!node_addr.addrs.is_empty());
+    debug_assert_eq!(handle_node_id_value(node_id), node_id.0);
 
     // RaftNode wrapper for KV operations
     let raft_node = RaftNode::new(node_id, Arc::new(raft.clone()), sm_variant);
@@ -218,78 +245,94 @@ pub async fn bootstrap_node(node_id: NodeId) -> Result<(NodeHandle, impl std::fu
     let (cmd_tx, cmd_rx) = mpsc::channel(CMD_CHANNEL_CAPACITY);
 
     let handle = NodeHandle { node_id, cmd_tx };
+    debug_assert_eq!(handle.node_id.0, node_id.0);
 
-    let cmd_loop = run_command_loop(node_id, raft, raft_node, network_factory, node_addr, cmd_rx, raft_server);
+    let cmd_context = CommandLoopContext {
+        node_id,
+        raft,
+        raft_node,
+        network_factory,
+        endpoint_addr: node_addr,
+        _raft_server: raft_server,
+    };
+    let cmd_loop = run_command_loop(cmd_context, cmd_rx);
 
     Ok((handle, cmd_loop))
 }
 
+fn handle_node_id_value(node_id: NodeId) -> u64 {
+    node_id.0
+}
+
+fn send_reply_or_log<T>(reply: oneshot::Sender<T>, value: T, node_id: NodeId, action: &str) {
+    if reply.send(value).is_err() {
+        debug!(node_id = node_id.0, action, "patchbay reply receiver dropped");
+    }
+}
+
+async fn init_cluster_command(raft_node: &RaftNode, members: Vec<ClusterNode>) -> Result<()> {
+    let request = InitRequest {
+        initial_members: members,
+        trust: trust_disabled_config(),
+    };
+    raft_node.init(request).await.map(|_| ()).map_err(|e| anyhow::anyhow!("init failed: {}", e))
+}
+
+async fn write_kv_command(raft_node: &RaftNode, key: String, value: String) -> Result<()> {
+    let request = aspen_kv_types::WriteRequest::set(key, value);
+    raft_node.write(request).await.map(|_| ()).map_err(|e| anyhow::anyhow!("write failed: {}", e))
+}
+
+async fn read_kv_command(raft_node: &RaftNode, key: String) -> Result<Option<String>> {
+    let request = aspen_kv_types::ReadRequest::stale(key);
+    raft_node
+        .read(request)
+        .await
+        .map(|response| response.kv.map(|kv| kv.value))
+        .map_err(|e| anyhow::anyhow!("read failed: {}", e))
+}
+
 /// Run the command loop for a spawned node.
-async fn run_command_loop(
-    node_id: NodeId,
-    raft: Raft<AppTypeConfig>,
-    raft_node: RaftNode,
-    network_factory: IrpcRaftNetworkFactory<TestTransport>,
-    endpoint_addr: EndpointAddr,
-    mut cmd_rx: mpsc::Receiver<NodeCommand>,
-    _raft_server: aspen_raft::server::RaftRpcServer,
-) {
-    use aspen_kv_types::ReadConsistency;
-    use aspen_kv_types::ReadRequest;
-    use aspen_kv_types::WriteCommand;
-    use aspen_kv_types::WriteRequest;
+async fn run_command_loop(cmd_context: CommandLoopContext, mut cmd_rx: mpsc::Receiver<NodeCommand>) {
+    debug_assert_eq!(cmd_context.node_id.0, handle_node_id_value(cmd_context.node_id));
+    debug_assert!(!cmd_context.endpoint_addr.addrs.is_empty());
 
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
             NodeCommand::GetAddr { reply } => {
-                let _ = reply.send(endpoint_addr.clone());
+                send_reply_or_log(reply, cmd_context.endpoint_addr.clone(), cmd_context.node_id, "get-addr");
             }
             NodeCommand::AddPeers { peers, reply } => {
-                network_factory.update_peers(peers).await;
-                let _ = reply.send(Ok(()));
+                cmd_context.network_factory.update_peers(peers).await;
+                send_reply_or_log(reply, Ok(()), cmd_context.node_id, "add-peers");
             }
             NodeCommand::InitCluster { members, reply } => {
-                let request = InitRequest {
-                    initial_members: members,
-                    trust: Default::default(),
-                };
-                let result =
-                    raft_node.init(request).await.map(|_| ()).map_err(|e| anyhow::anyhow!("init failed: {}", e));
-                let _ = reply.send(result);
+                let result = init_cluster_command(&cmd_context.raft_node, members).await;
+                send_reply_or_log(reply, result, cmd_context.node_id, "init");
             }
             NodeCommand::WriteKv { key, value, reply } => {
-                let request = WriteRequest {
-                    command: WriteCommand::Set { key, value },
-                };
-                let result =
-                    raft_node.write(request).await.map(|_| ()).map_err(|e| anyhow::anyhow!("write failed: {}", e));
-                let _ = reply.send(result);
+                let result = write_kv_command(&cmd_context.raft_node, key, value).await;
+                send_reply_or_log(reply, result, cmd_context.node_id, "write");
             }
             NodeCommand::ReadKv { key, reply } => {
-                let request = ReadRequest {
-                    key,
-                    consistency: ReadConsistency::Stale,
-                };
-                let result = raft_node
-                    .read(request)
-                    .await
-                    .map(|r| r.kv.map(|kv| kv.value))
-                    .map_err(|e| anyhow::anyhow!("read failed: {}", e));
-                let _ = reply.send(result);
+                let result = read_kv_command(&cmd_context.raft_node, key).await;
+                send_reply_or_log(reply, result, cmd_context.node_id, "read");
             }
             NodeCommand::GetLeader { reply } => {
-                let metrics = raft.metrics().borrow().clone();
-                let _ = reply.send(metrics.current_leader);
+                let metrics = cmd_context.raft.metrics().borrow().clone();
+                send_reply_or_log(reply, metrics.current_leader, cmd_context.node_id, "leader");
             }
             NodeCommand::GetAppliedIndex { reply } => {
-                let metrics = raft.metrics().borrow().clone();
+                let metrics = cmd_context.raft.metrics().borrow().clone();
                 let index = metrics.last_applied.map(|li| li.index);
-                let _ = reply.send(index);
+                send_reply_or_log(reply, index, cmd_context.node_id, "applied-index");
             }
             NodeCommand::Shutdown { reply } => {
-                info!(node_id = node_id.0, "shutting down patchbay test node");
-                let _ = raft.shutdown().await;
-                let _ = reply.send(());
+                info!(node_id = cmd_context.node_id.0, "shutting down patchbay test node");
+                if let Err(error) = cmd_context.raft.shutdown().await {
+                    debug!(%error, node_id = cmd_context.node_id.0, "patchbay raft shutdown returned error");
+                }
+                send_reply_or_log(reply, (), cmd_context.node_id, "shutdown");
                 break;
             }
         }

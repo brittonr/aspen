@@ -31,6 +31,13 @@ pub struct InMemoryLogStore {
     inner: Arc<Mutex<LogStoreInner>>,
 }
 
+impl InMemoryLogStore {
+    /// Create a new empty in-memory log store.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 /// Internal state for InMemoryLogStore.
 #[derive(Debug, Default)]
 struct LogStoreInner {
