@@ -167,6 +167,13 @@ pub enum WatchEvent {
     },
 }
 
+#[derive(Clone, Copy)]
+struct WatchCommitMeta {
+    index: u64,
+    term: u64,
+    committed_at_ms: u64,
+}
+
 impl WatchEvent {
     /// Convert a LogEntryPayload into a vector of WatchEvents.
     ///
@@ -180,36 +187,34 @@ impl WatchEvent {
             hlc_timestamp,
             operation,
         } = payload;
-        let committed_at_ms = hlc_timestamp.to_unix_ms();
+        let commit_meta = WatchCommitMeta {
+            index,
+            term,
+            committed_at_ms: hlc_timestamp.to_unix_ms(),
+        };
 
         match operation {
             KvOperation::Set { key, value } | KvOperation::SetWithLease { key, value, .. } => {
-                convert_kv_set(key, value, index, term, committed_at_ms)
+                convert_kv_set(key, value, commit_meta)
             }
             KvOperation::SetWithTTL {
                 key,
                 value,
                 expires_at_ms,
-            } => convert_kv_set_with_ttl(key, value, expires_at_ms, index, term, committed_at_ms),
+            } => convert_kv_set_with_ttl(key, value, expires_at_ms, commit_meta),
             KvOperation::Delete { key } | KvOperation::CompareAndDelete { key, .. } => {
-                convert_kv_delete(key, index, term, committed_at_ms)
+                convert_kv_delete(key, commit_meta)
             }
-            KvOperation::DeleteMulti { keys } => convert_kv_delete_multi(keys, index, term, committed_at_ms),
-            KvOperation::CompareAndSwap { key, new_value, .. } => {
-                convert_kv_cas(key, new_value, index, term, committed_at_ms)
-            }
+            KvOperation::DeleteMulti { keys } => convert_kv_delete_multi(keys, commit_meta),
+            KvOperation::CompareAndSwap { key, new_value, .. } => convert_kv_cas(key, new_value, commit_meta),
             KvOperation::SetMulti { pairs }
             | KvOperation::SetMultiWithTTL { pairs, .. }
-            | KvOperation::SetMultiWithLease { pairs, .. } => convert_multi_set(pairs, index, term, committed_at_ms),
+            | KvOperation::SetMultiWithLease { pairs, .. } => convert_multi_set(pairs, commit_meta),
             KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
-                convert_batch_operations(operations, index, term, committed_at_ms)
+                convert_batch_operations(operations, commit_meta)
             }
-            KvOperation::OptimisticTransaction { write_set, .. } => {
-                convert_batch_operations(write_set, index, term, committed_at_ms)
-            }
-            KvOperation::Transaction { success, failure, .. } => {
-                convert_transaction(success, failure, index, term, committed_at_ms)
-            }
+            KvOperation::OptimisticTransaction { write_set, .. } => convert_batch_operations(write_set, commit_meta),
+            KvOperation::Transaction { success, failure, .. } => convert_transaction(success, failure, commit_meta),
             KvOperation::Noop
             | KvOperation::LeaseGrant { .. }
             | KvOperation::LeaseRevoke { .. }
@@ -222,13 +227,13 @@ impl WatchEvent {
 }
 
 /// Convert a single key Set or SetWithLease operation into a Set watch event.
-fn convert_kv_set(key: Vec<u8>, value: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+fn convert_kv_set(key: Vec<u8>, value: Vec<u8>, commit_meta: WatchCommitMeta) -> Vec<WatchEvent> {
     vec![WatchEvent::Set {
         key,
         value,
-        index,
-        term,
-        committed_at_ms,
+        index: commit_meta.index,
+        term: commit_meta.term,
+        committed_at_ms: commit_meta.committed_at_ms,
     }]
 }
 
@@ -237,59 +242,57 @@ fn convert_kv_set_with_ttl(
     key: Vec<u8>,
     value: Vec<u8>,
     expires_at_ms: u64,
-    index: u64,
-    term: u64,
-    committed_at_ms: u64,
+    commit_meta: WatchCommitMeta,
 ) -> Vec<WatchEvent> {
     vec![WatchEvent::SetWithTTL {
         key,
         value,
         expires_at_ms,
-        index,
-        term,
-        committed_at_ms,
+        index: commit_meta.index,
+        term: commit_meta.term,
+        committed_at_ms: commit_meta.committed_at_ms,
     }]
 }
 
 /// Convert a Delete or CompareAndDelete operation into a Delete watch event.
-fn convert_kv_delete(key: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+fn convert_kv_delete(key: Vec<u8>, commit_meta: WatchCommitMeta) -> Vec<WatchEvent> {
     vec![WatchEvent::Delete {
         key,
-        index,
-        term,
-        committed_at_ms,
+        index: commit_meta.index,
+        term: commit_meta.term,
+        committed_at_ms: commit_meta.committed_at_ms,
     }]
 }
 
 /// Convert a DeleteMulti operation into a DeleteMulti watch event.
-fn convert_kv_delete_multi(keys: Vec<Vec<u8>>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+fn convert_kv_delete_multi(keys: Vec<Vec<u8>>, commit_meta: WatchCommitMeta) -> Vec<WatchEvent> {
     vec![WatchEvent::DeleteMulti {
         keys,
-        index,
-        term,
-        committed_at_ms,
+        index: commit_meta.index,
+        term: commit_meta.term,
+        committed_at_ms: commit_meta.committed_at_ms,
     }]
 }
 
 /// Convert a CompareAndSwap operation into a CompareAndSwap watch event.
-fn convert_kv_cas(key: Vec<u8>, new_value: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+fn convert_kv_cas(key: Vec<u8>, new_value: Vec<u8>, commit_meta: WatchCommitMeta) -> Vec<WatchEvent> {
     vec![WatchEvent::CompareAndSwap {
         key,
         new_value,
-        index,
-        term,
-        committed_at_ms,
+        index: commit_meta.index,
+        term: commit_meta.term,
+        committed_at_ms: commit_meta.committed_at_ms,
     }]
 }
 
 /// Convert a multi-set operation (SetMulti, SetMultiWithTTL, SetMultiWithLease)
 /// into a single SetMulti watch event.
-fn convert_multi_set(pairs: Vec<(Vec<u8>, Vec<u8>)>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+fn convert_multi_set(pairs: Vec<(Vec<u8>, Vec<u8>)>, commit_meta: WatchCommitMeta) -> Vec<WatchEvent> {
     vec![WatchEvent::SetMulti {
         pairs,
-        index,
-        term,
-        committed_at_ms,
+        index: commit_meta.index,
+        term: commit_meta.term,
+        committed_at_ms: commit_meta.committed_at_ms,
     }]
 }
 
@@ -297,9 +300,7 @@ fn convert_multi_set(pairs: Vec<(Vec<u8>, Vec<u8>)>, index: u64, term: u64, comm
 /// watch events. Used by Batch, ConditionalBatch, and OptimisticTransaction.
 fn convert_batch_operations(
     operations: Vec<(bool, Vec<u8>, Vec<u8>)>,
-    index: u64,
-    term: u64,
-    committed_at_ms: u64,
+    commit_meta: WatchCommitMeta,
 ) -> Vec<WatchEvent> {
     operations
         .into_iter()
@@ -308,16 +309,16 @@ fn convert_batch_operations(
                 WatchEvent::Set {
                     key,
                     value,
-                    index,
-                    term,
-                    committed_at_ms,
+                    index: commit_meta.index,
+                    term: commit_meta.term,
+                    committed_at_ms: commit_meta.committed_at_ms,
                 }
             } else {
                 WatchEvent::Delete {
                     key,
-                    index,
-                    term,
-                    committed_at_ms,
+                    index: commit_meta.index,
+                    term: commit_meta.term,
+                    committed_at_ms: commit_meta.committed_at_ms,
                 }
             }
         })
@@ -330,28 +331,27 @@ fn convert_batch_operations(
 fn convert_transaction(
     success: Vec<(u8, Vec<u8>, Vec<u8>)>,
     failure: Vec<(u8, Vec<u8>, Vec<u8>)>,
-    index: u64,
-    term: u64,
-    committed_at_ms: u64,
+    commit_meta: WatchCommitMeta,
 ) -> Vec<WatchEvent> {
-    let mut events = Vec::new();
+    let combined_len = success.len().saturating_add(failure.len());
+    let mut events = Vec::with_capacity(combined_len);
     for (op_type, key, value) in success.into_iter().chain(failure) {
         match op_type {
             0 => {
                 events.push(WatchEvent::Set {
                     key,
                     value,
-                    index,
-                    term,
-                    committed_at_ms,
+                    index: commit_meta.index,
+                    term: commit_meta.term,
+                    committed_at_ms: commit_meta.committed_at_ms,
                 });
             }
             1 => {
                 events.push(WatchEvent::Delete {
                     key,
-                    index,
-                    term,
-                    committed_at_ms,
+                    index: commit_meta.index,
+                    term: commit_meta.term,
+                    committed_at_ms: commit_meta.committed_at_ms,
                 });
             }
             _ => {
@@ -359,6 +359,8 @@ fn convert_transaction(
             }
         }
     }
+    debug_assert!(events.len() <= combined_len);
+    debug_assert!(events.iter().all(|event| !matches!(event, WatchEvent::EndOfStream { .. })));
     events
 }
 
@@ -508,7 +510,7 @@ impl WatchSession {
 
     /// Background task that reads length-prefixed events from the stream.
     async fn event_reader(mut recv: iroh::endpoint::RecvStream, event_tx: mpsc::Sender<WatchEvent>) {
-        loop {
+        for _ in 0..u32::MAX {
             // Read next length-prefixed message
             let message: LogEntryMessage = match read_message(&mut recv, MAX_LOG_ENTRY_MESSAGE_SIZE).await {
                 Ok(m) => m,
@@ -517,18 +519,26 @@ impl WatchSession {
                     let msg = e.to_string();
                     if msg.contains("closed") || msg.contains("finished") || msg.contains("reset") {
                         debug!("log subscriber stream closed gracefully");
-                        let _ = event_tx
+                        if event_tx
                             .send(WatchEvent::EndOfStream {
                                 reason: "stream closed".to_string(),
                             })
-                            .await;
+                            .await
+                            .is_err()
+                        {
+                            debug!("event receiver dropped while reporting closed stream");
+                        }
                     } else {
                         error!(error = %e, "error reading from log subscriber stream");
-                        let _ = event_tx
+                        if event_tx
                             .send(WatchEvent::EndOfStream {
                                 reason: format!("read error: {}", e),
                             })
-                            .await;
+                            .await
+                            .is_err()
+                        {
+                            debug!("event receiver dropped while reporting read error");
+                        }
                     }
                     break;
                 }
@@ -562,11 +572,15 @@ impl WatchSession {
                     }
                 }
                 LogEntryMessage::EndOfStream { reason } => {
-                    let _ = event_tx
+                    if event_tx
                         .send(WatchEvent::EndOfStream {
                             reason: reason.to_string(),
                         })
-                        .await;
+                        .await
+                        .is_err()
+                    {
+                        debug!("event receiver dropped while forwarding end-of-stream");
+                    }
                     break;
                 }
             }
@@ -641,8 +655,8 @@ impl WatchSubscription {
     }
 
     /// Get the number of pending events in the buffer.
-    pub fn pending_count(&self) -> usize {
-        self.event_rx.len()
+    pub fn pending_count(&self) -> u32 {
+        u32::try_from(self.event_rx.len()).unwrap_or(u32::MAX)
     }
 }
 
