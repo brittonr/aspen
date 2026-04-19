@@ -29,9 +29,39 @@ pub type Result<T> = std::result::Result<T, JobError>;
 
 /// Tiger Style: Maximum schedule string length to prevent resource exhaustion.
 const MAX_SCHEDULE_STRING_LENGTH: usize = 256;
+const SECONDS_PER_MINUTE: u64 = 60;
+const SECONDS_PER_HOUR: u64 = SECONDS_PER_MINUTE.saturating_mul(60);
+const SECONDS_PER_DAY: u64 = SECONDS_PER_HOUR.saturating_mul(24);
+const SECONDS_PER_WEEK: u64 = SECONDS_PER_DAY.saturating_mul(7);
 
 /// Tiger Style: Maximum interval duration (30 days) to prevent unbounded scheduling.
-const MAX_INTERVAL_SECONDS: u64 = 30 * 24 * 60 * 60;
+const MAX_INTERVAL_SECONDS: u64 = 30u64.saturating_mul(SECONDS_PER_DAY);
+
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "schedule parsing needs an explicit UTC boundary helper")]
+fn utc_now() -> DateTime<Utc> {
+    Utc::now()
+}
+
+#[derive(Clone, Copy)]
+struct RawInput<'a>(&'a str);
+
+impl RawInput<'_> {
+    fn as_str(&self) -> &str {
+        self.0
+    }
+}
+
+struct SecondsAddInput {
+    total_secs: u64,
+    next_secs: u64,
+}
+
+fn checked_add_secs(input: SecondsAddInput, raw_input: RawInput<'_>) -> Result<u64> {
+    input.total_secs.checked_add(input.next_secs).ok_or_else(|| JobError::InvalidJobSpec {
+        reason: format!("duration '{}' exceeds supported size", raw_input.as_str()),
+    })
+}
 
 /// Parse a schedule string into a [`Schedule`] enum.
 ///
@@ -90,21 +120,36 @@ pub fn parse_schedule(input: &str) -> Result<Schedule> {
         });
     }
 
-    // Dispatch to appropriate parser based on prefix
     if input.starts_with('@') {
-        parse_named_schedule(input)
-    } else if let Some(expr) = input.strip_prefix("cron:") {
-        parse_cron_schedule(expr)
-    } else if let Some(timestamp) = input.strip_prefix("at:") {
-        parse_at_schedule(timestamp)
-    } else if let Some(duration) = input.strip_prefix("in:") {
-        parse_in_schedule(duration)
-    } else if let Some(duration) = input.strip_prefix("every:") {
-        parse_every_schedule(duration)
-    } else {
-        // Try to parse as raw cron expression (auto-detect)
-        parse_cron_schedule(input)
+        let schedule = parse_named_schedule(input)?;
+        debug_assert!(matches!(schedule, Schedule::Recurring(_)));
+        return Ok(schedule);
     }
+    if let Some(cron_expr) = input.strip_prefix("cron:") {
+        let schedule = parse_cron_schedule(cron_expr)?;
+        debug_assert!(matches!(schedule, Schedule::Recurring(_)));
+        return Ok(schedule);
+    }
+    if let Some(timestamp) = input.strip_prefix("at:") {
+        let schedule = parse_at_schedule(timestamp, utc_now())?;
+        debug_assert!(matches!(schedule, Schedule::Once(_)));
+        return Ok(schedule);
+    }
+    if let Some(delay_input) = input.strip_prefix("in:") {
+        let schedule = parse_in_schedule(delay_input)?;
+        debug_assert!(matches!(schedule, Schedule::Once(_)));
+        return Ok(schedule);
+    }
+    if let Some(interval_input) = input.strip_prefix("every:") {
+        let schedule = parse_every_schedule(interval_input)?;
+        debug_assert!(matches!(schedule, Schedule::Interval { .. }));
+        return Ok(schedule);
+    }
+
+    // Try to parse as raw cron expression (auto-detect)
+    let schedule = parse_cron_schedule(input)?;
+    debug_assert!(matches!(schedule, Schedule::Recurring(_)));
+    Ok(schedule)
 }
 
 /// Parse named schedule (@daily, @hourly, etc.)
@@ -151,7 +196,7 @@ fn parse_cron_schedule(cron_expr: &str) -> Result<Schedule> {
 }
 
 /// Parse absolute timestamp (at:TIMESTAMP).
-fn parse_at_schedule(timestamp: &str) -> Result<Schedule> {
+fn parse_at_schedule(timestamp: &str, current_time: DateTime<Utc>) -> Result<Schedule> {
     let timestamp = timestamp.trim();
 
     // Parse ISO 8601 / RFC 3339 timestamp
@@ -165,61 +210,62 @@ fn parse_at_schedule(timestamp: &str) -> Result<Schedule> {
     let utc_time = dt.with_timezone(&Utc);
 
     // Validate that the time is in the future
-    let now = Utc::now();
-    if utc_time <= now {
+    if utc_time <= current_time {
         return Err(JobError::InvalidJobSpec {
             reason: format!(
                 "scheduled time '{}' is in the past (current time: {})",
                 utc_time.to_rfc3339(),
-                now.to_rfc3339()
+                current_time.to_rfc3339()
             ),
         });
     }
 
+    debug_assert!(utc_time > current_time);
+    debug_assert_eq!(utc_time.timezone(), Utc);
     Ok(Schedule::Once(utc_time))
 }
 
 /// Parse relative time (in:DURATION).
 fn parse_in_schedule(duration_str: &str) -> Result<Schedule> {
-    let duration = parse_duration(duration_str)?;
+    let relative_spec = parse_duration(duration_str)?;
 
     // Tiger Style: Validate duration bounds
-    if duration.as_secs() > MAX_INTERVAL_SECONDS {
+    if relative_spec.as_secs() > MAX_INTERVAL_SECONDS {
         return Err(JobError::InvalidJobSpec {
             reason: format!(
                 "relative delay {}s exceeds maximum of {} seconds (30 days)",
-                duration.as_secs(),
+                relative_spec.as_secs(),
                 MAX_INTERVAL_SECONDS
             ),
         });
     }
 
-    Schedule::after(duration)
+    Schedule::after(relative_spec)
 }
 
 /// Parse interval schedule (every:DURATION).
 fn parse_every_schedule(duration_str: &str) -> Result<Schedule> {
-    let duration = parse_duration(duration_str)?;
+    let cadence_spec = parse_duration(duration_str)?;
 
     // Tiger Style: Validate minimum interval (1 second)
-    if duration.as_secs() == 0 && duration.subsec_nanos() == 0 {
+    if cadence_spec.as_secs() == 0 && cadence_spec.subsec_nanos() == 0 {
         return Err(JobError::InvalidJobSpec {
             reason: "interval duration must be at least 1 second".to_string(),
         });
     }
 
     // Tiger Style: Validate maximum interval
-    if duration.as_secs() > MAX_INTERVAL_SECONDS {
+    if cadence_spec.as_secs() > MAX_INTERVAL_SECONDS {
         return Err(JobError::InvalidJobSpec {
             reason: format!(
                 "interval {}s exceeds maximum of {} seconds (30 days)",
-                duration.as_secs(),
+                cadence_spec.as_secs(),
                 MAX_INTERVAL_SECONDS
             ),
         });
     }
 
-    Ok(Schedule::interval(duration))
+    Ok(Schedule::interval(cadence_spec))
 }
 
 /// Parse duration string.
@@ -246,33 +292,46 @@ fn parse_duration(input: &str) -> Result<Duration> {
 }
 
 /// Parse a single ISO 8601 duration unit and return seconds.
-fn parse_iso8601_duration_unit(unit: char, current_num: &str, in_time_part: bool, input: &str) -> Result<u64> {
-    let value: f64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-        reason: format!("invalid {} value in duration: '{}'", unit, input),
+fn parse_iso8601_duration_unit(
+    unit: char,
+    digits: &str,
+    is_in_time_part: bool,
+    raw_input: RawInput<'_>,
+) -> Result<u64> {
+    let value: f64 = digits.parse().map_err(|_| JobError::InvalidJobSpec {
+        reason: format!("invalid {} value in duration: '{}'", unit, raw_input.as_str()),
     })?;
 
-    let multiplier = match unit {
-        'Y' => 365.0 * 24.0 * 60.0 * 60.0,                 // Years (approximate)
-        'M' if !in_time_part => 30.0 * 24.0 * 60.0 * 60.0, // Months (approximate)
-        'D' => 24.0 * 60.0 * 60.0,                         // Days
-        'H' => 60.0 * 60.0,                                // Hours
-        'M' if in_time_part => 60.0,                       // Minutes
-        'S' => 1.0,                                        // Seconds
+    let multiplier_secs = match unit {
+        'Y' => 365.0 * 24.0 * 60.0 * 60.0,                    // Years (approximate)
+        'M' if !is_in_time_part => 30.0 * 24.0 * 60.0 * 60.0, // Months (approximate)
+        'D' => 24.0 * 60.0 * 60.0,                            // Days
+        'H' => 60.0 * 60.0,                                   // Hours
+        'M' if is_in_time_part => 60.0,                       // Minutes
+        'S' => 1.0,                                           // Seconds
         _ => {
             return Err(JobError::InvalidJobSpec {
-                reason: format!("invalid character '{}' in ISO 8601 duration: '{}'", unit, input),
+                reason: format!("invalid character '{}' in ISO 8601 duration: '{}'", unit, raw_input.as_str()),
             });
         }
     };
+    let total_secs = value * multiplier_secs;
+    if !total_secs.is_finite() || !(0.0..=(u64::MAX as f64)).contains(&total_secs) {
+        return Err(JobError::InvalidJobSpec {
+            reason: format!("duration '{}' exceeds supported size", raw_input.as_str()),
+        });
+    }
 
-    Ok((value * multiplier) as u64)
+    let total_secs = total_secs as u64;
+    debug_assert!(total_secs > 0);
+    Ok(total_secs)
 }
 
 /// Parse ISO 8601 duration (P[n]Y[n]M[n]DT[n]H[n]M[n]S).
 fn parse_iso8601_duration(input: &str) -> Result<Duration> {
     let input = input.to_uppercase();
-
-    let mut total_seconds: u64 = 0;
+    let raw_input = RawInput(&input);
+    let mut total_secs: u64 = 0;
     let mut chars = input.chars().peekable();
 
     // Skip 'P'
@@ -282,25 +341,32 @@ fn parse_iso8601_duration(input: &str) -> Result<Duration> {
         });
     }
 
-    let mut in_time_part = false;
-    let mut current_num = String::new();
+    let mut is_in_time_part = false;
+    let mut current_digits = String::new();
 
     for c in chars {
         match c {
             'T' => {
-                in_time_part = true;
+                is_in_time_part = true;
             }
             '0'..='9' | '.' => {
-                current_num.push(c);
+                current_digits.push(c);
             }
             'Y' | 'M' | 'D' | 'H' | 'S' => {
-                if current_num.is_empty() {
+                if current_digits.is_empty() {
                     return Err(JobError::InvalidJobSpec {
                         reason: format!("missing number before '{}' in ISO 8601 duration: '{}'", c, input),
                     });
                 }
-                total_seconds += parse_iso8601_duration_unit(c, &current_num, in_time_part, &input)?;
-                current_num.clear();
+                let unit_secs = parse_iso8601_duration_unit(c, &current_digits, is_in_time_part, raw_input)?;
+                total_secs = checked_add_secs(
+                    SecondsAddInput {
+                        total_secs,
+                        next_secs: unit_secs,
+                    },
+                    raw_input,
+                )?;
+                current_digits.clear();
             }
             _ => {
                 return Err(JobError::InvalidJobSpec {
@@ -310,58 +376,76 @@ fn parse_iso8601_duration(input: &str) -> Result<Duration> {
         }
     }
 
-    if total_seconds == 0 {
+    if total_secs == 0 {
         return Err(JobError::InvalidJobSpec {
             reason: format!("ISO 8601 duration '{}' evaluates to zero", input),
         });
     }
 
-    Ok(Duration::from_secs(total_seconds))
+    debug_assert!(current_digits.is_empty());
+    debug_assert!(total_secs > 0);
+    Ok(Duration::from_secs(total_secs))
 }
 
 /// Parse a single human duration unit and return its value in seconds.
 ///
 /// Returns Ok(multiplier) for valid units, or Err for invalid units.
-fn parse_human_duration_unit(unit: char, current_num: &str, input: &str) -> Result<u64> {
-    if current_num.is_empty() {
+fn parse_human_duration_unit(unit: char, digits: &str, raw_input: RawInput<'_>) -> Result<u64> {
+    if digits.is_empty() {
         return Err(JobError::InvalidJobSpec {
-            reason: format!("missing number before '{}' in duration: '{}'", unit, input),
+            reason: format!("missing number before '{}' in duration: '{}'", unit, raw_input.as_str()),
         });
     }
 
-    let value: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
-        reason: format!("invalid {} value in duration: '{}'", unit, input),
+    let value: u64 = digits.parse().map_err(|_| JobError::InvalidJobSpec {
+        reason: format!("invalid {} value in duration: '{}'", unit, raw_input.as_str()),
     })?;
 
-    let multiplier = match unit {
+    let seconds_per_unit = match unit {
         's' | 'S' => 1,
-        'm' => 60,
-        'h' | 'H' => 60 * 60,
-        'd' | 'D' => 24 * 60 * 60,
-        'w' | 'W' => 7 * 24 * 60 * 60,
+        'm' => SECONDS_PER_MINUTE,
+        'h' | 'H' => SECONDS_PER_HOUR,
+        'd' | 'D' => SECONDS_PER_DAY,
+        'w' | 'W' => SECONDS_PER_WEEK,
         _ => {
             return Err(JobError::InvalidJobSpec {
-                reason: format!("invalid unit '{}' in duration '{}'. Valid units: s, m, h, d, w", unit, input),
+                reason: format!(
+                    "invalid unit '{}' in duration '{}'. Valid units: s, m, h, d, w",
+                    unit,
+                    raw_input.as_str()
+                ),
             });
         }
     };
 
-    Ok(value * multiplier)
+    let unit_secs = value.checked_mul(seconds_per_unit).ok_or_else(|| JobError::InvalidJobSpec {
+        reason: format!("duration '{}' exceeds supported size", raw_input.as_str()),
+    })?;
+    debug_assert!(unit_secs > 0);
+    Ok(unit_secs)
 }
 
 /// Parse human-readable duration (e.g., "5m", "1h30m", "2d").
 fn parse_human_duration(input: &str) -> Result<Duration> {
-    let mut total_seconds: u64 = 0;
-    let mut current_num = String::new();
+    let raw_input = RawInput(input);
+    let mut total_secs: u64 = 0;
+    let mut current_digits = String::new();
 
     for c in input.chars() {
         match c {
             '0'..='9' => {
-                current_num.push(c);
+                current_digits.push(c);
             }
             's' | 'S' | 'm' | 'h' | 'H' | 'd' | 'D' | 'w' | 'W' => {
-                total_seconds += parse_human_duration_unit(c, &current_num, input)?;
-                current_num.clear();
+                let unit_secs = parse_human_duration_unit(c, &current_digits, raw_input)?;
+                total_secs = checked_add_secs(
+                    SecondsAddInput {
+                        total_secs,
+                        next_secs: unit_secs,
+                    },
+                    raw_input,
+                )?;
+                current_digits.clear();
             }
             ' ' => {
                 // Allow spaces between units
@@ -375,19 +459,21 @@ fn parse_human_duration(input: &str) -> Result<Duration> {
     }
 
     // Handle trailing number without unit (assume seconds)
-    if !current_num.is_empty() {
+    if !current_digits.is_empty() {
         return Err(JobError::InvalidJobSpec {
             reason: format!("duration '{}' ends with number without unit. Use s, m, h, d, or w", input),
         });
     }
 
-    if total_seconds == 0 {
+    if total_secs == 0 {
         return Err(JobError::InvalidJobSpec {
             reason: format!("duration '{}' evaluates to zero", input),
         });
     }
 
-    Ok(Duration::from_secs(total_seconds))
+    debug_assert!(current_digits.is_empty());
+    debug_assert!(total_secs > 0);
+    Ok(Duration::from_secs(total_secs))
 }
 
 #[cfg(test)]
