@@ -16,6 +16,20 @@ use crate::types::Priority;
 use crate::types::RetryPolicy;
 use crate::types::Schedule;
 
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "job timestamps need an explicit UTC boundary helper")]
+fn utc_now() -> DateTime<Utc> {
+    Utc::now()
+}
+
+fn chrono_delay_from_duration(delay_duration: Duration) -> chrono::Duration {
+    chrono::Duration::from_std(delay_duration).unwrap_or(chrono::Duration::MAX)
+}
+
+fn u32_to_usize(value: u32) -> Option<usize> {
+    usize::try_from(value).ok()
+}
+
 /// Unique identifier for a job.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct JobId(String);
@@ -346,8 +360,8 @@ impl JobSpec {
     }
 
     /// Schedule the job after a delay.
-    pub fn schedule_after(mut self, delay: Duration) -> Self {
-        let time = Utc::now() + chrono::Duration::from_std(delay).unwrap_or(chrono::Duration::MAX);
+    pub fn schedule_after(mut self, delay_duration: Duration) -> Self {
+        let time = utc_now() + chrono_delay_from_duration(delay_duration);
         self.schedule = Some(Schedule::Once(time));
         self
     }
@@ -389,7 +403,7 @@ pub struct Job {
     /// Version number for optimistic concurrency control.
     pub version: u64,
     /// DLQ metadata
-    pub dlq_metadata: Option<DLQMetadata>,
+    pub dlq_metadata: Option<DlqMetadata>,
     /// Dependency state
     pub dependency_state: DependencyState,
     /// Jobs currently blocking this one
@@ -418,9 +432,9 @@ pub struct Job {
 
 /// Dead Letter Queue metadata for a job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DLQMetadata {
+pub struct DlqMetadata {
     /// Reason the job was moved to DLQ.
-    pub reason: DLQReason,
+    pub reason: DlqReason,
     /// Time when job entered DLQ.
     pub entered_at: DateTime<Utc>,
     /// Time when job was redriven from DLQ (if applicable).
@@ -435,7 +449,7 @@ pub struct DLQMetadata {
 
 /// Reason for moving a job to the Dead Letter Queue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DLQReason {
+pub enum DlqReason {
     /// Exceeded maximum retry attempts.
     MaxRetriesExceeded,
     /// Explicitly moved to DLQ by worker or system.
@@ -451,7 +465,7 @@ pub enum DLQReason {
 impl Job {
     /// Create a new job from a specification.
     pub fn from_spec(spec: JobSpec) -> Self {
-        let now = Utc::now();
+        let now = utc_now();
         let scheduled_at = match &spec.schedule {
             Some(schedule) => schedule.next_execution(),
             None => None,
@@ -490,7 +504,7 @@ impl Job {
             dependency_state,
             blocked_by: dependencies,
             blocking: Vec::new(),
-            dependency_failure_policy: DependencyFailurePolicy::default(),
+            dependency_failure_policy: DependencyFailurePolicy::FailCascade,
             execution_token: None,
         }
     }
@@ -505,7 +519,7 @@ impl Job {
         // Retrying jobs can only proceed if their retry time has passed
         if self.status == JobStatus::Retrying {
             return match self.next_retry_at {
-                Some(next_retry_at) => next_retry_at <= Utc::now(),
+                Some(next_retry_at) => next_retry_at <= utc_now(),
                 None => true,
             };
         }
@@ -517,14 +531,14 @@ impl Job {
 
         // Check if scheduled time has passed
         if let Some(scheduled_at) = self.scheduled_at {
-            if scheduled_at > Utc::now() {
+            if scheduled_at > utc_now() {
                 return false;
             }
         }
 
         // Check if retry time has passed
         if let Some(next_retry_at) = self.next_retry_at {
-            if next_retry_at > Utc::now() {
+            if next_retry_at > utc_now() {
                 return false;
             }
         }
@@ -536,7 +550,7 @@ impl Job {
     pub fn update_progress(&mut self, progress: u8, message: Option<String>) {
         self.progress = Some(progress.min(100));
         self.progress_message = message;
-        self.updated_at = Utc::now();
+        self.updated_at = utc_now();
         self.version += 1;
     }
 
@@ -548,9 +562,9 @@ impl Job {
         let token = Uuid::new_v4().to_string();
         self.status = JobStatus::Running;
         self.worker_id = Some(worker_id);
-        self.started_at = Some(Utc::now());
-        self.attempts += 1;
-        self.updated_at = Utc::now();
+        self.started_at = Some(utc_now());
+        self.attempts = self.attempts.saturating_add(1);
+        self.updated_at = utc_now();
         self.version += 1;
         self.execution_token = Some(token.clone());
         token
@@ -564,8 +578,8 @@ impl Job {
             JobStatus::Failed
         };
         self.result = Some(result);
-        self.completed_at = Some(Utc::now());
-        self.updated_at = Utc::now();
+        self.completed_at = Some(utc_now());
+        self.updated_at = utc_now();
         self.worker_id = None;
         self.version += 1;
     }
@@ -575,7 +589,7 @@ impl Job {
         self.status = JobStatus::Retrying;
         self.next_retry_at = Some(next_retry_at);
         self.last_error = Some(error);
-        self.updated_at = Utc::now();
+        self.updated_at = utc_now();
         self.worker_id = None;
         self.version += 1;
     }
@@ -584,8 +598,8 @@ impl Job {
     pub fn mark_cancelled(&mut self) {
         self.status = JobStatus::Cancelled;
         self.result = Some(JobResult::Cancelled);
-        self.completed_at = Some(Utc::now());
-        self.updated_at = Utc::now();
+        self.completed_at = Some(utc_now());
+        self.updated_at = utc_now();
         self.worker_id = None;
         self.version += 1;
     }
@@ -606,7 +620,7 @@ impl Job {
             return None;
         }
 
-        let delay = match &self.spec.config.retry_policy {
+        let retry_delay = match &self.spec.config.retry_policy {
             RetryPolicy::None => return None,
             RetryPolicy::Fixed { delay, .. } => *delay,
             RetryPolicy::Exponential {
@@ -615,37 +629,38 @@ impl Job {
                 max_delay,
                 ..
             } => {
-                let mut delay = *initial_delay;
+                let mut retry_delay = *initial_delay;
                 for _ in 1..self.attempts {
-                    delay = Duration::from_secs_f64(delay.as_secs_f64() * multiplier);
-                    if let Some(max) = max_delay {
-                        delay = delay.min(*max);
+                    retry_delay = Duration::from_secs_f64(retry_delay.as_secs_f64() * multiplier);
+                    if let Some(max_delay_duration) = max_delay {
+                        retry_delay = retry_delay.min(*max_delay_duration);
                     }
                 }
-                delay
+                retry_delay
             }
             RetryPolicy::Custom { delays, .. } => {
-                let index = (self.attempts - 1) as usize;
-                delays.get(index).copied().unwrap_or(Duration::from_secs(60))
+                let retry_index = self.attempts.saturating_sub(1);
+                let retry_index = u32_to_usize(retry_index)?;
+                delays.get(retry_index).copied().unwrap_or(Duration::from_secs(60))
             }
         };
 
-        Some(Utc::now() + chrono::Duration::from_std(delay).unwrap_or(chrono::Duration::MAX))
+        Some(utc_now() + chrono_delay_from_duration(retry_delay))
     }
 
     /// Mark job as moved to Dead Letter Queue.
-    pub fn mark_dlq(&mut self, reason: DLQReason, error: String) {
+    pub fn mark_dlq(&mut self, reason: DlqReason, error: String) {
         self.status = JobStatus::DeadLetter;
-        self.dlq_metadata = Some(DLQMetadata {
+        self.dlq_metadata = Some(DlqMetadata {
             reason,
-            entered_at: Utc::now(),
+            entered_at: utc_now(),
             redriven_at: None,
             original_job_id: None,
             redrive_count: 0,
             final_error: error.clone(),
         });
         self.last_error = Some(error);
-        self.updated_at = Utc::now();
+        self.updated_at = utc_now();
         self.worker_id = None;
         self.version += 1;
     }
@@ -658,14 +673,14 @@ impl Job {
     /// Prepare job for redrive from DLQ.
     pub fn prepare_for_redrive(&mut self) {
         if let Some(ref mut dlq_meta) = self.dlq_metadata {
-            dlq_meta.redriven_at = Some(Utc::now());
-            dlq_meta.redrive_count += 1;
+            dlq_meta.redriven_at = Some(utc_now());
+            dlq_meta.redrive_count = dlq_meta.redrive_count.saturating_add(1);
         }
         self.status = JobStatus::Pending;
         self.attempts = 0; // Reset attempts for redrive
         self.last_error = None;
         self.next_retry_at = None;
-        self.updated_at = Utc::now();
+        self.updated_at = utc_now();
         self.version += 1;
     }
 }

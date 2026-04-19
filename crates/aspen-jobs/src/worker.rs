@@ -25,7 +25,10 @@ use crate::job::JobResult;
 use crate::manager::JobManager;
 
 #[allow(unknown_lints)]
-#[allow(ambient_clock, reason = "worker lifecycle timestamps need an explicit UTC boundary helper")]
+#[allow(
+    ambient_clock,
+    reason = "worker lifecycle timestamps need an explicit UTC boundary helper"
+)]
 fn utc_now() -> DateTime<Utc> {
     Utc::now()
 }

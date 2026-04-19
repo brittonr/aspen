@@ -14,7 +14,7 @@ use super::JobCompletionCallback;
 use super::JobManager;
 use crate::error::JobError;
 use crate::error::Result;
-use crate::job::DLQReason;
+use crate::job::DlqReason;
 use crate::job::Job;
 use crate::job::JobId;
 use crate::job::JobResult;
@@ -380,11 +380,11 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                         job.mark_retry(next_retry, error.clone());
                     } else {
                         // Shouldn't happen, but handle gracefully
-                        job.mark_dlq(DLQReason::MaxRetriesExceeded, error.clone());
+                        job.mark_dlq(DlqReason::MaxRetriesExceeded, error.clone());
                     }
                 } else {
                     // Move to DLQ as retry limit exceeded
-                    job.mark_dlq(DLQReason::MaxRetriesExceeded, error.clone());
+                    job.mark_dlq(DlqReason::MaxRetriesExceeded, error.clone());
                 }
 
                 Ok(())
