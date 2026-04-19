@@ -139,6 +139,12 @@ struct TreeLookupPath<'a> {
     path: &'a str,
 }
 
+struct ParsedRequest<'a> {
+    normalized_path: &'a str,
+    query: HashMap<String, String>,
+    segments: Vec<&'a str>,
+}
+
 pub fn method_not_allowed() -> RouteResponse {
     RouteResponse::Html {
         status: StatusCode::METHOD_NOT_ALLOWED,
@@ -146,86 +152,86 @@ pub fn method_not_allowed() -> RouteResponse {
     }
 }
 
-/// Dispatch a GET request to the appropriate handler.
-///
-/// `path` may include a query string (e.g., `/repo/search?q=term`).
-pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> RouteResponse {
-    // Split path from query string.
-    let (path, query_string) = path.split_once('?').unwrap_or((path, ""));
+fn parse_request_path(path: &str) -> ParsedRequest<'_> {
+    debug_assert!(path.starts_with('/'));
+    let (request_path, query_string) = path.split_once('?').unwrap_or((path, ""));
     let query: HashMap<String, String> = form_urlencoded::parse(query_string.as_bytes())
-        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
         .collect();
-
-    // Strip trailing slash (except root).
-    let path = if path.len() > 1 {
-        path.trim_end_matches('/')
+    let normalized_path = if request_path.len() > 1 {
+        request_path.trim_end_matches('/')
     } else {
-        path
+        request_path
     };
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-
-    // POST routes (body is Some)
-    if let Some(body) = body {
-        let form = parse_form(body);
-        return match segments.as_slice() {
-            [repo_id, "issues", "new"] => create_issue_post(state, repo_id, &form).await,
-            [repo_id, "issues", id, "comment"] => {
-                comment_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }, &form).await
-            }
-            [repo_id, "issues", id, "close"] => close_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }).await,
-            [repo_id, "issues", id, "reopen"] => {
-                reopen_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }).await
-            }
-            [repo_id, "patches", id, "merge"] => {
-                merge_patch_post(state, RepoPatchRoute { repo_id, patch_id: id }, &form).await
-            }
-            [repo_id, "patches", id, "approve"] => {
-                approve_patch_post(state, RepoPatchRoute { repo_id, patch_id: id }).await
-            }
-            [repo_id, "ci", run_id, "cancel"] => ci_cancel_post(state, RepoRunRoute { repo_id, run_id }).await,
-            [repo_id, "ci", run_id, "retrigger"] => ci_retrigger_post(state, RepoRunRoute { repo_id, run_id }).await,
-            ["login", "verify"] => login_verify_post(state, &form).await,
-            _ => method_not_allowed(),
-        };
+    debug_assert!(!normalized_path.is_empty());
+    let segments = normalized_path.split('/').filter(|segment| !segment.is_empty()).collect();
+    ParsedRequest {
+        normalized_path,
+        query,
+        segments,
     }
+}
 
-    // GET routes
-    match segments.as_slice() {
+async fn dispatch_post(state: &AppState, segments: &[&str], body: &Bytes) -> RouteResponse {
+    let form = parse_form(body);
+    debug_assert!(!segments.is_empty());
+    debug_assert!(!form.is_empty() || matches!(segments, ["login", "verify"]));
+    match segments {
+        [repo_id, "issues", "new"] => create_issue_post(state, repo_id, &form).await,
+        [repo_id, "issues", id, "comment"] => {
+            comment_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }, &form).await
+        }
+        [repo_id, "issues", id, "close"] => close_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }).await,
+        [repo_id, "issues", id, "reopen"] => reopen_issue_post(state, RepoIssueRoute { repo_id, issue_id: id }).await,
+        [repo_id, "patches", id, "merge"] => {
+            merge_patch_post(state, RepoPatchRoute { repo_id, patch_id: id }, &form).await
+        }
+        [repo_id, "patches", id, "approve"] => {
+            approve_patch_post(state, RepoPatchRoute { repo_id, patch_id: id }).await
+        }
+        [repo_id, "ci", run_id, "cancel"] => ci_cancel_post(state, RepoRunRoute { repo_id, run_id }).await,
+        [repo_id, "ci", run_id, "retrigger"] => ci_retrigger_post(state, RepoRunRoute { repo_id, run_id }).await,
+        ["login", "verify"] => login_verify_post(state, &form).await,
+        _ => method_not_allowed(),
+    }
+}
+
+async fn dispatch_get(state: &AppState, request: &ParsedRequest<'_>) -> RouteResponse {
+    debug_assert!(request.normalized_path.starts_with('/'));
+    debug_assert!(request.segments.len() <= request.normalized_path.len());
+    match request.segments.as_slice() {
         [] => repo_list(state).await,
-        ["ci"] => ci_list_all(state, &query).await,
+        ["ci"] => ci_list_all(state, &request.query).await,
         ["cluster"] => cluster_overview(state).await,
         ["login"] => login_page(state).await,
-        ["login", "challenge"] => login_challenge(state, &query).await,
+        ["login", "challenge"] => login_challenge(state, &request.query).await,
         [repo_id] => repo_overview(state, repo_id).await,
         [repo_id, "tree"] => tree_root(state, repo_id).await,
         [repo_id, "tree", ref_name, rest @ ..] => {
-            let sub = rest.join("/");
             tree_path(state, RepoRefPath {
                 repo_id,
                 ref_name,
-                path: &sub,
+                path: &rest.join("/"),
             })
             .await
         }
         [repo_id, "blob", ref_name, rest @ ..] if !rest.is_empty() => {
-            let sub = rest.join("/");
             blob_view(state, RepoRefPath {
                 repo_id,
                 ref_name,
-                path: &sub,
+                path: &rest.join("/"),
             })
             .await
         }
         [repo_id, "raw", ref_name, rest @ ..] if !rest.is_empty() => {
-            let sub = rest.join("/");
             raw_blob(state, RepoRefPath {
                 repo_id,
                 ref_name,
-                path: &sub,
+                path: &rest.join("/"),
             })
             .await
         }
-        [repo_id, "search"] => search(state, repo_id, &query).await,
+        [repo_id, "search"] => search(state, repo_id, &request.query).await,
         [repo_id, "commit", hash] => commit_detail(state, RepoHashRoute { repo_id, hash }).await,
         [repo_id, "commits"] => commits(state, repo_id).await,
         [repo_id, "issues"] => issues(state, repo_id).await,
@@ -233,7 +239,7 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
         [repo_id, "issues", id] => issue_detail(state, RepoIssueRoute { repo_id, issue_id: id }).await,
         [repo_id, "patches"] => patches(state, repo_id).await,
         [repo_id, "patches", id] => patch_detail(state, RepoPatchRoute { repo_id, patch_id: id }).await,
-        [repo_id, "ci"] => ci_list_repo(state, repo_id, &query).await,
+        [repo_id, "ci"] => ci_list_repo(state, repo_id, &request.query).await,
         [repo_id, "ci", run_id] => ci_run_detail(state, RepoRunRoute { repo_id, run_id }).await,
         [repo_id, "ci", run_id, job_id] => {
             ci_job_logs(
@@ -243,11 +249,24 @@ pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> Rou
                     run_id,
                     job_id,
                 },
-                &query,
+                &request.query,
             )
             .await
         }
-        _ => not_found(path),
+        _ => not_found(request.normalized_path),
+    }
+}
+
+/// Dispatch a GET request to the appropriate handler.
+///
+/// `path` may include a query string (e.g., `/repo/search?q=term`).
+pub async fn dispatch(state: &AppState, path: &str, body: Option<&Bytes>) -> RouteResponse {
+    let request = parse_request_path(path);
+    debug_assert!(request.normalized_path.starts_with('/'));
+    debug_assert!(request.segments.len() <= request.normalized_path.len());
+    match body {
+        Some(body) => dispatch_post(state, &request.segments, body).await,
+        None => dispatch_get(state, &request).await,
     }
 }
 
@@ -261,10 +280,12 @@ async fn repo_list(st: &AppState) -> RouteResponse {
 }
 
 async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
+    debug_assert!(!repo_id.is_empty());
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
     };
+    debug_assert!(!repo.default_branch.is_empty());
     let branches = st.list_branches(repo_id).await.unwrap_or_default();
     let recent = st.get_log(repo_id, None, Some(10)).await.unwrap_or_default();
     let readme_html = st.get_readme(&repo).await.and_then(|bytes| {
@@ -285,15 +306,14 @@ async fn repo_overview(st: &AppState, repo_id: &str) -> RouteResponse {
         }
     }
 
-    ok(templates::repo_overview(
-        &repo,
-        &branches,
-        &recent,
-        readme_html.as_deref(),
-        &ticket,
-        ci_status.as_ref(),
-        &branch_ci,
-    ))
+    ok(templates::repo_overview(&repo, &templates::RepoOverviewParams {
+        branches: &branches,
+        recent_commits: &recent,
+        readme_html: readme_html.as_deref(),
+        ticket: &ticket,
+        ci_status: ci_status.as_ref(),
+        branch_ci: &branch_ci,
+    }))
 }
 
 async fn tree_root(st: &AppState, repo_id: &str) -> RouteResponse {
@@ -321,6 +341,8 @@ async fn tree_path(st: &AppState, route: RepoRefPath<'_>) -> RouteResponse {
 }
 
 async fn tree_at(st: &AppState, repo: &aspen_forge_protocol::ForgeRepoInfo, route: RefPath<'_>) -> RouteResponse {
+    debug_assert!(!repo.id.is_empty());
+    debug_assert!(!route.ref_name.is_empty());
     let commit_hash = match st.resolve_ref(&repo.id, route.ref_name).await {
         Ok(h) => h,
         Err(e) => return err(e),
@@ -339,12 +361,18 @@ async fn tree_at(st: &AppState, repo: &aspen_forge_protocol::ForgeRepoInfo, rout
         Err(e) => return err(e),
     };
     match st.get_tree(&tree_hash).await {
-        Ok(entries) => ok(templates::file_browser(repo, route.ref_name, route.path, &entries)),
+        Ok(entries) => ok(templates::file_browser(repo, &templates::FileBrowserParams {
+            ref_name: route.ref_name,
+            path: route.path,
+            entries: &entries,
+        })),
         Err(e) => err(e),
     }
 }
 
 async fn blob_view(st: &AppState, route: RepoRefPath<'_>) -> RouteResponse {
+    debug_assert!(!route.repo_id.is_empty());
+    debug_assert!(!route.path.is_empty());
     let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -370,7 +398,12 @@ async fn blob_view(st: &AppState, route: RepoRefPath<'_>) -> RouteResponse {
         Ok(blob) => {
             let content = blob.content.as_deref();
             let size_bytes = blob.size.unwrap_or(0);
-            ok(templates::file_view(&repo, route.ref_name, route.path, content, size_bytes))
+            ok(templates::file_view(&repo, &templates::FileViewParams {
+                ref_name: route.ref_name,
+                path: route.path,
+                content,
+                size_bytes,
+            }))
         }
         Err(e) => err(e),
     }
@@ -392,6 +425,8 @@ async fn search(st: &AppState, repo_id: &str, query: &HashMap<String, String>) -
 }
 
 async fn commit_detail(st: &AppState, route: RepoHashRoute<'_>) -> RouteResponse {
+    debug_assert!(!route.repo_id.is_empty());
+    debug_assert!(!route.hash.is_empty());
     let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -596,6 +631,7 @@ async fn ci_list_all(st: &AppState, query: &HashMap<String, String>) -> RouteRes
 }
 
 async fn ci_list_repo(st: &AppState, repo_id: &str, query: &HashMap<String, String>) -> RouteResponse {
+    debug_assert!(!repo_id.is_empty());
     let repo = match st.get_repo(repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -606,6 +642,7 @@ async fn ci_list_repo(st: &AppState, repo_id: &str, query: &HashMap<String, Stri
     } else {
         Some(status_filter)
     };
+    debug_assert!(filter.is_none_or(|value| !value.is_empty()));
     match st.list_runs(Some(repo_id), filter, Some(50)).await {
         Ok(resp) => ok(templates::pipeline_list(&resp.runs, Some(repo_id), Some(&repo.name), status_filter)),
         Err(e) => {
@@ -630,6 +667,8 @@ async fn ci_run_detail(st: &AppState, route: RepoRunRoute<'_>) -> RouteResponse 
 }
 
 async fn ci_job_logs(st: &AppState, route: RepoRunJobRoute<'_>, query: &HashMap<String, String>) -> RouteResponse {
+    debug_assert!(!route.repo_id.is_empty());
+    debug_assert!(!route.job_id.is_empty());
     let repo = match st.get_repo(route.repo_id).await {
         Ok(r) => r,
         Err(e) => return err(e),
@@ -649,6 +688,8 @@ async fn ci_job_logs(st: &AppState, route: RepoRunJobRoute<'_>, query: &HashMap<
         Some(j) => (j.name.as_str(), j.status.as_str(), j.started_at_ms, j.ended_at_ms),
         None => return not_found(&format!("/{}/ci/{}/{}", route.repo_id, route.run_id, route.job_id)),
     };
+    debug_assert!(!job_name.is_empty());
+    debug_assert!(!job_status.is_empty());
 
     // Full output mode: ?full=1
     let is_full = query.get("full").is_some_and(|v| v == "1");
@@ -746,6 +787,7 @@ async fn login_page(_st: &AppState) -> RouteResponse {
 }
 
 async fn login_challenge(st: &AppState, query: &HashMap<String, String>) -> RouteResponse {
+    debug_assert!(query.get("npub").is_none_or(|value| !value.is_empty()));
     let npub = match query.get("npub") {
         Some(n) if n.len() == 64 => n.as_str(),
         _ => {
@@ -756,6 +798,8 @@ async fn login_challenge(st: &AppState, query: &HashMap<String, String>) -> Rout
             };
         }
     };
+    debug_assert_eq!(npub.len(), 64);
+    debug_assert!(npub.chars().all(|ch| ch.is_ascii_hexdigit()));
     match st.nostr_auth_challenge(npub).await {
         Ok((challenge_id, challenge_hex)) => RouteResponse::Raw {
             status: StatusCode::OK,
@@ -776,6 +820,7 @@ async fn login_challenge(st: &AppState, query: &HashMap<String, String>) -> Rout
 }
 
 async fn login_verify_post(st: &AppState, form: &HashMap<String, String>) -> RouteResponse {
+    debug_assert!(form.len() <= 3);
     let npub = form.get("npub").map(|s| s.as_str()).unwrap_or("");
     let challenge_id = form.get("challenge_id").map(|s| s.as_str()).unwrap_or("");
     let signature = form.get("signature").map(|s| s.as_str()).unwrap_or("");
@@ -783,6 +828,9 @@ async fn login_verify_post(st: &AppState, form: &HashMap<String, String>) -> Rou
     if npub.is_empty() || challenge_id.is_empty() || signature.is_empty() {
         return err(anyhow::anyhow!("missing npub, challenge_id, or signature"));
     }
+    debug_assert!(!npub.is_empty());
+    debug_assert!(!challenge_id.is_empty());
+    debug_assert!(!signature.is_empty());
 
     match st.nostr_auth_verify(npub, challenge_id, signature).await {
         Ok(token) => {
@@ -803,6 +851,8 @@ async fn login_verify_post(st: &AppState, form: &HashMap<String, String>) -> Rou
 }
 
 async fn raw_blob(st: &AppState, route: RepoRefPath<'_>) -> RouteResponse {
+    debug_assert!(!route.ref_name.is_empty());
+    debug_assert!(!route.path.is_empty());
     let commit_hash = match st.resolve_ref(route.repo_id, route.ref_name).await {
         Ok(h) => h,
         Err(e) => return err(e),
@@ -856,6 +906,8 @@ async fn walk_tree(st: &AppState, route: TreeLookupPath<'_>) -> anyhow::Result<S
 }
 
 async fn walk_to_blob(st: &AppState, route: TreeLookupPath<'_>) -> anyhow::Result<String> {
+    debug_assert!(!route.root_tree.is_empty());
+    debug_assert!(!route.path.is_empty());
     let parts: Vec<&str> = route.path.split('/').filter(|p| !p.is_empty()).collect();
     let Some((file, dirs)) = parts.split_last() else {
         anyhow::bail!("empty path");
@@ -881,6 +933,8 @@ async fn walk_to_blob(st: &AppState, route: TreeLookupPath<'_>) -> anyhow::Resul
 
 /// Derive a content-type from the file extension in a path.
 fn content_type_for_path(path: &str) -> &'static str {
+    debug_assert!(!path.is_empty());
+    debug_assert!(!path.ends_with('/'));
     let ext = path.rsplit('.').next().unwrap_or("");
     match ext {
         // Text
@@ -1731,7 +1785,15 @@ mod tests {
         let mut branch_ci = std::collections::HashMap::new();
         branch_ci.insert("main".to_string(), "succeeded".to_string());
         branch_ci.insert("dev".to_string(), "failed".to_string());
-        let html = templates::repo_overview(&repo, &branches, &[], None, "ticket", None, &branch_ci).into_string();
+        let html = templates::repo_overview(&repo, &templates::RepoOverviewParams {
+            branches: &branches,
+            recent_commits: &[],
+            readme_html: None,
+            ticket: "ticket",
+            ci_status: None,
+            branch_ci: &branch_ci,
+        })
+        .into_string();
         assert!(html.contains("branch-ci-passed"));
         assert!(html.contains("branch-ci-failed"));
     }

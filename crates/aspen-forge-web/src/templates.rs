@@ -91,28 +91,7 @@ pub fn render_markdown(source: &str) -> String {
 
 /// Repo navigation tabs with optional search box.
 fn repo_tabs(repo: &ForgeRepoInfo, active: &str) -> Markup {
-    let tabs = [
-        ("Overview", format!("/{}", repo.id), "overview"),
-        ("Files", format!("/{}/tree", repo.id), "tree"),
-        ("Commits", format!("/{}/commits", repo.id), "commits"),
-        ("Issues", format!("/{}/issues", repo.id), "issues"),
-        ("Patches", format!("/{}/patches", repo.id), "patches"),
-        ("CI", format!("/{}/ci", repo.id), "ci"),
-    ];
-    html! {
-        div.tabs {
-            @for (label, href, key) in &tabs {
-                @if *key == active {
-                    a.active href=(href) { (label) }
-                } @else {
-                    a href=(href) { (label) }
-                }
-            }
-            form.tabs-search method="get" action=(format!("/{}/search", repo.id)) {
-                input type="text" name="q" placeholder="Search…" {}
-            }
-        }
-    }
+    render_repo_tabs(repo, active)
 }
 
 /// Render an author's display name.
@@ -124,7 +103,9 @@ fn author_display(commit: &ForgeCommitInfo) -> String {
     }
     if let Some(ref npub) = commit.author_npub {
         if npub.len() > 16 {
-            return format!("npub:{}…{}", &npub[..8], &npub[npub.len() - 4..]);
+            let suffix_start = npub.len().saturating_sub(4);
+            debug_assert!(suffix_start < npub.len());
+            return format!("npub:{}…{}", &npub[..8], &npub[suffix_start..]);
         }
         return format!("npub:{npub}");
     }
@@ -219,21 +200,24 @@ pub fn repo_list(repos: &[ForgeRepoInfo]) -> Markup {
     })
 }
 
+pub struct RepoOverviewParams<'a> {
+    pub branches: &'a [ForgeRefInfo],
+    pub recent_commits: &'a [ForgeCommitInfo],
+    pub readme_html: Option<&'a str>,
+    pub ticket: &'a str,
+    pub ci_status: Option<&'a CiRunInfo>,
+    pub branch_ci: &'a std::collections::HashMap<String, String>,
+}
+
 /// Repository overview page.
-pub fn repo_overview(
-    repo: &ForgeRepoInfo,
-    branches: &[ForgeRefInfo],
-    recent_commits: &[ForgeCommitInfo],
-    readme_html: Option<&str>,
-    ticket: &str,
-    ci_status: Option<&CiRunInfo>,
-    branch_ci: &std::collections::HashMap<String, String>,
-) -> Markup {
-    let clone_cmd = format!("git clone aspen://{}/{} {}", ticket, repo.id, repo.name);
+pub fn repo_overview(repo: &ForgeRepoInfo, params: &RepoOverviewParams<'_>) -> Markup {
+    debug_assert!(!params.ticket.is_empty());
+    debug_assert!(params.branch_ci.keys().all(|branch_name| !branch_name.is_empty()));
+    let clone_cmd = format!("git clone aspen://{}/{} {}", params.ticket, repo.id, repo.name);
     base_layout(&repo.name, html! {
         h1 {
             (&repo.name)
-            @if let Some(run) = ci_status {
+            @if let Some(run) = params.ci_status {
                 " " (ci_status_badge(&repo.id, run))
             }
         }
@@ -248,7 +232,7 @@ pub fn repo_overview(
 
         (repo_tabs(repo, "overview"))
 
-        @if let Some(html) = readme_html {
+        @if let Some(html) = params.readme_html {
             div.readme {
                 h2 { "📖 README" }
                 div.markdown { (PreEscaped(html)) }
@@ -256,13 +240,13 @@ pub fn repo_overview(
         }
 
         h2 { "Branches" }
-        @if branches.is_empty() {
+        @if params.branches.is_empty() {
             p.muted { "No branches." }
         } @else {
             ul {
-                @for b in branches {
+                @for b in params.branches {
                     li {
-                        @if let Some(status) = branch_ci.get(&b.name) {
+                        @if let Some(status) = params.branch_ci.get(&b.name) {
                             span class=(branch_ci_dot_class(status)) { "" }
                             " "
                         }
@@ -274,39 +258,45 @@ pub fn repo_overview(
         }
 
         h2 { "Recent Commits" }
-        @if recent_commits.is_empty() {
+        @if params.recent_commits.is_empty() {
             p.muted { "No commits." }
         } @else {
-            (commit_table(repo, recent_commits))
+            (commit_table(repo, params.recent_commits))
         }
     })
 }
 
+pub struct FileBrowserParams<'a> {
+    pub ref_name: &'a str,
+    pub path: &'a str,
+    pub entries: &'a [ForgeTreeEntry],
+}
+
 /// File browser page (directory listing).
-pub fn file_browser(repo: &ForgeRepoInfo, ref_name: &str, path: &str, entries: &[ForgeTreeEntry]) -> Markup {
-    base_layout(&format!("{} — {}", repo.name, if path.is_empty() { "/" } else { path }), html! {
+pub fn file_browser(repo: &ForgeRepoInfo, params: &FileBrowserParams<'_>) -> Markup {
+    base_layout(&format!("{} — {}", repo.name, if params.path.is_empty() { "/" } else { params.path }), html! {
         h1 {
             a href=(format!("/{}", repo.id)) { (&repo.name) }
             " / "
-            a href=(format!("/{}/tree/{}", repo.id, ref_name)) { code { (ref_name) } }
-            @if !path.is_empty() {
-                (breadcrumb_path(repo, ref_name, path))
+            a href=(format!("/{}/tree/{}", repo.id, params.ref_name)) { code { (params.ref_name) } }
+            @if !params.path.is_empty() {
+                (breadcrumb_path(repo, params.ref_name, params.path))
             }
         }
 
         (repo_tabs(repo, "tree"))
 
         table.file-list {
-            @if !path.is_empty() {
+            @if !params.path.is_empty() {
                 tr {
-                    td { a href=(parent_link(repo, ref_name, path)) { "📁 .." } }
+                    td { a href=(parent_link(&TreeLinkContext { repo, ref_name: params.ref_name, path: params.path })) { "📁 .." } }
                     td {}
                 }
             }
-            @for entry in entries {
+            @for entry in params.entries {
                 tr {
                     td {
-                        @let link = entry_link(repo, ref_name, path, &entry.name, entry.mode);
+                        @let link = entry_link(&TreeLinkContext { repo, ref_name: params.ref_name, path: params.path }, &entry.name, entry.mode);
                         a href=(link) { (file_icon(entry.mode)) " " (&entry.name) }
                     }
                     td.hash { code { (short_hash(&entry.hash)) } }
@@ -316,32 +306,42 @@ pub fn file_browser(repo: &ForgeRepoInfo, ref_name: &str, path: &str, entries: &
     })
 }
 
+pub struct FileViewParams<'a> {
+    pub ref_name: &'a str,
+    pub path: &'a str,
+    pub content: Option<&'a [u8]>,
+    pub size_bytes: u64,
+}
+
 /// Blob (file content) page.
-pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Option<&[u8]>, size: u64) -> Markup {
-    let is_text = content.as_ref().is_some_and(|c| is_likely_text(c));
-    let raw_url = format!("/{}/raw/{}/{}", repo.id, ref_name, path);
-    base_layout(&format!("{} — {}", repo.name, path), html! {
+pub fn file_view(repo: &ForgeRepoInfo, params: &FileViewParams<'_>) -> Markup {
+    debug_assert!(!params.ref_name.is_empty());
+    debug_assert!(!params.path.is_empty());
+    let is_text = params.content.as_ref().is_some_and(|c| is_likely_text(c));
+    let raw_url = format!("/{}/raw/{}/{}", repo.id, params.ref_name, params.path);
+    base_layout(&format!("{} — {}", repo.name, params.path), html! {
         h1 {
             a href=(format!("/{}", repo.id)) { (&repo.name) }
             " / "
-            code { (ref_name) }
-            " / " (path)
+            code { (params.ref_name) }
+            " / " (params.path)
         }
 
         p.meta {
-            (size) " bytes"
+            (params.size_bytes) " bytes"
             " · "
             a.raw-link href=(raw_url) { "Raw" }
         }
 
         @if is_text {
-            @if let Some(bytes) = content {
+            @if let Some(bytes) = params.content {
                 pre.code-block {
                     table.code-table {
                         @let text = String::from_utf8_lossy(bytes);
                         @for (line_no, line) in text.lines().enumerate() {
+                            @let display_line_no = checked_line_number(line_no);
                             tr {
-                                td.ln id=(format!("L{}", line_no + 1)) { (line_no + 1) }
+                                td.ln id=(format!("L{}", display_line_no)) { (display_line_no) }
                                 td.line { code { (line) } }
                             }
                         }
@@ -350,7 +350,7 @@ pub fn file_view(repo: &ForgeRepoInfo, ref_name: &str, path: &str, content: Opti
             }
         } @else {
             p.muted {
-                "Binary file (" (size) " bytes) · "
+                "Binary file (" (params.size_bytes) " bytes) · "
                 a href=(raw_url) { "Download" }
             }
         }
@@ -368,6 +368,8 @@ pub fn commit_detail(
     use crate::state::DiffKind;
     use crate::state::DiffLine;
 
+    debug_assert!(!commit.hash.is_empty());
+    debug_assert!(file_diffs.iter().all(|(file, _)| !file.path.is_empty()));
     base_layout(&format!("{} — {}", repo.name, short_hash(&commit.hash)), html! {
         h1 {
             a href=(format!("/{}", repo.id)) { (&repo.name) }
@@ -380,7 +382,7 @@ pub fn commit_detail(
 
         div.card {
             p { strong { (first_line(&commit.message)) } }
-            @let rest = commit.message.lines().skip(1).collect::<Vec<_>>().join("\n").trim().to_string();
+            @let rest = commit_message_rest(&commit.message);
             @if !rest.is_empty() {
                 pre.code-block { (rest) }
             }
@@ -719,32 +721,46 @@ fn merge_status_banner(
     }
 }
 
+struct NewIssueFormDraft<'a> {
+    error: Option<&'a str>,
+    title: &'a str,
+    body: &'a str,
+}
+
 /// New issue form page.
 pub fn new_issue_form(repo: &ForgeRepoInfo) -> Markup {
-    new_issue_form_inner(repo, None, "", "")
+    new_issue_form_inner(repo, &NewIssueFormDraft {
+        error: None,
+        title: "",
+        body: "",
+    })
 }
 
 /// New issue form with validation error.
 pub fn new_issue_form_with_error(repo: &ForgeRepoInfo, error: &str, title: &str, body: &str) -> Markup {
-    new_issue_form_inner(repo, Some(error), title, body)
+    new_issue_form_inner(repo, &NewIssueFormDraft {
+        error: Some(error),
+        title,
+        body,
+    })
 }
 
-fn new_issue_form_inner(repo: &ForgeRepoInfo, error: Option<&str>, title: &str, body: &str) -> Markup {
+fn new_issue_form_inner(repo: &ForgeRepoInfo, draft: &NewIssueFormDraft<'_>) -> Markup {
     base_layout(&format!("{} — New Issue", repo.name), html! {
         p { a href=(format!("/{}/issues", repo.id)) { "← Issues" } }
         h1 { "New Issue" }
 
-        @if let Some(msg) = error {
+        @if let Some(msg) = draft.error {
             div.error { (msg) }
         }
 
         form.card method="POST" action=(format!("/{}/issues/new", repo.id)) {
             label for="title" { "Title" }
-            input type="text" name="title" id="title" value=(title) required
+            input type="text" name="title" id="title" value=(draft.title) required
                 placeholder="Issue title" {}
 
             label for="body" { "Description" }
-            textarea name="body" id="body" rows="8" placeholder="Describe the issue…" { (body) }
+            textarea name="body" id="body" rows="8" placeholder="Describe the issue…" { (draft.body) }
 
             label for="labels" { "Labels " span.muted { "(comma-separated)" } }
             input type="text" name="labels" id="labels" placeholder="bug, docs" {}
@@ -920,7 +936,8 @@ fn status_label(status: &str) -> &str {
 fn format_duration_ms(started_ms: Option<u64>, ended_ms: Option<u64>) -> String {
     match (started_ms, ended_ms) {
         (Some(start), Some(end)) if end >= start => {
-            let secs = (end - start) / 1000;
+            let elapsed_ms = end.saturating_sub(start);
+            let secs = elapsed_ms / 1000;
             if secs < 60 {
                 format!("{secs}s")
             } else {
@@ -939,6 +956,8 @@ pub fn pipeline_list(
     repo_name: Option<&str>,
     active_filter: &str,
 ) -> Markup {
+    debug_assert_eq!(repo_id.is_some(), repo_name.is_some());
+    debug_assert!(!active_filter.contains('&'));
     let title = match repo_name {
         Some(name) => format!("{name} — CI Pipelines"),
         None => "CI Pipelines".to_string(),
@@ -1002,6 +1021,8 @@ pub fn pipeline_list(
 
 /// CI pipeline run detail page with stages and jobs.
 pub fn pipeline_detail(repo_id: &str, repo_name: &str, status_resp: &CiGetStatusResponse) -> Markup {
+    debug_assert!(!repo_id.is_empty());
+    debug_assert!(!repo_name.is_empty());
     let run_id = status_resp.run_id.as_deref().unwrap_or("unknown");
     let status = status_resp.status.as_deref().unwrap_or("unknown");
     let is_active = status == "running" || status == "pending";
@@ -1047,7 +1068,7 @@ pub fn pipeline_detail(repo_id: &str, repo_name: &str, status_resp: &CiGetStatus
         }
         (stage_timeline(&status_resp.stages))
         @for stage in &status_resp.stages {
-            (stage_section(repo_id, run_id, stage))
+            (stage_section(&PipelineJobContext { repo_id, run_id }, stage))
         }
         @if status_resp.stages.is_empty() {
             p.muted { "No stages defined for this pipeline." }
@@ -1099,7 +1120,12 @@ fn stage_segment_icon(status: &str) -> &'static str {
 }
 
 /// Render a single stage section with its jobs.
-fn stage_section(repo_id: &str, run_id: &str, stage: &CiStageInfo) -> Markup {
+struct PipelineJobContext<'a> {
+    repo_id: &'a str,
+    run_id: &'a str,
+}
+
+fn stage_section(context: &PipelineJobContext<'_>, stage: &CiStageInfo) -> Markup {
     html! {
         div.ci-stage {
             h3.ci-stage-header {
@@ -1118,7 +1144,7 @@ fn stage_section(repo_id: &str, run_id: &str, stage: &CiStageInfo) -> Markup {
                 }
                 tbody {
                     @for job in &stage.jobs {
-                        (job_row(repo_id, run_id, job))
+                        (job_row(context, job))
                     }
                 }
             }
@@ -1127,7 +1153,7 @@ fn stage_section(repo_id: &str, run_id: &str, stage: &CiStageInfo) -> Markup {
 }
 
 /// Render a single job row.
-fn job_row(repo_id: &str, run_id: &str, job: &CiJobInfo) -> Markup {
+fn job_row(context: &PipelineJobContext<'_>, job: &CiJobInfo) -> Markup {
     html! {
         tr {
             td {
@@ -1141,7 +1167,7 @@ fn job_row(repo_id: &str, run_id: &str, job: &CiJobInfo) -> Markup {
             }
             td.meta { (format_duration_ms(job.started_at_ms, job.ended_at_ms)) }
             td {
-                a href=(format!("/{repo_id}/ci/{run_id}/{}", job.id)) { "logs →" }
+                a href=(format!("/{}/ci/{}/{}", context.repo_id, context.run_id, job.id)) { "logs →" }
             }
         }
     }
@@ -1163,11 +1189,14 @@ pub struct JobLogParams<'a> {
 
 /// CI job log viewer page.
 pub fn job_log_viewer(params: &JobLogParams<'_>) -> Markup {
+    debug_assert!(!params.repo_id.is_empty());
+    debug_assert!(!params.job_id.is_empty());
     let is_active = params.job_status == "running";
     let title = format!("{} — {} logs", params.repo_name, params.job_name);
 
     // Build numbered log lines from chunks
-    let mut log_lines: Vec<String> = Vec::new();
+    let log_line_count_bound = params.logs_resp.chunks.iter().map(|chunk| chunk.content.lines().count()).sum::<usize>();
+    let mut log_lines: Vec<String> = Vec::with_capacity(log_line_count_bound);
     for chunk in &params.logs_resp.chunks {
         for line in chunk.content.split('\n') {
             log_lines.push(ansi_to_html_safe(line));
@@ -1203,7 +1232,7 @@ pub fn job_log_viewer(params: &JobLogParams<'_>) -> Markup {
             table.log-table {
                 @for (i, line_html) in log_lines.iter().enumerate() {
                     tr {
-                        td.log-line-number { (i + 1) }
+                        td.log-line-number { (checked_line_number(i)) }
                         td.log-line { code { (PreEscaped(line_html)) } }
                     }
                 }
@@ -1211,7 +1240,7 @@ pub fn job_log_viewer(params: &JobLogParams<'_>) -> Markup {
         }
         @if params.logs_resp.has_more {
             div.ci-load-more {
-                a href=(format!("/{}/ci/{}/{}?start={}", params.repo_id, params.run_id, params.job_id, params.start_index + params.logs_resp.chunks.len() as u32)) {
+                a href=(format!("/{}/ci/{}/{}?start={}", params.repo_id, params.run_id, params.job_id, next_log_start_index(params.start_index, params.logs_resp.chunks.len()))) {
                     "Load more…"
                 }
             }
@@ -1232,8 +1261,8 @@ fn branch_ci_dot_class(status: &str) -> &'static str {
 /// Format bytes into human-readable size.
 pub fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
-    const MB: u64 = 1024 * 1024;
-    const GB: u64 = 1024 * 1024 * 1024;
+    const MB: u64 = KB.saturating_mul(KB);
+    const GB: u64 = MB.saturating_mul(KB);
     if bytes >= GB {
         format!("{:.1} GB", bytes as f64 / GB as f64)
     } else if bytes >= MB {
@@ -1316,13 +1345,15 @@ pub struct JobFullOutputParams<'a> {
 
 /// CI job full output viewer page.
 pub fn job_full_output_viewer(params: &JobFullOutputParams<'_>) -> Markup {
+    debug_assert!(!params.repo_id.is_empty());
+    debug_assert!(!params.job_id.is_empty());
     let is_active = params.job_status == "running";
     let title = format!("{} — {} output", params.repo_name, params.job_name);
     let chunked_url = format!("/{}/ci/{}/{}", params.repo_id, params.run_id, params.job_id);
 
     let stdout = params.output_resp.stdout.as_deref().unwrap_or("");
     let stderr = params.output_resp.stderr.as_deref().unwrap_or("");
-    let total_bytes = stdout.len() + stderr.len();
+    let total_bytes = stdout.len().saturating_add(stderr.len());
     let is_truncated = total_bytes > MAX_FULL_OUTPUT_BYTES;
 
     // Truncate if needed
@@ -1448,6 +1479,8 @@ pub fn ci_unavailable() -> Markup {
 
 /// Cluster overview page.
 pub fn cluster_overview(health: &HealthResponse, cluster: &ClusterStateResponse) -> Markup {
+    debug_assert!(cluster.nodes.iter().all(|node| node.node_id > 0));
+    debug_assert!(health.node_id > 0);
     let total_nodes = cluster.nodes.len();
     let leader_id = cluster.leader_id;
 
@@ -1531,6 +1564,14 @@ fn dummy_repo() -> ForgeRepoInfo {
 
 /// Repo tabs variant that includes the CI tab.
 fn repo_tabs_with_ci(repo: &ForgeRepoInfo, active: &str) -> Markup {
+    render_repo_tabs(repo, active)
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+
+fn render_repo_tabs(repo: &ForgeRepoInfo, active: &str) -> Markup {
+    debug_assert!(!active.is_empty());
+    debug_assert!(repo.id.is_empty() || !repo.name.is_empty());
     let tabs = [
         ("Overview", format!("/{}", repo.id), "overview"),
         ("Files", format!("/{}/tree", repo.id), "tree"),
@@ -1555,7 +1596,19 @@ fn repo_tabs_with_ci(repo: &ForgeRepoInfo, active: &str) -> Markup {
     }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────
+fn checked_line_number(line_index: usize) -> usize {
+    debug_assert!(line_index < usize::MAX);
+    line_index.saturating_add(1)
+}
+
+fn next_log_start_index(start_index: u32, chunk_count: usize) -> u32 {
+    let chunk_count_u32 = u32::try_from(chunk_count).unwrap_or(u32::MAX);
+    start_index.saturating_add(chunk_count_u32)
+}
+
+fn commit_message_rest(message: &str) -> String {
+    message.lines().skip(1).collect::<Vec<_>>().join("\n").trim().to_string()
+}
 
 fn commit_table(repo: &ForgeRepoInfo, commits: &[ForgeCommitInfo]) -> Markup {
     html! {
@@ -1580,23 +1633,29 @@ fn first_line(s: &str) -> &str {
     s.lines().next().unwrap_or(s)
 }
 
-fn entry_link(repo: &ForgeRepoInfo, ref_name: &str, path: &str, name: &str, mode: u32) -> String {
-    let full = if path.is_empty() {
+struct TreeLinkContext<'a> {
+    repo: &'a ForgeRepoInfo,
+    ref_name: &'a str,
+    path: &'a str,
+}
+
+fn entry_link(context: &TreeLinkContext<'_>, name: &str, mode: u32) -> String {
+    let full = if context.path.is_empty() {
         name.to_string()
     } else {
-        format!("{path}/{name}")
+        format!("{}/{}", context.path, name)
     };
     if is_dir(mode) {
-        format!("/{}/tree/{}/{}", repo.id, ref_name, full)
+        format!("/{}/tree/{}/{}", context.repo.id, context.ref_name, full)
     } else {
-        format!("/{}/blob/{}/{}", repo.id, ref_name, full)
+        format!("/{}/blob/{}/{}", context.repo.id, context.ref_name, full)
     }
 }
 
-fn parent_link(repo: &ForgeRepoInfo, ref_name: &str, path: &str) -> String {
-    match path.rsplit_once('/') {
-        Some((parent, _)) => format!("/{}/tree/{}/{}", repo.id, ref_name, parent),
-        None => format!("/{}/tree/{}", repo.id, ref_name),
+fn parent_link(context: &TreeLinkContext<'_>) -> String {
+    match context.path.rsplit_once('/') {
+        Some((parent, _)) => format!("/{}/tree/{}/{}", context.repo.id, context.ref_name, parent),
+        None => format!("/{}/tree/{}", context.repo.id, context.ref_name),
     }
 }
 
@@ -1608,7 +1667,7 @@ fn is_likely_text(data: &[u8]) -> bool {
 
 fn breadcrumb_path(repo: &ForgeRepoInfo, ref_name: &str, path: &str) -> Markup {
     let segments: Vec<&str> = path.split('/').collect();
-    let mut cumulative_paths = Vec::new();
+    let mut cumulative_paths = Vec::with_capacity(segments.len());
     let mut current_path = String::new();
 
     for (i, segment) in segments.iter().enumerate() {

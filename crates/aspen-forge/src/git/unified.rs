@@ -4,8 +4,6 @@
 //! diff format (`---`/`+++` headers, `@@` hunks, `+`/`-` lines). Uses
 //! the `similar` crate for line-level diffing.
 
-use std::fmt::Write;
-
 use similar::ChangeTag;
 use similar::TextDiff;
 
@@ -14,6 +12,60 @@ use super::diff::DiffKind;
 
 /// Maximum width for the diffstat bar chart.
 const DIFFSTAT_BAR_WIDTH: u32 = 40;
+
+fn checked_line_count_u32(input: &str) -> u32 {
+    u32::try_from(input.lines().count()).unwrap_or(u32::MAX)
+}
+
+fn checked_u32_to_usize(value: u32) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
+
+struct DiffstatBarScale {
+    total_changes: u32,
+    max_changes: u32,
+}
+
+fn scaled_bar_width(scale: DiffstatBarScale) -> u32 {
+    debug_assert!(scale.max_changes > 0);
+    if scale.max_changes <= DIFFSTAT_BAR_WIDTH {
+        return scale.total_changes;
+    }
+    let scaled = u64::from(scale.total_changes)
+        .saturating_mul(u64::from(DIFFSTAT_BAR_WIDTH))
+        .checked_div(u64::from(scale.max_changes))
+        .unwrap_or(0);
+    u32::try_from(scaled).unwrap_or(DIFFSTAT_BAR_WIDTH)
+}
+
+struct DiffstatBarComponent {
+    component_changes: u32,
+    bar_total: u32,
+    total_changes: u32,
+}
+
+fn scaled_bar_component(component: DiffstatBarComponent) -> u32 {
+    debug_assert!(component.total_changes > 0);
+    if component.total_changes == 0 {
+        return 0;
+    }
+    let scaled = u64::from(component.component_changes)
+        .saturating_mul(u64::from(component.bar_total))
+        .checked_div(u64::from(component.total_changes))
+        .unwrap_or(0);
+    u32::try_from(scaled).unwrap_or(component.bar_total)
+}
+
+fn push_line(out: &mut String, line: &str) {
+    debug_assert!(line.len() < usize::MAX);
+    out.push_str(line);
+    out.push('\n');
+}
+
+fn push_fmt_line(out: &mut String, args: std::fmt::Arguments<'_>) {
+    let line = args.to_string();
+    push_line(out, &line);
+}
 
 /// Render unified diff text from diff entries.
 ///
@@ -39,11 +91,12 @@ pub fn render_unified_diff(entries: &[DiffEntry], context_lines: u32) -> String 
 ///
 /// Shows per-file insertion/deletion counts and a bar chart.
 pub fn render_diffstat(entries: &[DiffEntry]) -> String {
+    debug_assert!(DIFFSTAT_BAR_WIDTH > 0);
     if entries.is_empty() {
         return String::new();
     }
 
-    let mut lines: Vec<(String, u32, u32)> = Vec::new();
+    let mut lines: Vec<(String, u32, u32)> = Vec::with_capacity(entries.len());
     let mut total_add: u32 = 0;
     let mut total_del: u32 = 0;
     let mut max_path_len: usize = 0;
@@ -59,66 +112,79 @@ pub fn render_diffstat(entries: &[DiffEntry]) -> String {
     }
 
     let mut out = String::new();
-    let max_changes: u32 = lines.iter().map(|(_, a, d)| a.saturating_add(*d)).max().unwrap_or(1).max(1);
+    let max_changes: u32 = lines
+        .iter()
+        .map(|(_, add_count, del_count)| add_count.saturating_add(*del_count))
+        .max()
+        .unwrap_or(1)
+        .max(1);
 
     for (path, add, del) in &lines {
         let total = add.saturating_add(*del);
-        let bar_total = if max_changes > DIFFSTAT_BAR_WIDTH {
-            (u64::from(total) * u64::from(DIFFSTAT_BAR_WIDTH) / u64::from(max_changes)) as u32
-        } else {
-            total
-        };
+        let bar_total = scaled_bar_width(DiffstatBarScale {
+            total_changes: total,
+            max_changes,
+        });
         let bar_add = if total > 0 {
-            (u64::from(*add) * u64::from(bar_total) / u64::from(total)) as u32
+            scaled_bar_component(DiffstatBarComponent {
+                component_changes: *add,
+                bar_total,
+                total_changes: total,
+            })
         } else {
             0
         };
         let bar_del = bar_total.saturating_sub(bar_add);
 
-        let _ = writeln!(
-            out,
-            " {:<width$} | {:>5} {}{}",
-            path,
-            total,
-            "+".repeat(bar_add as usize),
-            "-".repeat(bar_del as usize),
-            width = max_path_len,
+        push_fmt_line(
+            &mut out,
+            format_args!(
+                " {:<width$} | {:>5} {}{}",
+                path,
+                total,
+                "+".repeat(checked_u32_to_usize(bar_add)),
+                "-".repeat(checked_u32_to_usize(bar_del)),
+                width = max_path_len,
+            ),
         );
     }
 
-    let _ = writeln!(out, " {} files changed, {} insertions(+), {} deletions(-)", lines.len(), total_add, total_del,);
+    push_fmt_line(
+        &mut out,
+        format_args!(" {} files changed, {} insertions(+), {} deletions(-)", lines.len(), total_add, total_del,),
+    );
 
     out
 }
 
 /// Render a single diff entry.
 fn render_entry(out: &mut String, entry: &DiffEntry, context_lines: u32) {
+    debug_assert!(!entry.path.is_empty());
     match entry.kind {
         DiffKind::Renamed => {
             let old = entry.old_path.as_deref().unwrap_or("unknown");
-            let _ = writeln!(out, "rename from {old}");
-            let _ = writeln!(out, "rename to {}", entry.path);
-            // If mode changed during rename, note it
+            push_fmt_line(out, format_args!("rename from {old}"));
+            push_fmt_line(out, format_args!("rename to {}", entry.path));
             if entry.old_mode != entry.new_mode
-                && let (Some(om), Some(nm)) = (entry.old_mode, entry.new_mode)
+                && let (Some(old_mode), Some(new_mode)) = (entry.old_mode, entry.new_mode)
             {
-                let _ = writeln!(out, "old mode {om:o}");
-                let _ = writeln!(out, "new mode {nm:o}");
+                push_fmt_line(out, format_args!("old mode {old_mode:o}"));
+                push_fmt_line(out, format_args!("new mode {new_mode:o}"));
             }
         }
         DiffKind::Added => {
-            let _ = writeln!(out, "--- /dev/null");
-            let _ = writeln!(out, "+++ b/{}", entry.path);
+            push_line(out, "--- /dev/null");
+            push_fmt_line(out, format_args!("+++ b/{}", entry.path));
             render_content_diff(out, Some(b""), entry.new_content.as_deref(), context_lines);
         }
         DiffKind::Removed => {
-            let _ = writeln!(out, "--- a/{}", entry.path);
-            let _ = writeln!(out, "+++ /dev/null");
+            push_fmt_line(out, format_args!("--- a/{}", entry.path));
+            push_line(out, "+++ /dev/null");
             render_content_diff(out, entry.old_content.as_deref(), Some(b""), context_lines);
         }
         DiffKind::Modified => {
-            let _ = writeln!(out, "--- a/{}", entry.path);
-            let _ = writeln!(out, "+++ b/{}", entry.path);
+            push_fmt_line(out, format_args!("--- a/{}", entry.path));
+            push_fmt_line(out, format_args!("+++ b/{}", entry.path));
             render_content_diff(out, entry.old_content.as_deref(), entry.new_content.as_deref(), context_lines);
         }
     }
@@ -126,44 +192,40 @@ fn render_entry(out: &mut String, entry: &DiffEntry, context_lines: u32) {
 
 /// Render line-level diff between old and new content.
 fn render_content_diff(out: &mut String, old: Option<&[u8]>, new: Option<&[u8]>, context_lines: u32) {
+    debug_assert!(context_lines <= u32::try_from(usize::MAX).unwrap_or(u32::MAX));
     let (old_bytes, new_bytes) = match (old, new) {
-        (Some(o), Some(n)) => (o, n),
-        (Some(o), None) => (o, &b""[..]),
-        (None, Some(n)) => (&b""[..], n),
+        (Some(old_bytes), Some(new_bytes)) => (old_bytes, new_bytes),
+        (Some(old_bytes), None) => (old_bytes, &b""[..]),
+        (None, Some(new_bytes)) => (&b""[..], new_bytes),
         (None, None) => {
-            // No content loaded — show hash-only note
-            let _ = writeln!(out, "Binary files differ (content not loaded)");
+            push_line(out, "Binary files differ (content not loaded)");
             return;
         }
     };
 
-    // Check if content is valid UTF-8; if not, it's binary
     let old_str = match std::str::from_utf8(old_bytes) {
-        Ok(s) => s,
+        Ok(value) => value,
         Err(_) => {
-            let _ = writeln!(out, "Binary files differ");
+            push_line(out, "Binary files differ");
             return;
         }
     };
     let new_str = match std::str::from_utf8(new_bytes) {
-        Ok(s) => s,
+        Ok(value) => value,
         Err(_) => {
-            let _ = writeln!(out, "Binary files differ");
+            push_line(out, "Binary files differ");
             return;
         }
     };
 
     let diff = TextDiff::from_lines(old_str, new_str);
-    let mut unified = diff.unified_diff();
-    let formatted = unified.context_radius(context_lines as usize).to_string();
+    let formatted = diff.unified_diff().context_radius(checked_u32_to_usize(context_lines)).to_string();
 
-    // The similar crate produces full unified output including headers;
-    // we already wrote headers, so strip any leading ---/+++ lines.
     for line in formatted.lines() {
         if line.starts_with("---") || line.starts_with("+++") {
             continue;
         }
-        let _ = writeln!(out, "{line}");
+        push_line(out, line);
     }
 }
 
@@ -174,8 +236,8 @@ fn count_changes(entry: &DiffEntry) -> (u32, u32) {
             let lines = entry
                 .new_content
                 .as_deref()
-                .and_then(|b| std::str::from_utf8(b).ok())
-                .map(|s| s.lines().count() as u32)
+                .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                .map(checked_line_count_u32)
                 .unwrap_or(1);
             (lines, 0)
         }
@@ -183,8 +245,8 @@ fn count_changes(entry: &DiffEntry) -> (u32, u32) {
             let lines = entry
                 .old_content
                 .as_deref()
-                .and_then(|b| std::str::from_utf8(b).ok())
-                .map(|s| s.lines().count() as u32)
+                .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                .map(checked_line_count_u32)
                 .unwrap_or(1);
             (0, lines)
         }

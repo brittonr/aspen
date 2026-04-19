@@ -181,6 +181,17 @@ pub struct HookMetricsOutput {
     pub handlers: Vec<HookHandlerMetrics>,
 }
 
+fn format_avg_latency_us(avg_duration_us: u64) -> String {
+    debug_assert!(avg_duration_us <= u64::MAX / 1000);
+    if avg_duration_us == 0 {
+        return "n/a".to_string();
+    }
+    if avg_duration_us >= 1000 {
+        return format!("{:.1}ms", avg_duration_us as f64 / 1000.0);
+    }
+    format!("{}us", avg_duration_us)
+}
+
 impl Outputable for HookMetricsOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
@@ -212,19 +223,14 @@ impl Outputable for HookMetricsOutput {
                 m.name.clone()
             };
 
-            let latency_str = if m.avg_duration_us > 0 {
-                if m.avg_duration_us >= 1000 {
-                    format!("{:.1}ms", m.avg_duration_us as f64 / 1000.0)
-                } else {
-                    format!("{}us", m.avg_duration_us)
-                }
-            } else {
-                "n/a".to_string()
-            };
-
             output.push_str(&format!(
                 "{:<20}  {:>7}  {:>6}  {:>7}  {:>7}  {:>11}\n",
-                name_short, m.success_count, m.failure_count, m.dropped_count, m.jobs_submitted, latency_str,
+                name_short,
+                m.success_count,
+                m.failure_count,
+                m.dropped_count,
+                m.jobs_submitted,
+                format_avg_latency_us(m.avg_duration_us),
             ));
         }
 
@@ -351,27 +357,30 @@ impl Outputable for HookTriggerUrlOutput {
 
 impl HookCommand {
     /// Execute the hook command.
-    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+    pub async fn run(self, client: &AspenClient, is_json_output: bool) -> Result<()> {
         match self {
-            HookCommand::List => hook_list(client, json).await,
-            HookCommand::Metrics(args) => hook_metrics(client, args, json).await,
-            HookCommand::Trigger(args) => hook_trigger(client, args, json).await,
-            HookCommand::CreateUrl(args) => hook_create_url(client, args, json).await,
-            HookCommand::TriggerUrl(args) => hook_trigger_url(args, json).await,
+            HookCommand::List => hook_list(client, is_json_output).await,
+            HookCommand::Metrics(args) => hook_metrics(client, args, is_json_output).await,
+            HookCommand::Trigger(args) => hook_trigger(client, args, is_json_output).await,
+            HookCommand::CreateUrl(args) => hook_create_url(client, args, is_json_output).await,
+            HookCommand::TriggerUrl(args) => hook_trigger_url(args, is_json_output).await,
         }
     }
 }
 
-async fn hook_list(client: &AspenClient, json: bool) -> Result<()> {
+async fn hook_list(client: &AspenClient, is_json_output: bool) -> Result<()> {
     let response = client.send(ClientRpcRequest::HookList).await?;
 
     match response {
         ClientRpcResponse::HookListResult(result) => {
+            let handler_count = result.handlers.len();
             let output = HookListOutput {
                 is_enabled: result.is_enabled,
                 handlers: result.handlers,
             };
-            print_output(&output, json);
+            debug_assert_eq!(output.handlers.len(), handler_count);
+            debug_assert_eq!(output.is_enabled, result.is_enabled);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -379,7 +388,7 @@ async fn hook_list(client: &AspenClient, json: bool) -> Result<()> {
     }
 }
 
-async fn hook_metrics(client: &AspenClient, args: MetricsArgs, json: bool) -> Result<()> {
+async fn hook_metrics(client: &AspenClient, args: MetricsArgs, is_json_output: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::HookGetMetrics {
             handler_name: args.handler,
@@ -388,12 +397,15 @@ async fn hook_metrics(client: &AspenClient, args: MetricsArgs, json: bool) -> Re
 
     match response {
         ClientRpcResponse::HookMetricsResult(result) => {
+            let handler_count = result.handlers.len();
             let output = HookMetricsOutput {
                 is_enabled: result.is_enabled,
                 total_events_processed: result.total_events_processed,
                 handlers: result.handlers,
             };
-            print_output(&output, json);
+            debug_assert_eq!(output.handlers.len(), handler_count);
+            debug_assert_eq!(output.total_events_processed, result.total_events_processed);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -401,7 +413,9 @@ async fn hook_metrics(client: &AspenClient, args: MetricsArgs, json: bool) -> Re
     }
 }
 
-async fn hook_trigger(client: &AspenClient, args: TriggerArgs, json: bool) -> Result<()> {
+async fn hook_trigger(client: &AspenClient, args: TriggerArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.event_type.is_empty());
+    debug_assert!(!args.payload.is_empty());
     // Validate payload is valid JSON (but send as string for PostCard compatibility)
     let _: serde_json::Value =
         serde_json::from_str(&args.payload).map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
@@ -421,7 +435,9 @@ async fn hook_trigger(client: &AspenClient, args: TriggerArgs, json: bool) -> Re
                 error: result.error,
                 handler_failures: result.handler_failures,
             };
-            print_output(&output, json);
+            debug_assert!(output.is_success || output.error.is_some() || !output.handler_failures.is_empty());
+            debug_assert_eq!(output.dispatched_count, result.dispatched_count);
+            print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
             }
@@ -432,7 +448,7 @@ async fn hook_trigger(client: &AspenClient, args: TriggerArgs, json: bool) -> Re
     }
 }
 
-async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, json: bool) -> Result<()> {
+async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, is_json_output: bool) -> Result<()> {
     // Validate inputs
     hook_create_url_validate_inputs(&args)?;
 
@@ -452,12 +468,16 @@ async fn hook_create_url(client: &AspenClient, args: CreateUrlArgs, json: bool) 
         peer_count: bootstrap_peers.len() as u32,
     };
 
-    print_output(&output, json);
+    debug_assert!(!output.url.is_empty());
+    debug_assert_eq!(usize::try_from(output.peer_count).unwrap_or(0), bootstrap_peers.len());
+    print_output(&output, is_json_output);
     Ok(())
 }
 
 /// Validate the event type and optional payload JSON for hook URL creation.
 fn hook_create_url_validate_inputs(args: &CreateUrlArgs) -> Result<()> {
+    debug_assert!(!args.event_type.is_empty());
+    debug_assert!(args.payload.as_deref().is_none_or(|payload| !payload.is_empty()));
     let valid_types = [
         "write_committed",
         "delete_committed",
@@ -480,6 +500,8 @@ fn hook_create_url_validate_inputs(args: &CreateUrlArgs) -> Result<()> {
             serde_json::from_str(payload).map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
     }
 
+    debug_assert!(args.expires == 0 || args.expires <= u64::from(u32::MAX));
+    debug_assert!(args.relay_url.as_deref().is_none_or(|relay_url| !relay_url.is_empty()));
     Ok(())
 }
 
@@ -532,7 +554,7 @@ fn hook_create_url_build_ticket(
     Ok(hook_ticket)
 }
 
-async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
+async fn hook_trigger_url(args: TriggerUrlArgs, is_json_output: bool) -> Result<()> {
     // Parse the hook ticket
     let ticket = AspenHookTicket::deserialize(&args.url).context("failed to parse hook trigger URL")?;
 
@@ -552,12 +574,18 @@ async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
         .await
         .context("failed to create Iroh endpoint")?;
 
-    let rpc_timeout = Duration::from_millis(args.timeout_ms);
+    let rpc_budget = Duration::from_millis(args.timeout_ms);
+    debug_assert!(!ticket.bootstrap_peers.is_empty());
+    debug_assert!(!payload.is_empty());
 
     // Try each bootstrap peer
     let mut last_error = None;
     for peer_addr in &ticket.bootstrap_peers {
-        match send_hook_trigger(&endpoint, peer_addr, &ticket.event_type, &payload, rpc_timeout).await {
+        let request = RemoteHookTriggerRequest {
+            event_type: &ticket.event_type,
+            payload_json: &payload,
+        };
+        match send_hook_trigger(&endpoint, peer_addr, &request, rpc_budget).await {
             Ok(result) => {
                 let output = HookTriggerUrlOutput {
                     is_success: result.is_success,
@@ -567,7 +595,8 @@ async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
                     error: result.error,
                     handler_failures: result.handler_failures,
                 };
-                print_output(&output, json);
+                debug_assert!(output.is_success || output.error.is_some() || !output.handler_failures.is_empty());
+                print_output(&output, is_json_output);
                 if !result.is_success {
                     std::process::exit(1);
                 }
@@ -584,14 +613,29 @@ async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
     Err(last_error.unwrap_or_else(|| anyhow::anyhow!("no bootstrap peers available")))
 }
 
+struct RemoteHookTriggerRequest<'a> {
+    event_type: &'a str,
+    payload_json: &'a str,
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "hook URL trigger tracks a wall-clock deadline across connection and stream phases"
+)]
+fn hook_deadline_now() -> std::time::Instant {
+    std::time::Instant::now()
+}
+
 /// Send a hook trigger request to a specific peer.
 async fn send_hook_trigger(
     endpoint: &Endpoint,
     peer_addr: &EndpointAddr,
-    event_type: &str,
-    payload: &str,
+    request: &RemoteHookTriggerRequest<'_>,
     rpc_timeout: Duration,
 ) -> Result<HookTriggerResult> {
+    debug_assert!(!request.event_type.is_empty());
+    debug_assert!(!request.payload_json.is_empty());
     // Connect to the peer
     let connection = timeout(rpc_timeout, async {
         endpoint.connect(peer_addr.clone(), CLIENT_ALPN).await.context("failed to connect to peer")
@@ -600,15 +644,15 @@ async fn send_hook_trigger(
     .context("connection timeout")??;
 
     // Build and serialize the request before entering the timed exchange
-    let request = ClientRpcRequest::HookTrigger {
-        event_type: event_type.to_string(),
-        payload_json: payload.to_string(),
+    let rpc_request = ClientRpcRequest::HookTrigger {
+        event_type: request.event_type.to_string(),
+        payload_json: request.payload_json.to_string(),
     };
-    let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
+    let request_bytes = postcard::to_stdvec(&rpc_request).context("failed to serialize request")?;
 
     // Bound the full post-connect exchange with one overall deadline while
     // preserving stage-specific timeout errors.
-    let deadline = std::time::Instant::now() + rpc_timeout;
+    let deadline = hook_deadline_now() + rpc_timeout;
 
     // Open bidirectional stream
     let (mut send, mut recv) = timeout(remaining_timeout_hooks(deadline)?, connection.open_bi())
@@ -653,9 +697,10 @@ async fn send_hook_trigger(
 
 /// Compute remaining time until a deadline, returning an error if already past.
 fn remaining_timeout_hooks(deadline: std::time::Instant) -> anyhow::Result<std::time::Duration> {
-    match deadline.checked_duration_since(std::time::Instant::now()) {
+    match deadline.checked_duration_since(hook_deadline_now()) {
         Some(remaining) if !remaining.is_zero() => Ok(remaining),
-        _ => Err(anyhow::anyhow!("deadline exceeded")),
+        Some(_) => Err(anyhow::anyhow!("deadline exceeded")),
+        None => Err(anyhow::anyhow!("deadline exceeded")),
     }
 }
 

@@ -202,7 +202,21 @@ impl ContactsCommand {
     }
 }
 
+fn print_contact_data_or_error(contact_data: Option<&str>, error_message: Option<&str>) {
+    debug_assert!(contact_data.is_some() || error_message.is_some());
+    debug_assert!(contact_data.is_none() || error_message.is_none());
+    if let Some(contact_data) = contact_data {
+        print!("{contact_data}");
+        return;
+    }
+    if let Some(error_message) = error_message {
+        eprintln!("Error: {error_message}");
+    }
+}
+
 async fn create_book(client: &AspenClient, args: CreateBookArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.name.is_empty());
+    debug_assert!(args.description.as_deref().is_none_or(|description| !description.is_empty()));
     let resp = client
         .send(ClientRpcRequest::ContactsCreateBook {
             name: args.name,
@@ -211,16 +225,16 @@ async fn create_book(client: &AspenClient, args: CreateBookArgs, is_json_output:
         .await?;
     match resp {
         ClientRpcResponse::ContactsBookResult(r) => {
-            print_output(
-                &SimpleResult {
-                    is_success: r.is_success,
-                    id: r.book_id,
-                    name: r.name,
-                    error: r.error,
-                    label: "book",
-                },
-                is_json_output,
-            );
+            let output = SimpleResult {
+                is_success: r.is_success,
+                id: r.book_id,
+                name: r.name,
+                error: r.error,
+                label: "book",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.id.is_some() || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -249,19 +263,21 @@ async fn list_books(client: &AspenClient, args: ListBooksArgs, is_json_output: b
 }
 
 async fn delete_book(client: &AspenClient, args: DeleteBookArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.book_id.is_empty());
+    debug_assert_eq!(args.book_id, args.book_id.trim());
     let resp = client.send(ClientRpcRequest::ContactsDeleteBook { book_id: args.book_id }).await?;
     match resp {
         ClientRpcResponse::ContactsBookResult(r) => {
-            print_output(
-                &SimpleResult {
-                    is_success: r.is_success,
-                    id: r.book_id,
-                    name: None,
-                    error: r.error,
-                    label: "book",
-                },
-                is_json_output,
-            );
+            let output = SimpleResult {
+                is_success: r.is_success,
+                id: r.book_id,
+                name: None,
+                error: r.error,
+                label: "book",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.id.is_some() || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -270,6 +286,8 @@ async fn delete_book(client: &AspenClient, args: DeleteBookArgs, is_json_output:
 }
 
 async fn add_contact(client: &AspenClient, args: AddContactArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.book.is_empty());
+    debug_assert!(!args.name.is_empty());
     // Build a minimal vCard from CLI args.
     let mut vcard = format!("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:{}\r\n", args.name);
     if let Some(email) = &args.email {
@@ -291,16 +309,16 @@ async fn add_contact(client: &AspenClient, args: AddContactArgs, is_json_output:
         .await?;
     match resp {
         ClientRpcResponse::ContactsResult(r) => {
-            print_output(
-                &SimpleResult {
-                    is_success: r.is_success,
-                    id: r.contact_id,
-                    name: None,
-                    error: r.error,
-                    label: "contact",
-                },
-                is_json_output,
-            );
+            let output = SimpleResult {
+                is_success: r.is_success,
+                id: r.contact_id,
+                name: None,
+                error: r.error,
+                label: "contact",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.id.is_some() || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -309,6 +327,8 @@ async fn add_contact(client: &AspenClient, args: AddContactArgs, is_json_output:
 }
 
 async fn get_contact(client: &AspenClient, args: GetContactArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.contact_id.is_empty());
+    debug_assert_eq!(args.contact_id, args.contact_id.trim());
     let resp = client
         .send(ClientRpcRequest::ContactsGetContact {
             contact_id: args.contact_id,
@@ -316,19 +336,17 @@ async fn get_contact(client: &AspenClient, args: GetContactArgs, is_json_output:
         .await?;
     match resp {
         ClientRpcResponse::ContactsResult(r) => {
+            let output = VcardOutput {
+                vcard_data: r.vcard_data,
+                contact_id: r.contact_id,
+                error: r.error,
+            };
+            debug_assert!(output.vcard_data.is_some() || output.error.is_some());
+            debug_assert!(output.contact_id.is_some() || output.error.is_some());
             if is_json_output {
-                print_output(
-                    &VcardOutput {
-                        vcard_data: r.vcard_data,
-                        contact_id: r.contact_id,
-                        error: r.error,
-                    },
-                    is_json_output,
-                );
-            } else if let Some(vcard) = &r.vcard_data {
-                println!("{vcard}");
-            } else if let Some(err) = &r.error {
-                eprintln!("Error: {err}");
+                print_output(&output, is_json_output);
+            } else {
+                print_contact_data_or_error(output.vcard_data.as_deref(), output.error.as_deref());
             }
             Ok(())
         }
@@ -338,6 +356,8 @@ async fn get_contact(client: &AspenClient, args: GetContactArgs, is_json_output:
 }
 
 async fn update_contact(client: &AspenClient, args: UpdateContactArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.contact_id.is_empty());
+    debug_assert!(!args.vcard.is_empty());
     let resp = client
         .send(ClientRpcRequest::ContactsUpdateContact {
             contact_id: args.contact_id,
@@ -346,16 +366,16 @@ async fn update_contact(client: &AspenClient, args: UpdateContactArgs, is_json_o
         .await?;
     match resp {
         ClientRpcResponse::ContactsResult(r) => {
-            print_output(
-                &SimpleResult {
-                    is_success: r.is_success,
-                    id: r.contact_id,
-                    name: None,
-                    error: r.error,
-                    label: "contact",
-                },
-                is_json_output,
-            );
+            let output = SimpleResult {
+                is_success: r.is_success,
+                id: r.contact_id,
+                name: None,
+                error: r.error,
+                label: "contact",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.id.is_some() || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -364,6 +384,8 @@ async fn update_contact(client: &AspenClient, args: UpdateContactArgs, is_json_o
 }
 
 async fn delete_contact(client: &AspenClient, args: DeleteContactArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.contact_id.is_empty());
+    debug_assert_eq!(args.contact_id, args.contact_id.trim());
     let resp = client
         .send(ClientRpcRequest::ContactsDeleteContact {
             contact_id: args.contact_id,
@@ -371,16 +393,16 @@ async fn delete_contact(client: &AspenClient, args: DeleteContactArgs, is_json_o
         .await?;
     match resp {
         ClientRpcResponse::ContactsResult(r) => {
-            print_output(
-                &SimpleResult {
-                    is_success: r.is_success,
-                    id: r.contact_id,
-                    name: None,
-                    error: r.error,
-                    label: "contact",
-                },
-                is_json_output,
-            );
+            let output = SimpleResult {
+                is_success: r.is_success,
+                id: r.contact_id,
+                name: None,
+                error: r.error,
+                label: "contact",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.id.is_some() || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -389,6 +411,8 @@ async fn delete_contact(client: &AspenClient, args: DeleteContactArgs, is_json_o
 }
 
 async fn list_contacts(client: &AspenClient, args: ListContactsArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.book.is_empty());
+    debug_assert!(args.max_results.is_none_or(|limit| limit > 0));
     let resp = client
         .send(ClientRpcRequest::ContactsListContacts {
             book_id: args.book,
@@ -403,6 +427,8 @@ async fn list_contacts(client: &AspenClient, args: ListContactsArgs, is_json_out
                 total: r.total,
                 error: r.error,
             };
+            debug_assert!(output.total >= u32::try_from(output.contacts.len()).unwrap_or(u32::MAX));
+            debug_assert!(output.error.is_none() || output.contacts.is_empty());
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -412,6 +438,8 @@ async fn list_contacts(client: &AspenClient, args: ListContactsArgs, is_json_out
 }
 
 async fn search_contacts(client: &AspenClient, args: SearchContactsArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.query.is_empty());
+    debug_assert!(args.max_results.is_none_or(|limit| limit > 0));
     let resp = client
         .send(ClientRpcRequest::ContactsSearchContacts {
             query: args.query,
@@ -426,6 +454,8 @@ async fn search_contacts(client: &AspenClient, args: SearchContactsArgs, is_json
                 total: r.total,
                 error: r.error,
             };
+            debug_assert!(output.total >= u32::try_from(output.contacts.len()).unwrap_or(u32::MAX));
+            debug_assert!(output.error.is_none() || output.contacts.is_empty());
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -435,6 +465,8 @@ async fn search_contacts(client: &AspenClient, args: SearchContactsArgs, is_json
 }
 
 async fn import_contacts(client: &AspenClient, args: ImportArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.book.is_empty());
+    debug_assert!(!args.file.is_empty());
     let vcard_data =
         std::fs::read_to_string(&args.file).map_err(|e| anyhow::anyhow!("failed to read {}: {}", args.file, e))?;
     let resp = client
@@ -445,15 +477,15 @@ async fn import_contacts(client: &AspenClient, args: ImportArgs, is_json_output:
         .await?;
     match resp {
         ClientRpcResponse::ContactsExportResult(r) => {
-            print_output(
-                &ImportExportOutput {
-                    count: r.count,
-                    is_success: r.is_success,
-                    error: r.error,
-                    op: "imported",
-                },
-                is_json_output,
-            );
+            let output = ImportExportOutput {
+                count: r.count,
+                is_success: r.is_success,
+                error: r.error,
+                op: "imported",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.count > 0 || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -462,23 +494,23 @@ async fn import_contacts(client: &AspenClient, args: ImportArgs, is_json_output:
 }
 
 async fn export_contacts(client: &AspenClient, args: ExportArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.book.is_empty());
+    debug_assert_eq!(args.book, args.book.trim());
     let resp = client.send(ClientRpcRequest::ContactsExportVcard { book_id: args.book }).await?;
     match resp {
         ClientRpcResponse::ContactsExportResult(r) => {
+            let output = ImportExportOutput {
+                count: r.count,
+                is_success: r.is_success,
+                error: r.error.clone(),
+                op: "exported",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(r.vcard_data.is_some() || output.error.is_some());
             if is_json_output {
-                print_output(
-                    &ImportExportOutput {
-                        count: r.count,
-                        is_success: r.is_success,
-                        error: r.error,
-                        op: "exported",
-                    },
-                    is_json_output,
-                );
-            } else if let Some(data) = &r.vcard_data {
-                print!("{data}");
-            } else if let Some(err) = &r.error {
-                eprintln!("Error: {err}");
+                print_output(&output, is_json_output);
+            } else {
+                print_contact_data_or_error(r.vcard_data.as_deref(), output.error.as_deref());
             }
             Ok(())
         }
@@ -488,6 +520,8 @@ async fn export_contacts(client: &AspenClient, args: ExportArgs, is_json_output:
 }
 
 async fn create_group(client: &AspenClient, args: CreateGroupArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.book.is_empty());
+    debug_assert!(!args.name.is_empty());
     let resp = client
         .send(ClientRpcRequest::ContactsCreateGroup {
             book_id: args.book,
@@ -497,16 +531,16 @@ async fn create_group(client: &AspenClient, args: CreateGroupArgs, is_json_outpu
         .await?;
     match resp {
         ClientRpcResponse::ContactsGroupResult(r) => {
-            print_output(
-                &SimpleResult {
-                    is_success: r.is_success,
-                    id: r.group_id,
-                    name: r.name,
-                    error: r.error,
-                    label: "group",
-                },
-                is_json_output,
-            );
+            let output = SimpleResult {
+                is_success: r.is_success,
+                id: r.group_id,
+                name: r.name,
+                error: r.error,
+                label: "group",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.id.is_some() || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
@@ -531,6 +565,8 @@ async fn list_groups(client: &AspenClient, args: ListGroupsArgs, is_json_output:
 }
 
 async fn delete_group(client: &AspenClient, args: DeleteGroupArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.group_id.is_empty());
+    debug_assert_eq!(args.group_id, args.group_id.trim());
     let resp = client
         .send(ClientRpcRequest::ContactsDeleteGroup {
             group_id: args.group_id,
@@ -538,16 +574,16 @@ async fn delete_group(client: &AspenClient, args: DeleteGroupArgs, is_json_outpu
         .await?;
     match resp {
         ClientRpcResponse::ContactsGroupResult(r) => {
-            print_output(
-                &SimpleResult {
-                    is_success: r.is_success,
-                    id: r.group_id,
-                    name: None,
-                    error: r.error,
-                    label: "group",
-                },
-                is_json_output,
-            );
+            let output = SimpleResult {
+                is_success: r.is_success,
+                id: r.group_id,
+                name: None,
+                error: r.error,
+                label: "group",
+            };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.id.is_some() || !output.is_success);
+            print_output(&output, is_json_output);
             Ok(())
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),

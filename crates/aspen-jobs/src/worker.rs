@@ -24,6 +24,12 @@ use crate::job::Job;
 use crate::job::JobResult;
 use crate::manager::JobManager;
 
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "worker lifecycle timestamps need an explicit UTC boundary helper")]
+fn utc_now() -> DateTime<Utc> {
+    Utc::now()
+}
+
 /// Timeout for job ack/nack operations.
 /// Leadership gaps during elections should resolve within this window.
 const JOB_ACK_TIMEOUT: Duration = Duration::from_secs(60);
@@ -138,13 +144,17 @@ impl Default for WorkerConfig {
 }
 
 /// Pool of workers for processing jobs.
+///
+/// Lock order when multiple pool locks must be held together:
+/// `shutdown` -> `handles` -> `worker_info` -> `workers`.
 pub struct WorkerPool<S: aspen_core::KeyValueStore + ?Sized> {
     manager: Arc<JobManager<S>>,
+    /// Lock order: `shutdown` -> `handles` -> `worker_info` -> `workers`.
     workers: Arc<RwLock<HashMap<String, Arc<dyn Worker>>>>,
     worker_info: Arc<RwLock<HashMap<String, WorkerInfo>>>,
     handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
     shutdown: Arc<RwLock<bool>>,
-    concurrency_limiter: Arc<Semaphore>,
+    job_slots: Arc<Semaphore>,
 }
 
 impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
@@ -162,7 +172,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
             worker_info: Arc::new(RwLock::new(HashMap::new())),
             handles: Arc::new(RwLock::new(Vec::new())),
             shutdown: Arc::new(RwLock::new(false)),
-            concurrency_limiter: Arc::new(Semaphore::new(10)), // Default max concurrent jobs
+            job_slots: Arc::new(Semaphore::new(10)), // Default max concurrent jobs
         }
     }
 
@@ -216,6 +226,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
         let worker_id = config.id.clone().unwrap_or_else(|| format!("worker-{}", uuid::Uuid::new_v4()));
 
         // Create worker info
+        let started_at = utc_now();
         let info = WorkerInfo {
             id: worker_id.clone(),
             status: WorkerStatus::Starting,
@@ -223,8 +234,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
             current_job: None,
             jobs_processed: 0,
             jobs_failed: 0,
-            started_at: Utc::now(),
-            last_heartbeat: Utc::now(),
+            started_at,
+            last_heartbeat: started_at,
         };
 
         self.worker_info.write().await.insert(worker_id.clone(), info);
@@ -234,12 +245,11 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
         let workers = self.workers.clone();
         let worker_info = self.worker_info.clone();
         let shutdown = self.shutdown.clone();
-        let concurrency_limiter = self.concurrency_limiter.clone();
+        let job_slots = self.job_slots.clone();
 
         let handle = tokio::spawn(async move {
             if let Err(e) =
-                run_worker(worker_id.clone(), config, manager, workers, worker_info, shutdown, concurrency_limiter)
-                    .await
+                run_worker(worker_id.clone(), config, manager, workers, worker_info, shutdown, job_slots).await
             {
                 error!(worker_id, error = ?e, "worker failed");
             }
@@ -256,7 +266,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
         // Wait for all workers to finish
         let mut handles = self.handles.write().await;
         for handle in handles.drain(..) {
-            let _ = handle.await;
+            if let Err(join_error) = handle.await {
+                warn!(error = ?join_error, "worker task join failed during shutdown");
+            }
         }
 
         info!("worker pool shutdown complete");
@@ -326,7 +338,7 @@ async fn run_worker_update_status(
     if let Some(w) = info.get_mut(worker_id) {
         w.status = status;
         w.current_job = current_job;
-        w.last_heartbeat = Utc::now();
+        w.last_heartbeat = utc_now();
     }
 }
 
@@ -405,10 +417,10 @@ fn run_worker_spawn_heartbeat<S: aspen_core::KeyValueStore + ?Sized + 'static>(
     job_id: crate::job::JobId,
     worker_id: String,
 ) -> JoinHandle<()> {
-    let heartbeat_interval = Duration::from_millis(aspen_core::JOB_HEARTBEAT_INTERVAL_MS);
+    let heartbeat_period = Duration::from_millis(aspen_core::JOB_HEARTBEAT_INTERVAL_MS);
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(heartbeat_interval).await;
+            tokio::time::sleep(heartbeat_period).await;
             if let Err(e) = manager.update_heartbeat(&job_id).await {
                 warn!(worker_id = %worker_id, job_id = %job_id, error = ?e, "failed to update job heartbeat");
             }
@@ -480,13 +492,13 @@ async fn run_worker_execute_job<S: aspen_core::KeyValueStore + ?Sized + 'static>
     job: Job,
     handler: Arc<dyn Worker>,
 ) -> JobResult {
-    let job_timeout = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
+    let allowed_runtime = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
     let job_id = job.id.clone();
 
     // Spawn heartbeat task
     let heartbeat_handle = run_worker_spawn_heartbeat(manager.clone(), job_id.clone(), worker_id.to_string());
 
-    let result = match timeout(job_timeout, handler.execute(job)).await {
+    let result = match timeout(allowed_runtime, handler.execute(job)).await {
         Ok(result) => result,
         Err(_) => {
             warn!(worker_id, job_id = %job_id, "job timed out");
@@ -513,8 +525,10 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
     workers: Arc<RwLock<HashMap<String, Arc<dyn Worker>>>>,
     worker_info: Arc<RwLock<HashMap<String, WorkerInfo>>>,
     shutdown: Arc<RwLock<bool>>,
-    concurrency_limiter: Arc<Semaphore>,
+    job_slots: Arc<Semaphore>,
 ) -> Result<()> {
+    debug_assert!(!worker_id.is_empty());
+    debug_assert!(config.poll_interval > Duration::ZERO);
     info!(worker_id, "worker starting");
     run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Idle, None).await;
 
@@ -523,39 +537,42 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
         info!(worker_id, excluded_types = ?excluded_types, "worker excluding job types from dequeue");
     }
 
-    loop {
-        if *shutdown.read().await {
-            info!(worker_id, "worker shutting down");
-            break;
-        }
-
-        match manager.dequeue_jobs_filtered(&worker_id, 1, config.visibility_timeout, &excluded_types).await {
-            Ok(jobs) if jobs.is_empty() => tokio::time::sleep(config.poll_interval).await,
-            Ok(jobs) => {
-                for (queue_item, job) in jobs {
-                    run_worker_process_single_job(
-                        &worker_id,
-                        &manager,
-                        &workers,
-                        &worker_info,
-                        &concurrency_limiter,
-                        queue_item,
-                        job,
-                    )
-                    .await?;
-                }
-            }
-            Err(e) => {
-                info!(worker_id, error = ?e, "failed to dequeue jobs, retrying");
-                tokio::time::sleep(config.poll_interval).await;
-            }
-        }
-
-        run_worker_update_heartbeat(&worker_info, &worker_id).await;
+    while !*shutdown.read().await {
+        run_worker_poll_iteration(&worker_id, &config, &manager, &workers, &worker_info, &job_slots, &excluded_types)
+            .await?;
     }
+    info!(worker_id, "worker shutting down");
 
     run_worker_update_status(&worker_info, &worker_id, WorkerStatus::Stopped, None).await;
     info!(worker_id, "worker stopped");
+    Ok(())
+}
+
+async fn run_worker_poll_iteration<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    worker_id: &str,
+    config: &WorkerConfig,
+    manager: &Arc<JobManager<S>>,
+    workers: &Arc<RwLock<HashMap<String, Arc<dyn Worker>>>>,
+    worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>,
+    job_slots: &Arc<Semaphore>,
+    excluded_types: &[String],
+) -> Result<()> {
+    debug_assert!(!worker_id.is_empty());
+    debug_assert!(config.visibility_timeout > Duration::ZERO);
+    match manager.dequeue_jobs_filtered(worker_id, 1, config.visibility_timeout, excluded_types).await {
+        Ok(jobs) if jobs.is_empty() => tokio::time::sleep(config.poll_interval).await,
+        Ok(jobs) => {
+            for (queue_item, job) in jobs {
+                run_worker_process_single_job(worker_id, manager, workers, worker_info, job_slots, queue_item, job)
+                    .await?;
+            }
+        }
+        Err(e) => {
+            info!(worker_id, error = ?e, "failed to dequeue jobs, retrying");
+            tokio::time::sleep(config.poll_interval).await;
+        }
+    }
+    run_worker_update_heartbeat(worker_info, worker_id).await;
     Ok(())
 }
 
@@ -565,14 +582,14 @@ async fn run_worker_process_single_job<S: aspen_core::KeyValueStore + ?Sized + '
     manager: &Arc<JobManager<S>>,
     workers: &Arc<RwLock<HashMap<String, Arc<dyn Worker>>>>,
     worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>,
-    concurrency_limiter: &Arc<Semaphore>,
+    job_slots: &Arc<Semaphore>,
     queue_item: aspen_coordination::DequeuedItem,
     job: Job,
 ) -> Result<()> {
-    let _permit = concurrency_limiter.acquire().await.map_err(|_| {
-        error!(worker_id, "concurrency limiter semaphore was closed unexpectedly");
+    let _permit = job_slots.acquire().await.map_err(|_| {
+        error!(worker_id, "job-slot semaphore was closed unexpectedly");
         JobError::WorkerCommunicationFailed {
-            reason: "concurrency limiter semaphore closed".to_string(),
+            reason: "job-slot semaphore closed".to_string(),
         }
     })?;
 
@@ -590,27 +607,21 @@ async fn run_worker_process_single_job<S: aspen_core::KeyValueStore + ?Sized + '
     Ok(())
 }
 
-/// Execute job with handler, process result, and update stats.
-async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+async fn run_worker_claim_execution_token<S: aspen_core::KeyValueStore + ?Sized + 'static>(
     worker_id: &str,
     manager: &Arc<JobManager<S>>,
-    worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>,
     queue_item: &aspen_coordination::DequeuedItem,
-    job: Job,
-    handler: Arc<dyn Worker>,
-) {
-    let execution_token = match manager.mark_started(&job.id, worker_id.to_string()).await {
-        Ok(token) => token,
+    job: &Job,
+) -> Option<String> {
+    debug_assert!(!worker_id.is_empty());
+    debug_assert!(!queue_item.receipt_handle.is_empty());
+    match manager.mark_started(&job.id, worker_id.to_string()).await {
+        Ok(token) => Some(token),
         Err(e) => {
-            // If the job is already Running (another worker claimed it), just
-            // ACK the queue item so it stops being redelivered.  For all other
-            // errors (transient leadership blips, network issues), release it
-            // back to the queue so a worker can retry.
             let should_ack = matches!(
                 &e,
                 crate::error::JobError::InvalidJobState { state, .. } if state == "Running"
             ) || matches!(&e, crate::error::JobError::JobNotFound { .. });
-
             if should_ack {
                 info!(worker_id, job_id = %job.id, error = ?e, "job not claimable, acking queue item");
                 if let Err(ack_err) =
@@ -628,58 +639,75 @@ async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized +
                     )
                     .await
                 {
-                    error!(
-                        worker_id,
-                        job_id = %job.id,
-                        error = ?release_err,
-                        "failed to release queue item after mark_started failure — job may be orphaned"
-                    );
+                    error!(worker_id, job_id = %job.id, error = ?release_err, "failed to release queue item after mark_started failure — job may be orphaned");
                 }
             }
-            return;
+            None
         }
-    };
-
-    if let Err(e) = manager.update_heartbeat(&job.id).await {
-        warn!(worker_id, job_id = %job.id, error = ?e, "failed to send initial heartbeat");
     }
+}
 
-    let job_id = job.id.clone();
-    let result = run_worker_execute_job(manager.clone(), worker_id, job, handler).await;
-
+async fn run_worker_finalize_result<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    worker_id: &str,
+    manager: &Arc<JobManager<S>>,
+    worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>,
+    queue_item: &aspen_coordination::DequeuedItem,
+    execution_token: &str,
+    job_id: &crate::job::JobId,
+    result: JobResult,
+) {
+    debug_assert!(!execution_token.is_empty());
+    debug_assert!(!queue_item.receipt_handle.is_empty());
     if result.is_success() {
-        let ack_ok = run_worker_handle_success(
-            manager,
-            worker_id,
-            &job_id,
-            &queue_item.receipt_handle,
-            &execution_token,
-            result,
-        )
-        .await;
+        let ack_ok =
+            run_worker_handle_success(manager, worker_id, job_id, &queue_item.receipt_handle, execution_token, result)
+                .await;
         run_worker_record_success(worker_info, worker_id).await;
         if ack_ok {
             info!(worker_id, job_id = %job_id, "job completed successfully");
         } else {
             warn!(worker_id, job_id = %job_id, "job executed but ack failed - check if job was marked completed");
         }
-    } else {
-        let error_msg = match &result {
-            JobResult::Failure(f) => f.reason.clone(),
-            _ => "unknown error".to_string(),
-        };
-        run_worker_handle_failure(
-            manager,
-            worker_id,
-            &job_id,
-            &queue_item.receipt_handle,
-            &execution_token,
-            error_msg.clone(),
-        )
-        .await;
-        run_worker_record_failure(worker_info, worker_id).await;
-        warn!(worker_id, job_id = %job_id, error = error_msg, "job failed");
+        return;
     }
+
+    let error_msg = match &result {
+        JobResult::Failure(failure) => failure.reason.clone(),
+        _ => "unknown error".to_string(),
+    };
+    run_worker_handle_failure(
+        manager,
+        worker_id,
+        job_id,
+        &queue_item.receipt_handle,
+        execution_token,
+        error_msg.clone(),
+    )
+    .await;
+    run_worker_record_failure(worker_info, worker_id).await;
+    warn!(worker_id, job_id = %job_id, error = error_msg, "job failed");
+}
+
+/// Execute job with handler, process result, and update stats.
+async fn run_worker_execute_with_handler<S: aspen_core::KeyValueStore + ?Sized + 'static>(
+    worker_id: &str,
+    manager: &Arc<JobManager<S>>,
+    worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>,
+    queue_item: &aspen_coordination::DequeuedItem,
+    job: Job,
+    handler: Arc<dyn Worker>,
+) {
+    debug_assert!(!worker_id.is_empty());
+    debug_assert!(!queue_item.receipt_handle.is_empty());
+    let Some(execution_token) = run_worker_claim_execution_token(worker_id, manager, queue_item, &job).await else {
+        return;
+    };
+    if let Err(e) = manager.update_heartbeat(&job.id).await {
+        warn!(worker_id, job_id = %job.id, error = ?e, "failed to send initial heartbeat");
+    }
+    let job_id = job.id.clone();
+    let result = run_worker_execute_job(manager.clone(), worker_id, job, handler).await;
+    run_worker_finalize_result(worker_id, manager, worker_info, queue_item, &execution_token, &job_id, result).await;
 }
 
 /// Handle job with no registered handler.
@@ -704,9 +732,11 @@ async fn run_worker_handle_no_handler<S: aspen_core::KeyValueStore + ?Sized + 's
 
 /// Update worker heartbeat timestamp.
 async fn run_worker_update_heartbeat(worker_info: &Arc<RwLock<HashMap<String, WorkerInfo>>>, worker_id: &str) {
+    debug_assert!(!worker_id.is_empty());
+    let heartbeat_at = utc_now();
     let mut info = worker_info.write().await;
-    if let Some(w) = info.get_mut(worker_id) {
-        w.last_heartbeat = Utc::now();
+    if let Some(worker) = info.get_mut(worker_id) {
+        worker.last_heartbeat = heartbeat_at;
     }
 }
 
@@ -725,6 +755,7 @@ impl Worker for LogWorker {
 
         // Simulate some work
         tokio::time::sleep(Duration::from_secs(1)).await;
+        debug_assert!(!job.id.to_string().is_empty());
 
         JobResult::success(serde_json::json!({
             "message": format!("Job {} completed", job.id)

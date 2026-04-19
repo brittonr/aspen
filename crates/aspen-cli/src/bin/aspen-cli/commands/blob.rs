@@ -126,7 +126,7 @@ pub struct TicketArgs {
 pub struct ListArgs {
     /// Maximum number of blobs to return.
     #[arg(long, default_value = "100")]
-    pub limit_results: u32,
+    pub max_results: u32,
 
     /// Continuation token from previous list.
     #[arg(long)]
@@ -692,6 +692,8 @@ impl BlobCommand {
 }
 
 async fn blob_add(client: &AspenClient, args: AddArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(args.file.is_some() || args.data.is_some());
+    debug_assert!(args.file.as_ref().is_none_or(|path| !path.as_os_str().is_empty()));
     // Get data from file, stdin, or --data argument
     let data = if let Some(ref path) = args.file {
         if path.as_os_str() == "-" {
@@ -718,6 +720,8 @@ async fn blob_add(client: &AspenClient, args: AddArgs, is_json_output: bool) -> 
                 was_new: result.was_new,
                 error: result.error,
             };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.hash.is_some() || !output.is_success);
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -730,29 +734,33 @@ async fn blob_add(client: &AspenClient, args: AddArgs, is_json_output: bool) -> 
 }
 
 async fn blob_get(client: &AspenClient, args: GetArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
+    debug_assert!(args.output.as_ref().is_none_or(|path| !path.as_os_str().is_empty()));
     // Use streaming path when output file is specified (handles large blobs)
     let response = client.send_get_blob(args.hash, args.output.as_deref()).await?;
 
     match response {
         ClientRpcResponse::GetBlobResult(result) => {
-            // Streaming path already wrote the file, just report success
-            if result.is_streaming {
-                if let Some(output_path) = &args.output {
+            match (&args.output, result.is_streaming) {
+                (Some(output_path), true) => {
                     if !is_json_output {
                         println!("Wrote {} bytes to {}", result.size_bytes, output_path.display());
                     }
                     return Ok(());
                 }
+                _ => {}
             }
 
-            // Inline path: data is in the response
-            if let (Some(output_path), true, Some(data)) = (&args.output, result.was_found, &result.data) {
-                std::fs::write(output_path, data)
-                    .with_context(|| format!("failed to write blob to {}", output_path.display()))?;
-                if !is_json_output {
-                    println!("Wrote {} bytes to {}", data.len(), output_path.display());
+            match (&args.output, result.was_found, &result.data) {
+                (Some(output_path), true, Some(data)) => {
+                    std::fs::write(output_path, data)
+                        .with_context(|| format!("failed to write blob to {}", output_path.display()))?;
+                    if !is_json_output {
+                        println!("Wrote {} bytes to {}", data.len(), output_path.display());
+                    }
+                    return Ok(());
                 }
-                return Ok(());
+                _ => {}
             }
 
             let output = GetBlobOutput {
@@ -760,6 +768,8 @@ async fn blob_get(client: &AspenClient, args: GetArgs, is_json_output: bool) -> 
                 data: result.data,
                 error: result.error,
             };
+            debug_assert!(output.was_found || output.error.is_some());
+            debug_assert!(output.data.is_some() || !output.was_found);
             print_output(&output, is_json_output);
             if !result.was_found {
                 std::process::exit(1);
@@ -772,6 +782,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, is_json_output: bool) -> 
 }
 
 async fn blob_has(client: &AspenClient, args: HasArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
     let response = client
         .send(ClientRpcRequest::HasBlob {
             hash: args.hash.clone(),
@@ -785,6 +796,8 @@ async fn blob_has(client: &AspenClient, args: HasArgs, is_json_output: bool) -> 
                 does_exist: result.does_exist,
                 error: result.error,
             };
+            debug_assert!(!output.hash.is_empty());
+            debug_assert!(output.does_exist || output.error.is_some() || !is_json_output);
             print_output(&output, is_json_output);
             if !result.does_exist {
                 std::process::exit(1);
@@ -818,9 +831,10 @@ async fn blob_ticket(client: &AspenClient, args: TicketArgs, is_json_output: boo
 }
 
 async fn blob_list(client: &AspenClient, args: ListArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(args.max_results > 0);
     let response = client
         .send(ClientRpcRequest::ListBlobs {
-            limit: args.limit_results,
+            limit: args.max_results,
             continuation_token: args.token,
         })
         .await?;
@@ -843,6 +857,8 @@ async fn blob_list(client: &AspenClient, args: ListArgs, is_json_output: bool) -
                 continuation_token: result.continuation_token,
                 error: result.error,
             };
+            debug_assert!(output.count >= u32::try_from(output.blobs.len()).unwrap_or(u32::MAX));
+            debug_assert!(output.continuation_token.is_some() || !output.has_more);
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -852,6 +868,8 @@ async fn blob_list(client: &AspenClient, args: ListArgs, is_json_output: bool) -
 }
 
 async fn blob_protect(client: &AspenClient, args: ProtectArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
+    debug_assert!(!args.tag.is_empty());
     let response = client
         .send(ClientRpcRequest::ProtectBlob {
             hash: args.hash,
@@ -866,6 +884,8 @@ async fn blob_protect(client: &AspenClient, args: ProtectArgs, is_json_output: b
                 is_success: result.is_success,
                 error: result.error,
             };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert_eq!(output.operation, "protect");
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -899,6 +919,7 @@ async fn blob_unprotect(client: &AspenClient, args: UnprotectArgs, is_json_outpu
 }
 
 async fn blob_delete(client: &AspenClient, args: DeleteArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
     let response = client
         .send(ClientRpcRequest::DeleteBlob {
             hash: args.hash,
@@ -912,6 +933,8 @@ async fn blob_delete(client: &AspenClient, args: DeleteArgs, is_json_output: boo
                 is_success: result.is_success,
                 error: result.error,
             };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.error.is_none() || !output.is_success);
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -924,6 +947,7 @@ async fn blob_delete(client: &AspenClient, args: DeleteArgs, is_json_output: boo
 }
 
 async fn blob_download(client: &AspenClient, args: DownloadArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.blob_ticket.is_empty());
     let response = client
         .send(ClientRpcRequest::DownloadBlob {
             ticket: args.blob_ticket,
@@ -939,6 +963,8 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, is_json_output:
                 size_bytes: result.size_bytes,
                 error: result.error,
             };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.hash.is_some() || !output.is_success);
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -951,6 +977,7 @@ async fn blob_download(client: &AspenClient, args: DownloadArgs, is_json_output:
 }
 
 async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
     let response = client
         .send(ClientRpcRequest::DownloadBlobByHash {
             hash: args.hash,
@@ -966,6 +993,8 @@ async fn blob_download_by_hash(client: &AspenClient, args: DownloadByHashArgs, i
                 size_bytes: result.size_bytes,
                 error: result.error,
             };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.hash.is_some() || !output.is_success);
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -982,6 +1011,8 @@ async fn blob_download_by_provider(
     args: DownloadByProviderArgs,
     is_json_output: bool,
 ) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
+    debug_assert!(!args.provider.is_empty());
     let response = client
         .send(ClientRpcRequest::DownloadBlobByProvider {
             hash: args.hash,
@@ -998,6 +1029,8 @@ async fn blob_download_by_provider(
                 size_bytes: result.size_bytes,
                 error: result.error,
             };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.hash.is_some() || !output.is_success);
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);
@@ -1010,6 +1043,7 @@ async fn blob_download_by_provider(
 }
 
 async fn blob_status(client: &AspenClient, args: StatusArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
     let response = client.send(ClientRpcRequest::GetBlobStatus { hash: args.hash }).await?;
 
     match response {
@@ -1022,6 +1056,8 @@ async fn blob_status(client: &AspenClient, args: StatusArgs, is_json_output: boo
                 tags: result.tags,
                 error: result.error,
             };
+            debug_assert!(output.was_found || output.error.is_some());
+            debug_assert!(output.hash.is_some() || !output.was_found);
             print_output(&output, is_json_output);
             if !result.was_found {
                 std::process::exit(1);
@@ -1038,6 +1074,7 @@ async fn blob_replication_status(
     args: ReplicationStatusArgs,
     is_json_output: bool,
 ) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
     let response = client.send(ClientRpcRequest::GetBlobReplicationStatus { hash: args.hash }).await?;
 
     match response {
@@ -1054,6 +1091,8 @@ async fn blob_replication_status(
                 updated_at: result.updated_at,
                 error: result.error,
             };
+            debug_assert!(output.was_found || output.error.is_some());
+            debug_assert!(output.hash.is_some() || !output.was_found);
             print_output(&output, is_json_output);
             if !result.was_found {
                 std::process::exit(1);
@@ -1066,6 +1105,7 @@ async fn blob_replication_status(
 }
 
 async fn blob_repair(client: &AspenClient, args: RepairArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.hash.is_empty());
     // Parse target nodes if provided
     let target_nodes: Vec<u64> = if let Some(targets_str) = args.targets {
         targets_str
@@ -1095,6 +1135,8 @@ async fn blob_repair(client: &AspenClient, args: RepairArgs, is_json_output: boo
                 duration_ms: result.duration_ms,
                 error: result.error,
             };
+            debug_assert!(output.is_success || output.error.is_some());
+            debug_assert!(output.hash.is_some() || !output.is_success);
             print_output(&output, is_json_output);
             if !result.is_success {
                 std::process::exit(1);

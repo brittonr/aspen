@@ -48,9 +48,22 @@ fn monotonic_now() -> Instant {
 }
 
 #[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "CI executor reads tokio monotonic deadlines for shutdown polling"
+)]
+fn tokio_monotonic_now() -> tokio::time::Instant {
+    tokio::time::Instant::now()
+}
+
+#[allow(unknown_lints)]
 #[allow(ambient_clock, reason = "CI executor polls real monotonic shutdown deadlines")]
 fn monotonic_deadline_after(duration: Duration) -> tokio::time::Instant {
-    tokio::time::Instant::now() + duration
+    tokio_monotonic_now() + duration
+}
+
+fn has_monotonic_deadline_passed(deadline: tokio::time::Instant) -> bool {
+    tokio_monotonic_now() >= deadline
 }
 
 fn elapsed_ms_u64(start: Instant) -> u64 {
@@ -337,11 +350,11 @@ impl Executor {
         let job_id = request.id.clone();
         let heartbeat_handle = tokio::spawn(async move {
             let start = monotonic_now();
-            let mut heartbeat_interval_timer = tokio::time::interval(HEARTBEAT_INTERVAL);
-            heartbeat_interval_timer.tick().await; // Skip first immediate tick
+            let mut heartbeat_timer = tokio::time::interval(HEARTBEAT_INTERVAL);
+            heartbeat_timer.tick().await; // Skip first immediate tick
 
             for _heartbeat_idx in 0..u32::MAX {
-                heartbeat_interval_timer.tick().await;
+                heartbeat_timer.tick().await;
                 let elapsed_secs = start.elapsed().as_secs();
                 debug!(job_id = %job_id, elapsed_secs, "sending heartbeat");
                 if heartbeat_tx.send(LogMessage::Heartbeat { elapsed_secs }).await.is_err() {
@@ -351,7 +364,6 @@ impl Executor {
         });
 
         // Wait for completion with timeout and cancellation
-        let timeout_duration = Duration::from_secs(request.timeout_secs);
 
         enum ExitReason {
             Completed(std::process::ExitStatus),
@@ -367,7 +379,7 @@ impl Executor {
                     Err(e) => ExitReason::WaitError(e),
                 }
             }
-            _ = tokio::time::sleep(timeout_duration) => {
+            _ = tokio::time::sleep(Duration::from_secs(request.timeout_secs)) => {
                 ExitReason::Timeout
             }
             _ = &mut cancel_rx => {
@@ -446,7 +458,7 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
     // Wait for graceful exit
     let deadline = monotonic_deadline_after(grace);
     for _poll_idx in 0..u32::MAX {
-        if tokio::time::Instant::now() >= deadline {
+        if has_monotonic_deadline_passed(deadline) {
             break;
         }
         if child.inner().try_wait().ok().flatten().is_some() {
@@ -522,6 +534,106 @@ struct DbDumpMeta {
     generated_at: String,
 }
 
+async fn read_db_dump_meta(meta_path: &Path) -> Option<DbDumpMeta> {
+    if !meta_path.exists() {
+        return None;
+    }
+
+    match tokio::fs::read_to_string(meta_path).await {
+        Ok(content) => match serde_json::from_str(&content) {
+            Ok(meta) => Some(meta),
+            Err(error) => {
+                debug!("failed to parse dump metadata: {error}");
+                None
+            }
+        },
+        Err(error) => {
+            debug!("failed to read dump metadata: {error}");
+            None
+        }
+    }
+}
+
+async fn read_db_dump_contents(dump_path: &Path) -> Option<(Vec<u8>, u64)> {
+    use tokio::fs::File;
+    use tokio::io::AsyncReadExt;
+
+    debug_assert!(dump_path.is_absolute(), "dump path must be absolute");
+    let dump_size_bytes = match tokio::fs::metadata(dump_path).await {
+        Ok(metadata) => metadata.len(),
+        Err(error) => {
+            error!("failed to stat nix database dump: {error}");
+            return None;
+        }
+    };
+
+    let dump_file = match File::open(dump_path).await {
+        Ok(file) => file,
+        Err(error) => {
+            error!("failed to open nix database dump: {error}");
+            return None;
+        }
+    };
+
+    let dump_capacity_bytes = usize::try_from(dump_size_bytes).unwrap_or(0);
+    debug_assert!(dump_capacity_bytes == 0 || dump_size_bytes <= usize::MAX as u64);
+    let mut dump_contents = Vec::with_capacity(dump_capacity_bytes);
+    let mut dump_reader = tokio::io::BufReader::new(dump_file);
+    if let Err(error) = dump_reader.read_to_end(&mut dump_contents).await {
+        error!("failed to read nix database dump: {error}");
+        return None;
+    }
+
+    Some((dump_contents, dump_size_bytes))
+}
+
+fn spawn_nix_store_loader() -> std::io::Result<tokio::process::Child> {
+    use std::process::Stdio;
+
+    Command::new("nix-store")
+        .arg("--load-db")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+}
+
+async fn write_db_dump_to_loader(child: &mut tokio::process::Child, dump_contents: &[u8]) -> bool {
+    use tokio::io::AsyncWriteExt;
+
+    if let Some(mut stdin) = child.stdin.take()
+        && let Err(error) = stdin.write_all(dump_contents).await
+    {
+        error!("failed to write to nix-store stdin: {error}");
+        return false;
+    }
+
+    true
+}
+
+fn log_db_dump_load_result(
+    status: std::process::ExitStatus,
+    start: Instant,
+    dump_size_bytes: u64,
+    meta: Option<&DbDumpMeta>,
+) {
+    let elapsed_ms = elapsed_ms_u64(start);
+    if status.success() {
+        info!(
+            dump_size_bytes,
+            path_count = meta.map(|dump_meta| dump_meta.path_count),
+            elapsed_ms,
+            "nix database dump loaded successfully - store paths should now be recognized"
+        );
+        return;
+    }
+
+    error!(
+        exit_code = status.code(),
+        elapsed_ms, "nix-store --load-db failed - build will likely rebuild from scratch"
+    );
+}
+
 /// Load nix database dump from the workspace if present.
 ///
 /// The host generates a database dump after prefetching the build closure.
@@ -530,58 +642,28 @@ struct DbDumpMeta {
 /// Loading this dump makes nix recognize these paths as valid.
 ///
 /// This function also reads the metadata file for verification and logging.
-async fn load_nix_db_dump(workspace_root: &std::path::Path) {
-    use std::process::Stdio;
-    use std::time::Instant;
-
-    use tokio::fs::File;
-    use tokio::io::AsyncReadExt;
-    use tokio::io::AsyncWriteExt;
-
+async fn load_nix_db_dump(workspace_root: &Path) {
     let dump_path = workspace_root.join(".nix-db-dump");
     let meta_path = workspace_root.join(".nix-db-dump.meta");
 
+    debug_assert!(workspace_root.is_absolute(), "workspace root must be absolute");
+    debug_assert!(dump_path.starts_with(workspace_root), "dump path must stay under workspace root");
     if !dump_path.exists() {
         info!(dump_path = %dump_path.display(), "no nix database dump found - skipping DB load");
         return;
     }
 
     let start = monotonic_now();
-
-    // Read metadata if available for logging
-    let meta: Option<DbDumpMeta> = if meta_path.exists() {
-        match tokio::fs::read_to_string(&meta_path).await {
-            Ok(content) => match serde_json::from_str(&content) {
-                Ok(m) => Some(m),
-                Err(e) => {
-                    debug!("failed to parse dump metadata: {}", e);
-                    None
-                }
-            },
-            Err(e) => {
-                debug!("failed to read dump metadata: {}", e);
-                None
-            }
-        }
-    } else {
-        None
+    let meta = read_db_dump_meta(&meta_path).await;
+    let Some((dump_contents, dump_size_bytes)) = read_db_dump_contents(&dump_path).await else {
+        return;
     };
 
-    // Read the dump file size for logging
-    let dump_size_bytes = match tokio::fs::metadata(&dump_path).await {
-        Ok(meta) => meta.len(),
-        Err(e) => {
-            error!("failed to stat nix database dump: {}", e);
-            return;
-        }
-    };
-
-    // Verify dump size matches metadata if available
-    if let Some(ref m) = meta
-        && dump_size_bytes != m.dump_size_bytes
+    if let Some(ref dump_meta) = meta
+        && dump_size_bytes != dump_meta.dump_size_bytes
     {
         warn!(
-            expected = m.dump_size_bytes,
+            expected = dump_meta.dump_size_bytes,
             actual = dump_size_bytes,
             "dump file size mismatch - file may be corrupted or incomplete"
         );
@@ -589,76 +671,27 @@ async fn load_nix_db_dump(workspace_root: &std::path::Path) {
 
     info!(
         dump_path = %dump_path.display(),
-        dump_size_bytes = dump_size_bytes,
-        path_count = meta.as_ref().map(|m| m.path_count),
-        drv_path = meta.as_ref().map(|m| m.drv_path.as_str()),
+        dump_size_bytes,
+        path_count = meta.as_ref().map(|dump_meta| dump_meta.path_count),
+        drv_path = meta.as_ref().map(|dump_meta| dump_meta.drv_path.as_str()),
         "loading nix database dump"
     );
 
-    // Open the dump file for reading
-    let dump_file = match File::open(&dump_path).await {
-        Ok(f) => f,
-        Err(e) => {
-            error!("failed to open nix database dump: {}", e);
+    let mut child = match spawn_nix_store_loader() {
+        Ok(child) => child,
+        Err(error) => {
+            error!("failed to spawn nix-store --load-db: {error}");
             return;
         }
     };
 
-    // Read the entire dump into memory (should be reasonable size)
-    let mut dump_contents = Vec::new();
-    let mut dump_reader = tokio::io::BufReader::new(dump_file);
-    if let Err(e) = dump_reader.read_to_end(&mut dump_contents).await {
-        error!("failed to read nix database dump: {}", e);
+    if !write_db_dump_to_loader(&mut child, &dump_contents).await {
         return;
     }
 
-    // Load the database using nix-store --load-db
-    // This requires piping the dump to stdin
-    let mut child = match Command::new("nix-store")
-        .arg("--load-db")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            error!("failed to spawn nix-store --load-db: {}", e);
-            return;
-        }
-    };
-
-    // Write dump to stdin
-    if let Some(mut stdin) = child.stdin.take()
-        && let Err(e) = stdin.write_all(&dump_contents).await
-    {
-        error!("failed to write to nix-store stdin: {}", e);
-        return;
-    }
-    // stdin is dropped here to close it and signal EOF
-
-    // Wait for completion
     match child.wait().await {
-        Ok(status) => {
-            let elapsed = start.elapsed();
-            if status.success() {
-                info!(
-                    dump_size_bytes = dump_size_bytes,
-                    path_count = meta.as_ref().map(|m| m.path_count),
-                    elapsed_ms = elapsed.as_millis(),
-                    "nix database dump loaded successfully - store paths should now be recognized"
-                );
-            } else {
-                error!(
-                    exit_code = status.code(),
-                    elapsed_ms = elapsed.as_millis(),
-                    "nix-store --load-db failed - build will likely rebuild from scratch"
-                );
-            }
-        }
-        Err(e) => {
-            error!("failed to wait for nix-store --load-db: {}", e);
-        }
+        Ok(status) => log_db_dump_load_result(status, start, dump_size_bytes, meta.as_ref()),
+        Err(error) => error!("failed to wait for nix-store --load-db: {error}"),
     }
 }
 

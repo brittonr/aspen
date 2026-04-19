@@ -201,6 +201,8 @@ pub struct InitArgs {
 }
 
 async fn init_cluster(client: &AspenClient, is_json_output: bool, args: &InitArgs) -> Result<()> {
+    debug_assert!(args.trust || args.trust_threshold.is_none());
+    debug_assert!(args.trust_threshold.is_none_or(|threshold| threshold > 0));
     let request = if args.trust {
         ClientRpcRequest::InitClusterWithTrust {
             threshold: args.trust_threshold,
@@ -250,6 +252,8 @@ async fn cluster_status(client: &AspenClient, is_json_output: bool) -> Result<()
                     })
                     .collect(),
             };
+            debug_assert_eq!(output.nodes.len(), state.nodes.len());
+            debug_assert!(output.nodes.iter().all(|node| node.node_id > 0));
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -272,6 +276,8 @@ async fn health_check(client: &AspenClient, is_json_output: bool) -> Result<()> 
                 uptime_seconds: health.uptime_seconds,
                 iroh_node_id: health.iroh_node_id,
             };
+            debug_assert_eq!(output.node_id, health.node_id);
+            debug_assert_eq!(output.raft_node_id, health.raft_node_id);
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -295,6 +301,8 @@ async fn raft_metrics(client: &AspenClient, is_json_output: bool) -> Result<()> 
                 last_applied: metrics.last_applied_index.unwrap_or(0),
                 snapshot_index: metrics.snapshot_index.unwrap_or(0),
             };
+            debug_assert_eq!(output.last_log_index, metrics.last_log_index.unwrap_or(0));
+            debug_assert_eq!(output.last_applied, metrics.last_applied_index.unwrap_or(0));
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -310,6 +318,8 @@ async fn prometheus_metrics(client: &AspenClient, is_json_output: bool) -> Resul
 
     match response {
         ClientRpcResponse::Metrics(metrics) => {
+            debug_assert!(!metrics.prometheus_text.trim().is_empty());
+            debug_assert!(metrics.prometheus_text.contains('\n') || metrics.prometheus_text.contains(' '));
             if is_json_output {
                 println!(
                     "{}",
@@ -336,6 +346,9 @@ async fn network_metrics(client: &AspenClient, is_json_output: bool) -> Result<(
 
     match response {
         ClientRpcResponse::NetworkMetrics(m) => {
+            let unhealthy_connections = m.degraded_connections.saturating_add(m.failed_connections);
+            debug_assert!(m.healthy_connections <= m.total_connections);
+            debug_assert!(unhealthy_connections <= m.total_connections);
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&m)?);
             } else {
@@ -372,6 +385,7 @@ async fn network_metrics(client: &AspenClient, is_json_output: bool) -> Result<(
 }
 
 async fn expunge_node(client: &AspenClient, args: ExpungeArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(args.node_id > 0);
     if !args.confirm {
         anyhow::bail!(
             "This will permanently remove node {} from the cluster. \
@@ -391,6 +405,8 @@ async fn expunge_node(client: &AspenClient, args: ExpungeArgs, is_json_output: b
 
     match response {
         ClientRpcResponse::ExpungeNodeResult(result) => {
+            debug_assert_eq!(result.node_id, args.node_id);
+            debug_assert!(result.is_success || result.error.is_some());
             if is_json_output {
                 println!("{}", serde_json::to_string_pretty(&result)?);
             } else if result.is_success {
@@ -406,6 +422,8 @@ async fn expunge_node(client: &AspenClient, args: ExpungeArgs, is_json_output: b
 }
 
 async fn add_learner(client: &AspenClient, args: AddLearnerArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(args.node_id > 0);
+    debug_assert!(!args.addr.is_empty());
     let response = client
         .send(ClientRpcRequest::AddLearner {
             node_id: args.node_id,
@@ -429,6 +447,8 @@ async fn add_learner(client: &AspenClient, args: AddLearnerArgs, is_json_output:
 }
 
 async fn update_peer(client: &AspenClient, args: UpdatePeerArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(args.node_id > 0);
+    debug_assert!(!args.addr.is_empty());
     let response = client
         .send(ClientRpcRequest::AddPeer {
             node_id: args.node_id,
@@ -456,6 +476,8 @@ async fn update_peer(client: &AspenClient, args: UpdatePeerArgs, is_json_output:
 }
 
 async fn promote_learner(client: &AspenClient, args: PromoteArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(args.learner_id > 0);
+    debug_assert!(args.replace.is_none_or(|node_id| node_id > 0));
     let response = client
         .send(ClientRpcRequest::PromoteLearner {
             learner_id: args.learner_id,
@@ -491,6 +513,8 @@ async fn promote_learner(client: &AspenClient, args: PromoteArgs, is_json_output
 }
 
 async fn change_membership(client: &AspenClient, args: ChangeMembershipArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.members.is_empty());
+    debug_assert!(args.members.iter().all(|member| *member > 0));
     let response = client
         .send(ClientRpcRequest::ChangeMembership {
             members: args.members.clone(),
@@ -535,6 +559,8 @@ async fn checkpoint_wal(client: &AspenClient, is_json_output: bool) -> Result<()
 
     match response {
         ClientRpcResponse::CheckpointWalResult(result) => {
+            debug_assert!(result.is_success || result.error.is_some());
+            debug_assert!(result.pages_checkpointed.is_some() || !result.is_success);
             if is_json_output {
                 println!(
                     "{}",
@@ -565,6 +591,8 @@ async fn get_ticket(client: &AspenClient, is_json_output: bool) -> Result<()> {
 
     match response {
         ClientRpcResponse::ClusterTicket(ticket_response) => {
+            debug_assert!(!ticket_response.ticket.is_empty());
+            debug_assert_eq!(ticket_response.ticket, ticket_response.ticket.trim());
             if is_json_output {
                 println!(
                     "{}",
@@ -585,6 +613,8 @@ async fn get_ticket(client: &AspenClient, is_json_output: bool) -> Result<()> {
 }
 
 async fn deploy(client: &AspenClient, args: DeployArgs, is_json_output: bool) -> Result<()> {
+    debug_assert!(!args.artifact.is_empty());
+    debug_assert!(args.max_concurrent > 0);
     let should_wait = args.wait;
     let timeout_secs = args.deploy_timeout_secs;
 
@@ -649,6 +679,8 @@ async fn deploy_status(client: &AspenClient, is_json_output: bool) -> Result<()>
                 elapsed_ms: result.elapsed_ms,
                 error: result.error,
             };
+            debug_assert_eq!(output.nodes.len(), result.nodes.len());
+            debug_assert!(output.nodes.iter().all(|node| node.node_id > 0));
             print_output(&output, is_json_output);
             Ok(())
         }
@@ -669,6 +701,8 @@ async fn rollback(client: &AspenClient, is_json_output: bool) -> Result<()> {
                 deploy_id: result.deploy_id,
                 error: result.error.clone(),
             };
+            debug_assert!(output.is_accepted || output.error.is_some());
+            debug_assert_eq!(output.is_accepted, result.is_accepted);
             print_output(&output, is_json_output);
             if !result.is_accepted {
                 anyhow::bail!("rollback rejected: {}", result.error.as_deref().unwrap_or("unknown error"));
@@ -684,6 +718,128 @@ async fn rollback(client: &AspenClient, is_json_output: bool) -> Result<()> {
 
 fn deploy_wait_max_attempts(timeout_secs: u64) -> u64 {
     timeout_secs.saturating_div(5).saturating_add(2)
+}
+
+fn deploy_wait_timeout_output(
+    deploy_id: Option<&str>,
+    timeout_secs: u64,
+    prev_statuses: &std::collections::HashMap<u64, String>,
+) -> DeployWaitFinalOutput {
+    let final_nodes: Vec<DeployNodeStatusEntry> = prev_statuses
+        .iter()
+        .map(|(id, status)| DeployNodeStatusEntry {
+            node_id: *id,
+            status: status.clone(),
+            error: None,
+        })
+        .collect();
+    DeployWaitFinalOutput {
+        deploy_id: deploy_id.map(String::from),
+        status: "timeout".to_string(),
+        elapsed_secs: timeout_secs,
+        nodes: final_nodes,
+        error: Some(format!("timed out after {}s", timeout_secs)),
+    }
+}
+
+fn deploy_wait_final_output(
+    deploy_id: Option<&str>,
+    status: &str,
+    elapsed_secs: u64,
+    nodes: &[aspen_client_api::messages::NodeDeployStatusEntry],
+    error: Option<String>,
+) -> DeployWaitFinalOutput {
+    DeployWaitFinalOutput {
+        deploy_id: deploy_id.map(String::from),
+        status: status.to_string(),
+        elapsed_secs,
+        nodes: nodes
+            .iter()
+            .map(|node| DeployNodeStatusEntry {
+                node_id: node.node_id,
+                status: node.status.clone(),
+                error: node.error.clone(),
+            })
+            .collect(),
+        error,
+    }
+}
+
+fn print_deploy_wait_transitions(
+    prev_statuses: &mut std::collections::HashMap<u64, String>,
+    nodes: &[aspen_client_api::messages::NodeDeployStatusEntry],
+    elapsed_secs: u64,
+    is_json_output: bool,
+) {
+    const MAX_DEPLOY_STATUS_ENTRIES: usize = 1_000;
+
+    debug_assert!(nodes.len() <= MAX_DEPLOY_STATUS_ENTRIES);
+    for node in nodes {
+        let previous_status = prev_statuses.get(&node.node_id).cloned().unwrap_or_default();
+        if previous_status != node.status {
+            let transition = DeployWaitOutput {
+                node_id: node.node_id,
+                old_status: previous_status,
+                new_status: node.status.clone(),
+                error: node.error.clone(),
+                elapsed_secs,
+            };
+            print_output(&transition, is_json_output);
+            prev_statuses.insert(node.node_id, node.status.clone());
+        }
+    }
+}
+
+struct DeployWaitRpcError<'a> {
+    code: &'a str,
+    message: &'a str,
+}
+
+fn report_deploy_wait_rpc_error(is_json_output: bool, consecutive_errors: u32, error: DeployWaitRpcError<'_>) {
+    const WARN_EVERY_N_ERRORS: u32 = 5;
+
+    if !is_json_output && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
+        eprintln!(
+            "warning: status poll RPC error ({} consecutive): {}: {}",
+            consecutive_errors, error.code, error.message
+        );
+    }
+}
+
+fn handle_deploy_wait_status_response(
+    deploy_id: Option<&str>,
+    result: aspen_client_api::messages::ClusterDeployStatusResultResponse,
+    prev_statuses: &mut std::collections::HashMap<u64, String>,
+    is_json_output: bool,
+) -> Result<bool> {
+    debug_assert!(result.is_found || result.nodes.is_empty());
+    debug_assert!(result.is_found || result.error.is_none());
+    if !result.is_found {
+        let output = deploy_wait_final_output(deploy_id, "completed", 0, &[], None);
+        print_output(&output, is_json_output);
+        return Ok(true);
+    }
+    if let (Some(expected), Some(actual)) = (deploy_id, &result.deploy_id)
+        && expected != actual
+    {
+        anyhow::bail!("deployment ID mismatch: expected {}, found {}", expected, actual);
+    }
+
+    let elapsed_secs = result.elapsed_ms.unwrap_or(0) / 1000;
+    print_deploy_wait_transitions(prev_statuses, &result.nodes, elapsed_secs, is_json_output);
+    let status = result.status.as_deref().unwrap_or("unknown");
+    if status == "completed" {
+        let output = deploy_wait_final_output(deploy_id, status, elapsed_secs, &result.nodes, None);
+        print_output(&output, is_json_output);
+        return Ok(true);
+    }
+    if status == "failed" || status == "rolled_back" {
+        let output = deploy_wait_final_output(deploy_id, status, elapsed_secs, &result.nodes, result.error.clone());
+        print_output(&output, is_json_output);
+        anyhow::bail!("deployment {}: {}", status, result.error.as_deref().unwrap_or("unknown error"));
+    }
+
+    Ok(false)
 }
 
 #[allow(
@@ -720,55 +876,28 @@ async fn deploy_wait(
     use std::collections::HashMap;
 
     const BASE_POLL_INTERVAL_SECS: u64 = 5;
-    /// Extended poll interval when errors persist (reduces QUIC pressure
-    /// during node restarts).
     const ERROR_POLL_INTERVAL_SECS: u64 = 10;
-    /// Print a warning every N consecutive errors (every ~50s at error interval).
     const WARN_EVERY_N_ERRORS: u32 = 5;
-
     const MAX_DEPLOY_STATUS_ENTRIES: usize = 1_000;
 
     let base_sleep = std::time::Duration::from_secs(BASE_POLL_INTERVAL_SECS);
     let error_sleep = std::time::Duration::from_secs(ERROR_POLL_INTERVAL_SECS);
     let deadline = deploy_wait_start() + std::time::Duration::from_secs(timeout_secs);
+    let mut prev_statuses: HashMap<u64, String> = HashMap::with_capacity(MAX_DEPLOY_STATUS_ENTRIES);
+    let mut consecutive_errors: u32 = 0;
 
     debug_assert!(BASE_POLL_INTERVAL_SECS >= 1);
     debug_assert!(ERROR_POLL_INTERVAL_SECS >= BASE_POLL_INTERVAL_SECS);
-
-    // Track per-node status for diff-based output.
-    let mut prev_statuses: HashMap<u64, String> = HashMap::with_capacity(MAX_DEPLOY_STATUS_ENTRIES);
-    // Count consecutive RPC errors for logging.
-    let mut consecutive_errors: u32 = 0;
-
     for _poll_attempt in 0..deploy_wait_max_attempts(timeout_secs) {
-        // Use longer interval when errors persist — nodes are restarting
-        // and hammering QUIC makes reconnection slower.
-        let current_sleep = if consecutive_errors > 0 {
+        tokio::time::sleep(if consecutive_errors > 0 {
             error_sleep
         } else {
             base_sleep
-        };
-        tokio::time::sleep(current_sleep).await;
-
-        // Check timeout.
+        })
+        .await;
         if has_deploy_wait_timed_out(deadline) {
-            let final_nodes: Vec<DeployNodeStatusEntry> = prev_statuses
-                .iter()
-                .map(|(id, status)| DeployNodeStatusEntry {
-                    node_id: *id,
-                    status: status.clone(),
-                    error: None,
-                })
-                .collect();
-            let output = DeployWaitFinalOutput {
-                deploy_id: deploy_id.map(String::from),
-                status: "timeout".to_string(),
-                elapsed_secs: timeout_secs,
-                nodes: final_nodes,
-                error: Some(format!("timed out after {}s", timeout_secs)),
-            };
+            let output = deploy_wait_timeout_output(deploy_id, timeout_secs, &prev_statuses);
             print_output(&output, is_json_output);
-            // Exit code 2 for timeout — caller uses process::exit(2).
             std::process::exit(2);
         }
 
@@ -782,9 +911,6 @@ async fn deploy_wait(
             }
             Err(error) => {
                 consecutive_errors = consecutive_errors.saturating_add(1);
-                // Periodic warnings — not a hard failure. During a rolling
-                // deploy, the node we're connected to may be the one
-                // restarting. The deploy timeout is the real deadline.
                 if !is_json_output && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
                     eprintln!(
                         "warning: status poll error ({} consecutive, will retry until deploy timeout): {}",
@@ -797,103 +923,19 @@ async fn deploy_wait(
 
         match response {
             ClientRpcResponse::ClusterDeployStatusResult(result) => {
-                if !result.is_found {
-                    // Deployment completed and was archived before we could see it.
-                    let output = DeployWaitFinalOutput {
-                        deploy_id: deploy_id.map(String::from),
-                        status: "completed".to_string(),
-                        elapsed_secs: 0,
-                        nodes: vec![],
-                        error: None,
-                    };
-                    print_output(&output, is_json_output);
+                if handle_deploy_wait_status_response(deploy_id, result, &mut prev_statuses, is_json_output)? {
                     return Ok(());
-                }
-
-                // Verify we're tracking the right deployment.
-                if let (Some(expected), Some(actual)) = (deploy_id, &result.deploy_id)
-                    && expected != actual
-                {
-                    anyhow::bail!("deployment ID mismatch: expected {}, found {}", expected, actual);
-                }
-
-                let elapsed_secs = result.elapsed_ms.unwrap_or(0) / 1000;
-
-                // Emit per-node status diffs.
-                debug_assert!(result.nodes.len() <= MAX_DEPLOY_STATUS_ENTRIES);
-                for node in &result.nodes {
-                    let previous_status = prev_statuses.get(&node.node_id).cloned().unwrap_or_default();
-                    if previous_status != node.status {
-                        let transition = DeployWaitOutput {
-                            node_id: node.node_id,
-                            old_status: previous_status,
-                            new_status: node.status.clone(),
-                            error: node.error.clone(),
-                            elapsed_secs,
-                        };
-                        print_output(&transition, is_json_output);
-                        prev_statuses.insert(node.node_id, node.status.clone());
-                    }
-                }
-
-                // Check terminal states.
-                let status = result.status.as_deref().unwrap_or("unknown");
-                match status {
-                    "completed" => {
-                        let output = DeployWaitFinalOutput {
-                            deploy_id: deploy_id.map(String::from),
-                            status: "completed".to_string(),
-                            elapsed_secs,
-                            nodes: result
-                                .nodes
-                                .iter()
-                                .map(|node| DeployNodeStatusEntry {
-                                    node_id: node.node_id,
-                                    status: node.status.clone(),
-                                    error: node.error.clone(),
-                                })
-                                .collect(),
-                            error: None,
-                        };
-                        print_output(&output, is_json_output);
-                        return Ok(());
-                    }
-                    "failed" | "rolled_back" => {
-                        let output = DeployWaitFinalOutput {
-                            deploy_id: deploy_id.map(String::from),
-                            status: status.to_string(),
-                            elapsed_secs,
-                            nodes: result
-                                .nodes
-                                .iter()
-                                .map(|node| DeployNodeStatusEntry {
-                                    node_id: node.node_id,
-                                    status: node.status.clone(),
-                                    error: node.error.clone(),
-                                })
-                                .collect(),
-                            error: result.error.clone(),
-                        };
-                        print_output(&output, is_json_output);
-                        anyhow::bail!("deployment {}: {}", status, result.error.as_deref().unwrap_or("unknown error"));
-                    }
-                    _ => { /* still in progress */ }
                 }
             }
             ClientRpcResponse::Error(error) => {
                 if error.code.contains("DEPLOY_UNAVAILABLE") {
                     anyhow::bail!("deploy feature not enabled on server");
                 }
-                // RPC-level errors during deploy are expected — the node
-                // may be mid-restart. Track for logging but don't bail;
-                // the deploy timeout is the real deadline.
                 consecutive_errors = consecutive_errors.saturating_add(1);
-                if !is_json_output && consecutive_errors % WARN_EVERY_N_ERRORS == 1 {
-                    eprintln!(
-                        "warning: status poll RPC error ({} consecutive): {}: {}",
-                        consecutive_errors, error.code, error.message
-                    );
-                }
+                report_deploy_wait_rpc_error(is_json_output, consecutive_errors, DeployWaitRpcError {
+                    code: &error.code,
+                    message: &error.message,
+                });
             }
             _ => {
                 if !is_json_output {
