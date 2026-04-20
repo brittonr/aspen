@@ -161,7 +161,9 @@ mod tests {
     use super::*;
 
     /// In-memory store for testing re-encryption.
-    // Lock order: data -> checkpoints.
+    ///
+    /// Lock order: `data` first, `checkpoints` second.
+    #[allow(tigerstyle::multi_lock_ordering, reason = "in-memory test store — locks acquired sequentially, never held together")]
     struct TestStore {
         data: Mutex<BTreeMap<String, Vec<u8>>>,
         checkpoints: Mutex<BTreeMap<String, String>>,
@@ -186,14 +188,15 @@ mod tests {
 
     #[async_trait]
     impl ReencryptionStore for TestStore {
+        #[allow(tigerstyle::numeric_units)]
         async fn scan_secrets(
             &self,
             prefix: &str,
             after_key: Option<&str>,
-            batch_key_count: u32,
+            batch_size: u32,
         ) -> Result<Vec<(String, Vec<u8>)>, ReencryptionError> {
             let data = self.data.lock().unwrap();
-            let batch_limit_keys = usize::try_from(batch_key_count).unwrap_or(usize::MAX);
+            let batch_limit_key_n = usize::try_from(batch_size).unwrap_or(usize::MAX);
             let iter = data
                 .iter()
                 .filter(|(k, _)| k.starts_with(prefix))
@@ -201,7 +204,7 @@ mod tests {
                     Some(after) => k.as_str() > after,
                     None => true,
                 })
-                .take(batch_limit_keys)
+                .take(batch_limit_key_n)
                 .map(|(k, v)| (k.clone(), v.clone()));
             Ok(iter.collect())
         }

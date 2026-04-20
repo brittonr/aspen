@@ -161,8 +161,9 @@ impl SecretsEncryption {
     }
 
     /// How many epoch keys are currently held.
+    #[allow(tigerstyle::sentinel_fallback, reason = "key count can't realistically exceed u32::MAX; unwrap_or is safe sentinel")]
     pub fn epoch_key_count(&self) -> u32 {
-        self.keys.len().min(u32::MAX as usize) as u32
+        u32::try_from(self.keys.len()).unwrap_or(u32::MAX)
     }
 }
 

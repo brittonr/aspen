@@ -19,10 +19,16 @@ pub struct ThresholdConfig {
 
 /// Check if a threshold/total pair is valid for Shamir secret sharing.
 ///
-/// Valid when: K >= 1, K <= N, N <= 255 (GF(2^8) has 255 nonzero elements).
+/// Valid when: K >= 1, K <= N, N >= 1 (GF(2^8) has 255 nonzero elements).
 #[inline]
 pub fn is_valid_threshold(config: ThresholdConfig) -> bool {
-    config.threshold >= 1 && config.threshold <= config.total && config.total >= 1
+    if config.threshold < 1 {
+        return false;
+    }
+    if config.threshold > config.total {
+        return false;
+    }
+    config.total >= 1
 }
 
 /// Compute the default majority threshold for a given cluster size.
@@ -30,10 +36,11 @@ pub fn is_valid_threshold(config: ThresholdConfig) -> bool {
 /// Returns `(n / 2) + 1`. For n=0, returns 1 (minimum valid threshold).
 /// Uses saturating arithmetic to prevent overflow.
 #[inline]
+#[allow(tigerstyle::sentinel_fallback, reason = "clamped_majority guaranteed ≤ u8::MAX by min clamp above")]
 pub fn default_threshold_for_size(n: u32) -> u8 {
     let majority = (n / 2).saturating_add(1);
     let clamped_majority = majority.min(u32::from(u8::MAX));
-    clamped_majority as u8
+    u8::try_from(clamped_majority).unwrap_or(u8::MAX)
 }
 
 #[cfg(test)]

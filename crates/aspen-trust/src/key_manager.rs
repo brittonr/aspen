@@ -318,7 +318,7 @@ mod tests {
 
         // First attempt with empty collector fails
         let empty_collector = MockCollector { shares: vec![] };
-        let _ = km.ensure_initialized(&empty_collector).await;
+        assert!(km.ensure_initialized(&empty_collector).await.is_err());
 
         // Reset and retry with good collector
         km.reset_reconstruction_attempt().await;

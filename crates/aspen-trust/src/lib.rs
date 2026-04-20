@@ -3,7 +3,10 @@
 //! This crate implements GF(2^8) Shamir secret sharing for distributing a
 //! 32-byte cluster root secret across N nodes with a K-of-N reconstruction
 //! threshold. Inspired by Oxide's trust-quorum and `gfss` crate.
-//!
+
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 //! ## Modules
 //!
 //! - **`gf256`**: GF(2^8) finite field arithmetic (multiplication, polynomial evaluation)

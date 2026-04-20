@@ -1,5 +1,8 @@
 //! Property-based tests for Shamir secret sharing.
 
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+
 use aspen_trust::shamir::SECRET_SIZE;
 use aspen_trust::shamir::{self};
 use proptest::prelude::*;
@@ -7,13 +10,14 @@ use proptest::test_runner::TestCaseError;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
+#[allow(tigerstyle::ambiguous_params, reason = "mirrors shamir::split_secret signature")]
 fn split_secret_or_fail(
     secret: &[u8; SECRET_SIZE],
-    threshold: u8,
-    total: u8,
+    share_threshold: u8,
+    share_total: u8,
     rng: &mut StdRng,
 ) -> Result<Vec<shamir::Share>, TestCaseError> {
-    shamir::split_secret(secret, threshold, total, rng).map_err(|error| TestCaseError::fail(error.to_string()))
+    shamir::split_secret(secret, share_threshold, share_total, rng).map_err(|error| TestCaseError::fail(error.to_string()))
 }
 
 fn reconstruct_secret_or_fail(shares: &[shamir::Share]) -> Result<[u8; SECRET_SIZE], TestCaseError> {
