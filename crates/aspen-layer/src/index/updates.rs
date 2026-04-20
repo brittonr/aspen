@@ -28,7 +28,7 @@ impl IndexUpdate {
 
     /// Get total number of operations.
     pub fn operation_count(&self) -> u32 {
-        (self.inserts.len().saturating_add(self.deletes.len())).min(u32::MAX as usize) as u32
+        (self.inserts.len().saturating_add(self.deletes.len())).min(usize::MAX) as u32
     }
 }
 

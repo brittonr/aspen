@@ -21,7 +21,7 @@ impl IndexScanResult {
 
     /// Get the number of results.
     pub fn len(&self) -> u32 {
-        self.primary_keys.len().min(u32::MAX as usize) as u32
+        self.primary_keys.len().min(usize::MAX) as u32
     }
 
     /// Check if the result is empty.
