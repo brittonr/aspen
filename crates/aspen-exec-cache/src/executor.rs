@@ -124,11 +124,17 @@ fn cache_lookup_started_at() -> Instant {
 }
 
 fn elapsed_lookup_time_us(started_at: Instant) -> u64 {
-    u64::try_from(started_at.elapsed().as_micros()).unwrap_or(u64::MAX)
+    match u64::try_from(started_at.elapsed().as_micros()) {
+        Ok(us) => us,
+        Err(_) => u64::MAX,
+    }
 }
 
 fn output_file_limit() -> usize {
-    usize::try_from(MAX_OUTPUT_FILES).unwrap_or(usize::MAX)
+    match usize::try_from(MAX_OUTPUT_FILES) {
+        Ok(n) => n,
+        Err(_) => usize::MAX,
+    }
 }
 
 impl<S: CacheKvStore, B: BlobStore> CachedExecutor<S, B> {
@@ -464,8 +470,10 @@ mod tests {
         exec.tracker().record_read(200, "src/main.rs".into(), [0x11; 32]);
         exec.tracker().record_read(200, "src/lib.rs".into(), [0x22; 32]);
 
-        let result = exec.try_cache_lookup(200, command, &args, &env, now + 1000);
-        assert!(result.is_some(), "should hit cache");
+        let result = exec
+            .try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000));
+        assert!(result.is_some());
+        assert!(result.as_ref().map_or(false, |r| r.is_cache_hit));
 
         let result = result.unwrap();
         assert!(result.is_cache_hit);
@@ -506,8 +514,10 @@ mod tests {
         // Lookup with different input hash [0x22; 32]
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "src/main.rs".into(), [0x22; 32]);
-        let result = exec.try_cache_lookup(200, command, &args, &env, now + 1000);
-        assert!(result.is_none(), "different input should miss");
+        let result = exec
+            .try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000));
+        assert!(result.is_none());
+        assert!(!result.map_or(false, |r| r.is_cache_hit));
     }
 
     #[test]
@@ -540,7 +550,9 @@ mod tests {
         // Lookup and materialize
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "main.c".into(), [0x11; 32]);
-        let result = exec.try_cache_lookup(200, command, &args, &env, now + 1000).unwrap();
+        let result = exec
+            .try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000))
+            .unwrap();
 
         let files = exec.materialize_outputs(&result.outputs).unwrap();
         assert_eq!(files.len(), 2);
@@ -574,7 +586,9 @@ mod tests {
         // Replays the failure
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "bad.c".into(), [0x11; 32]);
-        let result = exec.try_cache_lookup(200, "gcc", &["bad.c".into()], &sample_env(), now + 1000).unwrap();
+        let result = exec
+            .try_cache_lookup(200, "gcc", &["bad.c".into()], &sample_env(), now.saturating_add(1_000))
+            .unwrap();
         assert_eq!(result.exit_code, 1);
         assert_eq!(result.stderr, b"error: syntax");
     }
@@ -614,7 +628,7 @@ mod tests {
 
         exec.tracker().start_session(300);
         exec.tracker().record_read(300, "f".into(), [0x11; 32]);
-        let _ = exec.try_cache_lookup(300, "cmd", &[], &sample_env(), now + 1000);
+        let _ = exec.try_cache_lookup(300, "cmd", &[], &sample_env(), now.saturating_add(1_000));
 
         let stats = exec.stats();
         assert_eq!(stats.hits, 1);
@@ -628,7 +642,14 @@ mod tests {
         exec.tracker().start_session(100);
         let read_set = exec.tracker().finalize(100).unwrap();
 
-        let too_many: Vec<(&str, &[u8])> = (0..MAX_OUTPUT_FILES + 1).map(|_| ("f", &b"x"[..])).collect();
+        // Verify the boundary: MAX_OUTPUT_FILES + 1 exceeds the limit
+        let max_plus_one: usize =
+            usize::try_from(MAX_OUTPUT_FILES).ok().and_then(|n| n.checked_add(1)).unwrap_or(usize::MAX);
+        let too_many: Vec<(&str, &[u8])> = (0..max_plus_one).map(|_| ("f", &b"x"[..])).collect();
+        assert!(
+            too_many.len() > usize::try_from(MAX_OUTPUT_FILES).unwrap_or(usize::MAX),
+            "test setup must exceed MAX_OUTPUT_FILES"
+        );
 
         let result = exec.store_result(&StoreResultParams {
             command: "cmd",
@@ -693,7 +714,8 @@ mod tests {
         // Lookup parent — should hit because child is still valid
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "parent.rs".into(), [0x22; 32]);
-        let result = exec.try_cache_lookup(200, "cargo", &["build".into()], &sample_env(), now + 1000);
+        let result = exec
+            .try_cache_lookup(200, "cargo", &["build".into()], &sample_env(), now.saturating_add(1_000));
         assert!(result.is_some(), "parent should hit when child is valid");
 
         // Delete child, then parent should miss
@@ -701,7 +723,8 @@ mod tests {
 
         exec.tracker().start_session(300);
         exec.tracker().record_read(300, "parent.rs".into(), [0x22; 32]);
-        let result = exec.try_cache_lookup(300, "cargo", &["build".into()], &sample_env(), now + 2000);
+        let result = exec
+            .try_cache_lookup(300, "cargo", &["build".into()], &sample_env(), now.saturating_add(2_000));
         assert!(result.is_none(), "parent should miss when child is invalid");
     }
 }
