@@ -66,6 +66,8 @@ fn parse_requested_commit_hash(commit_hash: Option<&str>) -> Result<Option<[u8; 
 fn normalize_trigger_ref_name(ref_name: &str) -> String {
     let ref_path = if ref_name.starts_with("refs/") {
         ref_name.strip_prefix("refs/").unwrap_or(ref_name).to_string()
+    } else if ref_name.starts_with("heads/") || ref_name.starts_with("tags/") {
+        ref_name.to_string()
     } else {
         format!("heads/{ref_name}")
     };
@@ -182,7 +184,7 @@ async fn checkout_trigger_repository(
     use aspen_ci::checkout::prepare_for_ci_build;
 
     let checkout_dir = checkout_dir_for_run(run_id);
-    debug_assert!(checkout_dir.ends_with(run_id));
+    debug_assert!(checkout_dir.to_string_lossy().ends_with(run_id));
 
     info!(
         repo_id = %repo_id,
@@ -592,6 +594,10 @@ mod tests {
         assert_eq!(normalize_trigger_ref_name("main"), "heads/main");
         assert_eq!(normalize_trigger_ref_name("refs/heads/main"), "heads/main");
         assert_eq!(normalize_trigger_ref_name("refs/tags/v1"), "tags/v1");
+        // Already-normalized refs should pass through unchanged
+        assert_eq!(normalize_trigger_ref_name("heads/main"), "heads/main");
+        assert_eq!(normalize_trigger_ref_name("tags/v1.0"), "tags/v1.0");
+        assert_eq!(normalize_trigger_ref_name("heads/feature/foo"), "heads/feature/foo");
     }
 
     #[test]

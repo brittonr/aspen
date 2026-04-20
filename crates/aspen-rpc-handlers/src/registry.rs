@@ -60,9 +60,9 @@ pub struct NativeHandlerPlan {
     pub enable_forge: bool,
     #[cfg(feature = "jobs")]
     pub enable_jobs: bool,
-    #[cfg(feature = "ci")]
+    #[cfg(feature = "ci-core")]
     pub enable_ci: bool,
-    #[cfg(feature = "ci")]
+    #[cfg(feature = "ci-cache")]
     pub enable_cache: bool,
     #[cfg(feature = "secrets")]
     pub enable_secrets: bool,
@@ -83,9 +83,9 @@ impl NativeHandlerPlan {
             enable_forge: false,
             #[cfg(feature = "jobs")]
             enable_jobs: false,
-            #[cfg(feature = "ci")]
+            #[cfg(feature = "ci-core")]
             enable_ci: false,
-            #[cfg(feature = "ci")]
+            #[cfg(feature = "ci-cache")]
             enable_cache: false,
             #[cfg(feature = "secrets")]
             enable_secrets: false,
@@ -140,20 +140,20 @@ impl NativeHandlerPlan {
     }
 
     pub fn set_ci_enabled(&mut self, enabled: bool) {
-        #[cfg(feature = "ci")]
+        #[cfg(feature = "ci-core")]
         {
             self.enable_ci = enabled;
         }
-        #[cfg(not(feature = "ci"))]
+        #[cfg(not(feature = "ci-core"))]
         let _ = enabled;
     }
 
     pub fn set_cache_enabled(&mut self, enabled: bool) {
-        #[cfg(feature = "ci")]
+        #[cfg(feature = "ci-cache")]
         {
             self.enable_cache = enabled;
         }
-        #[cfg(not(feature = "ci"))]
+        #[cfg(not(feature = "ci-cache"))]
         let _ = enabled;
     }
 
@@ -214,7 +214,7 @@ static DOCS_HANDLER_FACTORY: aspen_docs_handler::DocsHandlerFactory = aspen_docs
 static FORGE_HANDLER_FACTORY: aspen_forge_handler::ForgeHandlerFactory = aspen_forge_handler::ForgeHandlerFactory;
 #[cfg(feature = "jobs")]
 static JOB_HANDLER_FACTORY: aspen_job_handler::JobHandlerFactory = aspen_job_handler::JobHandlerFactory;
-#[cfg(feature = "ci")]
+#[cfg(feature = "ci-core")]
 static CI_HANDLER_FACTORY: aspen_ci_handler::CiHandlerFactory = aspen_ci_handler::CiHandlerFactory;
 #[cfg(feature = "secrets")]
 static SECRETS_HANDLER_FACTORY: aspen_secrets_handler::SecretsHandlerFactory =
@@ -222,10 +222,10 @@ static SECRETS_HANDLER_FACTORY: aspen_secrets_handler::SecretsHandlerFactory =
 #[cfg(feature = "snix")]
 static SNIX_HANDLER_FACTORY: aspen_nix_handler::snix_factory::SnixHandlerFactory =
     aspen_nix_handler::snix_factory::SnixHandlerFactory;
-#[cfg(feature = "ci")]
+#[cfg(feature = "ci-cache")]
 static CACHE_HANDLER_FACTORY: aspen_nix_handler::cache_factory::CacheHandlerFactory =
     aspen_nix_handler::cache_factory::CacheHandlerFactory;
-#[cfg(feature = "ci")]
+#[cfg(feature = "ci-cache")]
 static CACHE_MIGRATION_HANDLER_FACTORY: aspen_nix_handler::cache_factory::CacheMigrationHandlerFactory =
     aspen_nix_handler::cache_factory::CacheMigrationHandlerFactory;
 
@@ -261,11 +261,11 @@ fn builtin_handler_factories(_plan: &NativeHandlerPlan) -> Vec<&'static dyn Hand
     if _plan.enable_jobs {
         factories.push(&JOB_HANDLER_FACTORY);
     }
-    #[cfg(feature = "ci")]
+    #[cfg(feature = "ci-core")]
     if _plan.enable_ci {
         factories.push(&CI_HANDLER_FACTORY);
     }
-    #[cfg(feature = "ci")]
+    #[cfg(feature = "ci-cache")]
     if _plan.enable_cache {
         factories.push(&CACHE_HANDLER_FACTORY);
         factories.push(&CACHE_MIGRATION_HANDLER_FACTORY);

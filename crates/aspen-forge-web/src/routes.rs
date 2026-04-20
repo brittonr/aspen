@@ -175,7 +175,19 @@ fn parse_request_path(path: &str) -> ParsedRequest<'_> {
 async fn dispatch_post(state: &AppState, segments: &[&str], body: &Bytes) -> RouteResponse {
     let form = parse_form(body);
     debug_assert!(!segments.is_empty());
-    debug_assert!(!form.is_empty() || matches!(segments, ["login", "verify"]));
+    // Empty form bodies are valid for action-only routes (cancel, retrigger, close, reopen, approve)
+    debug_assert!(
+        !form.is_empty()
+            || matches!(
+                segments,
+                ["login", "verify"]
+                    | [_, "ci", _, "cancel"]
+                    | [_, "ci", _, "retrigger"]
+                    | [_, "issues", _, "close"]
+                    | [_, "issues", _, "reopen"]
+                    | [_, "patches", _, "approve"]
+            )
+    );
     match segments {
         [repo_id, "issues", "new"] => create_issue_post(state, repo_id, &form).await,
         [repo_id, "issues", id, "comment"] => {

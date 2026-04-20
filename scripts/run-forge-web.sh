@@ -123,10 +123,11 @@ check_port
 
 log "Building..."
 cargo build \
-  --features ci,docs,hooks,shell-worker,automerge,git-bridge \
-  --bin aspen-node --bin aspen-cli --bin git-remote-aspen \
-  -p aspen -p aspen-cli -p aspen-forge-web \
+  --features ci,nix-cli-fallback,docs,hooks,shell-worker,automerge,git-bridge,node-runtime-apps,blob \
+  -p aspen --bin aspen-node --bin git-remote-aspen \
   2>&1 | tail -3
+cargo build -p aspen-cli --features ci --bin aspen-cli 2>&1 | tail -3
+cargo build -p aspen-forge-web --bin aspen-forge-web 2>&1 | tail -3
 ok "Build complete"
 
 # ── Start cluster ────────────────────────────────────────────────────
@@ -213,18 +214,49 @@ INNER_MD
     printf 'fn main() {\n    println!("Hello from Aspen Forge!");\n}\n' > src/main.rs
     printf '[package]\nname = "hello"\nversion = "0.1.0"\nedition = "2024"\n' > Cargo.toml
 
+    # Generate Cargo.lock so the Nix build can vendor dependencies
+    cargo generate-lockfile -q 2>/dev/null || true
+
+    # Nix flake for building the project
+    cat > flake.nix << 'INNER_FLAKE'
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs = { self, nixpkgs }:
+    let
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+    in {
+      packages.${system}.default = pkgs.rustPlatform.buildRustPackage {
+        pname = "hello";
+        version = "0.1.0";
+        src = ./.;
+        cargoLock.lockFile = ./Cargo.lock;
+      };
+    };
+}
+INNER_FLAKE
+
     # CI config — triggers automatically on push when --ci-auto-trigger is set
     mkdir -p .aspen
     cat > .aspen/ci.ncl << 'INNER_NCL'
 {
-  jobs = {
-    build = {
-      steps = [
-        { run = "echo 'Hello from Aspen CI!'" },
-        { run = "cat README.md" },
-      ]
-    }
-  }
+  name = "hello-world",
+  stages = [
+    {
+      name = "build",
+      jobs = [
+        {
+          name = "nix-build",
+          type = 'nix,
+          flake_attr = "packages.x86_64-linux.default",
+          timeout_secs = 600,
+        },
+      ],
+    },
+  ],
 }
 INNER_NCL
 
@@ -234,6 +266,27 @@ INNER_NCL
 else
   log "git-remote-aspen not found — repo created but empty"
   log "To populate: build git-remote-aspen or use nix run .#dogfood-local"
+fi
+
+# ── Enable CI for the repository ─────────────────────────────────────
+
+log "Enabling CI for repository..."
+cli ci watch "$REPO_ID" 2>/dev/null && ok "CI watch enabled" || log "CI watch failed (will trigger manually)"
+sleep 2
+
+# Check if CI auto-triggered from the replay buffer, otherwise trigger manually
+CI_RUNS=$(cli_json ci list --repo-id "$REPO_ID" --limit 1 2>/dev/null || echo "")
+if echo "$CI_RUNS" | grep -q 'run_id'; then
+  ok "CI pipeline auto-triggered"
+else
+  log "Triggering CI pipeline manually..."
+  TRIGGER_OUT=$(cli_json ci run "$REPO_ID" 2>/dev/null || echo "")
+  RUN_ID=$(parse_field "run_id" <<< "$TRIGGER_OUT")
+  if [ -n "$RUN_ID" ]; then
+    ok "CI pipeline triggered: $RUN_ID"
+  else
+    log "CI trigger returned no run ID (CI may still start asynchronously)"
+  fi
 fi
 
 # ── Start forge-web with embedded TCP proxy ──────────────────────────
