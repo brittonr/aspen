@@ -16,7 +16,7 @@ use serde::Serialize;
 fn unix_epoch_micros() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
+        .map(|d| d.as_micros().min(u64::MAX as u128) as u64)
         .unwrap_or(0)
 }
 

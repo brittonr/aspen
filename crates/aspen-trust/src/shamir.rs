@@ -222,7 +222,7 @@ pub fn reconstruct_secret(shares: &[Share]) -> Result<[u8; SECRET_SIZE], ShamirE
     for (byte_idx, secret_byte) in secret.iter_mut().enumerate() {
         let mut value: u8 = 0;
         for (i, share) in shares.iter().enumerate() {
-            let share_index = u32::try_from(i).unwrap_or(u32::MAX);
+            let share_index = i as u32;
             let li = gf256::lagrange_basis_at_zero(&xs, share_index);
             value ^= gf256::mul(share.y[byte_idx], li);
         }

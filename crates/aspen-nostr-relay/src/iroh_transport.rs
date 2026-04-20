@@ -56,7 +56,7 @@ impl<S: ?Sized> NostrProtocolHandler<S> {
             write_policy,
             relay_url,
             connection_semaphore: Arc::new(tokio::sync::Semaphore::new(
-                usize::try_from(MAX_IROH_CONNECTIONS).unwrap_or(usize::MAX),
+                MAX_IROH_CONNECTIONS as usize,
             )),
             conn_counter: std::sync::atomic::AtomicU32::new(0),
         }

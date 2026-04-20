@@ -38,7 +38,7 @@ impl Tuple {
     /// Create a tuple with pre-allocated capacity.
     pub fn with_capacity(capacity_elements: u32) -> Self {
         Self {
-            elements: Vec::with_capacity(usize::try_from(capacity_elements).unwrap_or(usize::MAX)),
+            elements: Vec::with_capacity(capacity_elements as usize),
         }
     }
 
@@ -55,7 +55,7 @@ impl Tuple {
 
     /// Get the number of elements in the tuple.
     pub fn len(&self) -> u32 {
-        u32::try_from(self.elements.len()).unwrap_or(u32::MAX)
+        self.elements.len().min(u32::MAX as usize) as u32
     }
 
     /// Check if the tuple is empty.
@@ -65,8 +65,7 @@ impl Tuple {
 
     /// Get an element by index.
     pub fn get(&self, element_index: u32) -> Option<&Element> {
-        let index = usize::try_from(element_index).unwrap_or(usize::MAX);
-        self.elements.get(index)
+        self.elements.get(element_index as usize)
     }
 
     /// Get an iterator over the elements.
@@ -96,7 +95,7 @@ impl Tuple {
     /// Returns the decoded tuple and ensures all bytes were consumed.
     pub fn unpack(data: &[u8]) -> Result<Self, TupleError> {
         let (tuple, consumed_bytes) = Self::unpack_partial(data)?;
-        let consumed = usize::try_from(consumed_bytes).unwrap_or(usize::MAX);
+        let consumed = consumed_bytes as usize;
         if consumed != data.len() {
             // Extra bytes after tuple - this is valid, return what we got
         }
@@ -116,7 +115,7 @@ impl Tuple {
             offset_bytes = offset_bytes.saturating_add(consumed_bytes);
         }
 
-        Ok((tuple, u32::try_from(offset_bytes).unwrap_or(u32::MAX)))
+        Ok((tuple, offset_bytes.min(u32::MAX as usize) as u32))
     }
 
     /// Get the range of keys that have this tuple as a prefix.

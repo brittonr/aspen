@@ -33,7 +33,7 @@ pub fn is_valid_threshold(config: ThresholdConfig) -> bool {
 pub fn default_threshold_for_size(n: u32) -> u8 {
     let majority = (n / 2).saturating_add(1);
     let clamped_majority = majority.min(u32::from(u8::MAX));
-    u8::try_from(clamped_majority).unwrap_or(u8::MAX)
+    clamped_majority as u8
 }
 
 #[cfg(test)]

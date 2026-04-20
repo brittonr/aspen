@@ -104,7 +104,7 @@ impl IndexRegistry {
     ///
     /// Returns `IndexError::TooManyIndexes` if the registry is at capacity.
     pub fn register(&mut self, index: SecondaryIndex) -> IndexResult<()> {
-        let max_indexes = usize::try_from(MAX_INDEXES).unwrap_or(usize::MAX);
+        let max_indexes = MAX_INDEXES as usize;
         if self.indexes.len() >= max_indexes {
             return Err(IndexError::TooManyIndexes);
         }
@@ -124,7 +124,7 @@ impl IndexRegistry {
 
     /// Get the number of registered indexes.
     pub fn len(&self) -> u32 {
-        u32::try_from(self.indexes.len()).unwrap_or(u32::MAX)
+        self.indexes.len().min(u32::MAX as usize) as u32
     }
 
     /// Check if the registry is empty.

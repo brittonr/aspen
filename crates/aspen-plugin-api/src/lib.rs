@@ -113,7 +113,7 @@ pub struct PluginHealth {
 )]
 fn current_epoch_ms() -> u64 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration_since_epoch) => u64::try_from(duration_since_epoch.as_millis()).unwrap_or(u64::MAX),
+        Ok(duration_since_epoch) => duration_since_epoch.as_millis().min(u64::MAX as u128) as u64,
         Err(_) => 0,
     }
 }

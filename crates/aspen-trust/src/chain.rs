@@ -104,7 +104,7 @@ pub fn encrypt_chain(
         salt,
         data: ciphertext,
         epoch,
-        prior_count: u32::try_from(prior_secrets.len()).unwrap_or(u32::MAX),
+        prior_count: prior_secrets.len().min(u32::MAX as usize) as u32,
     })
 }
 

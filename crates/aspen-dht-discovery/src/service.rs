@@ -364,7 +364,7 @@ impl ContentDiscoveryService {
                                 }
                             }
                             info!(count = announced, "bulk announced local blobs to DHT");
-                            drop(reply.send(Ok(usize::try_from(announced).unwrap_or(usize::MAX))));
+                            drop(reply.send(Ok(announced as usize)));
                         }
 
                         DiscoveryCommand::FindProviderByKey { public_key, hash, format, reply } => {
@@ -571,7 +571,7 @@ impl ContentDiscoveryService {
 fn unix_epoch_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+        .map(|d| d.as_secs().min(i64::MAX as u64) as i64)
         .unwrap_or(1)
 }
 
@@ -581,7 +581,7 @@ fn unix_epoch_secs() -> i64 {
 fn unix_epoch_micros() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
+        .map(|d| d.as_micros().min(u64::MAX as u128) as u64)
         .unwrap_or(0)
 }
 

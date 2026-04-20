@@ -26,7 +26,7 @@ pub fn mul(a: u8, b: u8) -> u8 {
         // If low bit of b is set, XOR a into result
         if b & 1 != 0 {
             let reduced = a & u16::from(u8::MAX);
-            result ^= u8::try_from(reduced).unwrap_or_default();
+            result ^= reduced as u8;
         }
         // Shift a left (multiply by x)
         a <<= 1;
@@ -94,13 +94,13 @@ pub fn eval_polynomial(coeffs: &[u8], x: u8) -> u8 {
 #[inline]
 pub fn lagrange_basis_at_zero(xs: &[u8], share_index: u32) -> u8 {
     let mut result: u8 = 1;
-    let share_slot = usize::try_from(share_index).unwrap_or(usize::MAX);
+    let share_slot = share_index as usize;
     let xi = xs[share_slot];
 
     let mut current_slot = 0u32;
-    while usize::try_from(current_slot).unwrap_or(usize::MAX) < xs.len() {
+    while (current_slot as usize) < xs.len() {
         if current_slot != share_index {
-            let slot = usize::try_from(current_slot).unwrap_or(usize::MAX);
+            let slot = current_slot as usize;
             let xj = xs[slot];
             // numerator: xj, denominator: xj XOR xi (subtraction = addition in GF(2^8))
             let denom = xj ^ xi;

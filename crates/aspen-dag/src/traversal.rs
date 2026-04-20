@@ -188,10 +188,9 @@ where
             }
 
             // Visited set bound check.
-            let visited_count = u32::try_from(self.visited.len()).unwrap_or(u32::MAX);
-            if visited_count >= MAX_VISITED_SET_SIZE {
+            if self.visited.len() >= MAX_VISITED_SET_SIZE as usize {
                 return Err(TraversalError::VisitedSetExceeded {
-                    size: visited_count,
+                    size: self.visited.len().min(u32::MAX as usize) as u32,
                     max: MAX_VISITED_SET_SIZE,
                 });
             }

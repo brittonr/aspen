@@ -78,7 +78,7 @@ fn session_started_at() -> Instant {
 }
 
 fn session_limit(value: u32) -> usize {
-    usize::try_from(value).unwrap_or(usize::MAX)
+    value as usize
 }
 
 impl ReadTracker {
@@ -253,7 +253,7 @@ impl ReadTracker {
 
     /// Number of active sessions.
     pub fn session_count(&self) -> u32 {
-        u32::try_from(self.sessions.len()).unwrap_or(u32::MAX)
+        self.sessions.len().min(u32::MAX as usize) as u32
     }
 }
 

@@ -92,7 +92,7 @@ async fn connection_event_loop<S: NostrEventStore>(
             msg = ws_rx.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        if text.len() > usize::try_from(MAX_EVENT_SIZE).unwrap_or(usize::MAX) {
+                        if text.len() > MAX_EVENT_SIZE as usize {
                             drop(send_notice(ws_tx, "message too large").await);
                             continue;
                         }

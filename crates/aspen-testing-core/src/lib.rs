@@ -386,7 +386,7 @@ impl DeterministicKeyValueStore {
                 }
                 TxnOp::Range { prefix, limit } => {
                     let matching: Vec<_> = inner.iter().filter(|(k, _)| k.starts_with(prefix)).collect();
-                    let max_results = usize::try_from(*limit).unwrap_or(usize::MAX);
+                    let max_results = *limit as usize;
                     let is_more_results = matching.len() > max_results;
                     let kvs: Vec<_> = matching
                         .into_iter()
@@ -823,8 +823,7 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let inner = self.inner.lock().await;
 
         // Apply Tiger Style bounded limit
-        let max_results = usize::try_from(request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS))
-            .unwrap_or(usize::MAX);
+        let max_results = request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {

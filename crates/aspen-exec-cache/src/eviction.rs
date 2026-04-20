@@ -66,7 +66,7 @@ pub fn run_eviction<S: CacheKvStore, G: BlobGc>(
     let all_entries = index.scan_all(u32::MAX)?;
     let (mut live_entries, expired_removed) = remove_expired_entries(index, &all_entries, params.now_ms, blob_gc)?;
     let lru_evicted = evict_lru_entries(index, &mut live_entries, params.max_storage_bytes, blob_gc)?;
-    let remaining = u32::try_from(live_entries.len()).unwrap_or(u32::MAX);
+    let remaining = live_entries.len().min(u32::MAX as usize) as u32;
 
     if expired_removed > 0 || lru_evicted > 0 {
         info!(expired_removed, lru_evicted, remaining, "eviction pass complete");
@@ -115,7 +115,7 @@ fn evict_lru_entries<S: CacheKvStore, G: BlobGc>(
     live_entries.sort_by_key(|(_, entry)| entry.last_accessed_ms);
     let removed_entries_count = count_lru_entries_to_remove(index, live_entries, max_storage_bytes, blob_gc)?;
     live_entries.drain(..removed_entries_count);
-    Ok(u32::try_from(removed_entries_count).unwrap_or(u32::MAX))
+    Ok(removed_entries_count.min(u32::MAX as usize) as u32)
 }
 
 fn count_lru_entries_to_remove<S: CacheKvStore, G: BlobGc>(

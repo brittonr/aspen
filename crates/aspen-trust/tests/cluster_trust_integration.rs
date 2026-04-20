@@ -18,7 +18,7 @@ use aspen_trust::shamir::ShareDigest;
 use aspen_trust::shamir::{self};
 
 fn total_shares_u8(total_shares: u32) -> u8 {
-    u8::try_from(total_shares).unwrap_or(u8::MAX)
+    (total_shares.min(u8::MAX as u32)) as u8
 }
 
 #[test]
