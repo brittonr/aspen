@@ -137,6 +137,7 @@ impl CircuitBreaker {
 }
 
 #[cfg(test)]
+#[allow(ambient_clock, reason = "tests use Instant::now() for monotonic time")]
 mod tests {
     use super::*;
 

@@ -49,7 +49,7 @@ use tracing::warn;
 // ============================================================================
 
 /// Maximum number of applications per cluster.
-pub const MAX_APPS_PER_CLUSTER: usize = 32;
+pub const MAX_APPS_PER_CLUSTER: u32 = 32;
 
 /// Maximum number of capabilities per application.
 pub const MAX_CAPABILITIES_PER_APP: usize = 16;
@@ -244,7 +244,7 @@ impl AppRegistry {
         }
 
         // Check capacity
-        if apps.len() >= MAX_APPS_PER_CLUSTER {
+        if apps.len() >= MAX_APPS_PER_CLUSTER as usize {
             warn!(
                 app_id = %manifest.app_id,
                 max = MAX_APPS_PER_CLUSTER,
@@ -315,8 +315,8 @@ impl AppRegistry {
     }
 
     /// Get the number of registered applications.
-    pub fn len(&self) -> usize {
-        self.apps.read().unwrap_or_else(|e| e.into_inner()).len()
+    pub fn len(&self) -> u32 {
+        self.apps.read().unwrap_or_else(|e| e.into_inner()).len() as u32
     }
 
     /// Check if the registry is empty.
@@ -336,7 +336,7 @@ impl AppRegistry {
     /// This is used when processing received `ClusterAnnouncement` messages.
     pub fn from_announcement_list(apps: Vec<AppManifest>) -> Self {
         let registry = Self::new();
-        for app in apps.into_iter().take(MAX_APPS_PER_CLUSTER) {
+        for app in apps.into_iter().take(MAX_APPS_PER_CLUSTER as usize) {
             registry.register(app);
         }
         registry

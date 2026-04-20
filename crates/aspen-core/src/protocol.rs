@@ -32,6 +32,9 @@ use serde::Serialize;
 
 use crate::types::NodeId;
 
+/// Sentinel: count overflow when usize does not fit in u32.
+const COUNT_OVERFLOW_SENTINEL: u32 = u32::MAX;
+
 // ============================================================================
 // Envelope
 // ============================================================================
@@ -212,7 +215,7 @@ impl<S, M> TestCtx<S, M> {
 
     /// Number of envelopes in the outbound queue.
     pub fn num_envelopes(&self) -> u32 {
-        u32::try_from(self.envelopes.len()).unwrap_or(u32::MAX)
+        u32::try_from(self.envelopes.len()).unwrap_or(COUNT_OVERFLOW_SENTINEL)
     }
 
     /// View all envelopes in the outbound queue.
@@ -257,7 +260,7 @@ impl<S, M> TestCtx<S, M> {
 
     /// Number of raised alarms.
     pub fn num_alarms(&self) -> u32 {
-        u32::try_from(self.alarms.len()).unwrap_or(u32::MAX)
+        u32::try_from(self.alarms.len()).unwrap_or(COUNT_OVERFLOW_SENTINEL)
     }
 
     /// Iterate over raised alarms.

@@ -533,7 +533,7 @@ mod tests {
             .map(|_| {
                 let alloc = allocator.clone();
                 tokio::spawn(async move {
-                    let mut ids = Vec::new();
+                    let mut ids = Vec::with_capacity(20);
                     for _ in 0..20 {
                         ids.push(alloc.allocate().await.unwrap());
                     }
@@ -919,6 +919,6 @@ mod tests {
         };
         let err = AllocationError::Storage { source: kv_error };
         let display = format!("{}", err);
-        assert!(display.contains("storage") || display.contains("Storage"));
+        assert!(display.to_lowercase().contains("storage"), "display={display:?}");
     }
 }

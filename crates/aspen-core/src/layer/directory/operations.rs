@@ -3,14 +3,19 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+/// Sentinel value for invalid system time (clock before UNIX_EPOCH).
+const SYSTEM_TIME_INVALID_MS: u64 = 0;
+/// Sentinel value for overflow when converting millis to u64.
+const SYSTEM_TIME_OVERFLOW_MS: u64 = u64::MAX;
+
 /// Clock boundary: wall-clock milliseconds since Unix epoch.
 #[allow(unknown_lints)]
 #[allow(ambient_clock, reason = "directory creation timestamps need current wall-clock time")]
 fn unix_epoch_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
-        .unwrap_or(0)
+        .map(|d| u64::try_from(d.as_millis()).unwrap_or(SYSTEM_TIME_OVERFLOW_MS))
+        .unwrap_or(SYSTEM_TIME_INVALID_MS)
 }
 
 use snafu::ResultExt;

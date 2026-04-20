@@ -545,7 +545,7 @@ mod tests {
     fn test_full_pagination_sequence() {
         let entries: Vec<(String, &str)> = (0..10).map(|i| (format!("{:02}", i), "v")).collect();
 
-        let mut all_results = vec![];
+        let mut all_results = Vec::with_capacity(entries.len());
         let mut token: Option<String> = None;
 
         loop {

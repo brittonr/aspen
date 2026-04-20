@@ -183,7 +183,8 @@ mod tests {
 
         // Keys in directory should be in range
         let key = dir.pack(&Tuple::new().push("test"));
-        assert!(key >= start && key < end);
+        assert!(key >= start, "key={key:x} start={start:x}");
+        assert!(key < end, "key={key:x} end={end:x}");
     }
 
     // =========================================================================
@@ -520,7 +521,7 @@ mod tests {
             handles.spawn(async move { dir_clone.create_or_open(&["concurrent", "test"]).await });
         }
 
-        let mut prefixes = vec![];
+        let mut prefixes = Vec::with_capacity(5);
         while let Some(result) = handles.join_next().await {
             let d = result.unwrap().unwrap();
             prefixes.push(d.prefix().to_vec());
@@ -571,7 +572,7 @@ mod tests {
         let dir = DirectoryLayer::new(store);
 
         // Create a 10-level deep hierarchy
-        let mut current_path: Vec<&str> = vec![];
+        let mut current_path: Vec<&str> = Vec::with_capacity(10);
         let levels: Vec<String> = (0..10).map(|i| format!("level{}", i)).collect();
 
         for level in &levels {
@@ -606,7 +607,14 @@ mod tests {
 
         // Prefix lengths may vary due to allocator
         // But none should be a prefix of another
-        assert!(!level2.prefix().starts_with(level1.prefix()) || level1.prefix().is_empty());
+        if !level1.prefix().is_empty() {
+            assert!(
+                !level2.prefix().starts_with(level1.prefix()),
+                "level2={:?} should not start with level1={:?}",
+                level2.prefix(),
+                level1.prefix()
+            );
+        }
     }
 
     // =========================================================================
@@ -757,8 +765,10 @@ mod tests {
         let key1 = dir.pack(&Tuple::new().push("a"));
         let key2 = dir.pack(&Tuple::new().push("z").push(1u64).push("nested"));
 
-        assert!(key1 >= start && key1 < end);
-        assert!(key2 >= start && key2 < end);
+        assert!(key1 >= start, "key1={key1:x} start={start:x}");
+        assert!(key1 < end, "key1={key1:x} end={end:x}");
+        assert!(key2 >= start, "key2={key2:x} start={start:x}");
+        assert!(key2 < end, "key2={key2:x} end={end:x}");
     }
 
     #[tokio::test]
@@ -936,6 +946,7 @@ mod tests {
     // =========================================================================
 
     #[tokio::test]
+    #[allow(ambient_clock, reason = "testing timestamp ordering requires SystemTime::now()")]
     async fn test_created_at_is_reasonable() {
         let store = Arc::new(DeterministicKeyValueStore::new());
         let dir = DirectoryLayer::new(store);

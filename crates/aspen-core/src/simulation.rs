@@ -237,6 +237,7 @@ impl SimulationArtifactBuilder {
 }
 
 #[cfg(test)]
+#[allow(ignored_result, reason = "test cleanup ignores fs errors — best-effort only")]
 mod tests {
     use super::*;
 
@@ -367,7 +368,7 @@ mod tests {
     #[test]
     fn artifact_persist_and_load() {
         let temp_dir = std::env::temp_dir().join(format!("aspen-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&temp_dir); // Clean up any previous run
+        let _ = fs::remove_dir_all(&temp_dir); // Best-effort: previous runs may not exist
 
         let original =
             SimulationArtifact::new("persist_test", 999, vec!["persist_event".into()], "persist_metrics".into())
@@ -387,7 +388,7 @@ mod tests {
         assert_eq!(original.duration_ms, loaded.duration_ms);
 
         // Cleanup
-        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = fs::remove_dir_all(&temp_dir); // Best-effort: path may not exist
     }
 
     #[test]
@@ -397,7 +398,7 @@ mod tests {
             .join("nested")
             .join("path");
 
-        let _ = fs::remove_dir_all(temp_dir.parent().unwrap().parent().unwrap());
+        let _ = fs::remove_dir_all(temp_dir.parent().unwrap().parent().unwrap()); // Best-effort: may not exist
 
         let artifact = SimulationArtifact::new("nested_test", 0, vec![], String::new());
         let path = artifact.persist(&temp_dir).expect("persist should create nested dirs");
@@ -405,7 +406,7 @@ mod tests {
         assert!(path.exists());
 
         // Cleanup
-        let _ = fs::remove_dir_all(temp_dir.parent().unwrap().parent().unwrap());
+        let _ = fs::remove_dir_all(temp_dir.parent().unwrap().parent().unwrap()); // Best-effort cleanup
     }
 
     #[test]
@@ -597,7 +598,7 @@ mod tests {
         let (builder, seed) = SimulationArtifactBuilder::new_with_auto_seed("test_simulation");
 
         // Seed should be some value (either from env or hash)
-        assert!(seed > 0 || seed == 0); // Any u64 is valid
+        let _ = seed; // always a valid u64
 
         // Builder should have the test name set
         let artifact = builder.build();
@@ -658,8 +659,7 @@ mod tests {
 
         // If both fall back to hash, they should be different
         // If env vars override, they might be same, so we just check they're valid
-        assert!(seed_a != 0 || seed_a == 0);
-        assert!(seed_b != 0 || seed_b == 0);
+        let _ = (seed_a, seed_b); // always valid u64 values
     }
 
     #[test]
