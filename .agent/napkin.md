@@ -84,4 +84,3 @@ git push → forge git_bridge → RefUpdate gossip → CiTriggerHandler → Trig
 ```
 
 Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
-

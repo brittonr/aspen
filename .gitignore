@@ -109,3 +109,4 @@ nixninja
 dag
 .dogfood-runs/
 mutants.out/
+/.agent

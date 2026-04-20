@@ -66,7 +66,8 @@ pub fn run_eviction<S: CacheKvStore, G: BlobGc>(
     let all_entries = index.scan_all(u32::MAX)?;
     let (mut live_entries, expired_removed) = remove_expired_entries(index, &all_entries, params.now_ms, blob_gc)?;
     let lru_evicted = evict_lru_entries(index, &mut live_entries, params.max_storage_bytes, blob_gc)?;
-    let remaining = live_entries.len().min(u32::MAX as usize) as u32;
+    // live_entries.len() <= scan limit = u32::MAX, so cast is safe
+    let remaining = live_entries.len() as u32;
 
     if expired_removed > 0 || lru_evicted > 0 {
         info!(expired_removed, lru_evicted, remaining, "eviction pass complete");
@@ -115,7 +116,8 @@ fn evict_lru_entries<S: CacheKvStore, G: BlobGc>(
     live_entries.sort_by_key(|(_, entry)| entry.last_accessed_ms);
     let removed_entries_count = count_lru_entries_to_remove(index, live_entries, max_storage_bytes, blob_gc)?;
     live_entries.drain(..removed_entries_count);
-    Ok(removed_entries_count.min(u32::MAX as usize) as u32)
+    // removed_entries_count <= live_entries.len() <= u32::MAX
+    Ok(removed_entries_count as u32)
 }
 
 fn count_lru_entries_to_remove<S: CacheKvStore, G: BlobGc>(
@@ -166,11 +168,22 @@ fn estimate_total_size_bytes(entries: &[(CacheKey, CacheEntry)]) -> u64 {
     entries.iter().map(|(_, entry)| estimate_entry_size_bytes(entry)).sum()
 }
 
+/// Storage parameters for estimating entry size.
+#[derive(Debug, Clone, Copy, Default)]
+struct EntrySizeParams {
+    /// Sum of output file sizes in bytes.
+    output_size_bytes: u64,
+    /// Index entry overhead in bytes.
+    index_overhead_bytes: u64,
+}
+
 /// Estimate storage for a single entry: sum of output file sizes + index overhead.
 fn estimate_entry_size_bytes(entry: &CacheEntry) -> u64 {
-    let output_size_bytes: u64 = entry.outputs.iter().map(|output| output.size_bytes).sum();
-    // ~256 bytes for the index entry itself
-    output_size_bytes.saturating_add(256)
+    let params = EntrySizeParams {
+        output_size_bytes: entry.outputs.iter().map(|output| output.size_bytes).sum(),
+        index_overhead_bytes: 256,
+    };
+    params.output_size_bytes.saturating_add(params.index_overhead_bytes)
 }
 
 #[cfg(test)]
@@ -181,7 +194,15 @@ mod tests {
     use crate::index::test_store::InMemoryKvStore;
     use crate::types::OutputMapping;
 
-    fn make_entry(created_at_ms: u64, last_accessed_ms: u64, output_size: u64) -> CacheEntry {
+    /// Parameters for constructing a test cache entry.
+    #[derive(Debug, Clone, Copy)]
+    struct MakeEntryParams {
+        created_at_ms: u64,
+        last_accessed_ms: u64,
+        output_size_bytes: u64,
+    }
+
+    fn make_entry(params: MakeEntryParams) -> CacheEntry {
         CacheEntry {
             exit_code: 0,
             stdout_hash: [0; 32],
@@ -189,11 +210,11 @@ mod tests {
             outputs: vec![OutputMapping {
                 path: "out".into(),
                 hash: [0; 32],
-                size_bytes: output_size,
+                size_bytes: params.output_size_bytes,
             }],
-            created_at_ms,
+            created_at_ms: params.created_at_ms,
             ttl_ms: DEFAULT_TTL_MS,
-            last_accessed_ms,
+            last_accessed_ms: params.last_accessed_ms,
             child_keys: vec![],
         }
     }
@@ -205,13 +226,21 @@ mod tests {
 
         // Expired entry (created at 1000, TTL 500)
         let key1 = CacheKey([0x01; 32]);
-        let mut entry1 = make_entry(1000, 1000, 100);
+        let mut entry1 = make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            last_accessed_ms: 1000,
+            output_size_bytes: 100,
+        });
         entry1.ttl_ms = 500;
         index.put(&key1, &entry1).unwrap();
 
         // Live entry
         let key2 = CacheKey([0x02; 32]);
-        index.put(&key2, &make_entry(now, now, 100)).unwrap();
+        index.put(&key2, &make_entry(MakeEntryParams {
+            created_at_ms: now,
+            last_accessed_ms: now,
+            output_size_bytes: 100,
+        })).unwrap();
 
         let result = run_eviction(
             &index,
@@ -241,12 +270,24 @@ mod tests {
         let key_mid = CacheKey([0x02; 32]);
         let key_new = CacheKey([0x03; 32]);
 
-        index.put(&key_old, &make_entry(now, 1000, 1024)).unwrap(); // oldest access
-        index.put(&key_mid, &make_entry(now, 5000, 1024)).unwrap();
-        index.put(&key_new, &make_entry(now, 9000, 1024)).unwrap(); // newest access
+        index.put(&key_old, &make_entry(MakeEntryParams {
+            created_at_ms: now,
+            last_accessed_ms: 1000,
+            output_size_bytes: 1024,
+        })).unwrap(); // oldest access
+        index.put(&key_mid, &make_entry(MakeEntryParams {
+            created_at_ms: now,
+            last_accessed_ms: 5000,
+            output_size_bytes: 1024,
+        })).unwrap();
+        index.put(&key_new, &make_entry(MakeEntryParams {
+            created_at_ms: now,
+            last_accessed_ms: 9000,
+            output_size_bytes: 1024,
+        })).unwrap(); // newest access
 
         // Set max to allow only ~2 entries
-        let max = 2 * (1024 + 256) + 1;
+        let max = (2u64).saturating_mul(1024u64.saturating_add(256u64)).saturating_add(1);
         let result = run_eviction(
             &index,
             EvictionParams {
@@ -271,7 +312,11 @@ mod tests {
         let now = 100_000u64;
 
         let key = CacheKey([0x01; 32]);
-        index.put(&key, &make_entry(now, now, 100)).unwrap();
+        index.put(&key, &make_entry(MakeEntryParams {
+            created_at_ms: now,
+            last_accessed_ms: now,
+            output_size_bytes: 100,
+        })).unwrap();
 
         let result = run_eviction(
             &index,

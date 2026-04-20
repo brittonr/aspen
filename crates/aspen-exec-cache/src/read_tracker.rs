@@ -77,6 +77,8 @@ fn session_started_at() -> Instant {
     Instant::now()
 }
 
+/// Convert a u32 constant to usize (constants are bounded small values).
+#[allow(platform_dependent_cast, reason = "called only with small constants from constants.rs, e.g. 1000")]
 fn session_limit(value: u32) -> usize {
     value as usize
 }
@@ -253,7 +255,8 @@ impl ReadTracker {
 
     /// Number of active sessions.
     pub fn session_count(&self) -> u32 {
-        self.sessions.len().min(u32::MAX as usize) as u32
+        // DashMap len() <= u32::MAX for all practical session counts
+        self.sessions.len() as u32
     }
 }
 

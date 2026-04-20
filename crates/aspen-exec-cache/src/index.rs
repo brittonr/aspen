@@ -204,15 +204,22 @@ mod tests {
     use super::*;
     use crate::constants::DEFAULT_TTL_MS;
 
-    fn make_entry(created_at_ms: u64, ttl_ms: u64) -> CacheEntry {
+    /// Parameters for constructing a test cache entry.
+    #[derive(Debug, Clone, Copy)]
+    struct MakeEntryParams {
+        created_at_ms: u64,
+        ttl_ms: u64,
+    }
+
+    fn make_entry(params: MakeEntryParams) -> CacheEntry {
         CacheEntry {
             exit_code: 0,
             stdout_hash: [0x11; 32],
             stderr_hash: [0x22; 32],
             outputs: vec![],
-            created_at_ms,
-            ttl_ms,
-            last_accessed_ms: created_at_ms,
+            created_at_ms: params.created_at_ms,
+            ttl_ms: params.ttl_ms,
+            last_accessed_ms: params.created_at_ms,
             child_keys: vec![],
         }
     }
@@ -228,7 +235,10 @@ mod tests {
     fn put_then_get_returns_entry() {
         let index = ExecCacheIndex::new(InMemoryKvStore::new());
         let key = CacheKey([0xbb; 32]);
-        let entry = make_entry(1000, DEFAULT_TTL_MS);
+        let entry = make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            ttl_ms: DEFAULT_TTL_MS,
+        });
 
         index.put(&key, &entry).unwrap();
         let result = index.get(&key, 1500).unwrap();
@@ -242,7 +252,10 @@ mod tests {
     fn get_returns_none_for_expired_entry() {
         let index = ExecCacheIndex::new(InMemoryKvStore::new());
         let key = CacheKey([0xcc; 32]);
-        let entry = make_entry(1000, 500); // expires at 1500
+        let entry = make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            ttl_ms: 500,
+        }); // expires at 1500
 
         index.put(&key, &entry).unwrap();
 
@@ -250,7 +263,10 @@ mod tests {
         assert!(index.get(&key, 1200).unwrap().is_some());
 
         // Past TTL — re-insert since expired entry was deleted
-        index.put(&key, &make_entry(1000, 500)).unwrap();
+        index.put(&key, &make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            ttl_ms: 500,
+        })).unwrap();
         assert!(index.get(&key, 1501).unwrap().is_none());
     }
 
@@ -258,7 +274,10 @@ mod tests {
     fn get_updates_last_accessed_ms() {
         let index = ExecCacheIndex::new(InMemoryKvStore::new());
         let key = CacheKey([0xdd; 32]);
-        let entry = make_entry(1000, DEFAULT_TTL_MS);
+        let entry = make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            ttl_ms: DEFAULT_TTL_MS,
+        });
 
         index.put(&key, &entry).unwrap();
         let got = index.get(&key, 5000).unwrap().unwrap();
@@ -269,7 +288,10 @@ mod tests {
     fn delete_removes_entry() {
         let index = ExecCacheIndex::new(InMemoryKvStore::new());
         let key = CacheKey([0xee; 32]);
-        let entry = make_entry(1000, DEFAULT_TTL_MS);
+        let entry = make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            ttl_ms: DEFAULT_TTL_MS,
+        });
 
         index.put(&key, &entry).unwrap();
         assert!(index.get(&key, 1500).unwrap().is_some());
@@ -284,8 +306,14 @@ mod tests {
 
         let key1 = CacheKey([0x01; 32]);
         let key2 = CacheKey([0x02; 32]);
-        index.put(&key1, &make_entry(1000, DEFAULT_TTL_MS)).unwrap();
-        index.put(&key2, &make_entry(2000, DEFAULT_TTL_MS)).unwrap();
+        index.put(&key1, &make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            ttl_ms: DEFAULT_TTL_MS,
+        })).unwrap();
+        index.put(&key2, &make_entry(MakeEntryParams {
+            created_at_ms: 2000,
+            ttl_ms: DEFAULT_TTL_MS,
+        })).unwrap();
 
         let results = index.scan_all(100).unwrap();
         assert_eq!(results.len(), 2);
@@ -295,7 +323,10 @@ mod tests {
     fn stores_non_zero_exit_code() {
         let index = ExecCacheIndex::new(InMemoryKvStore::new());
         let key = CacheKey([0xff; 32]);
-        let mut entry = make_entry(1000, DEFAULT_TTL_MS);
+        let mut entry = make_entry(MakeEntryParams {
+            created_at_ms: 1000,
+            ttl_ms: DEFAULT_TTL_MS,
+        });
         entry.exit_code = 1;
 
         index.put(&key, &entry).unwrap();
