@@ -74,23 +74,9 @@ aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
 │   │               ├── shlex v1.3.0
 │   │               └── shlex feature "std"
 │   │                   └── shlex v1.3.0
-│   ├── uhlc v0.8.2
+│   ├── uhlc v0.8.2 (/home/brittonr/git/aspen/vendor/uhlc)
 │   │   ├── serde feature "alloc" (*)
 │   │   ├── serde feature "derive" (*)
-│   │   ├── rand feature "alloc"
-│   │   │   ├── rand v0.8.5
-│   │   │   │   └── rand_core feature "default"
-│   │   │   │       └── rand_core v0.6.4
-│   │   │   │           └── getrandom feature "default"
-│   │   │   │               └── getrandom v0.2.17
-│   │   │   │                   ├── libc v0.2.183
-│   │   │   │                   └── cfg-if feature "default" (*)
-│   │   │   └── rand_core feature "alloc"
-│   │   │       └── rand_core v0.6.4 (*)
-│   │   ├── rand feature "getrandom"
-│   │   │   ├── rand v0.8.5 (*)
-│   │   │   └── rand_core feature "getrandom"
-│   │   │       └── rand_core v0.6.4 (*)
 │   │   ├── spin feature "mutex"
 │   │   │   └── spin v0.10.0
 │   │   └── spin feature "spin_mutex"

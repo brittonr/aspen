@@ -876,6 +876,7 @@ required-features = ["node-runtime"]
 # (removed in Cargo 1.93) with stable --message-format=json.
 [patch.crates-io]
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
+uhlc = { path = "vendor/uhlc" }
 
 # snix-glue patched to implement Fetch::Git and builtins.fetchGit.
 # See vendor/snix-glue/PATCHES.md for details.

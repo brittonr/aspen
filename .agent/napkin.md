@@ -9,6 +9,8 @@
 - Treat `cargo check -p aspen-core`, `cargo check -p aspen-core-no-std-smoke`, and the saved compile-slice evidence under `openspec/changes/no-std-aspen-core/evidence/compile-*.txt` as the reliable slice-local rails until the wider workspace breakage is fixed.
 - `cargo check -p aspen-cluster` may still die before cluster code because vendored `openraft` currently panics inside `#[since(...)]` proc-macros on this toolchain; do not misattribute that failure to `aspen-core/std` gating.
 - `cargo tree -p aspen-core -e features` can keep showing `iroh`/`iroh-base` even after `aspen-core` disables defaults on `aspen-cluster-types` if `crates/aspen-traits` still depends on `aspen-cluster-types` with defaults. Boundary cleanup must fix both the leaf crate feature gate and every transitive re-export path.
+- After the cluster-types cleanup, if `scripts/check-aspen-core-no-std-boundary.py` reports only `rand`, `rand_core`, and `getrandom` as unexpected plus `rand` as denylisted, remaining work is concentrated in `aspen-hlc -> uhlc`, not the rest of the alloc-only graph.
+- Fix for that leak lives in `vendor/uhlc/`: make `rand` optional, keep it in upstream-like defaults, and let `aspen-hlc` depend on `uhlc` with `default-features = false`. Re-check both `cargo tree -p aspen-core --no-default-features -e normal` and the boundary checker after any future `uhlc` update.
 
 ## Tigerstyle scope (2026-04-21)
 

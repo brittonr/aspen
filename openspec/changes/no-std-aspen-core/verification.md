@@ -2,34 +2,52 @@
 
 This file is the claim-to-artifact index for `no-std-aspen-core`.
 Durable evidence lives under `openspec/changes/no-std-aspen-core/evidence/`.
-The checked items below cover traceability scaffolding, evidence-plan setup, the frozen pre-refactor surface baseline, the first alloc-only core scaffolding slice, and the follow-on feature-topology plus direct-dependency cleanup slice.
+The checked items below cover traceability scaffolding, evidence-plan setup, the frozen pre-refactor surface baseline, the first alloc-only core scaffolding slice, the follow-on feature-topology plus direct-dependency cleanup slice, and the first deterministic boundary-checker tooling slice.
 
 ## Implementation Evidence
 
+- Changed file: `.agent/napkin.md`
+- Changed file: `AGENTS.md`
+- Changed file: `Cargo.toml`
+- Changed file: `Cargo.lock`
 - Changed file: `openspec/changes/no-std-aspen-core/tasks.md`
 - Changed file: `openspec/changes/no-std-aspen-core/verification.md`
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`
-- Changed file: `Cargo.lock`
-- Changed file: `crates/aspen-cluster-types/Cargo.toml`
-- Changed file: `crates/aspen-cluster-types/src/lib.rs`
-- Changed file: `crates/aspen-core/Cargo.toml`
-- Changed file: `crates/aspen-hlc/Cargo.toml`
-- Changed file: `crates/aspen-hlc/src/lib.rs`
-- Changed file: `crates/aspen-kv-types/Cargo.toml`
-- Changed file: `crates/aspen-storage-types/Cargo.toml`
-- Changed file: `crates/aspen-traits/Cargo.toml`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayref.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayvec.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-blake3.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cfg-if.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-constant_time_eq.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cpufeatures.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-heck.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-libc.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-proc-macro2.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-quote.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-redb.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_core.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_derive.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-snafu-derive.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-spin.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-syn.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-thiserror-impl.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-uhlc.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-unicode-ident.md`
+- Changed file: `scripts/aspen-core-no-std-transitives.txt`
+- Changed file: `scripts/check-aspen-core-no-std-boundary.py`
+- Changed file: `scripts/check-aspen-core-feature-claims.py`
+- Changed file: `vendor/uhlc/Cargo.toml`
+- Changed file: `vendor/uhlc/Cargo.lock`
+- Changed file: `vendor/uhlc/LICENSE`
+- Changed file: `vendor/uhlc/PATCHES.md`
+- Changed file: `vendor/uhlc/README.md`
+- Changed file: `vendor/uhlc/src/id.rs`
+- Changed file: `vendor/uhlc/src/lib.rs`
+- Changed file: `vendor/uhlc/src/ntp64.rs`
+- Changed file: `vendor/uhlc/src/timestamp.rs`
 
 ## Evidence Naming Convention
 
@@ -79,6 +97,14 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `crates/aspen-core/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
 - [x] 2.4 Audit `crates/aspen-core/Cargo.toml` so alloc-only builds keep only the direct prerequisites from the design with alloc-safe feature settings (`default-features = false` where applicable), while `std`-only dependencies move behind explicit shell opt-ins.
   - Evidence: `crates/aspen-core/Cargo.toml`, `crates/aspen-cluster-types/Cargo.toml`, `crates/aspen-cluster-types/src/lib.rs`, `crates/aspen-hlc/Cargo.toml`, `crates/aspen-hlc/src/lib.rs`, `crates/aspen-kv-types/Cargo.toml`, `crates/aspen-storage-types/Cargo.toml`, `crates/aspen-traits/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`, `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
+- [x] 2.5 Author and maintain `scripts/aspen-core-no-std-transitives.txt` as the approved alloc-only transitive allowlist consumed by the boundary checker.
+  - Evidence: `scripts/aspen-core-no-std-transitives.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+- [x] 2.7 Implement `scripts/check-aspen-core-no-std-boundary.py` with the design's dependency-boundary checklist:
+  - Evidence: `scripts/check-aspen-core-no-std-boundary.py`, `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`, `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+- [x] 2.9 Implement `scripts/check-aspen-core-feature-claims.py` so default-feature resolution, the declared `aspen-core` feature topology, smoke-consumer manifest shape plus `#![no_std]` source proof, and representative consumer feature proofs become deterministic pass/fail checks; the checker must parse the repo-local `crates/aspen-core/Cargo.toml` manifest and fail unless `default = []`, `layer` includes both `std` and `dep:aspen-layer`, `global-discovery` includes both `std` and `dep:iroh-blobs`, and `sql` remains alloc-safe without requiring `std`; it must also fail unless the smoke manifest uses a bare `aspen-core` dependency, the smoke source proves alloc-backed `#![no_std]`, `cluster-core-features.txt` shows `aspen-core/std`, `cli-core-features.txt` shows `aspen-core/layer`, and it must emit `openspec/changes/no-std-aspen-core/evidence/feature-claims.json`.
+  - Evidence: `scripts/check-aspen-core-feature-claims.py`, `openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
+- [x] 2.10 Create and maintain `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-<crate>.md` for every allowlisted transitive crate, using the schema defined in `design.md`.
+  - Evidence: `scripts/aspen-core-no-std-transitives.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`
 - [x] 3.1 Inventory alloc-only APIs for ambient randomness, configuration, environment access, process-global state, I/O, async operations, system calls, hidden runtime context, or implicit randomness sources, and record the per-category disposition in `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md` before refactors begin.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`
 - [x] 3.1d Save proof when one of the listed purity categories is absent from the alloc-only surface.
@@ -113,6 +139,10 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `crates/aspen-core-no-std-smoke/Cargo.toml`, `crates/aspen-core-no-std-smoke/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt`, `openspec/changes/no-std-aspen-core/evidence/smoke-source.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
 - [x] 5.11 Run `cargo tree -p aspen-core --no-default-features -e normal --depth 1 > openspec/changes/no-std-aspen-core/evidence/deps-direct.txt` and assert the direct prerequisite set matches the design exactly.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
+- [x] 5.12 Run `cargo tree -p aspen-core --no-default-features -e normal > openspec/changes/no-std-aspen-core/evidence/deps-full.txt` and inspect the full alloc-only graph used by the boundary checker.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
+- [x] 5.13 Run `python scripts/check-aspen-core-no-std-boundary.py --manifest-path crates/aspen-core/Cargo.toml --allowlist scripts/aspen-core-no-std-transitives.txt --output openspec/changes/no-std-aspen-core/evidence/deps-transitive.json --diff-output openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`, and assert the checker closes the full dependency-boundary checklist:
+  - Evidence: `scripts/check-aspen-core-no-std-boundary.py`, `scripts/aspen-core-no-std-transitives.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`, `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
 
 ## Scenario Coverage
 
@@ -144,7 +174,7 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 ## Review Scope Snapshot
 
 No implementation diff artifact yet.
-Current implementation slices add alloc-backed no-std scaffolding in `aspen-core`, a real smoke consumer, explicit shell gating for current root exports, alloc-safe manifest settings across direct prerequisite crates, a feature-gated alloc-safe `NodeAddress` bridge, a first purity-disposition inventory, and refreshed compile-slice plus direct-dependency evidence.
+Current implementation slices add alloc-backed no-std scaffolding in `aspen-core`, a real smoke consumer, explicit shell gating for current root exports, alloc-safe manifest settings across direct prerequisite crates, a feature-gated alloc-safe `NodeAddress` bridge, a first purity-disposition inventory, deterministic boundary/feature-claims checker scripts, transitive review notes, and refreshed compile-slice plus dependency evidence. A vendored `uhlc` patch now removes the alloc-only `rand` leak, so the boundary checker passes end to end.
 
 ## Verification Commands
 
@@ -191,3 +221,12 @@ Current implementation slices add alloc-backed no-std scaffolding in `aspen-core
 - `cargo tree -p aspen-cli -e features -i aspen-core > openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt`
   - Status: pass
   - Artifact: `openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt`
+- `cargo tree -p aspen-core --no-default-features -e normal > openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
+- `python scripts/check-aspen-core-no-std-boundary.py --manifest-path crates/aspen-core/Cargo.toml --allowlist scripts/aspen-core-no-std-transitives.txt --output openspec/changes/no-std-aspen-core/evidence/deps-transitive.json --diff-output openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`, `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+- `python scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/no-std-aspen-core/evidence/core-default-features.txt --smoke-manifest openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt --smoke-source openspec/changes/no-std-aspen-core/evidence/smoke-source.txt --cluster-features openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt --cli-features openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt --output openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/feature-claims.json`

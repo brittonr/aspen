@@ -1,0 +1,59 @@
+aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106
+│   │       │   └── unicode-ident v1.0.24
+│   │       ├── quote v1.0.45
+│   │       │   └── proc-macro2 v1.0.106 (*)
+│   │       └── syn v2.0.117
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── unicode-ident v1.0.24
+│   └── thiserror v2.0.18
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
+│   ├── blake3 v1.8.3
+│   │   ├── arrayref v0.3.9
+│   │   ├── arrayvec v0.7.6
+│   │   ├── cfg-if v1.0.4
+│   │   ├── constant_time_eq v0.4.2
+│   │   └── cpufeatures v0.2.17
+│   ├── serde v1.0.228 (*)
+│   └── uhlc v0.8.2 (/home/brittonr/git/aspen/vendor/uhlc)
+│       ├── serde v1.0.228 (*)
+│       └── spin v0.10.0
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── serde v1.0.228 (*)
+│   └── thiserror v2.0.18 (*)
+├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
+│   ├── bincode v1.3.3
+│   │   └── serde v1.0.228 (*)
+│   ├── redb v2.6.3
+│   │   └── libc v0.2.183
+│   └── serde v1.0.228 (*)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types) (*)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   └── async-trait v0.1.89 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── base64 v0.22.1
+├── bincode v1.3.3 (*)
+├── hex v0.4.3
+├── serde v1.0.228 (*)
+├── snafu v0.8.9
+│   └── snafu-derive v0.8.9 (proc-macro)
+│       ├── heck v0.5.0
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+└── thiserror v2.0.18 (*)

@@ -1,0 +1,260 @@
+{
+  "allowlist_path": "/home/brittonr/git/aspen/scripts/aspen-core-no-std-transitives.txt",
+  "denylist_hits": [],
+  "direct": {
+    "expected": [
+      "aspen-cluster-types",
+      "aspen-constants",
+      "aspen-hlc",
+      "aspen-kv-types",
+      "aspen-storage-types",
+      "aspen-traits",
+      "async-trait",
+      "base64",
+      "bincode",
+      "hex",
+      "serde",
+      "snafu",
+      "thiserror"
+    ],
+    "missing": [],
+    "resolved": [
+      "aspen-cluster-types",
+      "aspen-constants",
+      "aspen-hlc",
+      "aspen-kv-types",
+      "aspen-storage-types",
+      "aspen-traits",
+      "async-trait",
+      "base64",
+      "bincode",
+      "hex",
+      "serde",
+      "snafu",
+      "thiserror"
+    ],
+    "unexpected": []
+  },
+  "failures": [],
+  "manifest_path": "/home/brittonr/git/aspen/crates/aspen-core/Cargo.toml",
+  "manifest_rules": [
+    {
+      "messages": [],
+      "ok": true,
+      "package": "aspen-cluster-types"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "aspen-constants"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "aspen-hlc"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "aspen-kv-types"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "aspen-storage-types"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "aspen-traits"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "base64"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "bincode"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "hex"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "serde"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "snafu"
+    }
+  ],
+  "ok": true,
+  "review_notes": [
+    {
+      "messages": [],
+      "ok": true,
+      "package": "arrayref@0.3.9",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayref.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "arrayvec@0.7.6",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayvec.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "blake3@1.8.3",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-blake3.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "cfg-if@1.0.4",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cfg-if.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "constant_time_eq@0.4.2",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-constant_time_eq.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "cpufeatures@0.2.17",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cpufeatures.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "heck@0.5.0",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-heck.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "libc@0.2.183",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-libc.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "proc-macro2@1.0.106",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-proc-macro2.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "quote@1.0.45",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-quote.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "redb@2.6.3",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-redb.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "serde_core@1.0.228",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_core.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "serde_derive@1.0.228",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_derive.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "snafu-derive@0.8.9",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-snafu-derive.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "spin@0.10.0",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-spin.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "syn@2.0.117",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-syn.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "thiserror-impl@2.0.18",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-thiserror-impl.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "uhlc@0.8.2",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-uhlc.md"
+    },
+    {
+      "messages": [],
+      "ok": true,
+      "package": "unicode-ident@1.0.24",
+      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-unicode-ident.md"
+    }
+  ],
+  "transitives": {
+    "introduced_by": {
+      "arrayref@0.3.9": "aspen-hlc@0.1.0",
+      "arrayvec@0.7.6": "aspen-hlc@0.1.0",
+      "blake3@1.8.3": "aspen-hlc@0.1.0",
+      "cfg-if@1.0.4": "aspen-hlc@0.1.0",
+      "constant_time_eq@0.4.2": "aspen-hlc@0.1.0",
+      "cpufeatures@0.2.17": "aspen-hlc@0.1.0",
+      "heck@0.5.0": "snafu@0.8.9",
+      "libc@0.2.183": "aspen-storage-types@0.1.0",
+      "proc-macro2@1.0.106": "aspen-cluster-types@0.1.0",
+      "quote@1.0.45": "aspen-cluster-types@0.1.0",
+      "redb@2.6.3": "aspen-storage-types@0.1.0",
+      "serde_core@1.0.228": "aspen-cluster-types@0.1.0",
+      "serde_derive@1.0.228": "aspen-cluster-types@0.1.0",
+      "snafu-derive@0.8.9": "snafu@0.8.9",
+      "spin@0.10.0": "aspen-hlc@0.1.0",
+      "syn@2.0.117": "aspen-cluster-types@0.1.0",
+      "thiserror-impl@2.0.18": "aspen-cluster-types@0.1.0",
+      "uhlc@0.8.2": "aspen-hlc@0.1.0",
+      "unicode-ident@1.0.24": "aspen-cluster-types@0.1.0"
+    },
+    "missing_from_graph": [],
+    "resolved": [
+      "arrayref@0.3.9",
+      "arrayvec@0.7.6",
+      "blake3@1.8.3",
+      "cfg-if@1.0.4",
+      "constant_time_eq@0.4.2",
+      "cpufeatures@0.2.17",
+      "heck@0.5.0",
+      "libc@0.2.183",
+      "proc-macro2@1.0.106",
+      "quote@1.0.45",
+      "redb@2.6.3",
+      "serde_core@1.0.228",
+      "serde_derive@1.0.228",
+      "snafu-derive@0.8.9",
+      "spin@0.10.0",
+      "syn@2.0.117",
+      "thiserror-impl@2.0.18",
+      "uhlc@0.8.2",
+      "unicode-ident@1.0.24"
+    ],
+    "unexpected": []
+  }
+}

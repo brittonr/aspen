@@ -1,0 +1,23 @@
+# Approved alloc-only transitive packages for `aspen-core --no-default-features`.
+# One `name@version` per line. Every entry must have a matching
+# `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-<crate>.md` note.
+
+arrayref@0.3.9
+arrayvec@0.7.6
+blake3@1.8.3
+cfg-if@1.0.4
+constant_time_eq@0.4.2
+cpufeatures@0.2.17
+heck@0.5.0
+libc@0.2.183
+proc-macro2@1.0.106
+quote@1.0.45
+redb@2.6.3
+serde_core@1.0.228
+serde_derive@1.0.228
+snafu-derive@0.8.9
+spin@0.10.0
+syn@2.0.117
+thiserror-impl@2.0.18
+uhlc@0.8.2
+unicode-ident@1.0.24
