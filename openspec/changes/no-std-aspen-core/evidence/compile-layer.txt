@@ -1,0 +1,12 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.63s

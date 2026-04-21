@@ -1,0 +1,9 @@
+[package]
+name = "aspen-core-no-std-smoke"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Alloc-backed no_std smoke consumer for aspen-core"
+
+[dependencies]
+aspen-core = { path = "../aspen-core" }

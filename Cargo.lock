@@ -1415,7 +1415,6 @@ dependencies = [
  "hex",
  "insta",
  "iroh",
- "iroh-base",
  "iroh-blobs",
  "n0-future",
  "postcard",
@@ -1449,6 +1448,13 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "aspen-core-no-std-smoke"
+version = "0.1.0"
+dependencies = [
+ "aspen-core",
 ]
 
 [[package]]

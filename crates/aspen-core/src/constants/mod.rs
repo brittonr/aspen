@@ -40,9 +40,10 @@ pub mod network {
     //! Network constants for Aspen distributed system.
     //!
     //! This module re-exports constants from `aspen_constants::network` and provides
-    //! `std::time::Duration` versions for convenient use with async timeouts.
+    //! `core::time::Duration` versions for convenient use with async timeouts.
 
-    use std::time::Duration;
+    #[cfg(feature = "std")]
+    use core::time::Duration;
 
     // Re-export all base constants from aspen-constants
     pub use aspen_constants::network::*;
@@ -51,21 +52,27 @@ pub mod network {
     // These are used with tokio::time::timeout() and other async functions
 
     /// Timeout for Iroh connection establishment (5 seconds).
+    #[cfg(feature = "std")]
     pub const IROH_CONNECT_TIMEOUT: Duration = Duration::from_secs(IROH_CONNECT_TIMEOUT_SECS);
 
     /// Timeout for bidirectional stream open (2 seconds).
+    #[cfg(feature = "std")]
     pub const IROH_STREAM_OPEN_TIMEOUT: Duration = Duration::from_secs(IROH_STREAM_OPEN_TIMEOUT_SECS);
 
     /// Timeout for RPC response read (10 seconds).
+    #[cfg(feature = "std")]
     pub const IROH_READ_TIMEOUT: Duration = Duration::from_secs(IROH_READ_TIMEOUT_SECS);
 
     /// Timeout for ReadIndex linearizability check (5 seconds).
+    #[cfg(feature = "std")]
     pub const READ_INDEX_TIMEOUT: Duration = Duration::from_secs(READ_INDEX_TIMEOUT_SECS);
 
     /// Timeout for cluster membership operations (30 seconds).
+    #[cfg(feature = "std")]
     pub const MEMBERSHIP_OPERATION_TIMEOUT: Duration = Duration::from_secs(MEMBERSHIP_OPERATION_TIMEOUT_SECS);
 
     /// Timeout for gossip subscription (10 seconds).
+    #[cfg(feature = "std")]
     pub const GOSSIP_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(GOSSIP_SUBSCRIBE_TIMEOUT_SECS);
 }
 
@@ -73,12 +80,14 @@ pub mod network {
 pub mod raft_compat {
     //! Raft constants with Duration versions for backward compatibility.
 
-    use std::time::Duration;
+    #[cfg(feature = "std")]
+    use core::time::Duration;
 
     // Re-export all base constants from aspen-constants
     pub use aspen_constants::raft::*;
 
     /// Cooldown period for membership changes (300 seconds / 5 minutes).
+    #[cfg(feature = "std")]
     pub const MEMBERSHIP_COOLDOWN: Duration = Duration::from_secs(MEMBERSHIP_COOLDOWN_SECS);
 }
 
@@ -111,10 +120,17 @@ pub use coordination::MAX_RWLOCK_PENDING_WRITERS;
 pub use coordination::MAX_RWLOCK_READERS;
 pub use coordination::MAX_SEMAPHORE_HOLDERS;
 // Re-export Duration constants at module root for backward compatibility
+#[cfg(feature = "std")]
 pub use network::GOSSIP_SUBSCRIBE_TIMEOUT;
+#[cfg(feature = "std")]
 pub use network::IROH_CONNECT_TIMEOUT;
+#[cfg(feature = "std")]
 pub use network::IROH_READ_TIMEOUT;
+#[cfg(feature = "std")]
 pub use network::IROH_STREAM_OPEN_TIMEOUT;
+#[cfg(feature = "std")]
 pub use network::MEMBERSHIP_OPERATION_TIMEOUT;
+#[cfg(feature = "std")]
 pub use network::READ_INDEX_TIMEOUT;
+#[cfg(feature = "std")]
 pub use raft_compat::MEMBERSHIP_COOLDOWN;

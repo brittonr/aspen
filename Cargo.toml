@@ -73,6 +73,7 @@ members = [
     # Tier 1: Core engine
     "crates/aspen-disk",
     "crates/aspen-core",
+    "crates/aspen-core-no-std-smoke",
     "crates/aspen-layer",
 
     # Tier 2: Consensus (+ vendored openraft/)

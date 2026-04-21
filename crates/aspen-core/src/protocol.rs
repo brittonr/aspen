@@ -24,8 +24,10 @@
 //!
 //! See also: `docs/patterns/sans-io-protocol.md`
 
-use std::collections::BTreeSet;
-use std::fmt::Debug;
+use alloc::collections::BTreeSet;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::fmt::Debug;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -225,7 +227,7 @@ impl<S, M> TestCtx<S, M> {
 
     /// Drain all envelopes from the outbound queue.
     pub fn drain_envelopes(&mut self) -> Vec<Envelope<M>> {
-        std::mem::take(&mut self.envelopes)
+core::mem::take(&mut self.envelopes)
     }
 
     /// Get envelopes addressed to a specific node.
@@ -270,7 +272,7 @@ impl<S, M> TestCtx<S, M> {
 
     /// Drain all alarms.
     pub fn drain_alarms(&mut self) -> Vec<Alarm> {
-        std::mem::take(&mut self.alarms)
+core::mem::take(&mut self.alarms)
     }
 }
 

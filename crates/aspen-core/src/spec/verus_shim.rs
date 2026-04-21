@@ -42,6 +42,10 @@
 //! - `ensures! { ... }` -> nothing
 //! - Ghost types are zero-sized
 
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::marker::PhantomData;
+
 // ============================================================================
 // No-op Macros - Always compile to nothing
 // ============================================================================
@@ -150,19 +154,19 @@ pub use crate::requires;
 /// This is a zero-sized type that compiles away completely.
 /// It's used to annotate where ghost state would be tracked in proofs.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Ghost<T>(std::marker::PhantomData<T>);
+pub struct Ghost<T>(PhantomData<T>);
 
 impl<T> Ghost<T> {
     /// Create a new ghost value (no-op, zero cost).
     #[inline(always)]
     pub fn new(_value: T) -> Self {
-        Ghost(std::marker::PhantomData)
+        Ghost(PhantomData)
     }
 
     /// Track a reference as ghost (no-op, zero cost).
     #[inline(always)]
     pub fn track(_value: &T) -> Self {
-        Ghost(std::marker::PhantomData)
+        Ghost(PhantomData)
     }
 }
 
@@ -171,13 +175,13 @@ impl<T> Ghost<T> {
 /// This is a zero-sized type that compiles away completely.
 /// It's used to annotate where tracked values would be used in proofs.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Tracked<T>(std::marker::PhantomData<T>);
+pub struct Tracked<T>(PhantomData<T>);
 
 impl<T> Tracked<T> {
     /// Create a new tracked value (no-op, zero cost).
     #[inline(always)]
     pub fn new(_value: T) -> Self {
-        Tracked(std::marker::PhantomData)
+        Tracked(PhantomData)
     }
 }
 

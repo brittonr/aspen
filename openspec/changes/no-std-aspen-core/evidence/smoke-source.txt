@@ -1,0 +1,28 @@
+#![no_std]
+
+extern crate alloc;
+
+use alloc::string::String;
+use aspen_core::KeyValueStore;
+use aspen_core::NodeId;
+use aspen_core::decode_continuation_token;
+use aspen_core::encode_continuation_token;
+use aspen_core::normalize_scan_limit;
+use aspen_core::validate_client_key;
+
+const SMOKE_NODE_ID_RAW: u64 = 7;
+const REQUESTED_SCAN_LIMIT: u32 = 5;
+const DEFAULT_SCAN_LIMIT: u32 = 32;
+const MAX_SCAN_LIMIT: u32 = 1024;
+const CLIENT_KEY: &str = "tenant/config";
+
+pub fn smoke_surface() -> (NodeId, u32, bool, Option<String>) {
+    let node_id = NodeId::new(SMOKE_NODE_ID_RAW);
+    let limit = normalize_scan_limit(Some(REQUESTED_SCAN_LIMIT), DEFAULT_SCAN_LIMIT, MAX_SCAN_LIMIT);
+    let token = encode_continuation_token(CLIENT_KEY);
+    let decoded = decode_continuation_token(Some(&token));
+    let key_is_valid = validate_client_key(CLIENT_KEY).is_ok();
+    (node_id, limit, key_is_valid, decoded)
+}
+
+pub fn accepts_store<T: KeyValueStore + ?Sized>(_store: &T) {}

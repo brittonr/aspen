@@ -3,6 +3,9 @@
 //! This module extracts pure business logic from API implementations
 //! following the "Functional Core, Imperative Shell" pattern.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use base64::Engine;
 
 use crate::constants::DEFAULT_SCAN_LIMIT;

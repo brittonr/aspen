@@ -10,7 +10,7 @@ pub use aspen_traits::ClusterController;
 pub use aspen_traits::CoordinationBackend;
 pub use aspen_traits::KeyValueStore;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use std::sync::Arc;
 

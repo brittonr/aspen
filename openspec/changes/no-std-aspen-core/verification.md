@@ -2,7 +2,45 @@
 
 This file is the claim-to-artifact index for `no-std-aspen-core`.
 Durable evidence lives under `openspec/changes/no-std-aspen-core/evidence/`.
-No tasks are checked yet; this file defines the evidence plan that implementation must fill in.
+The checked items below cover traceability scaffolding, evidence-plan setup, the frozen pre-refactor surface baseline, and the first alloc-only core scaffolding slice.
+
+## Implementation Evidence
+
+- Changed file: `openspec/changes/no-std-aspen-core/specs/core/spec.md`
+- Changed file: `openspec/changes/no-std-aspen-core/specs/architecture-modularity/spec.md`
+- Changed file: `openspec/changes/no-std-aspen-core/tasks.md`
+- Changed file: `openspec/changes/no-std-aspen-core/verification.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/verification-compile-slices-plan.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/verification-regression-plan.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/baseline-surface-run.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/baseline-surface-inventory.md`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/smoke-source.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
+- Changed file: `crates/aspen-core/Cargo.toml`
+- Changed file: `crates/aspen-core/src/lib.rs`
+- Changed file: `crates/aspen-core/src/circuit_breaker.rs`
+- Changed file: `crates/aspen-core/src/constants/mod.rs`
+- Changed file: `crates/aspen-core/src/crypto.rs`
+- Changed file: `crates/aspen-core/src/protocol.rs`
+- Changed file: `crates/aspen-core/src/sql.rs`
+- Changed file: `crates/aspen-core/src/spec/verus_shim.rs`
+- Changed file: `crates/aspen-core/src/traits.rs`
+- Changed file: `crates/aspen-core/src/verified/scan.rs`
+- Changed file: `crates/aspen-core-no-std-smoke/Cargo.toml`
+- Changed file: `crates/aspen-core-no-std-smoke/src/lib.rs`
+- Changed file: `crates/aspen-cluster/Cargo.toml`
+- Changed file: `scripts/check-aspen-core-no-std-surface.py`
 
 ## Evidence Naming Convention
 
@@ -11,49 +49,123 @@ No tasks are checked yet; this file defines the evidence plan that implementatio
 - smoke consumer proof: `evidence/smoke-manifest.txt`, `evidence/smoke-source.txt`, `evidence/compile-smoke.txt`
 - representative consumer feature proofs: `evidence/cluster-core-features.txt`, `evidence/cli-core-features.txt`, `evidence/feature-claims.json`
 - dependency audits: `evidence/deps-direct.txt`, `evidence/deps-full.txt`, `evidence/deps-transitive.json`, `evidence/deps-allowlist-diff.txt`, `evidence/deps-transitive-review-<crate>.md`
+- purity disposition record: `evidence/purity-disposition.md`
 - boundary inventories and source audits: `evidence/baseline-surface-inventory.md`, `evidence/surface-inventory.md`, `evidence/export-map.md`, `evidence/source-audit.txt`
 - compile-fail artifacts: `evidence/compile-ui.txt`, `evidence/ui-fixtures.txt`, `evidence/ui-<fixture>.stderr`
 - regression artifacts: `evidence/regression-<topic>.txt`
-- docs review notes: saved under `evidence/` with a `docs-*.md` or `docs-*.txt` name
+- docs review note: `evidence/docs-no-std-core-review.md`
+- typed verification-plan stubs: `evidence/verification-compile-slices-plan.md`, `evidence/verification-boundary-plan.md`, `evidence/verification-regression-plan.md`
 
 ## Task Coverage
 
-No tasks are checked yet.
-When a task is checked in `tasks.md`, copy its text here verbatim and cite the exact evidence paths.
+- [x] I1 Add requirement/scenario ID lines and seed typed implementation/verification coverage before scenario-to-evidence mapping begins [covers=core.no-std-core-baseline,core.functional-core-imperative-shell,architecture.modularity.acyclic-no-std-core-boundary,architecture.modularity.feature-bundles-are-explicit-and-bounded]
+  - Evidence: `openspec/changes/no-std-aspen-core/specs/core/spec.md`, `openspec/changes/no-std-aspen-core/specs/architecture-modularity/spec.md`, `openspec/changes/no-std-aspen-core/tasks.md`
+- [x] I2 Establish verification-plan artifacts, evidence contracts, and baseline harness staging for no-std boundary work [covers=core.no-std-core-baseline,architecture.modularity.acyclic-no-std-core-boundary,architecture.modularity.feature-bundles-are-explicit-and-bounded]
+  - Evidence: `openspec/changes/no-std-aspen-core/verification.md`, `openspec/changes/no-std-aspen-core/evidence/verification-compile-slices-plan.md`, `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`, `openspec/changes/no-std-aspen-core/evidence/verification-regression-plan.md`, `scripts/check-aspen-core-no-std-surface.py`, `openspec/changes/no-std-aspen-core/evidence/baseline-surface-run.txt`, `openspec/changes/no-std-aspen-core/evidence/baseline-surface-inventory.md`
+- [x] 1.0 Add explicit requirement/scenario ID lines to `openspec/changes/no-std-aspen-core/specs/core/spec.md` and `openspec/changes/no-std-aspen-core/specs/architecture-modularity/spec.md`, then align the typed `I*` / `V*` task coverage tags with those IDs.
+  - Evidence: `openspec/changes/no-std-aspen-core/specs/core/spec.md`, `openspec/changes/no-std-aspen-core/specs/architecture-modularity/spec.md`, `openspec/changes/no-std-aspen-core/tasks.md`
+- [x] 1.1 Create `openspec/changes/no-std-aspen-core/verification.md` with an explicit evidence naming-convention section plus task-coverage and scenario-coverage sections that map each checked `tasks.md` item and every normative scenario from `specs/core/spec.md` and `specs/architecture-modularity/spec.md` to evidence files, and keep it updated as evidence lands rather than only at the end.
+  - Evidence: `openspec/changes/no-std-aspen-core/verification.md`
+- [x] 1.1a Create `openspec/changes/no-std-aspen-core/evidence/verification-compile-slices-plan.md` as the durable plan artifact referenced by `V1`.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/verification-compile-slices-plan.md`
+- [x] 1.1b Create `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md` as the durable plan artifact referenced by `V2`.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`
+- [x] 1.1c Create `openspec/changes/no-std-aspen-core/evidence/verification-regression-plan.md` as the durable plan artifact referenced by `V3`.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/verification-regression-plan.md`
+- [x] 1.2 Record the compile-slice artifact contract in `openspec/changes/no-std-aspen-core/verification.md`, covering `core-default-features.txt`, `compile-default.txt`, `compile-no-default.txt`, `compile-sql.txt`, `compile-std.txt`, `compile-std-sql.txt`, `compile-layer.txt`, `compile-global-discovery.txt`, `compile-smoke.txt`, `compile-cluster.txt`, `compile-cli.txt`, and `compile-ui.txt`.
+  - Evidence: `openspec/changes/no-std-aspen-core/verification.md`, `openspec/changes/no-std-aspen-core/evidence/verification-compile-slices-plan.md`
+- [x] 1.3 Record the dependency-boundary harnesses and artifact contract in `openspec/changes/no-std-aspen-core/verification.md` for `scripts/check-aspen-core-no-std-boundary.py`, `deps-direct.txt`, `deps-full.txt`, `deps-transitive.json`, `deps-allowlist-diff.txt`, and `deps-transitive-review-<crate>.md`.
+  - Evidence: `openspec/changes/no-std-aspen-core/verification.md`, `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`
+- [x] 1.3a Record the purity-disposition artifact contract in `openspec/changes/no-std-aspen-core/verification.md` and `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md` for `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`.
+  - Evidence: `openspec/changes/no-std-aspen-core/verification.md`, `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`
+- [x] 1.4 Stage an initial `scripts/check-aspen-core-no-std-surface.py` capable of producing `surface-inventory.md` before boundary edits, run it once against the pre-refactor tree, and freeze that output as `openspec/changes/no-std-aspen-core/evidence/baseline-surface-inventory.md`.
+  - Evidence: `scripts/check-aspen-core-no-std-surface.py`, `openspec/changes/no-std-aspen-core/evidence/baseline-surface-run.txt`, `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md`, `openspec/changes/no-std-aspen-core/evidence/baseline-surface-inventory.md`
+- [x] 1.5 Record the surface-audit and UI artifact contract in `openspec/changes/no-std-aspen-core/verification.md` for `scripts/check-aspen-core-no-std-surface.py`, `baseline-surface-inventory.md`, `surface-inventory.md`, `export-map.md`, `source-audit.txt`, `ui-fixtures.txt`, and `ui-<fixture>.stderr`.
+  - Evidence: `openspec/changes/no-std-aspen-core/verification.md`, `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`, `scripts/check-aspen-core-no-std-surface.py`
+- [x] 2.1 Add the downstream smoke consumer crate `crates/aspen-core-no-std-smoke/` as a real alloc-backed `#![no_std]` consumer, make it import/use representative alloc-only `aspen-core` types or traits through the bare/default dependency path, and keep its dependency on `aspen-core` free of feature overrides.
+  - Evidence: `crates/aspen-core-no-std-smoke/Cargo.toml`, `crates/aspen-core-no-std-smoke/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt`, `openspec/changes/no-std-aspen-core/evidence/smoke-source.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
+- [x] 2.2 Add alloc/no-std crate scaffolding for `aspen-core` (`no_std` entry, `alloc`, feature map, cfg gates) so the crate can expose the documented alloc-only surface.
+  - Evidence: `crates/aspen-core/Cargo.toml`, `crates/aspen-core/src/lib.rs`, `crates/aspen-core/src/crypto.rs`, `crates/aspen-core/src/protocol.rs`, `crates/aspen-core/src/spec/verus_shim.rs`, `crates/aspen-core/src/sql.rs`, `crates/aspen-core/src/verified/scan.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
+- [x] 3.2 Convert pure-but-std-bound APIs such as circuit-breaker timing and duration convenience layers to explicit primitive or no-std-safe time inputs, and keep the documented duration convenience root exports (`GOSSIP_SUBSCRIBE_TIMEOUT`, `IROH_CONNECT_TIMEOUT`, `IROH_READ_TIMEOUT`, `IROH_STREAM_OPEN_TIMEOUT`, `MEMBERSHIP_OPERATION_TIMEOUT`, `READ_INDEX_TIMEOUT`, `MEMBERSHIP_COOLDOWN`) on their current root paths behind `#[cfg(feature = "std")]`.
+  - Evidence: `crates/aspen-core/src/circuit_breaker.rs`, `crates/aspen-core/src/constants/mod.rs`, `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+- [x] 3.3 Keep the alloc-safe `sql` surface available without `std` and gate `Arc<T>`-style `sql` convenience impls behind the `std` shell path.
+  - Evidence: `crates/aspen-core/src/sql.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
+- [x] 3.4 Gate `app_registry` and its current root exports on the `std` shell path while preserving the existing public paths under `#[cfg(feature = "std")]`.
+  - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+- [x] 3.5 Gate `context` / watch-registry implementations and current root exports so `aspen_core::{ContentDiscovery, ContentNodeAddr, ContentProviderInfo}` and any additional `global-discovery` / Iroh-backed context helpers stay on their existing public paths behind both `feature = "std"` and `feature = "global-discovery"`.
+  - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
+- [x] 3.6 Gate `simulation`, `utils`, and their current root exports on the `std` shell path while preserving the existing public paths under `#[cfg(feature = "std")]`.
+  - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+- [x] 3.7 Gate `transport`, runtime convenience impls, and their current root exports on the `std` shell path while preserving the existing public paths under `#[cfg(feature = "std")]`.
+  - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+- [x] 4.1 Update `crates/aspen-cluster` to opt into `aspen-core/std` explicitly.
+  - Evidence: `crates/aspen-cluster/Cargo.toml`
 
 ## Scenario Coverage
 
-| Scenario | Planned evidence |
+| Scenario ID | Planned evidence |
 | --- | --- |
-| `specs/core/spec.md` → `Bare dependency uses alloc-only default` | `evidence/core-default-features.txt`, `evidence/feature-claims.json` |
-| `specs/core/spec.md` → `Alloc-only build succeeds` | `evidence/compile-no-default.txt`, `evidence/deps-direct.txt`, `evidence/deps-full.txt`, `evidence/deps-transitive.json` |
-| `specs/core/spec.md` → `Bare-default downstream consumer remains supported` | `evidence/smoke-manifest.txt`, `evidence/smoke-source.txt`, `evidence/compile-smoke.txt`, `evidence/feature-claims.json` |
-| `specs/core/spec.md` → `Alloc-only build rejects shell imports` | `evidence/compile-ui.txt`, `evidence/ui-fixtures.txt`, `evidence/ui-<fixture>.stderr` |
-| `specs/core/spec.md` → `Compile-fail verification is reviewable` | `evidence/compile-ui.txt`, `evidence/ui-fixtures.txt`, `evidence/ui-<fixture>.stderr` |
-| `specs/core/spec.md` → `Std-dependent helpers require explicit opt-in` | `evidence/compile-std.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt`, `evidence/export-map.md` |
-| `specs/core/spec.md` → `Std-gated shell APIs keep current public paths` | `evidence/export-map.md`, `evidence/ui-fixtures.txt`, `evidence/ui-<fixture>.stderr` |
-| `specs/core/spec.md` → `Module-family boundary matches documented inventory` | `evidence/baseline-surface-inventory.md`, `evidence/surface-inventory.md`, `evidence/export-map.md` |
-| `specs/core/spec.md` → `Representative std consumers remain supported` | `evidence/compile-cluster.txt`, `evidence/cluster-core-features.txt`, `evidence/compile-cli.txt`, `evidence/cli-core-features.txt` |
-| `specs/core/spec.md` → `Compile-slice verification is reviewable` | `evidence/compile-default.txt`, `evidence/compile-no-default.txt`, `evidence/compile-sql.txt`, `evidence/compile-std.txt`, `evidence/compile-std-sql.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt`, `evidence/compile-smoke.txt`, `evidence/compile-cluster.txt`, `evidence/compile-cli.txt` |
-| `specs/core/spec.md` → `Verified function purity` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
-| `specs/core/spec.md` → `Shell APIs do not leak into alloc-only core` | `evidence/export-map.md`, `evidence/source-audit.txt` |
-| `specs/core/spec.md` → `Pure time-dependent logic uses no-std-safe inputs` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
-| `specs/core/spec.md` → `Pure logic accepts explicit randomness and configuration inputs` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
-| `specs/core/spec.md` → `Refactored pure logic keeps regression coverage` | `evidence/regression-<topic>.txt` |
-| `specs/architecture-modularity/spec.md` → `Runtime shells depend outward on core` | `evidence/surface-inventory.md`, `evidence/export-map.md`, `evidence/source-audit.txt` |
-| `specs/architecture-modularity/spec.md` → `Acyclic boundary proof is reviewable` | `evidence/surface-inventory.md`, `evidence/export-map.md`, `evidence/source-audit.txt` |
-| `specs/architecture-modularity/spec.md` → `Pure consumers avoid runtime shells` | `evidence/compile-no-default.txt`, `evidence/compile-smoke.txt`, `evidence/feature-claims.json` |
-| `specs/architecture-modularity/spec.md` → `Alloc-only core excludes runtime shells` | `evidence/deps-direct.txt`, `evidence/deps-full.txt`, `evidence/deps-transitive.json`, `evidence/deps-allowlist-diff.txt`, `evidence/deps-transitive-review-<crate>.md` |
-| `specs/architecture-modularity/spec.md` → `Std compatibility is an explicit opt-in` | `evidence/core-default-features.txt`, `evidence/compile-std.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt`, `evidence/compile-sql.txt`, `evidence/compile-std-sql.txt` |
-| `specs/architecture-modularity/spec.md` → `Dependency boundary is checked deterministically` | `evidence/deps-direct.txt`, `evidence/deps-full.txt`, `evidence/deps-transitive.json`, `evidence/deps-allowlist-diff.txt`, `evidence/deps-transitive-review-<crate>.md` |
-| `specs/architecture-modularity/spec.md` → `Feature-topology verification is reviewable` | `evidence/core-default-features.txt`, `evidence/compile-default.txt`, `evidence/compile-no-default.txt`, `evidence/compile-sql.txt`, `evidence/compile-std.txt`, `evidence/compile-std-sql.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt` |
+| `core.no-std-core-baseline.bare-dependency-uses-alloc-only-default` | `evidence/core-default-features.txt`, `evidence/feature-claims.json` |
+| `core.no-std-core-baseline.alloc-only-build-succeeds` | `evidence/compile-no-default.txt`, `evidence/deps-direct.txt`, `evidence/deps-full.txt`, `evidence/deps-transitive.json` |
+| `core.no-std-core-baseline.bare-default-downstream-consumer-remains-supported` | `evidence/smoke-manifest.txt`, `evidence/smoke-source.txt`, `evidence/compile-smoke.txt`, `evidence/feature-claims.json` |
+| `core.no-std-core-baseline.alloc-only-build-rejects-shell-imports` | `evidence/compile-ui.txt`, `evidence/ui-fixtures.txt`, `evidence/ui-<fixture>.stderr` |
+| `core.no-std-core-baseline.compile-fail-verification-is-reviewable` | `evidence/compile-ui.txt`, `evidence/ui-fixtures.txt`, `evidence/ui-<fixture>.stderr` |
+| `core.no-std-core-baseline.std-dependent-helpers-require-explicit-opt-in` | `evidence/compile-std.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt`, `evidence/export-map.md` |
+| `core.no-std-core-baseline.std-gated-shell-apis-keep-current-public-paths` | `evidence/export-map.md`, `evidence/ui-fixtures.txt`, `evidence/ui-<fixture>.stderr` |
+| `core.no-std-core-baseline.module-family-boundary-matches-documented-inventory` | `evidence/baseline-surface-inventory.md`, `evidence/surface-inventory.md`, `evidence/export-map.md` |
+| `core.no-std-core-baseline.representative-std-consumers-remain-supported` | `evidence/compile-cluster.txt`, `evidence/cluster-core-features.txt`, `evidence/compile-cli.txt`, `evidence/cli-core-features.txt` |
+| `core.no-std-core-baseline.compile-slice-verification-is-reviewable` | `evidence/compile-default.txt`, `evidence/compile-no-default.txt`, `evidence/compile-sql.txt`, `evidence/compile-std.txt`, `evidence/compile-std-sql.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt`, `evidence/compile-smoke.txt`, `evidence/compile-cluster.txt`, `evidence/compile-cli.txt` |
+| `core.functional-core-imperative-shell.verified-function-purity` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
+| `core.functional-core-imperative-shell.shell-apis-do-not-leak-into-alloc-only-core` | `evidence/export-map.md`, `evidence/source-audit.txt` |
+| `core.functional-core-imperative-shell.pure-time-dependent-logic-uses-no-std-safe-inputs` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
+| `core.functional-core-imperative-shell.pure-logic-accepts-explicit-randomness-and-configuration-inputs` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
+| `core.functional-core-imperative-shell.refactored-pure-logic-keeps-regression-coverage` | `evidence/regression-<topic>.txt` |
+| `architecture.modularity.acyclic-no-std-core-boundary.runtime-shells-depend-outward-on-core` | `evidence/surface-inventory.md`, `evidence/export-map.md`, `evidence/source-audit.txt` |
+| `architecture.modularity.acyclic-no-std-core-boundary.acyclic-boundary-proof-is-reviewable` | `evidence/surface-inventory.md`, `evidence/export-map.md`, `evidence/source-audit.txt` |
+| `architecture.modularity.acyclic-no-std-core-boundary.pure-consumers-avoid-runtime-shells` | `evidence/compile-no-default.txt`, `evidence/compile-smoke.txt`, `evidence/feature-claims.json` |
+| `architecture.modularity.feature-bundles-are-explicit-and-bounded.alloc-only-core-excludes-runtime-shells` | `evidence/deps-direct.txt`, `evidence/deps-full.txt`, `evidence/deps-transitive.json`, `evidence/deps-allowlist-diff.txt`, `evidence/deps-transitive-review-<crate>.md` |
+| `architecture.modularity.feature-bundles-are-explicit-and-bounded.std-compatibility-is-an-explicit-opt-in` | `evidence/core-default-features.txt`, `evidence/compile-std.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt`, `evidence/compile-sql.txt`, `evidence/compile-std-sql.txt` |
+| `architecture.modularity.feature-bundles-are-explicit-and-bounded.dependency-boundary-is-checked-deterministically` | `evidence/deps-direct.txt`, `evidence/deps-full.txt`, `evidence/deps-transitive.json`, `evidence/deps-allowlist-diff.txt`, `evidence/deps-transitive-review-<crate>.md` |
+| `architecture.modularity.feature-bundles-are-explicit-and-bounded.feature-topology-verification-is-reviewable` | `evidence/core-default-features.txt`, `evidence/compile-default.txt`, `evidence/compile-no-default.txt`, `evidence/compile-sql.txt`, `evidence/compile-std.txt`, `evidence/compile-std-sql.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt` |
 
 ## Review Scope Snapshot
 
-No implementation evidence yet.
-Add changed-file paths and any saved diff artifacts once tasks begin landing.
+No implementation diff artifact yet.
+Current implementation slice adds alloc-backed no-std scaffolding in `aspen-core`, a real smoke consumer, explicit shell gating for current root exports, and saved compile-slice evidence for the new feature matrix.
 
 ## Verification Commands
 
-No commands have been run for this change yet.
-Populate this section with exact commands and saved outputs as evidence lands.
+### `python scripts/check-aspen-core-no-std-surface.py --crate-dir crates/aspen-core/src --output-dir openspec/changes/no-std-aspen-core/evidence`
+
+- Status: pass
+- Artifact: `openspec/changes/no-std-aspen-core/evidence/baseline-surface-run.txt`
+
+### Compile-slice commands
+
+- `cargo tree -p aspen-core -e features > openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
+- `cargo check -p aspen-core > openspec/changes/no-std-aspen-core/evidence/compile-default.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`
+- `cargo check -p aspen-core --no-default-features > openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
+- `cargo check -p aspen-core --no-default-features --features sql > openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`
+- `cargo check -p aspen-core --features std > openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+- `cargo check -p aspen-core --features std,sql > openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
+- `cargo check -p aspen-core --features layer > openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
+- `cargo check -p aspen-core --features global-discovery > openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
+- `cargo check -p aspen-core-no-std-smoke > openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`

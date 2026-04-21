@@ -1,6 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Acyclic no-std core boundary
+ID: architecture.modularity.acyclic-no-std-core-boundary
 
 Aspen MUST maintain an acyclic dependency boundary where the alloc-only `aspen-core` surface depends only on alloc-safe leaf crates, and `std`-bound runtime shells depend on that core rather than the reverse.
 
@@ -11,6 +12,7 @@ For this requirement:
 - **direct prerequisite** means a dependency selected directly by `crates/aspen-core/Cargo.toml` for the alloc-only build, not an arbitrary transitive dependency of another enabled crate.
 
 #### Scenario: Runtime shells depend outward on core
+ID: architecture.modularity.acyclic-no-std-core-boundary.runtime-shells-depend-outward-on-core
 
 - **GIVEN** a shell facility such as transport, registry state, simulation persistence, or runtime convenience implementations
 - **WHEN** its module or crate is composed
@@ -18,6 +20,7 @@ For this requirement:
 - **AND** the alloc-only core surface MUST NOT depend back on that shell facility
 
 #### Scenario: Acyclic boundary proof is reviewable
+ID: architecture.modularity.acyclic-no-std-core-boundary.acyclic-boundary-proof-is-reviewable
 
 - **GIVEN** the alloc-only core and `std` shell boundary
 - **WHEN** that boundary is verified for review
@@ -25,6 +28,7 @@ For this requirement:
 - **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifacts prove the boundary remains acyclic
 
 #### Scenario: Pure consumers avoid runtime shells
+ID: architecture.modularity.acyclic-no-std-core-boundary.pure-consumers-avoid-runtime-shells
 
 - **GIVEN** a workspace crate or external consumer that needs only Aspen core contracts
 - **WHEN** it depends on the alloc-only `aspen-core` surface
@@ -34,10 +38,12 @@ For this requirement:
 ## MODIFIED Requirements
 
 ### Requirement: Feature bundles are explicit and bounded
+ID: architecture.modularity.feature-bundles-are-explicit-and-bounded
 
 The build feature graph SHALL distinguish alloc-only core surfaces, `std`-only shell features, and higher-level convenience bundles so enabling foundational Aspen contracts does not silently pull runtime dependencies.
 
 #### Scenario: Alloc-only core excludes runtime shells
+ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.alloc-only-core-excludes-runtime-shells
 
 - **GIVEN** a contributor or downstream crate enables only the alloc-only `aspen-core` surface
 - **WHEN** Cargo resolves the feature graph
@@ -46,6 +52,7 @@ The build feature graph SHALL distinguish alloc-only core surfaces, `std`-only s
 - **AND** `std`-only shell facilities such as transport, simulation, or runtime registry helpers SHALL remain disabled
 
 #### Scenario: Std compatibility is an explicit opt-in
+ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.std-compatibility-is-an-explicit-opt-in
 
 - **GIVEN** a build profile requires shell helpers on top of the alloc-only core
 - **WHEN** the profile is expressed through Cargo features or companion shell crates
@@ -54,6 +61,7 @@ The build feature graph SHALL distinguish alloc-only core surfaces, `std`-only s
 - **AND** documentation at `docs/no-std-core.md` and compile-slice tests SHALL identify what each opt-in enables
 
 #### Scenario: Dependency boundary is checked deterministically
+ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.dependency-boundary-is-checked-deterministically
 
 - **GIVEN** the alloc-only `aspen-core` feature set
 - **WHEN** its dependency graph is checked by the documented dependency-boundary verification commands
@@ -65,6 +73,7 @@ The build feature graph SHALL distinguish alloc-only core surfaces, `std`-only s
 - **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifact proves the dependency-boundary claim
 
 #### Scenario: Feature-topology verification is reviewable
+ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.feature-topology-verification-is-reviewable
 
 - **GIVEN** the public feature contract `default = []`, `std`, `layer = std + dep:aspen-layer`, `global-discovery = std + dep:iroh-blobs`, `sql`, and `std + sql`
 - **WHEN** that contract is verified for review

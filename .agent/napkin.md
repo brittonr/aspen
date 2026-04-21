@@ -1,5 +1,15 @@
 # Napkin - Mistakes and Learnings
 
+## No-std aspen-core baseline (2026-04-21)
+
+**Discovery**: `cargo check -p aspen-cluster` is currently blocked by pre-existing workspace breakage outside the no-std scaffolding slice.
+
+### What To Do
+
+- Treat `cargo check -p aspen-core`, `cargo check -p aspen-core-no-std-smoke`, and the saved compile-slice evidence under `openspec/changes/no-std-aspen-core/evidence/compile-*.txt` as the reliable slice-local rails until the wider workspace breakage is fixed.
+- `cargo check -p aspen-cluster` may still die before cluster code because vendored `openraft` currently panics inside `#[since(...)]` proc-macros on this toolchain; do not misattribute that failure to `aspen-core/std` gating.
+- `cargo tree -p aspen-core -e features` still shows `iroh` in the bare/default graph via `crates/aspen-cluster-types` and `NodeAddress`. Dependency-boundary cleanup must fix `aspen-cluster-types` before alloc-only verification can pass.
+
 ## Tigerstyle scope (2026-04-21)
 
 **Discovery**: `cargo tigerstyle check` on Aspen workspace reports vendored `openraft` / `openraft_macros` findings too. Aspen-local cleanup can reach zero Aspen findings while vendored macro lints still remain.

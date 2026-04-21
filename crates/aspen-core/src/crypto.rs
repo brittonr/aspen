@@ -40,7 +40,7 @@ impl<'de> Deserialize<'de> for Signature {
         impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
             type Value = Signature;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 formatter.write_str("64 bytes")
             }
 

@@ -1,0 +1,1 @@
+openspec/changes/no-std-aspen-core/evidence/surface-inventory.md

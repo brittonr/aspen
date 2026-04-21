@@ -2,6 +2,11 @@
 //!
 //! Provides types for SQL query execution against the state machine.
 
+use alloc::boxed::Box;
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde::Serialize;
@@ -221,6 +226,7 @@ pub trait SqlQueryExecutor: Send + Sync {
 }
 
 // Blanket implementation for Arc<T>
+#[cfg(feature = "std")]
 #[async_trait]
 impl<T: SqlQueryExecutor + ?Sized> SqlQueryExecutor for std::sync::Arc<T> {
     async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {
