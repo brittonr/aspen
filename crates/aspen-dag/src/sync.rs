@@ -248,21 +248,6 @@ where
         }
     }
 
-     stats.bytes_transferred = bytes_received;
-     Ok(stats)
- }
-            Some(ReceivedFrame::HashOnly { hash }) => {
-                stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
-                on_frame(ReceivedFrame::HashOnly { hash })?;
-            }
-            Some(ReceivedFrame::Data { hash, data }) => {
-                stats.data_frames = stats.data_frames.saturating_add(1);
-                on_frame(ReceivedFrame::Data { hash, data })?;
-            }
-            None => break,
-        }
-    }
-
     stats.bytes_transferred = bytes_received;
     Ok(stats)
 }

@@ -1,0 +1,52 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on build directory
+    Checking aspen-dag v0.1.0 (/home/brittonr/git/aspen/crates/aspen-dag)
+    Checking aspen-client v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client)
+    Checking aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+    Checking aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster)
+    Checking aspen-cli v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cli)
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/calendar.rs:277:5
+    |
+277 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/cluster.rs:846:5
+    |
+846 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/cluster.rs:854:5
+    |
+854 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+    --> crates/aspen-cli/src/bin/aspen-cli/commands/federation.rs:1005:5
+     |
+1005 |     ambient_clock,
+     |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/job.rs:468:5
+    |
+468 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/job.rs:476:5
+    |
+476 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: `aspen-cli` (bin "aspen-cli") generated 6 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.09s
