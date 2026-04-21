@@ -6,25 +6,30 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-core/src/verified/mod.rs`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/export-map.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`
+- Changed file: `crates/aspen-core/tests/ui.rs`
+- Changed file: `crates/aspen-core/tests/ui/.gitignore`
+- Changed file: `crates/aspen-core/tests/ui/app-registry-no-std/Cargo.toml`
+- Changed file: `crates/aspen-core/tests/ui/app-registry-no-std/src/main.rs`
+- Changed file: `crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/Cargo.toml`
+- Changed file: `crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/src/main.rs`
+- Changed file: `crates/aspen-core/tests/ui/directory-layer-std-without-layer/Cargo.toml`
+- Changed file: `crates/aspen-core/tests/ui/directory-layer-std-without-layer/src/main.rs`
+- Changed file: `crates/aspen-core/tests/ui/network-transport-no-std/Cargo.toml`
+- Changed file: `crates/aspen-core/tests/ui/network-transport-no-std/src/main.rs`
+- Changed file: `crates/aspen-core/tests/ui/simulation-artifact-no-std/Cargo.toml`
+- Changed file: `crates/aspen-core/tests/ui/simulation-artifact-no-std/src/main.rs`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-ui.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-app-registry-no-std.stderr`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-content-discovery-std-without-global-discovery.stderr`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-directory-layer-std-without-layer.stderr`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-network-transport-no-std.stderr`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-simulation-artifact-no-std.stderr`
 - Changed file: `openspec/changes/no-std-aspen-core/tasks.md`
 - Changed file: `openspec/changes/no-std-aspen-core/verification.md`
-- Changed file: `scripts/check-aspen-core-no-std-surface.py`
 
 ## Evidence Naming Convention
 
@@ -46,6 +51,8 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `openspec/changes/no-std-aspen-core/specs/core/spec.md`, `openspec/changes/no-std-aspen-core/specs/architecture-modularity/spec.md`, `openspec/changes/no-std-aspen-core/tasks.md`
 - [x] I2 Establish verification-plan artifacts, evidence contracts, and baseline harness staging for no-std boundary work [covers=core.no-std-core-baseline,architecture.modularity.acyclic-no-std-core-boundary,architecture.modularity.feature-bundles-are-explicit-and-bounded]
   - Evidence: `openspec/changes/no-std-aspen-core/verification.md`, `openspec/changes/no-std-aspen-core/evidence/verification-compile-slices-plan.md`, `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`, `openspec/changes/no-std-aspen-core/evidence/verification-regression-plan.md`, `scripts/check-aspen-core-no-std-surface.py`, `openspec/changes/no-std-aspen-core/evidence/baseline-surface-run.txt`, `openspec/changes/no-std-aspen-core/evidence/baseline-surface-inventory.md`
+- [x] I3 Umbrella tracker for tasks `2.1`-`3.11`: implement alloc-only crate scaffolding, dependency cleanup, shell gating, and purity conversion for `aspen-core` [covers=core.no-std-core-baseline,core.functional-core-imperative-shell,architecture.modularity.acyclic-no-std-core-boundary,architecture.modularity.feature-bundles-are-explicit-and-bounded]
+  - Evidence: `crates/aspen-core/tests/ui.rs`, `openspec/changes/no-std-aspen-core/evidence/export-map.md`, `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`, `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`
 - [x] I4 Umbrella tracker for tasks `4.1`-`4.3`: update representative consumers and docs for the explicit `std` opt-in contract [covers=core.no-std-core-baseline,architecture.modularity.feature-bundles-are-explicit-and-bounded]
   - Evidence: `crates/aspen-cluster/Cargo.toml`, `crates/aspen-cli/Cargo.toml`, `docs/no-std-core.md`, `openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`, `openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt`, `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md`
 - [x] V2 Verify dependency-boundary and surface/source-audit evidence stays complete and reviewable [covers=core.no-std-core-baseline,core.functional-core-imperative-shell,architecture.modularity.acyclic-no-std-core-boundary] [evidence=openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md]
@@ -92,6 +99,8 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `scripts/aspen-core-no-std-transitives.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`
 - [x] 3.1 Inventory alloc-only APIs for ambient randomness, configuration, environment access, process-global state, I/O, async operations, system calls, hidden runtime context, or implicit randomness sources, and record the per-category disposition in `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md` before refactors begin.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`
+- [x] 3.1a Audit alloc-only APIs that still depend on randomness or configuration and narrow them to concrete targets with explicit value inputs (for this change: re-check `protocol`, alloc-safe `sql`, and `verified::scan` helpers), saving follow-up regression proof under `openspec/changes/no-std-aspen-core/evidence/regression-<topic>.txt` when a target changes.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`
 - [x] 3.1b Audit alloc-only APIs for ambient environment or process-global state and either remove each concrete hit or record its absence in `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md` plus later `source-audit.txt`.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`, `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`
 - [x] 3.1c Audit alloc-only production modules for hidden runtime context, I/O, runtime-bound async bodies, or system calls and move each concrete hit behind the `std` shell boundary, with resulting proof saved under `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`, `source-audit.txt`, or `regression-<topic>.txt`.
@@ -114,6 +123,8 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/export-map.md`, `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`
 - [x] 3.9 Keep `layer` on its documented existing `aspen_core::*` public paths (`AllocationError`, `DirectoryError`, `DirectoryLayer`, `DirectorySubspace`, `Element`, `HighContentionAllocator`, `Subspace`, `SubspaceError`, `Tuple`, `TupleError`) behind both `feature = "std"` and `feature = "layer"` for this change.
   - Evidence: `crates/aspen-core/src/lib.rs`, `crates/aspen-core/src/verified/mod.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
+- [x] 3.10 Create/update `crates/aspen-core/tests/ui/` `trybuild` fixtures so the fixture set includes: alloc-only fixtures with `default-features = false` for `AppRegistry`, `NetworkTransport`, and `SimulationArtifact`; `std`-enabled but `global-discovery`-disabled fixture(s) for `ContentDiscovery`; and `std`-enabled but `layer`-disabled fixture(s) for `DirectoryLayer`, all on their current `aspen_core::*` paths.
+  - Evidence: `crates/aspen-core/tests/ui.rs`, `crates/aspen-core/tests/ui/app-registry-no-std/Cargo.toml`, `crates/aspen-core/tests/ui/network-transport-no-std/Cargo.toml`, `crates/aspen-core/tests/ui/simulation-artifact-no-std/Cargo.toml`, `crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/Cargo.toml`, `crates/aspen-core/tests/ui/directory-layer-std-without-layer/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`
 - [x] 3.11 Extend `scripts/check-aspen-core-no-std-surface.py` (or companion rule data) with the alloc-only purity/source-audit checklist so alloc-only modules are mechanically checked for:
   - Evidence: `scripts/check-aspen-core-no-std-surface.py`, `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`
 - [x] 4.1 Update `crates/aspen-cluster` to opt into `aspen-core/std` explicitly.
@@ -148,8 +159,12 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `scripts/check-aspen-core-no-std-surface.py`, `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md`, `openspec/changes/no-std-aspen-core/evidence/export-map.md`
 - [x] 5.15 Use the same source-audit outputs plus `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md` to assert alloc-only exports do not leak back to shell-only modules or crates, `Arc<T>` convenience impls plus runtime-only prelude additions stay `std`-gated, and alloc-only/`verified` modules do not perform I/O, runtime-bound async bodies, system calls, ambient environment reads, process-global state access, hidden runtime context access, or implicit randomness reads, while pure alloc-only contract traits may still declare async signatures.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`, `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`
+- [x] 5.16 Run `cargo test -p aspen-core --test ui > openspec/changes/no-std-aspen-core/evidence/compile-ui.txt`, save `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`, capture `openspec/changes/no-std-aspen-core/evidence/ui-<fixture>.stderr`, and assert `ui-fixtures.txt` records the exact fixture path, manifest feature settings, and command for each case while each stderr snapshot fails for the intended missing gate (`std`, `global-discovery`, or `layer`) rather than an unrelated error.
+  - Evidence: `crates/aspen-core/tests/ui.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-ui.txt`, `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`, `openspec/changes/no-std-aspen-core/evidence/ui-app-registry-no-std.stderr`, `openspec/changes/no-std-aspen-core/evidence/ui-network-transport-no-std.stderr`, `openspec/changes/no-std-aspen-core/evidence/ui-simulation-artifact-no-std.stderr`, `openspec/changes/no-std-aspen-core/evidence/ui-content-discovery-std-without-global-discovery.stderr`, `openspec/changes/no-std-aspen-core/evidence/ui-directory-layer-std-without-layer.stderr`
 - [x] 5.17 Save `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md` as the review note for `docs/no-std-core.md`, showing it matches the feature matrix and current public-path contract.
   - Evidence: `docs/no-std-core.md`, `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md`
+- [x] 5.18 Run targeted regression tests for each refactored pure entrypoint, covering both positive and negative cases, and save outputs under `openspec/changes/no-std-aspen-core/evidence/regression-<topic>.txt`.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`
 - [x] 5.21 After tasks `2.6`, `2.8`, `3.8`-`3.11`, `4.2`, and `4.3` land, rerun or explicitly revalidate the already-saved compile/dependency rails (`5.1`-`5.7`, `5.11`-`5.13`) so `verification.md` ends with a fresh claim-to-artifact index rather than stale pre-surface-check outputs.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`, `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
 
@@ -167,11 +182,11 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 | `core.no-std-core-baseline.module-family-boundary-matches-documented-inventory` | `evidence/baseline-surface-inventory.md`, `evidence/surface-inventory.md`, `evidence/export-map.md` |
 | `core.no-std-core-baseline.representative-std-consumers-remain-supported` | `evidence/compile-cluster.txt`, `evidence/cluster-core-features.txt`, `evidence/compile-cli.txt`, `evidence/cli-core-features.txt` |
 | `core.no-std-core-baseline.compile-slice-verification-is-reviewable` | `evidence/compile-default.txt`, `evidence/compile-no-default.txt`, `evidence/compile-sql.txt`, `evidence/compile-std.txt`, `evidence/compile-std-sql.txt`, `evidence/compile-layer.txt`, `evidence/compile-global-discovery.txt`, `evidence/compile-smoke.txt`, `evidence/compile-cluster.txt`, `evidence/compile-cli.txt` |
-| `core.functional-core-imperative-shell.verified-function-purity` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
+| `core.functional-core-imperative-shell.verified-function-purity` | `evidence/source-audit.txt`, `evidence/regression-protocol.txt`, `evidence/regression-sql.txt`, `evidence/regression-scan.txt` |
 | `core.functional-core-imperative-shell.shell-apis-do-not-leak-into-alloc-only-core` | `evidence/export-map.md`, `evidence/source-audit.txt` |
-| `core.functional-core-imperative-shell.pure-time-dependent-logic-uses-no-std-safe-inputs` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
-| `core.functional-core-imperative-shell.pure-logic-accepts-explicit-randomness-and-configuration-inputs` | `evidence/source-audit.txt`, `evidence/regression-<topic>.txt` |
-| `core.functional-core-imperative-shell.refactored-pure-logic-keeps-regression-coverage` | `evidence/regression-<topic>.txt` |
+| `core.functional-core-imperative-shell.pure-time-dependent-logic-uses-no-std-safe-inputs` | `evidence/source-audit.txt`, `evidence/regression-protocol.txt`, `evidence/regression-scan.txt` |
+| `core.functional-core-imperative-shell.pure-logic-accepts-explicit-randomness-and-configuration-inputs` | `evidence/source-audit.txt`, `evidence/regression-protocol.txt`, `evidence/regression-sql.txt`, `evidence/regression-scan.txt` |
+| `core.functional-core-imperative-shell.refactored-pure-logic-keeps-regression-coverage` | `evidence/regression-protocol.txt`, `evidence/regression-sql.txt`, `evidence/regression-scan.txt` |
 | `architecture.modularity.acyclic-no-std-core-boundary.runtime-shells-depend-outward-on-core` | `evidence/surface-inventory.md`, `evidence/export-map.md`, `evidence/source-audit.txt` |
 | `architecture.modularity.acyclic-no-std-core-boundary.acyclic-boundary-proof-is-reviewable` | `evidence/surface-inventory.md`, `evidence/export-map.md`, `evidence/source-audit.txt` |
 | `architecture.modularity.acyclic-no-std-core-boundary.pure-consumers-avoid-runtime-shells` | `evidence/compile-no-default.txt`, `evidence/compile-smoke.txt`, `evidence/feature-claims.json` |
@@ -239,3 +254,18 @@ Current implementation slices add alloc-backed no-std scaffolding in `aspen-core
 - `python scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/no-std-aspen-core/evidence/core-default-features.txt --smoke-manifest openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt --smoke-source openspec/changes/no-std-aspen-core/evidence/smoke-source.txt --cluster-features openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt --cli-features openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt --output openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
   - Status: pass
   - Artifact: `openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
+
+### UI and regression commands
+
+- `cargo test -p aspen-core --test ui > openspec/changes/no-std-aspen-core/evidence/compile-ui.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-ui.txt`, `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`, `openspec/changes/no-std-aspen-core/evidence/ui-*.stderr`
+- `cargo test -p aspen-core --lib protocol::tests:: > openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`
+- `cargo test -p aspen-core --features sql --lib sql::tests:: > openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`
+- `cargo test -p aspen-core --lib verified::scan::tests:: > openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`

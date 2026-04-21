@@ -1,0 +1,16 @@
+error[E0432]: unresolved import `aspen_core::SimulationArtifact`
+   --> src/main.rs:1:5
+    |
+  1 | use aspen_core::SimulationArtifact;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `SimulationArtifact` in the root
+    |
+note: found an item that was configured out
+   --> $REPO_ROOT/crates/aspen-core/src/lib.rs:228:21
+    |
+227 | #[cfg(feature = "std")]
+    |       --------------- the item is gated behind the `std` feature
+228 | pub use simulation::SimulationArtifact;
+    |                     ^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `ui-simulation-artifact-no-std` (bin "ui-simulation-artifact-no-std") due to 1 previous error

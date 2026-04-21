@@ -1,0 +1,27 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running unittests src/lib.rs (target/debug/deps/aspen_core-f0588c9472cbbf2f)
+
+running 14 tests
+test protocol::tests::test_ctx_connections_remove_nonexistent ... ok
+test protocol::tests::test_ctx_persistent_state_update_dirty_flag ... ok
+test protocol::tests::test_ctx_persistent_state_update_no_change ... ok
+test protocol::tests::test_ctx_alarms ... ok
+test protocol::tests::test_ctx_envelopes ... ok
+test protocol::tests::test_ctx_connections_idempotent_add ... ok
+test protocol::tests::test_alarm_during_protocol_flow ... ok
+test protocol::tests::envelope_construction ... ok
+test protocol::tests::test_ctx_persistent_state_read ... ok
+test protocol::tests::test_ctx_identity ... ok
+test protocol::tests::test_ctx_full_workflow ... ok
+test protocol::tests::test_multiple_peers_concurrent_messages ... ok
+test protocol::tests::test_ctx_connections ... ok
+test protocol::tests::test_multi_step_connect_ping_pong ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 0.00s
+

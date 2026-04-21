@@ -1,0 +1,16 @@
+error[E0432]: unresolved import `aspen_core::NetworkTransport`
+   --> src/main.rs:1:5
+    |
+  1 | use aspen_core::NetworkTransport;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `NetworkTransport` in the root
+    |
+note: found an item that was configured out
+   --> $REPO_ROOT/crates/aspen-core/src/lib.rs:276:20
+    |
+275 | #[cfg(feature = "std")]
+    |       --------------- the item is gated behind the `std` feature
+276 | pub use transport::NetworkTransport;
+    |                    ^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `ui-network-transport-no-std` (bin "ui-network-transport-no-std") due to 1 previous error

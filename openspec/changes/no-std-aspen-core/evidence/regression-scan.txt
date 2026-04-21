@@ -1,0 +1,55 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (target/debug/deps/aspen_core-f0588c9472cbbf2f)
+
+running 42 tests
+test verified::scan::tests::test_build_scan_metadata_empty_result ... ok
+test verified::scan::tests::test_build_scan_metadata_not_truncated ... ok
+test verified::scan::tests::test_build_scan_metadata_truncated_no_last_key ... ok
+test verified::scan::tests::test_build_scan_metadata_truncated_with_last_key ... ok
+test verified::scan::tests::test_decode_invalid_base64 ... ok
+test verified::scan::tests::test_decode_none_token ... ok
+test verified::scan::tests::test_decode_valid_base64_but_invalid_utf8 ... ok
+test verified::scan::tests::test_encode_decode_empty_string ... ok
+test verified::scan::tests::test_encode_decode_roundtrip ... ok
+test verified::scan::tests::test_encode_decode_special_characters ... ok
+test verified::scan::tests::test_encode_decode_unicode ... ok
+test verified::scan::tests::test_encode_decode_long_key ... ok
+test verified::scan::tests::test_execute_scan_empty_result ... ok
+test verified::scan::tests::test_execute_scan_basic ... ok
+test verified::scan::tests::test_execute_scan_no_matches_for_prefix ... ok
+test verified::scan::tests::test_execute_scan_preserves_values ... ok
+test verified::scan::tests::test_execute_scan_unsorted_input ... ok
+test verified::scan::tests::test_execute_scan_with_continuation ... ok
+test verified::scan::tests::test_execute_scan_with_pagination ... ok
+test verified::scan::tests::test_execute_scan_with_prefix_filter ... ok
+test verified::scan::tests::test_filter_by_prefix_and_start_after ... ok
+test verified::scan::tests::test_filter_by_prefix_only ... ok
+test verified::scan::tests::test_filter_by_start_after_only ... ok
+test verified::scan::tests::test_filter_empty_input ... ok
+test verified::scan::tests::test_filter_no_matches ... ok
+test verified::scan::tests::test_filter_start_after_exact_match ... ok
+test verified::scan::tests::test_normalize_limit_capped ... ok
+test verified::scan::tests::test_full_pagination_sequence ... ok
+test verified::scan::tests::test_normalize_limit_default_exceeds_max ... ok
+test verified::scan::tests::test_normalize_limit_default ... ok
+test verified::scan::tests::test_normalize_limit_equal_to_max ... ok
+test verified::scan::tests::test_normalize_limit_specified_under_max ... ok
+test verified::scan::tests::test_normalize_limit_zero ... ok
+test verified::scan::tests::test_paginate_at_exact_limit ... ok
+test verified::scan::tests::test_paginate_empty ... ok
+test verified::scan::tests::test_paginate_one_over_limit ... ok
+test verified::scan::tests::test_paginate_over_limit ... ok
+test verified::scan::tests::test_paginate_under_limit ... ok
+test verified::scan::tests::test_paginate_zero_limit ... ok
+test verified::scan::tests::test_prefix_with_special_regex_chars ... ok
+test verified::scan::tests::test_execute_scan_default_limit ... ok
+test verified::scan::tests::test_execute_scan_limit_capped_at_max ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 69 filtered out; finished in 0.00s
+

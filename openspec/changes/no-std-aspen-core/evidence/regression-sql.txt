@@ -1,0 +1,74 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+   Compiling aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+   Compiling aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.45s
+     Running unittests src/lib.rs (target/debug/deps/aspen_core-8d8c268d54496288)
+
+running 57 tests
+test sql::tests::test_column_names_not_blocked ... ok
+test sql::tests::test_all_forbidden_keywords ... ok
+test sql::tests::test_effective_sql_limit_none ... ok
+test sql::tests::test_complex_valid_queries ... ok
+test sql::tests::test_effective_sql_limit_at_max ... ok
+test sql::tests::test_effective_sql_limit_over_max ... ok
+test sql::tests::test_effective_sql_limit_under_max ... ok
+test sql::tests::test_effective_sql_limit_zero ... ok
+test sql::tests::test_effective_sql_timeout_at_max ... ok
+test sql::tests::test_effective_sql_timeout_none ... ok
+test sql::tests::test_effective_sql_timeout_over_max ... ok
+test sql::tests::test_effective_sql_timeout_under_max ... ok
+test sql::tests::test_empty_query ... ok
+test sql::tests::test_forbidden_in_cte ... ok
+test sql::tests::test_forbidden_write_operations ... ok
+test sql::tests::test_invalid_start_keywords ... ok
+test sql::tests::test_keyword_in_string_literal ... ok
+test sql::tests::test_sql_column_info_construction ... ok
+test sql::tests::test_keyword_as_table_prefix ... ok
+test sql::tests::test_sql_column_info_debug ... ok
+test sql::tests::test_sql_consistency_clone ... ok
+test sql::tests::test_sql_column_info_serialization ... ok
+test sql::tests::test_sql_consistency_debug ... ok
+test sql::tests::test_sql_consistency_default ... ok
+test sql::tests::test_sql_consistency_serialization ... ok
+test sql::tests::test_sql_query_error_clone ... ok
+test sql::tests::test_sql_query_error_execution_failed ... ok
+test sql::tests::test_sql_query_error_not_leader ... ok
+test sql::tests::test_sql_query_error_not_supported ... ok
+test sql::tests::test_sql_query_error_query_not_allowed ... ok
+test sql::tests::test_sql_query_error_query_too_large ... ok
+test sql::tests::test_sql_query_error_syntax_error ... ok
+test sql::tests::test_sql_query_error_timeout ... ok
+test sql::tests::test_sql_query_error_too_many_params ... ok
+test sql::tests::test_sql_query_request_construction ... ok
+test sql::tests::test_sql_query_request_default ... ok
+test sql::tests::test_sql_query_result_construction ... ok
+test sql::tests::test_sql_query_result_empty ... ok
+test sql::tests::test_sql_query_result_truncated ... ok
+test sql::tests::test_sql_query_request_serialization ... ok
+test sql::tests::test_sql_value_blob ... ok
+test sql::tests::test_sql_value_clone ... ok
+test sql::tests::test_sql_value_integer ... ok
+test sql::tests::test_sql_value_integer_negative ... ok
+test sql::tests::test_sql_value_null ... ok
+test sql::tests::test_sql_value_real ... ok
+test sql::tests::test_sql_value_text ... ok
+test sql::tests::test_sql_value_serialization_roundtrip ... ok
+test sql::tests::test_subqueries ... ok
+test sql::tests::test_valid_select_queries ... ok
+test sql::tests::test_validate_sql_request_at_limits ... ok
+test sql::tests::test_validate_sql_request_limit_too_high ... ok
+test sql::tests::test_validate_sql_request_query_too_large ... ok
+test sql::tests::test_validate_sql_request_timeout_too_high ... ok
+test sql::tests::test_validate_sql_request_too_many_params ... ok
+test sql::tests::test_validate_sql_request_valid ... ok
+test sql::tests::test_with_cte_queries ... ok
+
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 111 filtered out; finished in 0.00s
+

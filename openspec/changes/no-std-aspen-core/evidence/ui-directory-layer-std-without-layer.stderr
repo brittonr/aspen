@@ -1,0 +1,16 @@
+error[E0432]: unresolved import `aspen_core::DirectoryLayer`
+   --> src/main.rs:1:5
+    |
+  1 | use aspen_core::DirectoryLayer;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ no `DirectoryLayer` in the root
+    |
+note: found an item that was configured out
+   --> $REPO_ROOT/crates/aspen-core/src/lib.rs:206:16
+    |
+205 | #[cfg(all(feature = "std", feature = "layer"))]
+    |                            ----------------- the item is gated behind the `layer` feature
+206 | pub use layer::DirectoryLayer;
+    |                ^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `ui-directory-layer-std-without-layer` (bin "ui-directory-layer-std-without-layer") due to 1 previous error

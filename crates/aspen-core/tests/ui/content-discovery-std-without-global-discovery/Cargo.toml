@@ -1,0 +1,10 @@
+[package]
+name = "ui-content-discovery-std-without-global-discovery"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-core = { path = "../../..", features = ["std"] }

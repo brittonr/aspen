@@ -1,0 +1,16 @@
+error[E0432]: unresolved import `aspen_core::ContentDiscovery`
+   --> src/main.rs:1:5
+    |
+  1 | use aspen_core::ContentDiscovery;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `ContentDiscovery` in the root
+    |
+note: found an item that was configured out
+   --> $REPO_ROOT/crates/aspen-core/src/lib.rs:121:18
+    |
+120 | #[cfg(all(feature = "std", feature = "global-discovery"))]
+    |                            ---------------------------- the item is gated behind the `global-discovery` feature
+121 | pub use context::ContentDiscovery;
+    |                  ^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `ui-content-discovery-std-without-global-discovery` (bin "ui-content-discovery-std-without-global-discovery") due to 1 previous error
