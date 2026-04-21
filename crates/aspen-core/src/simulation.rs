@@ -672,7 +672,5 @@ mod tests {
         assert_eq!(artifact.test_name, "chain_test");
         assert_eq!(artifact.events.len(), 2);
         assert_eq!(artifact.metrics, "test_metrics");
-        // Artifact has timestamp, not start_time
-        assert!(artifact.duration_ms >= 0);
     }
 }

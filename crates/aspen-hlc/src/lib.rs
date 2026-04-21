@@ -37,7 +37,7 @@
 // crates while suppressing noisier families until Aspen has cleanup bandwidth.
 #![allow(unknown_lints)]
 #![allow(no_panic)]
-#![warn(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
+#![deny(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
 #![allow(
     acronym_style,
     ambiguous_params,

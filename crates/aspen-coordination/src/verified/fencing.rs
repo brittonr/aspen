@@ -609,7 +609,8 @@ mod tests {
     #[test]
     fn test_election_timeout_with_jitter() {
         let timeout = compute_election_timeout_with_jitter(1000, 0.2, 0.5);
-        assert!(timeout >= 1000 && timeout <= 1200);
+        assert!(timeout >= 1000);
+        assert!(timeout <= 1200);
 
         // Edge cases
         let no_jitter = compute_election_timeout_with_jitter(1000, 0.2, 0.0);

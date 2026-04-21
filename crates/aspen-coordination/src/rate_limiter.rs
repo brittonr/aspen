@@ -733,7 +733,7 @@ mod tests {
         let store = Arc::new(ConflictThenSuccessStore::new(initial_state, 3));
         let limiter = DistributedRateLimiter::new(store.clone(), "retry_limiter", RateLimiterConfig::new(1.0, 1));
 
-        let start = std::time::Instant::now();
+        let start = crate::runtime_clock::measurement_start();
         let remaining = limiter.try_acquire_n(1).await.unwrap();
         let elapsed = start.elapsed();
 

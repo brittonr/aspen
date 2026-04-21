@@ -1,8 +1,8 @@
 # Aspen Tiger Style configuration — full integration.
 #
 # All 32 lints are enabled workspace-wide. Thresholds tightened to tigerstyle
-# defaults where possible. Violations surface as warnings during development
-# and will fail CI via `nix flake check` (checks.tigerstyle).
+# defaults where possible. Violations now surface as errors during development
+# and fail CI via `nix flake check` (checks.tigerstyle).
 
 [tigerstyle]
 # Tigerstyle default: 70. Aspen targets this.
@@ -23,13 +23,13 @@ acronym_allowlist = ["IO"]
 
 # All lints enabled — no disabled_lints.
 
-# Promote allow-by-default lints to warn for full coverage.
+# Promote allow-by-default lints to deny for full coverage.
 [tigerstyle.lint_levels]
-numeric_units = "warn"
-compound_condition = "warn"
-unjustified_allow = "warn"
-assertion_density = "warn"
-multi_lock_ordering = "warn"
-float_for_currency = "warn"
-ambiguous_params = "warn"
-raw_arithmetic_overflow = "warn"
+numeric_units = "deny"
+compound_condition = "deny"
+unjustified_allow = "deny"
+assertion_density = "deny"
+multi_lock_ordering = "deny"
+float_for_currency = "deny"
+ambiguous_params = "deny"
+raw_arithmetic_overflow = "deny"

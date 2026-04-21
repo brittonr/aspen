@@ -336,15 +336,15 @@ impl ContentDiscoveryService {
                 Some(cmd) = command_rx.recv() => {
                     match cmd {
                         DiscoveryCommand::Announce { hash, size, format, reply } => {
-                            let result = Self::handle_announce(
-                                &endpoint,
-                                &secret_key,
-                                &tracker,
-                                dht_client.as_ref(),
+                            let result = Self::handle_announce(AnnounceRequest {
+                                endpoint: &endpoint,
+                                secret_key: &secret_key,
+                                tracker: &tracker,
+                                dht_client: dht_client.as_ref(),
                                 hash,
                                 size,
                                 format,
-                            ).await;
+                            }).await;
                             drop(reply.send(result));
                         }
 
@@ -358,7 +358,7 @@ impl ContentDiscoveryService {
                         }
 
                         DiscoveryCommand::AnnounceLocalBlobs { blobs, reply } => {
-                            let mut announced = 0u32;
+                            let mut announced_count = 0usize;
                             for (hash, size, format) in blobs {
                                 let result = Self::handle_announce(AnnounceRequest {
                                     endpoint: &endpoint,
@@ -370,11 +370,10 @@ impl ContentDiscoveryService {
                                     format,
                                 }).await;
                                 if result.is_ok() {
-                                    announced = announced.saturating_add(1);
+                                    announced_count = announced_count.saturating_add(1);
                                 }
                             }
-                            info!(count = announced, "bulk announced local blobs to DHT");
-                            let announced_count = usize::try_from(announced).unwrap_or(usize::MAX);
+                            info!(count = announced_count, "bulk announced local blobs to DHT");
                             drop(reply.send(Ok(announced_count)));
                         }
 
@@ -419,7 +418,7 @@ impl ContentDiscoveryService {
         let tracker = request.tracker;
         let dht_client = request.dht_client;
         let hash = request.hash;
-        let size = request.size;
+        let size_bytes = request.size;
         let format = request.format;
         // Check rate limit
         if !tracker.read().can_announce(&hash) {
@@ -428,7 +427,7 @@ impl ContentDiscoveryService {
         }
 
         // Create signed announce for local verification
-        let announce = DhtAnnounce::new(hash, size, format);
+        let announce = DhtAnnounce::new(hash, size_bytes, format);
         let signed = SignedDhtAnnounce::sign(announce, secret_key)?;
         let bytes = signed.to_bytes()?;
 
@@ -454,7 +453,7 @@ impl ContentDiscoveryService {
                     TransportAddr::Ip(socket_addr) => Some(*socket_addr),
                     _ => None,
                 }),
-                size,
+                size_bytes,
                 format,
             );
 
@@ -470,7 +469,7 @@ impl ContentDiscoveryService {
 
             info!(
                 hash = %hash.fmt_short(),
-                size,
+                size_bytes,
                 format = ?format,
                 infohash = hex::encode(infohash),
                 public_key = %secret_key.public().fmt_short(),
@@ -485,7 +484,7 @@ impl ContentDiscoveryService {
         }
 
         // Record announce for rate limiting and republishing
-        tracker.write().record_announce(hash, size, format);
+        tracker.write().record_announce(hash, size_bytes, format);
 
         Ok(())
     }

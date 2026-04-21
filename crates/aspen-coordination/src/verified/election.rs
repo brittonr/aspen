@@ -476,7 +476,8 @@ mod tests {
 
         // Mid jitter
         let result = compute_election_interval_with_jitter(1000, 0.2, 0.5);
-        assert!(result >= 1000 && result <= 1200);
+        assert!(result >= 1000);
+        assert!(result <= 1200);
     }
 
     // ========================================================================

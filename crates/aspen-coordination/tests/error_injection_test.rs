@@ -45,11 +45,11 @@ async fn test_rate_limiter_fail_open_on_not_leader() {
     failing.fail_all_writes().await;
     failing.set_write_error("not leader; current leader: Some(2); forward").await;
 
-    let limiter = DistributedRateLimiter::new(failing.clone() as Arc<_>, "rate:test", config);
+    let admission_gate = DistributedRateLimiter::new(failing.clone() as Arc<_>, "rate:test", config);
 
     // Should succeed (fail-open) even though write fails with "not leader"
     // The rate limiter detects "forward" in the error message and allows the request
-    let result = limiter.try_acquire().await;
+    let result = admission_gate.try_acquire().await;
     assert!(result.is_ok(), "Rate limiter should fail-open on NotLeader, got: {:?}", result);
 }
 
@@ -69,17 +69,20 @@ async fn test_rate_limiter_fail_closed_on_storage_error() {
     failing.fail_all_reads().await;
     failing.set_read_error("disk I/O error").await;
 
-    let limiter = DistributedRateLimiter::new(failing as Arc<_>, "rate:test2", config);
+    let admission_gate = DistributedRateLimiter::new(failing as Arc<_>, "rate:test2", config);
 
-    let result = limiter.try_acquire().await;
+    let result = admission_gate.try_acquire().await;
     assert!(result.is_err(), "Rate limiter should fail-closed on I/O error");
     let err = result.unwrap_err();
+    let error_text = err.to_string();
+    let has_disk_error = error_text.contains("disk I/O error");
+    let has_storage_unavailable = error_text.contains("StorageUnavailable");
+    let has_injected_fault = error_text.contains("injected fault");
+    let is_known_storage_issue = has_disk_error || has_storage_unavailable || has_injected_fault;
     assert!(
-        err.to_string().contains("disk I/O error")
-            || err.to_string().contains("StorageUnavailable")
-            || err.to_string().contains("injected fault"),
+        is_known_storage_issue,
         "Error should mention storage issue, got: {}",
-        err
+        error_text
     );
 }
 

@@ -322,8 +322,28 @@ proptest! {
                             real_start, expected_start,
                             "reserve({count}) start mismatch"
                         );
-                        // All IDs in [start, start+count) must be unique
-                        for id in real_start..real_start + count {
+                        let reserve_end_exclusive = match real_start.checked_add(*count) {
+                            Some(end) => end,
+                            None => {
+                                panic!(
+                                    "reserve({count}) overflowed range end from start {real_start}"
+                                );
+                            }
+                        };
+                        let reserved_ids_count = match reserve_end_exclusive.checked_sub(real_start) {
+                            Some(span) => span,
+                            None => {
+                                panic!(
+                                    "reserve({count}) produced invalid end {reserve_end_exclusive} for start {real_start}"
+                                );
+                            }
+                        };
+                        assert_eq!(
+                            reserved_ids_count, *count,
+                            "reserve({count}) should cover exactly {count} ids"
+                        );
+                        // All IDs in the reserved span must be unique.
+                        for id in real_start..reserve_end_exclusive {
                             assert!(
                                 !all_ids.contains(&id),
                                 "Duplicate ID {id} from reserve({count})"
@@ -458,9 +478,6 @@ impl LockModel {
         }
     }
 
-    fn is_held(&self) -> bool {
-        self.holder.is_some()
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -826,15 +843,11 @@ proptest! {
 #[derive(Debug, Clone)]
 struct RateLimiterModel {
     tokens: u64,
-    capacity: u64,
 }
 
 impl RateLimiterModel {
     fn new(capacity: u64) -> Self {
-        Self {
-            tokens: capacity,
-            capacity,
-        }
+        Self { tokens: capacity }
     }
 
     /// Try to consume n tokens. Returns true if allowed.
@@ -847,9 +860,6 @@ impl RateLimiterModel {
         }
     }
 
-    fn reset(&mut self) {
-        self.tokens = self.capacity;
-    }
 }
 
 proptest! {
@@ -872,7 +882,7 @@ proptest! {
             let store = DeterministicKeyValueStore::new();
             // Tiger Style: keep the production invariant (positive refill_rate)
             // while making refill practically unreachable during this short test.
-            let limiter = DistributedRateLimiter::new(
+            let admission_gate = DistributedRateLimiter::new(
                 store,
                 "test-limiter",
                 RateLimiterConfig::new(1e-9, capacity),
@@ -882,12 +892,12 @@ proptest! {
             for req_count in &requests {
                 // Clamp to capacity: requests above capacity are invalid input.
                 let n = (*req_count).min(capacity);
-                let real_allowed = limiter.try_acquire_n(n).await.is_ok();
-                let model_allowed = model.try_acquire_n(n);
+                let is_real_allowed = admission_gate.try_acquire_n(n).await.is_ok();
+                let is_model_allowed = model.try_acquire_n(n);
 
                 assert_eq!(
-                    real_allowed,
-                    model_allowed,
+                    is_real_allowed,
+                    is_model_allowed,
                     "burst decision mismatch for request size {}",
                     n
                 );

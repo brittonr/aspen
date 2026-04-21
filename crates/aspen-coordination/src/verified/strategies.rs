@@ -656,7 +656,8 @@ mod tests {
     fn test_load_score_edge_cases() {
         // Zero max_concurrent (should not panic)
         let score = calculate_load_score(0.5, 5, 0, 0.7, 0.3);
-        assert!(score >= 0.0 && score <= 1.0);
+        assert!(score >= 0.0);
+        assert!(score <= 1.0);
 
         // Negative load (clamped)
         let score = calculate_load_score(-0.5, 0, 10, 0.7, 0.3);

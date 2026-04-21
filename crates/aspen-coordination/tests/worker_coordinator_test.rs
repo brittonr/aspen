@@ -18,11 +18,35 @@ async fn create_test_store() -> Arc<aspen_testing::DeterministicKeyValueStore> {
     aspen_testing::DeterministicKeyValueStore::new()
 }
 
+const DEFAULT_TEST_NODE_ID: &str = "n1";
+
+struct TestWorkerSpec<'a> {
+    node_id: &'a str,
+    load: f32,
+}
+
+/// Create a test worker info on the default node.
+fn create_test_worker(worker_id: impl Into<String>, load: f32) -> WorkerInfo {
+    create_test_worker_with_spec(
+        worker_id,
+        TestWorkerSpec {
+            node_id: DEFAULT_TEST_NODE_ID,
+            load,
+        },
+    )
+}
+
 /// Create a test worker info.
-fn create_test_worker(id: &str, node: &str, load: f32) -> WorkerInfo {
+fn create_test_worker_with_spec(worker_id: impl Into<String>, spec: TestWorkerSpec<'_>) -> WorkerInfo {
+    let worker_id = worker_id.into();
+    let load = spec.load;
+    assert!(!worker_id.is_empty(), "test worker ids must not be empty");
+    assert!(!spec.node_id.is_empty(), "test node ids must not be empty");
+    assert!(load >= 0.0, "test worker load must be non-negative");
+    assert!(load <= 1.0, "test worker load must stay normalized");
     WorkerInfo {
-        worker_id: id.to_string(),
-        node_id: node.to_string(),
+        worker_id,
+        node_id: spec.node_id.to_string(),
         peer_id: None,
         capabilities: vec!["test".to_string()],
         load,
@@ -52,7 +76,7 @@ async fn test_worker_registration() {
     let coordinator = DistributedWorkerCoordinator::new(store);
 
     // Register a worker
-    let worker = create_test_worker("w1", "n1", 0.5);
+    let worker = create_test_worker("w1", 0.5);
     coordinator.register_worker(worker.clone()).await.unwrap();
 
     // Get workers
@@ -67,7 +91,7 @@ async fn test_worker_heartbeat() {
     let coordinator = DistributedWorkerCoordinator::new(store);
 
     // Register a worker
-    let worker = create_test_worker("w1", "n1", 0.3);
+    let worker = create_test_worker("w1", 0.3);
     coordinator.register_worker(worker).await.unwrap();
 
     // Send heartbeat with updated stats
@@ -105,8 +129,8 @@ async fn test_worker_deregistration() {
     let coordinator = DistributedWorkerCoordinator::new(store);
 
     // Register workers
-    let w1 = create_test_worker("w1", "n1", 0.5);
-    let w2 = create_test_worker("w2", "n1", 0.3);
+    let w1 = create_test_worker("w1", 0.5);
+    let w2 = create_test_worker("w2", 0.3);
     coordinator.register_worker(w1).await.unwrap();
     coordinator.register_worker(w2).await.unwrap();
 
@@ -128,7 +152,7 @@ async fn test_worker_selection_round_robin() {
 
     // Register workers
     for i in 1..=3 {
-        let worker = create_test_worker(&format!("w{}", i), "n1", 0.5);
+        let worker = create_test_worker(format!("w{}", i), 0.5);
         coordinator.register_worker(worker).await.unwrap();
     }
 
@@ -153,9 +177,9 @@ async fn test_worker_selection_least_loaded() {
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers with different loads
-    let w1 = create_test_worker("w1", "n1", 0.8); // High load
-    let w2 = create_test_worker("w2", "n1", 0.2); // Low load
-    let w3 = create_test_worker("w3", "n1", 0.5); // Medium load
+    let w1 = create_test_worker("w1", 0.8); // High load
+    let w2 = create_test_worker("w2", 0.2); // Low load
+    let w3 = create_test_worker("w3", 0.5); // Medium load
 
     coordinator.register_worker(w1).await.unwrap();
     coordinator.register_worker(w2).await.unwrap();
@@ -172,15 +196,21 @@ async fn test_worker_filtering() {
     let coordinator = DistributedWorkerCoordinator::new(store);
 
     // Register workers with different attributes
-    let mut w1 = create_test_worker("w1", "n1", 0.5);
+    let mut w1 = create_test_worker("w1", 0.5);
     w1.tags = vec!["gpu".to_string(), "ml".to_string()];
     w1.capabilities = vec!["training".to_string()];
 
-    let mut w2 = create_test_worker("w2", "n2", 0.3);
+    let mut w2 = create_test_worker_with_spec(
+        "w2",
+        TestWorkerSpec {
+            node_id: "n2",
+            load: 0.3,
+        },
+    );
     w2.tags = vec!["cpu".to_string()];
     w2.capabilities = vec!["inference".to_string()];
 
-    let mut w3 = create_test_worker("w3", "n1", 0.7);
+    let mut w3 = create_test_worker("w3", 0.7);
     w3.health = HealthStatus::Unhealthy;
 
     coordinator.register_worker(w1).await.unwrap();
@@ -230,13 +260,13 @@ async fn test_work_stealing_targets() {
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers with different loads
-    let mut w1 = create_test_worker("w1", "n1", 0.1); // Low load, can steal
+    let mut w1 = create_test_worker("w1", 0.1); // Low load, can steal
     w1.active_jobs = 1;
 
-    let mut w2 = create_test_worker("w2", "n1", 0.8); // High load
+    let mut w2 = create_test_worker("w2", 0.8); // High load
     w2.queue_depth = 10; // Many queued jobs
 
-    let mut w3 = create_test_worker("w3", "n1", 0.2); // Low load, can steal
+    let mut w3 = create_test_worker("w3", 0.2); // Low load, can steal
     w3.active_jobs = 2;
 
     coordinator.register_worker(w1).await.unwrap();
@@ -260,7 +290,7 @@ async fn test_worker_groups() {
 
     // Register workers
     for i in 1..=4 {
-        let worker = create_test_worker(&format!("w{}", i), "n1", 0.5);
+        let worker = create_test_worker(format!("w{}", i), 0.5);
         coordinator.register_worker(worker).await.unwrap();
     }
 
@@ -309,7 +339,7 @@ async fn test_affinity_selection() {
 
     // Register workers
     for i in 1..=3 {
-        let worker = create_test_worker(&format!("w{}", i), "n1", 0.5);
+        let worker = create_test_worker(format!("w{}", i), 0.5);
         coordinator.register_worker(worker).await.unwrap();
     }
 
@@ -339,12 +369,12 @@ async fn test_max_workers_limit() {
 
     // Register workers up to limit
     for i in 1..=3 {
-        let worker = create_test_worker(&format!("w{}", i), "n1", 0.5);
+        let worker = create_test_worker(format!("w{}", i), 0.5);
         coordinator.register_worker(worker).await.unwrap();
     }
 
     // Try to register beyond limit
-    let worker = create_test_worker("w4", "n1", 0.5);
+    let worker = create_test_worker("w4", 0.5);
     let result = coordinator.register_worker(worker).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("maximum worker limit"));
@@ -359,7 +389,7 @@ async fn test_max_groups_limit() {
 
     // Register workers
     for i in 1..=4 {
-        let worker = create_test_worker(&format!("w{}", i), "n1", 0.5);
+        let worker = create_test_worker(format!("w{}", i), 0.5);
         coordinator.register_worker(worker).await.unwrap();
     }
 
@@ -410,7 +440,7 @@ async fn test_worker_readiness_gating() {
     let coordinator = DistributedWorkerCoordinator::new(store);
 
     // Register a worker (starts not ready)
-    let mut worker = create_test_worker("w1", "n1", 0.0);
+    let mut worker = create_test_worker("w1", 0.0);
     worker.is_ready = false;
     coordinator.register_worker(worker).await.unwrap();
 

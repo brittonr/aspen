@@ -683,6 +683,7 @@ mod tests {
         // Different key might map to different worker
         context.affinity_key = Some("job456".to_string());
         let idx3 = strategy.select(&workers, "email", &context).unwrap();
+        assert!(idx3.is_some());
         // May or may not be different, but should be consistent
     }
 

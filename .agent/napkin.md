@@ -9,6 +9,8 @@
 - Filter SARIF/JSON by `crates/aspen-`, `src/`, etc. when user asks for Aspen-only fixes.
 - Do not assume workspace summary means Aspen crates still have violations.
 - After fixes, rerun and verify remaining findings are only under `openraft/`.
+- `cargo tigerstyle check` still exits non-zero when warnings remain, even if the log reaches `Finished checking`; inspect the summary/error lines to distinguish deny-level blockers from warning-only debt.
+- Check both `git diff` and `git diff --cached` before claiming nothing changed; Aspen sessions often leave staged-only edits that `git diff` alone hides.
 
 ## CI with Forge Web (2026-04-19)
 
