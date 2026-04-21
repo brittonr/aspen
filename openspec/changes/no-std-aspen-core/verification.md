@@ -6,48 +6,10 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 
 ## Implementation Evidence
 
-- Changed file: `.agent/napkin.md`
-- Changed file: `AGENTS.md`
-- Changed file: `Cargo.toml`
-- Changed file: `Cargo.lock`
+- Changed file: `docs/no-std-core.md`
 - Changed file: `openspec/changes/no-std-aspen-core/tasks.md`
 - Changed file: `openspec/changes/no-std-aspen-core/verification.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayref.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayvec.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-blake3.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cfg-if.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-constant_time_eq.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cpufeatures.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-heck.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-libc.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-proc-macro2.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-quote.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-redb.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_core.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_derive.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-snafu-derive.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-spin.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-syn.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-thiserror-impl.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-uhlc.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-unicode-ident.md`
-- Changed file: `scripts/aspen-core-no-std-transitives.txt`
-- Changed file: `scripts/check-aspen-core-no-std-boundary.py`
-- Changed file: `scripts/check-aspen-core-feature-claims.py`
-- Changed file: `vendor/uhlc/Cargo.toml`
-- Changed file: `vendor/uhlc/Cargo.lock`
-- Changed file: `vendor/uhlc/LICENSE`
-- Changed file: `vendor/uhlc/PATCHES.md`
-- Changed file: `vendor/uhlc/README.md`
-- Changed file: `vendor/uhlc/src/id.rs`
-- Changed file: `vendor/uhlc/src/lib.rs`
-- Changed file: `vendor/uhlc/src/ntp64.rs`
-- Changed file: `vendor/uhlc/src/timestamp.rs`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md`
 
 ## Evidence Naming Convention
 
@@ -123,6 +85,8 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
 - [x] 4.1 Update `crates/aspen-cluster` to opt into `aspen-core/std` explicitly.
   - Evidence: `crates/aspen-cluster/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`
+- [x] 4.3 Write `docs/no-std-core.md` documenting the alloc-only build, bare/default feature behavior, alloc-safe `sql`, `std` opt-in path, `layer`, and `global-discovery`, including migration notes for existing public paths that become `std`-gated.
+  - Evidence: `docs/no-std-core.md`
 - [x] 5.1 Run `cargo tree -p aspen-core -e features > openspec/changes/no-std-aspen-core/evidence/core-default-features.txt` and assert the default feature set is empty.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
 - [x] 5.2 Run `cargo check -p aspen-core > openspec/changes/no-std-aspen-core/evidence/compile-default.txt` and assert the crate builds with the empty default feature set.
@@ -143,6 +107,8 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
 - [x] 5.13 Run `python scripts/check-aspen-core-no-std-boundary.py --manifest-path crates/aspen-core/Cargo.toml --allowlist scripts/aspen-core-no-std-transitives.txt --output openspec/changes/no-std-aspen-core/evidence/deps-transitive.json --diff-output openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`, and assert the checker closes the full dependency-boundary checklist:
   - Evidence: `scripts/check-aspen-core-no-std-boundary.py`, `scripts/aspen-core-no-std-transitives.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`, `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+- [x] 5.17 Save `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md` as the review note for `docs/no-std-core.md`, showing it matches the feature matrix and current public-path contract.
+  - Evidence: `docs/no-std-core.md`, `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md`
 
 ## Scenario Coverage
 
