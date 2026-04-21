@@ -53,6 +53,8 @@ mod tests {
         secret_key.public()
     }
 
+    /// Create a test socket address from a port number.
+    #[allow(unchecked_narrowing, reason = "port values are controlled in tests, always fit in u8 range")]
     fn create_test_socket_addr(port: u16) -> SocketAddr {
         use std::net::IpAddr;
         use std::net::Ipv4Addr;
@@ -61,6 +63,7 @@ mod tests {
 
     fn create_test_endpoint_addr(seed: u8, addrs: &[SocketAddr]) -> EndpointAddr {
         let id = create_test_endpoint_id(seed);
+        #[allow(numeric_units, reason = "transport_addrs is a BTreeSet, not a numeric quantity")]
         let transport_addrs: BTreeSet<TransportAddr> = addrs.iter().map(|a| TransportAddr::Ip(*a)).collect();
         EndpointAddr {
             id,
@@ -165,7 +168,7 @@ mod tests {
         let mut ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
 
         // Create endpoint with more than MAX_DIRECT_ADDRS_PER_PEER addresses
-        let addrs: Vec<SocketAddr> = (0..12).map(|i| create_test_socket_addr(7000 + i)).collect();
+        let addrs: Vec<SocketAddr> = (0..12).map(|i| create_test_socket_addr((7000u16).saturating_add(i))).collect();
         let endpoint_addr = create_test_endpoint_addr(1, &addrs);
 
         ticket.add_bootstrap_addr(&endpoint_addr).unwrap();
@@ -658,7 +661,7 @@ mod tests {
         let mut signed = SignedAspenClusterTicket::sign(ticket, &secret_key).unwrap();
 
         // Set version to a future version
-        signed.version = SIGNED_TICKET_VERSION + 1;
+        signed.version = (SIGNED_TICKET_VERSION).saturating_add(1);
 
         // Verification should fail (unknown version)
         assert!(signed.verify().is_none());
@@ -679,8 +682,8 @@ mod tests {
         assert!(!signed.is_expired());
 
         // Expires at should be roughly 1 hour from issued_at
-        let validity_duration = signed.expires_at_secs - signed.issued_at_secs;
-        assert_eq!(validity_duration, one_hour_secs);
+        let validity_duration_secs = (signed.expires_at_secs).saturating_sub(signed.issued_at_secs);
+        assert_eq!(validity_duration_secs, one_hour_secs);
 
         // Verification should succeed
         assert!(signed.verify().is_some());

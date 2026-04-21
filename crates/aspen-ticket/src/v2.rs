@@ -250,6 +250,7 @@ impl Ticket for AspenClusterTicket {
         // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
         // All fields are bounded (MAX_BOOTSTRAP_PEERS=16, MAX_DIRECT_ADDRS_PER_PEER=8)
         // with deterministic serialization of primitive types. Postcard serialization is infallible.
+        #[allow(unknown_lints, no_unwrap, reason = "trait `Ticket` requires `to_bytes() -> Vec<u8>` with no Result path")]
         postcard::to_stdvec(&self).expect("AspenClusterTicket serialization is infallible for bounded fields")
     }
 
@@ -285,6 +286,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(raw_arithmetic_overflow, reason = "test values are bounded small constants")]
     fn roundtrip_with_multiple_peers_and_addrs() {
         let mut ticket = AspenClusterTicket::new(TopicId::from_bytes([7u8; 32]), "multi-peer".to_string());
         for i in 0..5u8 {

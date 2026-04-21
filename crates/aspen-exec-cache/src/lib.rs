@@ -4,6 +4,14 @@
 //! environment, and file contents read via FUSE). On cache hit, outputs are
 //! replayed from iroh-blobs without re-executing the process.
 //!
+//! # Tigerstyle lints
+//!
+//! Tigerstyle is registered as a tool so lint names like `ambiguous_params`
+//! are recognized by rustc's attribute parser.
+
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+//!
 //! # Architecture
 //!
 //! - **Cache key**: `BLAKE3(command || args || env_hash || sorted_input_hashes)`
