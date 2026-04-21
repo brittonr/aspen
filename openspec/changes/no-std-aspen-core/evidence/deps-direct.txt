@@ -1,0 +1,14 @@
+aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+├── async-trait v0.1.89 (proc-macro)
+├── base64 v0.22.1
+├── bincode v1.3.3
+├── hex v0.4.3
+├── serde v1.0.228
+├── snafu v0.8.9
+└── thiserror v2.0.18

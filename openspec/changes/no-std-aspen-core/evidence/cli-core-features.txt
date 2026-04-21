@@ -1,0 +1,66 @@
+aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+├── aspen-core feature "default"
+│   ├── aspen-auth v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth)
+│   │   └── aspen-auth feature "default"
+│   │       ├── aspen-cli v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cli)
+│   │       │   └── aspen-cli feature "default" (command-line)
+│   │       ├── aspen-client v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client)
+│   │       │   └── aspen-client feature "default"
+│   │       │       └── aspen-cli v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cli) (*)
+│   │       ├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+│   │       │   ├── aspen-client-api feature "auth"
+│   │       │   │   └── aspen-client-api feature "default"
+│   │       │   │       ├── aspen-cli v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cli) (*)
+│   │       │   │       ├── aspen-client v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client) (*)
+│   │       │   │       └── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+│   │       │   │           └── aspen-raft feature "default"
+│   │       │   │               └── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster)
+│   │       │   │                   └── aspen-cluster feature "default"
+│   │       │   │                       └── aspen-cli v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cli) (*)
+│   │       │   ├── aspen-client-api feature "automerge"
+│   │       │   │   └── aspen-client-api feature "default" (*)
+│   │       │   ├── aspen-client-api feature "ci"
+│   │       │   │   └── aspen-client-api feature "default" (*)
+│   │       │   ├── aspen-client-api feature "default" (*)
+│   │       │   └── aspen-client-api feature "secrets"
+│   │       │       └── aspen-client-api feature "default" (*)
+│   │       ├── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster) (*)
+│   │       ├── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+│   │       └── aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport)
+│   │           └── aspen-transport feature "default"
+│   │               ├── aspen-client v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client) (*)
+│   │               ├── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster) (*)
+│   │               ├── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+│   │               └── aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network)
+│   │                   └── aspen-raft-network feature "default"
+│   │                       └── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+│   ├── aspen-cli v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cli) (*)
+│   ├── aspen-client v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client) (*)
+│   ├── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster) (*)
+│   ├── aspen-coordination v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination)
+│   │   └── aspen-coordination feature "default"
+│   │       └── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster) (*)
+│   ├── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+│   ├── aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network) (*)
+│   ├── aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-types)
+│   │   └── aspen-raft-types feature "default"
+│   │       ├── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster) (*)
+│   │       ├── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+│   │       ├── aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network) (*)
+│   │       └── aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport) (*)
+│   ├── aspen-redb-storage v0.1.0 (/home/brittonr/git/aspen/crates/aspen-redb-storage)
+│   │   └── aspen-redb-storage feature "default"
+│   │       └── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+│   ├── aspen-sharding v0.1.0 (/home/brittonr/git/aspen/crates/aspen-sharding)
+│   │   └── aspen-sharding feature "default"
+│   │       ├── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster) (*)
+│   │       ├── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+│   │       ├── aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network) (*)
+│   │       └── aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport) (*)
+│   └── aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport) (*)
+├── aspen-core feature "layer"
+│   ├── aspen-cli v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cli) (*)
+│   └── aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft) (*)
+└── aspen-core feature "std"
+    └── aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster) (*)
+    └── aspen-core feature "layer" (*)

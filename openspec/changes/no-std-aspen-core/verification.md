@@ -2,20 +2,12 @@
 
 This file is the claim-to-artifact index for `no-std-aspen-core`.
 Durable evidence lives under `openspec/changes/no-std-aspen-core/evidence/`.
-The checked items below cover traceability scaffolding, evidence-plan setup, the frozen pre-refactor surface baseline, and the first alloc-only core scaffolding slice.
+The checked items below cover traceability scaffolding, evidence-plan setup, the frozen pre-refactor surface baseline, the first alloc-only core scaffolding slice, and the follow-on feature-topology plus direct-dependency cleanup slice.
 
 ## Implementation Evidence
 
-- Changed file: `openspec/changes/no-std-aspen-core/specs/core/spec.md`
-- Changed file: `openspec/changes/no-std-aspen-core/specs/architecture-modularity/spec.md`
 - Changed file: `openspec/changes/no-std-aspen-core/tasks.md`
 - Changed file: `openspec/changes/no-std-aspen-core/verification.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/verification-compile-slices-plan.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/verification-boundary-plan.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/verification-regression-plan.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/baseline-surface-run.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/baseline-surface-inventory.md`
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
@@ -24,23 +16,20 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/smoke-source.txt`
 - Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`
+- Changed file: `Cargo.lock`
+- Changed file: `crates/aspen-cluster-types/Cargo.toml`
+- Changed file: `crates/aspen-cluster-types/src/lib.rs`
 - Changed file: `crates/aspen-core/Cargo.toml`
-- Changed file: `crates/aspen-core/src/lib.rs`
-- Changed file: `crates/aspen-core/src/circuit_breaker.rs`
-- Changed file: `crates/aspen-core/src/constants/mod.rs`
-- Changed file: `crates/aspen-core/src/crypto.rs`
-- Changed file: `crates/aspen-core/src/protocol.rs`
-- Changed file: `crates/aspen-core/src/sql.rs`
-- Changed file: `crates/aspen-core/src/spec/verus_shim.rs`
-- Changed file: `crates/aspen-core/src/traits.rs`
-- Changed file: `crates/aspen-core/src/verified/scan.rs`
-- Changed file: `crates/aspen-core-no-std-smoke/Cargo.toml`
-- Changed file: `crates/aspen-core-no-std-smoke/src/lib.rs`
-- Changed file: `crates/aspen-cluster/Cargo.toml`
-- Changed file: `scripts/check-aspen-core-no-std-surface.py`
+- Changed file: `crates/aspen-hlc/Cargo.toml`
+- Changed file: `crates/aspen-hlc/src/lib.rs`
+- Changed file: `crates/aspen-kv-types/Cargo.toml`
+- Changed file: `crates/aspen-storage-types/Cargo.toml`
+- Changed file: `crates/aspen-traits/Cargo.toml`
 
 ## Evidence Naming Convention
 
@@ -86,6 +75,14 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `crates/aspen-core-no-std-smoke/Cargo.toml`, `crates/aspen-core-no-std-smoke/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt`, `openspec/changes/no-std-aspen-core/evidence/smoke-source.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
 - [x] 2.2 Add alloc/no-std crate scaffolding for `aspen-core` (`no_std` entry, `alloc`, feature map, cfg gates) so the crate can expose the documented alloc-only surface.
   - Evidence: `crates/aspen-core/Cargo.toml`, `crates/aspen-core/src/lib.rs`, `crates/aspen-core/src/crypto.rs`, `crates/aspen-core/src/protocol.rs`, `crates/aspen-core/src/spec/verus_shim.rs`, `crates/aspen-core/src/sql.rs`, `crates/aspen-core/src/verified/scan.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
+- [x] 2.3 Wire and verify the exact Cargo feature topology: `default = []`, `std`, alloc-safe `sql`, `std + sql`, `layer = std + dep:aspen-layer`, and `global-discovery = std + dep:iroh-blobs`, while ensuring bare/default `aspen-core` matches the alloc-only surface.
+  - Evidence: `crates/aspen-core/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
+- [x] 2.4 Audit `crates/aspen-core/Cargo.toml` so alloc-only builds keep only the direct prerequisites from the design with alloc-safe feature settings (`default-features = false` where applicable), while `std`-only dependencies move behind explicit shell opt-ins.
+  - Evidence: `crates/aspen-core/Cargo.toml`, `crates/aspen-cluster-types/Cargo.toml`, `crates/aspen-cluster-types/src/lib.rs`, `crates/aspen-hlc/Cargo.toml`, `crates/aspen-hlc/src/lib.rs`, `crates/aspen-kv-types/Cargo.toml`, `crates/aspen-storage-types/Cargo.toml`, `crates/aspen-traits/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`, `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
+- [x] 3.1 Inventory alloc-only APIs for ambient randomness, configuration, environment access, process-global state, I/O, async operations, system calls, hidden runtime context, or implicit randomness sources, and record the per-category disposition in `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md` before refactors begin.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`
+- [x] 3.1d Save proof when one of the listed purity categories is absent from the alloc-only surface.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/purity-disposition.md`
 - [x] 3.2 Convert pure-but-std-bound APIs such as circuit-breaker timing and duration convenience layers to explicit primitive or no-std-safe time inputs, and keep the documented duration convenience root exports (`GOSSIP_SUBSCRIBE_TIMEOUT`, `IROH_CONNECT_TIMEOUT`, `IROH_READ_TIMEOUT`, `IROH_STREAM_OPEN_TIMEOUT`, `MEMBERSHIP_OPERATION_TIMEOUT`, `READ_INDEX_TIMEOUT`, `MEMBERSHIP_COOLDOWN`) on their current root paths behind `#[cfg(feature = "std")]`.
   - Evidence: `crates/aspen-core/src/circuit_breaker.rs`, `crates/aspen-core/src/constants/mod.rs`, `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
 - [x] 3.3 Keep the alloc-safe `sql` surface available without `std` and gate `Arc<T>`-style `sql` convenience impls behind the `std` shell path.
@@ -99,7 +96,23 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 - [x] 3.7 Gate `transport`, runtime convenience impls, and their current root exports on the `std` shell path while preserving the existing public paths under `#[cfg(feature = "std")]`.
   - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
 - [x] 4.1 Update `crates/aspen-cluster` to opt into `aspen-core/std` explicitly.
-  - Evidence: `crates/aspen-cluster/Cargo.toml`
+  - Evidence: `crates/aspen-cluster/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`
+- [x] 5.1 Run `cargo tree -p aspen-core -e features > openspec/changes/no-std-aspen-core/evidence/core-default-features.txt` and assert the default feature set is empty.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
+- [x] 5.2 Run `cargo check -p aspen-core > openspec/changes/no-std-aspen-core/evidence/compile-default.txt` and assert the crate builds with the empty default feature set.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`
+- [x] 5.3 Run `cargo check -p aspen-core --no-default-features > openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt` and assert the explicit alloc-only crate build succeeds.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`
+- [x] 5.4 Run `cargo check -p aspen-core --no-default-features --features sql > openspec/changes/no-std-aspen-core/evidence/compile-sql.txt` and assert the alloc-safe `sql` surface builds without `std`.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`
+- [x] 5.5 Run `cargo check -p aspen-core --features std > openspec/changes/no-std-aspen-core/evidence/compile-std.txt` and `cargo check -p aspen-core --features std,sql > openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`, and assert both shell-enabled slices build.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`
+- [x] 5.6 Run `cargo check -p aspen-core --features layer > openspec/changes/no-std-aspen-core/evidence/compile-layer.txt` and `cargo check -p aspen-core --features global-discovery > openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`, and assert both optional shell feature slices build.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`
+- [x] 5.7 Save `crates/aspen-core-no-std-smoke/Cargo.toml` as `openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt`, save `crates/aspen-core-no-std-smoke/src/lib.rs` as `openspec/changes/no-std-aspen-core/evidence/smoke-source.txt`, run `cargo check -p aspen-core-no-std-smoke > openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`, and assert the smoke consumer is a real alloc-backed `#![no_std]` downstream crate that keeps a bare `aspen-core` dependency with no feature overrides while importing alloc-only APIs.
+  - Evidence: `crates/aspen-core-no-std-smoke/Cargo.toml`, `crates/aspen-core-no-std-smoke/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt`, `openspec/changes/no-std-aspen-core/evidence/smoke-source.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
+- [x] 5.11 Run `cargo tree -p aspen-core --no-default-features -e normal --depth 1 > openspec/changes/no-std-aspen-core/evidence/deps-direct.txt` and assert the direct prerequisite set matches the design exactly.
+  - Evidence: `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
 
 ## Scenario Coverage
 
@@ -131,7 +144,7 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 ## Review Scope Snapshot
 
 No implementation diff artifact yet.
-Current implementation slice adds alloc-backed no-std scaffolding in `aspen-core`, a real smoke consumer, explicit shell gating for current root exports, and saved compile-slice evidence for the new feature matrix.
+Current implementation slices add alloc-backed no-std scaffolding in `aspen-core`, a real smoke consumer, explicit shell gating for current root exports, alloc-safe manifest settings across direct prerequisite crates, a feature-gated alloc-safe `NodeAddress` bridge, a first purity-disposition inventory, and refreshed compile-slice plus direct-dependency evidence.
 
 ## Verification Commands
 
@@ -169,3 +182,12 @@ Current implementation slice adds alloc-backed no-std scaffolding in `aspen-core
 - `cargo check -p aspen-core-no-std-smoke > openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
   - Status: pass
   - Artifact: `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`
+- `cargo tree -p aspen-core --no-default-features -e normal --depth 1 > openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
+- `cargo tree -p aspen-cluster -e features -i aspen-core > openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`
+- `cargo tree -p aspen-cli -e features -i aspen-core > openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt`
+  - Status: pass
+  - Artifact: `openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt`

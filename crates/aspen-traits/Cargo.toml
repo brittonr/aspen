@@ -10,10 +10,10 @@ description = "Core traits for Aspen distributed systems"
 async-trait = "0.1"
 
 # Cluster types (for ClusterController trait)
-aspen-cluster-types = { path = "../aspen-cluster-types" }
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
 
 # KV types (for KeyValueStore trait)
-aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-kv-types = { path = "../aspen-kv-types", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }

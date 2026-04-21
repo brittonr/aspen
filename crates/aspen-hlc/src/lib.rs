@@ -35,6 +35,7 @@
 
 // Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
 // crates while suppressing noisier families until Aspen has cleanup bandwidth.
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![allow(unknown_lints)]
 #![allow(no_panic)]
 #![deny(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
@@ -60,6 +61,10 @@
     verified_purity
 )]
 
+extern crate alloc;
+
+use alloc::string::String;
+use core::num::NonZeroU8;
 use serde::Deserialize;
 use serde::Serialize;
 // Re-export core uhlc types for convenience
@@ -210,7 +215,7 @@ impl SerializableTimestamp {
         let id = ID::try_from(self.id).ok().unwrap_or_else(|| {
             // Unreachable: self.id is [u8; 16] which is always valid for ID.
             // Use NonZeroU8::MIN (1) as a safe fallback ID.
-            ID::from(std::num::NonZeroU8::MIN)
+            ID::from(NonZeroU8::MIN)
         });
         HlcTimestamp::new(NTP64(self.time), id)
     }

@@ -13,12 +13,23 @@
 //! - [`ClusterMetrics`]: Raft metrics wrapper
 //! - [`ControlPlaneError`]: Errors for cluster control plane operations
 
-use std::collections::BTreeMap;
-use std::collections::HashSet;
+#![cfg_attr(not(any(test, feature = "iroh")), no_std)]
+
+extern crate alloc;
+
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::fmt;
+use core::net::SocketAddr;
 
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+
+#[cfg(feature = "iroh")]
+use alloc::string::ToString;
 
 // ============================================================================
 // Error Types
@@ -65,51 +76,185 @@ pub enum ControlPlaneError {
     },
 }
 
+/// Errors converting [`NodeAddress`] values to runtime iroh types.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum NodeAddressConvertError {
+    /// The stored endpoint identifier was not a valid iroh public key.
+    #[error("invalid endpoint id: {endpoint_id}")]
+    InvalidEndpointId {
+        /// The invalid endpoint identifier.
+        endpoint_id: String,
+    },
+
+    /// The stored relay URL was not a valid iroh relay URL.
+    #[error("invalid relay url: {relay_url}")]
+    InvalidRelayUrl {
+        /// The invalid relay URL.
+        relay_url: String,
+    },
+}
+
 // ============================================================================
 // NodeAddress - P2P endpoint address wrapper
 // ============================================================================
 
+/// A transport address stored in [`NodeAddress`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum NodeTransportAddr {
+    /// Relay-based transport.
+    Relay(String),
+    /// IP-based transport.
+    Ip(SocketAddr),
+    /// Custom transport payload.
+    Custom(CustomTransportAddr),
+}
+
+/// Custom transport payload for [`NodeTransportAddr::Custom`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CustomTransportAddr {
+    /// Custom transport identifier.
+    pub id: u64,
+    /// Opaque custom transport payload.
+    pub data: Vec<u8>,
+}
+
 /// P2P endpoint address for connecting to a node.
 ///
-/// This type wraps `iroh::EndpointAddr` to decouple the public API from the
-/// underlying iroh implementation. It provides the same functionality while
-/// allowing internal implementation changes without breaking the public API.
+/// This type keeps Aspen's public address contract alloc-safe while optional
+/// conversion helpers bridge to iroh runtime types when the `iroh` feature is enabled.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct NodeAddress(iroh::EndpointAddr);
+pub struct NodeAddress {
+    endpoint_id: String,
+    addrs: BTreeSet<NodeTransportAddr>,
+}
 
 impl NodeAddress {
-    /// Create a new NodeAddress from an iroh EndpointAddr.
-    pub fn new(addr: iroh::EndpointAddr) -> Self {
-        Self(addr)
+    /// Create a new address from explicit alloc-safe parts.
+    pub fn from_parts(
+        endpoint_id: impl Into<String>,
+        addrs: impl IntoIterator<Item = NodeTransportAddr>,
+    ) -> Self {
+        Self {
+            endpoint_id: endpoint_id.into(),
+            addrs: addrs.into_iter().collect(),
+        }
     }
 
     /// Get the node's public key ID as a string.
     pub fn id(&self) -> String {
-        self.0.id.to_string()
+        self.endpoint_id.clone()
     }
 
-    /// Get a reference to the underlying iroh EndpointAddr.
-    pub fn inner(&self) -> &iroh::EndpointAddr {
-        &self.0
+    /// Borrow the node's public key ID string.
+    pub fn endpoint_id(&self) -> &str {
+        &self.endpoint_id
     }
-}
 
-impl From<iroh::EndpointAddr> for NodeAddress {
-    fn from(addr: iroh::EndpointAddr) -> Self {
-        Self(addr)
+    /// Iterate over stored transport addresses.
+    pub fn transport_addrs(&self) -> impl Iterator<Item = &NodeTransportAddr> {
+        self.addrs.iter()
     }
-}
 
-impl From<NodeAddress> for iroh::EndpointAddr {
-    fn from(addr: NodeAddress) -> Self {
-        addr.0
+    /// Returns true when no transport addresses are present.
+    pub fn is_empty(&self) -> bool {
+        self.addrs.is_empty()
     }
 }
 
-impl std::fmt::Display for NodeAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.id)
+#[cfg(feature = "iroh")]
+impl NodeAddress {
+    /// Create a new `NodeAddress` from an iroh endpoint address.
+    pub fn new(addr: iroh_base::EndpointAddr) -> Self {
+        Self::from(addr)
+    }
+
+    /// Convert this address into an iroh endpoint address.
+    pub fn try_into_iroh(&self) -> Result<iroh_base::EndpointAddr, NodeAddressConvertError> {
+        iroh_base::EndpointAddr::try_from(self)
+    }
+}
+
+#[cfg(feature = "iroh")]
+impl From<iroh_base::TransportAddr> for NodeTransportAddr {
+    fn from(addr: iroh_base::TransportAddr) -> Self {
+        const FALLBACK_CUSTOM_TRANSPORT_ID: u64 = u64::MAX;
+
+        match addr {
+            iroh_base::TransportAddr::Relay(url) => Self::Relay(url.to_string()),
+            iroh_base::TransportAddr::Ip(addr) => Self::Ip(addr),
+            iroh_base::TransportAddr::Custom(addr) => Self::Custom(CustomTransportAddr {
+                id: addr.id(),
+                data: addr.data().to_vec(),
+            }),
+            _ => Self::Custom(CustomTransportAddr {
+                id: FALLBACK_CUSTOM_TRANSPORT_ID,
+                data: format!("{addr:?}").into_bytes(),
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "iroh")]
+impl TryFrom<&NodeTransportAddr> for iroh_base::TransportAddr {
+    type Error = NodeAddressConvertError;
+
+    fn try_from(addr: &NodeTransportAddr) -> Result<Self, Self::Error> {
+        match addr {
+            NodeTransportAddr::Relay(url) => url.parse().map(iroh_base::TransportAddr::Relay).map_err(|_| {
+                NodeAddressConvertError::InvalidRelayUrl {
+                    relay_url: url.clone(),
+                }
+            }),
+            NodeTransportAddr::Ip(addr) => Ok(iroh_base::TransportAddr::Ip(*addr)),
+            NodeTransportAddr::Custom(addr) => Ok(iroh_base::TransportAddr::Custom(
+                iroh_base::CustomAddr::from_parts(addr.id, &addr.data),
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "iroh")]
+impl From<iroh_base::EndpointAddr> for NodeAddress {
+    fn from(addr: iroh_base::EndpointAddr) -> Self {
+        Self {
+            endpoint_id: addr.id.to_string(),
+            addrs: addr.addrs.into_iter().map(NodeTransportAddr::from).collect(),
+        }
+    }
+}
+
+#[cfg(feature = "iroh")]
+impl TryFrom<&NodeAddress> for iroh_base::EndpointAddr {
+    type Error = NodeAddressConvertError;
+
+    fn try_from(addr: &NodeAddress) -> Result<Self, Self::Error> {
+        let endpoint_id = addr.endpoint_id.parse().map_err(|_| NodeAddressConvertError::InvalidEndpointId {
+            endpoint_id: addr.endpoint_id.clone(),
+        })?;
+        let mut transport_addrs = BTreeSet::new();
+        for transport_addr in &addr.addrs {
+            transport_addrs.insert(iroh_base::TransportAddr::try_from(transport_addr)?);
+        }
+        Ok(iroh_base::EndpointAddr {
+            id: endpoint_id,
+            addrs: transport_addrs,
+        })
+    }
+}
+
+#[cfg(feature = "iroh")]
+impl TryFrom<NodeAddress> for iroh_base::EndpointAddr {
+    type Error = NodeAddressConvertError;
+
+    fn try_from(addr: NodeAddress) -> Result<Self, Self::Error> {
+        iroh_base::EndpointAddr::try_from(&addr)
+    }
+}
+
+impl fmt::Display for NodeAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.endpoint_id)
     }
 }
 
@@ -197,8 +342,8 @@ impl NodeId {
     }
 }
 
-impl std::fmt::Display for NodeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
@@ -215,8 +360,8 @@ impl From<NodeId> for u64 {
     }
 }
 
-impl std::str::FromStr for NodeId {
-    type Err = std::num::ParseIntError;
+impl core::str::FromStr for NodeId {
+    type Err = core::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.parse::<u64>().map(NodeId)
@@ -320,20 +465,30 @@ impl ClusterNode {
         }
     }
 
-    /// Create a ClusterNode with an iroh EndpointAddr.
-    pub fn with_iroh_addr(id: u64, iroh_addr: iroh::EndpointAddr) -> Self {
-        Self::with_node_addr(id, NodeAddress::new(iroh_addr))
-    }
-
     /// Set the relay URL for this cluster node.
     pub fn with_relay_url(mut self, relay_url: String) -> Self {
         self.relay_url = Some(relay_url);
         self
     }
 
-    /// Get the node address as an iroh EndpointAddr, if available.
-    pub fn iroh_addr(&self) -> Option<&iroh::EndpointAddr> {
-        self.node_addr.as_ref().map(|addr| addr.inner())
+    /// Get the node address as an iroh endpoint address when runtime conversion is enabled.
+    #[cfg(feature = "iroh")]
+    pub fn try_iroh_addr(&self) -> Result<Option<iroh_base::EndpointAddr>, NodeAddressConvertError> {
+        self.node_addr.as_ref().map(NodeAddress::try_into_iroh).transpose()
+    }
+
+    /// Get the node address as an iroh endpoint address, dropping malformed values.
+    #[cfg(feature = "iroh")]
+    pub fn iroh_addr(&self) -> Option<iroh_base::EndpointAddr> {
+        self.try_iroh_addr().ok().flatten()
+    }
+}
+
+#[cfg(feature = "iroh")]
+impl ClusterNode {
+    /// Create a ClusterNode with an iroh endpoint address.
+    pub fn with_iroh_addr(id: u64, iroh_addr: iroh_base::EndpointAddr) -> Self {
+        Self::with_node_addr(id, NodeAddress::new(iroh_addr))
     }
 }
 
@@ -432,7 +587,7 @@ impl InitRequest {
         }
 
         // Check for duplicate node IDs
-        let mut seen_ids = HashSet::new();
+        let mut seen_ids = BTreeSet::new();
         for node in &self.initial_members {
             if !seen_ids.insert(node.id) {
                 return Err(ControlPlaneError::InvalidRequest {
@@ -614,11 +769,10 @@ mod tests {
 
     #[test]
     fn node_id_hash() {
-        use std::collections::HashSet;
-        let mut set = HashSet::new();
+        let mut set = BTreeSet::new();
         set.insert(NodeId::new(1));
         set.insert(NodeId::new(2));
-        set.insert(NodeId::new(1)); // Duplicate
+        set.insert(NodeId::new(1));
 
         assert_eq!(set.len(), 2);
         assert!(set.contains(&NodeId::new(1)));
@@ -723,10 +877,11 @@ mod tests {
     #[test]
     fn node_state_hash() {
         use std::collections::HashSet;
+
         let mut set = HashSet::new();
         set.insert(NodeState::Leader);
         set.insert(NodeState::Follower);
-        set.insert(NodeState::Leader); // Duplicate
+        set.insert(NodeState::Leader);
 
         assert_eq!(set.len(), 2);
     }
@@ -896,74 +1051,22 @@ mod tests {
     // NodeAddress tests
     // ============================================================================
 
-    fn create_test_endpoint_addr() -> iroh::EndpointAddr {
-        use iroh::EndpointAddr;
-        use iroh::SecretKey;
-
-        let mut seed = [0u8; 32];
-        seed[0] = 42; // Deterministic seed
-        let secret_key = SecretKey::from(seed);
-        let endpoint_id = secret_key.public();
-        EndpointAddr::new(endpoint_id)
-    }
-
     #[test]
-    fn node_address_new() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::new(iroh_addr.clone());
+    fn node_address_from_parts_preserves_id_and_display() {
+        let node_addr = NodeAddress::from_parts("node-1", []);
 
-        assert_eq!(node_addr.inner(), &iroh_addr);
-    }
-
-    #[test]
-    fn node_address_id() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::new(iroh_addr.clone());
-
-        let id_str = node_addr.id();
-        // Should match the iroh endpoint's public key as string
-        assert_eq!(id_str, iroh_addr.id.to_string());
-    }
-
-    #[test]
-    fn node_address_inner() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::new(iroh_addr.clone());
-
-        assert_eq!(node_addr.inner(), &iroh_addr);
-    }
-
-    #[test]
-    fn node_address_from_endpoint_addr() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr: NodeAddress = iroh_addr.clone().into();
-
-        assert_eq!(node_addr.inner(), &iroh_addr);
-    }
-
-    #[test]
-    fn node_address_into_endpoint_addr() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::new(iroh_addr.clone());
-
-        let recovered: iroh::EndpointAddr = node_addr.into();
-        assert_eq!(recovered, iroh_addr);
-    }
-
-    #[test]
-    fn node_address_display() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::new(iroh_addr.clone());
-
-        let display = format!("{}", node_addr);
-        // Display should show the public key ID
-        assert_eq!(display, iroh_addr.id.to_string());
+        assert_eq!(node_addr.id(), "node-1".to_string());
+        assert_eq!(node_addr.endpoint_id(), "node-1");
+        assert!(node_addr.is_empty());
+        assert_eq!(format!("{}", node_addr), "node-1");
     }
 
     #[test]
     fn node_address_clone() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::new(iroh_addr);
+        let node_addr = NodeAddress::from_parts(
+            "node-1",
+            [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7777)))],
+        );
         let cloned = node_addr.clone();
 
         assert_eq!(node_addr, cloned);
@@ -971,20 +1074,69 @@ mod tests {
 
     #[test]
     fn node_address_equality() {
-        let iroh_addr = create_test_endpoint_addr();
-        let addr1 = NodeAddress::new(iroh_addr.clone());
-        let addr2 = NodeAddress::new(iroh_addr);
+        let addr1 = NodeAddress::from_parts("node-1", []);
+        let addr2 = NodeAddress::from_parts("node-1", []);
 
         assert_eq!(addr1, addr2);
     }
 
     #[test]
     fn node_address_debug() {
-        let iroh_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::new(iroh_addr);
+        let node_addr = NodeAddress::from_parts("node-1", []);
 
         let debug = format!("{:?}", node_addr);
         assert!(debug.contains("NodeAddress"));
+    }
+
+    #[cfg(feature = "iroh")]
+    fn create_test_endpoint_addr() -> iroh_base::EndpointAddr {
+        use iroh_base::EndpointAddr;
+        use iroh_base::SecretKey;
+
+        let mut seed = [0u8; 32];
+        seed[0] = 42;
+        let secret_key = SecretKey::from(seed);
+        EndpointAddr::new(secret_key.public())
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn node_address_new_round_trips_endpoint_addr() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr.clone());
+
+        assert_eq!(node_addr.id(), iroh_addr.id.to_string());
+        assert_eq!(node_addr.try_into_iroh(), Ok(iroh_addr));
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn node_address_try_into_iroh_rejects_invalid_endpoint_id() {
+        let node_addr = NodeAddress::from_parts("not-an-endpoint", []);
+
+        assert_eq!(
+            node_addr.try_into_iroh(),
+            Err(NodeAddressConvertError::InvalidEndpointId {
+                endpoint_id: "not-an-endpoint".to_string(),
+            })
+        );
+    }
+
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn node_address_try_into_iroh_rejects_invalid_relay_url() {
+        let endpoint_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::from_parts(
+            endpoint_addr.id.to_string(),
+            [NodeTransportAddr::Relay("not-a-url".to_string())],
+        );
+
+        assert_eq!(
+            node_addr.try_into_iroh(),
+            Err(NodeAddressConvertError::InvalidRelayUrl {
+                relay_url: "not-a-url".to_string(),
+            })
+        );
     }
 
     // ============================================================================
@@ -1010,12 +1162,6 @@ mod tests {
     }
 
     #[test]
-    fn cluster_node_iroh_addr_returns_none_when_not_set() {
-        let node = ClusterNode::new(1, "test", None);
-        assert!(node.iroh_addr().is_none());
-    }
-
-    #[test]
     fn cluster_node_equality() {
         let node1 = ClusterNode::new(1, "addr1", None);
         let node2 = ClusterNode::new(1, "addr1", None);
@@ -1023,8 +1169,8 @@ mod tests {
         let node4 = ClusterNode::new(1, "addr2", None);
 
         assert_eq!(node1, node2);
-        assert_ne!(node1, node3); // Different ID
-        assert_ne!(node1, node4); // Different addr
+        assert_ne!(node1, node3);
+        assert_ne!(node1, node4);
     }
 
     #[test]
@@ -1042,6 +1188,15 @@ mod tests {
         assert!(debug.contains("addr: \"test\""));
     }
 
+    #[cfg(feature = "iroh")]
+    #[test]
+    fn cluster_node_iroh_addr_returns_none_when_not_set() {
+        let node = ClusterNode::new(1, "test", None);
+        assert_eq!(node.try_iroh_addr(), Ok(None));
+        assert!(node.iroh_addr().is_none());
+    }
+
+    #[cfg(feature = "iroh")]
     #[test]
     fn cluster_node_with_node_addr() {
         let iroh_addr = create_test_endpoint_addr();
@@ -1052,9 +1207,11 @@ mod tests {
         assert_eq!(node.addr, iroh_addr.id.to_string());
         assert!(node.raft_addr.is_none());
         assert!(node.node_addr.is_some());
-        assert_eq!(node.iroh_addr(), Some(&iroh_addr));
+        assert_eq!(node.try_iroh_addr(), Ok(Some(iroh_addr.clone())));
+        assert_eq!(node.iroh_addr(), Some(iroh_addr));
     }
 
+    #[cfg(feature = "iroh")]
     #[test]
     fn cluster_node_with_iroh_addr() {
         let iroh_addr = create_test_endpoint_addr();
@@ -1064,7 +1221,8 @@ mod tests {
         assert_eq!(node.addr, iroh_addr.id.to_string());
         assert!(node.raft_addr.is_none());
         assert!(node.node_addr.is_some());
-        assert_eq!(node.iroh_addr(), Some(&iroh_addr));
+        assert_eq!(node.try_iroh_addr(), Ok(Some(iroh_addr.clone())));
+        assert_eq!(node.iroh_addr(), Some(iroh_addr));
     }
 
     #[test]

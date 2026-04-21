@@ -8,7 +8,7 @@
 
 - Treat `cargo check -p aspen-core`, `cargo check -p aspen-core-no-std-smoke`, and the saved compile-slice evidence under `openspec/changes/no-std-aspen-core/evidence/compile-*.txt` as the reliable slice-local rails until the wider workspace breakage is fixed.
 - `cargo check -p aspen-cluster` may still die before cluster code because vendored `openraft` currently panics inside `#[since(...)]` proc-macros on this toolchain; do not misattribute that failure to `aspen-core/std` gating.
-- `cargo tree -p aspen-core -e features` still shows `iroh` in the bare/default graph via `crates/aspen-cluster-types` and `NodeAddress`. Dependency-boundary cleanup must fix `aspen-cluster-types` before alloc-only verification can pass.
+- `cargo tree -p aspen-core -e features` can keep showing `iroh`/`iroh-base` even after `aspen-core` disables defaults on `aspen-cluster-types` if `crates/aspen-traits` still depends on `aspen-cluster-types` with defaults. Boundary cleanup must fix both the leaf crate feature gate and every transitive re-export path.
 
 ## Tigerstyle scope (2026-04-21)
 

@@ -7,10 +7,10 @@ description = "Key-value operation types for Aspen distributed systems"
 
 [dependencies]
 # Constants (for validation limits)
-aspen-constants = { path = "../aspen-constants" }
+aspen-constants = { path = "../aspen-constants", default-features = false }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 
 # Error handling
 thiserror = "2.0"
