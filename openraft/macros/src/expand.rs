@@ -200,22 +200,22 @@ impl Parse for Expand {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut b = Expand {
             keyed: true,
-            idents: vec![],
-            template: Default::default(),
-            args_list: vec![],
-            present_keys: Default::default(),
+            idents: Vec::new(),
+            template: TokenStream2::new(),
+            args_list: Vec::new(),
+            present_keys: HashSet::new(),
         };
 
         // KEYED, or !KEYED,
         {
             let not = input.parse::<Token![!]>();
-            let not_keyed = not.is_ok();
+            let is_keyed = not.is_err();
 
             let keyed_lit = input.parse::<Ident>()?;
             if keyed_lit != "KEYED" {
                 return Err(syn::Error::new_spanned(&keyed_lit, "Expected KEYED"));
             };
-            b.keyed = !not_keyed;
+            b.keyed = is_keyed;
         }
 
         input.parse::<Token![,]>()?;
@@ -251,11 +251,7 @@ impl Parse for Expand {
         // List of arguments tuples for rendering the template
         // , (K1, V1...)...
 
-        loop {
-            if input.is_empty() {
-                break;
-            }
-
+        while !input.is_empty() {
             input.parse::<Token![,]>()?;
 
             if input.is_empty() {
@@ -273,11 +269,7 @@ impl Parse for Expand {
                 let k = content.parse::<TypeOrExpr>()?;
                 let mut args = vec![k.clone()];
 
-                loop {
-                    if content.is_empty() {
-                        break;
-                    }
-
+                while !content.is_empty() {
                     content.parse::<Token![,]>()?;
 
                     if content.is_empty() {

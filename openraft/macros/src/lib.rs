@@ -6,16 +6,17 @@ mod since;
 pub(crate) mod utils;
 
 use proc_macro::TokenStream;
+use quote::ToTokens;
 use quote::quote;
 use since::Since;
 use syn::Item;
+use syn::Block;
 use syn::ReturnType;
 use syn::TraitItem;
 use syn::Type;
 use syn::parse_macro_input;
 use syn::parse_str;
 use syn::parse2;
-use syn::token::RArrow;
 
 /// This proc macro attribute optionally adds `Send` bounds to a trait.
 ///
@@ -70,13 +71,19 @@ fn allow_non_send_bounds(item: TokenStream) -> TokenStream {
 }
 
 fn add_send_bounds(item: TokenStream) -> TokenStream {
-    let default_return_type: Box<Type> = parse_str("impl std::future::Future<Output = ()> + Send").unwrap();
+    let item_for_error = item.clone();
+    let default_return_type: Box<Type> = match parse_str("impl std::future::Future<Output = ()> + Send") {
+        Ok(value) => value,
+        Err(error) => return utils::token_stream_with_error(item_for_error.clone(), error),
+    };
+
+    debug_assert!(!default_return_type.to_token_stream().is_empty());
 
     match parse_macro_input!(item) {
         Item::Trait(mut input) => {
-            for item in input.items.iter_mut() {
+            for trait_item in input.items.iter_mut() {
                 // for each async function definition
-                let TraitItem::Fn(function) = item else { continue };
+                let TraitItem::Fn(function) = trait_item else { continue };
                 if function.sig.asyncness.is_none() {
                     continue;
                 };
@@ -86,23 +93,38 @@ fn add_send_bounds(item: TokenStream) -> TokenStream {
 
                 // wrap the return type in a `Future`
                 function.sig.output = match &function.sig.output {
-                    ReturnType::Default => ReturnType::Type(RArrow::default(), default_return_type.clone()),
-                    ReturnType::Type(arrow, t) => {
-                        let tokens = quote!(impl std::future::Future<Output = #t> + Send);
-                        ReturnType::Type(*arrow, parse2(tokens).unwrap())
+                    ReturnType::Default => match parse2(quote!(-> impl std::future::Future<Output = ()> + Send)) {
+                        Ok(value) => value,
+                        Err(error) => return utils::token_stream_with_error(item_for_error.clone(), error),
+                    },
+                    ReturnType::Type(_, t) => {
+                        let tokens = quote!(-> impl std::future::Future<Output = #t> + Send);
+                        match parse2(tokens) {
+                            Ok(value) => value,
+                            Err(error) => return utils::token_stream_with_error(item_for_error.clone(), error),
+                        }
                     }
                 };
 
+                debug_assert!(matches!(function.sig.output, ReturnType::Type(_, _)));
+
                 // if a body is defined, wrap it in an async block
                 let Some(body) = &function.default else { continue };
-                let body = parse2(quote!({ async move #body })).unwrap();
+                let body: Block = match parse2(quote!({ async move #body })) {
+                    Ok(value) => value,
+                    Err(error) => return utils::token_stream_with_error(item_for_error.clone(), error),
+                };
                 function.default = Some(body);
+                debug_assert!(function.default.is_some());
             }
 
             quote!(#input).into()
         }
 
-        _ => panic!("add_async_trait can only be used with traits"),
+        other => utils::token_stream_with_error(
+            item_for_error,
+            syn::Error::new_spanned(other, "add_async_trait can only be used with traits"),
+        ),
     }
 }
 

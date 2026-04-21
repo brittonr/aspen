@@ -295,8 +295,14 @@ mod tests {
         // ms / 1000 should be close to secs (within 1 second)
         let ms_as_secs = ms / 1000;
         assert!(
-            ms_as_secs >= secs.saturating_sub(1) && ms_as_secs <= secs + 1,
-            "ms/1000 ({}) and secs ({}) should be consistent",
+            ms_as_secs >= secs.saturating_sub(1),
+            "ms/1000 ({}) should not trail secs ({}) by more than 1",
+            ms_as_secs,
+            secs
+        );
+        assert!(
+            ms_as_secs <= secs.saturating_add(1),
+            "ms/1000 ({}) should not lead secs ({}) by more than 1",
             ms_as_secs,
             secs
         );
@@ -308,7 +314,11 @@ mod tests {
         let ms1 = current_time_ms();
         let ms2 = provider.now_unix_ms();
         // Should be within 10ms of each other
-        assert!(ms2 >= ms1 && ms2 <= ms1 + 10, "SystemTimeProvider should match current_time_ms");
+        assert!(ms2 >= ms1, "SystemTimeProvider should not lag current_time_ms");
+        assert!(
+            ms2 <= ms1.saturating_add(10),
+            "SystemTimeProvider should stay within 10ms of current_time_ms"
+        );
     }
 
     #[test]

@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_cookie_too_long() {
-        let long_cookie = "a".repeat(MAX_COOKIE_LENGTH + 1);
+        let long_cookie = "a".repeat(MAX_COOKIE_LENGTH.saturating_add(1));
         assert!(matches!(validate_cookie_length(&long_cookie), Err(CookieError::TooLong { .. })));
     }
 

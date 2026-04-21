@@ -32,7 +32,7 @@ pub fn merge_scan(
     debug_assert!(dirty_sorted.windows(2).all(|w| w[0].0 <= w[1].0), "dirty_sorted must be sorted by key");
     debug_assert!(parent_entries.windows(2).all(|w| w[0].key <= w[1].key), "parent_entries must be sorted by key");
 
-    let max_results = limit_entries as usize;
+    let max_results = usize::try_from(limit_entries).unwrap_or(usize::MAX);
     let total_inputs = dirty_sorted.len().saturating_add(parent_entries.len());
     let mut result = Vec::with_capacity(max_results.min(total_inputs));
 

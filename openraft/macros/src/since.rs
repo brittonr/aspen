@@ -74,30 +74,36 @@ impl Since {
     pub(crate) fn append_since_doc(self, item: TokenStream) -> Result<TokenStream, syn::Error> {
         let item = proc_macro2::TokenStream::from(item);
 
+        let token_count = item.clone().into_iter().count();
+
         // Present docs to skip, in order to append `since` at bottom of doc section.
-        let mut present_docs = vec![];
+        let mut present_docs = Vec::with_capacity(token_count);
 
         // Tokens left after present docs.
-        let mut last_non_doc = vec![];
+        let mut last_non_doc = Vec::with_capacity(token_count);
 
-        let mut it = item.clone().into_iter();
-        loop {
-            let Some(curr) = it.next() else {
-                break;
-            };
-            let Some(next) = it.next() else {
+        let tokens: Vec<_> = item.clone().into_iter().collect();
+        let mut token_index = 0usize;
+        while token_index < tokens.len() {
+            let curr = tokens[token_index].clone();
+            let next_index = token_index.saturating_add(1);
+            if next_index >= tokens.len() {
                 last_non_doc.push(curr);
                 break;
-            };
+            }
 
+            let next = tokens[next_index].clone();
             if utils::is_doc(&curr, &next) {
                 present_docs.push(curr);
                 present_docs.push(next);
-            } else {
-                last_non_doc.push(curr);
-                last_non_doc.push(next);
-                break;
+                token_index = token_index.saturating_add(2);
+                continue;
             }
+
+            last_non_doc.push(curr);
+            last_non_doc.push(next);
+            token_index = token_index.saturating_add(2);
+            break;
         }
 
         let since_docs_str = if present_docs.is_empty() {
@@ -106,13 +112,14 @@ impl Since {
             // If there are already docs, insert a blank line.
             format!(r#"#[doc = ""] #[doc = " {}"]"#, self.to_doc_string())
         };
-        let since_docs = proc_macro2::TokenStream::from_str(&since_docs_str).unwrap();
+        let since_docs = proc_macro2::TokenStream::from_str(&since_docs_str)
+            .map_err(|e| syn::Error::new(Span::call_site(), format!("failed to parse generated docs: {e}")))?;
 
         let present_docs: proc_macro2::TokenStream = present_docs.into_iter().collect();
         let last_non_docs: proc_macro2::TokenStream = last_non_doc.into_iter().collect();
 
         // Other non doc tokens.
-        let other: proc_macro2::TokenStream = it.collect();
+        let other: proc_macro2::TokenStream = tokens.into_iter().skip(token_index).collect();
 
         let tokens = quote! {
             #present_docs

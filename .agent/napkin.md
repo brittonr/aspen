@@ -1,5 +1,15 @@
 # Napkin - Mistakes and Learnings
 
+## Tigerstyle scope (2026-04-21)
+
+**Discovery**: `cargo tigerstyle check` on Aspen workspace reports vendored `openraft` / `openraft_macros` findings too. Aspen-local cleanup can reach zero Aspen findings while vendored macro lints still remain.
+
+### What To Do
+
+- Filter SARIF/JSON by `crates/aspen-`, `src/`, etc. when user asks for Aspen-only fixes.
+- Do not assume workspace summary means Aspen crates still have violations.
+- After fixes, rerun and verify remaining findings are only under `openraft/`.
+
 ## CI with Forge Web (2026-04-19)
 
 **Discovery**: CI with Aspen Forge Web is **already fully implemented and working**.

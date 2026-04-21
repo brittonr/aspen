@@ -76,7 +76,7 @@ impl DagSyncProtocolHandler {
         Self {
             on_request,
             connection_semaphore: Arc::new(Semaphore::new(
-                MAX_DAG_SYNC_CONNECTIONS as usize,
+                usize::try_from(MAX_DAG_SYNC_CONNECTIONS).unwrap_or(usize::MAX),
             )),
         }
     }
@@ -118,7 +118,7 @@ impl ProtocolHandler for DagSyncProtocolHandler {
 
         // Read request with size bound
         let request_bytes = recv
-            .read_to_end(MAX_DAG_SYNC_REQUEST_SIZE as usize)
+            .read_to_end(usize::try_from(MAX_DAG_SYNC_REQUEST_SIZE).unwrap_or(usize::MAX))
             .await
             .map_err(|e| AcceptError::from_err(std::io::Error::other(e.to_string())))?;
 

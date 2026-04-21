@@ -704,7 +704,7 @@ mod tests {
 
     #[test]
     fn rwlock_result_roundtrip() {
-        roundtrip(&RwLockResultResponse {
+        let write_lock = RwLockResultResponse {
             is_success: true,
             mode: Some("write".into()),
             fencing_token: Some(7),
@@ -712,11 +712,25 @@ mod tests {
             reader_count: Some(0),
             writer_holder: Some("writer-1".into()),
             error: None,
-        });
-        roundtrip(&RwLockResultResponse {
+        };
+        roundtrip(&write_lock);
+        assert_eq!(write_lock.mode.as_deref(), Some("write"));
+        assert_eq!(write_lock.reader_count, Some(0));
+        let read_lock = RwLockResultResponse {
             is_success: true,
             mode: Some("read".into()),
             fencing_token: None,
+            is_success: true,
+            mode: Some("write".into()),
+            fencing_token: Some(7),
+            deadline_ms: Some(1_700_000_000_000),
+            reader_count: Some(0),
+            writer_holder: Some("writer-1".into()),
+            error: None,
+        };
+        roundtrip(&read_lock);
+        assert_eq!(read_lock.mode.as_deref(), Some("read"));
+        assert!(read_lock.fencing_token.is_none());
             deadline_ms: Some(1_700_000_000_000),
             reader_count: Some(3),
             writer_holder: None,

@@ -408,7 +408,50 @@ mod tests {
 
     #[test]
     fn job_queue_stats_roundtrip() {
-        roundtrip(&JobQueueStatsResultResponse {
+        let populated = JobQueueStatsResultResponse {
+            pending_count: 10,
+            scheduled_count: 5,
+            running_count: 3,
+            completed_count: 100,
+            failed_count: 2,
+            cancelled_count: 1,
+            priority_counts: vec![PriorityCount { priority: 0, count: 5 }, PriorityCount {
+                priority: 2,
+                count: 8,
+            }],
+            type_counts: vec![TypeCount {
+                job_type: "build".into(),
+                count: 13,
+            }],
+            error: None,
+        };
+        roundtrip(&populated);
+        assert_eq!(populated.priority_counts.len(), 2);
+        assert_eq!(populated.type_counts.len(), 1);
+        // Empty stats
+        let empty = JobQueueStatsResultResponse {
+            pending_count: 0,
+            scheduled_count: 0,
+            running_count: 0,
+            completed_count: 0,
+            failed_count: 0,
+            cancelled_count: 0,
+            priority_counts: vec![],
+            type_counts: vec![],
+            error: None,
+        };
+        roundtrip(&empty);
+        assert!(empty.priority_counts.is_empty());
+        assert!(empty.type_counts.is_empty());
+    }
+
+    // =========================================================================
+    // Worker management
+    // =========================================================================
+
+    #[test]
+    fn worker_status_result_roundtrip() {
+        roundtrip(&WorkerStatusResultResponse {
             pending_count: 10,
             scheduled_count: 5,
             running_count: 3,
@@ -504,7 +547,34 @@ mod tests {
 
     #[test]
     fn worker_poll_jobs_result_roundtrip() {
-        roundtrip(&WorkerPollJobsResultResponse {
+        let populated = WorkerPollJobsResultResponse {
+            is_success: true,
+            worker_id: "w-1".into(),
+            jobs: vec![WorkerJobInfo {
+                job_id: "job-005".into(),
+                job_type: "test".into(),
+                job_spec_json: r#"{"command":"cargo nextest run"}"#.into(),
+                priority: "high".into(),
+                created_at_ms: 1_700_000_000_000,
+                visibility_timeout_ms: 1_700_000_060_000,
+                receipt_handle: "rh-xyz".into(),
+                execution_token: "et-123".into(),
+            }],
+            error: None,
+        };
+        roundtrip(&populated);
+        assert_eq!(populated.jobs.len(), 1);
+        assert_eq!(populated.worker_id, "w-1");
+        let empty = WorkerPollJobsResultResponse {
+            is_success: true,
+            worker_id: "w-2".into(),
+            jobs: vec![],
+            error: None,
+        };
+        roundtrip(&empty);
+        assert!(empty.jobs.is_empty());
+        assert_eq!(empty.worker_id, "w-2");
+    }
             is_success: true,
             worker_id: "w-1".into(),
             jobs: vec![WorkerJobInfo {

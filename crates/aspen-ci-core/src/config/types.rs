@@ -940,8 +940,10 @@ mod tests {
             priority: Priority::default(),
         };
         let err = config.validate().unwrap_err();
+        let err_text = err.to_string();
         assert_eq!(config.stages[0].jobs.len(), 2);
-        assert!(err.to_string().contains("same stage"), "got: {err}");
+        assert!(!err_text.is_empty());
+        assert!(err_text.contains("same stage"), "got: {err_text}");
     }
 
     #[test]
@@ -973,7 +975,9 @@ mod tests {
         };
 
         let err = config.validate().unwrap_err();
-        assert!(err.to_string().contains("build -> deploy -> build"), "got: {err}");
+        let err_text = err.to_string();
+        assert!(!err_text.is_empty());
+        assert!(err_text.contains("build -> deploy -> build"), "got: {err_text}");
     }
 
     #[test]

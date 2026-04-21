@@ -1224,7 +1224,7 @@ mod tests {
         let request = InitRequest {
             initial_members: vec![
                 ClusterNode::new(u64::MAX, "max-id", None),
-                ClusterNode::new(u64::MAX - 1, "almost-max", None),
+                ClusterNode::new(u64::MAX.saturating_sub(1), "almost-max", None),
             ],
             trust: Default::default(),
         };

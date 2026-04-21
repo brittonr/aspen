@@ -681,7 +681,7 @@ mod tests {
     #[test]
     fn test_latency_validation() {
         // Should fail with latency > MAX_LATENCY_MS
-        let result = LatencyInjection::create("eth0", MAX_LATENCY_MS + 1, 0);
+        let result = LatencyInjection::create("eth0", MAX_LATENCY_MS.saturating_add(1), 0);
         assert!(result.is_err());
         assert!(matches!(result, Err(FaultError::InvalidParameter { name: "latency_ms", .. })));
     }
@@ -724,7 +724,7 @@ mod tests {
         }
 
         // Just over the limit should fail validation
-        let result = LatencyInjection::create("eth0", MAX_LATENCY_MS + 1, 0);
+        let result = LatencyInjection::create("eth0", MAX_LATENCY_MS.saturating_add(1), 0);
         assert!(matches!(result, Err(FaultError::InvalidParameter { .. })));
     }
 
@@ -886,29 +886,34 @@ mod tests {
 
         // Create structures that will likely fail to inject but should drop safely
         let scenario = FaultScenario::new();
+        assert!(!scenario.has_active_faults());
         drop(scenario); // Should not panic
 
         // Test individual fault types
         if let Ok(mut partition) = NetworkPartition::create("192.168.1.1", &["192.168.1.2"]) {
             // If creation succeeded, test healing
-            let _ = partition.heal(); // Should not panic
+            let heal_result = partition.heal(); // Should not panic
+            assert!(heal_result.is_ok());
             drop(partition); // Should not panic
         }
 
         if let Ok(mut partition) =
             AsymmetricPartition::create("192.168.1.1", &["192.168.1.2"], PartitionDirection::OutboundOnly)
         {
-            let _ = partition.heal(); // Should not panic
+            let heal_result = partition.heal(); // Should not panic
+            assert!(heal_result.is_ok());
             drop(partition); // Should not panic
         }
 
         if let Ok(mut latency) = LatencyInjection::create("eth0", 100, 10) {
-            let _ = latency.heal(); // Should not panic
+            let heal_result = latency.heal(); // Should not panic
+            assert!(heal_result.is_ok());
             drop(latency); // Should not panic
         }
 
         if let Ok(mut loss) = PacketLossInjection::create("eth0", 10) {
-            let _ = loss.heal(); // Should not panic
+            let heal_result = loss.heal(); // Should not panic
+            assert!(heal_result.is_ok());
             drop(loss); // Should not panic
         }
     }
@@ -976,10 +981,10 @@ mod tests {
     #[test]
     #[ignore = "requires root privileges"]
     fn test_latency_injection_lifecycle() {
-        let mut latency = LatencyInjection::create("lo", 100, 10).unwrap();
-        assert!(latency.is_active());
-        latency.heal().unwrap();
-        assert!(!latency.is_active());
+        let mut latency_injection = LatencyInjection::create("lo", 100, 10).unwrap();
+        assert!(latency_injection.is_active());
+        latency_injection.heal().unwrap();
+        assert!(!latency_injection.is_active());
     }
 
     #[test]

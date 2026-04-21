@@ -168,6 +168,16 @@ pub struct ContentDiscoveryService {
     public_key: PublicKey,
 }
 
+struct AnnounceRequest<'a> {
+    endpoint: &'a Arc<Endpoint>,
+    secret_key: &'a SecretKey,
+    tracker: &'a Arc<RwLock<AnnounceTracker>>,
+    dht_client: Option<&'a Arc<DhtClient>>,
+    hash: Hash,
+    size: u64,
+    format: BlobFormat,
+}
+
 impl ContentDiscoveryService {
     /// Spawn the content discovery service.
     ///
@@ -350,21 +360,22 @@ impl ContentDiscoveryService {
                         DiscoveryCommand::AnnounceLocalBlobs { blobs, reply } => {
                             let mut announced = 0u32;
                             for (hash, size, format) in blobs {
-                                let result = Self::handle_announce(
-                                    &endpoint,
-                                    &secret_key,
-                                    &tracker,
-                                    dht_client.as_ref(),
+                                let result = Self::handle_announce(AnnounceRequest {
+                                    endpoint: &endpoint,
+                                    secret_key: &secret_key,
+                                    tracker: &tracker,
+                                    dht_client: dht_client.as_ref(),
                                     hash,
                                     size,
                                     format,
-                                ).await;
+                                }).await;
                                 if result.is_ok() {
                                     announced = announced.saturating_add(1);
                                 }
                             }
                             info!(count = announced, "bulk announced local blobs to DHT");
-                            drop(reply.send(Ok(announced as usize)));
+                            let announced_count = usize::try_from(announced).unwrap_or(usize::MAX);
+                            drop(reply.send(Ok(announced_count)));
                         }
 
                         DiscoveryCommand::FindProviderByKey { public_key, hash, format, reply } => {
@@ -402,15 +413,14 @@ impl ContentDiscoveryService {
         }
     }
 
-    async fn handle_announce(
-        endpoint: &Arc<Endpoint>,
-        secret_key: &SecretKey,
-        tracker: &Arc<RwLock<AnnounceTracker>>,
-        dht_client: Option<&Arc<DhtClient>>,
-        hash: Hash,
-        size: u64,
-        format: BlobFormat,
-    ) -> Result<()> {
+    async fn handle_announce(request: AnnounceRequest<'_>) -> Result<()> {
+        let endpoint = request.endpoint;
+        let secret_key = request.secret_key;
+        let tracker = request.tracker;
+        let dht_client = request.dht_client;
+        let hash = request.hash;
+        let size = request.size;
+        let format = request.format;
         // Check rate limit
         if !tracker.read().can_announce(&hash) {
             debug!(?hash, "announce rate limited");
@@ -710,9 +720,9 @@ mod tests {
     fn test_announce_tracker_capacity_limit() {
         let mut tracker = AnnounceTracker::new(3);
 
-        for i in 0..5 {
-            let hash = Hash::from_bytes([i as u8; 32]);
-            tracker.record_announce(hash, i as u64 * 100, BlobFormat::Raw);
+        for i in 0u8..5u8 {
+            let hash = Hash::from_bytes([i; 32]);
+            tracker.record_announce(hash, u64::from(i).saturating_mul(100), BlobFormat::Raw);
         }
 
         // Should not exceed capacity

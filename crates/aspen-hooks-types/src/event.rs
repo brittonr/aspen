@@ -682,14 +682,14 @@ mod tests {
         assert!(json.get("error").is_none());
 
         // DocsEntryImported
-        let entry_imported = DocsEntryImportedPayload {
+        let docs_entry_imported = DocsEntryImportedPayload {
             key: "user/123".to_string(),
             source_cluster: "remote-cluster".to_string(),
             priority: 1,
             value_size_bytes: 256,
             is_update: false,
         };
-        let json = serde_json::to_value(&entry_imported).unwrap();
+        let json = serde_json::to_value(&docs_entry_imported).unwrap();
         assert_eq!(json["key"], "user/123");
         assert_eq!(json["priority"], 1);
         assert_eq!(json["is_update"], false);

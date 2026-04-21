@@ -430,8 +430,10 @@ mod tests {
         assert_eq!(order.len(), 4);
         assert_eq!(order[0].name, "d");
         // B and C can be in any order
-        assert!(order[1].name == "b" || order[1].name == "c");
-        assert!(order[2].name == "b" || order[2].name == "c");
+        let is_second_middle = order[1].name == "b" || order[1].name == "c";
+        let is_third_middle = order[2].name == "b" || order[2].name == "c";
+        assert!(is_second_middle);
+        assert!(is_third_middle);
         assert_eq!(order[3].name, "a");
     }
 

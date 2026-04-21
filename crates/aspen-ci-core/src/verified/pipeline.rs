@@ -311,7 +311,7 @@ pub fn compute_stage_order(stages_with_deps: &[(u32, Vec<u32>)], stage_count: u3
             continue;
         };
         if idx_usize < stage_count_index {
-            in_degree[idx_usize] = deps.len().min(u32::MAX as usize) as u32;
+            in_degree[idx_usize] = u32::try_from(deps.len()).unwrap_or(u32::MAX);
         }
     }
 

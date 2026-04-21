@@ -399,7 +399,7 @@ mod tests {
 
         // Name too long
         let config = HookHandlerConfig {
-            name: "x".repeat(MAX_HANDLER_NAME_SIZE + 1),
+            name: "x".repeat(MAX_HANDLER_NAME_SIZE.saturating_add(1)),
             pattern: "hooks.>".to_string(),
             execution_mode: ExecutionMode::Direct,
             handler_type: HookHandlerType::InProcess {
@@ -422,7 +422,7 @@ mod tests {
             handler_type: HookHandlerType::InProcess {
                 handler_id: "test".to_string(),
             },
-            timeout_ms: MAX_HANDLER_TIMEOUT_MS + 1,
+            timeout_ms: MAX_HANDLER_TIMEOUT_MS.saturating_add(1),
             retry_count: 3,
             job_priority: None,
             is_enabled: true,
@@ -454,7 +454,7 @@ mod tests {
             pattern: "hooks.>".to_string(),
             execution_mode: ExecutionMode::Direct,
             handler_type: HookHandlerType::Shell {
-                command: "x".repeat(MAX_SHELL_COMMAND_SIZE + 1),
+                command: "x".repeat(MAX_SHELL_COMMAND_SIZE.saturating_add(1)),
                 working_dir: None,
             },
             timeout_ms: 5000,
@@ -497,7 +497,9 @@ mod tests {
                 },
             ],
         };
-        assert!(matches!(config.validate(), Err(HookTypeError::ConfigInvalid { .. })));
+        let result = config.validate();
+        assert!(result.is_err());
+        assert!(matches!(result, Err(HookTypeError::ConfigInvalid { .. })));
     }
 
     #[test]

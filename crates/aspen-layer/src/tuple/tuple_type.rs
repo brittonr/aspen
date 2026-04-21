@@ -36,9 +36,15 @@ impl Tuple {
     }
 
     /// Create a tuple with pre-allocated capacity.
-    pub fn with_capacity(capacity_elements: u32) -> Self {
+    #[allow(unknown_lints)]
+    #[allow(numeric_units, reason = "tuple capacity counts elements rather than a physical unit")]
+    pub fn with_capacity(capacity_count: u32) -> Self {
+        let capacity = match usize::try_from(capacity_count) {
+            Ok(value) => value,
+            Err(_) => return Self::new(),
+        };
         Self {
-            elements: Vec::with_capacity(usize::try_from(capacity_elements).unwrap_or(usize::MAX)),
+            elements: Vec::with_capacity(capacity),
         }
     }
 
@@ -98,7 +104,14 @@ impl Tuple {
     /// Returns the decoded tuple and ensures all bytes were consumed.
     pub fn unpack(data: &[u8]) -> Result<Self, TupleError> {
         let (tuple, consumed_bytes) = Self::unpack_partial(data)?;
-        let consumed = usize::try_from(consumed_bytes).unwrap_or(usize::MAX);
+        let consumed = match usize::try_from(consumed_bytes) {
+            Ok(value) => value,
+            Err(_) => {
+                return Err(TupleError::IntegerOverflow {
+                    offset: data.len(),
+                });
+            }
+        };
         if consumed != data.len() {
             // Extra bytes after tuple - this is valid, return what we got
         }
@@ -118,7 +131,15 @@ impl Tuple {
             offset_bytes = offset_bytes.saturating_add(consumed_bytes);
         }
 
-        Ok((tuple, offset_bytes.min(usize::MAX) as u32))
+        let consumed_bytes = match u32::try_from(offset_bytes) {
+            Ok(value) => value,
+            Err(_) => {
+                return Err(TupleError::IntegerOverflow {
+                    offset: offset_bytes,
+                });
+            }
+        };
+        Ok((tuple, consumed_bytes))
     }
 
     /// Get the range of keys that have this tuple as a prefix.

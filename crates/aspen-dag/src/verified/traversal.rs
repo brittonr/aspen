@@ -24,9 +24,26 @@ pub fn should_visit(is_visited: bool, is_known_head: bool) -> bool {
 ///
 /// Returns true if `depth < max_depth`. Uses strict less-than because
 /// depth 0 is the root, so `max_depth = 10_000` allows depths 0..9_999.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TraversalBound {
+    max: u32,
+}
+
+impl TraversalBound {
+    #[inline]
+    pub const fn new(max: u32) -> Self {
+        Self { max }
+    }
+
+    #[inline]
+    pub const fn max(self) -> u32 {
+        self.max
+    }
+}
+
 #[inline]
-pub fn is_within_depth_bound(depth: u32, max_depth: u32) -> bool {
-    depth < max_depth
+pub fn is_within_depth_bound(depth: u32, max_depth: TraversalBound) -> bool {
+    depth < max_depth.max()
 }
 
 /// Check whether a node count is within the allowed bound.
@@ -34,8 +51,8 @@ pub fn is_within_depth_bound(depth: u32, max_depth: u32) -> bool {
 /// Returns true if `count < max_count`. The count is checked before
 /// yielding, so `max_count = 100` means at most 100 nodes are yielded.
 #[inline]
-pub fn is_within_count_bound(count: u32, max_count: u32) -> bool {
-    count < max_count
+pub fn is_within_count_bound(count: u32, max_count: TraversalBound) -> bool {
+    count < max_count.max()
 }
 
 /// Compute the size of a visited set after inserting one element.
@@ -81,25 +98,27 @@ mod tests {
 
     #[test]
     fn test_depth_bound_within() {
-        assert!(is_within_depth_bound(0, 10_000));
-        assert!(is_within_depth_bound(9_999, 10_000));
+        let bound = TraversalBound::new(10_000);
+        assert!(is_within_depth_bound(0, bound));
+        assert!(is_within_depth_bound(9_999, bound));
     }
 
     #[test]
     fn test_depth_bound_at_limit() {
-        assert!(!is_within_depth_bound(10_000, 10_000));
+        assert!(!is_within_depth_bound(10_000, TraversalBound::new(10_000)));
     }
 
     #[test]
     fn test_depth_bound_over() {
-        assert!(!is_within_depth_bound(10_001, 10_000));
+        assert!(!is_within_depth_bound(10_001, TraversalBound::new(10_000)));
     }
 
     #[test]
     fn test_count_bound() {
-        assert!(is_within_count_bound(0, 100));
-        assert!(is_within_count_bound(99, 100));
-        assert!(!is_within_count_bound(100, 100));
+        let bound = TraversalBound::new(100);
+        assert!(is_within_count_bound(0, bound));
+        assert!(is_within_count_bound(99, bound));
+        assert!(!is_within_count_bound(100, bound));
     }
 
     #[test]

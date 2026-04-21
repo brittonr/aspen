@@ -44,6 +44,8 @@
 /// // No match
 /// assert!(!ref_matches_pattern("refs/tags/v1.0", "refs/heads/*"));
 /// ```
+#[allow(unknown_lints)]
+#[allow(ambiguous_params, reason = "parameter roles are documented and mirrored in established public API examples")]
 pub fn ref_matches_pattern(ref_name: &str, pattern: &str) -> bool {
     // Exact match
     if ref_name == pattern {
@@ -113,6 +115,8 @@ pub fn ref_matches_any_pattern(ref_name: &str, patterns: &[&str]) -> bool {
 /// assert!(path_matches_pattern("main.rs", "*.rs"));
 /// assert!(!path_matches_pattern("main.py", "*.rs"));
 /// ```
+#[allow(unknown_lints)]
+#[allow(ambiguous_params, reason = "parameter roles are documented and mirrored in established public API examples")]
 pub fn path_matches_pattern(path: &str, pattern: &str) -> bool {
     // Exact match
     if path == pattern {

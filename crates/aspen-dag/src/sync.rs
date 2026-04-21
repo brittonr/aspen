@@ -234,8 +234,23 @@ where
     let mut stats = SyncStats::default();
     let mut bytes_received: u64 = 0;
 
-    loop {
+    while bytes_received < MAX_DAG_SYNC_TRANSFER_SIZE {
         match read_frame(reader, &mut bytes_received).await? {
+            Some(ReceivedFrame::HashOnly { hash }) => {
+                stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
+                on_frame(ReceivedFrame::HashOnly { hash })?;
+            }
+            Some(ReceivedFrame::Data { hash, data }) => {
+                stats.data_frames = stats.data_frames.saturating_add(1);
+                on_frame(ReceivedFrame::Data { hash, data })?;
+            }
+            None => break,
+        }
+    }
+
+     stats.bytes_transferred = bytes_received;
+     Ok(stats)
+ }
             Some(ReceivedFrame::HashOnly { hash }) => {
                 stats.hash_only_frames = stats.hash_only_frames.saturating_add(1);
                 on_frame(ReceivedFrame::HashOnly { hash })?;

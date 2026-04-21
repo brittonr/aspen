@@ -495,7 +495,9 @@ mod tests {
         assert!(!future.is_expired());
         // Should show hours remaining
         let expiry_str = future.expiry_string();
-        assert!(expiry_str.ends_with('h') || expiry_str.ends_with('d'), "expected hours/days, got: {}", expiry_str);
+        let uses_hour_suffix = expiry_str.ends_with('h');
+        let uses_day_suffix = expiry_str.ends_with('d');
+        assert!(uses_hour_suffix || uses_day_suffix, "expected hours/days, got: {}", expiry_str);
     }
 
     #[test]

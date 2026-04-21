@@ -24,6 +24,7 @@ use crate::constants::MAX_VISITED_SET_SIZE;
 use crate::error::TraversalError;
 use crate::error::TraversalResult;
 use crate::link::LinkExtractor;
+use crate::verified::traversal::TraversalBound;
 use crate::verified::traversal::compute_child_depth;
 use crate::verified::traversal::is_within_count_bound;
 use crate::verified::traversal::is_within_depth_bound;
@@ -180,7 +181,7 @@ where
 
         while let Some((hash, depth)) = self.stack.pop() {
             // Depth bound check (verified pure function).
-            if !is_within_depth_bound(depth, MAX_DAG_TRAVERSAL_DEPTH) {
+            if !is_within_depth_bound(depth, TraversalBound::new(MAX_DAG_TRAVERSAL_DEPTH)) {
                 return Err(TraversalError::DepthExceeded {
                     depth,
                     max: MAX_DAG_TRAVERSAL_DEPTH,
@@ -188,9 +189,10 @@ where
             }
 
             // Visited set bound check.
-            if self.visited.len() >= MAX_VISITED_SET_SIZE as usize {
+            let max_visited_set_size = usize::try_from(MAX_VISITED_SET_SIZE).unwrap_or(usize::MAX);
+            if self.visited.len() >= max_visited_set_size {
                 return Err(TraversalError::VisitedSetExceeded {
-                    size: self.visited.len().min(u32::MAX as usize) as u32,
+                    size: u32::try_from(self.visited.len()).unwrap_or(u32::MAX),
                     max: MAX_VISITED_SET_SIZE,
                 });
             }
@@ -295,12 +297,17 @@ where
     type Db = T::Db;
 
     async fn next(&mut self) -> TraversalResult<Option<T::Hash>> {
-        loop {
+        let max_skips = usize::try_from(MAX_VISITED_SET_SIZE).unwrap_or(usize::MAX);
+        for _skip_index in 0..max_skips {
             match self.inner.next().await? {
                 Some(hash) if (self.predicate)(&hash) => continue,
                 other => return Ok(other),
             }
         }
+        Err(TraversalError::VisitedSetExceeded {
+            size: MAX_VISITED_SET_SIZE,
+            max: MAX_VISITED_SET_SIZE,
+        })
     }
 
     fn db_mut(&mut self) -> &mut T::Db {
@@ -337,7 +344,7 @@ where
 
     async fn next(&mut self) -> TraversalResult<Option<T::Hash>> {
         // Count bound (verified pure function).
-        if !is_within_count_bound(self.yielded, self.max_count) {
+        if !is_within_count_bound(self.yielded, TraversalBound::new(self.max_count)) {
             return Ok(None);
         }
 

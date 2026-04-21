@@ -195,7 +195,7 @@ fn validate_write_command_check_topology_data(topology_data: &[u8]) -> Result<()
 }
 
 fn usize_to_u32_saturating(value: usize) -> u32 {
-    value.min(u32::MAX as usize) as u32
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 /// Validate a write command against fixed size limits.

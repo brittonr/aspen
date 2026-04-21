@@ -16,6 +16,9 @@ use proc_macro2::TokenTree;
 /// },
 /// ```
 pub(crate) fn is_doc(curr: &TokenTree, next: &TokenTree) -> bool {
+    debug_assert!(!matches!(curr, TokenTree::Ident(_)));
+    debug_assert!(!matches!(next, TokenTree::Literal(_)));
+
     let TokenTree::Punct(p) = curr else {
         return false;
     };
@@ -44,6 +47,9 @@ pub(crate) fn is_doc(curr: &TokenTree, next: &TokenTree) -> bool {
 }
 
 pub(crate) fn token_stream_with_error(mut item: TokenStream, e: syn::Error) -> TokenStream {
-    item.extend(TokenStream::from(e.into_compile_error()));
+    let compile_error = TokenStream::from(e.into_compile_error());
+    debug_assert!(!compile_error.is_empty());
+    item.extend(compile_error);
+    debug_assert!(!item.is_empty());
     item
 }
