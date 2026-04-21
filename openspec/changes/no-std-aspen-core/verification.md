@@ -6,28 +6,6 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-core/tests/ui.rs`
-- Changed file: `crates/aspen-core/tests/ui/.gitignore`
-- Changed file: `crates/aspen-core/tests/ui/app-registry-no-std/Cargo.toml`
-- Changed file: `crates/aspen-core/tests/ui/app-registry-no-std/src/main.rs`
-- Changed file: `crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/Cargo.toml`
-- Changed file: `crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/src/main.rs`
-- Changed file: `crates/aspen-core/tests/ui/directory-layer-std-without-layer/Cargo.toml`
-- Changed file: `crates/aspen-core/tests/ui/directory-layer-std-without-layer/src/main.rs`
-- Changed file: `crates/aspen-core/tests/ui/network-transport-no-std/Cargo.toml`
-- Changed file: `crates/aspen-core/tests/ui/network-transport-no-std/src/main.rs`
-- Changed file: `crates/aspen-core/tests/ui/simulation-artifact-no-std/Cargo.toml`
-- Changed file: `crates/aspen-core/tests/ui/simulation-artifact-no-std/src/main.rs`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/compile-ui.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-app-registry-no-std.stderr`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-content-discovery-std-without-global-discovery.stderr`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-directory-layer-std-without-layer.stderr`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-network-transport-no-std.stderr`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/ui-simulation-artifact-no-std.stderr`
 - Changed file: `openspec/changes/no-std-aspen-core/tasks.md`
 - Changed file: `openspec/changes/no-std-aspen-core/verification.md`
 
@@ -165,6 +143,8 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `docs/no-std-core.md`, `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md`
 - [x] 5.18 Run targeted regression tests for each refactored pure entrypoint, covering both positive and negative cases, and save outputs under `openspec/changes/no-std-aspen-core/evidence/regression-<topic>.txt`.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/regression-protocol.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/regression-scan.txt`
+- [x] 5.19 Update `openspec/changes/no-std-aspen-core/verification.md` as each artifact lands, maintaining per-task and per-scenario claim-to-artifact mapping.
+  - Evidence: `openspec/changes/no-std-aspen-core/verification.md`
 - [x] 5.21 After tasks `2.6`, `2.8`, `3.8`-`3.11`, `4.2`, and `4.3` land, rerun or explicitly revalidate the already-saved compile/dependency rails (`5.1`-`5.7`, `5.11`-`5.13`) so `verification.md` ends with a fresh claim-to-artifact index rather than stale pre-surface-check outputs.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt`, `openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-full.txt`, `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json`, `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
 
