@@ -11,6 +11,7 @@
 - `cargo tree -p aspen-core -e features` can keep showing `iroh`/`iroh-base` even after `aspen-core` disables defaults on `aspen-cluster-types` if `crates/aspen-traits` still depends on `aspen-cluster-types` with defaults. Boundary cleanup must fix both the leaf crate feature gate and every transitive re-export path.
 - After the cluster-types cleanup, if `scripts/check-aspen-core-no-std-boundary.py` reports only `rand`, `rand_core`, and `getrandom` as unexpected plus `rand` as denylisted, remaining work is concentrated in `aspen-hlc -> uhlc`, not the rest of the alloc-only graph.
 - Fix for that leak lives in `vendor/uhlc/`: make `rand` optional, keep it in upstream-like defaults, and let `aspen-hlc` depend on `uhlc` with `default-features = false`. Re-check both `cargo tree -p aspen-core --no-default-features -e normal` and the boundary checker after any future `uhlc` update.
+- The vendored `openraft-macros` `since` attribute can panic on this toolchain before Aspen code even builds. If `cargo check -p aspen-cluster` or `cargo check -p aspen-cli` fails inside `#[since(...)]`, inspect `openraft/macros/src/utils.rs::is_doc()` first: the debug assertions on non-doc tokens are the trigger.
 
 ## Tigerstyle scope (2026-04-21)
 

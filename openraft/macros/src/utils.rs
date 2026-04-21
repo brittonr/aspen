@@ -16,9 +16,6 @@ use proc_macro2::TokenTree;
 /// },
 /// ```
 pub(crate) fn is_doc(curr: &TokenTree, next: &TokenTree) -> bool {
-    debug_assert!(!matches!(curr, TokenTree::Ident(_)));
-    debug_assert!(!matches!(next, TokenTree::Literal(_)));
-
     let TokenTree::Punct(p) = curr else {
         return false;
     };
