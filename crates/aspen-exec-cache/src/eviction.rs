@@ -63,10 +63,14 @@ pub fn run_eviction<S: CacheKvStore, G: BlobGc>(
     params: EvictionParams,
     blob_gc: &G,
 ) -> crate::Result<EvictionResult> {
+    // u32::MAX → usize cast: constants are bounded, never overflow
+    #[allow(tigerstyle::platform_dependent_cast)]
     let all_entries = index.scan_all(u32::MAX)?;
     let (mut live_entries, expired_removed) = remove_expired_entries(index, &all_entries, params.now_ms, blob_gc)?;
     let lru_evicted = evict_lru_entries(index, &mut live_entries, params.max_storage_bytes, blob_gc)?;
     // live_entries.len() <= scan limit = u32::MAX, so cast is safe
+    // live_entries.len() ≤ u32::MAX (bounded by scan limit)
+    #[allow(tigerstyle::platform_dependent_cast)]
     let remaining = live_entries.len() as u32;
 
     if expired_removed > 0 || lru_evicted > 0 {
@@ -80,6 +84,7 @@ pub fn run_eviction<S: CacheKvStore, G: BlobGc>(
     })
 }
 
+/// Remove entries past their TTL.
 fn remove_expired_entries<S: CacheKvStore, G: BlobGc>(
     index: &ExecCacheIndex<S>,
     all_entries: &[(CacheKey, CacheEntry)],
@@ -117,6 +122,8 @@ fn evict_lru_entries<S: CacheKvStore, G: BlobGc>(
     let removed_entries_count = count_lru_entries_to_remove(index, live_entries, max_storage_bytes, blob_gc)?;
     live_entries.drain(..removed_entries_count);
     // removed_entries_count <= live_entries.len() <= u32::MAX
+    // removed_entries_count ≤ live_entries.len() ≤ u32::MAX
+    #[allow(tigerstyle::platform_dependent_cast)]
     Ok(removed_entries_count as u32)
 }
 
@@ -179,11 +186,13 @@ struct EntrySizeParams {
 
 /// Estimate storage for a single entry: sum of output file sizes + index overhead.
 fn estimate_entry_size_bytes(entry: &CacheEntry) -> u64 {
-    let params = EntrySizeParams {
-        output_size_bytes: entry.outputs.iter().map(|output| output.size_bytes).sum(),
-        index_overhead_bytes: 256,
-    };
-    params.output_size_bytes.saturating_add(params.index_overhead_bytes)
+    {
+        let params = EntrySizeParams {
+            output_size_bytes: entry.outputs.iter().map(|output| output.size_bytes).sum(),
+            index_overhead_bytes: 256,
+        };
+        params.output_size_bytes.saturating_add(params.index_overhead_bytes)
+    }
 }
 
 #[cfg(test)]

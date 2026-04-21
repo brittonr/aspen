@@ -78,7 +78,7 @@ fn session_started_at() -> Instant {
 }
 
 /// Convert a u32 constant to usize (constants are bounded small values).
-#[allow(platform_dependent_cast, reason = "called only with small constants from constants.rs, e.g. 1000")]
+#[expect(tigerstyle::platform_dependent_cast, reason = "called only with small constants from constants.rs")]
 fn session_limit(value: u32) -> usize {
     value as usize
 }
@@ -255,7 +255,6 @@ impl ReadTracker {
 
     /// Number of active sessions.
     pub fn session_count(&self) -> u32 {
-        // DashMap len() <= u32::MAX for all practical session counts
         self.sessions.len() as u32
     }
 }

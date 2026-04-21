@@ -187,7 +187,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(arithmetic_overflow, reason = "saturating ops are intentionally tested here")]
     fn cache_entry_saturating_expiration() {
         // created_at near u64::MAX — saturating_add prevents overflow
         let entry = CacheEntry {
