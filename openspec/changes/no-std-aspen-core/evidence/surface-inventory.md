@@ -17,7 +17,7 @@
 | `error` | `always` |
 | `hlc` | `always` |
 | `kv` | `always` |
-| `layer` | `#[cfg(feature = "layer")]` |
+| `layer` | `#[cfg(all(feature = "std", feature = "layer"))]` |
 | `prelude` | `always` |
 | `protocol` | `always` |
 | `simulation` | `#[cfg(feature = "std")]` |
@@ -105,16 +105,16 @@
 | `WriteRequest` | `kv::WriteRequest` | `always` |
 | `WriteResult` | `kv::WriteResult` | `always` |
 | `validate_write_command` | `kv::validate_write_command` | `always` |
-| `AllocationError` | `layer::AllocationError` | `#[cfg(feature = "layer")]` |
-| `DirectoryError` | `layer::DirectoryError` | `#[cfg(feature = "layer")]` |
-| `DirectoryLayer` | `layer::DirectoryLayer` | `#[cfg(feature = "layer")]` |
-| `DirectorySubspace` | `layer::DirectorySubspace` | `#[cfg(feature = "layer")]` |
-| `Element` | `layer::Element` | `#[cfg(feature = "layer")]` |
-| `HighContentionAllocator` | `layer::HighContentionAllocator` | `#[cfg(feature = "layer")]` |
-| `Subspace` | `layer::Subspace` | `#[cfg(feature = "layer")]` |
-| `SubspaceError` | `layer::SubspaceError` | `#[cfg(feature = "layer")]` |
-| `Tuple` | `layer::Tuple` | `#[cfg(feature = "layer")]` |
-| `TupleError` | `layer::TupleError` | `#[cfg(feature = "layer")]` |
+| `AllocationError` | `layer::AllocationError` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `DirectoryError` | `layer::DirectoryError` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `DirectoryLayer` | `layer::DirectoryLayer` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `DirectorySubspace` | `layer::DirectorySubspace` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `Element` | `layer::Element` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `HighContentionAllocator` | `layer::HighContentionAllocator` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `Subspace` | `layer::Subspace` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `SubspaceError` | `layer::SubspaceError` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `Tuple` | `layer::Tuple` | `#[cfg(all(feature = "std", feature = "layer"))]` |
+| `TupleError` | `layer::TupleError` | `#[cfg(all(feature = "std", feature = "layer"))]` |
 | `Alarm` | `protocol::Alarm` | `always` |
 | `Envelope` | `protocol::Envelope` | `always` |
 | `ProtocolCtx` | `protocol::ProtocolCtx` | `always` |
@@ -167,7 +167,8 @@
 | `normalize_scan_limit` | `verified::normalize_scan_limit` | `always` |
 | `paginate_entries` | `verified::paginate_entries` | `always` |
 
-## Notes
-- Inventory source is declarative surface in `src/lib.rs` only.
-- Guards reflect contiguous `#[cfg(...)]` attributes immediately above each `pub mod` or `pub use` line.
-- This initial checker intentionally does not enforce policy yet; later tasks extend it with export-map and source-audit rules.
+## Validation notes
+- The root public module and re-export inventory matches the documented no-std contract.
+- `verified::*` is limited to scan helpers plus core pure re-exports from `hlc`, `kv`, and `types`.
+- `test_support` remains crate-private and test-only; there is no public `aspen_core::test_support` path.
+- Alloc-only module-path families remain present for `circuit_breaker`, `prelude`, `spec`, and `verified` scan helpers.

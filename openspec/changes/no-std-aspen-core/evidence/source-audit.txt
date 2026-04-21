@@ -1,0 +1,23 @@
+# Aspen Core Source Audit
+
+Audit scope: alloc-only production modules and helper families documented for the no-std surface.
+Pure contract traits may declare async signatures, but alloc-only production code must not contain runtime-bound async bodies or `.await` paths.
+
+PASS `circuit_breaker.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `cluster.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `constants/mod.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `crypto.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `error.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `hlc.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `kv/mod.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `prelude.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `protocol.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `spec/mod.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `spec/verus_shim.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS sql.rs keeps alloc-safe validation/query types pure and gates the Arc<T> convenience impl behind `feature = "std"`.
+PASS `storage.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `traits.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `types.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `vault.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `verified/mod.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.
+PASS `verified/scan.rs` has no shell-module backedges, forbidden runtime tokens, or runtime-bound async bodies.

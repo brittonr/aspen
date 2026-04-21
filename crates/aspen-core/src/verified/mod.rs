@@ -21,11 +21,10 @@
 //! - **types**: Pure helper methods for NodeState, NodeId
 //! - **hlc**: Timestamp conversions (HLC ↔ Unix milliseconds)
 //!
-//! # Re-exports from layer module
+//! # Public surface
 //!
-//! The tuple and subspace modules from `crate::layer` are also pure and are
-//! re-exported here for convenience. They provide FoundationDB-compatible
-//! order-preserving key encoding.
+//! The documented `verified::*` surface for this change is limited to scan
+//! helpers plus core pure re-exports from `hlc`, `kv`, and `types`.
 
 pub mod scan;
 
@@ -44,17 +43,6 @@ pub use crate::hlc::create_hlc;
 pub use crate::hlc::to_unix_ms;
 // Re-export pure validation function from kv module
 pub use crate::kv::validate_write_command;
-// Re-export pure layer types (tuple and subspace are pure)
-#[cfg(all(feature = "std", feature = "layer"))]
-pub use crate::layer::Element;
-#[cfg(all(feature = "std", feature = "layer"))]
-pub use crate::layer::Subspace;
-#[cfg(all(feature = "std", feature = "layer"))]
-pub use crate::layer::SubspaceError;
-#[cfg(all(feature = "std", feature = "layer"))]
-pub use crate::layer::Tuple;
-#[cfg(all(feature = "std", feature = "layer"))]
-pub use crate::layer::TupleError;
 pub use crate::types::NodeId;
 // Re-export pure type helpers
 pub use crate::types::NodeState;
