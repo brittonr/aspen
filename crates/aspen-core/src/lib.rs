@@ -58,7 +58,7 @@ pub mod crypto;
 pub mod error;
 pub mod hlc;
 pub mod kv;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub mod layer;
 pub mod prelude;
 pub mod protocol;
@@ -197,26 +197,26 @@ pub use kv::WriteOp;
 pub use kv::WriteRequest;
 pub use kv::WriteResult;
 pub use kv::validate_write_command;
-// Layer types (Tuple, Subspace, Directory) — requires aspen-layer
-#[cfg(feature = "layer")]
+// Layer types (Tuple, Subspace, Directory) — requires std + aspen-layer
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::AllocationError;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::DirectoryError;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::DirectoryLayer;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::DirectorySubspace;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::Element;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::HighContentionAllocator;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::Subspace;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::SubspaceError;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::Tuple;
-#[cfg(feature = "layer")]
+#[cfg(all(feature = "std", feature = "layer"))]
 pub use layer::TupleError;
 // Protocol types (sans-IO infrastructure)
 pub use protocol::Alarm;

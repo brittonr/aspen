@@ -8,11 +8,11 @@
 ## Public modules
 | Module | Guard |
 | --- | --- |
-| `app_registry` | `always` |
+| `app_registry` | `#[cfg(feature = "std")]` |
 | `circuit_breaker` | `always` |
 | `cluster` | `always` |
 | `constants` | `always` |
-| `context` | `always` |
+| `context` | `#[cfg(feature = "std")]` |
 | `crypto` | `always` |
 | `error` | `always` |
 | `hlc` | `always` |
@@ -20,24 +20,24 @@
 | `layer` | `#[cfg(feature = "layer")]` |
 | `prelude` | `always` |
 | `protocol` | `always` |
-| `simulation` | `always` |
+| `simulation` | `#[cfg(feature = "std")]` |
 | `spec` | `always` |
 | `sql` | `#[cfg(feature = "sql")]` |
 | `storage` | `always` |
 | `traits` | `always` |
-| `transport` | `always` |
+| `transport` | `#[cfg(feature = "std")]` |
 | `types` | `always` |
-| `utils` | `always` |
+| `utils` | `#[cfg(feature = "std")]` |
 | `vault` | `always` |
 | `verified` | `always` |
 
 ## Root re-exports
 | Export | Source | Guard |
 | --- | --- | --- |
-| `AppManifest` | `app_registry::AppManifest` | `always` |
-| `AppRegistry` | `app_registry::AppRegistry` | `always` |
-| `SharedAppRegistry` | `app_registry::SharedAppRegistry` | `always` |
-| `shared_registry` | `app_registry::shared_registry` | `always` |
+| `AppManifest` | `app_registry::AppManifest` | `#[cfg(feature = "std")]` |
+| `AppRegistry` | `app_registry::AppRegistry` | `#[cfg(feature = "std")]` |
+| `SharedAppRegistry` | `app_registry::SharedAppRegistry` | `#[cfg(feature = "std")]` |
+| `shared_registry` | `app_registry::shared_registry` | `#[cfg(feature = "std")]` |
 | `AddLearnerRequest` | `cluster::AddLearnerRequest` | `always` |
 | `ChangeMembershipRequest` | `cluster::ChangeMembershipRequest` | `always` |
 | `ClusterNode` | `cluster::ClusterNode` | `always` |
@@ -50,29 +50,29 @@
 | `*` | `constants::directory::*` | `always` |
 | `*` | `constants::network::*` | `always` |
 | `*` | `constants::raft::*` | `always` |
-| `MEMBERSHIP_COOLDOWN` | `constants::raft_compat::MEMBERSHIP_COOLDOWN` | `always` |
-| `AspenDocsTicket` | `context::AspenDocsTicket` | `always` |
-| `ContentDiscovery` | `context::ContentDiscovery` | `#[cfg(feature = "global-discovery")]` |
-| `ContentNodeAddr` | `context::ContentNodeAddr` | `#[cfg(feature = "global-discovery")]` |
-| `ContentProviderInfo` | `context::ContentProviderInfo` | `#[cfg(feature = "global-discovery")]` |
-| `DocsEntry` | `context::DocsEntry` | `always` |
-| `DocsStatus` | `context::DocsStatus` | `always` |
-| `DocsSyncProvider` | `context::DocsSyncProvider` | `always` |
-| `EndpointProvider` | `context::EndpointProvider` | `always` |
-| `InMemoryWatchRegistry` | `context::InMemoryWatchRegistry` | `always` |
-| `KeyOrigin` | `context::KeyOrigin` | `always` |
-| `NetworkFactory` | `context::NetworkFactory` | `always` |
-| `PeerConnectionState` | `context::PeerConnectionState` | `always` |
-| `PeerImporter` | `context::PeerImporter` | `always` |
-| `PeerInfo` | `context::PeerInfo` | `always` |
-| `PeerManager` | `context::PeerManager` | `always` |
-| `ServiceExecutor` | `context::ServiceExecutor` | `always` |
-| `ShardTopology` | `context::ShardTopology` | `always` |
-| `StateMachineProvider` | `context::StateMachineProvider` | `always` |
-| `SubscriptionFilter` | `context::SubscriptionFilter` | `always` |
-| `SyncStatus` | `context::SyncStatus` | `always` |
-| `WatchInfo` | `context::WatchInfo` | `always` |
-| `WatchRegistry` | `context::WatchRegistry` | `always` |
+| `MEMBERSHIP_COOLDOWN` | `constants::raft_compat::MEMBERSHIP_COOLDOWN` | `#[cfg(feature = "std")]` |
+| `AspenDocsTicket` | `context::AspenDocsTicket` | `#[cfg(feature = "std")]` |
+| `ContentDiscovery` | `context::ContentDiscovery` | `#[cfg(all(feature = "std", feature = "global-discovery"))]` |
+| `ContentNodeAddr` | `context::ContentNodeAddr` | `#[cfg(all(feature = "std", feature = "global-discovery"))]` |
+| `ContentProviderInfo` | `context::ContentProviderInfo` | `#[cfg(all(feature = "std", feature = "global-discovery"))]` |
+| `DocsEntry` | `context::DocsEntry` | `#[cfg(feature = "std")]` |
+| `DocsStatus` | `context::DocsStatus` | `#[cfg(feature = "std")]` |
+| `DocsSyncProvider` | `context::DocsSyncProvider` | `#[cfg(feature = "std")]` |
+| `EndpointProvider` | `context::EndpointProvider` | `#[cfg(feature = "std")]` |
+| `InMemoryWatchRegistry` | `context::InMemoryWatchRegistry` | `#[cfg(feature = "std")]` |
+| `KeyOrigin` | `context::KeyOrigin` | `#[cfg(feature = "std")]` |
+| `NetworkFactory` | `context::NetworkFactory` | `#[cfg(feature = "std")]` |
+| `PeerConnectionState` | `context::PeerConnectionState` | `#[cfg(feature = "std")]` |
+| `PeerImporter` | `context::PeerImporter` | `#[cfg(feature = "std")]` |
+| `PeerInfo` | `context::PeerInfo` | `#[cfg(feature = "std")]` |
+| `PeerManager` | `context::PeerManager` | `#[cfg(feature = "std")]` |
+| `ServiceExecutor` | `context::ServiceExecutor` | `#[cfg(feature = "std")]` |
+| `ShardTopology` | `context::ShardTopology` | `#[cfg(feature = "std")]` |
+| `StateMachineProvider` | `context::StateMachineProvider` | `#[cfg(feature = "std")]` |
+| `SubscriptionFilter` | `context::SubscriptionFilter` | `#[cfg(feature = "std")]` |
+| `SyncStatus` | `context::SyncStatus` | `#[cfg(feature = "std")]` |
+| `WatchInfo` | `context::WatchInfo` | `#[cfg(feature = "std")]` |
+| `WatchRegistry` | `context::WatchRegistry` | `#[cfg(feature = "std")]` |
 | `Signature` | `crypto::Signature` | `always` |
 | `ControlPlaneError` | `error::ControlPlaneError` | `always` |
 | `KeyValueStoreError` | `error::KeyValueStoreError` | `always` |
@@ -119,9 +119,9 @@
 | `Envelope` | `protocol::Envelope` | `always` |
 | `ProtocolCtx` | `protocol::ProtocolCtx` | `always` |
 | `TestCtx` | `protocol::TestCtx` | `always` |
-| `SimulationArtifact` | `simulation::SimulationArtifact` | `always` |
-| `SimulationArtifactBuilder` | `simulation::SimulationArtifactBuilder` | `always` |
-| `SimulationStatus` | `simulation::SimulationStatus` | `always` |
+| `SimulationArtifact` | `simulation::SimulationArtifact` | `#[cfg(feature = "std")]` |
+| `SimulationArtifactBuilder` | `simulation::SimulationArtifactBuilder` | `#[cfg(feature = "std")]` |
+| `SimulationStatus` | `simulation::SimulationStatus` | `#[cfg(feature = "std")]` |
 | `SqlColumnInfo` | `sql::SqlColumnInfo` | `#[cfg(feature = "sql")]` |
 | `SqlConsistency` | `sql::SqlConsistency` | `#[cfg(feature = "sql")]` |
 | `SqlQueryError` | `sql::SqlQueryError` | `#[cfg(feature = "sql")]` |
@@ -138,23 +138,23 @@
 | `ClusterController` | `traits::ClusterController` | `always` |
 | `CoordinationBackend` | `traits::CoordinationBackend` | `always` |
 | `KeyValueStore` | `traits::KeyValueStore` | `always` |
-| `BlobAnnouncedCallback` | `transport::BlobAnnouncedCallback` | `always` |
-| `BlobAnnouncedInfo` | `transport::BlobAnnouncedInfo` | `always` |
-| `DiscoveredPeer` | `transport::DiscoveredPeer` | `always` |
-| `DiscoveryHandle` | `transport::DiscoveryHandle` | `always` |
-| `IrohTransportExt` | `transport::IrohTransportExt` | `always` |
-| `MembershipAddressUpdater` | `transport::MembershipAddressUpdater` | `always` |
-| `NetworkTransport` | `transport::NetworkTransport` | `always` |
-| `PeerDiscoveredCallback` | `transport::PeerDiscoveredCallback` | `always` |
-| `PeerDiscovery` | `transport::PeerDiscovery` | `always` |
-| `StaleTopologyInfo` | `transport::StaleTopologyInfo` | `always` |
-| `TopologyStaleCallback` | `transport::TopologyStaleCallback` | `always` |
+| `BlobAnnouncedCallback` | `transport::BlobAnnouncedCallback` | `#[cfg(feature = "std")]` |
+| `BlobAnnouncedInfo` | `transport::BlobAnnouncedInfo` | `#[cfg(feature = "std")]` |
+| `DiscoveredPeer` | `transport::DiscoveredPeer` | `#[cfg(feature = "std")]` |
+| `DiscoveryHandle` | `transport::DiscoveryHandle` | `#[cfg(feature = "std")]` |
+| `IrohTransportExt` | `transport::IrohTransportExt` | `#[cfg(feature = "std")]` |
+| `MembershipAddressUpdater` | `transport::MembershipAddressUpdater` | `#[cfg(feature = "std")]` |
+| `NetworkTransport` | `transport::NetworkTransport` | `#[cfg(feature = "std")]` |
+| `PeerDiscoveredCallback` | `transport::PeerDiscoveredCallback` | `#[cfg(feature = "std")]` |
+| `PeerDiscovery` | `transport::PeerDiscovery` | `#[cfg(feature = "std")]` |
+| `StaleTopologyInfo` | `transport::StaleTopologyInfo` | `#[cfg(feature = "std")]` |
+| `TopologyStaleCallback` | `transport::TopologyStaleCallback` | `#[cfg(feature = "std")]` |
 | `ClusterMetrics` | `types::ClusterMetrics` | `always` |
 | `NodeAddress` | `types::NodeAddress` | `always` |
 | `NodeId` | `types::NodeId` | `always` |
 | `NodeState` | `types::NodeState` | `always` |
 | `SnapshotLogId` | `types::SnapshotLogId` | `always` |
-| `ensure_disk_space_available` | `utils::ensure_disk_space_available` | `always` |
+| `ensure_disk_space_available` | `utils::ensure_disk_space_available` | `#[cfg(feature = "std")]` |
 | `SYSTEM_PREFIX` | `vault::SYSTEM_PREFIX` | `always` |
 | `VaultError` | `vault::VaultError` | `always` |
 | `is_system_key` | `vault::is_system_key` | `always` |

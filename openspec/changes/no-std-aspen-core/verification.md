@@ -6,10 +6,11 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 
 ## Implementation Evidence
 
-- Changed file: `docs/no-std-core.md`
+- Changed file: `crates/aspen-core/src/lib.rs`
+- Changed file: `crates/aspen-core/src/verified/mod.rs`
+- Changed file: `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md`
 - Changed file: `openspec/changes/no-std-aspen-core/tasks.md`
 - Changed file: `openspec/changes/no-std-aspen-core/verification.md`
-- Changed file: `openspec/changes/no-std-aspen-core/evidence/docs-no-std-core-review.md`
 
 ## Evidence Naming Convention
 
@@ -83,10 +84,12 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
   - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
 - [x] 3.7 Gate `transport`, runtime convenience impls, and their current root exports on the `std` shell path while preserving the existing public paths under `#[cfg(feature = "std")]`.
   - Evidence: `crates/aspen-core/src/lib.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-std.txt`
+- [x] 3.9 Keep `layer` on its documented existing `aspen_core::*` public paths (`AllocationError`, `DirectoryError`, `DirectoryLayer`, `DirectorySubspace`, `Element`, `HighContentionAllocator`, `Subspace`, `SubspaceError`, `Tuple`, `TupleError`) behind both `feature = "std"` and `feature = "layer"` for this change.
+  - Evidence: `crates/aspen-core/src/lib.rs`, `crates/aspen-core/src/verified/mod.rs`, `openspec/changes/no-std-aspen-core/evidence/compile-layer.txt`
 - [x] 4.1 Update `crates/aspen-cluster` to opt into `aspen-core/std` explicitly.
   - Evidence: `crates/aspen-cluster/Cargo.toml`, `openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt`
 - [x] 4.3 Write `docs/no-std-core.md` documenting the alloc-only build, bare/default feature behavior, alloc-safe `sql`, `std` opt-in path, `layer`, and `global-discovery`, including migration notes for existing public paths that become `std`-gated.
-  - Evidence: `docs/no-std-core.md`
+  - Evidence: `docs/no-std-core.md`, `openspec/changes/no-std-aspen-core/verification.md`
 - [x] 5.1 Run `cargo tree -p aspen-core -e features > openspec/changes/no-std-aspen-core/evidence/core-default-features.txt` and assert the default feature set is empty.
   - Evidence: `openspec/changes/no-std-aspen-core/evidence/core-default-features.txt`
 - [x] 5.2 Run `cargo check -p aspen-core > openspec/changes/no-std-aspen-core/evidence/compile-default.txt` and assert the crate builds with the empty default feature set.
