@@ -1,6 +1,11 @@
+pub(super) const REQUIRED_APP_VARIANTS: &[&str] = &[
+    "ExecuteSql",
+];
+
 pub(super) fn required_app(variant_name: &str) -> Option<&'static str> {
-    match variant_name {
-        "ExecuteSql" => Some("sql"),
-        _ => None,
+    if REQUIRED_APP_VARIANTS.contains(&variant_name) {
+        Some("sql")
+    } else {
+        None
     }
 }

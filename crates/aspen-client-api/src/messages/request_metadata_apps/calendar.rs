@@ -1,18 +1,23 @@
+pub(super) const REQUIRED_APP_VARIANTS: &[&str] = &[
+    "CalendarCreate",
+    "CalendarCreateEvent",
+    "CalendarDelete",
+    "CalendarDeleteEvent",
+    "CalendarExpandRecurrence",
+    "CalendarExportIcal",
+    "CalendarFreeBusy",
+    "CalendarGetEvent",
+    "CalendarImportIcal",
+    "CalendarList",
+    "CalendarListEvents",
+    "CalendarSearchEvents",
+    "CalendarUpdateEvent",
+];
+
 pub(super) fn required_app(variant_name: &str) -> Option<&'static str> {
-    match variant_name {
-        "CalendarCreate"
-        | "CalendarCreateEvent"
-        | "CalendarDelete"
-        | "CalendarDeleteEvent"
-        | "CalendarExpandRecurrence"
-        | "CalendarExportIcal"
-        | "CalendarFreeBusy"
-        | "CalendarGetEvent"
-        | "CalendarImportIcal"
-        | "CalendarList"
-        | "CalendarListEvents"
-        | "CalendarSearchEvents"
-        | "CalendarUpdateEvent" => Some("calendar"),
-        _ => None,
+    if REQUIRED_APP_VARIANTS.contains(&variant_name) {
+        Some("calendar")
+    } else {
+        None
     }
 }

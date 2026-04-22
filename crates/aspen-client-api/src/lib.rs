@@ -464,28 +464,19 @@ mod tests {
     }
 
     #[test]
-    fn test_request_metadata_variant_name_samples_are_unique() {
-        let requests = [
-            ClientRpcRequest::GetHealth,
-            ClientRpcRequest::Ping,
-            ClientRpcRequest::HookList,
-            ClientRpcRequest::ClusterDeployStatus,
-            ClientRpcRequest::SecretsKvRead {
-                mount: "secret".into(),
-                path: "db/password".into(),
-                version: None,
-            },
-            ClientRpcRequest::FederationGitListRefs {
-                origin_key: "a".repeat(52),
-                repo_id: "bb".repeat(32),
-                origin_addr_hint: None,
-            },
-        ];
-
+    fn test_request_required_app_metadata_is_unique_and_known() {
+        let known_variant_names: std::collections::HashSet<&'static str> =
+            messages::request_metadata::REQUEST_VARIANT_NAMES.iter().copied().collect();
         let mut seen = std::collections::HashSet::new();
-        for request in requests {
-            let variant_name = request.variant_name();
-            assert!(seen.insert(variant_name), "duplicate request metadata entry for {variant_name}");
+
+        for variant_group in messages::request_metadata::request_required_app_variant_groups() {
+            for &variant_name in *variant_group {
+                assert!(
+                    known_variant_names.contains(variant_name),
+                    "required_app mapping references unknown request variant {variant_name}"
+                );
+                assert!(seen.insert(variant_name), "duplicate request metadata entry for {variant_name}");
+            }
         }
     }
 

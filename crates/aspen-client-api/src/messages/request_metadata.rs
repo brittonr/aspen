@@ -10,12 +10,22 @@ use super::ClientRpcRequest;
 
 macro_rules! define_request_variant_name {
     ($( $(#[$cfg:meta])? $pattern:pat => $name:literal, )*) => {
+        #[cfg(test)]
+        pub(crate) const REQUEST_VARIANT_NAMES: &[&str] = &[
+            $( $(#[$cfg])? $name, )*
+        ];
+
         pub(crate) fn request_variant_name(request: &ClientRpcRequest) -> &'static str {
             match request {
                 $( $(#[$cfg])? $pattern => $name, )*
             }
         }
     };
+}
+
+#[cfg(test)]
+pub(crate) fn request_required_app_variant_groups() -> &'static [&'static [&'static str]] {
+    request_metadata_apps::REQUIRED_APP_VARIANT_GROUPS
 }
 
 define_request_variant_name! {

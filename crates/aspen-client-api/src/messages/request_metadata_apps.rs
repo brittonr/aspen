@@ -26,6 +26,21 @@ mod snix;
 #[path = "request_metadata_apps/sql.rs"]
 mod sql;
 
+#[cfg(test)]
+pub(super) const REQUIRED_APP_VARIANT_GROUPS: &[&[&str]] = &[
+    automerge::REQUIRED_APP_VARIANTS,
+    calendar::REQUIRED_APP_VARIANTS,
+    ci::REQUIRED_APP_VARIANTS,
+    contacts::REQUIRED_APP_VARIANTS,
+    deploy::REQUIRED_APP_VARIANTS,
+    forge::REQUIRED_APP_VARIANTS,
+    hooks::REQUIRED_APP_VARIANTS,
+    jobs::REQUIRED_APP_VARIANTS,
+    secrets::REQUIRED_APP_VARIANTS,
+    snix::REQUIRED_APP_VARIANTS,
+    sql::REQUIRED_APP_VARIANTS,
+];
+
 pub(crate) fn request_required_app_for_variant(variant_name: &str) -> Option<&'static str> {
     automerge::required_app(variant_name)
         .or_else(|| calendar::required_app(variant_name))
