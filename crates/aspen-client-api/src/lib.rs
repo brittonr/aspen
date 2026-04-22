@@ -464,15 +464,29 @@ mod tests {
     }
 
     #[test]
-    fn test_request_metadata_lookup_table_has_unique_variant_names() {
+    fn test_request_metadata_variant_name_samples_are_unique() {
+        let requests = [
+            ClientRpcRequest::GetHealth,
+            ClientRpcRequest::Ping,
+            ClientRpcRequest::HookList,
+            ClientRpcRequest::ClusterDeployStatus,
+            ClientRpcRequest::SecretsKvRead {
+                mount: "secret".into(),
+                path: "db/password".into(),
+                version: None,
+            },
+            ClientRpcRequest::FederationGitListRefs {
+                origin_key: "a".repeat(52),
+                repo_id: "bb".repeat(32),
+                origin_addr_hint: None,
+            },
+        ];
+
         let mut seen = std::collections::HashSet::new();
-        for (name, _app) in messages::request_metadata::REQUEST_REQUIRED_APP {
-            assert!(seen.insert(*name), "duplicate request metadata entry for {name}");
+        for request in requests {
+            let variant_name = request.variant_name();
+            assert!(seen.insert(variant_name), "duplicate request metadata entry for {variant_name}");
         }
-        assert_eq!(seen.len(), messages::request_metadata::REQUEST_REQUIRED_APP.len());
-        assert!(seen.contains("ClusterDeploy"));
-        assert!(seen.contains("SecretsKvRead"));
-        assert!(seen.contains("AutomergeCreate"));
     }
 
     #[test]
@@ -536,11 +550,6 @@ mod tests {
         for (request, expected_name, expected_app) in cases {
             assert_eq!(request.variant_name(), expected_name);
             assert_eq!(request.required_app(), expected_app);
-            let table_app = messages::request_metadata::REQUEST_REQUIRED_APP
-                .iter()
-                .find_map(|(name, app)| (*name == expected_name).then_some(*app))
-                .flatten();
-            assert_eq!(table_app, expected_app, "table mismatch for {expected_name}");
         }
     }
 

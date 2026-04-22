@@ -29,28 +29,26 @@
 //! ```
 
 mod builder;
-mod capability;
-pub mod constants;
 mod credential;
-mod error;
 pub mod hmac_auth;
 mod revocation;
-mod token;
 mod utils;
-pub mod verified_auth;
-pub mod verified_credential;
 mod verifier;
 
+pub use aspen_auth_core::AuthError;
+pub use aspen_auth_core::Audience;
+pub use aspen_auth_core::Capability;
+pub use aspen_auth_core::CapabilityToken;
+pub use aspen_auth_core::Operation;
+pub use aspen_auth_core::constants;
+pub use aspen_auth_core::token;
+pub use aspen_auth_core::verified_auth;
+pub use aspen_auth_core::verified_credential;
 pub use builder::TokenBuilder;
 pub use builder::generate_root_token;
-pub use capability::Capability;
-pub use capability::Operation;
 pub use credential::Credential;
-pub use error::AuthError;
 pub use revocation::KeyValueRevocationStore;
 pub use revocation::RevocationStore;
-pub use token::Audience;
-pub use token::CapabilityToken;
 pub use verifier::TokenVerifier;
 
 #[cfg(test)]

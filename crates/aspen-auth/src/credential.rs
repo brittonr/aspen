@@ -7,17 +7,18 @@
 
 use std::time::Duration;
 
-use iroh::PublicKey;
-use iroh::SecretKey;
+use iroh_base::PublicKey;
+use iroh_base::SecretKey;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::builder::TokenBuilder;
-use crate::capability::Capability;
-use crate::constants::MAX_DELEGATION_DEPTH;
-use crate::constants::MAX_TOKEN_SIZE;
-use crate::error::AuthError;
-use crate::token::CapabilityToken;
+use aspen_auth_core::Capability;
+use aspen_auth_core::CapabilityToken;
+use aspen_auth_core::constants::MAX_DELEGATION_DEPTH;
+use aspen_auth_core::constants::MAX_TOKEN_SIZE;
+
+use crate::AuthError;
 use crate::verifier::TokenVerifier;
 
 /// Maximum credential size: bounded by delegation depth × token size.

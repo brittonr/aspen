@@ -3,6 +3,14 @@
 //! Response types for decentralized Git hosting operations including
 //! repositories, blobs, trees, commits, refs, issues, and patches.
 
+#![cfg_attr(not(test), no_std)]
+
+extern crate alloc;
+
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -498,7 +506,7 @@ pub struct GitBridgePushMetadata {
     /// Optional timestamp.
     pub timestamp: Option<u64>,
     /// Optional additional metadata as key-value pairs.
-    pub additional: Option<std::collections::HashMap<String, String>>,
+    pub additional: Option<BTreeMap<String, String>>,
 }
 
 /// Git bridge push response.

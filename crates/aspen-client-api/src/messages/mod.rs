@@ -15,6 +15,8 @@
 //! - Bounded message sizes
 //! - Fail-fast on invalid requests
 
+use std::collections::BTreeMap;
+
 // Sub-modules
 pub mod automerge;
 pub mod batch;
@@ -2698,7 +2700,7 @@ pub enum ClientRpcRequest {
         /// Path to the secret within the mount.
         path: String,
         /// Secret data as key-value pairs.
-        data: std::collections::HashMap<String, String>,
+        data: BTreeMap<String, String>,
         /// Optional CAS version for optimistic locking.
         cas: Option<u64>,
     },
@@ -2773,7 +2775,7 @@ pub enum ClientRpcRequest {
         /// Require CAS for writes.
         cas_required: Option<bool>,
         /// Custom key-value metadata.
-        custom_metadata: Option<std::collections::HashMap<String, String>>,
+        custom_metadata: Option<BTreeMap<String, String>>,
     },
 
     /// Delete a secret and all its versions.

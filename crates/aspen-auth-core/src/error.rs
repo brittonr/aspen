@@ -2,6 +2,9 @@
 //!
 //! Uses thiserror for derive macro error implementation as per project conventions.
 
+use alloc::string::String;
+use alloc::string::ToString;
+
 use thiserror::Error;
 
 /// Errors that can occur during token operations.

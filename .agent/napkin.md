@@ -114,6 +114,17 @@ git push → forge git_bridge → RefUpdate gossip → CiTriggerHandler → Trig
 
 Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 
+## Hook/auth seam split follow-ups (2026-04-22)
+
+**Discovery**: `aspen-auth` and `aspen-hooks-types` had runtime baggage hidden behind seemingly lightweight public types.
+
+### What To Do
+
+- Treat `crates/aspen-auth-core/` as the portable auth surface. `crates/aspen-auth/` is now shell-only for builder/verifier/HMAC/revocation.
+- `aspen-client-api` auth feature should point at `aspen-auth-core`, not shell `aspen-auth`, or it drags `aspen-core-shell` back into wire crates.
+- `AspenHookTicket` now lives in `crates/aspen-hooks-ticket/`. If a consumer only needs hook config/event schema, depend on `aspen-hooks-types`; if it needs ticket URLs, use `aspen-hooks-ticket` or `aspen-hooks` re-exports.
+- `aspen-client-api` test code uses `postcard::to_stdvec`, so if you tighten postcard features for that crate you must keep `use-std` enabled or rewrite the tests to use alloc-only serializers.
+
 ## OpenSpec archive preflight gotcha (2026-04-21)
 
 **Discovery**: Archiving a change can break `scripts/openspec-preflight.sh` if archived docs still point at `openspec/changes/<name>/...`.

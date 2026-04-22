@@ -4,6 +4,8 @@
 //! These functions are deterministic, no I/O, no async.
 //! Time is passed as an explicit parameter.
 
+use alloc::vec::Vec;
+
 use crate::capability::Capability;
 use crate::constants::MAX_DELEGATION_DEPTH;
 

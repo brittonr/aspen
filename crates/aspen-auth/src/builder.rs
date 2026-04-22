@@ -4,16 +4,17 @@
 
 use std::time::Duration;
 
-use iroh::PublicKey;
-use iroh::SecretKey;
+use iroh_base::PublicKey;
+use iroh_base::SecretKey;
 use rand::RngCore;
 
-use crate::capability::Capability;
-use crate::constants::MAX_CAPABILITIES_PER_TOKEN;
-use crate::constants::MAX_DELEGATION_DEPTH;
-use crate::error::AuthError;
-use crate::token::Audience;
-use crate::token::CapabilityToken;
+use aspen_auth_core::Capability;
+use aspen_auth_core::CapabilityToken;
+use aspen_auth_core::constants::MAX_CAPABILITIES_PER_TOKEN;
+use aspen_auth_core::constants::MAX_DELEGATION_DEPTH;
+
+use crate::AuthError;
+use crate::Audience;
 use crate::utils::current_time_secs;
 
 /// Builder for creating capability tokens.

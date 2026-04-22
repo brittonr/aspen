@@ -1,0 +1,17 @@
+[package]
+name = "aspen-auth-core"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Alloc-focused authorization types and pure logic for Aspen distributed systems"
+
+[dependencies]
+iroh-base = { version = "0.97.0", default-features = false, features = ["key"] }
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+postcard = { version = "1.0", features = ["alloc"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+blake3 = { version = "1.5", default-features = false }
+thiserror = "2.0"
+
+[dev-dependencies]
+rand = "0.9"

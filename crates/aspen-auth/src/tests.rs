@@ -4,7 +4,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use iroh::SecretKey;
+use iroh_base::SecretKey;
 
 use super::*;
 
@@ -1166,7 +1166,7 @@ fn test_concurrent_parent_registration() {
                 // Create a unique key for each thread
                 let mut seed = [0u8; 32];
                 seed[0] = i;
-                iroh::SecretKey::from(seed)
+                SecretKey::from(seed)
             };
 
             let token = TokenBuilder::new(key)

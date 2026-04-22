@@ -3,6 +3,11 @@
 //! Capabilities represent what operations a token holder can perform.
 //! They follow the principle of least privilege with prefix-based scoping.
 
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use core::fmt;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -818,8 +823,8 @@ pub enum Operation {
     },
 }
 
-impl std::fmt::Display for Operation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Operation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Operation::Read { key } => write!(f, "Read({})", key),
             Operation::Write { key, .. } => write!(f, "Write({})", key),

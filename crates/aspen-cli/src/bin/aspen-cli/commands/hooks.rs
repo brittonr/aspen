@@ -14,7 +14,7 @@ use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::HookHandlerInfo;
 use aspen_client_api::HookHandlerMetrics;
 use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
-use aspen_hooks_types::AspenHookTicket;
+use aspen_hooks_ticket::AspenHookTicket;
 use clap::Args;
 use clap::Subcommand;
 use iroh::Endpoint;

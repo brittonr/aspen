@@ -19,7 +19,7 @@ aspen-ci-core = { path = "../aspen-ci-core" }
 aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell", features = ["layer"] }
 aspen-auth = { path = "../aspen-auth" }
 aspen-cluster = { path = "../aspen-cluster" }
-aspen-hooks-types = { path = "../aspen-hooks-types" }
+aspen-hooks-ticket = { path = "../aspen-hooks-ticket" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-plugin-api = { path = "../aspen-plugin-api", optional = true }

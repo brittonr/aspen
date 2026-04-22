@@ -4,6 +4,13 @@
 //! counters, sequences, rate limiters, barriers, semaphores, read-write locks,
 //! queues, and service registry.
 
+#![cfg_attr(not(test), no_std)]
+
+extern crate alloc;
+
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

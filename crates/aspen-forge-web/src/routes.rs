@@ -1639,7 +1639,7 @@ mod tests {
                 size_bytes: 2048,
                 content_type: "application/x-nix-nar".into(),
                 created_at: "2024-01-01".into(),
-                metadata: std::collections::HashMap::new(),
+                metadata: std::collections::BTreeMap::new(),
             }],
             error: None,
         };

@@ -57,7 +57,7 @@ pub fn constant_time_compare(a: &[u8; 32], b: &[u8; 32]) -> bool {
 /// # Example
 ///
 /// ```rust
-/// use aspen_auth::verified_auth::is_challenge_valid;
+/// use aspen_auth_core::verified_auth::is_challenge_valid;
 ///
 /// let challenge_time = 1000000;
 /// let now = 1030000; // 30 seconds later
@@ -86,7 +86,7 @@ pub const fn is_challenge_valid(challenge_timestamp_ms: u64, current_time_ms: u6
 /// # Example
 ///
 /// ```rust
-/// use aspen_auth::verified_auth::calculate_challenge_age_ms;
+/// use aspen_auth_core::verified_auth::calculate_challenge_age_ms;
 ///
 /// assert_eq!(calculate_challenge_age_ms(1000, 1500), 500);
 /// assert_eq!(calculate_challenge_age_ms(1000, 1000), 0);
@@ -114,7 +114,7 @@ pub const fn calculate_challenge_age_ms(challenge_timestamp_ms: u64, current_tim
 /// # Example
 ///
 /// ```rust
-/// use aspen_auth::verified_auth::derive_hmac_key;
+/// use aspen_auth_core::verified_auth::derive_hmac_key;
 ///
 /// let key1 = derive_hmac_key("my-cookie");
 /// let key2 = derive_hmac_key("my-cookie");
@@ -125,7 +125,8 @@ pub const fn calculate_challenge_age_ms(challenge_timestamp_ms: u64, current_tim
 /// ```
 #[inline]
 pub fn derive_hmac_key(cookie: &str) -> [u8; 32] {
-    aspen_crypto::cookie::derive_cookie_hmac_key(cookie)
+    let hash = blake3::hash(cookie.as_bytes());
+    *hash.as_bytes()
 }
 
 #[cfg(test)]

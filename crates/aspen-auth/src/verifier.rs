@@ -6,16 +6,17 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::RwLock;
 
-use iroh::PublicKey;
+use iroh_base::PublicKey;
+use iroh_base::Signature;
 
 use crate::builder::bytes_to_sign;
-use crate::capability::Operation;
-use crate::constants::MAX_DELEGATION_DEPTH;
-use crate::constants::TOKEN_CLOCK_SKEW_SECS;
-use crate::error::AuthError;
-use crate::token::Audience;
-use crate::token::CapabilityToken;
 use crate::utils::current_time_secs;
+use crate::AuthError;
+use aspen_auth_core::Audience;
+use aspen_auth_core::CapabilityToken;
+use aspen_auth_core::Operation;
+use aspen_auth_core::constants::MAX_DELEGATION_DEPTH;
+use aspen_auth_core::constants::TOKEN_CLOCK_SKEW_SECS;
 
 /// Verifies capability tokens and checks authorization.
 ///
@@ -143,7 +144,7 @@ impl TokenVerifier {
 
         // 1. Check signature
         let sign_bytes = bytes_to_sign(token);
-        let signature = iroh::Signature::from_bytes(&token.signature);
+        let signature = Signature::from_bytes(&token.signature);
         token.issuer.verify(&sign_bytes, &signature).map_err(|_| AuthError::InvalidSignature)?;
 
         // 2. Check expiration
@@ -272,7 +273,7 @@ impl TokenVerifier {
 
         // 1. Check signature
         let sign_bytes = bytes_to_sign(token);
-        let signature = iroh::Signature::from_bytes(&token.signature);
+        let signature = Signature::from_bytes(&token.signature);
         token.issuer.verify(&sign_bytes, &signature).map_err(|_| AuthError::InvalidSignature)?;
 
         // 2. Check expiration

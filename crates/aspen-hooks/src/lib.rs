@@ -155,7 +155,8 @@
 //! - `MAX_SHELL_COMMAND_SIZE`: 4,096
 //! - `MAX_SHELL_OUTPUT_SIZE`: 64KB
 
-// Re-export all types from aspen-hooks-types for backward compatibility
+// Re-export all schema/ticket types for backward compatibility.
+pub use aspen_hooks_ticket::*;
 pub use aspen_hooks_types::*;
 
 // Runtime modules (these stay in aspen-hooks)

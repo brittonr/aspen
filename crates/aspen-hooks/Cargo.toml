@@ -7,8 +7,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/blixard/aspen"
 
 [dependencies]
-# Types crate (lightweight, no async runtime)
+# Types crates (lightweight schema + ticket split)
 aspen-hooks-types = { path = "../aspen-hooks-types" }
+aspen-hooks-ticket = { path = "../aspen-hooks-ticket" }
 
 # Core dependencies
 aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell", features = ["layer"] }

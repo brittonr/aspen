@@ -85,7 +85,7 @@ pub(crate) async fn kv_get(client: &AspenClient, args: KvGetArgs, json: bool) ->
 }
 
 pub(crate) async fn kv_put(client: &AspenClient, args: KvPutArgs, json: bool) -> Result<()> {
-    let data: HashMap<String, String> = serde_json::from_str(&args.data)
+    let data: std::collections::BTreeMap<String, String> = serde_json::from_str(&args.data)
         .map_err(|e| anyhow::anyhow!("Invalid data JSON: {}. Expected format: {{\"key\":\"value\"}}", e))?;
 
     let response = client

@@ -716,21 +716,32 @@ name = "aspen-auth"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-auth-core",
  "aspen-core-shell",
- "aspen-crypto",
  "async-trait",
  "base64 0.22.1",
- "blake3",
  "hex",
  "hmac",
- "iroh",
+ "iroh-base",
  "postcard",
  "rand 0.9.2",
  "serde",
  "sha2 0.10.9",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aspen-auth-core"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "blake3",
+ "iroh-base",
+ "postcard",
+ "rand 0.9.2",
+ "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1100,7 +1111,7 @@ dependencies = [
  "aspen-commit-dag",
  "aspen-core-shell",
  "aspen-forge",
- "aspen-hooks-types",
+ "aspen-hooks-ticket",
  "aspen-plugin-api",
  "aspen-proxy",
  "async-trait",
@@ -1169,7 +1180,7 @@ dependencies = [
 name = "aspen-client-api"
 version = "0.1.0"
 dependencies = [
- "aspen-auth",
+ "aspen-auth-core",
  "aspen-coordination-protocol",
  "aspen-forge-protocol",
  "aspen-jobs-protocol",
@@ -1935,6 +1946,7 @@ dependencies = [
  "aspen-client",
  "aspen-client-api",
  "aspen-core-shell",
+ "aspen-hooks-ticket",
  "aspen-hooks-types",
  "aspen-jobs",
  "aspen-transport",
@@ -1959,14 +1971,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-hooks-types"
+name = "aspen-hooks-ticket"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aspen-hlc",
  "iroh",
  "iroh-tickets",
  "postcard",
+ "proptest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aspen-hooks-types"
+version = "0.1.0"
+dependencies = [
+ "aspen-hlc",
  "proptest",
  "schemars 0.8.22",
  "serde",

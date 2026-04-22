@@ -6,27 +6,25 @@ license = "AGPL-3.0-or-later"
 description = "Capability-based authorization for Aspen distributed systems"
 
 [dependencies]
-# Core types and traits
+# Core shell integration
+aspen-auth-core = { path = "../aspen-auth-core" }
 aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
-aspen-crypto = { path = "../aspen-crypto" }
 
 # Async traits
 async-trait = "0.1"
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 postcard = { version = "1.0", features = ["alloc"] }
-base64 = "0.22"
-hex = "0.4"
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 
 # Cryptography
-blake3 = "1.5"
 hmac = "0.12"
 sha2 = "0.10"
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = { version = "0.97.0", default-features = false, features = ["key"] }
 
 # Error handling
-thiserror = "2.0"
 anyhow = "1.0"
 
 # Utilities

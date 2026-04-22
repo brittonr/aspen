@@ -16,16 +16,12 @@
 //! - Bounded scan operations to prevent unbounded memory usage
 
 use anyhow::Result;
+use aspen_auth_core::constants::MAX_REVOCATION_LIST_SIZE;
 use aspen_core::KeyValueStore;
 use aspen_core::ReadRequest;
 use aspen_core::ScanRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
-
-/// Maximum number of revoked tokens to load from storage.
-///
-/// Tiger Style: Fixed limit prevents unbounded memory usage during startup.
-const MAX_REVOCATION_LIST_SIZE: u32 = 10_000;
 
 /// System prefix for revocation storage.
 ///

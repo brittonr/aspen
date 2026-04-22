@@ -3,6 +3,8 @@
 //! Request/response types for CI pipeline management, execution, Nix binary cache,
 //! SNIX storage, and cache migration operations.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -310,7 +312,7 @@ pub struct CiArtifactInfo {
     /// When the artifact was created.
     pub created_at: String,
     /// Additional metadata.
-    pub metadata: std::collections::HashMap<String, String>,
+    pub metadata: BTreeMap<String, String>,
 }
 
 /// CI list artifacts response.

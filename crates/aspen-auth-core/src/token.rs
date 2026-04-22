@@ -3,7 +3,11 @@
 //! Tokens are self-contained and can be verified offline using only
 //! the issuer's public key and current time.
 
-use iroh::PublicKey;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
+use iroh_base::PublicKey;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -128,7 +132,7 @@ impl CapabilityToken {
 
 /// Serde helper for PublicKey.
 mod public_key_serde {
-    use iroh::PublicKey;
+    use iroh_base::PublicKey;
     use serde::Deserialize;
     use serde::Deserializer;
     use serde::Serialize;
@@ -146,6 +150,9 @@ mod public_key_serde {
 
 /// Serde helper for Ed25519 signatures (64 bytes).
 mod signature_serde {
+    use alloc::format;
+    use alloc::vec::Vec;
+
     use serde::Deserialize;
     use serde::Deserializer;
     use serde::Serializer;

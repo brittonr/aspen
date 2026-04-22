@@ -15,7 +15,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use aspen_hooks_types::AspenHookTicket;
+//! use aspen_hooks_ticket::AspenHookTicket;
 //! use iroh::EndpointAddr;
 //!
 //! // Create a hook ticket

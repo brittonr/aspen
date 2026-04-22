@@ -3,6 +3,8 @@
 //! Request/response types for Vault-compatible secrets management including
 //! KV secrets engine, Transit encryption, PKI certificates, and Nix cache signing.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -20,7 +22,7 @@ pub enum SecretsRequest {
     SecretsKvWrite {
         mount: String,
         path: String,
-        data: std::collections::HashMap<String, String>,
+        data: BTreeMap<String, String>,
         cas: Option<u64>,
     },
     /// Soft-delete secret versions.
@@ -51,7 +53,7 @@ pub enum SecretsRequest {
         path: String,
         max_versions: Option<u32>,
         cas_required: Option<bool>,
-        custom_metadata: Option<std::collections::HashMap<String, String>>,
+        custom_metadata: Option<BTreeMap<String, String>>,
     },
     /// Delete a secret and all its versions.
     SecretsKvDeleteMetadata { mount: String, path: String },
@@ -266,7 +268,7 @@ pub struct SecretsKvReadResultResponse {
     /// Whether the read was successful.
     pub is_success: bool,
     /// Secret data (key-value pairs).
-    pub data: Option<std::collections::HashMap<String, String>>,
+    pub data: Option<BTreeMap<String, String>>,
     /// Version metadata.
     pub metadata: Option<SecretsKvVersionMetadata>,
     /// Error message if the operation failed.
@@ -335,7 +337,7 @@ pub struct SecretsKvMetadataResultResponse {
     /// All version info.
     pub versions: Vec<SecretsKvVersionInfo>,
     /// Custom metadata.
-    pub custom_metadata: Option<std::collections::HashMap<String, String>>,
+    pub custom_metadata: Option<BTreeMap<String, String>>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

@@ -92,7 +92,7 @@ pub async fn handle_list_artifacts(
                 size_bytes: metadata.size_bytes,
                 content_type: metadata.content_type,
                 created_at: metadata.created_at,
-                metadata: metadata.extra,
+                metadata: metadata.extra.into_iter().collect(),
             });
         }
     }
@@ -154,7 +154,7 @@ pub async fn handle_get_artifact(
                 size_bytes: metadata.size_bytes,
                 content_type: metadata.content_type,
                 created_at: metadata.created_at,
-                metadata: metadata.extra,
+                metadata: metadata.extra.into_iter().collect(),
             });
             break;
         }
@@ -254,7 +254,7 @@ pub async fn handle_get_artifact(
                 size_bytes: metadata.size_bytes,
                 content_type: metadata.content_type,
                 created_at: metadata.created_at,
-                metadata: metadata.extra,
+                metadata: metadata.extra.into_iter().collect(),
             });
             break;
         }

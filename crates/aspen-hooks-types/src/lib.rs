@@ -1,8 +1,8 @@
 //! Lightweight type definitions for the Aspen hook system.
 //!
-//! This crate contains only the type definitions needed for hook configuration,
-//! events, and tickets. It has minimal dependencies (no tokio, no async runtime)
-//! and can be used by consumers who only need to work with hook types without
+//! This crate contains only the type definitions needed for hook configuration
+//! and events. It has minimal dependencies (no tokio, no async runtime)
+//! and can be used by consumers who only need to work with hook schema without
 //! pulling in the full hook runtime.
 //!
 //! For the full hook system with services, handlers, and pub/sub machinery,
@@ -12,7 +12,6 @@
 //!
 //! - **Configuration**: `HooksConfig`, `HookHandlerConfig`, `ExecutionMode`, `HookHandlerType`
 //! - **Events**: `HookEvent`, `HookEventType`, and payload types for each event category
-//! - **Tickets**: `AspenHookTicket` for external program integration
 //! - **Constants**: Tiger Style resource bounds
 //!
 //! # Example
@@ -36,7 +35,6 @@ pub mod config;
 pub mod constants;
 pub mod error;
 pub mod event;
-pub mod ticket;
 
 // Re-export main types for convenience
 pub use config::ExecutionMode;
@@ -89,15 +87,6 @@ pub use event::LeaderElectedPayload;
 pub use event::MembershipChangedPayload;
 pub use event::SnapshotPayload;
 pub use event::TtlExpiredPayload;
-// Ticket types
-pub use ticket::AspenHookTicket;
-pub use ticket::DEFAULT_EXPIRY_HOURS;
-pub use ticket::HOOK_TICKET_PREFIX;
-pub use ticket::MAX_BOOTSTRAP_PEERS;
-pub use ticket::MAX_CLUSTER_ID_SIZE;
-pub use ticket::MAX_EVENT_TYPE_SIZE;
-pub use ticket::MAX_PAYLOAD_SIZE;
-pub use ticket::MAX_RELAY_URL_SIZE;
 
 #[cfg(test)]
 mod tests {
