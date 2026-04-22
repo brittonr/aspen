@@ -1,0 +1,4 @@
+OK: openspec/changes/extend-no-std-foundation-and-wire
+  tasks: 13 total / 2 checked
+  changed files listed: 9
+  verification artifacts: 3

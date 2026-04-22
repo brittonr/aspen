@@ -232,14 +232,12 @@ impl TryFrom<&NodeAddress> for iroh_base::EndpointAddr {
         let endpoint_id = addr.endpoint_id.parse().map_err(|_| NodeAddressConvertError::InvalidEndpointId {
             endpoint_id: addr.endpoint_id.clone(),
         })?;
-        let mut transport_addrs = BTreeSet::new();
-        for transport_addr in &addr.addrs {
-            transport_addrs.insert(iroh_base::TransportAddr::try_from(transport_addr)?);
-        }
-        Ok(iroh_base::EndpointAddr {
-            id: endpoint_id,
-            addrs: transport_addrs,
-        })
+        let addrs = addr
+            .addrs
+            .iter()
+            .map(iroh_base::TransportAddr::try_from)
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        Ok(iroh_base::EndpointAddr { id: endpoint_id, addrs })
     }
 }
 

@@ -23,7 +23,7 @@ fn validate_write_command_check_key(key: &str) -> Result<(), KeyValueStoreError>
     if key.is_empty() {
         return Err(KeyValueStoreError::EmptyKey);
     }
-    let key_len_bytes = usize_to_u32_saturating(key.len());
+    let key_len_bytes = usize_to_u32_limit_checked(key.len(), MAX_KEY_SIZE);
     if key_len_bytes > MAX_KEY_SIZE {
         return Err(KeyValueStoreError::KeyTooLarge {
             size: key_len_bytes,
@@ -35,7 +35,7 @@ fn validate_write_command_check_key(key: &str) -> Result<(), KeyValueStoreError>
 
 /// Validate a value against size limits.
 fn validate_write_command_check_value(value: &str) -> Result<(), KeyValueStoreError> {
-    let value_len_bytes = usize_to_u32_saturating(value.len());
+    let value_len_bytes = usize_to_u32_limit_checked(value.len(), MAX_VALUE_SIZE);
     if value_len_bytes > MAX_VALUE_SIZE {
         return Err(KeyValueStoreError::ValueTooLarge {
             size: value_len_bytes,
@@ -47,7 +47,7 @@ fn validate_write_command_check_value(value: &str) -> Result<(), KeyValueStoreEr
 
 /// Validate batch size against limits.
 fn validate_write_command_check_batch_size(size_count: usize) -> Result<(), KeyValueStoreError> {
-    let batch_len_items = usize_to_u32_saturating(size_count);
+    let batch_len_items = usize_to_u32_limit_checked(size_count, MAX_SETMULTI_KEYS);
     if batch_len_items > MAX_SETMULTI_KEYS {
         return Err(KeyValueStoreError::BatchTooLarge {
             size: batch_len_items,
@@ -184,7 +184,7 @@ fn validate_write_command_check_optimistic_transaction(
 }
 
 fn validate_write_command_check_topology_data(topology_data: &[u8]) -> Result<(), KeyValueStoreError> {
-    let topology_size_bytes = usize_to_u32_saturating(topology_data.len());
+    let topology_size_bytes = usize_to_u32_limit_checked(topology_data.len(), MAX_VALUE_SIZE);
     if topology_size_bytes > MAX_VALUE_SIZE {
         return Err(KeyValueStoreError::ValueTooLarge {
             size: topology_size_bytes,
@@ -194,8 +194,11 @@ fn validate_write_command_check_topology_data(topology_data: &[u8]) -> Result<()
     Ok(())
 }
 
-fn usize_to_u32_saturating(value: usize) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
+fn usize_to_u32_limit_checked(value: usize, max_allowed: u32) -> u32 {
+    match u32::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => max_allowed.saturating_add(1),
+    }
 }
 
 /// Validate a write command against fixed size limits.
