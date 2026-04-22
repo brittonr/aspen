@@ -5,6 +5,7 @@
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use async_trait::async_trait;
@@ -226,9 +227,8 @@ pub trait SqlQueryExecutor: Send + Sync {
 }
 
 // Blanket implementation for Arc<T>
-#[cfg(feature = "std")]
 #[async_trait]
-impl<T: SqlQueryExecutor + ?Sized> SqlQueryExecutor for std::sync::Arc<T> {
+impl<T: SqlQueryExecutor + ?Sized> SqlQueryExecutor for Arc<T> {
     async fn execute_sql(&self, request: SqlQueryRequest) -> Result<SqlQueryResult, SqlQueryError> {
         (**self).execute_sql(request).await
     }

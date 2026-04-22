@@ -10,9 +10,9 @@ pub use aspen_traits::ClusterController;
 pub use aspen_traits::CoordinationBackend;
 pub use aspen_traits::KeyValueStore;
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use alloc::sync::Arc;
 
     use super::*;
     use crate::ClusterNode;

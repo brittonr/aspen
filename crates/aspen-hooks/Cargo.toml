@@ -11,7 +11,7 @@ repository = "https://github.com/blixard/aspen"
 aspen-hooks-types = { path = "../aspen-hooks-types" }
 
 # Core dependencies
-aspen-core = { path = "../aspen-core", features = ["layer"] }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell", features = ["layer"] }
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-transport = { path = "../aspen-transport" }
 aspen-client = { path = "../aspen-client" }

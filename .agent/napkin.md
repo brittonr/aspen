@@ -13,6 +13,8 @@
 - Fix for that leak lives in `vendor/uhlc/`: make `rand` optional, keep it in upstream-like defaults, and let `aspen-hlc` depend on `uhlc` with `default-features = false`. Re-check both `cargo tree -p aspen-core --no-default-features -e normal` and the boundary checker after any future `uhlc` update.
 - The vendored `openraft-macros` `since` attribute can panic on this toolchain before Aspen code even builds. If `cargo check -p aspen-cluster` or `cargo check -p aspen-cli` fails inside `#[since(...)]`, inspect `openraft/macros/src/utils.rs::is_doc()` first: the debug assertions on non-doc tokens are the trigger.
 - After the macro panic is gone, the next cluster/cli blockers may still be unrelated parser breakage elsewhere. This session found duplicated/half-merged code in `crates/aspen-coordination-protocol/src/lib.rs`, `crates/aspen-jobs-protocol/src/lib.rs`, and `crates/aspen-dag/src/sync.rs`; fix those before blaming `aspen-core` feature gating.
+- If you split std helpers into `aspen-core-shell`, alias that package under dependency key `aspen-core` in shell consumers (`aspen-core = { package = "aspen-core-shell", ... }`). That preserves existing `aspen_core::*` import paths while keeping real `aspen-core` alloc-only.
+- Representative rails for the split are now `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, `cargo check -p aspen-core-shell --features layer,global-discovery,sql`, `cargo test -p aspen-core --test ui`, `cargo check -p aspen-cluster`, `cargo check -p aspen-cli`, `cargo check -p aspen-rpc-handlers`, and `cargo check -p aspen --no-default-features --features node-runtime`.
 
 ## Tigerstyle scope (2026-04-21)
 

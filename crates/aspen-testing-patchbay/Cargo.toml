@@ -11,7 +11,7 @@ authors = ["Aspen Contributors"]
 patchbay = { git = "https://github.com/n0-computer/patchbay.git", rev = "e0c48e094ae11442b1ea374b6d4d8fd55a498ac1" }
 
 # Core Aspen dependencies (minimal set for test nodes)
-aspen-core = { path = "../aspen-core" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-constants = { path = "../aspen-constants" }
 aspen-raft = { path = "../aspen-raft" }
 aspen-raft-types = { path = "../aspen-raft-types" }

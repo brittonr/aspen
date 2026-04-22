@@ -9,7 +9,7 @@ description = "Network transport layer for Aspen distributed systems - protocol 
 # Core workspace dependencies (explicit paths to sibling repos)
 aspen-constants = { path = "../aspen-constants" }
 aspen-raft-types = { path = "../aspen-raft-types" }
-aspen-core = { path = "../aspen-core" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-trust = { workspace = true }

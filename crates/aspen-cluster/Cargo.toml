@@ -8,7 +8,7 @@ authors = ["Aspen Contributors"]
 
 [dependencies]
 # Core Aspen dependencies
-aspen-core = { path = "../aspen-core", features = ["std"] }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-crypto = { path = "../aspen-crypto" }
 aspen-disk = { path = "../aspen-disk" }
 aspen-ticket = { path = "../aspen-ticket" }

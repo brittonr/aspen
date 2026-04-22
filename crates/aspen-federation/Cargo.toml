@@ -9,7 +9,7 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Core Aspen dependencies
 aspen-auth = { path = "../aspen-auth" }
-aspen-core = { path = "../aspen-core" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-hlc = { path = "../aspen-hlc" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-traits = { path = "../aspen-traits" }

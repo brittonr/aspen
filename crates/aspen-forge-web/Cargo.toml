@@ -9,7 +9,7 @@ description = "Web frontend for Aspen Forge served over HTTP/3 via iroh-h3"
 # Aspen client for cluster connection
 aspen-client = { workspace = true }
 aspen-client-api = { workspace = true }
-aspen-core = { workspace = true }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-transport = { workspace = true }
 aspen-forge-protocol = { path = "../aspen-forge-protocol" }
 
@@ -70,7 +70,7 @@ tempfile = "3.10"
 aspen-blob = { workspace = true }
 aspen-client = { workspace = true }
 aspen-client-api = { workspace = true }
-aspen-core = { workspace = true }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-forge = { path = "../aspen-forge" }
 aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
 aspen-rpc-handlers = { path = "../aspen-rpc-handlers", features = ["forge", "blob"] }

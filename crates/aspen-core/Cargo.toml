@@ -21,15 +21,6 @@ aspen-kv-types = { path = "../aspen-kv-types", default-features = false }
 # Core traits (extracted to separate crate for lighter dependencies)
 aspen-traits = { path = "../aspen-traits", default-features = false }
 
-# Layer types (FoundationDB-compatible tuple encoding and subspace layer)
-aspen-layer = { path = "../aspen-layer", optional = true }
-
-# Time utilities (extracted from utils.rs)
-aspen-time = { path = "../aspen-time", optional = true }
-
-# Disk space utilities (extracted from utils.rs)
-aspen-disk = { path = "../aspen-disk", optional = true }
-
 # Storage types (extracted from storage.rs)
 aspen-storage-types = { path = "../aspen-storage-types", default-features = false }
 
@@ -44,51 +35,16 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
 # Error handling
 thiserror = "2.0"
-anyhow = { version = "1.0", optional = true }
 snafu = { version = "0.8.9", default-features = false, features = ["rust_1_65"] }
-
-# Async utilities
-n0-future = { version = "0.3.2", optional = true }
-tokio-util = { version = "0.7", optional = true }
-tokio = { version = "1.48", features = ["sync"], optional = true }
-
-# P2P networking (for NodeAddress wrapper)
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"], optional = true }
-iroh-blobs = { version = "0.99.0", optional = true }
-
-# Random for HCA (High-Contention Allocator)
-rand = { version = "0.9", optional = true }
-
-# Logging
-tracing = { version = "0.1", optional = true }
-
-# For simulation artifacts
-chrono = { version = "0.4", features = ["serde"], optional = true }
-serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]
 postcard = { version = "1.0", features = ["alloc"] }
-# Property-based testing for layer module
+# Property-based testing for core module families
 proptest = "1.0"
 insta = "1.42"
 serde_json = "1.0"
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "sync"] }
 
 [features]
 default = []
-std = [
-    "aspen-cluster-types/iroh",
-    "dep:anyhow",
-    "dep:aspen-disk",
-    "dep:aspen-time",
-    "dep:chrono",
-    "dep:iroh",
-    "dep:n0-future",
-    "dep:rand",
-    "dep:serde_json",
-    "dep:tokio",
-    "dep:tokio-util",
-    "dep:tracing",
-]
-layer = ["std", "dep:aspen-layer"]
 sql = ["aspen-constants/sql"]
-global-discovery = ["std", "dep:iroh-blobs"]

@@ -9,7 +9,7 @@ license = "AGPL-3.0-or-later"
 # Core dependencies (always required)
 aspen-client-api = { workspace = true }
 aspen-constants = { workspace = true }
-aspen-core = { path = "../aspen-core" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-hooks-types = { workspace = true }
 aspen-hooks = { path = "../aspen-hooks", optional = true }

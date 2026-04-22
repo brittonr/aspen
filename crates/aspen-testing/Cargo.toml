@@ -8,7 +8,7 @@ authors = ["Aspen Contributors"]
 
 [dependencies]
 # Core Aspen dependencies
-aspen-core = { version = "0.1.0", path = "../aspen-core" }
+aspen-core = { package = "aspen-core-shell", version = "0.1.0", path = "../aspen-core-shell" }
 
 # Lightweight testing core (deterministic implementations)
 aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }

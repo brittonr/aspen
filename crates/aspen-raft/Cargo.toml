@@ -8,7 +8,7 @@ authors = ["Aspen Contributors"]
 
 [dependencies]
 # Core Aspen dependencies
-aspen-core = { workspace = true, features = ["layer"] }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell", features = ["layer"] }
 aspen-raft-types = { workspace = true }
 aspen-raft-network = { workspace = true }
 

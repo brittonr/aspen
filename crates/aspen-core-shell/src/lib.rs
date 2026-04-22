@@ -1,0 +1,233 @@
+//! Std shell surface layered on top of alloc-only `aspen-core`.
+//!
+//! This crate keeps runtime-oriented helpers, transport traits, simulation
+//! artifacts, context traits, and layer helpers out of the alloc-only core
+//! package while preserving the familiar `aspen_core::*` public paths for
+//! consumers that intentionally opt into the shell crate.
+//!
+//! # Feature Flags
+//!
+//! - `sql`: Re-export alloc-safe SQL query types and traits from `aspen-core`
+//! - `layer`: Enable FoundationDB-style layer helpers and re-exports
+//! - `global-discovery`: Enable content-discovery traits and types
+
+// Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
+// crates while suppressing noisier families until Aspen has cleanup bandwidth.
+#![allow(unknown_lints)]
+#![allow(no_panic)]
+#![deny(ambient_clock, compound_assertion, contradictory_time, ignored_result, no_unwrap)]
+#![allow(
+    acronym_style,
+    ambiguous_params,
+    assertion_density,
+    bool_naming,
+    catch_all_on_enum,
+    compound_condition,
+    float_for_currency,
+    function_length,
+    multi_lock_ordering,
+    nested_conditionals,
+    no_recursion,
+    numeric_units,
+    platform_dependent_cast,
+    raw_arithmetic_overflow,
+    unbounded_loop,
+    unchecked_division,
+    unchecked_narrowing,
+    unjustified_allow,
+    verified_purity
+)]
+
+pub mod app_registry;
+pub use aspen_core::circuit_breaker;
+pub use aspen_core::cluster;
+pub mod constants;
+pub mod context;
+pub use aspen_core::crypto;
+pub use aspen_core::error;
+pub use aspen_core::hlc;
+pub use aspen_core::kv;
+#[cfg(feature = "layer")]
+pub mod layer;
+pub use aspen_core::prelude;
+pub use aspen_core::protocol;
+pub mod simulation;
+pub use aspen_core::spec;
+#[cfg(feature = "sql")]
+pub use aspen_core::sql;
+pub use aspen_core::storage;
+pub use aspen_core::traits;
+pub mod transport;
+pub use aspen_core::types;
+pub mod utils;
+pub use aspen_core::vault;
+pub use aspen_core::verified;
+
+// Re-export all public types at crate root for convenience.
+
+// App registry types
+pub use app_registry::AppManifest;
+pub use app_registry::AppRegistry;
+pub use app_registry::SharedAppRegistry;
+pub use app_registry::shared_registry;
+// Re-export all constants at crate root for backward compatibility.
+pub use constants::api::*;
+pub use constants::ci::*;
+pub use constants::coordination::*;
+pub use constants::directory::*;
+pub use constants::network::*;
+pub use constants::raft::*;
+pub use constants::raft_compat::MEMBERSHIP_COOLDOWN;
+// Context traits
+pub use context::AspenDocsTicket;
+#[cfg(feature = "global-discovery")]
+pub use context::ContentDiscovery;
+#[cfg(feature = "global-discovery")]
+pub use context::ContentNodeAddr;
+#[cfg(feature = "global-discovery")]
+pub use context::ContentProviderInfo;
+pub use context::DocsEntry;
+pub use context::DocsStatus;
+pub use context::DocsSyncProvider;
+pub use context::EndpointProvider;
+pub use context::InMemoryWatchRegistry;
+pub use context::KeyOrigin;
+pub use context::NetworkFactory;
+pub use context::PeerConnectionState;
+pub use context::PeerImporter;
+pub use context::PeerInfo;
+pub use context::PeerManager;
+pub use context::ServiceExecutor;
+pub use context::ShardTopology;
+pub use context::StateMachineProvider;
+pub use context::SubscriptionFilter;
+pub use context::SyncStatus;
+pub use context::WatchInfo;
+pub use context::WatchRegistry;
+// Crypto types
+pub use crypto::Signature;
+// Error types
+pub use error::ControlPlaneError;
+pub use error::KeyValueStoreError;
+// HLC types
+pub use hlc::HLC;
+pub use hlc::HlcTimestamp;
+pub use hlc::ID as HlcId;
+pub use hlc::NTP64;
+pub use hlc::SerializableTimestamp;
+pub use hlc::create_hlc;
+pub use hlc::new_timestamp;
+pub use hlc::to_unix_ms;
+pub use hlc::update_from_timestamp;
+// KV types
+pub use kv::BatchCondition;
+pub use kv::BatchOperation;
+pub use kv::CompareOp;
+pub use kv::CompareTarget;
+pub use kv::DeleteRequest;
+pub use kv::DeleteResult;
+pub use kv::KeyValueWithRevision;
+pub use kv::ReadConsistency;
+pub use kv::ReadRequest;
+pub use kv::ReadResult;
+pub use kv::ScanRequest;
+pub use kv::ScanResult;
+pub use kv::TxnCompare;
+pub use kv::TxnOp;
+pub use kv::TxnOpResult;
+pub use kv::WriteCommand;
+pub use kv::WriteOp;
+pub use kv::WriteRequest;
+pub use kv::WriteResult;
+pub use kv::validate_write_command;
+// Layer types (Tuple, Subspace, Directory) — requires `layer`
+#[cfg(feature = "layer")]
+pub use layer::AllocationError;
+#[cfg(feature = "layer")]
+pub use layer::DirectoryError;
+#[cfg(feature = "layer")]
+pub use layer::DirectoryLayer;
+#[cfg(feature = "layer")]
+pub use layer::DirectorySubspace;
+#[cfg(feature = "layer")]
+pub use layer::Element;
+#[cfg(feature = "layer")]
+pub use layer::HighContentionAllocator;
+#[cfg(feature = "layer")]
+pub use layer::Subspace;
+#[cfg(feature = "layer")]
+pub use layer::SubspaceError;
+#[cfg(feature = "layer")]
+pub use layer::Tuple;
+#[cfg(feature = "layer")]
+pub use layer::TupleError;
+// Protocol types (sans-IO infrastructure)
+pub use protocol::Alarm;
+pub use protocol::Envelope;
+pub use protocol::ProtocolCtx;
+pub use protocol::TestCtx;
+// Simulation types
+pub use simulation::SimulationArtifact;
+pub use simulation::SimulationArtifactBuilder;
+pub use simulation::SimulationStatus;
+#[cfg(feature = "sql")]
+pub use sql::SqlColumnInfo;
+#[cfg(feature = "sql")]
+pub use sql::SqlConsistency;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryError;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryExecutor;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryRequest;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryResult;
+#[cfg(feature = "sql")]
+pub use sql::SqlValue;
+#[cfg(feature = "sql")]
+pub use sql::effective_sql_limit;
+#[cfg(feature = "sql")]
+pub use sql::effective_sql_timeout_ms;
+#[cfg(feature = "sql")]
+pub use sql::validate_sql_query;
+#[cfg(feature = "sql")]
+pub use sql::validate_sql_request;
+// Storage types
+pub use storage::KvEntry;
+pub use storage::SM_KV_TABLE;
+// Traits
+pub use traits::ClusterController;
+pub use traits::CoordinationBackend;
+pub use traits::KeyValueStore;
+// Transport types
+pub use transport::BlobAnnouncedCallback;
+pub use transport::BlobAnnouncedInfo;
+pub use transport::DiscoveredPeer;
+pub use transport::DiscoveryHandle;
+pub use transport::IrohTransportExt;
+pub use transport::MembershipAddressUpdater;
+pub use transport::NetworkTransport;
+pub use transport::PeerDiscoveredCallback;
+pub use transport::PeerDiscovery;
+pub use transport::StaleTopologyInfo;
+pub use transport::TopologyStaleCallback;
+// Types
+pub use types::ClusterMetrics;
+pub use types::NodeAddress;
+pub use types::NodeId;
+pub use types::NodeState;
+pub use types::SnapshotLogId;
+pub use utils::ensure_disk_space_available;
+// Vault types
+pub use vault::SYSTEM_PREFIX;
+pub use vault::VaultError;
+pub use vault::is_system_key;
+pub use vault::validate_client_key;
+// Verified functions (pure, formally verified)
+pub use verified::build_scan_metadata;
+pub use verified::decode_continuation_token;
+pub use verified::encode_continuation_token;
+pub use verified::execute_scan;
+pub use verified::filter_scan_entries;
+pub use verified::normalize_scan_limit;
+pub use verified::paginate_entries;

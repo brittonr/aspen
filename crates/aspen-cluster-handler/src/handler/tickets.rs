@@ -39,7 +39,7 @@ pub(crate) async fn handle_get_cluster_ticket(ctx: &ClientProtocolContext) -> an
                 if iroh_addr.id == ctx.endpoint_manager.endpoint().id() {
                     continue;
                 }
-                if ticket.add_bootstrap_addr(iroh_addr).is_ok() {
+                if ticket.add_bootstrap_addr(&iroh_addr).is_ok() {
                     added_peers += 1;
                 }
             }
@@ -112,7 +112,7 @@ pub(crate) async fn handle_get_cluster_ticket_combined(
                     continue;
                 }
                 // Use full endpoint address with direct socket addresses
-                if ticket.add_bootstrap_addr(iroh_addr).is_ok() {
+                if ticket.add_bootstrap_addr(&iroh_addr).is_ok() {
                     added_peers += 1;
                 }
             }

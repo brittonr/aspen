@@ -56,13 +56,13 @@ const UI_FIXTURES: &[UiFixture] = &[
     UiFixture {
         name: "content-discovery-std-without-global-discovery",
         manifest_relative_path: "crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/Cargo.toml",
-        feature_settings: "features = [\"std\"]",
+        feature_settings: "package = \"aspen-core-shell\"",
         expected_stderr_substrings: CONTENT_DISCOVERY_EXPECTED,
     },
     UiFixture {
         name: "directory-layer-std-without-layer",
         manifest_relative_path: "crates/aspen-core/tests/ui/directory-layer-std-without-layer/Cargo.toml",
-        feature_settings: "features = [\"std\"]",
+        feature_settings: "package = \"aspen-core-shell\"",
         expected_stderr_substrings: DIRECTORY_LAYER_EXPECTED,
     },
 ];

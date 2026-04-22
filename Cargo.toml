@@ -73,6 +73,7 @@ members = [
     # Tier 1: Core engine
     "crates/aspen-disk",
     "crates/aspen-core",
+    "crates/aspen-core-shell",
     "crates/aspen-core-no-std-smoke",
     "crates/aspen-layer",
 
@@ -254,6 +255,7 @@ aspen-client-api = { path = "crates/aspen-client-api" }
 aspen-constants = { path = "crates/aspen-constants" }
 aspen-cluster-types = { path = "crates/aspen-cluster-types" }
 aspen-core = { path = "crates/aspen-core" }
+aspen-core-shell = { path = "crates/aspen-core-shell" }
 aspen-hlc = { path = "crates/aspen-hlc" }
 aspen-kv-types = { path = "crates/aspen-kv-types" }
 aspen-layer = { path = "crates/aspen-layer" }
@@ -372,7 +374,7 @@ ed25519-dalek = "2.1"  # Narinfo signing
 
 [dependencies]
 aspen-client = { workspace = true }
-aspen-core = { workspace = true, features = ["layer"] }  # global-discovery forwarded via feature
+aspen-core = { package = "aspen-core-shell", path = "crates/aspen-core-shell", features = ["layer"] }  # global-discovery forwarded via feature
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true, optional = true }
 aspen-sql = { workspace = true, optional = true }
