@@ -5,21 +5,40 @@ Covers: core.no-std-core-baseline.compile-fail-verification-is-reviewable, core.
 
 # Verification mapping plan
 
-This file is the supporting pre-implementation traceability plan for the root claim-to-artifact index at `openspec/changes/extend-no-std-foundation-and-wire/verification.md`.
+This supporting plan stays synchronized with `openspec/changes/extend-no-std-foundation-and-wire/verification.md`.
+It separates baseline context from final proof so reviewers can see both the before-state and the completed seam.
 
-Freshness rule for this change:
+## Baseline context anchors
 
-- only artifacts generated under `openspec/changes/extend-no-std-foundation-and-wire/evidence/` and indexed from this change's `verification.md` satisfy this change's verification claims
-- archived evidence from earlier no-std changes may be cited as baseline context only and MUST NOT substitute for this change's final proof
+These artifacts are historical context only, not final proof for the completed cut:
 
-Implementation phase must replace or augment this plan with:
+- `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-plan.md`
+- `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-storage-seam-verification.md`
+- `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-core-foundation-verification.md`
+- `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-wire-dependency-verification.md`
 
-- task-to-evidence mapping for every checked task
-- scenario-to-evidence mapping for every changed requirement scenario in:
-  - `specs/core/spec.md`
-  - `specs/architecture-modularity/spec.md`
-- links to compile, dependency, UI, boundary, and wire-compatibility artifacts saved under this change's `evidence/` directory
-- explicit references to alloc-only target-build artifacts for the leaf and wire crates
-- an explicit reference to `evidence/client-rpc-postcard-baseline.json` and the test artifact that compares current encodings against that baseline
+## Final proof anchors
 
-Until implementation starts, this file records the intended traceability shape without checking any tasks complete.
+- `V1` → `openspec/changes/extend-no-std-foundation-and-wire/evidence/storage-seam-verification.md`
+- `V2` → `openspec/changes/extend-no-std-foundation-and-wire/evidence/core-foundation-verification.md`
+- `V3` → `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`
+- `V4` → `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-compatibility-verification.md`
+- `V5` → `openspec/changes/extend-no-std-foundation-and-wire/verification.md`
+
+## Supporting review artifacts
+
+- docs review: `openspec/changes/extend-no-std-foundation-and-wire/evidence/docs-no-std-core-review.md`
+- postcard baseline artifact: `openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
+- review diff snapshot: `openspec/changes/extend-no-std-foundation-and-wire/evidence/implementation-diff.txt`
+- OpenSpec preflight transcript: `openspec/changes/extend-no-std-foundation-and-wire/evidence/openspec-preflight.txt`
+
+## wasm target setup anchors
+
+- baseline setup record: the header of each `baseline-*-verification.md` artifact
+- final alloc-only target-build proof:
+  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/core-foundation-verification.md`
+  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`
+
+## Synchronization rule
+
+When `tasks.md` changes, update `verification.md`, this file, and any affected evidence-plan index in the same review pass. Do not treat archived no-std evidence as final proof for this change.

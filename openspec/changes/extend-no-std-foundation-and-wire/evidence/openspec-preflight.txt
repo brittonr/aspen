@@ -1,4 +1,9 @@
+Evidence-ID: extend-no-std-foundation-and-wire.v5-preflight
+Task-ID: V5
+Artifact-Type: verification
+Covers: core.no-std-core-baseline.compile-fail-verification-is-reviewable, core.no-std-core-baseline.compile-slice-verification-is-reviewable, architecture.modularity.alloc-safe-wire-crates-default-to-alloc-safe-production-surfaces.protocol-dependency-verification-is-reviewable, architecture.modularity.alloc-safe-wire-crates-default-to-alloc-safe-production-surfaces.wire-compatibility-verification-is-reviewable
+
 OK: openspec/changes/extend-no-std-foundation-and-wire
-  tasks: 13 total / 2 checked
-  changed files listed: 9
-  verification artifacts: 3
+  tasks: 13 total / 13 checked
+  changed files listed: 8
+  verification artifacts: 1

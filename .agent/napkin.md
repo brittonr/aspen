@@ -23,6 +23,8 @@
 - If you forget to capture a baseline before editing an uncommitted OpenSpec seam, recover it from `HEAD` with a temporary git worktree instead of pretending the modified tree is the baseline.
 - I accidentally ran a 33s `cargo test -p aspen-client-api` through `bash`; for Aspen compile/test rails that might stretch past ~30s, queue them through `pueue_run` even when they look incremental.
 - Low free space can make `edit` truncate large staged OpenSpec files to zero bytes. If that happens, recover the staged content with `git show :path/to/file` before rewriting, and free space quickly with targeted `cargo clean -p ...` instead of nuking the whole workspace cache.
+- Baseline-capture clones for Aspen must preserve sibling-repo layout. A `/tmp` git worktree or clone without adjacent `aspen-dns` / `aspen-wasm-plugin` siblings can break workspace path deps, and if those siblings resolve `../aspen` back to the live repo Cargo can hit package-collision lockfile errors. Prefer a standalone baseline clone with explicit sibling symlinks that point back to the baseline snapshot.
+- pueue task environments can inherit `CARGO_INCREMENTAL=1`, which makes Aspen's `sccache` wrapper abort in detached baseline clones/worktrees (`sccache: incremental compilation is prohibited`). Unset `CARGO_INCREMENTAL` before long cargo rails in those captures.
 
 ## Tigerstyle scope (2026-04-21)
 
