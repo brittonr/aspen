@@ -71,12 +71,27 @@ pub struct CapabilityToken {
     ///
     /// Facts carry informational claims that don't affect authorization.
     /// For federation: sync preferences, cluster metadata, subscription context.
-    /// `#[serde(default)]` ensures backward-compatible deserialization.
-    #[serde(default)]
+    /// Explicit default helper preserves backward-compatible deserialization.
+    #[serde(default = "default_token_facts")]
     pub facts: Vec<(String, Vec<u8>)>,
     /// Ed25519 signature over all above fields.
     #[serde(with = "signature_serde")]
     pub signature: [u8; 64],
+}
+
+fn default_token_facts() -> Vec<(String, Vec<u8>)> {
+    Vec::new()
+}
+
+fn max_token_size_usize() -> usize {
+    match usize::try_from(MAX_TOKEN_SIZE) {
+        Ok(max_size_bytes) => max_size_bytes,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn token_exceeds_max_size(size_bytes: usize) -> bool {
+    size_bytes > max_token_size_usize()
 }
 
 impl CapabilityToken {
@@ -85,10 +100,10 @@ impl CapabilityToken {
     /// Uses postcard for compact binary serialization.
     pub fn encode(&self) -> Result<Vec<u8>, AuthError> {
         let bytes = postcard::to_allocvec(self).map_err(|e| AuthError::EncodingError(e.to_string()))?;
-        if bytes.len() > MAX_TOKEN_SIZE as usize {
+        if token_exceeds_max_size(bytes.len()) {
             return Err(AuthError::TokenTooLarge {
                 size_bytes: bytes.len() as u64,
-                max_bytes: MAX_TOKEN_SIZE as u64,
+                max_bytes: u64::from(MAX_TOKEN_SIZE),
             });
         }
         Ok(bytes)
@@ -96,10 +111,10 @@ impl CapabilityToken {
 
     /// Decode token from bytes.
     pub fn decode(bytes: &[u8]) -> Result<Self, AuthError> {
-        if bytes.len() > MAX_TOKEN_SIZE as usize {
+        if token_exceeds_max_size(bytes.len()) {
             return Err(AuthError::TokenTooLarge {
                 size_bytes: bytes.len() as u64,
-                max_bytes: MAX_TOKEN_SIZE as u64,
+                max_bytes: u64::from(MAX_TOKEN_SIZE),
             });
         }
         Ok(postcard::from_bytes(bytes)?)

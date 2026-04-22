@@ -11,58 +11,92 @@ use core::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
+struct GlobMatchInput<'a> {
+    pattern: &'a str,
+    candidate: &'a str,
+}
+
+struct PrefixScope<'a> {
+    prefix: &'a str,
+    candidate: &'a str,
+}
+
+struct MountScope<'a> {
+    capability_mount: &'a str,
+    requested_mount: &'a str,
+    capability_prefix: &'a str,
+    requested_path: &'a str,
+}
+
+struct ShellCommandMatch<'a> {
+    pattern: &'a str,
+    command: &'a str,
+}
+
+struct ShellPatternContainment<'a> {
+    parent_pattern: &'a str,
+    child_pattern: &'a str,
+}
+
 /// Simple glob pattern matching for shell command authorization.
 ///
 /// Supports only `*` wildcards at the end of patterns (e.g., "pg_*").
 /// Returns true if the pattern matches the input.
-fn glob_match(pattern: &str, input: &str) -> bool {
-    if pattern == "*" {
+fn glob_match(input: GlobMatchInput<'_>) -> bool {
+    if input.pattern == "*" {
         return true;
     }
 
-    if let Some(prefix) = pattern.strip_suffix('*') {
-        // Pattern like "pg_*" matches anything starting with "pg_"
-        input.starts_with(prefix)
-    } else if pattern.contains('*') {
-        // More complex patterns: split by * and check each segment
-        let parts: Vec<&str> = pattern.split('*').collect();
-        if parts.is_empty() {
-            return true;
-        }
-
-        let mut remaining = input;
-
-        // First part must be at the start
-        if !parts[0].is_empty() && !remaining.starts_with(parts[0]) {
-            return false;
-        }
-        remaining = &remaining[parts[0].len()..];
-
-        // Middle parts must exist somewhere in order
-        for part in parts.iter().skip(1).take(parts.len().saturating_sub(2)) {
-            if part.is_empty() {
-                continue;
-            }
-            if let Some(pos) = remaining.find(part) {
-                remaining = &remaining[pos + part.len()..];
-            } else {
-                return false;
-            }
-        }
-
-        // Last part must be at the end (if non-empty)
-        if let Some(last) = parts.last()
-            && !last.is_empty()
-            && !remaining.ends_with(last)
-        {
-            return false;
-        }
-
-        true
-    } else {
-        // No wildcards, exact match
-        pattern == input
+    if let Some(prefix) = input.pattern.strip_suffix('*') {
+        return input.candidate.starts_with(prefix);
     }
+    if input.pattern.contains('*') {
+        return glob_match_multi_segment(&input);
+    }
+
+    input.pattern == input.candidate
+}
+
+fn glob_match_multi_segment(input: &GlobMatchInput<'_>) -> bool {
+    let parts: Vec<&str> = input.pattern.split('*').collect();
+    let mut remaining = input.candidate;
+    let first_part = parts[0];
+
+    if !first_part.is_empty() && !remaining.starts_with(first_part) {
+        return false;
+    }
+    if !first_part.is_empty() {
+        debug_assert!(remaining.starts_with(first_part));
+    }
+    remaining = &remaining[first_part.len()..];
+
+    for part in parts.iter().skip(1).take(parts.len().saturating_sub(2)) {
+        if part.is_empty() {
+            continue;
+        }
+        let Some(pos) = remaining.find(part) else {
+            return false;
+        };
+        let Some(next_offset) = pos.checked_add(part.len()) else {
+            return false;
+        };
+        debug_assert!(remaining[pos..].starts_with(part));
+        remaining = &remaining[next_offset..];
+    }
+
+    if let Some(last_part) = parts.last()
+        && !last_part.is_empty()
+        && !remaining.ends_with(last_part)
+    {
+        return false;
+    }
+    if let Some(last_part) = parts.last()
+        && !last_part.is_empty()
+    {
+        debug_assert!(remaining.ends_with(last_part));
+    }
+
+    true
 }
 
 /// What operations a token holder can perform.
@@ -249,19 +283,26 @@ pub enum Capability {
     },
 }
 
-fn matches_prefix_scope(prefix: &str, value: &str) -> bool {
-    value.starts_with(prefix)
+fn matches_prefix_scope(scope: PrefixScope<'_>) -> bool {
+    scope.candidate.starts_with(scope.prefix)
 }
 
-fn matches_mount_scope(cap_mount: &str, op_mount: &str, cap_prefix: &str, path: &str) -> bool {
-    cap_mount == op_mount && matches_prefix_scope(cap_prefix, path)
+fn matches_mount_scope(scope: MountScope<'_>) -> bool {
+    scope.capability_mount == scope.requested_mount
+        && matches_prefix_scope(PrefixScope {
+            prefix: scope.capability_prefix,
+            candidate: scope.requested_path,
+        })
 }
 
-fn shell_command_matches(pattern: &str, command: &str) -> bool {
-    match pattern {
+fn shell_command_matches(input: ShellCommandMatch<'_>) -> bool {
+    match input.pattern {
         "*" => true,
-        pattern if pattern.contains('*') => glob_match(pattern, command),
-        exact => exact == command,
+        pattern if pattern.contains('*') => glob_match(GlobMatchInput {
+            pattern,
+            candidate: input.command,
+        }),
+        exact => exact == input.command,
     }
 }
 
@@ -273,20 +314,24 @@ fn shell_working_dir_matches(capability_dir: &Option<String>, requested_dir: &Op
     }
 }
 
-fn shell_pattern_contains(parent_pattern: &str, child_pattern: &str) -> bool {
-    if parent_pattern == "*" {
+fn shell_pattern_contains(input: ShellPatternContainment<'_>) -> bool {
+    if input.parent_pattern == "*" {
         return true;
     }
-    if child_pattern == "*" {
+    if input.child_pattern == "*" {
         return false;
     }
-    if parent_pattern.ends_with('*') && child_pattern.ends_with('*') {
-        return child_pattern.starts_with(parent_pattern.trim_end_matches('*'));
+    if input.parent_pattern.ends_with('*') && input.child_pattern.ends_with('*') {
+        return input
+            .child_pattern
+            .starts_with(input.parent_pattern.trim_end_matches('*'));
     }
-    if parent_pattern.ends_with('*') {
-        return child_pattern.starts_with(parent_pattern.trim_end_matches('*'));
+    if input.parent_pattern.ends_with('*') {
+        return input
+            .child_pattern
+            .starts_with(input.parent_pattern.trim_end_matches('*'));
     }
-    parent_pattern == child_pattern
+    input.parent_pattern == input.child_pattern
 }
 
 impl Capability {
@@ -306,18 +351,48 @@ impl Capability {
 
     fn authorizes_data(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
-            (Capability::Full { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(prefix, key)),
-            (Capability::Full { prefix }, Operation::Write { key, .. }) => Some(matches_prefix_scope(prefix, key)),
-            (Capability::Full { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(prefix, key)),
-            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => {
-                Some(matches_prefix_scope(prefix, key_prefix))
+            (Capability::Full { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(PrefixScope {
+                prefix,
+                candidate: key,
+            })),
+            (Capability::Full { prefix }, Operation::Write { key, .. }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix,
+                    candidate: key,
+                }))
             }
-            (Capability::Read { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(prefix, key)),
-            (Capability::Write { prefix }, Operation::Write { key, .. }) => Some(matches_prefix_scope(prefix, key)),
-            (Capability::Delete { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(prefix, key)),
-            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => {
-                Some(matches_prefix_scope(prefix, key_prefix))
+            (Capability::Full { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(PrefixScope {
+                prefix,
+                candidate: key,
+            })),
+            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => Some(matches_prefix_scope(
+                PrefixScope {
+                    prefix,
+                    candidate: key_prefix,
+                },
+            )),
+            (Capability::Read { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(PrefixScope {
+                prefix,
+                candidate: key,
+            })),
+            (Capability::Write { prefix }, Operation::Write { key, .. }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix,
+                    candidate: key,
+                }))
             }
+            (Capability::Delete { prefix }, Operation::Delete { key }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix,
+                    candidate: key,
+                }))
+            }
+            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => Some(matches_prefix_scope(
+                PrefixScope {
+                    prefix,
+                    candidate: key_prefix,
+                },
+            )),
             (Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => Some(true),
             _ => None,
         }
@@ -335,8 +410,10 @@ impl Capability {
                     working_dir: requested_dir,
                 },
             ) => Some(
-                shell_command_matches(command_pattern, command)
-                    && shell_working_dir_matches(working_dir, requested_dir),
+                shell_command_matches(ShellCommandMatch {
+                    pattern: command_pattern,
+                    command,
+                }) && shell_working_dir_matches(working_dir, requested_dir),
             ),
             _ => None,
         }
@@ -352,19 +429,39 @@ impl Capability {
             (
                 Capability::SecretsFull { mount, prefix } | Capability::SecretsRead { mount, prefix },
                 Operation::SecretsRead { mount: op_mount, path },
-            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+            ) => Some(matches_mount_scope(MountScope {
+                capability_mount: mount,
+                requested_mount: op_mount,
+                capability_prefix: prefix,
+                requested_path: path,
+            })),
             (
                 Capability::SecretsFull { mount, prefix } | Capability::SecretsWrite { mount, prefix },
                 Operation::SecretsWrite { mount: op_mount, path },
-            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+            ) => Some(matches_mount_scope(MountScope {
+                capability_mount: mount,
+                requested_mount: op_mount,
+                capability_prefix: prefix,
+                requested_path: path,
+            })),
             (
                 Capability::SecretsFull { mount, prefix } | Capability::SecretsDelete { mount, prefix },
                 Operation::SecretsDelete { mount: op_mount, path },
-            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+            ) => Some(matches_mount_scope(MountScope {
+                capability_mount: mount,
+                requested_mount: op_mount,
+                capability_prefix: prefix,
+                requested_path: path,
+            })),
             (
                 Capability::SecretsFull { mount, prefix } | Capability::SecretsList { mount, prefix },
                 Operation::SecretsList { mount: op_mount, path },
-            ) => Some(matches_mount_scope(mount, op_mount, prefix, path)),
+            ) => Some(matches_mount_scope(MountScope {
+                capability_mount: mount,
+                requested_mount: op_mount,
+                capability_prefix: prefix,
+                requested_path: path,
+            })),
             _ => None,
         }
     }
@@ -381,7 +478,10 @@ impl Capability {
             | (Capability::TransitSign { key_prefix }, Operation::TransitSign { key_name })
             | (Capability::TransitVerify { key_prefix }, Operation::TransitVerify { key_name })
             | (Capability::TransitKeyManage { key_prefix }, Operation::TransitKeyManage { key_name }) => {
-                Some(matches_prefix_scope(key_prefix, key_name))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: key_prefix,
+                    candidate: key_name,
+                }))
             }
             _ => None,
         }
@@ -394,7 +494,10 @@ impl Capability {
             | (Capability::SecretsAdmin, Operation::PkiReadCa)
             | (Capability::SecretsAdmin, Operation::PkiManage) => Some(true),
             (Capability::PkiIssue { role_prefix }, Operation::PkiIssue { role }) => {
-                Some(matches_prefix_scope(role_prefix, role))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: role_prefix,
+                    candidate: role,
+                }))
             }
             (Capability::PkiRevoke, Operation::PkiRevoke)
             | (Capability::PkiReadCa, Operation::PkiReadCa)
@@ -413,11 +516,17 @@ impl Capability {
             | (Capability::NetAdmin, Operation::NetUnpublish { .. })
             | (Capability::NetAdmin, Operation::NetAdmin { .. }) => Some(true),
             (Capability::NetConnect { service_prefix }, Operation::NetConnect { service, .. }) => {
-                Some(matches_prefix_scope(service_prefix, service))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: service_prefix,
+                    candidate: service,
+                }))
             }
             (Capability::NetPublish { service_prefix }, Operation::NetPublish { service })
             | (Capability::NetPublish { service_prefix }, Operation::NetUnpublish { service }) => {
-                Some(matches_prefix_scope(service_prefix, service))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: service_prefix,
+                    candidate: service,
+                }))
             }
             _ => None,
         }
@@ -427,7 +536,10 @@ impl Capability {
         match (self, op) {
             (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
             | (Capability::FederationPush { repo_prefix }, Operation::FederationPush { fed_id }) => {
-                Some(matches_prefix_scope(repo_prefix, fed_id))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: repo_prefix,
+                    candidate: fed_id,
+                }))
             }
             _ => None,
         }
@@ -471,7 +583,10 @@ impl Capability {
             | (Capability::Write { prefix: parent }, Capability::Write { prefix: child })
             | (Capability::Delete { prefix: parent }, Capability::Delete { prefix: child })
             | (Capability::Watch { prefix: parent }, Capability::Watch { prefix: child }) => {
-                Some(matches_prefix_scope(parent, child))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: parent,
+                    candidate: child,
+                }))
             }
             (Capability::ClusterAdmin, Capability::ClusterAdmin) | (Capability::Delegate, Capability::Delegate) => {
                 Some(true)
@@ -492,8 +607,10 @@ impl Capability {
                     working_dir: child_dir,
                 },
             ) => Some(
-                shell_pattern_contains(parent_pattern, child_pattern)
-                    && shell_working_dir_matches(parent_dir, child_dir),
+                shell_pattern_contains(ShellPatternContainment {
+                    parent_pattern,
+                    child_pattern,
+                }) && shell_working_dir_matches(parent_dir, child_dir),
             ),
             _ => None,
         }
@@ -544,7 +661,12 @@ impl Capability {
                     mount: child_mount,
                     prefix: child_prefix,
                 },
-            ) => Some(matches_mount_scope(parent_mount, child_mount, parent_prefix, child_prefix)),
+            ) => Some(matches_mount_scope(MountScope {
+                capability_mount: parent_mount,
+                requested_mount: child_mount,
+                capability_prefix: parent_prefix,
+                requested_path: child_prefix,
+            })),
             _ => None,
         }
     }
@@ -590,7 +712,12 @@ impl Capability {
                     mount: child_mount,
                     prefix: child_prefix,
                 },
-            ) => Some(matches_mount_scope(parent_mount, child_mount, parent_prefix, child_prefix)),
+            ) => Some(matches_mount_scope(MountScope {
+                capability_mount: parent_mount,
+                requested_mount: child_mount,
+                capability_prefix: parent_prefix,
+                requested_path: child_prefix,
+            })),
             _ => None,
         }
     }
@@ -609,7 +736,10 @@ impl Capability {
             | (
                 Capability::TransitKeyManage { key_prefix: parent },
                 Capability::TransitKeyManage { key_prefix: child },
-            ) => Some(matches_prefix_scope(parent, child)),
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
             _ => None,
         }
     }
@@ -627,7 +757,10 @@ impl Capability {
             | (Capability::PkiRevoke, Capability::PkiRevoke)
             | (Capability::PkiReadCa, Capability::PkiReadCa) => Some(true),
             (Capability::PkiIssue { role_prefix: parent }, Capability::PkiIssue { role_prefix: child }) => {
-                Some(matches_prefix_scope(parent, child))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: parent,
+                    candidate: child,
+                }))
             }
             _ => None,
         }
@@ -640,7 +773,10 @@ impl Capability {
             | (Capability::NetAdmin, Capability::NetPublish { .. }) => Some(true),
             (Capability::NetConnect { service_prefix: parent }, Capability::NetConnect { service_prefix: child })
             | (Capability::NetPublish { service_prefix: parent }, Capability::NetPublish { service_prefix: child }) => {
-                Some(matches_prefix_scope(parent, child))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: parent,
+                    candidate: child,
+                }))
             }
             _ => None,
         }
@@ -650,7 +786,10 @@ impl Capability {
         match (self, other) {
             (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
             | (Capability::FederationPush { repo_prefix: parent }, Capability::FederationPush { repo_prefix: child }) => {
-                Some(matches_prefix_scope(parent, child))
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: parent,
+                    candidate: child,
+                }))
             }
             _ => None,
         }
