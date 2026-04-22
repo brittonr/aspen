@@ -16,31 +16,43 @@ use proc_macro2::TokenTree;
 /// },
 /// ```
 pub(crate) fn is_doc(curr: &TokenTree, next: &TokenTree) -> bool {
-    let TokenTree::Punct(p) = curr else {
+    let TokenTree::Punct(punct) = curr else {
         return false;
     };
 
-    if p.as_char() != '#' {
+    let punct_char = punct.as_char();
+    if punct_char != '#' {
         return false;
     }
+    debug_assert_eq!(punct_char, '#');
 
-    let TokenTree::Group(g) = &next else {
+    let TokenTree::Group(group) = next else {
         return false;
     };
 
-    if g.delimiter() != proc_macro2::Delimiter::Bracket {
+    if group.delimiter() != proc_macro2::Delimiter::Bracket {
         return false;
     }
-    let first = g.stream().into_iter().next();
-    let Some(first) = first else {
+    debug_assert_eq!(group.delimiter(), proc_macro2::Delimiter::Bracket);
+
+    let stream = group.stream();
+    if stream.is_empty() {
+        return false;
+    }
+    debug_assert!(!stream.is_empty());
+
+    let Some(first_token) = stream.into_iter().next() else {
+        return false;
+    };
+    let TokenTree::Ident(ident) = first_token else {
         return false;
     };
 
-    let TokenTree::Ident(i) = first else {
+    if ident != "doc" {
         return false;
-    };
-
-    i == "doc"
+    }
+    debug_assert!(ident == "doc");
+    true
 }
 
 pub(crate) fn token_stream_with_error(mut item: TokenStream, e: syn::Error) -> TokenStream {
