@@ -21,6 +21,7 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 - regression artifacts: `evidence/regression-<topic>.txt`
 - docs review note: `evidence/docs-no-std-core-review.md`
 - typed verification-plan stubs: `evidence/verification-compile-slices-plan.md`, `evidence/verification-boundary-plan.md`, `evidence/verification-regression-plan.md`
+- archive follow-up proof: `evidence/spec-sync-check.txt`, `evidence/openspec-preflight.txt`
 
 ## Task Coverage
 
@@ -188,8 +189,19 @@ The checked items below cover traceability scaffolding, evidence-plan setup, the
 
 No implementation diff artifact yet.
 Current implementation slices add alloc-backed no-std scaffolding in `aspen-core`, a real smoke consumer, explicit shell gating for current root exports, alloc-safe manifest settings across direct prerequisite crates, a feature-gated alloc-safe `NodeAddress` bridge, deterministic boundary/feature-claims checker scripts, surface/source-audit enforcement, UI compile-fail fixtures, regression evidence, downstream docs, and refreshed representative consumer compile evidence. The final verification pass also repaired unrelated syntax damage in `aspen-coordination-protocol`, `aspen-jobs-protocol`, and `aspen-dag` so `compile-cluster.txt` and `compile-cli.txt` now prove the intended `aspen-core/std` and `aspen-core/layer` consumers instead of dying before the boundary under test.
+Archive follow-up evidence also saves the synced main-spec hunks plus exact archived-to-main equality checks in `evidence/spec-sync-check.txt` and the successful archive preflight rerun in `evidence/openspec-preflight.txt`.
 
 ## Verification Commands
+
+### `git show baf78a55a -- openspec/specs/core/spec.md openspec/specs/architecture-modularity/spec.md` plus archived-to-main diff checks
+
+- Status: pass
+- Artifact: `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/spec-sync-check.txt`
+
+### `./scripts/openspec-preflight.sh openspec/changes/archive/2026-04-21-no-std-aspen-core`
+
+- Status: pass
+- Artifact: `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/openspec-preflight.txt`
 
 ### `python scripts/check-aspen-core-no-std-surface.py --crate-dir crates/aspen-core/src --output-dir openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence`
 

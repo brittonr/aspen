@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-04-21-no-std-aspen-core
+  tasks: 66 total / 66 checked
+  changed files listed: 1
+  verification artifacts: 21
