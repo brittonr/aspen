@@ -76,4 +76,3 @@ test sql::tests::test_validate_sql_request_valid ... ok
 test sql::tests::test_with_cte_queries ... ok
 
 test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 111 filtered out; finished in 0.00s
-

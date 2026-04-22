@@ -29,4 +29,3 @@ test protocol::tests::test_ctx_connections ... ok
 test protocol::tests::test_multi_step_connect_ping_pong ... ok
 
 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 97 filtered out; finished in 0.00s
-
