@@ -1,3 +1,8 @@
+Evidence-ID: no-std-aspen-core.regression-scan
+Task-ID: 5.18
+Artifact-Type: regression-log
+Covers: core.no-std-core-baseline, core.functional-core-imperative-shell
+
 warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
 package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
 workspace: /home/brittonr/git/aspen/Cargo.toml

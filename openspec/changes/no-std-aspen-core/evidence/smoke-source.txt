@@ -1,3 +1,8 @@
+Evidence-ID: no-std-aspen-core.smoke-source
+Task-ID: 5.7
+Artifact-Type: source-snapshot
+Covers: core.no-std-core-baseline, architecture.modularity.feature-bundles-are-explicit-and-bounded
+
 #![no_std]
 
 extern crate alloc;

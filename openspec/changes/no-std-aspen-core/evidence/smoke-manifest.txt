@@ -1,3 +1,8 @@
+Evidence-ID: no-std-aspen-core.smoke-manifest
+Task-ID: 5.7
+Artifact-Type: manifest-snapshot
+Covers: core.no-std-core-baseline, architecture.modularity.feature-bundles-are-explicit-and-bounded
+
 [package]
 name = "aspen-core-no-std-smoke"
 version = "0.1.0"

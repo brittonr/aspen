@@ -1,3 +1,8 @@
+Evidence-ID: no-std-aspen-core.deps-allowlist-diff
+Task-ID: 5.13
+Artifact-Type: dependency-diff
+Covers: core.no-std-core-baseline, architecture.modularity.acyclic-no-std-core-boundary, architecture.modularity.feature-bundles-are-explicit-and-bounded
+
 ## Direct missing
 - none
 

@@ -1,3 +1,8 @@
+Evidence-ID: no-std-aspen-core.ui-content-discovery-std-without-global-discovery
+Task-ID: 5.16
+Artifact-Type: stderr-snapshot
+Covers: core.no-std-core-baseline, architecture.modularity.feature-bundles-are-explicit-and-bounded
+
 error[E0432]: unresolved import `aspen_core::ContentDiscovery`
    --> src/main.rs:1:5
     |

@@ -1,1 +1,6 @@
+Evidence-ID: no-std-aspen-core.baseline-surface-run
+Task-ID: 1.4
+Artifact-Type: command-log
+Covers: core.no-std-core-baseline, architecture.modularity.acyclic-no-std-core-boundary, architecture.modularity.feature-bundles-are-explicit-and-bounded
+
 openspec/changes/no-std-aspen-core/evidence/surface-inventory.md

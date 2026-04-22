@@ -219,12 +219,6 @@ EXPECTED_VERIFIED_REEXPORTS = frozenset(
         ("scan::filter_scan_entries", GUARD_NONE),
         ("scan::normalize_scan_limit", GUARD_NONE),
         ("scan::paginate_entries", GUARD_NONE),
-        ("crate::hlc::SerializableTimestamp", GUARD_NONE),
-        ("crate::hlc::create_hlc", GUARD_NONE),
-        ("crate::hlc::to_unix_ms", GUARD_NONE),
-        ("crate::kv::validate_write_command", GUARD_NONE),
-        ("crate::types::NodeId", GUARD_NONE),
-        ("crate::types::NodeState", GUARD_NONE),
     }
 )
 EXPECTED_SPEC_MODULES = frozenset({("verus_shim", GUARD_NONE)})
@@ -283,7 +277,6 @@ ALLOC_ONLY_MODULE_PATH_FAMILIES = (
     "aspen_core::prelude::*",
     "aspen_core::spec::*",
     "aspen_core::verified::scan::{build_scan_metadata, decode_continuation_token, encode_continuation_token, execute_scan, filter_scan_entries, normalize_scan_limit, paginate_entries}",
-    "aspen_core::verified::{SerializableTimestamp, create_hlc, to_unix_ms, validate_write_command, NodeId, NodeState}",
 )
 
 ALLOC_ONLY_AUDIT_FILES = (

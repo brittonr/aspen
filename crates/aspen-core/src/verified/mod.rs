@@ -24,7 +24,7 @@
 //! # Public surface
 //!
 //! The documented `verified::*` surface for this change is limited to scan
-//! helpers plus core pure re-exports from `hlc`, `kv`, and `types`.
+//! helpers exposed at the module root and the `verified::scan::*` module path.
 
 pub mod scan;
 
@@ -37,12 +37,3 @@ pub use scan::filter_scan_entries;
 pub use scan::normalize_scan_limit;
 pub use scan::paginate_entries;
 
-pub use crate::hlc::SerializableTimestamp;
-// Re-export pure HLC functions
-pub use crate::hlc::create_hlc;
-pub use crate::hlc::to_unix_ms;
-// Re-export pure validation function from kv module
-pub use crate::kv::validate_write_command;
-pub use crate::types::NodeId;
-// Re-export pure type helpers
-pub use crate::types::NodeState;

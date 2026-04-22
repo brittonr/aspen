@@ -46,13 +46,32 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def strip_evidence_metadata(text: str) -> str:
+    lines = text.splitlines()
+    metadata_prefixes = (
+        "Evidence-ID:",
+        "Task-ID:",
+        "Artifact-Type:",
+        "Covers:",
+    )
+    line_index = 0
+    while line_index < len(lines) and any(lines[line_index].startswith(prefix) for prefix in metadata_prefixes):
+        line_index += 1
+    while line_index < len(lines) and lines[line_index] == "":
+        line_index += 1
+    return "\n".join(lines[line_index:]) + ("\n" if lines[line_index:] else "")
+
+
+def read_evidence_text(path: Path) -> str:
+    return strip_evidence_metadata(path.read_text())
+
+
 def load_toml(path: Path) -> dict[str, Any]:
-    with path.open("rb") as handle:
-        return tomllib.load(handle)
+    return tomllib.loads(read_evidence_text(path))
 
 
 def default_feature_result(path: Path) -> dict[str, Any]:
-    text = path.read_text()
+    text = read_evidence_text(path)
     offending_lines = [line for line in text.splitlines() if ROOT_FEATURE_MARKER in line]
     return {
         "ok": not offending_lines,
@@ -99,7 +118,7 @@ def smoke_manifest_result(path: Path) -> dict[str, Any]:
 
 
 def smoke_source_result(path: Path) -> dict[str, Any]:
-    text = path.read_text()
+    text = read_evidence_text(path)
     messages: list[str] = []
     if NO_STD_MARKER not in text:
         messages.append("missing #![no_std]")
@@ -111,7 +130,7 @@ def smoke_source_result(path: Path) -> dict[str, Any]:
 
 
 def consumer_feature_result(path: Path, required_markers: list[str]) -> dict[str, Any]:
-    text = path.read_text()
+    text = read_evidence_text(path)
     missing_markers = [marker for marker in required_markers if marker not in text]
     return {"ok": not missing_markers, "path": str(path), "missing_markers": missing_markers}
 

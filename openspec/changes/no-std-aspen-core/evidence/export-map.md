@@ -150,7 +150,6 @@
 - `aspen_core::prelude::*`
 - `aspen_core::spec::*`
 - `aspen_core::verified::scan::{build_scan_metadata, decode_continuation_token, encode_continuation_token, execute_scan, filter_scan_entries, normalize_scan_limit, paginate_entries}`
-- `aspen_core::verified::{SerializableTimestamp, create_hlc, to_unix_ms, validate_write_command, NodeId, NodeState}`
 
 ## Test-only shell infrastructure
 - `test_support` stays crate-private behind `#[cfg(all(test, feature = "std"))]` and has no public root path.

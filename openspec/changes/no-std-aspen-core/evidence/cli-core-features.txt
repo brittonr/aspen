@@ -1,3 +1,8 @@
+Evidence-ID: no-std-aspen-core.cli-core-features
+Task-ID: 5.9
+Artifact-Type: feature-tree
+Covers: core.no-std-core-baseline, architecture.modularity.feature-bundles-are-explicit-and-bounded
+
 aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
 ├── aspen-core feature "default"
 │   ├── aspen-auth v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth)
