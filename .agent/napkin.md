@@ -15,6 +15,7 @@
 - After the macro panic is gone, the next cluster/cli blockers may still be unrelated parser breakage elsewhere. This session found duplicated/half-merged code in `crates/aspen-coordination-protocol/src/lib.rs`, `crates/aspen-jobs-protocol/src/lib.rs`, and `crates/aspen-dag/src/sync.rs`; fix those before blaming `aspen-core` feature gating.
 - If you split std helpers into `aspen-core-shell`, alias that package under dependency key `aspen-core` in shell consumers (`aspen-core = { package = "aspen-core-shell", ... }`). That preserves existing `aspen_core::*` import paths while keeping real `aspen-core` alloc-only.
 - Representative rails for the split are now `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, `cargo check -p aspen-core-shell --features layer,global-discovery,sql`, `cargo test -p aspen-core --test ui`, `cargo check -p aspen-cluster`, `cargo check -p aspen-cli`, `cargo check -p aspen-rpc-handlers`, and `cargo check -p aspen --no-default-features --features node-runtime`.
+- Do not summarize old verification rails as "green" unless this transcript ran them or you cite the saved archive evidence path explicitly. For this change, durable proof lives under `openspec/changes/archive/2026-04-21-no-std-aspen-core/`, while the leftover active dir `openspec/changes/no-std-aspen-core/` only carries copied UI evidence.
 
 ## Tigerstyle scope (2026-04-21)
 
