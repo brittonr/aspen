@@ -682,6 +682,7 @@ Fixed limits in `crates/aspen-constants/src/` to prevent resource exhaustion:
 - If you cite `bash -n` or `scripts/openspec-preflight.sh` in your completion summary, save those transcripts as evidence too.
 - Before `request_done_review` or claiming an OpenSpec task is complete, run `scripts/openspec-preflight.sh <change-dir-or-name>`.
 - `scripts/openspec-preflight.sh` also checks that every `verification.md` `Changed file:` entry is currently modified/staged. For retroactive verification of already-landed code, keep `Implementation Evidence` limited to the new verification/evidence artifacts and cite committed source files under `Task Coverage` or saved diff artifacts.
+- After archiving a change, rewrite repo-relative `openspec/changes/<name>/...` references inside the archived `tasks.md`, `verification.md`, and other evidence-linked docs to the new `openspec/changes/archive/<date>-<name>/...` path before rerunning preflight; otherwise preflight can fail on missing `Changed file:` entries or task/verification text mismatches.
 - Stage newly created source files before `nix build` / `nix run`; untracked files can be excluded by the flake source filter and create false verification results.
 
 ## Important Notes

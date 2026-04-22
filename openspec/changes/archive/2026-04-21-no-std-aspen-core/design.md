@@ -150,30 +150,30 @@ If any alloc-only dependency cannot satisfy this feature policy, it must be reco
 
 | Rail | Purpose |
 | --- | --- |
-| `cargo tree -p aspen-core -e features > openspec/changes/no-std-aspen-core/evidence/core-default-features.txt` | captures default feature resolution for the feature-claims checker |
-| `cargo check -p aspen-core > openspec/changes/no-std-aspen-core/evidence/compile-default.txt` | proves the crate itself builds with the empty default feature set |
-| `cargo check -p aspen-core --no-default-features > openspec/changes/no-std-aspen-core/evidence/compile-no-default.txt` | proves the explicit alloc-only crate build works |
-| `cargo check -p aspen-core --no-default-features --features sql > openspec/changes/no-std-aspen-core/evidence/compile-sql.txt` | proves the documented alloc-safe `sql` surface builds without `std` |
-| `cargo check -p aspen-core --features std > openspec/changes/no-std-aspen-core/evidence/compile-std.txt` | proves the base shell opt-in path builds |
-| `cargo check -p aspen-core --features std,sql > openspec/changes/no-std-aspen-core/evidence/compile-std-sql.txt` | proves `sql` stays usable when `std` is enabled for shell conveniences |
-| `cargo check -p aspen-core --features layer > openspec/changes/no-std-aspen-core/evidence/compile-layer.txt` | proves `layer` remains a `std`-gated shell path |
-| `cargo check -p aspen-core --features global-discovery > openspec/changes/no-std-aspen-core/evidence/compile-global-discovery.txt` | proves `global-discovery` remains a `std`-gated shell path |
-| `cp crates/aspen-core-no-std-smoke/Cargo.toml openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt` plus `cp crates/aspen-core-no-std-smoke/src/lib.rs openspec/changes/no-std-aspen-core/evidence/smoke-source.txt` plus `cargo check -p aspen-core-no-std-smoke > openspec/changes/no-std-aspen-core/evidence/compile-smoke.txt` | captures smoke-consumer manifest, alloc-backed `#![no_std]` source, and build output so the feature-claims checker and review record can prove a real no-std downstream with a bare default dependency that imports alloc-only APIs |
+| `cargo tree -p aspen-core -e features > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/core-default-features.txt` | captures default feature resolution for the feature-claims checker |
+| `cargo check -p aspen-core > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-default.txt` | proves the crate itself builds with the empty default feature set |
+| `cargo check -p aspen-core --no-default-features > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-no-default.txt` | proves the explicit alloc-only crate build works |
+| `cargo check -p aspen-core --no-default-features --features sql > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-sql.txt` | proves the documented alloc-safe `sql` surface builds without `std` |
+| `cargo check -p aspen-core --features std > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-std.txt` | proves the base shell opt-in path builds |
+| `cargo check -p aspen-core --features std,sql > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-std-sql.txt` | proves `sql` stays usable when `std` is enabled for shell conveniences |
+| `cargo check -p aspen-core --features layer > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-layer.txt` | proves `layer` remains a `std`-gated shell path |
+| `cargo check -p aspen-core --features global-discovery > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-global-discovery.txt` | proves `global-discovery` remains a `std`-gated shell path |
+| `cp crates/aspen-core-no-std-smoke/Cargo.toml openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/smoke-manifest.txt` plus `cp crates/aspen-core-no-std-smoke/src/lib.rs openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/smoke-source.txt` plus `cargo check -p aspen-core-no-std-smoke > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-smoke.txt` | captures smoke-consumer manifest, alloc-backed `#![no_std]` source, and build output so the feature-claims checker and review record can prove a real no-std downstream with a bare default dependency that imports alloc-only APIs |
 | `cargo tree -p aspen-core --no-default-features -e normal --depth 1` asserted to match exactly the alloc-only direct prerequisite set from Decision 3 | proves the direct prerequisite contract |
 | `scripts/check-aspen-core-no-std-boundary.py` consuming `cargo metadata` plus `cargo tree -p aspen-core --no-default-features -e normal` | proves every transitive dependency is reachable only through approved alloc-only prerequisites, uses the required alloc-safe feature settings, and appears in the approved alloc-safe transitive allowlist |
 | the same boundary audit asserting exclusion of `aspen-layer`, `aspen-time`, `aspen-disk`, `anyhow`, `n0-future`, `tokio`, `tokio-util`, `iroh`, `iroh-base`, `iroh-blobs`, `rand`, `tracing`, `chrono`, and `serde_json` | proves known shell/runtime crates do not leak into the alloc-only graph |
 | saved inventory, export-map, and source-audit artifacts tied to the module/export map in Decision 2 | proves the alloc-only surface has no back-edge to `std` shell exports or modules, and that `Arc<T>` convenience impls plus runtime-only prelude additions remain `std`-gated |
-| `cargo check -p aspen-cluster > openspec/changes/no-std-aspen-core/evidence/compile-cluster.txt` plus `cargo tree -p aspen-cluster -e features -i aspen-core > openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt` after `crates/aspen-cluster/Cargo.toml` explicitly opts into `aspen-core/std` | captures representative transport-shell consumer outputs for the feature-claims checker |
-| `cargo check -p aspen-cli > openspec/changes/no-std-aspen-core/evidence/compile-cli.txt` plus `cargo tree -p aspen-cli -e features -i aspen-core > openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt` after `crates/aspen-cli/Cargo.toml` explicitly opts into `aspen-core/layer` (and therefore `std`) | captures representative layer-shell consumer outputs for the feature-claims checker |
-| `python scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/no-std-aspen-core/evidence/core-default-features.txt --smoke-manifest openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt --smoke-source openspec/changes/no-std-aspen-core/evidence/smoke-source.txt --cluster-features openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt --cli-features openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt --output openspec/changes/no-std-aspen-core/evidence/feature-claims.json` | proves `default = []`, the smoke consumer is an alloc-backed `#![no_std]` bare dependency without feature overrides, `aspen-cluster -> aspen-core/std`, and `aspen-cli -> aspen-core/layer` |
-| `cargo test -p aspen-core --test ui > openspec/changes/no-std-aspen-core/evidence/compile-ui.txt` with `trybuild` fixtures under `crates/aspen-core/tests/ui/` | proves gated APIs stay unavailable under the intended missing-feature conditions |
-| `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt` plus stderr snapshots for those UI tests | proves the exact fixture paths, manifest feature settings, commands, and failure reason for each gate. The fixture index must include at minimum: alloc-only fixtures with `default-features = false` for `AppRegistry`, `NetworkTransport`, and `SimulationArtifact`; `std`-enabled but `global-discovery`-disabled fixture(s) for `ContentDiscovery`; and `std`-enabled but `layer`-disabled fixture(s) for `DirectoryLayer` |
+| `cargo check -p aspen-cluster > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-cluster.txt` plus `cargo tree -p aspen-cluster -e features -i aspen-core > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/cluster-core-features.txt` after `crates/aspen-cluster/Cargo.toml` explicitly opts into `aspen-core/std` | captures representative transport-shell consumer outputs for the feature-claims checker |
+| `cargo check -p aspen-cli > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-cli.txt` plus `cargo tree -p aspen-cli -e features -i aspen-core > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/cli-core-features.txt` after `crates/aspen-cli/Cargo.toml` explicitly opts into `aspen-core/layer` (and therefore `std`) | captures representative layer-shell consumer outputs for the feature-claims checker |
+| `python scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/core-default-features.txt --smoke-manifest openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/smoke-manifest.txt --smoke-source openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/smoke-source.txt --cluster-features openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/cluster-core-features.txt --cli-features openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/cli-core-features.txt --output openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/feature-claims.json` | proves `default = []`, the smoke consumer is an alloc-backed `#![no_std]` bare dependency without feature overrides, `aspen-cluster -> aspen-core/std`, and `aspen-cli -> aspen-core/layer` |
+| `cargo test -p aspen-core --test ui > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/compile-ui.txt` with `trybuild` fixtures under `crates/aspen-core/tests/ui/` | proves gated APIs stay unavailable under the intended missing-feature conditions |
+| `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/ui-fixtures.txt` plus stderr snapshots for those UI tests | proves the exact fixture paths, manifest feature settings, commands, and failure reason for each gate. The fixture index must include at minimum: alloc-only fixtures with `default-features = false` for `AppRegistry`, `NetworkTransport`, and `SimulationArtifact`; `std`-enabled but `global-discovery`-disabled fixture(s) for `ContentDiscovery`; and `std`-enabled but `layer`-disabled fixture(s) for `DirectoryLayer` |
 | targeted regression tests for converted pure entrypoints | proves refactored functional-core logic keeps both positive and negative coverage |
 | `docs/no-std-core.md` reviewed alongside these rails | proves the explicit opt-in contract is documented durably |
 
 The feature-claims command contract for this change is:
 
-- `python scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/no-std-aspen-core/evidence/core-default-features.txt --smoke-manifest openspec/changes/no-std-aspen-core/evidence/smoke-manifest.txt --smoke-source openspec/changes/no-std-aspen-core/evidence/smoke-source.txt --cluster-features openspec/changes/no-std-aspen-core/evidence/cluster-core-features.txt --cli-features openspec/changes/no-std-aspen-core/evidence/cli-core-features.txt --output openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
+- `python scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/core-default-features.txt --smoke-manifest openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/smoke-manifest.txt --smoke-source openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/smoke-source.txt --cluster-features openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/cluster-core-features.txt --cli-features openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/cli-core-features.txt --output openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/feature-claims.json`
 
 That checker must:
 
@@ -181,24 +181,24 @@ That checker must:
 2. fail unless `crates/aspen-core-no-std-smoke/Cargo.toml` uses a bare `aspen-core` dependency with no feature overrides and `crates/aspen-core-no-std-smoke/src/lib.rs` proves the crate is alloc-backed `#![no_std]`
 3. fail unless `cluster-core-features.txt` shows `aspen-core/std`
 4. fail unless `cli-core-features.txt` shows `aspen-core/layer`
-5. emit a machine-readable summary at `openspec/changes/no-std-aspen-core/evidence/feature-claims.json`
+5. emit a machine-readable summary at `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/feature-claims.json`
 
 The dependency-audit command contract for this change is:
 
-- `cargo tree -p aspen-core --no-default-features -e normal --depth 1 > openspec/changes/no-std-aspen-core/evidence/deps-direct.txt`
-- `cargo tree -p aspen-core --no-default-features -e normal > openspec/changes/no-std-aspen-core/evidence/deps-full.txt`
-- `python scripts/check-aspen-core-no-std-boundary.py --manifest-path crates/aspen-core/Cargo.toml --allowlist scripts/aspen-core-no-std-transitives.txt --output openspec/changes/no-std-aspen-core/evidence/deps-transitive.json --diff-output openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+- `cargo tree -p aspen-core --no-default-features -e normal --depth 1 > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-direct.txt`
+- `cargo tree -p aspen-core --no-default-features -e normal > openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-full.txt`
+- `python scripts/check-aspen-core-no-std-boundary.py --manifest-path crates/aspen-core/Cargo.toml --allowlist scripts/aspen-core-no-std-transitives.txt --output openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive.json --diff-output openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-allowlist-diff.txt`
 
 The acyclic-boundary/source-audit command contract for this change is:
 
-- `python scripts/check-aspen-core-no-std-surface.py --crate-dir crates/aspen-core/src --output-dir openspec/changes/no-std-aspen-core/evidence`
-- Before boundary edits, run that checker once against the pre-refactor tree and save `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md` as `openspec/changes/no-std-aspen-core/evidence/baseline-surface-inventory.md`; later runs continue to overwrite `surface-inventory.md`, `export-map.md`, and `source-audit.txt` for the current tree.
+- `python scripts/check-aspen-core-no-std-surface.py --crate-dir crates/aspen-core/src --output-dir openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence`
+- Before boundary edits, run that checker once against the pre-refactor tree and save `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/surface-inventory.md` as `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/baseline-surface-inventory.md`; later runs continue to overwrite `surface-inventory.md`, `export-map.md`, and `source-audit.txt` for the current tree.
 
 That checker must emit:
 
-- `openspec/changes/no-std-aspen-core/evidence/surface-inventory.md`
-- `openspec/changes/no-std-aspen-core/evidence/export-map.md`
-- `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`
+- `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/surface-inventory.md`
+- `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/export-map.md`
+- `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/source-audit.txt`
 
 and it must validate that alloc-only modules and exports do not import or depend on shell-only modules within `crates/aspen-core/src`, that shell-only impl blocks (for example `Arc<T>` convenience impls) plus runtime-only prelude additions are guarded by `#[cfg(feature = "std")]`, and that alloc-only modules do not read `std::env`, `std::process`, global singletons, hidden runtime context, implicit randomness sources such as `rand::rng` / `thread_rng`, perform I/O, or contain runtime-bound async bodies / `.await` paths. Alloc-only contract traits may still declare async signatures when they remain pure interface contracts and do not pull runtime behavior into the alloc-only implementation surface.
 
@@ -210,9 +210,9 @@ The transitive dependency audit is not ad hoc. `scripts/check-aspen-core-no-std-
 4. assert every resolved package uses the required alloc-safe feature policy where the policy is constrained in Decision 3
 5. compare the resolved transitive package set against an explicit allowlist file (planned path: `scripts/aspen-core-no-std-transitives.txt`) whose entries are the approved alloc-safe transitives for this change
 6. fail on any shell-only dependency in the denylist above
-7. emit a machine-readable summary in `openspec/changes/no-std-aspen-core/evidence/deps-transitive.json` plus an allowlist diff in `openspec/changes/no-std-aspen-core/evidence/deps-allowlist-diff.txt`
+7. emit a machine-readable summary in `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive.json` plus an allowlist diff in `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-allowlist-diff.txt`
 
-Each entry admitted to `scripts/aspen-core-no-std-transitives.txt` must be justified by a saved alloc-safety review note under `openspec/changes/no-std-aspen-core/evidence/` using the pattern `evidence/deps-transitive-review-<crate>.md`, so future verification can fail closed on any newly introduced transitive package.
+Each entry admitted to `scripts/aspen-core-no-std-transitives.txt` must be justified by a saved alloc-safety review note under `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/` using the pattern `evidence/deps-transitive-review-<crate>.md`, so future verification can fail closed on any newly introduced transitive package.
 
 Each `deps-transitive-review-<crate>.md` note must include a small fixed schema:
 
@@ -227,7 +227,7 @@ Each `deps-transitive-review-<crate>.md` note must include a small fixed schema:
 
 `scripts/check-aspen-core-no-std-boundary.py` must fail if an allowlisted crate lacks a matching review note or if the note is missing any required schema field.
 
-Saved OpenSpec evidence must capture the exact commands, checker outputs, fixture paths, stderr assertions, and outputs for these rails. Compile-fail command/fixture indexing is saved in `openspec/changes/no-std-aspen-core/evidence/ui-fixtures.txt`.
+Saved OpenSpec evidence must capture the exact commands, checker outputs, fixture paths, stderr assertions, and outputs for these rails. Compile-fail command/fixture indexing is saved in `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/ui-fixtures.txt`.
 
 **Rationale:** this boundary is easy to erode accidentally. Positive tests alone are not enough.
 
@@ -235,7 +235,7 @@ Saved OpenSpec evidence must capture the exact commands, checker outputs, fixtur
 
 ### 7. `verification.md` is the authoritative claim-to-artifact index
 
-**Choice:** `openspec/changes/no-std-aspen-core/verification.md` will be maintained as the review index for this change, not just as a late-stage dump.
+**Choice:** `openspec/changes/archive/2026-04-21-no-std-aspen-core/verification.md` will be maintained as the review index for this change, not just as a late-stage dump.
 
 It must contain:
 

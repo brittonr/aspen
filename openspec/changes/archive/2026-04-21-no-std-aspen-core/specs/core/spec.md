@@ -42,9 +42,9 @@ ID: core.no-std-core-baseline.compile-fail-verification-is-reviewable
 
 - **GIVEN** compile-fail fixtures under `crates/aspen-core/tests/ui/` that exercise shell imports without `std`
 - **WHEN** their negative verification is saved for review
-- **THEN** the exact fixture paths, commands, and stderr assertions SHALL be recorded under `openspec/changes/no-std-aspen-core/evidence/`
+- **THEN** the exact fixture paths, commands, and stderr assertions SHALL be recorded under `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/`
 - **AND** the fixture set SHALL cover at least `aspen_core::{AppRegistry, NetworkTransport, SimulationArtifact, ContentDiscovery, DirectoryLayer}` without the required shell features
-- **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifact proves each compile-fail expectation
+- **AND** `openspec/changes/archive/2026-04-21-no-std-aspen-core/verification.md` SHALL identify which artifact proves each compile-fail expectation
 
 #### Scenario: Std-dependent helpers require explicit opt-in
 ID: core.no-std-core-baseline.std-dependent-helpers-require-explicit-opt-in
@@ -85,8 +85,8 @@ ID: core.no-std-core-baseline.compile-slice-verification-is-reviewable
 
 - **GIVEN** the alloc-only crate, alloc-safe `sql`, smoke consumer, and representative std consumers
 - **WHEN** their compile slices are verified for review
-- **THEN** the exact commands and results SHALL be saved under `openspec/changes/no-std-aspen-core/evidence/`
-- **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifact proves each slice
+- **THEN** the exact commands and results SHALL be saved under `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/`
+- **AND** `openspec/changes/archive/2026-04-21-no-std-aspen-core/verification.md` SHALL identify which artifact proves each slice
 
 ## MODIFIED Requirements
 

@@ -100,115 +100,115 @@
       "messages": [],
       "ok": true,
       "package": "arrayref@0.3.9",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayref.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-arrayref.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "arrayvec@0.7.6",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-arrayvec.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-arrayvec.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "blake3@1.8.3",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-blake3.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-blake3.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "cfg-if@1.0.4",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cfg-if.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-cfg-if.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "constant_time_eq@0.4.2",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-constant_time_eq.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-constant_time_eq.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "cpufeatures@0.2.17",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-cpufeatures.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-cpufeatures.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "heck@0.5.0",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-heck.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-heck.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "libc@0.2.183",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-libc.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-libc.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "proc-macro2@1.0.106",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-proc-macro2.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-proc-macro2.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "quote@1.0.45",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-quote.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-quote.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "redb@2.6.3",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-redb.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-redb.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "serde_core@1.0.228",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_core.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-serde_core.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "serde_derive@1.0.228",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-serde_derive.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-serde_derive.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "snafu-derive@0.8.9",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-snafu-derive.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-snafu-derive.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "spin@0.10.0",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-spin.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-spin.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "syn@2.0.117",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-syn.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-syn.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "thiserror-impl@2.0.18",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-thiserror-impl.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-thiserror-impl.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "uhlc@0.8.2",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-uhlc.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-uhlc.md"
     },
     {
       "messages": [],
       "ok": true,
       "package": "unicode-ident@1.0.24",
-      "path": "/home/brittonr/git/aspen/openspec/changes/no-std-aspen-core/evidence/deps-transitive-review-unicode-ident.md"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/deps-transitive-review-unicode-ident.md"
     }
   ],
   "transitives": {

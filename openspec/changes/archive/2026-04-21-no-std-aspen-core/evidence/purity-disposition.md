@@ -48,4 +48,4 @@ Searches run against the alloc-only family set after shell gating landed:
 ## Follow-up
 
 - `3.1a` remains for any remaining alloc-only API that still needs explicit randomness/config refactoring beyond the already-landed `circuit_breaker` conversion.
-- `3.1b`, `3.1c`, and `3.11` now have mechanical proof in `openspec/changes/no-std-aspen-core/evidence/source-audit.txt`; future work only needs to reopen them if new alloc-only APIs are added.
+- `3.1b`, `3.1c`, and `3.11` now have mechanical proof in `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/source-audit.txt`; future work only needs to reopen them if new alloc-only APIs are added.

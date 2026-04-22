@@ -24,8 +24,8 @@ ID: architecture.modularity.acyclic-no-std-core-boundary.acyclic-boundary-proof-
 
 - **GIVEN** the alloc-only core and `std` shell boundary
 - **WHEN** that boundary is verified for review
-- **THEN** saved inventory, export-map, and source-audit artifacts under `openspec/changes/no-std-aspen-core/evidence/` SHALL show that alloc-only modules and exports do not depend on shell-only modules or crates
-- **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifacts prove the boundary remains acyclic
+- **THEN** saved inventory, export-map, and source-audit artifacts under `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/` SHALL show that alloc-only modules and exports do not depend on shell-only modules or crates
+- **AND** `openspec/changes/archive/2026-04-21-no-std-aspen-core/verification.md` SHALL identify which artifacts prove the boundary remains acyclic
 
 #### Scenario: Pure consumers avoid runtime shells
 ID: architecture.modularity.acyclic-no-std-core-boundary.pure-consumers-avoid-runtime-shells
@@ -69,13 +69,13 @@ ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.dependency-
 - **AND** every transitive dependency in the saved full-graph artifact SHALL be reachable only through those approved prerequisites using alloc-safe feature settings
 - **AND** every transitive dependency SHALL appear in the approved alloc-safe transitive allowlist for this change or cause verification to fail
 - **AND** the full graph SHALL exclude `aspen-layer`, `aspen-time`, `aspen-disk`, `anyhow`, `n0-future`, `tokio`, `tokio-util`, `iroh`, `iroh-base`, `iroh-blobs`, `rand`, `tracing`, `chrono`, and `serde_json`
-- **AND** the saved verification artifact SHALL identify the exact commands and results used for review under `openspec/changes/no-std-aspen-core/evidence/`
-- **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifact proves the dependency-boundary claim
+- **AND** the saved verification artifact SHALL identify the exact commands and results used for review under `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/`
+- **AND** `openspec/changes/archive/2026-04-21-no-std-aspen-core/verification.md` SHALL identify which artifact proves the dependency-boundary claim
 
 #### Scenario: Feature-topology verification is reviewable
 ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.feature-topology-verification-is-reviewable
 
 - **GIVEN** the public feature contract `default = []`, `std`, `layer = std + dep:aspen-layer`, `global-discovery = std + dep:iroh-blobs`, `sql`, and `std + sql`
 - **WHEN** that contract is verified for review
-- **THEN** the exact commands and results for the default, `std`, `layer`, `global-discovery`, `sql`, and `std + sql` compile slices SHALL be saved under `openspec/changes/no-std-aspen-core/evidence/`
-- **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifact proves each feature topology claim
+- **THEN** the exact commands and results for the default, `std`, `layer`, `global-discovery`, `sql`, and `std + sql` compile slices SHALL be saved under `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/`
+- **AND** `openspec/changes/archive/2026-04-21-no-std-aspen-core/verification.md` SHALL identify which artifact proves each feature topology claim

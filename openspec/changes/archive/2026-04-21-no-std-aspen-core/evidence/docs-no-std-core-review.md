@@ -23,7 +23,7 @@ Reviewed document: `docs/no-std-core.md`
 - Docs describe that `sql` stays alloc-safe and does not require `std`.
 - Docs preserve migration guidance for runtime helpers that became `std`-gated.
 - Docs preserve migration guidance for `layer` and `global-discovery` users.
-- Docs point reviewers at durable evidence artifacts under `openspec/changes/no-std-aspen-core/evidence/`.
+- Docs point reviewers at durable evidence artifacts under `openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence/`.
 
 ## Result
 

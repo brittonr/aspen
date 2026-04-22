@@ -110,3 +110,14 @@ git push → forge git_bridge → RefUpdate gossip → CiTriggerHandler → Trig
 ```
 
 Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
+
+## OpenSpec archive preflight gotcha (2026-04-21)
+
+**Discovery**: Archiving a change can break `scripts/openspec-preflight.sh` if archived docs still point at `openspec/changes/<name>/...`.
+
+### What To Do
+
+- After moving `openspec/changes/<name>` to `openspec/changes/archive/<date>-<name>`, rewrite repo-relative paths in archived `verification.md`, `tasks.md`, and any spec/evidence docs that mention the old change path.
+- At minimum, fix `verification.md` `Changed file:` entries; preflight fails immediately if they still point at the old active path.
+- If `verification.md` task coverage lines use archive paths, `tasks.md` must use the same text verbatim or preflight reports missing checked task coverage entries.
+- Stage the archived tree before rerunning preflight, otherwise it fails on untracked archive files.
