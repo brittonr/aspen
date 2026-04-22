@@ -10,7 +10,7 @@
 //!
 //! - **Application types** ([`AppRequest`], [`AppResponse`]): The commands and responses replicated
 //!   through Raft consensus
-//! - **Node metadata** ([`RaftMemberInfo`]): Information about cluster members
+//! - **Node metadata** ([`RaftMemberInfo`]): Transport-neutral information about cluster members
 //! - **Constants**: Network, storage, and timing constants
 //!
 //! # AppTypeConfig

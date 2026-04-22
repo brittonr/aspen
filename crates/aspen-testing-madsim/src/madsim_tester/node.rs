@@ -32,7 +32,7 @@ pub fn create_test_raft_member_info(node_id: impl Into<NodeId>) -> RaftMemberInf
     // Create an EndpointAddr with just the ID (no relay URLs or direct addresses for tests)
     let endpoint_addr = EndpointAddr::new(endpoint_id);
 
-    RaftMemberInfo::new(endpoint_addr)
+    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
 }
 
 /// Helper to create a fresh artifact builder for std::mem::replace

@@ -25,6 +25,7 @@ use crate::node_failure_detection::NodeFailureDetector;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
+use crate::types::member_endpoint_addr as convert_member_endpoint_addr;
 
 #[inline]
 fn max_peers_usize() -> usize {
@@ -34,9 +35,9 @@ fn max_peers_usize() -> usize {
 /// IRPC-based Raft network factory for Iroh P2P transport.
 ///
 /// With the introduction of `RaftMemberInfo`, peer addresses are now stored directly
-/// in the Raft membership state. The network factory receives addresses via
-/// the `new_client()` method's `node` parameter, which contains the `RaftMemberInfo`
-/// with the Iroh `EndpointAddr`.
+/// in the Raft membership state as transport-neutral `NodeAddress` values. The
+/// network factory receives those values via `new_client()` and converts them to
+/// concrete iroh `EndpointAddr` values only at the runtime shell boundary.
 ///
 /// The `peer_addrs` map is retained as a fallback/cache for:
 /// - Initial bootstrap before Raft membership is populated
@@ -335,23 +336,35 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         node: &RaftMemberInfo,
         shard_id: ShardId,
     ) -> IrpcRaftNetwork<T> {
-        // Update the fallback cache with this address
-        {
+        let peer_addr = match convert_member_endpoint_addr(node) {
+            Ok(peer_addr) => Some(peer_addr),
+            Err(error) => {
+                warn!(
+                    target_node = %target,
+                    endpoint_id = %node.endpoint_id(),
+                    error = %error,
+                    "skipping sharded peer cache seed because membership address is not a valid iroh endpoint"
+                );
+                None
+            }
+        };
+
+        if let Some(peer_addr) = &peer_addr {
             let mut peers = self.peer_addrs.write().await;
             if peers.len() < max_peers_usize() || peers.contains_key(&target) {
-                peers.insert(target, node.iroh_addr.clone());
+                peers.insert(target, peer_addr.clone());
             }
         }
 
         info!(
             target_node = %target,
             shard_id,
-            endpoint_id = %node.iroh_addr.id,
+            endpoint_id = %node.endpoint_id(),
             "creating sharded network client"
         );
 
         IrpcRaftNetwork::new(Arc::clone(&self.connection_pool), IrpcRaftNetworkConfig {
-            peer_addr: Some(node.iroh_addr.clone()),
+            peer_addr,
             target,
             failure_detector: Arc::clone(&self.failure_detector),
             drift_detector: Arc::clone(&self.drift_detector),
@@ -370,55 +383,68 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     async fn new_client(&mut self, target: NodeId, node: &RaftMemberInfo) -> Self::Network {
         let target_node = target;
         async move {
+            let membership_addr = match convert_member_endpoint_addr(node) {
+                Ok(addr) => Some(addr),
+                Err(error) => {
+                    warn!(
+                        target_node = %target,
+                        endpoint_id = %node.endpoint_id(),
+                        error = %error,
+                        "stored membership address is not a valid iroh endpoint"
+                    );
+                    None
+                }
+            };
+
             // Resolve the best address: gossip-discovered addresses may be fresher
             // than Raft membership after a node restart (new port, same endpoint ID).
             let peer_addr = {
                 let peers = self.peer_addrs.read().await;
                 if let Some(gossip_addr) = peers.get(&target) {
-                    if gossip_addr.id == node.iroh_addr.id {
-                        // Same endpoint ID — this is the same node. Use gossip address
-                        // if it has different socket addresses (fresher after restart).
-                        if gossip_addr.addrs != node.iroh_addr.addrs {
-                            info!(
-                                target_node = %target,
-                                endpoint_id = %gossip_addr.id,
-                                gossip_addrs = gossip_addr.addrs.len(),
-                                raft_addrs = node.iroh_addr.addrs.len(),
-                                "using gossip-discovered address (fresher than Raft membership)"
-                            );
-                            Some(gossip_addr.clone())
-                        } else {
-                            Some(node.iroh_addr.clone())
+                    if gossip_addr.id.to_string() == node.endpoint_id() {
+                        match &membership_addr {
+                            Some(raft_addr) if gossip_addr != raft_addr => {
+                                info!(
+                                    target_node = %target,
+                                    endpoint_id = %gossip_addr.id,
+                                    gossip_addrs = gossip_addr.addrs.len(),
+                                    raft_addrs = node.transport_addr_count(),
+                                    "using gossip-discovered address (fresher than Raft membership)"
+                                );
+                                Some(gossip_addr.clone())
+                            }
+                            Some(raft_addr) => Some(raft_addr.clone()),
+                            None => Some(gossip_addr.clone()),
                         }
                     } else {
                         // Endpoint ID mismatch — gossip cache has a different node's
                         // address under this node ID. Fall back to Raft membership.
                         warn!(
                             target_node = %target,
-                            raft_endpoint_id = %node.iroh_addr.id,
+                            raft_endpoint_id = %node.endpoint_id(),
                             gossip_endpoint_id = %gossip_addr.id,
                             "gossip cache endpoint ID mismatch, using Raft membership address"
                         );
-                        Some(node.iroh_addr.clone())
+                        membership_addr.clone()
                     }
                 } else {
                     // No gossip entry — use Raft membership address.
-                    Some(node.iroh_addr.clone())
+                    membership_addr.clone()
                 }
             };
 
             // Update the fallback cache with Raft membership address (only if no
             // gossip entry exists — don't overwrite fresher gossip data).
-            {
+            if let Some(membership_addr) = &membership_addr {
                 let mut peers = self.peer_addrs.write().await;
                 if !peers.contains_key(&target) && (peers.len() < max_peers_usize()) {
-                    peers.insert(target, node.iroh_addr.clone());
+                    peers.insert(target, membership_addr.clone());
                 }
             }
 
             debug!(
                 target_node = %target,
-                endpoint_id = %node.iroh_addr.id,
+                endpoint_id = %node.endpoint_id(),
                 "creating network client with address from Raft membership"
             );
 

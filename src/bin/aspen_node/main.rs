@@ -73,7 +73,6 @@ use aspen_core::context::InMemoryWatchRegistry;
 use aspen_core::context::WatchRegistry;
 use tracing::error;
 use tracing::info;
-#[cfg(not(feature = "ci"))]
 use tracing::warn;
 
 use crate::config::initialize_and_load_config;
@@ -181,8 +180,17 @@ async fn async_main() -> Result<()> {
                             .membership_config
                             .membership()
                             .nodes()
-                            .map(|(node_id, node)| {
-                                aspen_blob::replication::NodeInfo::new(u64::from(*node_id), node.iroh_addr.id)
+                            .filter_map(|(node_id, node)| match node.endpoint_id().parse() {
+                                Ok(public_key) => Some(aspen_blob::replication::NodeInfo::new(u64::from(*node_id), public_key)),
+                                Err(error) => {
+                                    warn!(
+                                        node_id = %node_id,
+                                        endpoint_id = %node.endpoint_id(),
+                                        error = %error,
+                                        "skipping invalid membership endpoint id while building blob topology"
+                                    );
+                                    None
+                                }
                             })
                             .collect()
                     });

@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use aspen_cluster_types::InitRequest;
+use aspen_cluster_types::NodeAddress;
 use aspen_transport::TrustShareProvider;
 use aspen_trust::chain;
 use aspen_trust::protocol::ShareResponse;
@@ -58,7 +59,7 @@ struct ShareCollectionPlan {
     old_epoch: u64,
     old_threshold: u8,
     old_members: BTreeSet<u64>,
-    old_member_addresses: BTreeMap<u64, iroh::EndpointAddr>,
+    old_member_addresses: BTreeMap<u64, NodeAddress>,
     local_node_id: u64,
     local_share: Option<shamir::Share>,
     expected_digests: BTreeMap<u64, shamir::ShareDigest>,
@@ -67,7 +68,7 @@ struct ShareCollectionPlan {
 
 struct PeerExpungementProbePlan {
     current_epoch: u64,
-    peers: BTreeMap<u64, iroh::EndpointAddr>,
+    peers: BTreeMap<u64, NodeAddress>,
     expected_digests: BTreeMap<u64, shamir::ShareDigest>,
     required_peer_confirmations: usize,
 }
@@ -81,7 +82,7 @@ struct TrustRotationContext {
     threshold_override: Option<u8>,
     old_threshold: u8,
     new_threshold: u8,
-    old_member_addresses: BTreeMap<u64, iroh::EndpointAddr>,
+    old_member_addresses: BTreeMap<u64, NodeAddress>,
     timeout_context: TimeoutContext,
 }
 
@@ -130,11 +131,11 @@ pub(crate) fn build_trust_initialize_payload(request: &InitRequest) -> Result<Tr
         .initial_members
         .iter()
         .map(|member| {
-            let endpoint = member
-                .iroh_addr()
-                .cloned()
-                .ok_or_else(|| format!("missing iroh address for trust member {}", member.id))?;
-            Ok((member.id, endpoint))
+            let node_addr = member
+                .node_addr
+                .clone()
+                .ok_or_else(|| format!("missing node address for trust member {}", member.id))?;
+            Ok((member.id, node_addr))
         })
         .collect::<Result<Vec<_>, String>>()?;
 
@@ -196,7 +197,7 @@ fn required_peer_confirmations(peer_count: usize, threshold: u8) -> usize {
 fn proposal_from_actions(
     actions: Vec<ReconfigAction>,
     threshold_override: Option<u8>,
-    members: Vec<(u64, iroh::EndpointAddr)>,
+    members: Vec<(u64, NodeAddress)>,
 ) -> Option<TrustReconfigurationPayload> {
     for action in actions {
         if let ReconfigAction::ProposeNewConfig {
@@ -276,6 +277,12 @@ fn response_reports_current_epoch(response: &ShareResponse, expected_current_epo
     response.current_epoch == expected_current_epoch
 }
 
+fn node_endpoint_addr(node_addr: &NodeAddress) -> Result<iroh::EndpointAddr, String> {
+    node_addr
+        .try_into_iroh()
+        .map_err(|error| format!("invalid node address {}: {error}", node_addr.endpoint_id()))
+}
+
 /// Spawn async tasks to request shares from all non-local old members.
 ///
 /// Skips members with missing stored endpoints (logs a warning instead).
@@ -288,13 +295,20 @@ fn spawn_peer_share_requests(
         if *old_member == plan.local_node_id {
             continue;
         }
-        let Some(endpoint) = plan.old_member_addresses.get(old_member).cloned() else {
+        let Some(node_addr) = plan.old_member_addresses.get(old_member).cloned() else {
             warn!(
                 node_id = *old_member,
                 epoch = old_epoch,
-                "missing stored endpoint for trust share request; waiting for timeout"
+                "missing stored node address for trust share request; waiting for timeout"
             );
             continue;
+        };
+        let endpoint = match node_endpoint_addr(&node_addr) {
+            Ok(endpoint) => endpoint,
+            Err(error) => {
+                warn!(node_id = *old_member, epoch = old_epoch, error = %error, "invalid stored node address");
+                continue;
+            }
         };
         let client = plan.client.clone();
         let target_node = *old_member;
@@ -470,15 +484,15 @@ fn build_share_collection_plan(
 fn collect_new_member_addresses(
     membership: &openraft::Membership<crate::types::AppTypeConfig>,
     new_members: &BTreeSet<u64>,
-) -> Result<Vec<(u64, iroh::EndpointAddr)>, String> {
+) -> Result<Vec<(u64, NodeAddress)>, String> {
     new_members
         .iter()
         .map(|node_id| {
-            let endpoint = membership
+            let node_addr = membership
                 .get_node(&(*node_id).into())
-                .map(|node| node.iroh_addr.clone())
-                .ok_or_else(|| format!("missing endpoint for new member {node_id}"))?;
-            Ok((*node_id, endpoint))
+                .map(|node| node.node_addr.clone())
+                .ok_or_else(|| format!("missing node address for new member {node_id}"))?;
+            Ok((*node_id, node_addr))
         })
         .collect()
 }
@@ -503,14 +517,21 @@ fn spawn_expungement_notification(
 
 fn notify_removed_nodes(
     client: Arc<dyn TrustShareClient>,
-    old_member_addresses: &BTreeMap<u64, iroh::EndpointAddr>,
+    old_member_addresses: &BTreeMap<u64, NodeAddress>,
     removed_nodes: &BTreeSet<u64>,
     new_epoch: u64,
     leader_id: u64,
 ) {
     for removed_id in removed_nodes {
-        if let Some(endpoint) = old_member_addresses.get(removed_id) {
-            spawn_expungement_notification(client.clone(), endpoint.clone(), new_epoch, *removed_id);
+        if let Some(node_addr) = old_member_addresses.get(removed_id) {
+            match node_endpoint_addr(node_addr) {
+                Ok(endpoint) => {
+                    spawn_expungement_notification(client.clone(), endpoint, new_epoch, *removed_id);
+                }
+                Err(error) => {
+                    warn!(node_id = *removed_id, error = %error, "invalid stored node address for removed node");
+                }
+            }
         } else {
             warn!(
                 node_id = *removed_id,
@@ -560,7 +581,10 @@ impl RaftNode {
         let metrics = self.raft().metrics().borrow().clone();
         let membership = metrics.membership_config.membership();
         let voters: BTreeSet<_> = membership.voter_ids().collect();
-        membership.nodes().any(|(node_id, node)| voters.contains(node_id) && node.iroh_addr.id == requester)
+        let requester_id = requester.to_string();
+        membership
+            .nodes()
+            .any(|(node_id, node)| voters.contains(node_id) && node.endpoint_id() == requester_id)
     }
 
     pub(crate) async fn probe_for_peer_expungement(&self) -> Result<PeerExpungementProbeOutcome, String> {
@@ -581,7 +605,15 @@ impl RaftNode {
 
         let mut confirmed_peer_count = 0usize;
         let mut saw_retryable_error = false;
-        for (node_id, endpoint) in plan.peers {
+        for (node_id, node_addr) in plan.peers {
+            let endpoint = match node_endpoint_addr(&node_addr) {
+                Ok(endpoint) => endpoint,
+                Err(error) => {
+                    saw_retryable_error = true;
+                    warn!(node_id, epoch = plan.current_epoch, error = %error, "peer expungement probe skipped invalid node address");
+                    continue;
+                }
+            };
             match client.get_share(endpoint, plan.current_epoch).await {
                 Ok(response) => {
                     if !response_reports_current_epoch(&response, plan.current_epoch) {
@@ -1042,7 +1074,7 @@ mod tests {
         let old_members: BTreeSet<u64> = [1, 2, 3].into();
         let remote_addr = endpoint_addr();
         let mut addresses = BTreeMap::new();
-        addresses.insert(2, remote_addr.clone());
+        addresses.insert(2, NodeAddress::new(remote_addr.clone()));
 
         let collected = collect_old_shares_for_reconfiguration(ShareCollectionPlan {
             client: Arc::new(MockTrustShareClient {

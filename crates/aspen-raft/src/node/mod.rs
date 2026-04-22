@@ -59,12 +59,14 @@ pub use health::RaftNodeHealth;
 pub use membership_refresh::AddressUpdateDebouncer;
 use openraft::Raft;
 use tokio::sync::Semaphore;
+use tracing::warn;
 
 use crate::StateMachineVariant;
 #[cfg(feature = "trust")]
 use crate::trust_share_client::TrustShareClient;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
+use crate::types::member_endpoint_addr;
 use crate::write_batcher::BatchConfig;
 use crate::write_batcher::WriteBatcher;
 use crate::write_forwarder::WriteForwarder;
@@ -251,7 +253,19 @@ impl RaftNode {
         let leader_id = metrics.current_leader?;
         let membership = metrics.membership_config.membership();
         let leader_node = membership.get_node(&leader_id)?;
-        Some((leader_id, leader_node.iroh_addr.clone()))
+        let leader_addr = match member_endpoint_addr(leader_node) {
+            Ok(leader_addr) => leader_addr,
+            Err(error) => {
+                warn!(
+                    leader_id = leader_id.0,
+                    endpoint_id = %leader_node.endpoint_id(),
+                    error = %error,
+                    "cannot use current leader membership address because it is invalid"
+                );
+                return None;
+            }
+        };
+        Some((leader_id, leader_addr))
     }
 
     /// Get the underlying Raft instance.
@@ -385,7 +399,8 @@ impl RaftNode {
         let voter_ids: std::collections::HashSet<NodeId> = membership.membership().voter_ids().collect();
 
         for (node_id, member_info) in membership_nodes {
-            let cluster_node = ClusterNode::with_iroh_addr((*node_id).into(), member_info.iroh_addr.clone());
+            let mut cluster_node = ClusterNode::with_node_addr((*node_id).into(), member_info.node_addr.clone());
+            cluster_node.relay_url = member_info.relay_url.clone();
 
             if voter_ids.contains(node_id) {
                 members.push((*node_id).into());
@@ -400,5 +415,162 @@ impl RaftNode {
             members,
             learners,
         }
+    }
+}
+
+#[cfg(all(test, feature = "testing"))]
+mod warning_tests {
+    use std::io;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    use aspen_cluster_types::ClusterNode;
+    use aspen_cluster_types::InitRequest;
+    use openraft::Config;
+    use tracing_subscriber::fmt::MakeWriter;
+
+    use super::*;
+    use aspen_traits::ClusterController;
+    use crate::madsim_network::FailureInjector;
+    use crate::madsim_network::MadsimNetworkFactory;
+    use crate::madsim_network::MadsimRaftRouter;
+    use crate::storage::InMemoryLogStore;
+    use crate::storage::InMemoryStateMachine;
+
+    const TEST_NODE_ID_U64: u64 = 1;
+    const TEST_NODE_PORT_BASE: u64 = 26_000;
+    const LEADER_WAIT_TIMEOUT_MS: u64 = 2_000;
+    const LEADER_POLL_INTERVAL_MS: u64 = 50;
+
+    #[derive(Clone, Default)]
+    struct SharedLogBuffer {
+        bytes: Arc<Mutex<Vec<u8>>>,
+    }
+
+    struct BufferWriter {
+        bytes: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl SharedLogBuffer {
+        fn as_string(&self) -> String {
+            let bytes = self.bytes.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone();
+            String::from_utf8_lossy(&bytes).into_owned()
+        }
+    }
+
+    impl io::Write for BufferWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.bytes
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> MakeWriter<'a> for SharedLogBuffer {
+        type Writer = BufferWriter;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            BufferWriter {
+                bytes: Arc::clone(&self.bytes),
+            }
+        }
+    }
+
+    fn capture_warning_logs<T>(action: impl FnOnce() -> T) -> (T, String) {
+        let log_buffer = SharedLogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_target(false)
+            .with_max_level(tracing::Level::WARN)
+            .with_writer(log_buffer.clone())
+            .finish();
+        let result = tracing::subscriber::with_default(subscriber, action);
+        (result, log_buffer.as_string())
+    }
+
+    async fn wait_for_self_leader(node: &RaftNode) {
+        let wait_timeout = Duration::from_millis(LEADER_WAIT_TIMEOUT_MS);
+        let poll_interval = Duration::from_millis(LEADER_POLL_INTERVAL_MS);
+        tokio::time::timeout(wait_timeout, async {
+            loop {
+                let metrics = node.raft().metrics().borrow().clone();
+                if metrics.current_leader == Some(NodeId(TEST_NODE_ID_U64)) {
+                    break;
+                }
+                tokio::time::sleep(poll_interval).await;
+            }
+        })
+        .await
+        .expect("leader should be elected for invalid-address warning test");
+    }
+
+    async fn create_single_node_cluster(node_addr: aspen_core::NodeAddress) -> RaftNode {
+        let config = Arc::new(Config {
+            cluster_name: "warning-test-cluster".to_string(),
+            ..Default::default()
+        });
+        let log_storage = InMemoryLogStore::default();
+        let state_machine = Arc::new(InMemoryStateMachine::default());
+        let router = Arc::new(MadsimRaftRouter::new());
+        let failure_injector = Arc::new(FailureInjector::new());
+        let network_factory = MadsimNetworkFactory::new(NodeId(TEST_NODE_ID_U64), router.clone(), failure_injector);
+
+        let raft = openraft::Raft::new(
+            NodeId(TEST_NODE_ID_U64),
+            config,
+            network_factory,
+            log_storage,
+            InMemoryStateMachine::store(Arc::clone(&state_machine)),
+        )
+        .await
+        .expect("create raft instance for invalid-address warning test");
+
+        let register_addr = format!("127.0.0.1:{}", TEST_NODE_PORT_BASE + TEST_NODE_ID_U64);
+        router
+            .register_node(NodeId(TEST_NODE_ID_U64), register_addr, raft.clone())
+            .expect("register warning test node with router");
+
+        let node = RaftNode::new(
+            NodeId(TEST_NODE_ID_U64),
+            Arc::new(raft),
+            StateMachineVariant::InMemory(state_machine),
+        );
+
+        let mut cluster_node = ClusterNode::new(TEST_NODE_ID_U64, "warning-test-node", None);
+        cluster_node.node_addr = Some(node_addr);
+        ClusterController::init(
+            &node,
+            InitRequest {
+                initial_members: vec![cluster_node],
+                trust: Default::default(),
+            },
+        )
+        .await
+        .expect("initialize warning test cluster");
+
+        wait_for_self_leader(&node).await;
+        node
+    }
+
+    #[tokio::test]
+    async fn test_current_leader_info_warns_and_returns_none_for_invalid_leader_address() {
+        let node = create_single_node_cluster(aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new())).await;
+
+        let (leader_info, logs) = capture_warning_logs(|| node.current_leader_info());
+
+        println!("captured_warning={}", logs.trim());
+        println!("leader_info={leader_info:?}");
+
+        assert!(leader_info.is_none(), "invalid leader membership address should be unavailable");
+        assert!(logs.contains("cannot use current leader membership address because it is invalid"));
+        assert!(logs.contains("not-a-public-key"));
     }
 }

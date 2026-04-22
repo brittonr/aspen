@@ -44,10 +44,10 @@ impl ClusterController for RaftNode {
             .initial_members
             .iter()
             .map(|cluster_node| {
-                let iroh_addr = cluster_node.iroh_addr().ok_or_else(|| ControlPlaneError::InvalidRequest {
+                let node_addr = cluster_node.node_addr.clone().ok_or_else(|| ControlPlaneError::InvalidRequest {
                     reason: format!("node_addr must be set for node {}", cluster_node.id),
                 })?;
-                let mut member_info = RaftMemberInfo::new(iroh_addr.clone());
+                let mut member_info = RaftMemberInfo::new(node_addr);
                 member_info.relay_url = cluster_node.relay_url.clone();
                 Ok::<_, ControlPlaneError>((cluster_node.id.into(), member_info))
             })
@@ -99,18 +99,18 @@ impl ClusterController for RaftNode {
         self.ensure_initialized()?;
 
         let learner = request.learner;
-        let iroh_addr = learner.iroh_addr().ok_or_else(|| ControlPlaneError::InvalidRequest {
+        let node_addr = learner.node_addr.clone().ok_or_else(|| ControlPlaneError::InvalidRequest {
             reason: format!("node_addr must be set for node {}", learner.id),
         })?;
 
-        let mut node = RaftMemberInfo::new(iroh_addr.clone());
+        let mut node = RaftMemberInfo::new(node_addr.clone());
         node.relay_url = learner.relay_url.clone();
 
         info!(
             learner_id = learner.id,
-            endpoint_id = %iroh_addr.id,
+            endpoint_id = %node_addr.endpoint_id(),
             relay_url = ?learner.relay_url,
-            "adding learner with Iroh address"
+            "adding learner with transport-neutral node address"
         );
 
         // Tiger Style: Explicit timeout prevents indefinite hang if leader unavailable

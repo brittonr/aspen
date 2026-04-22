@@ -181,9 +181,16 @@ fn test_raft_member_info_construction() {
     let endpoint_id = secret_key.public();
     let endpoint_addr = iroh::EndpointAddr::new(endpoint_id);
 
-    let member_info = RaftMemberInfo::new(endpoint_addr.clone());
+    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
 
-    assert_eq!(member_info.iroh_addr.id, endpoint_addr.id);
+    assert_eq!(member_info.endpoint_id(), endpoint_addr.id.to_string());
+}
+
+#[test]
+fn test_raft_member_info_default_endpoint_id_is_parseable() {
+    let member_info = RaftMemberInfo::default();
+    let parse_result = member_info.endpoint_id().parse::<iroh::PublicKey>();
+    assert!(parse_result.is_ok(), "default member endpoint id must stay parseable for runtime watchers");
 }
 
 #[test]
@@ -197,10 +204,10 @@ fn test_raft_member_info_clone() {
     let endpoint_id = secret_key.public();
     let endpoint_addr = iroh::EndpointAddr::new(endpoint_id);
 
-    let member_info = RaftMemberInfo::new(endpoint_addr);
+    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr));
     let cloned = member_info.clone();
 
-    assert_eq!(member_info.iroh_addr.id, cloned.iroh_addr.id);
+    assert_eq!(member_info.endpoint_id(), cloned.endpoint_id());
 }
 
 // =========================================================================

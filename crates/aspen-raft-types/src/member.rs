@@ -1,70 +1,75 @@
 //! Raft membership metadata types.
 //!
-//! This module defines the node metadata stored in Raft's membership set.
+//! This module defines the transport-neutral node metadata stored in Raft's
+//! membership set.
 
-use std::fmt;
+use core::fmt;
 
-use iroh::EndpointAddr;
-use iroh::EndpointId;
-use iroh::SecretKey;
+use aspen_core::NodeAddress;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Raft membership metadata containing Iroh P2P connection information.
+/// Stable parseable endpoint id used by [`RaftMemberInfo::default`].
+///
+/// This is the iroh public key string derived from the historical zero-seed
+/// default (`SecretKey::from([0u8; 32]).public()`). Keeping it parseable avoids
+/// surprising runtime behavior in watchers and relay/bootstrap helpers that
+/// still validate endpoint ids even for `Default` test helper nodes.
+const DEFAULT_MEMBER_ENDPOINT_ID: &str =
+    "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29";
+
+/// Raft membership metadata containing transport-neutral connection information.
 ///
 /// This type is stored in Raft's membership set alongside each `NodeId`. Unlike
 /// openraft's `BasicNode` which stores a simple address string, `RaftMemberInfo`
-/// stores the full Iroh `EndpointAddr` containing:
-/// - Endpoint ID (public key identifier)
-/// - Relay URLs for NAT traversal
-/// - Direct socket addresses
-///
-/// This enables peer addresses to be replicated via Raft consensus,
-/// persisted in the state machine, and recovered on restart without
-/// requiring gossip rediscovery.
+/// stores Aspen's alloc-safe [`NodeAddress`] plus optional relay metadata.
+/// Runtime crates convert that address into concrete iroh endpoint data at the
+/// shell boundary when they need to open network connections.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RaftMemberInfo {
-    /// The Iroh endpoint address for connecting to this node.
-    pub iroh_addr: EndpointAddr,
+    /// The alloc-safe node address for connecting to this member.
+    pub node_addr: NodeAddress,
     /// Optional cluster-internal relay server URL for this node.
     ///
     /// When a node runs its own relay server, this field stores the URL
-    /// (e.g., "https://relay.example.com") to enable other cluster members
-    /// to use it for NAT traversal and P2P connectivity.
+    /// (for example, `"https://relay.example.com"`) so other cluster members
+    /// can use it for NAT traversal and P2P connectivity.
     pub relay_url: Option<String>,
 }
 
 impl RaftMemberInfo {
-    /// Creates a new `RaftMemberInfo` with the given Iroh endpoint address.
-    pub fn new(iroh_addr: EndpointAddr) -> Self {
+    /// Creates a new `RaftMemberInfo` with the given transport-neutral node address.
+    pub fn new(node_addr: NodeAddress) -> Self {
         Self {
-            iroh_addr,
+            node_addr,
             relay_url: None,
         }
     }
 
-    /// Creates a new `RaftMemberInfo` with an endpoint address and relay URL.
-    pub fn with_relay(iroh_addr: EndpointAddr, relay_url: String) -> Self {
+    /// Creates a new `RaftMemberInfo` with a node address and relay URL.
+    pub fn with_relay(node_addr: NodeAddress, relay_url: String) -> Self {
         Self {
-            iroh_addr,
+            node_addr,
             relay_url: Some(relay_url),
         }
+    }
+
+    /// Borrow this member's stable endpoint identifier string.
+    pub fn endpoint_id(&self) -> &str {
+        self.node_addr.endpoint_id()
+    }
+
+    /// Count the stored transport addresses attached to this member.
+    pub fn transport_addr_count(&self) -> usize {
+        self.node_addr.transport_addrs().count()
     }
 }
 
 impl Default for RaftMemberInfo {
-    /// Creates a default `RaftMemberInfo` with a zero endpoint ID.
-    ///
-    /// This is primarily used by testing utilities (e.g., openraft's `membership_ent`)
-    /// that require nodes to implement `Default`. In production, use `RaftMemberInfo::new()`
-    /// or `create_test_raft_member_info()` to create nodes with proper endpoint addresses.
+    /// Creates a placeholder `RaftMemberInfo` used by test helpers that require `Default`.
     fn default() -> Self {
-        let seed = [0u8; 32];
-        let secret_key = SecretKey::from(seed);
-        let endpoint_id: EndpointId = secret_key.public();
-
         Self {
-            iroh_addr: EndpointAddr::new(endpoint_id),
+            node_addr: NodeAddress::from_parts(DEFAULT_MEMBER_ENDPOINT_ID, Vec::new()),
             relay_url: None,
         }
     }
@@ -72,7 +77,7 @@ impl Default for RaftMemberInfo {
 
 impl fmt::Display for RaftMemberInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RaftMemberInfo({})", self.iroh_addr.id)
+        write!(f, "RaftMemberInfo({})", self.endpoint_id())
     }
 }
 
@@ -80,10 +85,15 @@ impl fmt::Display for RaftMemberInfo {
 mod tests {
     use super::*;
 
+    fn test_node_addr(endpoint_id: &str) -> NodeAddress {
+        NodeAddress::from_parts(endpoint_id, Vec::new())
+    }
+
     #[test]
     fn test_raft_member_info_default() {
         let info = RaftMemberInfo::default();
-        // Default should create a valid RaftMemberInfo with a zero-seed endpoint
+        assert_eq!(info.endpoint_id(), DEFAULT_MEMBER_ENDPOINT_ID);
+        assert_eq!(info.transport_addr_count(), 0);
         assert!(format!("{}", info).starts_with("RaftMemberInfo("));
     }
 
@@ -91,32 +101,34 @@ mod tests {
     fn test_raft_member_info_display() {
         let info = RaftMemberInfo::default();
         let display = format!("{}", info);
-        // Should contain "RaftMemberInfo(" prefix
         assert!(display.contains("RaftMemberInfo("));
+        assert!(display.contains(DEFAULT_MEMBER_ENDPOINT_ID));
     }
 
     #[test]
     fn test_raft_member_info_equality() {
         let info1 = RaftMemberInfo::default();
         let info2 = RaftMemberInfo::default();
-        // Two defaults with same seed should be equal
         assert_eq!(info1, info2);
     }
 
     #[test]
     fn test_raft_member_info_new() {
-        let seed = [1u8; 32];
-        let secret_key = SecretKey::from(seed);
-        let endpoint_id: EndpointId = secret_key.public();
-        let addr = EndpointAddr::new(endpoint_id);
+        let info = RaftMemberInfo::new(test_node_addr("node-1"));
+        assert_eq!(info.endpoint_id(), "node-1");
+        assert_eq!(info.transport_addr_count(), 0);
+    }
 
-        let info = RaftMemberInfo::new(addr.clone());
-        assert_eq!(info.iroh_addr.id, endpoint_id);
+    #[test]
+    fn test_raft_member_info_with_relay() {
+        let info = RaftMemberInfo::with_relay(test_node_addr("node-2"), "https://relay.test".to_string());
+        assert_eq!(info.endpoint_id(), "node-2");
+        assert_eq!(info.relay_url.as_deref(), Some("https://relay.test"));
     }
 
     #[test]
     fn test_raft_member_info_serde_roundtrip() {
-        let original = RaftMemberInfo::default();
+        let original = RaftMemberInfo::with_relay(test_node_addr("node-3"), "https://relay.test".to_string());
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: RaftMemberInfo = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, deserialized);

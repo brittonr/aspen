@@ -17,9 +17,6 @@ aspen-trust = { workspace = true }
 # Vendored openraft
 openraft = { path = "../../openraft/openraft", version = "0.10.0", features = ["serde", "type-alias"] }
 
-# P2P networking
-iroh = { version = "0.97.0" }
-
 # RPC framework
 irpc = { workspace = true }
 

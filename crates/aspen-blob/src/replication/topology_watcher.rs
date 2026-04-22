@@ -66,7 +66,10 @@ pub type NodeInfoExtractor<M> = Box<dyn Fn(&M) -> Vec<NodeInfo> + Send + Sync>;
 ///
 /// let extractor = Box::new(|metrics: &RaftMetrics<AppTypeConfig>| {
 ///     metrics.membership_config.membership().nodes()
-///         .map(|(node_id, info)| NodeInfo::new(*node_id, info.iroh_addr.id))
+///         .filter_map(|(node_id, info)| match info.endpoint_id().parse() {
+///             Ok(key) => Some(NodeInfo::new(*node_id, key)),
+///             Err(_error) => None,
+///         })
 ///         .collect()
 /// });
 ///

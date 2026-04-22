@@ -84,6 +84,7 @@ pub use sharding_init::bootstrap_sharded_node;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 use self::storage_init::StorageBroadcasts;
 // Use the type alias from cluster mod.rs which provides the concrete type
@@ -391,11 +392,22 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
                     if node_id == our_node_id.into() {
                         continue;
                     }
-                    let addr = &member_info.iroh_addr;
-                    // Feed into network factory for gossip bootstrap, connection pool,
-                    // and peer cache persistence.
-                    net.network_factory.add_peer(node_id, addr.clone()).await;
-                    peer_count = peer_count.saturating_add(1);
+                    match member_info.node_addr.try_into_iroh() {
+                        Ok(addr) => {
+                            // Feed into network factory for gossip bootstrap, connection pool,
+                            // and peer cache persistence.
+                            net.network_factory.add_peer(node_id, addr).await;
+                            peer_count = peer_count.saturating_add(1);
+                        }
+                        Err(error) => {
+                            warn!(
+                                node_id = %node_id,
+                                endpoint_id = %member_info.endpoint_id(),
+                                error = %error,
+                                "skipping invalid membership address while seeding network factory"
+                            );
+                        }
+                    }
                 }
                 break;
             }

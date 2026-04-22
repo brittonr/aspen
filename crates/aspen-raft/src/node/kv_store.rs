@@ -72,12 +72,14 @@ use openraft::error::ClientWriteError;
 use openraft::error::RaftError;
 use tracing::debug;
 use tracing::instrument;
+use tracing::warn;
 
 use super::RaftNode;
 use crate::StateMachineVariant;
 use crate::types::AppRequest;
 use crate::types::AppResponse;
 use crate::types::AppTypeConfig;
+use crate::types::member_endpoint_addr;
 use crate::write_batcher::command_conversion::write_command_to_app_request;
 
 #[async_trait]
@@ -128,14 +130,26 @@ impl KeyValueStore for RaftNode {
                         if let Some(leader_id) = forward_info.leader_id {
                             if leader_id != self.node_id() {
                                 if let Some(leader_node) = &forward_info.leader_node {
-                                    let leader_addr = leader_node.iroh_addr.clone();
-                                    debug!(
-                                        node_id = self.node_id().0,
-                                        leader_id = leader_id.0,
-                                        "forwarding write to leader"
-                                    );
-                                    metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
-                                    return forwarder.forward_write(leader_id, leader_addr, request).await;
+                                    match member_endpoint_addr(leader_node) {
+                                        Ok(leader_addr) => {
+                                            debug!(
+                                                node_id = self.node_id().0,
+                                                leader_id = leader_id.0,
+                                                "forwarding write to leader"
+                                            );
+                                            metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
+                                            return forwarder.forward_write(leader_id, leader_addr, request).await;
+                                        }
+                                        Err(error) => {
+                                            warn!(
+                                                node_id = self.node_id().0,
+                                                leader_id = leader_id.0,
+                                                endpoint_id = %leader_node.endpoint_id(),
+                                                error = %error,
+                                                "cannot forward write because leader membership address is invalid"
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -207,23 +221,35 @@ impl KeyValueStore for RaftNode {
                         if let Some(leader_id) = forward_info.leader_id {
                             if leader_id != self.node_id() {
                                 if let Some(leader_node) = &forward_info.leader_node {
-                                    let leader_addr = leader_node.iroh_addr.clone();
-                                    debug!(
-                                        node_id = self.node_id().0,
-                                        leader_id = leader_id.0,
-                                        "forwarding delete to leader"
-                                    );
-                                    let write_request = WriteRequest {
-                                        command: WriteCommand::Delete {
-                                            key: request.key.clone(),
-                                        },
-                                    };
-                                    let _forwarded_write_result =
-                                        forwarder.forward_write(leader_id, leader_addr, write_request).await?;
-                                    return Ok(DeleteResult {
-                                        key: request.key,
-                                        is_deleted: true,
-                                    });
+                                    match member_endpoint_addr(leader_node) {
+                                        Ok(leader_addr) => {
+                                            debug!(
+                                                node_id = self.node_id().0,
+                                                leader_id = leader_id.0,
+                                                "forwarding delete to leader"
+                                            );
+                                            let write_request = WriteRequest {
+                                                command: WriteCommand::Delete {
+                                                    key: request.key.clone(),
+                                                },
+                                            };
+                                            let _forwarded_write_result =
+                                                forwarder.forward_write(leader_id, leader_addr, write_request).await?;
+                                            return Ok(DeleteResult {
+                                                key: request.key,
+                                                is_deleted: true,
+                                            });
+                                        }
+                                        Err(error) => {
+                                            warn!(
+                                                node_id = self.node_id().0,
+                                                leader_id = leader_id.0,
+                                                endpoint_id = %leader_node.endpoint_id(),
+                                                error = %error,
+                                                "cannot forward delete because leader membership address is invalid"
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }

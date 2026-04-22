@@ -500,7 +500,7 @@ fn create_test_raft_member_info(node_id: NodeId) -> RaftMemberInfo {
     // Create an EndpointAddr with just the ID (no relay URLs or direct addresses for tests)
     let endpoint_addr = EndpointAddr::new(endpoint_id);
 
-    RaftMemberInfo::new(endpoint_addr)
+    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
 }
 
 #[cfg(test)]
@@ -1405,18 +1405,18 @@ mod tests {
         let info3 = create_test_raft_member_info(1.into());
 
         // Same node ID produces same info
-        assert_eq!(info1.iroh_addr.id, info2.iroh_addr.id);
+        assert_eq!(info1.endpoint_id(), info2.endpoint_id());
 
         // Different node IDs produce different info
-        assert_ne!(info1.iroh_addr.id, info3.iroh_addr.id);
+        assert_ne!(info1.endpoint_id(), info3.endpoint_id());
     }
 
     #[test]
     fn test_create_test_raft_member_info_valid() {
         let info = create_test_raft_member_info(42.into());
 
-        // Should have a valid endpoint address
-        let _id = info.iroh_addr.id; // Should not panic
+        // Should have a stable endpoint identifier string
+        let _id = info.endpoint_id();
     }
 
     // =============================================================================

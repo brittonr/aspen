@@ -92,6 +92,7 @@ bolero = "0.13"
 bolero-generator = "0.13"
 tempfile = "3.4.0"
 metrics-exporter-prometheus = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [features]
 default = []

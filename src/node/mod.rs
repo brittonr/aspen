@@ -656,7 +656,7 @@ impl Node {
 
             // Spawn the membership watcher to keep TrustedPeersRegistry in sync with Raft membership.
             // The watcher monitors Raft metrics for membership changes and updates the registry
-            // with PublicKeys from RaftMemberInfo.iroh_addr.id.
+            // with PublicKeys parsed from each RaftMemberInfo endpoint identifier.
             let watcher_cancel =
                 spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);

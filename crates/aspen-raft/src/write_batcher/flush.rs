@@ -9,6 +9,7 @@ use tracing::warn;
 use super::*;
 use crate::types::AppRequest;
 use crate::types::NodeId;
+use crate::types::member_endpoint_addr;
 use crate::verified::BatchLimits;
 use crate::verified::BatchState;
 use crate::verified::FlushDecision;
@@ -253,7 +254,20 @@ impl WriteBatcher {
                 command: WriteCommand::Batch { operations: batch_ops },
             };
 
-            return forwarder.forward_write(NodeId(lid.0), node.iroh_addr.clone(), request).await;
+            match member_endpoint_addr(node) {
+                Ok(leader_addr) => {
+                    return forwarder.forward_write(NodeId(lid.0), leader_addr, request).await;
+                }
+                Err(error) => {
+                    warn!(
+                        leader_id = lid.0,
+                        endpoint_id = %node.endpoint_id(),
+                        error = %error,
+                        batch_item_count = batch_size,
+                        "cannot forward batch flush because leader membership address is invalid"
+                    );
+                }
+            }
         }
 
         // No forwarder or no leader info — return NotLeader for client retry
@@ -261,7 +275,7 @@ impl WriteBatcher {
         warn!(
             leader = ?leader_hint,
             batch_item_count = batch_size,
-            "batch flush failed: leadership changed, no forwarder available"
+            "batch flush failed: leadership changed and no valid leader forwarding target was available"
         );
         Err(KeyValueStoreError::NotLeader {
             leader: leader_hint,

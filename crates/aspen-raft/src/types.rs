@@ -6,7 +6,7 @@
 //! # Type Configuration
 //!
 //! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification
-//! - **Node**: `RaftMemberInfo` - Raft membership metadata with Iroh P2P addresses
+//! - **Node**: `RaftMemberInfo` - transport-neutral membership metadata backed by `NodeAddress`
 //! - **AppRequest**: Application-level write commands (Set, SetMulti)
 //! - **AppResponse**: Application-level read/write responses
 //! - **AppTypeConfig**: OpenRaft type configuration (defined here to satisfy orphan rules)
@@ -30,6 +30,18 @@ pub use aspen_raft_types::NodeId;
 pub use aspen_raft_types::RaftMemberInfo;
 pub use aspen_raft_types::TrustInitializePayload;
 pub use aspen_raft_types::TrustReconfigurationPayload;
+
+#[inline]
+pub(crate) fn node_address_to_iroh(node_addr: &aspen_core::NodeAddress) -> Result<iroh::EndpointAddr, String> {
+    node_addr
+        .try_into_iroh()
+        .map_err(|error| format!("invalid node address {}: {error}", node_addr.endpoint_id()))
+}
+
+#[inline]
+pub(crate) fn member_endpoint_addr(member_info: &RaftMemberInfo) -> Result<iroh::EndpointAddr, String> {
+    node_address_to_iroh(&member_info.node_addr)
+}
 
 #[cfg(test)]
 mod tests {
@@ -145,6 +157,26 @@ mod tests {
         let displayed = original.to_string();
         let parsed: NodeId = displayed.parse().expect("should parse");
         assert_eq!(original, parsed);
+    }
+
+    // =========================================================================
+    // Address conversion tests
+    // =========================================================================
+
+    #[test]
+    fn test_member_endpoint_addr_accepts_valid_node_address() {
+        let secret_key = iroh::SecretKey::from([7u8; 32]);
+        let endpoint_addr = iroh::EndpointAddr::new(secret_key.public());
+        let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
+
+        assert_eq!(member_endpoint_addr(&member_info), Ok(endpoint_addr));
+    }
+
+    #[test]
+    fn test_member_endpoint_addr_rejects_invalid_node_address() {
+        let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new()));
+        let error = member_endpoint_addr(&member_info).expect_err("invalid endpoint id must fail conversion");
+        assert!(error.contains("invalid node address not-a-public-key"));
     }
 
     // =========================================================================
@@ -368,8 +400,8 @@ mod tests {
         let endpoint_id: EndpointId = secret_key.public();
         let addr = EndpointAddr::new(endpoint_id);
 
-        let info = RaftMemberInfo::new(addr.clone());
-        assert_eq!(info.iroh_addr.id, endpoint_id);
+        let info = RaftMemberInfo::new(aspen_core::NodeAddress::new(addr.clone()));
+        assert_eq!(info.endpoint_id(), endpoint_id.to_string());
     }
 
     #[test]

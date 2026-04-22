@@ -1,0 +1,1773 @@
+diff --git a/crates/aspen-blob/src/replication/topology_watcher.rs b/crates/aspen-blob/src/replication/topology_watcher.rs
+index 815f04a48..02163849a 100644
+--- a/crates/aspen-blob/src/replication/topology_watcher.rs
++++ b/crates/aspen-blob/src/replication/topology_watcher.rs
+@@ -66,7 +66,10 @@ pub type NodeInfoExtractor<M> = Box<dyn Fn(&M) -> Vec<NodeInfo> + Send + Sync>;
+ ///
+ /// let extractor = Box::new(|metrics: &RaftMetrics<AppTypeConfig>| {
+ ///     metrics.membership_config.membership().nodes()
+-///         .map(|(node_id, info)| NodeInfo::new(*node_id, info.iroh_addr.id))
++///         .filter_map(|(node_id, info)| match info.endpoint_id().parse() {
++///             Ok(key) => Some(NodeInfo::new(*node_id, key)),
++///             Err(_error) => None,
++///         })
+ ///         .collect()
+ /// });
+ ///
+diff --git a/crates/aspen-cluster/src/bootstrap/node/mod.rs b/crates/aspen-cluster/src/bootstrap/node/mod.rs
+index 4cd559452..b1998e540 100644
+--- a/crates/aspen-cluster/src/bootstrap/node/mod.rs
++++ b/crates/aspen-cluster/src/bootstrap/node/mod.rs
+@@ -84,6 +84,7 @@ pub use sharding_init::bootstrap_sharded_node;
+ use tokio_util::sync::CancellationToken;
+ use tracing::error;
+ use tracing::info;
++use tracing::warn;
+ 
+ use self::storage_init::StorageBroadcasts;
+ // Use the type alias from cluster mod.rs which provides the concrete type
+@@ -391,11 +392,22 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
+                     if node_id == our_node_id.into() {
+                         continue;
+                     }
+-                    let addr = &member_info.iroh_addr;
+-                    // Feed into network factory for gossip bootstrap, connection pool,
+-                    // and peer cache persistence.
+-                    net.network_factory.add_peer(node_id, addr.clone()).await;
+-                    peer_count = peer_count.saturating_add(1);
++                    match member_info.node_addr.try_into_iroh() {
++                        Ok(addr) => {
++                            // Feed into network factory for gossip bootstrap, connection pool,
++                            // and peer cache persistence.
++                            net.network_factory.add_peer(node_id, addr).await;
++                            peer_count = peer_count.saturating_add(1);
++                        }
++                        Err(error) => {
++                            warn!(
++                                node_id = %node_id,
++                                endpoint_id = %member_info.endpoint_id(),
++                                error = %error,
++                                "skipping invalid membership address while seeding network factory"
++                            );
++                        }
++                    }
+                 }
+                 break;
+             }
+diff --git a/crates/aspen-cluster/src/relay_server.rs b/crates/aspen-cluster/src/relay_server.rs
+index 538fe9d0f..fead70933 100644
+--- a/crates/aspen-cluster/src/relay_server.rs
++++ b/crates/aspen-cluster/src/relay_server.rs
+@@ -104,7 +104,16 @@ where I: IntoIterator<Item = RaftMemberInfo> {
+ /// Used to update the relay server's allowed-endpoints set when membership changes.
+ pub fn extract_endpoint_ids<I>(members: I) -> HashSet<EndpointId>
+ where I: IntoIterator<Item = RaftMemberInfo> {
+-    members.into_iter().map(|member| member.iroh_addr.id).collect()
++    members
++        .into_iter()
++        .filter_map(|member| match member.endpoint_id().parse::<EndpointId>() {
++            Ok(endpoint_id) => Some(endpoint_id),
++            Err(error) => {
++                warn!(endpoint_id = member.endpoint_id(), error = %error, "skipping invalid relay membership endpoint id");
++                None
++            }
++        })
++        .collect()
+ }
+ 
+ /// Pre-configure an `IrohEndpointConfig` to use the cluster's own relay server.
+@@ -325,7 +334,7 @@ mod tests {
+         let key = SecretKey::from([seed; 32]);
+         let addr = EndpointAddr::new(key.public());
+         RaftMemberInfo {
+-            iroh_addr: addr,
++            node_addr: aspen_core::NodeAddress::new(addr),
+             relay_url: relay_url.map(String::from),
+         }
+     }
+@@ -372,11 +381,25 @@ mod tests {
+     fn test_extract_endpoint_ids() {
+         let m1 = make_member(1, None);
+         let m2 = make_member(2, None);
+-        let id1 = m1.iroh_addr.id;
+-        let id2 = m2.iroh_addr.id;
++        let id1: EndpointId = m1.endpoint_id().parse().unwrap();
++        let id2: EndpointId = m2.endpoint_id().parse().unwrap();
+         let ids = extract_endpoint_ids(vec![m1, m2]);
+         assert_eq!(ids.len(), 2);
+         assert!(ids.contains(&id1));
+         assert!(ids.contains(&id2));
+     }
++
++    #[test]
++    fn test_extract_endpoint_ids_skips_invalid_member_endpoint_id() {
++        let valid_member = make_member(1, None);
++        let invalid_member = RaftMemberInfo {
++            node_addr: aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new()),
++            relay_url: None,
++        };
++
++        let ids = extract_endpoint_ids(vec![valid_member.clone(), invalid_member]);
++        let valid_id: EndpointId = valid_member.endpoint_id().parse().unwrap();
++        assert_eq!(ids.len(), 1);
++        assert!(ids.contains(&valid_id));
++    }
+ }
+diff --git a/crates/aspen-raft-types/Cargo.toml b/crates/aspen-raft-types/Cargo.toml
+index b578cd578..e6643f7c9 100644
+--- a/crates/aspen-raft-types/Cargo.toml
++++ b/crates/aspen-raft-types/Cargo.toml
+@@ -17,9 +17,6 @@ aspen-trust = { workspace = true }
+ # Vendored openraft
+ openraft = { path = "../../openraft/openraft", version = "0.10.0", features = ["serde", "type-alias"] }
+ 
+-# P2P networking
+-iroh = { version = "0.97.0" }
+-
+ # RPC framework
+ irpc = { workspace = true }
+ 
+diff --git a/crates/aspen-raft-types/src/member.rs b/crates/aspen-raft-types/src/member.rs
+index f06f4c8ad..7108411cc 100644
+--- a/crates/aspen-raft-types/src/member.rs
++++ b/crates/aspen-raft-types/src/member.rs
+@@ -1,70 +1,75 @@
+ //! Raft membership metadata types.
+ //!
+-//! This module defines the node metadata stored in Raft's membership set.
++//! This module defines the transport-neutral node metadata stored in Raft's
++//! membership set.
+ 
+-use std::fmt;
++use core::fmt;
+ 
+-use iroh::EndpointAddr;
+-use iroh::EndpointId;
+-use iroh::SecretKey;
++use aspen_core::NodeAddress;
+ use serde::Deserialize;
+ use serde::Serialize;
+ 
+-/// Raft membership metadata containing Iroh P2P connection information.
++/// Stable parseable endpoint id used by [`RaftMemberInfo::default`].
++///
++/// This is the iroh public key string derived from the historical zero-seed
++/// default (`SecretKey::from([0u8; 32]).public()`). Keeping it parseable avoids
++/// surprising runtime behavior in watchers and relay/bootstrap helpers that
++/// still validate endpoint ids even for `Default` test helper nodes.
++const DEFAULT_MEMBER_ENDPOINT_ID: &str =
++    "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29";
++
++/// Raft membership metadata containing transport-neutral connection information.
+ ///
+ /// This type is stored in Raft's membership set alongside each `NodeId`. Unlike
+ /// openraft's `BasicNode` which stores a simple address string, `RaftMemberInfo`
+-/// stores the full Iroh `EndpointAddr` containing:
+-/// - Endpoint ID (public key identifier)
+-/// - Relay URLs for NAT traversal
+-/// - Direct socket addresses
+-///
+-/// This enables peer addresses to be replicated via Raft consensus,
+-/// persisted in the state machine, and recovered on restart without
+-/// requiring gossip rediscovery.
++/// stores Aspen's alloc-safe [`NodeAddress`] plus optional relay metadata.
++/// Runtime crates convert that address into concrete iroh endpoint data at the
++/// shell boundary when they need to open network connections.
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct RaftMemberInfo {
+-    /// The Iroh endpoint address for connecting to this node.
+-    pub iroh_addr: EndpointAddr,
++    /// The alloc-safe node address for connecting to this member.
++    pub node_addr: NodeAddress,
+     /// Optional cluster-internal relay server URL for this node.
+     ///
+     /// When a node runs its own relay server, this field stores the URL
+-    /// (e.g., "https://relay.example.com") to enable other cluster members
+-    /// to use it for NAT traversal and P2P connectivity.
++    /// (for example, `"https://relay.example.com"`) so other cluster members
++    /// can use it for NAT traversal and P2P connectivity.
+     pub relay_url: Option<String>,
+ }
+ 
+ impl RaftMemberInfo {
+-    /// Creates a new `RaftMemberInfo` with the given Iroh endpoint address.
+-    pub fn new(iroh_addr: EndpointAddr) -> Self {
++    /// Creates a new `RaftMemberInfo` with the given transport-neutral node address.
++    pub fn new(node_addr: NodeAddress) -> Self {
+         Self {
+-            iroh_addr,
++            node_addr,
+             relay_url: None,
+         }
+     }
+ 
+-    /// Creates a new `RaftMemberInfo` with an endpoint address and relay URL.
+-    pub fn with_relay(iroh_addr: EndpointAddr, relay_url: String) -> Self {
++    /// Creates a new `RaftMemberInfo` with a node address and relay URL.
++    pub fn with_relay(node_addr: NodeAddress, relay_url: String) -> Self {
+         Self {
+-            iroh_addr,
++            node_addr,
+             relay_url: Some(relay_url),
+         }
+     }
++
++    /// Borrow this member's stable endpoint identifier string.
++    pub fn endpoint_id(&self) -> &str {
++        self.node_addr.endpoint_id()
++    }
++
++    /// Count the stored transport addresses attached to this member.
++    pub fn transport_addr_count(&self) -> usize {
++        self.node_addr.transport_addrs().count()
++    }
+ }
+ 
+ impl Default for RaftMemberInfo {
+-    /// Creates a default `RaftMemberInfo` with a zero endpoint ID.
+-    ///
+-    /// This is primarily used by testing utilities (e.g., openraft's `membership_ent`)
+-    /// that require nodes to implement `Default`. In production, use `RaftMemberInfo::new()`
+-    /// or `create_test_raft_member_info()` to create nodes with proper endpoint addresses.
++    /// Creates a placeholder `RaftMemberInfo` used by test helpers that require `Default`.
+     fn default() -> Self {
+-        let seed = [0u8; 32];
+-        let secret_key = SecretKey::from(seed);
+-        let endpoint_id: EndpointId = secret_key.public();
+-
+         Self {
+-            iroh_addr: EndpointAddr::new(endpoint_id),
++            node_addr: NodeAddress::from_parts(DEFAULT_MEMBER_ENDPOINT_ID, Vec::new()),
+             relay_url: None,
+         }
+     }
+@@ -72,7 +77,7 @@ impl Default for RaftMemberInfo {
+ 
+ impl fmt::Display for RaftMemberInfo {
+     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+-        write!(f, "RaftMemberInfo({})", self.iroh_addr.id)
++        write!(f, "RaftMemberInfo({})", self.endpoint_id())
+     }
+ }
+ 
+@@ -80,10 +85,15 @@ impl fmt::Display for RaftMemberInfo {
+ mod tests {
+     use super::*;
+ 
++    fn test_node_addr(endpoint_id: &str) -> NodeAddress {
++        NodeAddress::from_parts(endpoint_id, Vec::new())
++    }
++
+     #[test]
+     fn test_raft_member_info_default() {
+         let info = RaftMemberInfo::default();
+-        // Default should create a valid RaftMemberInfo with a zero-seed endpoint
++        assert_eq!(info.endpoint_id(), DEFAULT_MEMBER_ENDPOINT_ID);
++        assert_eq!(info.transport_addr_count(), 0);
+         assert!(format!("{}", info).starts_with("RaftMemberInfo("));
+     }
+ 
+@@ -91,32 +101,34 @@ mod tests {
+     fn test_raft_member_info_display() {
+         let info = RaftMemberInfo::default();
+         let display = format!("{}", info);
+-        // Should contain "RaftMemberInfo(" prefix
+         assert!(display.contains("RaftMemberInfo("));
++        assert!(display.contains(DEFAULT_MEMBER_ENDPOINT_ID));
+     }
+ 
+     #[test]
+     fn test_raft_member_info_equality() {
+         let info1 = RaftMemberInfo::default();
+         let info2 = RaftMemberInfo::default();
+-        // Two defaults with same seed should be equal
+         assert_eq!(info1, info2);
+     }
+ 
+     #[test]
+     fn test_raft_member_info_new() {
+-        let seed = [1u8; 32];
+-        let secret_key = SecretKey::from(seed);
+-        let endpoint_id: EndpointId = secret_key.public();
+-        let addr = EndpointAddr::new(endpoint_id);
++        let info = RaftMemberInfo::new(test_node_addr("node-1"));
++        assert_eq!(info.endpoint_id(), "node-1");
++        assert_eq!(info.transport_addr_count(), 0);
++    }
+ 
+-        let info = RaftMemberInfo::new(addr.clone());
+-        assert_eq!(info.iroh_addr.id, endpoint_id);
++    #[test]
++    fn test_raft_member_info_with_relay() {
++        let info = RaftMemberInfo::with_relay(test_node_addr("node-2"), "https://relay.test".to_string());
++        assert_eq!(info.endpoint_id(), "node-2");
++        assert_eq!(info.relay_url.as_deref(), Some("https://relay.test"));
+     }
+ 
+     #[test]
+     fn test_raft_member_info_serde_roundtrip() {
+-        let original = RaftMemberInfo::default();
++        let original = RaftMemberInfo::with_relay(test_node_addr("node-3"), "https://relay.test".to_string());
+         let json = serde_json::to_string(&original).expect("serialize");
+         let deserialized: RaftMemberInfo = serde_json::from_str(&json).expect("deserialize");
+         assert_eq!(original, deserialized);
+diff --git a/crates/aspen-raft-types/src/request.rs b/crates/aspen-raft-types/src/request.rs
+index d997e55c8..36ba59368 100644
+--- a/crates/aspen-raft-types/src/request.rs
++++ b/crates/aspen-raft-types/src/request.rs
+@@ -12,6 +12,7 @@
+ 
+ use std::fmt;
+ 
++use aspen_core::NodeAddress;
+ use aspen_core::TxnOpResult;
+ use aspen_trust::chain::EncryptedSecretChain;
+ use serde::Deserialize;
+@@ -29,7 +30,7 @@ pub struct TrustInitializePayload {
+     /// SHA3-256 digests for all shares in this epoch.
+     pub digests: Vec<(u64, [u8; 32])>,
+     /// Epoch membership addresses keyed by node ID.
+-    pub members: Vec<(u64, iroh::EndpointAddr)>,
++    pub members: Vec<(u64, NodeAddress)>,
+ }
+ 
+ /// Payload for committed trust reconfiguration.
+@@ -44,7 +45,7 @@ pub struct TrustReconfigurationPayload {
+     /// SHA3-256 digests for all shares in the new epoch.
+     pub digests: Vec<(u64, [u8; 32])>,
+     /// Epoch membership addresses keyed by node ID.
+-    pub members: Vec<(u64, iroh::EndpointAddr)>,
++    pub members: Vec<(u64, NodeAddress)>,
+     /// Encrypted chain carrying prior epoch secrets under the new epoch's secret.
+     pub encrypted_chain: EncryptedSecretChain,
+ }
+diff --git a/crates/aspen-raft/Cargo.toml b/crates/aspen-raft/Cargo.toml
+index a4b6a87fa..1bd6dd70b 100644
+--- a/crates/aspen-raft/Cargo.toml
++++ b/crates/aspen-raft/Cargo.toml
+@@ -92,6 +92,7 @@ bolero = "0.13"
+ bolero-generator = "0.13"
+ tempfile = "3.4.0"
+ metrics-exporter-prometheus = { workspace = true }
++tracing-subscriber = { workspace = true }
+ 
+ [features]
+ default = []
+diff --git a/crates/aspen-raft/src/network/factory.rs b/crates/aspen-raft/src/network/factory.rs
+index fdf5218a5..a9652f6f4 100644
+--- a/crates/aspen-raft/src/network/factory.rs
++++ b/crates/aspen-raft/src/network/factory.rs
+@@ -25,6 +25,7 @@ use crate::node_failure_detection::NodeFailureDetector;
+ use crate::types::AppTypeConfig;
+ use crate::types::NodeId;
+ use crate::types::RaftMemberInfo;
++use crate::types::member_endpoint_addr as convert_member_endpoint_addr;
+ 
+ #[inline]
+ fn max_peers_usize() -> usize {
+@@ -34,9 +35,9 @@ fn max_peers_usize() -> usize {
+ /// IRPC-based Raft network factory for Iroh P2P transport.
+ ///
+ /// With the introduction of `RaftMemberInfo`, peer addresses are now stored directly
+-/// in the Raft membership state. The network factory receives addresses via
+-/// the `new_client()` method's `node` parameter, which contains the `RaftMemberInfo`
+-/// with the Iroh `EndpointAddr`.
++/// in the Raft membership state as transport-neutral `NodeAddress` values. The
++/// network factory receives those values via `new_client()` and converts them to
++/// concrete iroh `EndpointAddr` values only at the runtime shell boundary.
+ ///
+ /// The `peer_addrs` map is retained as a fallback/cache for:
+ /// - Initial bootstrap before Raft membership is populated
+@@ -335,23 +336,35 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
+         node: &RaftMemberInfo,
+         shard_id: ShardId,
+     ) -> IrpcRaftNetwork<T> {
+-        // Update the fallback cache with this address
+-        {
++        let peer_addr = match convert_member_endpoint_addr(node) {
++            Ok(peer_addr) => Some(peer_addr),
++            Err(error) => {
++                warn!(
++                    target_node = %target,
++                    endpoint_id = %node.endpoint_id(),
++                    error = %error,
++                    "skipping sharded peer cache seed because membership address is not a valid iroh endpoint"
++                );
++                None
++            }
++        };
++
++        if let Some(peer_addr) = &peer_addr {
+             let mut peers = self.peer_addrs.write().await;
+             if peers.len() < max_peers_usize() || peers.contains_key(&target) {
+-                peers.insert(target, node.iroh_addr.clone());
++                peers.insert(target, peer_addr.clone());
+             }
+         }
+ 
+         info!(
+             target_node = %target,
+             shard_id,
+-            endpoint_id = %node.iroh_addr.id,
++            endpoint_id = %node.endpoint_id(),
+             "creating sharded network client"
+         );
+ 
+         IrpcRaftNetwork::new(Arc::clone(&self.connection_pool), IrpcRaftNetworkConfig {
+-            peer_addr: Some(node.iroh_addr.clone()),
++            peer_addr,
+             target,
+             failure_detector: Arc::clone(&self.failure_detector),
+             drift_detector: Arc::clone(&self.drift_detector),
+@@ -370,55 +383,68 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
+     async fn new_client(&mut self, target: NodeId, node: &RaftMemberInfo) -> Self::Network {
+         let target_node = target;
+         async move {
++            let membership_addr = match convert_member_endpoint_addr(node) {
++                Ok(addr) => Some(addr),
++                Err(error) => {
++                    warn!(
++                        target_node = %target,
++                        endpoint_id = %node.endpoint_id(),
++                        error = %error,
++                        "stored membership address is not a valid iroh endpoint"
++                    );
++                    None
++                }
++            };
++
+             // Resolve the best address: gossip-discovered addresses may be fresher
+             // than Raft membership after a node restart (new port, same endpoint ID).
+             let peer_addr = {
+                 let peers = self.peer_addrs.read().await;
+                 if let Some(gossip_addr) = peers.get(&target) {
+-                    if gossip_addr.id == node.iroh_addr.id {
+-                        // Same endpoint ID — this is the same node. Use gossip address
+-                        // if it has different socket addresses (fresher after restart).
+-                        if gossip_addr.addrs != node.iroh_addr.addrs {
+-                            info!(
+-                                target_node = %target,
+-                                endpoint_id = %gossip_addr.id,
+-                                gossip_addrs = gossip_addr.addrs.len(),
+-                                raft_addrs = node.iroh_addr.addrs.len(),
+-                                "using gossip-discovered address (fresher than Raft membership)"
+-                            );
+-                            Some(gossip_addr.clone())
+-                        } else {
+-                            Some(node.iroh_addr.clone())
++                    if gossip_addr.id.to_string() == node.endpoint_id() {
++                        match &membership_addr {
++                            Some(raft_addr) if gossip_addr != raft_addr => {
++                                info!(
++                                    target_node = %target,
++                                    endpoint_id = %gossip_addr.id,
++                                    gossip_addrs = gossip_addr.addrs.len(),
++                                    raft_addrs = node.transport_addr_count(),
++                                    "using gossip-discovered address (fresher than Raft membership)"
++                                );
++                                Some(gossip_addr.clone())
++                            }
++                            Some(raft_addr) => Some(raft_addr.clone()),
++                            None => Some(gossip_addr.clone()),
+                         }
+                     } else {
+                         // Endpoint ID mismatch — gossip cache has a different node's
+                         // address under this node ID. Fall back to Raft membership.
+                         warn!(
+                             target_node = %target,
+-                            raft_endpoint_id = %node.iroh_addr.id,
++                            raft_endpoint_id = %node.endpoint_id(),
+                             gossip_endpoint_id = %gossip_addr.id,
+                             "gossip cache endpoint ID mismatch, using Raft membership address"
+                         );
+-                        Some(node.iroh_addr.clone())
++                        membership_addr.clone()
+                     }
+                 } else {
+                     // No gossip entry — use Raft membership address.
+-                    Some(node.iroh_addr.clone())
++                    membership_addr.clone()
+                 }
+             };
+ 
+             // Update the fallback cache with Raft membership address (only if no
+             // gossip entry exists — don't overwrite fresher gossip data).
+-            {
++            if let Some(membership_addr) = &membership_addr {
+                 let mut peers = self.peer_addrs.write().await;
+                 if !peers.contains_key(&target) && (peers.len() < max_peers_usize()) {
+-                    peers.insert(target, node.iroh_addr.clone());
++                    peers.insert(target, membership_addr.clone());
+                 }
+             }
+ 
+             debug!(
+                 target_node = %target,
+-                endpoint_id = %node.iroh_addr.id,
++                endpoint_id = %node.endpoint_id(),
+                 "creating network client with address from Raft membership"
+             );
+ 
+diff --git a/crates/aspen-raft/src/network/tests.rs b/crates/aspen-raft/src/network/tests.rs
+index 714714893..4d1050d32 100644
+--- a/crates/aspen-raft/src/network/tests.rs
++++ b/crates/aspen-raft/src/network/tests.rs
+@@ -181,9 +181,16 @@ fn test_raft_member_info_construction() {
+     let endpoint_id = secret_key.public();
+     let endpoint_addr = iroh::EndpointAddr::new(endpoint_id);
+ 
+-    let member_info = RaftMemberInfo::new(endpoint_addr.clone());
++    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
+ 
+-    assert_eq!(member_info.iroh_addr.id, endpoint_addr.id);
++    assert_eq!(member_info.endpoint_id(), endpoint_addr.id.to_string());
++}
++
++#[test]
++fn test_raft_member_info_default_endpoint_id_is_parseable() {
++    let member_info = RaftMemberInfo::default();
++    let parse_result = member_info.endpoint_id().parse::<iroh::PublicKey>();
++    assert!(parse_result.is_ok(), "default member endpoint id must stay parseable for runtime watchers");
+ }
+ 
+ #[test]
+@@ -197,10 +204,10 @@ fn test_raft_member_info_clone() {
+     let endpoint_id = secret_key.public();
+     let endpoint_addr = iroh::EndpointAddr::new(endpoint_id);
+ 
+-    let member_info = RaftMemberInfo::new(endpoint_addr);
++    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr));
+     let cloned = member_info.clone();
+ 
+-    assert_eq!(member_info.iroh_addr.id, cloned.iroh_addr.id);
++    assert_eq!(member_info.endpoint_id(), cloned.endpoint_id());
+ }
+ 
+ // =========================================================================
+diff --git a/crates/aspen-raft/src/node/kv_store.rs b/crates/aspen-raft/src/node/kv_store.rs
+index 95f41755e..7033ad51d 100644
+--- a/crates/aspen-raft/src/node/kv_store.rs
++++ b/crates/aspen-raft/src/node/kv_store.rs
+@@ -72,12 +72,14 @@ use openraft::error::ClientWriteError;
+ use openraft::error::RaftError;
+ use tracing::debug;
+ use tracing::instrument;
++use tracing::warn;
+ 
+ use super::RaftNode;
+ use crate::StateMachineVariant;
+ use crate::types::AppRequest;
+ use crate::types::AppResponse;
+ use crate::types::AppTypeConfig;
++use crate::types::member_endpoint_addr;
+ use crate::write_batcher::command_conversion::write_command_to_app_request;
+ 
+ #[async_trait]
+@@ -128,14 +130,26 @@ impl KeyValueStore for RaftNode {
+                         if let Some(leader_id) = forward_info.leader_id {
+                             if leader_id != self.node_id() {
+                                 if let Some(leader_node) = &forward_info.leader_node {
+-                                    let leader_addr = leader_node.iroh_addr.clone();
+-                                    debug!(
+-                                        node_id = self.node_id().0,
+-                                        leader_id = leader_id.0,
+-                                        "forwarding write to leader"
+-                                    );
+-                                    metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
+-                                    return forwarder.forward_write(leader_id, leader_addr, request).await;
++                                    match member_endpoint_addr(leader_node) {
++                                        Ok(leader_addr) => {
++                                            debug!(
++                                                node_id = self.node_id().0,
++                                                leader_id = leader_id.0,
++                                                "forwarding write to leader"
++                                            );
++                                            metrics::counter!("aspen.write_batcher.forwarded_total").increment(1);
++                                            return forwarder.forward_write(leader_id, leader_addr, request).await;
++                                        }
++                                        Err(error) => {
++                                            warn!(
++                                                node_id = self.node_id().0,
++                                                leader_id = leader_id.0,
++                                                endpoint_id = %leader_node.endpoint_id(),
++                                                error = %error,
++                                                "cannot forward write because leader membership address is invalid"
++                                            );
++                                        }
++                                    }
+                                 }
+                             }
+                         }
+@@ -207,23 +221,35 @@ impl KeyValueStore for RaftNode {
+                         if let Some(leader_id) = forward_info.leader_id {
+                             if leader_id != self.node_id() {
+                                 if let Some(leader_node) = &forward_info.leader_node {
+-                                    let leader_addr = leader_node.iroh_addr.clone();
+-                                    debug!(
+-                                        node_id = self.node_id().0,
+-                                        leader_id = leader_id.0,
+-                                        "forwarding delete to leader"
+-                                    );
+-                                    let write_request = WriteRequest {
+-                                        command: WriteCommand::Delete {
+-                                            key: request.key.clone(),
+-                                        },
+-                                    };
+-                                    let _forwarded_write_result =
+-                                        forwarder.forward_write(leader_id, leader_addr, write_request).await?;
+-                                    return Ok(DeleteResult {
+-                                        key: request.key,
+-                                        is_deleted: true,
+-                                    });
++                                    match member_endpoint_addr(leader_node) {
++                                        Ok(leader_addr) => {
++                                            debug!(
++                                                node_id = self.node_id().0,
++                                                leader_id = leader_id.0,
++                                                "forwarding delete to leader"
++                                            );
++                                            let write_request = WriteRequest {
++                                                command: WriteCommand::Delete {
++                                                    key: request.key.clone(),
++                                                },
++                                            };
++                                            let _forwarded_write_result =
++                                                forwarder.forward_write(leader_id, leader_addr, write_request).await?;
++                                            return Ok(DeleteResult {
++                                                key: request.key,
++                                                is_deleted: true,
++                                            });
++                                        }
++                                        Err(error) => {
++                                            warn!(
++                                                node_id = self.node_id().0,
++                                                leader_id = leader_id.0,
++                                                endpoint_id = %leader_node.endpoint_id(),
++                                                error = %error,
++                                                "cannot forward delete because leader membership address is invalid"
++                                            );
++                                        }
++                                    }
+                                 }
+                             }
+                         }
+diff --git a/crates/aspen-raft/src/node/membership_refresh.rs b/crates/aspen-raft/src/node/membership_refresh.rs
+index 7f9dca100..ea2235f99 100644
+--- a/crates/aspen-raft/src/node/membership_refresh.rs
++++ b/crates/aspen-raft/src/node/membership_refresh.rs
+@@ -20,6 +20,7 @@ use tracing::warn;
+ use super::RaftNode;
+ use crate::types::NodeId;
+ use crate::types::RaftMemberInfo;
++use crate::types::member_endpoint_addr;
+ 
+ #[allow(unknown_lints)]
+ #[allow(
+@@ -79,13 +80,14 @@ impl AddressUpdateDebouncer {
+     }
+ }
+ 
+-/// Hash the socket addresses of an EndpointAddr for debounce keying.
+-/// Uses a simple FNV-like hash over the debug representation.
+-fn hash_addrs(addr: &iroh::EndpointAddr) -> u64 {
++/// Hash the transport addresses of a stored node address for debounce keying.
++fn hash_addrs(addr: &aspen_core::NodeAddress) -> u64 {
+     use std::hash::Hash;
+     use std::hash::Hasher;
+     let mut hasher = std::collections::hash_map::DefaultHasher::new();
+-    addr.addrs.hash(&mut hasher);
++    for transport_addr in addr.transport_addrs() {
++        transport_addr.hash(&mut hasher);
++    }
+     hasher.finish()
+ }
+ 
+@@ -96,7 +98,18 @@ impl RaftNode {
+     pub fn get_member_addr(&self, node_id: NodeId) -> Option<iroh::EndpointAddr> {
+         let metrics = self.raft().metrics().borrow().clone();
+         let membership = metrics.membership_config.membership();
+-        membership.get_node(&node_id).map(|info: &RaftMemberInfo| info.iroh_addr.clone())
++        membership.get_node(&node_id).and_then(|info: &RaftMemberInfo| match member_endpoint_addr(info) {
++            Ok(addr) => Some(addr),
++            Err(error) => {
++                warn!(
++                    target_node = %node_id,
++                    endpoint_id = %info.endpoint_id(),
++                    error = %error,
++                    "cannot refresh membership address because stored membership address is invalid"
++                );
++                None
++            }
++        })
+     }
+ 
+     /// Update a member's address in the Raft membership.
+@@ -154,7 +167,7 @@ impl RaftNode {
+         }
+ 
+         // Debounce: skip if the same address was recently submitted.
+-        let addr_hash = hash_addrs(&new_addr);
++        let addr_hash = hash_addrs(&aspen_core::NodeAddress::new(new_addr.clone()));
+         if debouncer.is_debounced(target_node, addr_hash).await {
+             debug!(
+                 target_node = %target_node,
+@@ -167,7 +180,7 @@ impl RaftNode {
+         let metrics = self.raft().metrics().borrow().clone();
+         let membership = metrics.membership_config.membership();
+         let existing_info = membership.get_node(&target_node);
+-        let mut updated_info = RaftMemberInfo::new(new_addr.clone());
++        let mut updated_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(new_addr.clone()));
+         if let Some(existing) = existing_info {
+             updated_info.relay_url = existing.relay_url.clone();
+         }
+@@ -249,8 +262,9 @@ mod tests {
+     fn test_hash_addrs_deterministic() {
+         let key = iroh::SecretKey::from_bytes(&[1u8; 32]);
+         let addr = iroh::EndpointAddr::new(key.public());
+-        let h1 = hash_addrs(&addr);
+-        let h2 = hash_addrs(&addr);
++        let node_addr = aspen_core::NodeAddress::new(addr);
++        let h1 = hash_addrs(&node_addr);
++        let h2 = hash_addrs(&node_addr);
+         assert_eq!(h1, h2);
+     }
+ 
+@@ -266,7 +280,7 @@ mod tests {
+         addr2.addrs = BTreeSet::from([iroh::TransportAddr::Ip(socket_addr)]);
+ 
+         // Different addrs should produce different hashes
+-        assert_ne!(hash_addrs(&addr1), hash_addrs(&addr2));
++        assert_ne!(hash_addrs(&aspen_core::NodeAddress::new(addr1)), hash_addrs(&aspen_core::NodeAddress::new(addr2)));
+     }
+ 
+     #[tokio::test]
+diff --git a/crates/aspen-raft/src/node/mod.rs b/crates/aspen-raft/src/node/mod.rs
+index 080c30191..e12828821 100644
+--- a/crates/aspen-raft/src/node/mod.rs
++++ b/crates/aspen-raft/src/node/mod.rs
+@@ -59,12 +59,14 @@ pub use health::RaftNodeHealth;
+ pub use membership_refresh::AddressUpdateDebouncer;
+ use openraft::Raft;
+ use tokio::sync::Semaphore;
++use tracing::warn;
+ 
+ use crate::StateMachineVariant;
+ #[cfg(feature = "trust")]
+ use crate::trust_share_client::TrustShareClient;
+ use crate::types::AppTypeConfig;
+ use crate::types::NodeId;
++use crate::types::member_endpoint_addr;
+ use crate::write_batcher::BatchConfig;
+ use crate::write_batcher::WriteBatcher;
+ use crate::write_forwarder::WriteForwarder;
+@@ -251,7 +253,19 @@ impl RaftNode {
+         let leader_id = metrics.current_leader?;
+         let membership = metrics.membership_config.membership();
+         let leader_node = membership.get_node(&leader_id)?;
+-        Some((leader_id, leader_node.iroh_addr.clone()))
++        let leader_addr = match member_endpoint_addr(leader_node) {
++            Ok(leader_addr) => leader_addr,
++            Err(error) => {
++                warn!(
++                    leader_id = leader_id.0,
++                    endpoint_id = %leader_node.endpoint_id(),
++                    error = %error,
++                    "cannot use current leader membership address because it is invalid"
++                );
++                return None;
++            }
++        };
++        Some((leader_id, leader_addr))
+     }
+ 
+     /// Get the underlying Raft instance.
+@@ -385,7 +399,8 @@ impl RaftNode {
+         let voter_ids: std::collections::HashSet<NodeId> = membership.membership().voter_ids().collect();
+ 
+         for (node_id, member_info) in membership_nodes {
+-            let cluster_node = ClusterNode::with_iroh_addr((*node_id).into(), member_info.iroh_addr.clone());
++            let mut cluster_node = ClusterNode::with_node_addr((*node_id).into(), member_info.node_addr.clone());
++            cluster_node.relay_url = member_info.relay_url.clone();
+ 
+             if voter_ids.contains(node_id) {
+                 members.push((*node_id).into());
+@@ -402,3 +417,160 @@ impl RaftNode {
+         }
+     }
+ }
++
++#[cfg(all(test, feature = "testing"))]
++mod warning_tests {
++    use std::io;
++    use std::sync::Arc;
++    use std::sync::Mutex;
++    use std::time::Duration;
++
++    use aspen_cluster_types::ClusterNode;
++    use aspen_cluster_types::InitRequest;
++    use openraft::Config;
++    use tracing_subscriber::fmt::MakeWriter;
++
++    use super::*;
++    use aspen_traits::ClusterController;
++    use crate::madsim_network::FailureInjector;
++    use crate::madsim_network::MadsimNetworkFactory;
++    use crate::madsim_network::MadsimRaftRouter;
++    use crate::storage::InMemoryLogStore;
++    use crate::storage::InMemoryStateMachine;
++
++    const TEST_NODE_ID_U64: u64 = 1;
++    const TEST_NODE_PORT_BASE: u64 = 26_000;
++    const LEADER_WAIT_TIMEOUT_MS: u64 = 2_000;
++    const LEADER_POLL_INTERVAL_MS: u64 = 50;
++
++    #[derive(Clone, Default)]
++    struct SharedLogBuffer {
++        bytes: Arc<Mutex<Vec<u8>>>,
++    }
++
++    struct BufferWriter {
++        bytes: Arc<Mutex<Vec<u8>>>,
++    }
++
++    impl SharedLogBuffer {
++        fn as_string(&self) -> String {
++            let bytes = self.bytes.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone();
++            String::from_utf8_lossy(&bytes).into_owned()
++        }
++    }
++
++    impl io::Write for BufferWriter {
++        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
++            self.bytes
++                .lock()
++                .unwrap_or_else(|poisoned| poisoned.into_inner())
++                .extend_from_slice(buf);
++            Ok(buf.len())
++        }
++
++        fn flush(&mut self) -> io::Result<()> {
++            Ok(())
++        }
++    }
++
++    impl<'a> MakeWriter<'a> for SharedLogBuffer {
++        type Writer = BufferWriter;
++
++        fn make_writer(&'a self) -> Self::Writer {
++            BufferWriter {
++                bytes: Arc::clone(&self.bytes),
++            }
++        }
++    }
++
++    fn capture_warning_logs<T>(action: impl FnOnce() -> T) -> (T, String) {
++        let log_buffer = SharedLogBuffer::default();
++        let subscriber = tracing_subscriber::fmt()
++            .with_ansi(false)
++            .without_time()
++            .with_target(false)
++            .with_max_level(tracing::Level::WARN)
++            .with_writer(log_buffer.clone())
++            .finish();
++        let result = tracing::subscriber::with_default(subscriber, action);
++        (result, log_buffer.as_string())
++    }
++
++    async fn wait_for_self_leader(node: &RaftNode) {
++        let wait_timeout = Duration::from_millis(LEADER_WAIT_TIMEOUT_MS);
++        let poll_interval = Duration::from_millis(LEADER_POLL_INTERVAL_MS);
++        tokio::time::timeout(wait_timeout, async {
++            loop {
++                let metrics = node.raft().metrics().borrow().clone();
++                if metrics.current_leader == Some(NodeId(TEST_NODE_ID_U64)) {
++                    break;
++                }
++                tokio::time::sleep(poll_interval).await;
++            }
++        })
++        .await
++        .expect("leader should be elected for invalid-address warning test");
++    }
++
++    async fn create_single_node_cluster(node_addr: aspen_core::NodeAddress) -> RaftNode {
++        let config = Arc::new(Config {
++            cluster_name: "warning-test-cluster".to_string(),
++            ..Default::default()
++        });
++        let log_storage = InMemoryLogStore::default();
++        let state_machine = Arc::new(InMemoryStateMachine::default());
++        let router = Arc::new(MadsimRaftRouter::new());
++        let failure_injector = Arc::new(FailureInjector::new());
++        let network_factory = MadsimNetworkFactory::new(NodeId(TEST_NODE_ID_U64), router.clone(), failure_injector);
++
++        let raft = openraft::Raft::new(
++            NodeId(TEST_NODE_ID_U64),
++            config,
++            network_factory,
++            log_storage,
++            InMemoryStateMachine::store(Arc::clone(&state_machine)),
++        )
++        .await
++        .expect("create raft instance for invalid-address warning test");
++
++        let register_addr = format!("127.0.0.1:{}", TEST_NODE_PORT_BASE + TEST_NODE_ID_U64);
++        router
++            .register_node(NodeId(TEST_NODE_ID_U64), register_addr, raft.clone())
++            .expect("register warning test node with router");
++
++        let node = RaftNode::new(
++            NodeId(TEST_NODE_ID_U64),
++            Arc::new(raft),
++            StateMachineVariant::InMemory(state_machine),
++        );
++
++        let mut cluster_node = ClusterNode::new(TEST_NODE_ID_U64, "warning-test-node", None);
++        cluster_node.node_addr = Some(node_addr);
++        ClusterController::init(
++            &node,
++            InitRequest {
++                initial_members: vec![cluster_node],
++                trust: Default::default(),
++            },
++        )
++        .await
++        .expect("initialize warning test cluster");
++
++        wait_for_self_leader(&node).await;
++        node
++    }
++
++    #[tokio::test]
++    async fn test_current_leader_info_warns_and_returns_none_for_invalid_leader_address() {
++        let node = create_single_node_cluster(aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new())).await;
++
++        let (leader_info, logs) = capture_warning_logs(|| node.current_leader_info());
++
++        println!("captured_warning={}", logs.trim());
++        println!("leader_info={leader_info:?}");
++
++        assert!(leader_info.is_none(), "invalid leader membership address should be unavailable");
++        assert!(logs.contains("cannot use current leader membership address because it is invalid"));
++        assert!(logs.contains("not-a-public-key"));
++    }
++}
+diff --git a/crates/aspen-raft/src/node/trust.rs b/crates/aspen-raft/src/node/trust.rs
+index 3f5824646..535f3eb95 100644
+--- a/crates/aspen-raft/src/node/trust.rs
++++ b/crates/aspen-raft/src/node/trust.rs
+@@ -14,6 +14,7 @@ use std::time::Duration;
+ 
+ use anyhow::Context;
+ use aspen_cluster_types::InitRequest;
++use aspen_cluster_types::NodeAddress;
+ use aspen_transport::TrustShareProvider;
+ use aspen_trust::chain;
+ use aspen_trust::protocol::ShareResponse;
+@@ -58,7 +59,7 @@ struct ShareCollectionPlan {
+     old_epoch: u64,
+     old_threshold: u8,
+     old_members: BTreeSet<u64>,
+-    old_member_addresses: BTreeMap<u64, iroh::EndpointAddr>,
++    old_member_addresses: BTreeMap<u64, NodeAddress>,
+     local_node_id: u64,
+     local_share: Option<shamir::Share>,
+     expected_digests: BTreeMap<u64, shamir::ShareDigest>,
+@@ -67,7 +68,7 @@ struct ShareCollectionPlan {
+ 
+ struct PeerExpungementProbePlan {
+     current_epoch: u64,
+-    peers: BTreeMap<u64, iroh::EndpointAddr>,
++    peers: BTreeMap<u64, NodeAddress>,
+     expected_digests: BTreeMap<u64, shamir::ShareDigest>,
+     required_peer_confirmations: usize,
+ }
+@@ -81,7 +82,7 @@ struct TrustRotationContext {
+     threshold_override: Option<u8>,
+     old_threshold: u8,
+     new_threshold: u8,
+-    old_member_addresses: BTreeMap<u64, iroh::EndpointAddr>,
++    old_member_addresses: BTreeMap<u64, NodeAddress>,
+     timeout_context: TimeoutContext,
+ }
+ 
+@@ -130,11 +131,11 @@ pub(crate) fn build_trust_initialize_payload(request: &InitRequest) -> Result<Tr
+         .initial_members
+         .iter()
+         .map(|member| {
+-            let endpoint = member
+-                .iroh_addr()
+-                .cloned()
+-                .ok_or_else(|| format!("missing iroh address for trust member {}", member.id))?;
+-            Ok((member.id, endpoint))
++            let node_addr = member
++                .node_addr
++                .clone()
++                .ok_or_else(|| format!("missing node address for trust member {}", member.id))?;
++            Ok((member.id, node_addr))
+         })
+         .collect::<Result<Vec<_>, String>>()?;
+ 
+@@ -196,7 +197,7 @@ fn required_peer_confirmations(peer_count: usize, threshold: u8) -> usize {
+ fn proposal_from_actions(
+     actions: Vec<ReconfigAction>,
+     threshold_override: Option<u8>,
+-    members: Vec<(u64, iroh::EndpointAddr)>,
++    members: Vec<(u64, NodeAddress)>,
+ ) -> Option<TrustReconfigurationPayload> {
+     for action in actions {
+         if let ReconfigAction::ProposeNewConfig {
+@@ -276,6 +277,12 @@ fn response_reports_current_epoch(response: &ShareResponse, expected_current_epo
+     response.current_epoch == expected_current_epoch
+ }
+ 
++fn node_endpoint_addr(node_addr: &NodeAddress) -> Result<iroh::EndpointAddr, String> {
++    node_addr
++        .try_into_iroh()
++        .map_err(|error| format!("invalid node address {}: {error}", node_addr.endpoint_id()))
++}
++
+ /// Spawn async tasks to request shares from all non-local old members.
+ ///
+ /// Skips members with missing stored endpoints (logs a warning instead).
+@@ -288,14 +295,21 @@ fn spawn_peer_share_requests(
+         if *old_member == plan.local_node_id {
+             continue;
+         }
+-        let Some(endpoint) = plan.old_member_addresses.get(old_member).cloned() else {
++        let Some(node_addr) = plan.old_member_addresses.get(old_member).cloned() else {
+             warn!(
+                 node_id = *old_member,
+                 epoch = old_epoch,
+-                "missing stored endpoint for trust share request; waiting for timeout"
++                "missing stored node address for trust share request; waiting for timeout"
+             );
+             continue;
+         };
++        let endpoint = match node_endpoint_addr(&node_addr) {
++            Ok(endpoint) => endpoint,
++            Err(error) => {
++                warn!(node_id = *old_member, epoch = old_epoch, error = %error, "invalid stored node address");
++                continue;
++            }
++        };
+         let client = plan.client.clone();
+         let target_node = *old_member;
+         pending_requests.spawn(async move {
+@@ -470,15 +484,15 @@ fn build_share_collection_plan(
+ fn collect_new_member_addresses(
+     membership: &openraft::Membership<crate::types::AppTypeConfig>,
+     new_members: &BTreeSet<u64>,
+-) -> Result<Vec<(u64, iroh::EndpointAddr)>, String> {
++) -> Result<Vec<(u64, NodeAddress)>, String> {
+     new_members
+         .iter()
+         .map(|node_id| {
+-            let endpoint = membership
++            let node_addr = membership
+                 .get_node(&(*node_id).into())
+-                .map(|node| node.iroh_addr.clone())
+-                .ok_or_else(|| format!("missing endpoint for new member {node_id}"))?;
+-            Ok((*node_id, endpoint))
++                .map(|node| node.node_addr.clone())
++                .ok_or_else(|| format!("missing node address for new member {node_id}"))?;
++            Ok((*node_id, node_addr))
+         })
+         .collect()
+ }
+@@ -503,14 +517,21 @@ fn spawn_expungement_notification(
+ 
+ fn notify_removed_nodes(
+     client: Arc<dyn TrustShareClient>,
+-    old_member_addresses: &BTreeMap<u64, iroh::EndpointAddr>,
++    old_member_addresses: &BTreeMap<u64, NodeAddress>,
+     removed_nodes: &BTreeSet<u64>,
+     new_epoch: u64,
+     leader_id: u64,
+ ) {
+     for removed_id in removed_nodes {
+-        if let Some(endpoint) = old_member_addresses.get(removed_id) {
+-            spawn_expungement_notification(client.clone(), endpoint.clone(), new_epoch, *removed_id);
++        if let Some(node_addr) = old_member_addresses.get(removed_id) {
++            match node_endpoint_addr(node_addr) {
++                Ok(endpoint) => {
++                    spawn_expungement_notification(client.clone(), endpoint, new_epoch, *removed_id);
++                }
++                Err(error) => {
++                    warn!(node_id = *removed_id, error = %error, "invalid stored node address for removed node");
++                }
++            }
+         } else {
+             warn!(
+                 node_id = *removed_id,
+@@ -560,7 +581,10 @@ impl RaftNode {
+         let metrics = self.raft().metrics().borrow().clone();
+         let membership = metrics.membership_config.membership();
+         let voters: BTreeSet<_> = membership.voter_ids().collect();
+-        membership.nodes().any(|(node_id, node)| voters.contains(node_id) && node.iroh_addr.id == requester)
++        let requester_id = requester.to_string();
++        membership
++            .nodes()
++            .any(|(node_id, node)| voters.contains(node_id) && node.endpoint_id() == requester_id)
+     }
+ 
+     pub(crate) async fn probe_for_peer_expungement(&self) -> Result<PeerExpungementProbeOutcome, String> {
+@@ -581,7 +605,15 @@ impl RaftNode {
+ 
+         let mut confirmed_peer_count = 0usize;
+         let mut saw_retryable_error = false;
+-        for (node_id, endpoint) in plan.peers {
++        for (node_id, node_addr) in plan.peers {
++            let endpoint = match node_endpoint_addr(&node_addr) {
++                Ok(endpoint) => endpoint,
++                Err(error) => {
++                    saw_retryable_error = true;
++                    warn!(node_id, epoch = plan.current_epoch, error = %error, "peer expungement probe skipped invalid node address");
++                    continue;
++                }
++            };
+             match client.get_share(endpoint, plan.current_epoch).await {
+                 Ok(response) => {
+                     if !response_reports_current_epoch(&response, plan.current_epoch) {
+@@ -1042,7 +1074,7 @@ mod tests {
+         let old_members: BTreeSet<u64> = [1, 2, 3].into();
+         let remote_addr = endpoint_addr();
+         let mut addresses = BTreeMap::new();
+-        addresses.insert(2, remote_addr.clone());
++        addresses.insert(2, NodeAddress::new(remote_addr.clone()));
+ 
+         let collected = collect_old_shares_for_reconfiguration(ShareCollectionPlan {
+             client: Arc::new(MockTrustShareClient {
+diff --git a/crates/aspen-raft/src/storage_shared/trust.rs b/crates/aspen-raft/src/storage_shared/trust.rs
+index 239fdba81..9a18d352a 100644
+--- a/crates/aspen-raft/src/storage_shared/trust.rs
++++ b/crates/aspen-raft/src/storage_shared/trust.rs
+@@ -5,6 +5,7 @@
+ 
+ use std::collections::BTreeMap;
+ 
++use aspen_cluster_types::NodeAddress;
+ use aspen_raft_types::TrustInitializePayload;
+ use aspen_raft_types::TrustReconfigurationPayload;
+ use aspen_trust::chain::EncryptedSecretChain;
+@@ -98,7 +99,7 @@ impl SharedRedbStorage {
+     }
+ 
+     /// Load membership addresses for the given trust epoch.
+-    pub fn load_members(&self, epoch: u64) -> Result<BTreeMap<u64, iroh::EndpointAddr>, SharedStorageError> {
++    pub fn load_members(&self, epoch: u64) -> Result<BTreeMap<u64, NodeAddress>, SharedStorageError> {
+         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+         let table = read_txn.open_table(TRUST_MEMBERS_TABLE).context(OpenTableSnafu)?;
+ 
+@@ -113,7 +114,7 @@ impl SharedRedbStorage {
+                 && let Ok(node_id) = node_id_str.parse::<u64>()
+             {
+                 let endpoint = bincode::deserialize(value_guard.value()).map_err(|e| SharedStorageError::Internal {
+-                    reason: format!("failed to deserialize EndpointAddr: {e}"),
++                    reason: format!("failed to deserialize NodeAddress: {e}"),
+                 })?;
+                 members.insert(node_id, endpoint);
+             }
+@@ -413,14 +414,14 @@ fn store_epoch_digests_in_txn(
+ fn store_epoch_members_in_txn(
+     members_table: &mut redb::Table<&str, &[u8]>,
+     epoch: u64,
+-    members: &[(u64, iroh::EndpointAddr)],
++    members: &[(u64, NodeAddress)],
+ ) -> Result<(), SharedStorageError> {
+-    for (node_id, endpoint) in members {
++    for (node_id, node_addr) in members {
+         let key = format!("{epoch}:{node_id}");
+-        let endpoint_bytes = bincode::serialize(endpoint).map_err(|e| SharedStorageError::Internal {
+-            reason: format!("failed to serialize EndpointAddr: {e}"),
++        let node_addr_bytes = bincode::serialize(node_addr).map_err(|e| SharedStorageError::Internal {
++            reason: format!("failed to serialize NodeAddress: {e}"),
+         })?;
+-        members_table.insert(key.as_str(), endpoint_bytes.as_slice()).context(super::InsertSnafu)?;
++        members_table.insert(key.as_str(), node_addr_bytes.as_slice()).context(super::InsertSnafu)?;
+     }
+     Ok(())
+ }
+@@ -453,9 +454,9 @@ mod tests {
+ 
+     use super::*;
+ 
+-    fn endpoint_addr() -> EndpointAddr {
++    fn node_addr() -> NodeAddress {
+         let key = SecretKey::generate(&mut rand::rng());
+-        EndpointAddr::new(key.public())
++        NodeAddress::new(EndpointAddr::new(key.public()))
+     }
+ 
+     #[test]
+@@ -480,7 +481,7 @@ mod tests {
+                 (2, aspen_trust::shamir::share_digest(&shares[1])),
+                 (3, aspen_trust::shamir::share_digest(&shares[2])),
+             ],
+-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
++            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
+         };
+ 
+         let write_txn = storage.db.begin_write().unwrap();
+@@ -533,7 +534,7 @@ mod tests {
+                 (2, aspen_trust::shamir::share_digest(&shares[1])),
+                 (3, aspen_trust::shamir::share_digest(&shares[2])),
+             ],
+-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
++            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
+         };
+ 
+         let write_txn = storage.db.begin_write().unwrap();
+@@ -584,7 +585,7 @@ mod tests {
+                 (3, aspen_trust::shamir::share_digest(&shares[2])),
+                 (4, aspen_trust::shamir::share_digest(&shares[3])),
+             ],
+-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
++            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
+         };
+ 
+         let write_txn = storage.db.begin_write().unwrap();
+@@ -626,7 +627,7 @@ mod tests {
+                 (2, aspen_trust::shamir::share_digest(&shares[1])),
+                 (3, aspen_trust::shamir::share_digest(&shares[2])),
+             ],
+-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
++            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
+         };
+ 
+         let write_txn = storage.db.begin_write().unwrap();
+@@ -672,7 +673,7 @@ mod tests {
+                 (2, aspen_trust::shamir::share_digest(&shares[1])),
+                 (4, aspen_trust::shamir::share_digest(&shares[2])),
+             ],
+-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (4, endpoint_addr())],
++            members: vec![(1, node_addr()), (2, node_addr()), (4, node_addr())],
+             encrypted_chain: EncryptedSecretChain {
+                 salt: [4; 32],
+                 data: vec![9, 8, 7],
+@@ -731,7 +732,7 @@ mod tests {
+                 (2, aspen_trust::shamir::share_digest(&shares[1])),
+                 (4, aspen_trust::shamir::share_digest(&shares[2])),
+             ],
+-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (4, endpoint_addr())],
++            members: vec![(1, node_addr()), (2, node_addr()), (4, node_addr())],
+             encrypted_chain: EncryptedSecretChain {
+                 salt: [4; 32],
+                 data: vec![9, 8, 7],
+diff --git a/crates/aspen-raft/src/types.rs b/crates/aspen-raft/src/types.rs
+index dd3ee708e..b553e0c2d 100644
+--- a/crates/aspen-raft/src/types.rs
++++ b/crates/aspen-raft/src/types.rs
+@@ -6,7 +6,7 @@
+ //! # Type Configuration
+ //!
+ //! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification
+-//! - **Node**: `RaftMemberInfo` - Raft membership metadata with Iroh P2P addresses
++//! - **Node**: `RaftMemberInfo` - transport-neutral membership metadata backed by `NodeAddress`
+ //! - **AppRequest**: Application-level write commands (Set, SetMulti)
+ //! - **AppResponse**: Application-level read/write responses
+ //! - **AppTypeConfig**: OpenRaft type configuration (defined here to satisfy orphan rules)
+@@ -31,6 +31,18 @@ pub use aspen_raft_types::RaftMemberInfo;
+ pub use aspen_raft_types::TrustInitializePayload;
+ pub use aspen_raft_types::TrustReconfigurationPayload;
+ 
++#[inline]
++pub(crate) fn node_address_to_iroh(node_addr: &aspen_core::NodeAddress) -> Result<iroh::EndpointAddr, String> {
++    node_addr
++        .try_into_iroh()
++        .map_err(|error| format!("invalid node address {}: {error}", node_addr.endpoint_id()))
++}
++
++#[inline]
++pub(crate) fn member_endpoint_addr(member_info: &RaftMemberInfo) -> Result<iroh::EndpointAddr, String> {
++    node_address_to_iroh(&member_info.node_addr)
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -147,6 +159,26 @@ mod tests {
+         assert_eq!(original, parsed);
+     }
+ 
++    // =========================================================================
++    // Address conversion tests
++    // =========================================================================
++
++    #[test]
++    fn test_member_endpoint_addr_accepts_valid_node_address() {
++        let secret_key = iroh::SecretKey::from([7u8; 32]);
++        let endpoint_addr = iroh::EndpointAddr::new(secret_key.public());
++        let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
++
++        assert_eq!(member_endpoint_addr(&member_info), Ok(endpoint_addr));
++    }
++
++    #[test]
++    fn test_member_endpoint_addr_rejects_invalid_node_address() {
++        let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new()));
++        let error = member_endpoint_addr(&member_info).expect_err("invalid endpoint id must fail conversion");
++        assert!(error.contains("invalid node address not-a-public-key"));
++    }
++
+     // =========================================================================
+     // AppRequest Tests
+     // =========================================================================
+@@ -368,8 +400,8 @@ mod tests {
+         let endpoint_id: EndpointId = secret_key.public();
+         let addr = EndpointAddr::new(endpoint_id);
+ 
+-        let info = RaftMemberInfo::new(addr.clone());
+-        assert_eq!(info.iroh_addr.id, endpoint_id);
++        let info = RaftMemberInfo::new(aspen_core::NodeAddress::new(addr.clone()));
++        assert_eq!(info.endpoint_id(), endpoint_id.to_string());
+     }
+ 
+     #[test]
+diff --git a/crates/aspen-raft/src/write_batcher/direct_write.rs b/crates/aspen-raft/src/write_batcher/direct_write.rs
+index eaccf7a78..fee1abb03 100644
+--- a/crates/aspen-raft/src/write_batcher/direct_write.rs
++++ b/crates/aspen-raft/src/write_batcher/direct_write.rs
+@@ -3,10 +3,12 @@ use aspen_kv_types::WriteCommand;
+ use aspen_kv_types::WriteRequest;
+ use aspen_kv_types::WriteResult;
+ use tracing::debug;
++use tracing::warn;
+ 
+ use super::command_conversion::write_command_to_app_request;
+ use super::*;
+ use crate::types::NodeId;
++use crate::types::member_endpoint_addr;
+ 
+ struct DirectWriteForwardTarget {
+     leader_id: NodeId,
+@@ -24,9 +26,21 @@ impl WriteBatcher {
+         if NodeId(leader_id.0) == self.node_id() {
+             return None;
+         }
++        let leader_addr = match member_endpoint_addr(leader_node) {
++            Ok(leader_addr) => leader_addr,
++            Err(error) => {
++                warn!(
++                    leader_id = leader_id.0,
++                    endpoint_id = %leader_node.endpoint_id(),
++                    error = %error,
++                    "cannot forward direct write because leader membership address is invalid"
++                );
++                return None;
++            }
++        };
+         Some(DirectWriteForwardTarget {
+             leader_id: NodeId(leader_id.0),
+-            leader_addr: leader_node.iroh_addr.clone(),
++            leader_addr,
+         })
+     }
+ 
+diff --git a/crates/aspen-raft/src/write_batcher/flush.rs b/crates/aspen-raft/src/write_batcher/flush.rs
+index 65f82e1c7..893b4fcde 100644
+--- a/crates/aspen-raft/src/write_batcher/flush.rs
++++ b/crates/aspen-raft/src/write_batcher/flush.rs
+@@ -9,6 +9,7 @@ use tracing::warn;
+ use super::*;
+ use crate::types::AppRequest;
+ use crate::types::NodeId;
++use crate::types::member_endpoint_addr;
+ use crate::verified::BatchLimits;
+ use crate::verified::BatchState;
+ use crate::verified::FlushDecision;
+@@ -253,7 +254,20 @@ impl WriteBatcher {
+                 command: WriteCommand::Batch { operations: batch_ops },
+             };
+ 
+-            return forwarder.forward_write(NodeId(lid.0), node.iroh_addr.clone(), request).await;
++            match member_endpoint_addr(node) {
++                Ok(leader_addr) => {
++                    return forwarder.forward_write(NodeId(lid.0), leader_addr, request).await;
++                }
++                Err(error) => {
++                    warn!(
++                        leader_id = lid.0,
++                        endpoint_id = %node.endpoint_id(),
++                        error = %error,
++                        batch_item_count = batch_size,
++                        "cannot forward batch flush because leader membership address is invalid"
++                    );
++                }
++            }
+         }
+ 
+         // No forwarder or no leader info — return NotLeader for client retry
+@@ -261,7 +275,7 @@ impl WriteBatcher {
+         warn!(
+             leader = ?leader_hint,
+             batch_item_count = batch_size,
+-            "batch flush failed: leadership changed, no forwarder available"
++            "batch flush failed: leadership changed and no valid leader forwarding target was available"
+         );
+         Err(KeyValueStoreError::NotLeader {
+             leader: leader_hint,
+diff --git a/openspec/changes/transport-neutral-raft-types/.openspec.yaml b/openspec/changes/transport-neutral-raft-types/.openspec.yaml
+new file mode 100644
+index 000000000..25345f420
+--- /dev/null
++++ b/openspec/changes/transport-neutral-raft-types/.openspec.yaml
+@@ -0,0 +1,2 @@
++schema: spec-driven
++created: 2026-04-22
+diff --git a/openspec/changes/transport-neutral-raft-types/design.md b/openspec/changes/transport-neutral-raft-types/design.md
+new file mode 100644
+index 000000000..43f9eead6
+--- /dev/null
++++ b/openspec/changes/transport-neutral-raft-types/design.md
+@@ -0,0 +1,87 @@
++## Context
++
++`aspen-raft-types` sits below the runtime transport crates, but it still encoded concrete `iroh::EndpointAddr` values in `RaftMemberInfo` and the trust reconfiguration payloads. That made a foundational metadata crate depend on shell-only transport types even though the persisted data Aspen actually needs is endpoint id plus transport addresses.
++
++Review also found two hardening gaps in the first implementation pass:
++
++1. `RaftMemberInfo::default()` used a placeholder endpoint id string that runtime parsers rejected.
++2. Several shell paths skipped invalid address conversions without logging, which hid why peer seeding or leader forwarding was unavailable.
++
++## Goals / Non-Goals
++
++**Goals**
++
++- Persist transport-neutral membership and trust address data in `aspen-raft-types`.
++- Convert to iroh only at runtime shell boundaries.
++- Keep default/test-helper membership metadata parseable by runtime helpers.
++- Make invalid runtime conversion paths visible through warnings or deterministic errors.
++- Save durable validation transcripts and verification metadata for review.
++
++**Non-Goals**
++
++- Eliminating iroh from runtime crates.
++- Reworking transport discovery or trust quorum algorithms.
++- Broadening this change into another large no-std foundation sweep.
++
++## Decisions
++
++### 1. Store `NodeAddress` in raft metadata and trust payloads
++
++**Choice:** `RaftMemberInfo`, `TrustInitializePayload.members`, and `TrustReconfigurationPayload.members` use `aspen_core::NodeAddress`.
++
++**Rationale:** `NodeAddress` preserves the endpoint id plus transport-address set without binding the metadata crate to runtime iroh types.
++
++**Alternative considered:** keep `iroh::EndpointAddr` in the leaf crate. Rejected because it keeps `aspen-raft-types` coupled to runtime transport and directly contradicts the deferred seam this change now picks up.
++
++### 2. Convert to iroh only in runtime shells
++
++**Choice:** `aspen-raft` exposes small conversion helpers that turn `NodeAddress` / `RaftMemberInfo` back into `iroh::EndpointAddr` for connection-opening code.
++
++**Rationale:** this keeps the functional data model transport-neutral while letting shell code report context-rich conversion failures.
++
++**Alternative considered:** teach `aspen-raft-types` how to convert directly. Rejected because it would reintroduce the iroh dependency into the leaf crate.
++
++### 3. Keep `RaftMemberInfo::default()` parseable
++
++**Choice:** use the historical zero-seed iroh public key string `3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29` as the default endpoint id constant in `crates/aspen-raft-types/src/member.rs`.
++
++**Rationale:** existing runtime helpers still parse endpoint ids even for test-helper/default nodes. A parseable deterministic id preserves old behavior without reintroducing runtime transport types.
++
++**Alternative considered:** leave a human-readable placeholder string. Rejected because it causes runtime helper paths to silently drop the default member.
++
++### 4. Warn on invalid runtime conversion and fail deterministically
++
++**Choice:** the following runtime paths log explicit warnings when stored metadata is invalid:
++
++- bootstrap peer seeding in `crates/aspen-cluster/src/bootstrap/node/mod.rs`
++- leader forwarding in `crates/aspen-raft/src/node/kv_store.rs`
++- batched/direct write forwarding in `crates/aspen-raft/src/write_batcher/{flush.rs,direct_write.rs}`
++- current-leader and membership refresh lookups in `crates/aspen-raft/src/node/{mod.rs,membership_refresh.rs}`
++- relay allowlist extraction in `crates/aspen-cluster/src/relay_server.rs`
++- blob-topology extraction in `src/bin/aspen_node/main.rs`
++
++Forwarding paths then return the existing deterministic retryable failure (`NotLeader` / unavailable target) instead of silently pretending no target existed.
++
++**Rationale:** invalid persisted metadata is exceptional. Operators and tests need a visible reason when a peer/leader cannot be reached.
++
++### 5. Save exact seam-validation artifacts
++
++**Choice:** save the exact rails below under `openspec/changes/transport-neutral-raft-types/evidence/validation.md`, plus `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt`:
++
++- `cargo test -p aspen-raft-types`
++- `cargo check -p aspen-raft`
++- `cargo check -p aspen-cluster`
++- `cargo check -p aspen-raft --features trust`
++- `cargo tree -p aspen-raft-types -e normal --depth 1`
++- `cargo test -p aspen-raft test_raft_member_info_default_endpoint_id_is_parseable --lib`
++- `cargo test -p aspen-raft test_member_endpoint_addr_rejects_invalid_node_address --lib`
++- `cargo test -p aspen-raft test_raft_member_info_construction --lib`
++- `cargo test -p aspen-raft --features trust test_collect_old_shares_accepts_valid_remote_share_from_stored_address --lib`
++- `cargo test -p aspen-cluster --features relay-server test_extract_endpoint_ids_skips_invalid_member_endpoint_id --lib`
++
++Reserve `openspec/changes/transport-neutral-raft-types/evidence/warning-behavior.md` for explicit warning-behavior coverage before archive.
++
++## Risks / Trade-offs
++
++- **More logging on corrupt metadata** → acceptable because these warnings indicate real state mismatch or bad persisted data.
++- **Targeted verification only** → acceptable for this change while it stays scoped to the metadata seam; keep broader consumer coverage as an explicit follow-up task before archive.
+diff --git a/openspec/changes/transport-neutral-raft-types/proposal.md b/openspec/changes/transport-neutral-raft-types/proposal.md
+new file mode 100644
+index 000000000..d88f4d3fe
+--- /dev/null
++++ b/openspec/changes/transport-neutral-raft-types/proposal.md
+@@ -0,0 +1,50 @@
++## Why
++
++`extend-no-std-foundation-and-wire` explicitly deferred the `aspen-raft-types` transport seam, but the remaining runtime boundary still stores concrete iroh address types in the Raft metadata crate. That keeps a foundational type crate coupled to runtime transport details and makes the trust payload path carry shell-only types deeper than necessary.
++
++The current implementation moves that seam to `NodeAddress`, but it needs its own OpenSpec change plus hardening for the review findings: `RaftMemberInfo::default()` must stay parseable for runtime helpers, invalid address conversions must stop failing silently, and the claimed cargo validation must be saved under durable evidence.
++
++## What Changes
++
++- Replace `iroh::EndpointAddr` in `crates/aspen-raft-types` membership and trust payload types with transport-neutral `aspen_core::NodeAddress` values.
++- Keep all concrete iroh conversion at runtime shell boundaries in `aspen-raft`, `aspen-cluster`, and top-level node binaries.
++- Preserve a parseable default endpoint id for `RaftMemberInfo::default()` so runtime membership watchers, relay access-control updates, and blob-topology extraction keep deterministic behavior in tests/helpers.
++- Surface explicit warnings or deterministic forwarding failures when runtime code cannot convert stored membership metadata back into an iroh address.
++- Save targeted cargo check/test transcripts and OpenSpec verification artifacts for this seam.
++
++## Non-Goals
++
++- Removing iroh from runtime crates such as `aspen-raft` or `aspen-cluster`.
++- Changing Raft wire protocol semantics, gossip behavior, or trust quorum rules beyond the address representation seam.
++- Reopening the already-completed `extend-no-std-foundation-and-wire` storage/traits/client-api/protocol work.
++
++## Capabilities
++
++### Modified Capabilities
++
++- `transport`: Raft membership metadata and trust payloads now preserve transport-neutral addresses until runtime shells open network connections.
++- `trust-reconfiguration`: trust membership payloads carry `NodeAddress` data and reject invalid runtime conversion paths explicitly.
++
++## Impact
++
++- **Files**: `crates/aspen-raft-types/`, `crates/aspen-raft/`, `crates/aspen-cluster/`, `src/bin/aspen_node/`, test helpers, and new OpenSpec evidence under `openspec/changes/transport-neutral-raft-types/`.
++- **APIs**: `RaftMemberInfo`, `TrustInitializePayload`, and `TrustReconfigurationPayload` become transport-neutral at the type level; runtime callers convert back to iroh as needed.
++- **Dependencies**: `crates/aspen-raft-types` drops its direct `iroh` dependency.
++- **Testing**: targeted `cargo check` and `cargo test` rails must be saved as durable evidence, including the new parseable-default regression test and trust-path coverage.
++
++## Verification
++
++Save the following exact rails under `openspec/changes/transport-neutral-raft-types/evidence/validation.md`:
++
++- `cargo test -p aspen-raft-types`
++- `cargo check -p aspen-raft`
++- `cargo check -p aspen-cluster`
++- `cargo check -p aspen-raft --features trust`
++- `cargo tree -p aspen-raft-types -e normal --depth 1`
++- `cargo test -p aspen-raft test_raft_member_info_default_endpoint_id_is_parseable --lib`
++- `cargo test -p aspen-raft test_member_endpoint_addr_rejects_invalid_node_address --lib`
++- `cargo test -p aspen-raft test_raft_member_info_construction --lib`
++- `cargo test -p aspen-raft --features trust test_collect_old_shares_accepts_valid_remote_share_from_stored_address --lib`
++- `cargo test -p aspen-cluster --features relay-server test_extract_endpoint_ids_skips_invalid_member_endpoint_id --lib`
++
++Keep the root mapping in `openspec/changes/transport-neutral-raft-types/verification.md`, save the reviewed diff under `openspec/changes/transport-neutral-raft-types/evidence/implementation-diff.txt`, save this change's preflight transcript under `openspec/changes/transport-neutral-raft-types/evidence/openspec-preflight.txt`, and reserve `openspec/changes/transport-neutral-raft-types/evidence/warning-behavior.md` for explicit warning-behavior coverage before archive.
+diff --git a/openspec/changes/transport-neutral-raft-types/specs/transport/spec.md b/openspec/changes/transport-neutral-raft-types/specs/transport/spec.md
+new file mode 100644
+index 000000000..2843c58ce
+--- /dev/null
++++ b/openspec/changes/transport-neutral-raft-types/specs/transport/spec.md
+@@ -0,0 +1,28 @@
++## ADDED Requirements
++
++### Requirement: Transport-neutral Raft membership metadata
++ID: transport.transport-neutral-raft-membership-metadata
++
++The system SHALL store transport-neutral `NodeAddress` values in Raft membership metadata and trust membership payloads rather than concrete runtime iroh address types. Runtime shells SHALL convert those values into `iroh::EndpointAddr` only when they need to open connections or populate runtime-only registries.
++
++#### Scenario: Membership metadata stays transport-neutral at rest
++ID: transport.transport-neutral-raft-membership-metadata.membership-metadata-stays-transport-neutral-at-rest
++
++- **WHEN** Aspen persists `RaftMemberInfo` or trust membership payload data in `aspen-raft-types`
++- **THEN** the stored representation SHALL contain `NodeAddress` data
++- **AND** `crates/aspen-raft-types` SHALL NOT depend directly on `iroh`
++
++#### Scenario: Runtime conversion failure is surfaced explicitly
++ID: transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly
++
++- **GIVEN** runtime code needs to turn stored membership metadata into an `iroh::EndpointAddr`
++- **WHEN** the stored endpoint id or transport address set is invalid
++- **THEN** the runtime path SHALL log a warning that identifies the failing member
++- **AND** the operation SHALL return its normal retryable/unavailable outcome instead of silently pretending the target never existed
++
++#### Scenario: Default member metadata stays parseable for runtime helpers
++ID: transport.transport-neutral-raft-membership-metadata.default-member-metadata-stays-parseable-for-runtime-helpers
++
++- **WHEN** test helpers or `openraft` utilities construct `RaftMemberInfo::default()`
++- **THEN** the default endpoint id SHALL remain parseable by runtime membership, relay, and blob-topology helper paths
++- **AND** default metadata SHALL remain deterministic across runs
+diff --git a/openspec/changes/transport-neutral-raft-types/tasks.md b/openspec/changes/transport-neutral-raft-types/tasks.md
+new file mode 100644
+index 000000000..364764c91
+--- /dev/null
++++ b/openspec/changes/transport-neutral-raft-types/tasks.md
+@@ -0,0 +1,9 @@
++## 1. Transport-neutral metadata seam
++
++- [x] I1 Replace `iroh::EndpointAddr` in `crates/aspen-raft-types` membership and trust payload types with `aspen_core::NodeAddress`, and update runtime callers to convert back to iroh only at shell boundaries. [covers=transport.transport-neutral-raft-membership-metadata,transport.transport-neutral-raft-membership-metadata.membership-metadata-stays-transport-neutral-at-rest]
++- [x] I2 Keep `RaftMemberInfo::default()` parseable for runtime helpers, and make invalid membership address conversion / endpoint-id parsing paths emit explicit warnings or deterministic forwarding failures instead of silently skipping the target. [covers=transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly,transport.transport-neutral-raft-membership-metadata.default-member-metadata-stays-parseable-for-runtime-helpers]
++
++## 2. Verification
++
++- [x] V1 Save the targeted cargo validation transcripts for this seam (`cargo test -p aspen-raft-types`, `cargo check -p aspen-raft`, `cargo check -p aspen-cluster`, `cargo check -p aspen-raft --features trust`, `cargo tree -p aspen-raft-types -e normal --depth 1`, `cargo test -p aspen-raft test_raft_member_info_default_endpoint_id_is_parseable --lib`, `cargo test -p aspen-raft test_member_endpoint_addr_rejects_invalid_node_address --lib`, `cargo test -p aspen-raft test_raft_member_info_construction --lib`, `cargo test -p aspen-raft --features trust test_collect_old_shares_accepts_valid_remote_share_from_stored_address --lib`, and `cargo test -p aspen-cluster --features relay-server test_extract_endpoint_ids_skips_invalid_member_endpoint_id --lib`), keep `verification.md` synchronized, and save `openspec/changes/transport-neutral-raft-types/evidence/implementation-diff.txt` plus `openspec/changes/transport-neutral-raft-types/evidence/openspec-preflight.txt`. [covers=transport.transport-neutral-raft-membership-metadata,transport.transport-neutral-raft-membership-metadata.membership-metadata-stays-transport-neutral-at-rest,transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly,transport.transport-neutral-raft-membership-metadata.default-member-metadata-stays-parseable-for-runtime-helpers] [evidence=openspec/changes/transport-neutral-raft-types/evidence/validation.md]
++- [x] V2 Before archive, capture explicit warning-behavior coverage for invalid conversion paths that identifies the failing member and shows the operation returning its normal retryable/unavailable outcome. [covers=transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly] [evidence=openspec/changes/transport-neutral-raft-types/evidence/warning-behavior.md]
+diff --git a/openspec/changes/transport-neutral-raft-types/verification.md b/openspec/changes/transport-neutral-raft-types/verification.md
+new file mode 100644
+index 000000000..97a7abf9b
+--- /dev/null
++++ b/openspec/changes/transport-neutral-raft-types/verification.md
+@@ -0,0 +1,120 @@
++# Verification Evidence
++
++This file tracks durable evidence for `transport-neutral-raft-types`.
++
++## Implementation Evidence
++
++- Changed file: `openspec/changes/transport-neutral-raft-types/.openspec.yaml`
++- Changed file: `openspec/changes/transport-neutral-raft-types/proposal.md`
++- Changed file: `openspec/changes/transport-neutral-raft-types/design.md`
++- Changed file: `openspec/changes/transport-neutral-raft-types/tasks.md`
++- Changed file: `openspec/changes/transport-neutral-raft-types/specs/transport/spec.md`
++- Changed file: `openspec/changes/transport-neutral-raft-types/verification.md`
++- Changed file: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++- Changed file: `openspec/changes/transport-neutral-raft-types/evidence/warning-behavior.md`
++- Changed file: `openspec/changes/transport-neutral-raft-types/evidence/implementation-diff.txt`
++- Changed file: `openspec/changes/transport-neutral-raft-types/evidence/openspec-preflight.txt`
++- Changed file: `crates/aspen-raft-types/Cargo.toml`
++- Changed file: `crates/aspen-raft-types/src/member.rs`
++- Changed file: `crates/aspen-raft-types/src/request.rs`
++- Changed file: `crates/aspen-raft/src/types.rs`
++- Changed file: `crates/aspen-raft/src/network/factory.rs`
++- Changed file: `crates/aspen-raft/src/network/tests.rs`
++- Changed file: `crates/aspen-raft/src/node/kv_store.rs`
++- Changed file: `crates/aspen-raft/src/node/membership_refresh.rs`
++- Changed file: `crates/aspen-raft/src/node/mod.rs`
++- Changed file: `crates/aspen-raft/src/node/trust.rs`
++- Changed file: `crates/aspen-raft/src/storage_shared/trust.rs`
++- Changed file: `crates/aspen-raft/src/write_batcher/direct_write.rs`
++- Changed file: `crates/aspen-raft/src/write_batcher/flush.rs`
++- Changed file: `crates/aspen-cluster/src/bootstrap/node/mod.rs`
++- Changed file: `crates/aspen-cluster/src/relay_server.rs`
++- Changed file: `crates/aspen-blob/src/replication/topology_watcher.rs`
++- Changed file: `src/bin/aspen_node/main.rs`
++
++## Task Coverage
++
++- [x] I1 Replace `iroh::EndpointAddr` in `crates/aspen-raft-types` membership and trust payload types with `aspen_core::NodeAddress`, and update runtime callers to convert back to iroh only at shell boundaries. [covers=transport.transport-neutral-raft-membership-metadata,transport.transport-neutral-raft-membership-metadata.membership-metadata-stays-transport-neutral-at-rest]
++  - Evidence: `crates/aspen-raft-types/Cargo.toml`, `crates/aspen-raft-types/src/member.rs`, `crates/aspen-raft-types/src/request.rs`, `crates/aspen-raft/src/types.rs`, `crates/aspen-raft/src/network/factory.rs`, `crates/aspen-raft/src/node/trust.rs`, `crates/aspen-raft/src/storage_shared/trust.rs`, `crates/aspen-cluster/src/bootstrap/node/mod.rs`
++
++- [x] I2 Keep `RaftMemberInfo::default()` parseable for runtime helpers, and make invalid membership address conversion / endpoint-id parsing paths emit explicit warnings or deterministic forwarding failures instead of silently skipping the target. [covers=transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly,transport.transport-neutral-raft-membership-metadata.default-member-metadata-stays-parseable-for-runtime-helpers]
++  - Evidence: `crates/aspen-raft-types/src/member.rs`, `crates/aspen-raft/src/types.rs`, `crates/aspen-raft/src/network/tests.rs`, `crates/aspen-raft/src/node/kv_store.rs`, `crates/aspen-raft/src/node/membership_refresh.rs`, `crates/aspen-raft/src/node/mod.rs`, `crates/aspen-raft/src/write_batcher/direct_write.rs`, `crates/aspen-raft/src/write_batcher/flush.rs`, `crates/aspen-cluster/src/bootstrap/node/mod.rs`, `crates/aspen-cluster/src/relay_server.rs`, `src/bin/aspen_node/main.rs`
++
++- [x] V1 Save the targeted cargo validation transcripts for this seam (`cargo test -p aspen-raft-types`, `cargo check -p aspen-raft`, `cargo check -p aspen-cluster`, `cargo check -p aspen-raft --features trust`, `cargo tree -p aspen-raft-types -e normal --depth 1`, `cargo test -p aspen-raft test_raft_member_info_default_endpoint_id_is_parseable --lib`, `cargo test -p aspen-raft test_member_endpoint_addr_rejects_invalid_node_address --lib`, `cargo test -p aspen-raft test_raft_member_info_construction --lib`, `cargo test -p aspen-raft --features trust test_collect_old_shares_accepts_valid_remote_share_from_stored_address --lib`, and `cargo test -p aspen-cluster --features relay-server test_extract_endpoint_ids_skips_invalid_member_endpoint_id --lib`), keep `verification.md` synchronized, and save `openspec/changes/transport-neutral-raft-types/evidence/implementation-diff.txt` plus `openspec/changes/transport-neutral-raft-types/evidence/openspec-preflight.txt`. [covers=transport.transport-neutral-raft-membership-metadata,transport.transport-neutral-raft-membership-metadata.membership-metadata-stays-transport-neutral-at-rest,transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly,transport.transport-neutral-raft-membership-metadata.default-member-metadata-stays-parseable-for-runtime-helpers] [evidence=openspec/changes/transport-neutral-raft-types/evidence/validation.md]
++  - Evidence: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`, `openspec/changes/transport-neutral-raft-types/evidence/implementation-diff.txt`, `openspec/changes/transport-neutral-raft-types/evidence/openspec-preflight.txt`
++
++- [x] V2 Before archive, capture explicit warning-behavior coverage for invalid conversion paths that identifies the failing member and shows the operation returning its normal retryable/unavailable outcome. [covers=transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly] [evidence=openspec/changes/transport-neutral-raft-types/evidence/warning-behavior.md]
++  - Evidence: `openspec/changes/transport-neutral-raft-types/evidence/warning-behavior.md`
++
++## Review Scope Snapshot
++
++### `git diff HEAD -- crates/aspen-raft-types/Cargo.toml crates/aspen-raft-types/src/member.rs crates/aspen-raft-types/src/request.rs crates/aspen-raft/src/types.rs crates/aspen-raft/src/network/factory.rs crates/aspen-raft/src/network/tests.rs crates/aspen-raft/src/node/kv_store.rs crates/aspen-raft/src/node/membership_refresh.rs crates/aspen-raft/src/node/mod.rs crates/aspen-raft/src/node/trust.rs crates/aspen-raft/src/storage_shared/trust.rs crates/aspen-raft/src/write_batcher/direct_write.rs crates/aspen-raft/src/write_batcher/flush.rs crates/aspen-cluster/src/bootstrap/node/mod.rs crates/aspen-cluster/src/relay_server.rs crates/aspen-blob/src/replication/topology_watcher.rs src/bin/aspen_node/main.rs openspec/changes/transport-neutral-raft-types/tasks.md openspec/changes/transport-neutral-raft-types/verification.md`
++
++- Status: captured after current edits
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/implementation-diff.txt`
++
++## Verification Commands
++
++### `cargo test -p aspen-raft-types`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo check -p aspen-raft`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo check -p aspen-cluster`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo check -p aspen-raft --features trust`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo test -p aspen-raft test_raft_member_info_default_endpoint_id_is_parseable --lib`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo test -p aspen-raft test_raft_member_info_construction --lib`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo test -p aspen-raft --features trust test_collect_old_shares_accepts_valid_remote_share_from_stored_address --lib`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo tree -p aspen-raft-types -e normal --depth 1`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo test -p aspen-raft test_member_endpoint_addr_rejects_invalid_node_address --lib`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo test -p aspen-cluster --features relay-server test_extract_endpoint_ids_skips_invalid_member_endpoint_id --lib`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/validation.md`
++
++### `cargo test -p aspen-raft --features testing test_current_leader_info_warns_and_returns_none_for_invalid_leader_address --lib -- --nocapture`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/warning-behavior.md`
++
++### `scripts/openspec-preflight.sh transport-neutral-raft-types`
++
++- Status: pass
++- Artifact: `openspec/changes/transport-neutral-raft-types/evidence/openspec-preflight.txt`
++
++## Notes
++
++- Warning-behavior evidence now shows the failing member (`endpoint_id=not-a-public-key`) and the unavailable outcome (`leader_info=None`) for the invalid leader-address path.
+diff --git a/src/bin/aspen_node/main.rs b/src/bin/aspen_node/main.rs
+index f6dd307fe..3e5f583bd 100644
+--- a/src/bin/aspen_node/main.rs
++++ b/src/bin/aspen_node/main.rs
+@@ -73,7 +73,6 @@ use aspen_core::context::InMemoryWatchRegistry;
+ use aspen_core::context::WatchRegistry;
+ use tracing::error;
+ use tracing::info;
+-#[cfg(not(feature = "ci"))]
+ use tracing::warn;
+ 
+ use crate::config::initialize_and_load_config;
+@@ -181,8 +180,17 @@ async fn async_main() -> Result<()> {
+                             .membership_config
+                             .membership()
+                             .nodes()
+-                            .map(|(node_id, node)| {
+-                                aspen_blob::replication::NodeInfo::new(u64::from(*node_id), node.iroh_addr.id)
++                            .filter_map(|(node_id, node)| match node.endpoint_id().parse() {
++                                Ok(public_key) => Some(aspen_blob::replication::NodeInfo::new(u64::from(*node_id), public_key)),
++                                Err(error) => {
++                                    warn!(
++                                        node_id = %node_id,
++                                        endpoint_id = %node.endpoint_id(),
++                                        error = %error,
++                                        "skipping invalid membership endpoint id while building blob topology"
++                                    );
++                                    None
++                                }
+                             })
+                             .collect()
+                     });

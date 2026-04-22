@@ -1,0 +1,9 @@
+Evidence-ID: transport-neutral-raft-types.openspec-preflight
+Task-ID: V1
+Artifact-Type: preflight-transcript
+Covers: transport.transport-neutral-raft-membership-metadata, transport.transport-neutral-raft-membership-metadata.membership-metadata-stays-transport-neutral-at-rest, transport.transport-neutral-raft-membership-metadata.runtime-conversion-failure-is-surfaced-explicitly, transport.transport-neutral-raft-membership-metadata.default-member-metadata-stays-parseable-for-runtime-helpers
+
+OK: openspec/changes/transport-neutral-raft-types
+  tasks: 4 total / 4 checked
+  changed files listed: 27
+  verification artifacts: 12

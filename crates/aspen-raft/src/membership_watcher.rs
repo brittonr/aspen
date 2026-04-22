@@ -208,23 +208,31 @@ async fn membership_watcher_task(
 
 /// Extract all PublicKeys from Raft metrics (synchronous, no await).
 ///
-/// This function extracts the Iroh PublicKey from each RaftMemberInfo in the
-/// current membership configuration (both voters and learners).
-///
-/// Called while holding the watch borrow, so must be synchronous.
+/// This function parses the transport-neutral endpoint identifier stored in
+/// each [`crate::types::RaftMemberInfo`] and keeps only valid iroh public keys.
+/// Called while holding the watch borrow, so it must stay synchronous.
 fn extract_public_keys_from_metrics(metrics: &openraft::RaftMetrics<AppTypeConfig>) -> Vec<PublicKey> {
     let membership = metrics.membership_config.membership();
 
-    // Collect all PublicKeys from all nodes (voters + learners)
     membership
         .nodes()
-        .map(|(node_id, member_info)| {
-            debug!(
-                node_id = %node_id,
-                public_key = %member_info.iroh_addr.id,
-                "extracting PublicKey from membership"
-            );
-            member_info.iroh_addr.id
+        .filter_map(|(node_id, member_info)| {
+            let endpoint_id = member_info.endpoint_id();
+            match endpoint_id.parse::<PublicKey>() {
+                Ok(public_key) => {
+                    debug!(node_id = %node_id, public_key = %public_key, "extracting PublicKey from membership");
+                    Some(public_key)
+                }
+                Err(error) => {
+                    warn!(
+                        node_id = %node_id,
+                        endpoint_id,
+                        error = %error,
+                        "skipping invalid endpoint id stored in membership"
+                    );
+                    None
+                }
+            }
         })
         .collect()
 }

@@ -104,7 +104,16 @@ where I: IntoIterator<Item = RaftMemberInfo> {
 /// Used to update the relay server's allowed-endpoints set when membership changes.
 pub fn extract_endpoint_ids<I>(members: I) -> HashSet<EndpointId>
 where I: IntoIterator<Item = RaftMemberInfo> {
-    members.into_iter().map(|member| member.iroh_addr.id).collect()
+    members
+        .into_iter()
+        .filter_map(|member| match member.endpoint_id().parse::<EndpointId>() {
+            Ok(endpoint_id) => Some(endpoint_id),
+            Err(error) => {
+                warn!(endpoint_id = member.endpoint_id(), error = %error, "skipping invalid relay membership endpoint id");
+                None
+            }
+        })
+        .collect()
 }
 
 /// Pre-configure an `IrohEndpointConfig` to use the cluster's own relay server.
@@ -325,7 +334,7 @@ mod tests {
         let key = SecretKey::from([seed; 32]);
         let addr = EndpointAddr::new(key.public());
         RaftMemberInfo {
-            iroh_addr: addr,
+            node_addr: aspen_core::NodeAddress::new(addr),
             relay_url: relay_url.map(String::from),
         }
     }
@@ -372,11 +381,25 @@ mod tests {
     fn test_extract_endpoint_ids() {
         let m1 = make_member(1, None);
         let m2 = make_member(2, None);
-        let id1 = m1.iroh_addr.id;
-        let id2 = m2.iroh_addr.id;
+        let id1: EndpointId = m1.endpoint_id().parse().unwrap();
+        let id2: EndpointId = m2.endpoint_id().parse().unwrap();
         let ids = extract_endpoint_ids(vec![m1, m2]);
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&id1));
         assert!(ids.contains(&id2));
+    }
+
+    #[test]
+    fn test_extract_endpoint_ids_skips_invalid_member_endpoint_id() {
+        let valid_member = make_member(1, None);
+        let invalid_member = RaftMemberInfo {
+            node_addr: aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new()),
+            relay_url: None,
+        };
+
+        let ids = extract_endpoint_ids(vec![valid_member.clone(), invalid_member]);
+        let valid_id: EndpointId = valid_member.endpoint_id().parse().unwrap();
+        assert_eq!(ids.len(), 1);
+        assert!(ids.contains(&valid_id));
     }
 }

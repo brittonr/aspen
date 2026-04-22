@@ -34,14 +34,9 @@ The `wasm32-unknown-unknown` setup record required by `R1` is indexed in the hea
 
 ## Implementation Evidence
 
-- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/tasks.md`
 - Changed file: `openspec/changes/extend-no-std-foundation-and-wire/verification.md`
-- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/verification-plan.md`
-- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-plan.md`
-- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-storage-seam-verification.md`
-- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-core-foundation-verification.md`
-- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-wire-dependency-verification.md`
-- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/implementation-diff.txt`
+- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/openspec-preflight.txt`
+- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/revalidation-audit.md`
 
 ## Task Coverage
 
@@ -159,7 +154,7 @@ The `wasm32-unknown-unknown` setup record required by `R1` is indexed in the hea
 
 ## Review Scope Snapshot
 
-### `git diff HEAD -- openspec/changes/extend-no-std-foundation-and-wire/tasks.md openspec/changes/extend-no-std-foundation-and-wire/verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/verification-plan.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-plan.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-storage-seam-verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-core-foundation-verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-wire-dependency-verification.md`
+### `git diff HEAD -- openspec/changes/extend-no-std-foundation-and-wire/verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/openspec-preflight.txt openspec/changes/extend-no-std-foundation-and-wire/evidence/revalidation-audit.md`
 
 - Status: captured after current edits
 - Artifact: `openspec/changes/extend-no-std-foundation-and-wire/evidence/implementation-diff.txt`
@@ -175,3 +170,4 @@ The `wasm32-unknown-unknown` setup record required by `R1` is indexed in the hea
 
 - Baseline artifacts remain context-only and must not be cited as final proof when reviewing the completed seam.
 - Archived no-std evidence remains historical context only; all final proof for this change is anchored to artifacts under `openspec/changes/extend-no-std-foundation-and-wire/evidence/`.
+- Current-turn revalidation of the already-checked task set is recorded in `openspec/changes/extend-no-std-foundation-and-wire/evidence/revalidation-audit.md`.

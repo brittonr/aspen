@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 
+use aspen_cluster_types::NodeAddress;
 use aspen_raft_types::TrustInitializePayload;
 use aspen_raft_types::TrustReconfigurationPayload;
 use aspen_trust::chain::EncryptedSecretChain;
@@ -98,7 +99,7 @@ impl SharedRedbStorage {
     }
 
     /// Load membership addresses for the given trust epoch.
-    pub fn load_members(&self, epoch: u64) -> Result<BTreeMap<u64, iroh::EndpointAddr>, SharedStorageError> {
+    pub fn load_members(&self, epoch: u64) -> Result<BTreeMap<u64, NodeAddress>, SharedStorageError> {
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let table = read_txn.open_table(TRUST_MEMBERS_TABLE).context(OpenTableSnafu)?;
 
@@ -113,7 +114,7 @@ impl SharedRedbStorage {
                 && let Ok(node_id) = node_id_str.parse::<u64>()
             {
                 let endpoint = bincode::deserialize(value_guard.value()).map_err(|e| SharedStorageError::Internal {
-                    reason: format!("failed to deserialize EndpointAddr: {e}"),
+                    reason: format!("failed to deserialize NodeAddress: {e}"),
                 })?;
                 members.insert(node_id, endpoint);
             }
@@ -413,14 +414,14 @@ fn store_epoch_digests_in_txn(
 fn store_epoch_members_in_txn(
     members_table: &mut redb::Table<&str, &[u8]>,
     epoch: u64,
-    members: &[(u64, iroh::EndpointAddr)],
+    members: &[(u64, NodeAddress)],
 ) -> Result<(), SharedStorageError> {
-    for (node_id, endpoint) in members {
+    for (node_id, node_addr) in members {
         let key = format!("{epoch}:{node_id}");
-        let endpoint_bytes = bincode::serialize(endpoint).map_err(|e| SharedStorageError::Internal {
-            reason: format!("failed to serialize EndpointAddr: {e}"),
+        let node_addr_bytes = bincode::serialize(node_addr).map_err(|e| SharedStorageError::Internal {
+            reason: format!("failed to serialize NodeAddress: {e}"),
         })?;
-        members_table.insert(key.as_str(), endpoint_bytes.as_slice()).context(super::InsertSnafu)?;
+        members_table.insert(key.as_str(), node_addr_bytes.as_slice()).context(super::InsertSnafu)?;
     }
     Ok(())
 }
@@ -453,9 +454,9 @@ mod tests {
 
     use super::*;
 
-    fn endpoint_addr() -> EndpointAddr {
+    fn node_addr() -> NodeAddress {
         let key = SecretKey::generate(&mut rand::rng());
-        EndpointAddr::new(key.public())
+        NodeAddress::new(EndpointAddr::new(key.public()))
     }
 
     #[test]
@@ -480,7 +481,7 @@ mod tests {
                 (2, aspen_trust::shamir::share_digest(&shares[1])),
                 (3, aspen_trust::shamir::share_digest(&shares[2])),
             ],
-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
+            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
         };
 
         let write_txn = storage.db.begin_write().unwrap();
@@ -533,7 +534,7 @@ mod tests {
                 (2, aspen_trust::shamir::share_digest(&shares[1])),
                 (3, aspen_trust::shamir::share_digest(&shares[2])),
             ],
-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
+            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
         };
 
         let write_txn = storage.db.begin_write().unwrap();
@@ -584,7 +585,7 @@ mod tests {
                 (3, aspen_trust::shamir::share_digest(&shares[2])),
                 (4, aspen_trust::shamir::share_digest(&shares[3])),
             ],
-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
+            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
         };
 
         let write_txn = storage.db.begin_write().unwrap();
@@ -626,7 +627,7 @@ mod tests {
                 (2, aspen_trust::shamir::share_digest(&shares[1])),
                 (3, aspen_trust::shamir::share_digest(&shares[2])),
             ],
-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
+            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
         };
 
         let write_txn = storage.db.begin_write().unwrap();
@@ -672,7 +673,7 @@ mod tests {
                 (2, aspen_trust::shamir::share_digest(&shares[1])),
                 (4, aspen_trust::shamir::share_digest(&shares[2])),
             ],
-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (4, endpoint_addr())],
+            members: vec![(1, node_addr()), (2, node_addr()), (4, node_addr())],
             encrypted_chain: EncryptedSecretChain {
                 salt: [4; 32],
                 data: vec![9, 8, 7],
@@ -731,7 +732,7 @@ mod tests {
                 (2, aspen_trust::shamir::share_digest(&shares[1])),
                 (4, aspen_trust::shamir::share_digest(&shares[2])),
             ],
-            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (4, endpoint_addr())],
+            members: vec![(1, node_addr()), (2, node_addr()), (4, node_addr())],
             encrypted_chain: EncryptedSecretChain {
                 salt: [4; 32],
                 data: vec![9, 8, 7],

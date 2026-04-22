@@ -3,10 +3,12 @@ use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
 use tracing::debug;
+use tracing::warn;
 
 use super::command_conversion::write_command_to_app_request;
 use super::*;
 use crate::types::NodeId;
+use crate::types::member_endpoint_addr;
 
 struct DirectWriteForwardTarget {
     leader_id: NodeId,
@@ -24,9 +26,21 @@ impl WriteBatcher {
         if NodeId(leader_id.0) == self.node_id() {
             return None;
         }
+        let leader_addr = match member_endpoint_addr(leader_node) {
+            Ok(leader_addr) => leader_addr,
+            Err(error) => {
+                warn!(
+                    leader_id = leader_id.0,
+                    endpoint_id = %leader_node.endpoint_id(),
+                    error = %error,
+                    "cannot forward direct write because leader membership address is invalid"
+                );
+                return None;
+            }
+        };
         Some(DirectWriteForwardTarget {
             leader_id: NodeId(leader_id.0),
-            leader_addr: leader_node.iroh_addr.clone(),
+            leader_addr,
         })
     }
 

@@ -12,6 +12,7 @@
 
 use std::fmt;
 
+use aspen_core::NodeAddress;
 use aspen_core::TxnOpResult;
 use aspen_trust::chain::EncryptedSecretChain;
 use serde::Deserialize;
@@ -29,7 +30,7 @@ pub struct TrustInitializePayload {
     /// SHA3-256 digests for all shares in this epoch.
     pub digests: Vec<(u64, [u8; 32])>,
     /// Epoch membership addresses keyed by node ID.
-    pub members: Vec<(u64, iroh::EndpointAddr)>,
+    pub members: Vec<(u64, NodeAddress)>,
 }
 
 /// Payload for committed trust reconfiguration.
@@ -44,7 +45,7 @@ pub struct TrustReconfigurationPayload {
     /// SHA3-256 digests for all shares in the new epoch.
     pub digests: Vec<(u64, [u8; 32])>,
     /// Epoch membership addresses keyed by node ID.
-    pub members: Vec<(u64, iroh::EndpointAddr)>,
+    pub members: Vec<(u64, NodeAddress)>,
     /// Encrypted chain carrying prior epoch secrets under the new epoch's secret.
     pub encrypted_chain: EncryptedSecretChain,
 }

@@ -2430,6 +2430,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2465,7 +2466,6 @@ dependencies = [
  "aspen-constants",
  "aspen-core",
  "aspen-trust",
- "iroh",
  "irpc",
  "openraft",
  "postcard",

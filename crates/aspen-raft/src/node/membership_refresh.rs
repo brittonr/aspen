@@ -20,6 +20,7 @@ use tracing::warn;
 use super::RaftNode;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
+use crate::types::member_endpoint_addr;
 
 #[allow(unknown_lints)]
 #[allow(
@@ -79,13 +80,14 @@ impl AddressUpdateDebouncer {
     }
 }
 
-/// Hash the socket addresses of an EndpointAddr for debounce keying.
-/// Uses a simple FNV-like hash over the debug representation.
-fn hash_addrs(addr: &iroh::EndpointAddr) -> u64 {
+/// Hash the transport addresses of a stored node address for debounce keying.
+fn hash_addrs(addr: &aspen_core::NodeAddress) -> u64 {
     use std::hash::Hash;
     use std::hash::Hasher;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    addr.addrs.hash(&mut hasher);
+    for transport_addr in addr.transport_addrs() {
+        transport_addr.hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -96,7 +98,18 @@ impl RaftNode {
     pub fn get_member_addr(&self, node_id: NodeId) -> Option<iroh::EndpointAddr> {
         let metrics = self.raft().metrics().borrow().clone();
         let membership = metrics.membership_config.membership();
-        membership.get_node(&node_id).map(|info: &RaftMemberInfo| info.iroh_addr.clone())
+        membership.get_node(&node_id).and_then(|info: &RaftMemberInfo| match member_endpoint_addr(info) {
+            Ok(addr) => Some(addr),
+            Err(error) => {
+                warn!(
+                    target_node = %node_id,
+                    endpoint_id = %info.endpoint_id(),
+                    error = %error,
+                    "cannot refresh membership address because stored membership address is invalid"
+                );
+                None
+            }
+        })
     }
 
     /// Update a member's address in the Raft membership.
@@ -154,7 +167,7 @@ impl RaftNode {
         }
 
         // Debounce: skip if the same address was recently submitted.
-        let addr_hash = hash_addrs(&new_addr);
+        let addr_hash = hash_addrs(&aspen_core::NodeAddress::new(new_addr.clone()));
         if debouncer.is_debounced(target_node, addr_hash).await {
             debug!(
                 target_node = %target_node,
@@ -167,7 +180,7 @@ impl RaftNode {
         let metrics = self.raft().metrics().borrow().clone();
         let membership = metrics.membership_config.membership();
         let existing_info = membership.get_node(&target_node);
-        let mut updated_info = RaftMemberInfo::new(new_addr.clone());
+        let mut updated_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(new_addr.clone()));
         if let Some(existing) = existing_info {
             updated_info.relay_url = existing.relay_url.clone();
         }
@@ -249,8 +262,9 @@ mod tests {
     fn test_hash_addrs_deterministic() {
         let key = iroh::SecretKey::from_bytes(&[1u8; 32]);
         let addr = iroh::EndpointAddr::new(key.public());
-        let h1 = hash_addrs(&addr);
-        let h2 = hash_addrs(&addr);
+        let node_addr = aspen_core::NodeAddress::new(addr);
+        let h1 = hash_addrs(&node_addr);
+        let h2 = hash_addrs(&node_addr);
         assert_eq!(h1, h2);
     }
 
@@ -266,7 +280,7 @@ mod tests {
         addr2.addrs = BTreeSet::from([iroh::TransportAddr::Ip(socket_addr)]);
 
         // Different addrs should produce different hashes
-        assert_ne!(hash_addrs(&addr1), hash_addrs(&addr2));
+        assert_ne!(hash_addrs(&aspen_core::NodeAddress::new(addr1)), hash_addrs(&aspen_core::NodeAddress::new(addr2)));
     }
 
     #[tokio::test]
