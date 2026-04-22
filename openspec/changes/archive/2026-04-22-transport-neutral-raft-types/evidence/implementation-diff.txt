@@ -23,7 +23,7 @@ index 4cd559452..b1998e540 100644
  use tracing::error;
  use tracing::info;
 +use tracing::warn;
- 
+
  use self::storage_init::StorageBroadcasts;
  // Use the type alias from cluster mod.rs which provides the concrete type
 @@ -391,11 +392,22 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
@@ -74,7 +74,7 @@ index 538fe9d0f..fead70933 100644
 +        })
 +        .collect()
  }
- 
+
  /// Pre-configure an `IrohEndpointConfig` to use the cluster's own relay server.
 @@ -325,7 +334,7 @@ mod tests {
          let key = SecretKey::from([seed; 32]);
@@ -120,13 +120,13 @@ index b578cd578..e6643f7c9 100644
 @@ -17,9 +17,6 @@ aspen-trust = { workspace = true }
  # Vendored openraft
  openraft = { path = "../../openraft/openraft", version = "0.10.0", features = ["serde", "type-alias"] }
- 
+
 -# P2P networking
 -iroh = { version = "0.97.0" }
 -
  # RPC framework
  irpc = { workspace = true }
- 
+
 diff --git a/crates/aspen-raft-types/src/member.rs b/crates/aspen-raft-types/src/member.rs
 index f06f4c8ad..7108411cc 100644
 --- a/crates/aspen-raft-types/src/member.rs
@@ -137,17 +137,17 @@ index f06f4c8ad..7108411cc 100644
 -//! This module defines the node metadata stored in Raft's membership set.
 +//! This module defines the transport-neutral node metadata stored in Raft's
 +//! membership set.
- 
+
 -use std::fmt;
 +use core::fmt;
- 
+
 -use iroh::EndpointAddr;
 -use iroh::EndpointId;
 -use iroh::SecretKey;
 +use aspen_core::NodeAddress;
  use serde::Deserialize;
  use serde::Serialize;
- 
+
 -/// Raft membership metadata containing Iroh P2P connection information.
 +/// Stable parseable endpoint id used by [`RaftMemberInfo::default`].
 +///
@@ -188,7 +188,7 @@ index f06f4c8ad..7108411cc 100644
 +    /// can use it for NAT traversal and P2P connectivity.
      pub relay_url: Option<String>,
  }
- 
+
  impl RaftMemberInfo {
 -    /// Creates a new `RaftMemberInfo` with the given Iroh endpoint address.
 -    pub fn new(iroh_addr: EndpointAddr) -> Self {
@@ -200,7 +200,7 @@ index f06f4c8ad..7108411cc 100644
              relay_url: None,
          }
      }
- 
+
 -    /// Creates a new `RaftMemberInfo` with an endpoint address and relay URL.
 -    pub fn with_relay(iroh_addr: EndpointAddr, relay_url: String) -> Self {
 +    /// Creates a new `RaftMemberInfo` with a node address and relay URL.
@@ -222,7 +222,7 @@ index f06f4c8ad..7108411cc 100644
 +        self.node_addr.transport_addrs().count()
 +    }
  }
- 
+
  impl Default for RaftMemberInfo {
 -    /// Creates a default `RaftMemberInfo` with a zero endpoint ID.
 -    ///
@@ -242,18 +242,18 @@ index f06f4c8ad..7108411cc 100644
          }
      }
 @@ -72,7 +77,7 @@ impl Default for RaftMemberInfo {
- 
+
  impl fmt::Display for RaftMemberInfo {
      fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 -        write!(f, "RaftMemberInfo({})", self.iroh_addr.id)
 +        write!(f, "RaftMemberInfo({})", self.endpoint_id())
      }
  }
- 
+
 @@ -80,10 +85,15 @@ impl fmt::Display for RaftMemberInfo {
  mod tests {
      use super::*;
- 
+
 +    fn test_node_addr(endpoint_id: &str) -> NodeAddress {
 +        NodeAddress::from_parts(endpoint_id, Vec::new())
 +    }
@@ -266,7 +266,7 @@ index f06f4c8ad..7108411cc 100644
 +        assert_eq!(info.transport_addr_count(), 0);
          assert!(format!("{}", info).starts_with("RaftMemberInfo("));
      }
- 
+
 @@ -91,32 +101,34 @@ mod tests {
      fn test_raft_member_info_display() {
          let info = RaftMemberInfo::default();
@@ -275,7 +275,7 @@ index f06f4c8ad..7108411cc 100644
          assert!(display.contains("RaftMemberInfo("));
 +        assert!(display.contains(DEFAULT_MEMBER_ENDPOINT_ID));
      }
- 
+
      #[test]
      fn test_raft_member_info_equality() {
          let info1 = RaftMemberInfo::default();
@@ -283,7 +283,7 @@ index f06f4c8ad..7108411cc 100644
 -        // Two defaults with same seed should be equal
          assert_eq!(info1, info2);
      }
- 
+
      #[test]
      fn test_raft_member_info_new() {
 -        let seed = [1u8; 32];
@@ -294,7 +294,7 @@ index f06f4c8ad..7108411cc 100644
 +        assert_eq!(info.endpoint_id(), "node-1");
 +        assert_eq!(info.transport_addr_count(), 0);
 +    }
- 
+
 -        let info = RaftMemberInfo::new(addr.clone());
 -        assert_eq!(info.iroh_addr.id, endpoint_id);
 +    #[test]
@@ -303,7 +303,7 @@ index f06f4c8ad..7108411cc 100644
 +        assert_eq!(info.endpoint_id(), "node-2");
 +        assert_eq!(info.relay_url.as_deref(), Some("https://relay.test"));
      }
- 
+
      #[test]
      fn test_raft_member_info_serde_roundtrip() {
 -        let original = RaftMemberInfo::default();
@@ -316,9 +316,9 @@ index d997e55c8..36ba59368 100644
 --- a/crates/aspen-raft-types/src/request.rs
 +++ b/crates/aspen-raft-types/src/request.rs
 @@ -12,6 +12,7 @@
- 
+
  use std::fmt;
- 
+
 +use aspen_core::NodeAddress;
  use aspen_core::TxnOpResult;
  use aspen_trust::chain::EncryptedSecretChain;
@@ -330,7 +330,7 @@ index d997e55c8..36ba59368 100644
 -    pub members: Vec<(u64, iroh::EndpointAddr)>,
 +    pub members: Vec<(u64, NodeAddress)>,
  }
- 
+
  /// Payload for committed trust reconfiguration.
 @@ -44,7 +45,7 @@ pub struct TrustReconfigurationPayload {
      /// SHA3-256 digests for all shares in the new epoch.
@@ -350,7 +350,7 @@ index a4b6a87fa..1bd6dd70b 100644
  tempfile = "3.4.0"
  metrics-exporter-prometheus = { workspace = true }
 +tracing-subscriber = { workspace = true }
- 
+
  [features]
  default = []
 diff --git a/crates/aspen-raft/src/network/factory.rs b/crates/aspen-raft/src/network/factory.rs
@@ -362,7 +362,7 @@ index fdf5218a5..a9652f6f4 100644
  use crate::types::NodeId;
  use crate::types::RaftMemberInfo;
 +use crate::types::member_endpoint_addr as convert_member_endpoint_addr;
- 
+
  #[inline]
  fn max_peers_usize() -> usize {
 @@ -34,9 +35,9 @@ fn max_peers_usize() -> usize {
@@ -404,7 +404,7 @@ index fdf5218a5..a9652f6f4 100644
 +                peers.insert(target, peer_addr.clone());
              }
          }
- 
+
          info!(
              target_node = %target,
              shard_id,
@@ -412,7 +412,7 @@ index fdf5218a5..a9652f6f4 100644
 +            endpoint_id = %node.endpoint_id(),
              "creating sharded network client"
          );
- 
+
          IrpcRaftNetwork::new(Arc::clone(&self.connection_pool), IrpcRaftNetworkConfig {
 -            peer_addr: Some(node.iroh_addr.clone()),
 +            peer_addr,
@@ -489,7 +489,7 @@ index fdf5218a5..a9652f6f4 100644
 +                    membership_addr.clone()
                  }
              };
- 
+
              // Update the fallback cache with Raft membership address (only if no
              // gossip entry exists — don't overwrite fresher gossip data).
 -            {
@@ -500,14 +500,14 @@ index fdf5218a5..a9652f6f4 100644
 +                    peers.insert(target, membership_addr.clone());
                  }
              }
- 
+
              debug!(
                  target_node = %target,
 -                endpoint_id = %node.iroh_addr.id,
 +                endpoint_id = %node.endpoint_id(),
                  "creating network client with address from Raft membership"
              );
- 
+
 diff --git a/crates/aspen-raft/src/network/tests.rs b/crates/aspen-raft/src/network/tests.rs
 index 714714893..4d1050d32 100644
 --- a/crates/aspen-raft/src/network/tests.rs
@@ -515,10 +515,10 @@ index 714714893..4d1050d32 100644
 @@ -181,9 +181,16 @@ fn test_raft_member_info_construction() {
      let endpoint_id = secret_key.public();
      let endpoint_addr = iroh::EndpointAddr::new(endpoint_id);
- 
+
 -    let member_info = RaftMemberInfo::new(endpoint_addr.clone());
 +    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
- 
+
 -    assert_eq!(member_info.iroh_addr.id, endpoint_addr.id);
 +    assert_eq!(member_info.endpoint_id(), endpoint_addr.id.to_string());
 +}
@@ -529,20 +529,20 @@ index 714714893..4d1050d32 100644
 +    let parse_result = member_info.endpoint_id().parse::<iroh::PublicKey>();
 +    assert!(parse_result.is_ok(), "default member endpoint id must stay parseable for runtime watchers");
  }
- 
+
  #[test]
 @@ -197,10 +204,10 @@ fn test_raft_member_info_clone() {
      let endpoint_id = secret_key.public();
      let endpoint_addr = iroh::EndpointAddr::new(endpoint_id);
- 
+
 -    let member_info = RaftMemberInfo::new(endpoint_addr);
 +    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr));
      let cloned = member_info.clone();
- 
+
 -    assert_eq!(member_info.iroh_addr.id, cloned.iroh_addr.id);
 +    assert_eq!(member_info.endpoint_id(), cloned.endpoint_id());
  }
- 
+
  // =========================================================================
 diff --git a/crates/aspen-raft/src/node/kv_store.rs b/crates/aspen-raft/src/node/kv_store.rs
 index 95f41755e..7033ad51d 100644
@@ -553,7 +553,7 @@ index 95f41755e..7033ad51d 100644
  use tracing::debug;
  use tracing::instrument;
 +use tracing::warn;
- 
+
  use super::RaftNode;
  use crate::StateMachineVariant;
  use crate::types::AppRequest;
@@ -561,7 +561,7 @@ index 95f41755e..7033ad51d 100644
  use crate::types::AppTypeConfig;
 +use crate::types::member_endpoint_addr;
  use crate::write_batcher::command_conversion::write_command_to_app_request;
- 
+
  #[async_trait]
 @@ -128,14 +130,26 @@ impl KeyValueStore for RaftNode {
                          if let Some(leader_id) = forward_info.leader_id {
@@ -660,13 +660,13 @@ index 7f9dca100..ea2235f99 100644
  use crate::types::NodeId;
  use crate::types::RaftMemberInfo;
 +use crate::types::member_endpoint_addr;
- 
+
  #[allow(unknown_lints)]
  #[allow(
 @@ -79,13 +80,14 @@ impl AddressUpdateDebouncer {
      }
  }
- 
+
 -/// Hash the socket addresses of an EndpointAddr for debounce keying.
 -/// Uses a simple FNV-like hash over the debug representation.
 -fn hash_addrs(addr: &iroh::EndpointAddr) -> u64 {
@@ -681,7 +681,7 @@ index 7f9dca100..ea2235f99 100644
 +    }
      hasher.finish()
  }
- 
+
 @@ -96,7 +98,18 @@ impl RaftNode {
      pub fn get_member_addr(&self, node_id: NodeId) -> Option<iroh::EndpointAddr> {
          let metrics = self.raft().metrics().borrow().clone();
@@ -700,11 +700,11 @@ index 7f9dca100..ea2235f99 100644
 +            }
 +        })
      }
- 
+
      /// Update a member's address in the Raft membership.
 @@ -154,7 +167,7 @@ impl RaftNode {
          }
- 
+
          // Debounce: skip if the same address was recently submitted.
 -        let addr_hash = hash_addrs(&new_addr);
 +        let addr_hash = hash_addrs(&aspen_core::NodeAddress::new(new_addr.clone()));
@@ -731,15 +731,15 @@ index 7f9dca100..ea2235f99 100644
 +        let h2 = hash_addrs(&node_addr);
          assert_eq!(h1, h2);
      }
- 
+
 @@ -266,7 +280,7 @@ mod tests {
          addr2.addrs = BTreeSet::from([iroh::TransportAddr::Ip(socket_addr)]);
- 
+
          // Different addrs should produce different hashes
 -        assert_ne!(hash_addrs(&addr1), hash_addrs(&addr2));
 +        assert_ne!(hash_addrs(&aspen_core::NodeAddress::new(addr1)), hash_addrs(&aspen_core::NodeAddress::new(addr2)));
      }
- 
+
      #[tokio::test]
 diff --git a/crates/aspen-raft/src/node/mod.rs b/crates/aspen-raft/src/node/mod.rs
 index 080c30191..e12828821 100644
@@ -750,7 +750,7 @@ index 080c30191..e12828821 100644
  use openraft::Raft;
  use tokio::sync::Semaphore;
 +use tracing::warn;
- 
+
  use crate::StateMachineVariant;
  #[cfg(feature = "trust")]
  use crate::trust_share_client::TrustShareClient;
@@ -779,16 +779,16 @@ index 080c30191..e12828821 100644
 +        };
 +        Some((leader_id, leader_addr))
      }
- 
+
      /// Get the underlying Raft instance.
 @@ -385,7 +399,8 @@ impl RaftNode {
          let voter_ids: std::collections::HashSet<NodeId> = membership.membership().voter_ids().collect();
- 
+
          for (node_id, member_info) in membership_nodes {
 -            let cluster_node = ClusterNode::with_iroh_addr((*node_id).into(), member_info.iroh_addr.clone());
 +            let mut cluster_node = ClusterNode::with_node_addr((*node_id).into(), member_info.node_addr.clone());
 +            cluster_node.relay_url = member_info.relay_url.clone();
- 
+
              if voter_ids.contains(node_id) {
                  members.push((*node_id).into());
 @@ -402,3 +417,160 @@ impl RaftNode {
@@ -957,7 +957,7 @@ index 3f5824646..535f3eb95 100644
 --- a/crates/aspen-raft/src/node/trust.rs
 +++ b/crates/aspen-raft/src/node/trust.rs
 @@ -14,6 +14,7 @@ use std::time::Duration;
- 
+
  use anyhow::Context;
  use aspen_cluster_types::InitRequest;
 +use aspen_cluster_types::NodeAddress;
@@ -974,7 +974,7 @@ index 3f5824646..535f3eb95 100644
      local_share: Option<shamir::Share>,
      expected_digests: BTreeMap<u64, shamir::ShareDigest>,
 @@ -67,7 +68,7 @@ struct ShareCollectionPlan {
- 
+
  struct PeerExpungementProbePlan {
      current_epoch: u64,
 -    peers: BTreeMap<u64, iroh::EndpointAddr>,
@@ -990,7 +990,7 @@ index 3f5824646..535f3eb95 100644
 +    old_member_addresses: BTreeMap<u64, NodeAddress>,
      timeout_context: TimeoutContext,
  }
- 
+
 @@ -130,11 +131,11 @@ pub(crate) fn build_trust_initialize_payload(request: &InitRequest) -> Result<Tr
          .initial_members
          .iter()
@@ -1007,7 +1007,7 @@ index 3f5824646..535f3eb95 100644
 +            Ok((member.id, node_addr))
          })
          .collect::<Result<Vec<_>, String>>()?;
- 
+
 @@ -196,7 +197,7 @@ fn required_peer_confirmations(peer_count: usize, threshold: u8) -> usize {
  fn proposal_from_actions(
      actions: Vec<ReconfigAction>,
@@ -1020,7 +1020,7 @@ index 3f5824646..535f3eb95 100644
 @@ -276,6 +277,12 @@ fn response_reports_current_epoch(response: &ShareResponse, expected_current_epo
      response.current_epoch == expected_current_epoch
  }
- 
+
 +fn node_endpoint_addr(node_addr: &NodeAddress) -> Result<iroh::EndpointAddr, String> {
 +    node_addr
 +        .try_into_iroh()
@@ -1076,7 +1076,7 @@ index 3f5824646..535f3eb95 100644
          .collect()
  }
 @@ -503,14 +517,21 @@ fn spawn_expungement_notification(
- 
+
  fn notify_removed_nodes(
      client: Arc<dyn TrustShareClient>,
 -    old_member_addresses: &BTreeMap<u64, iroh::EndpointAddr>,
@@ -1110,10 +1110,10 @@ index 3f5824646..535f3eb95 100644
 +            .nodes()
 +            .any(|(node_id, node)| voters.contains(node_id) && node.endpoint_id() == requester_id)
      }
- 
+
      pub(crate) async fn probe_for_peer_expungement(&self) -> Result<PeerExpungementProbeOutcome, String> {
 @@ -581,7 +605,15 @@ impl RaftNode {
- 
+
          let mut confirmed_peer_count = 0usize;
          let mut saw_retryable_error = false;
 -        for (node_id, endpoint) in plan.peers {
@@ -1135,7 +1135,7 @@ index 3f5824646..535f3eb95 100644
          let mut addresses = BTreeMap::new();
 -        addresses.insert(2, remote_addr.clone());
 +        addresses.insert(2, NodeAddress::new(remote_addr.clone()));
- 
+
          let collected = collect_old_shares_for_reconfiguration(ShareCollectionPlan {
              client: Arc::new(MockTrustShareClient {
 diff --git a/crates/aspen-raft/src/storage_shared/trust.rs b/crates/aspen-raft/src/storage_shared/trust.rs
@@ -1143,22 +1143,22 @@ index 239fdba81..9a18d352a 100644
 --- a/crates/aspen-raft/src/storage_shared/trust.rs
 +++ b/crates/aspen-raft/src/storage_shared/trust.rs
 @@ -5,6 +5,7 @@
- 
+
  use std::collections::BTreeMap;
- 
+
 +use aspen_cluster_types::NodeAddress;
  use aspen_raft_types::TrustInitializePayload;
  use aspen_raft_types::TrustReconfigurationPayload;
  use aspen_trust::chain::EncryptedSecretChain;
 @@ -98,7 +99,7 @@ impl SharedRedbStorage {
      }
- 
+
      /// Load membership addresses for the given trust epoch.
 -    pub fn load_members(&self, epoch: u64) -> Result<BTreeMap<u64, iroh::EndpointAddr>, SharedStorageError> {
 +    pub fn load_members(&self, epoch: u64) -> Result<BTreeMap<u64, NodeAddress>, SharedStorageError> {
          let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
          let table = read_txn.open_table(TRUST_MEMBERS_TABLE).context(OpenTableSnafu)?;
- 
+
 @@ -113,7 +114,7 @@ impl SharedRedbStorage {
                  && let Ok(node_id) = node_id_str.parse::<u64>()
              {
@@ -1189,16 +1189,16 @@ index 239fdba81..9a18d352a 100644
      Ok(())
  }
 @@ -453,9 +454,9 @@ mod tests {
- 
+
      use super::*;
- 
+
 -    fn endpoint_addr() -> EndpointAddr {
 +    fn node_addr() -> NodeAddress {
          let key = SecretKey::generate(&mut rand::rng());
 -        EndpointAddr::new(key.public())
 +        NodeAddress::new(EndpointAddr::new(key.public()))
      }
- 
+
      #[test]
 @@ -480,7 +481,7 @@ mod tests {
                  (2, aspen_trust::shamir::share_digest(&shares[1])),
@@ -1207,7 +1207,7 @@ index 239fdba81..9a18d352a 100644
 -            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
 +            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
          };
- 
+
          let write_txn = storage.db.begin_write().unwrap();
 @@ -533,7 +534,7 @@ mod tests {
                  (2, aspen_trust::shamir::share_digest(&shares[1])),
@@ -1216,7 +1216,7 @@ index 239fdba81..9a18d352a 100644
 -            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
 +            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
          };
- 
+
          let write_txn = storage.db.begin_write().unwrap();
 @@ -584,7 +585,7 @@ mod tests {
                  (3, aspen_trust::shamir::share_digest(&shares[2])),
@@ -1225,7 +1225,7 @@ index 239fdba81..9a18d352a 100644
 -            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
 +            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
          };
- 
+
          let write_txn = storage.db.begin_write().unwrap();
 @@ -626,7 +627,7 @@ mod tests {
                  (2, aspen_trust::shamir::share_digest(&shares[1])),
@@ -1234,7 +1234,7 @@ index 239fdba81..9a18d352a 100644
 -            members: vec![(1, endpoint_addr()), (2, endpoint_addr()), (3, endpoint_addr())],
 +            members: vec![(1, node_addr()), (2, node_addr()), (3, node_addr())],
          };
- 
+
          let write_txn = storage.db.begin_write().unwrap();
 @@ -672,7 +673,7 @@ mod tests {
                  (2, aspen_trust::shamir::share_digest(&shares[1])),
@@ -1270,7 +1270,7 @@ index dd3ee708e..b553e0c2d 100644
 @@ -31,6 +31,18 @@ pub use aspen_raft_types::RaftMemberInfo;
  pub use aspen_raft_types::TrustInitializePayload;
  pub use aspen_raft_types::TrustReconfigurationPayload;
- 
+
 +#[inline]
 +pub(crate) fn node_address_to_iroh(node_addr: &aspen_core::NodeAddress) -> Result<iroh::EndpointAddr, String> {
 +    node_addr
@@ -1289,7 +1289,7 @@ index dd3ee708e..b553e0c2d 100644
 @@ -147,6 +159,26 @@ mod tests {
          assert_eq!(original, parsed);
      }
- 
+
 +    // =========================================================================
 +    // Address conversion tests
 +    // =========================================================================
@@ -1316,13 +1316,13 @@ index dd3ee708e..b553e0c2d 100644
 @@ -368,8 +400,8 @@ mod tests {
          let endpoint_id: EndpointId = secret_key.public();
          let addr = EndpointAddr::new(endpoint_id);
- 
+
 -        let info = RaftMemberInfo::new(addr.clone());
 -        assert_eq!(info.iroh_addr.id, endpoint_id);
 +        let info = RaftMemberInfo::new(aspen_core::NodeAddress::new(addr.clone()));
 +        assert_eq!(info.endpoint_id(), endpoint_id.to_string());
      }
- 
+
      #[test]
 diff --git a/crates/aspen-raft/src/write_batcher/direct_write.rs b/crates/aspen-raft/src/write_batcher/direct_write.rs
 index eaccf7a78..fee1abb03 100644
@@ -1333,12 +1333,12 @@ index eaccf7a78..fee1abb03 100644
  use aspen_kv_types::WriteResult;
  use tracing::debug;
 +use tracing::warn;
- 
+
  use super::command_conversion::write_command_to_app_request;
  use super::*;
  use crate::types::NodeId;
 +use crate::types::member_endpoint_addr;
- 
+
  struct DirectWriteForwardTarget {
      leader_id: NodeId,
 @@ -24,9 +26,21 @@ impl WriteBatcher {
@@ -1363,7 +1363,7 @@ index eaccf7a78..fee1abb03 100644
 +            leader_addr,
          })
      }
- 
+
 diff --git a/crates/aspen-raft/src/write_batcher/flush.rs b/crates/aspen-raft/src/write_batcher/flush.rs
 index 65f82e1c7..893b4fcde 100644
 --- a/crates/aspen-raft/src/write_batcher/flush.rs
@@ -1379,7 +1379,7 @@ index 65f82e1c7..893b4fcde 100644
 @@ -253,7 +254,20 @@ impl WriteBatcher {
                  command: WriteCommand::Batch { operations: batch_ops },
              };
- 
+
 -            return forwarder.forward_write(NodeId(lid.0), node.iroh_addr.clone(), request).await;
 +            match member_endpoint_addr(node) {
 +                Ok(leader_addr) => {
@@ -1396,7 +1396,7 @@ index 65f82e1c7..893b4fcde 100644
 +                }
 +            }
          }
- 
+
          // No forwarder or no leader info — return NotLeader for client retry
 @@ -261,7 +275,7 @@ impl WriteBatcher {
          warn!(
@@ -1749,7 +1749,7 @@ index f6dd307fe..3e5f583bd 100644
  use tracing::info;
 -#[cfg(not(feature = "ci"))]
  use tracing::warn;
- 
+
  use crate::config::initialize_and_load_config;
 @@ -181,8 +180,17 @@ async fn async_main() -> Result<()> {
                              .membership_config

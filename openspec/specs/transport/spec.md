@@ -193,4 +193,3 @@ ID: transport.transport-neutral-raft-membership-metadata.default-member-metadata
 - **WHEN** test helpers or `openraft` utilities construct `RaftMemberInfo::default()`
 - **THEN** the default endpoint id SHALL remain parseable by runtime membership, relay, and blob-topology helper paths
 - **AND** default metadata SHALL remain deterministic across runs
-

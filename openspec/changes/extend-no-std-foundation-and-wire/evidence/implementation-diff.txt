@@ -10,7 +10,7 @@ index b8247444d..88e0095b2 100644
 -Covers: core.no-std-core-baseline.compile-fail-verification-is-reviewable, core.no-std-core-baseline.compile-slice-verification-is-reviewable, architecture.modularity.alloc-safe-wire-crates-default-to-alloc-safe-production-surfaces.protocol-dependency-verification-is-reviewable, architecture.modularity.alloc-safe-wire-crates-default-to-alloc-safe-production-surfaces.wire-compatibility-verification-is-reviewable
 +Artifact-Type: preflight-transcript
 +Covers: core.no-std-core-baseline.compile-fail-verification-is-reviewable, core.no-std-core-baseline.compile-slice-verification-is-reviewable, core.no-std-core-baseline.shell-alias-path-proof-is-reviewable, architecture.modularity.acyclic-no-std-core-boundary.acyclic-boundary-proof-is-reviewable, architecture.modularity.acyclic-no-std-core-boundary.leaf-crate-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.dependency-boundary-is-checked-deterministically, architecture.modularity.feature-bundles-are-explicit-and-bounded.feature-topology-verification-is-reviewable, architecture.modularity.alloc-safe-wire-crates-default-to-alloc-safe-production-surfaces.protocol-dependency-verification-is-reviewable, architecture.modularity.alloc-safe-wire-crates-default-to-alloc-safe-production-surfaces.wire-compatibility-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.std-compatibility-is-an-explicit-opt-in
- 
+
  OK: openspec/changes/extend-no-std-foundation-and-wire
    tasks: 13 total / 13 checked
 -  changed files listed: 8
@@ -84,9 +84,9 @@ index dc10cfe5f..b3b28c6b8 100644
 --- a/openspec/changes/extend-no-std-foundation-and-wire/verification.md
 +++ b/openspec/changes/extend-no-std-foundation-and-wire/verification.md
 @@ -34,14 +34,9 @@ The `wasm32-unknown-unknown` setup record required by `R1` is indexed in the hea
- 
+
  ## Implementation Evidence
- 
+
 -- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/tasks.md`
  - Changed file: `openspec/changes/extend-no-std-foundation-and-wire/verification.md`
 -- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/verification-plan.md`
@@ -97,20 +97,20 @@ index dc10cfe5f..b3b28c6b8 100644
 -- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/implementation-diff.txt`
 +- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/openspec-preflight.txt`
 +- Changed file: `openspec/changes/extend-no-std-foundation-and-wire/evidence/revalidation-audit.md`
- 
+
  ## Task Coverage
- 
+
 @@ -159,7 +154,7 @@ The `wasm32-unknown-unknown` setup record required by `R1` is indexed in the hea
- 
+
  ## Review Scope Snapshot
- 
+
 -### `git diff HEAD -- openspec/changes/extend-no-std-foundation-and-wire/tasks.md openspec/changes/extend-no-std-foundation-and-wire/verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/verification-plan.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-plan.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-storage-seam-verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-core-foundation-verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-wire-dependency-verification.md`
 +### `git diff HEAD -- openspec/changes/extend-no-std-foundation-and-wire/verification.md openspec/changes/extend-no-std-foundation-and-wire/evidence/openspec-preflight.txt openspec/changes/extend-no-std-foundation-and-wire/evidence/revalidation-audit.md`
- 
+
  - Status: captured after current edits
  - Artifact: `openspec/changes/extend-no-std-foundation-and-wire/evidence/implementation-diff.txt`
 @@ -175,3 +170,4 @@ The `wasm32-unknown-unknown` setup record required by `R1` is indexed in the hea
- 
+
  - Baseline artifacts remain context-only and must not be cited as final proof when reviewing the completed seam.
  - Archived no-std evidence remains historical context only; all final proof for this change is anchored to artifacts under `openspec/changes/extend-no-std-foundation-and-wire/evidence/`.
 +- Current-turn revalidation of the already-checked task set is recorded in `openspec/changes/extend-no-std-foundation-and-wire/evidence/revalidation-audit.md`.

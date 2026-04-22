@@ -214,5 +214,3 @@ running 1 test
 test relay_server::tests::test_extract_endpoint_ids_skips_invalid_member_endpoint_id ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 218 filtered out; finished in 0.00s
-
-

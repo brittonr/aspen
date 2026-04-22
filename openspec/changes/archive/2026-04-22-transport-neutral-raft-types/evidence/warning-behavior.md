@@ -46,4 +46,3 @@ leader_info=None
 test node::warning_tests::test_current_leader_info_warns_and_returns_none_for_invalid_leader_address ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 784 filtered out; finished in 0.00s
-

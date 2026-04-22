@@ -262,4 +262,3 @@
 | `verified::filter_scan_entries` | `always` |
 | `verified::normalize_scan_limit` | `always` |
 | `verified::paginate_entries` | `always` |
-
