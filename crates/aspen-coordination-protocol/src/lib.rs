@@ -538,7 +538,7 @@ mod tests {
 
     /// Helper: postcard roundtrip.
     fn postcard_roundtrip<T: Serialize + for<'de> Deserialize<'de> + std::fmt::Debug>(val: &T) {
-        let bytes = postcard::to_stdvec(val).expect("postcard serialize");
+        let bytes = postcard::to_allocvec(val).expect("postcard serialize");
         let _: T = postcard::from_bytes(&bytes).expect("postcard deserialize");
     }
 

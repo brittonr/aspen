@@ -3,6 +3,11 @@
 //! Request/response types for CRDT document management operations.
 //! These types are only available when the `automerge` feature is enabled.
 
+use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

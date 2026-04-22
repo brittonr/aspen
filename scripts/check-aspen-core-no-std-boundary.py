@@ -59,8 +59,10 @@ DENYLIST_PACKAGES = (
     "iroh",
     "iroh-base",
     "iroh-blobs",
+    "libc",
     "n0-future",
     "rand",
+    "redb",
     "serde_json",
     "tokio",
     "tokio-util",
@@ -250,6 +252,7 @@ def load_allowlist(path: Path) -> list[str]:
 def review_note_path(repo_root: Path, package_name: str) -> Path:
     review_file_name = f"deps-transitive-review-{package_name}.md"
     candidate_paths = [
+        repo_root / "openspec/changes/extend-no-std-foundation-and-wire/evidence" / review_file_name,
         repo_root / "openspec/changes/no-std-aspen-core/evidence" / review_file_name,
         repo_root / "openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence" / review_file_name,
     ]

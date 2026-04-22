@@ -7,7 +7,7 @@ description = "Coordination protocol types for Aspen distributed system"
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
-postcard = { version = "1.0", features = ["alloc", "use-std"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

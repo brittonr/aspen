@@ -3,7 +3,10 @@
 //! Request/response types for Vault-compatible secrets management including
 //! KV secrets engine, Transit encryption, PKI certificates, and Nix cache signing.
 
-use std::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use alloc::collections::BTreeMap;
 
 use serde::Deserialize;
 use serde::Serialize;

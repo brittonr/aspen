@@ -1,23 +1,15 @@
-//! Centralized storage constants and types.
+//! Alloc-safe storage record types.
 //!
-//! This module provides storage-related constants that are shared between
-//! the Raft state machine and other modules (like SQL executor).
-//!
-//! # Motivation
-//!
-//! Previously, `SM_KV_TABLE` and `KvEntry` were defined in `raft/storage_shared.rs`
-//! with duplicates in `sql/stream.rs`, tests, and benchmarks. Centralizing them
-//! here eliminates duplication and ensures consistency.
+//! This crate keeps portable storage data models available to alloc-only
+//! consumers without pulling in a concrete storage engine.
 
-use redb::TableDefinition;
+#![cfg_attr(not(test), no_std)]
+
+extern crate alloc;
+
+use alloc::string::String;
 use serde::Deserialize;
 use serde::Serialize;
-
-/// State machine KV table definition.
-///
-/// This is the Redb table where all key-value data is stored.
-/// Public for direct access by SQL executor and other modules.
-pub const SM_KV_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("sm_kv");
 
 /// Key-value entry stored in the state machine.
 ///
@@ -47,8 +39,6 @@ pub struct KvEntry {
 
 #[cfg(test)]
 mod tests {
-    use redb::TableHandle;
-
     use super::*;
 
     // ============================================================================
@@ -301,13 +291,4 @@ mod tests {
         assert!(debug_str.contains("version"));
     }
 
-    // ============================================================================
-    // SM_KV_TABLE constant test
-    // ============================================================================
-
-    #[test]
-    fn sm_kv_table_name_is_correct() {
-        // Verify the table name is what we expect
-        assert_eq!(SM_KV_TABLE.name(), "sm_kv");
-    }
 }

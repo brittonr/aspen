@@ -3,6 +3,9 @@
 //! Response types for distributed contacts operations including address books,
 //! contacts, groups, and vCard import/export.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

@@ -7,4 +7,6 @@ description = "Forge protocol types for Aspen distributed system"
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+
+[dev-dependencies]
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

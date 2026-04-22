@@ -2,6 +2,11 @@
 //!
 //! Request/response types for time-based resource management with leases.
 
+use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

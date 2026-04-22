@@ -3,6 +3,11 @@
 //! Request/response types for decentralized Git hosting operations including
 //! repositories, blobs, trees, commits, refs, issues, patches, and git bridge.
 
+use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 pub use aspen_forge_protocol::*;
 use serde::Deserialize;
 use serde::Serialize;

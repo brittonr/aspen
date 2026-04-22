@@ -1,9 +1,9 @@
 //! Std shell surface layered on top of alloc-only `aspen-core`.
 //!
-//! This crate keeps runtime-oriented helpers, transport traits, simulation
-//! artifacts, context traits, and layer helpers out of the alloc-only core
-//! package while preserving the familiar `aspen_core::*` public paths for
-//! consumers that intentionally opt into the shell crate.
+//! This crate keeps runtime-oriented helpers, Redb storage helpers, transport
+//! traits, simulation artifacts, context traits, and layer helpers out of the
+//! alloc-only core package while preserving the familiar `aspen_core::*`
+//! public paths for consumers that intentionally opt into the shell crate.
 //!
 //! # Feature Flags
 //!
@@ -55,7 +55,7 @@ pub mod simulation;
 pub use aspen_core::spec;
 #[cfg(feature = "sql")]
 pub use aspen_core::sql;
-pub use aspen_core::storage;
+pub mod storage;
 pub use aspen_core::traits;
 pub mod transport;
 pub use aspen_core::types;

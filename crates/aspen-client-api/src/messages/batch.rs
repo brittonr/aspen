@@ -2,6 +2,9 @@
 //!
 //! Request/response types for atomic multi-key batch read and write operations.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

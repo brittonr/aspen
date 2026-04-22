@@ -3,6 +3,9 @@
 //! Response types for distributed calendar operations including calendars,
 //! events, recurrence expansion, free/busy queries, and iCalendar import/export.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

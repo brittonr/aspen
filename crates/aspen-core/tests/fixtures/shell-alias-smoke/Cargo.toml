@@ -1,0 +1,10 @@
+[package]
+name = "shell-alias-smoke"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-core = { package = "aspen-core-shell", path = "../../../../aspen-core-shell" }

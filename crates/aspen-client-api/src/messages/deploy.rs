@@ -4,6 +4,9 @@
 //! the `ClusterDeploy*` / `NodeUpgrade*` / `NodeRollback*` RPC variants
 //! and the `aspen-deploy` crate's internal state machine.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

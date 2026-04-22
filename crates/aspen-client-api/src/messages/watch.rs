@@ -2,6 +2,9 @@
 //!
 //! Request/response types for real-time key change notification operations.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

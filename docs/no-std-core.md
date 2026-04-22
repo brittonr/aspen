@@ -11,7 +11,7 @@ Goal: keep contracts, pure helpers, request/response types, and verified logic i
 | `aspen-core` | Bare/default dependency. `default = []`. | Alloc-only root exports and alloc-safe module families. |
 | `aspen-core` with `default-features = false` | Explicit alloc-only dependency. | Same surface as bare/default dependency. |
 | `aspen-core --features sql` | Alloc-only plus alloc-safe SQL request/trait surface. | `sql::{SqlColumnInfo, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest, SqlQueryResult, SqlValue, effective_sql_limit, effective_sql_timeout_ms, validate_sql_query, validate_sql_request}` |
-| `aspen-core-shell` | Std shell crate. | Runtime helpers, transport traits, watch/context APIs, simulation artifacts, disk/time helpers, and all alloc-core re-exports. |
+| `aspen-core-shell` | Std shell crate. | Runtime helpers, transport traits, watch/context APIs, simulation artifacts, Redb storage helpers, disk/time helpers, and all alloc-core re-exports. |
 | `aspen-core-shell --features layer` | Layer shell bundle. | `DirectoryLayer`, `Tuple`, `Subspace`, index helpers, and related errors/types. |
 | `aspen-core-shell --features global-discovery` | Global discovery shell bundle. | `ContentDiscovery`, `ContentNodeAddr`, `ContentProviderInfo`. |
 | `aspen-core-shell --features sql,layer` | Shell crate plus alloc-safe SQL plus layer helpers. | Combined alloc SQL surface and shell/layer helpers. |
@@ -20,7 +20,7 @@ Goal: keep contracts, pure helpers, request/response types, and verified logic i
 
 Bare/default `aspen-core` keeps pure contract surface available:
 
-- root export groups: `cluster`, `constants`, `crypto`, `error`, `hlc`, `kv`, `protocol`, `storage`, `traits`, `types`, `vault`
+- root export groups: `cluster`, `constants`, `crypto`, `error`, `hlc`, `kv`, `protocol`, alloc-safe `storage`, `traits`, `types`, `vault`
 - optional alloc-safe root SQL exports behind `feature = "sql"`
 - root verified scan helpers:
   - `build_scan_metadata`
@@ -46,6 +46,7 @@ These paths moved out of `aspen-core` into `aspen-core-shell`:
 - `context::{AspenDocsTicket, DocsEntry, DocsStatus, DocsSyncProvider, EndpointProvider, InMemoryWatchRegistry, KeyOrigin, NetworkFactory, PeerConnectionState, PeerImporter, PeerInfo, PeerManager, ServiceExecutor, ShardTopology, StateMachineProvider, SubscriptionFilter, SyncStatus, WatchInfo, WatchRegistry}`
 - `transport::{BlobAnnouncedCallback, BlobAnnouncedInfo, DiscoveredPeer, DiscoveryHandle, IrohTransportExt, MembershipAddressUpdater, NetworkTransport, PeerDiscoveredCallback, PeerDiscovery, StaleTopologyInfo, TopologyStaleCallback}`
 - `simulation::{SimulationArtifact, SimulationArtifactBuilder, SimulationStatus}`
+- `storage::SM_KV_TABLE` (shell-facing Redb table definition; alloc-only `aspen-core::storage` keeps `KvEntry` only)
 - `utils::{check_disk_space, current_time_ms, current_time_secs, ensure_disk_space_available, DiskSpace, DISK_USAGE_THRESHOLD_PERCENT}`
 - duration convenience constants:
   - `GOSSIP_SUBSCRIBE_TIMEOUT`
@@ -92,6 +93,7 @@ Examples:
 - `AppRegistry`
 - `NetworkTransport`
 - `SimulationArtifact`
+- `storage::SM_KV_TABLE`
 - watch/context runtime helpers
 - duration convenience constants
 - disk/time helpers
@@ -106,6 +108,8 @@ aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell", featu
 ```
 
 That is current workspace pattern for std consumers.
+
+That alias path also preserves `aspen_core::storage::SM_KV_TABLE` for shell users while alloc-only consumers keep `aspen_core::storage::KvEntry` without Redb baggage.
 
 ### If you import layer APIs
 

@@ -2,6 +2,9 @@
 //!
 //! Request/response types for SQL query operations against the state machine.
 
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

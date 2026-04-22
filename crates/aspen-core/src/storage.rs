@@ -1,7 +1,5 @@
-//! Centralized storage constants and types.
+//! Alloc-safe storage record re-exports.
 //!
-//! This module re-exports storage types from aspen-storage-types for backward compatibility.
+//! Shell-only storage-engine helpers live in `aspen-core-shell::storage`.
 
-// Re-export all storage types from aspen-storage-types
 pub use aspen_storage_types::KvEntry;
-pub use aspen_storage_types::SM_KV_TABLE;

@@ -29,6 +29,7 @@ tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 serde_json = "1.0"
 hex = "0.4"
+redb = "2.0.0"
 
 [dev-dependencies]
 postcard = { version = "1.0", features = ["alloc"] }

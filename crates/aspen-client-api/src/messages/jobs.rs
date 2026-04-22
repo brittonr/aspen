@@ -2,6 +2,11 @@
 //!
 //! Request/response types for job scheduling, management, and worker coordination.
 
+use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 pub use aspen_jobs_protocol::*;
 use serde::Deserialize;
 use serde::Serialize;

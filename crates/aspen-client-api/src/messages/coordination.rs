@@ -3,6 +3,9 @@
 //! Re-exports response types from aspen-coordination-protocol and defines
 //! request enums for distributed coordination primitives.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 pub use aspen_coordination_protocol::*;
 use serde::Deserialize;
 use serde::Serialize;

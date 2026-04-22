@@ -35,7 +35,6 @@ SHELL_MODULE_REEXPORTS = {
     'prelude',
     'protocol',
     'spec',
-    'storage',
     'traits',
     'types',
     'vault',
@@ -65,6 +64,7 @@ SHELL_EXPECTED_MODULES = {
     ('context', ALWAYS_GUARD),
     ('layer', SHELL_LAYER_GUARD),
     ('simulation', ALWAYS_GUARD),
+    ('storage', ALWAYS_GUARD),
     ('transport', ALWAYS_GUARD),
     ('utils', ALWAYS_GUARD),
 }
@@ -72,6 +72,7 @@ SHELL_EXPECTED_ROOT_EXPORTS = {
     'app_registry::AppRegistry',
     'context::EndpointProvider',
     'simulation::SimulationArtifact',
+    'storage::SM_KV_TABLE',
     'transport::NetworkTransport',
     'utils::ensure_disk_space_available',
 }
@@ -82,6 +83,10 @@ CORE_REMOVED_PATHS = (
     Path('simulation.rs'),
     Path('transport.rs'),
     Path('utils.rs'),
+)
+CORE_STORAGE_FORBIDDEN_PATTERNS = (
+    'SM_KV_TABLE',
+    'TableDefinition::new',
 )
 
 
@@ -194,8 +199,13 @@ def validate_core(core_dir: Path) -> tuple[list[str], list[str], list[str]]:
         absolute_path = core_dir / removed_path
         if absolute_path.exists():
             errors.append(f'core must not retain shell source path `{absolute_path}`')
+    core_storage_text = (core_dir / 'storage.rs').read_text()
+    for forbidden_pattern in CORE_STORAGE_FORBIDDEN_PATTERNS:
+        if forbidden_pattern in core_storage_text:
+            errors.append(f'core storage.rs must not mention `{forbidden_pattern}`')
     if not errors:
         notes.append('core crate contains only alloc-safe public modules and keeps shell families out of the source tree')
+        notes.append('core storage surface keeps Redb table definitions out of alloc-only exports')
         notes.append('core sql blanket impl stays alloc-safe via `alloc::sync::Arc`')
     inventory_lines = [
         '# Aspen core surface inventory',
@@ -231,6 +241,7 @@ def validate_shell(shell_dir: Path) -> tuple[list[str], list[str], list[str]]:
             errors.append(f'missing shell root export `{export_source}`')
     if not errors:
         notes.append('shell crate owns runtime-only module families and re-exports alloc core modules for existing import paths')
+        notes.append('shell storage module keeps `SM_KV_TABLE` on the shell side while preserving the public path')
         notes.append('layer remains a shell-only opt-in behind `feature = "layer"`')
     inventory_lines = [
         f'- Shell crate dir: `{shell_dir}`',

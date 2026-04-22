@@ -1,0 +1,8 @@
+# Aspen core source audit
+
+PASS core crate contains only alloc-safe public modules and keeps shell families out of the source tree
+PASS core storage surface keeps Redb table definitions out of alloc-only exports
+PASS core sql blanket impl stays alloc-safe via `alloc::sync::Arc`
+PASS shell crate owns runtime-only module families and re-exports alloc core modules for existing import paths
+PASS shell storage module keeps `SM_KV_TABLE` on the shell side while preserving the public path
+PASS layer remains a shell-only opt-in behind `feature = "layer"`

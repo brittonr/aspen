@@ -12,7 +12,7 @@ const COLOR_NEVER: &str = "never";
 const QUIET_FLAG: &str = "--quiet";
 const MANIFEST_FLAG: &str = "--manifest-path";
 const UI_TARGET_DIR_RELATIVE: &str = "target/ui-fixtures";
-const EVIDENCE_DIR_RELATIVE: &str = "openspec/changes/no-std-aspen-core/evidence";
+const EVIDENCE_DIR_RELATIVE: &str = "openspec/changes/extend-no-std-foundation-and-wire/evidence";
 const FIXTURE_INDEX_FILE_NAME: &str = "ui-fixtures.txt";
 const STDERR_FILE_PREFIX: &str = "ui-";
 const STDERR_FILE_SUFFIX: &str = ".stderr";
@@ -33,6 +33,7 @@ const NETWORK_TRANSPORT_EXPECTED: &[&str] = &["no `NetworkTransport` in the root
 const SIMULATION_ARTIFACT_EXPECTED: &[&str] = &["no `SimulationArtifact` in the root"];
 const CONTENT_DISCOVERY_EXPECTED: &[&str] = &["no `ContentDiscovery` in the root"];
 const DIRECTORY_LAYER_EXPECTED: &[&str] = &["no `DirectoryLayer` in the root"];
+const STORAGE_TABLE_EXPECTED: &[&str] = &["no `SM_KV_TABLE` in `storage`"];
 
 const UI_FIXTURES: &[UiFixture] = &[
     UiFixture {
@@ -64,6 +65,12 @@ const UI_FIXTURES: &[UiFixture] = &[
         manifest_relative_path: "crates/aspen-core/tests/ui/directory-layer-std-without-layer/Cargo.toml",
         feature_settings: "package = \"aspen-core-shell\"",
         expected_stderr_substrings: DIRECTORY_LAYER_EXPECTED,
+    },
+    UiFixture {
+        name: "storage-table-no-std",
+        manifest_relative_path: "crates/aspen-core/tests/ui/storage-table-no-std/Cargo.toml",
+        feature_settings: "default-features = false",
+        expected_stderr_substrings: STORAGE_TABLE_EXPECTED,
     },
 ];
 

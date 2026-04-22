@@ -3,6 +3,11 @@
 //! Request/response types for cluster management operations including health checks,
 //! Raft metrics, node info, cluster state, and membership management.
 
+use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

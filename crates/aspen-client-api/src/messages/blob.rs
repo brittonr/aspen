@@ -3,6 +3,11 @@
 //! Request/response types for content-addressed blob storage operations including
 //! add, get, list, protect, delete, download, and replication.
 
+use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

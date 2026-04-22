@@ -7,7 +7,7 @@
 //!
 //! - **Traits**: `ClusterController`, `KeyValueStore`, `SqlQueryExecutor`
 //! - **Types**: `NodeId`, `NodeAddress`, `WriteCommand`, `ReadRequest`, etc.
-//! - **Storage**: `SM_KV_TABLE`, `KvEntry` (centralized storage constants)
+//! - **Storage**: alloc-safe storage record types such as `KvEntry`
 //! - **Constants**: Tiger Style resource limits
 //! - **Verified helpers**: Pure scan helpers and HLC helpers that remain
 //!   alloc-safe and portable
@@ -154,7 +154,6 @@ pub use sql::validate_sql_query;
 pub use sql::validate_sql_request;
 // Storage types
 pub use storage::KvEntry;
-pub use storage::SM_KV_TABLE;
 // Traits
 pub use traits::ClusterController;
 pub use traits::CoordinationBackend;

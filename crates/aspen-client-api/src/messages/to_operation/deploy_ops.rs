@@ -1,3 +1,5 @@
+use alloc::string::ToString;
+
 use aspen_auth::Operation;
 
 use super::super::ClientRpcRequest;

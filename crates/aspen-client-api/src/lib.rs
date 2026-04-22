@@ -31,6 +31,11 @@
 //! let auth_request = AuthenticatedRequest::unauthenticated(request);
 //! ```
 
+#![cfg_attr(not(test), no_std)]
+
+#[macro_use]
+extern crate alloc;
+
 pub mod messages;
 
 // Re-export all public types for convenience
@@ -56,7 +61,7 @@ mod tests {
     }
 
     fn discriminant_of<T: serde::Serialize>(value: &T) -> u32 {
-        let bytes = postcard::to_stdvec(value).expect("serialize discriminant");
+        let bytes = postcard::to_allocvec(value).expect("serialize discriminant");
         decode_varint(&bytes)
     }
 
@@ -103,7 +108,7 @@ mod tests {
             status: None,
             error: None,
         });
-        let bytes = postcard::to_stdvec(&ci_resp).expect("ci serialize");
+        let bytes = postcard::to_allocvec(&ci_resp).expect("ci serialize");
         let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("ci deserialize");
         assert!(matches!(decoded, ClientRpcResponse::CacheMigrationStartResult(_)));
 
@@ -113,7 +118,7 @@ mod tests {
             document_id: Some("doc1".into()),
             error: None,
         });
-        let bytes = postcard::to_stdvec(&am_resp).expect("automerge serialize");
+        let bytes = postcard::to_allocvec(&am_resp).expect("automerge serialize");
         let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("automerge deserialize");
         assert!(matches!(decoded, ClientRpcResponse::AutomergeCreateResult(_)));
 
@@ -124,7 +129,7 @@ mod tests {
             path: "db/password".into(),
             version: None,
         };
-        let bytes = postcard::to_stdvec(&sec_req).expect("secrets serialize");
+        let bytes = postcard::to_allocvec(&sec_req).expect("secrets serialize");
         let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("secrets deserialize");
         assert_eq!(decoded.variant_name(), "SecretsKvRead");
     }
@@ -138,7 +143,7 @@ mod tests {
             repo_id: "bb".repeat(32),
             origin_addr_hint: Some("192.168.1.1:12345".to_string()),
         };
-        let bytes = postcard::to_stdvec(&req).expect("FederationGitListRefs req serialize");
+        let bytes = postcard::to_allocvec(&req).expect("FederationGitListRefs req serialize");
         let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("FederationGitListRefs req deserialize");
         assert_eq!(decoded.variant_name(), "FederationGitListRefs");
 
@@ -150,7 +155,7 @@ mod tests {
             have: vec![],
             origin_addr_hint: None,
         };
-        let bytes = postcard::to_stdvec(&req).expect("FederationGitFetch req serialize");
+        let bytes = postcard::to_allocvec(&req).expect("FederationGitFetch req serialize");
         let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("FederationGitFetch req deserialize");
         assert_eq!(decoded.variant_name(), "FederationGitFetch");
 
@@ -164,7 +169,7 @@ mod tests {
             head: Some("refs/heads/main".to_string()),
             error: None,
         });
-        let bytes = postcard::to_stdvec(&resp).expect("FederationGitListRefs resp serialize");
+        let bytes = postcard::to_allocvec(&resp).expect("FederationGitListRefs resp serialize");
         let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("FederationGitListRefs resp deserialize");
         assert!(matches!(decoded, ClientRpcResponse::FederationGitListRefs(_)));
 
@@ -178,7 +183,7 @@ mod tests {
             total_objects: 0,
             total_chunks: 0,
         });
-        let bytes = postcard::to_stdvec(&resp).expect("FederationGitFetch resp serialize");
+        let bytes = postcard::to_allocvec(&resp).expect("FederationGitFetch resp serialize");
         let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("FederationGitFetch resp deserialize");
         assert!(matches!(decoded, ClientRpcResponse::FederationGitFetch(_)));
     }
@@ -198,7 +203,7 @@ mod tests {
             membership_node_count: Some(3),
             iroh_node_id: None,
         });
-        let first_bytes = postcard::to_stdvec(&first).expect("first serialize");
+        let first_bytes = postcard::to_allocvec(&first).expect("first serialize");
         // The first variant's postcard discriminant should be 0
         assert_eq!(discriminant_of(&first), 0, "Health must be discriminant 0");
 
@@ -211,7 +216,7 @@ mod tests {
             message: "not loaded".into(),
             hints: vec![],
         });
-        let cap_bytes = postcard::to_stdvec(&cap).expect("cap serialize");
+        let cap_bytes = postcard::to_allocvec(&cap).expect("cap serialize");
         let cap_decoded: ClientRpcResponse = postcard::from_bytes(&cap_bytes).expect("cap deserialize");
         assert!(matches!(cap_decoded, ClientRpcResponse::CapabilityUnavailable(_)));
 
@@ -223,7 +228,7 @@ mod tests {
             error: None,
             message: "ok".into(),
         });
-        let last_bytes = postcard::to_stdvec(&last).expect("last serialize");
+        let last_bytes = postcard::to_allocvec(&last).expect("last serialize");
         let last_decoded: ClientRpcResponse = postcard::from_bytes(&last_bytes).expect("last deserialize");
         assert!(matches!(last_decoded, ClientRpcResponse::PluginReloadResult(_)));
     }
@@ -233,7 +238,7 @@ mod tests {
     #[test]
     fn test_error_response_discriminant_is_stable() {
         let err = ClientRpcResponse::error("NOT_LEADER", "try another");
-        let bytes = postcard::to_stdvec(&err).expect("serialize");
+        let bytes = postcard::to_allocvec(&err).expect("serialize");
         // Error is variant index 14 (0-indexed) — if this changes, the
         // CLI's retry loop may break because it deserializes the wrong type.
         // Update this value if you intentionally reorder variants BEFORE Error.
@@ -364,7 +369,7 @@ mod tests {
 
         // Roundtrip test for each
         for (variant, name) in &deploy_variants {
-            let bytes = postcard::to_stdvec(variant).expect("serialize");
+            let bytes = postcard::to_allocvec(variant).expect("serialize");
             let _decoded: ClientRpcResponse =
                 postcard::from_bytes(&bytes).unwrap_or_else(|e| panic!("Failed to deserialize {name}: {e}"));
         }
@@ -422,7 +427,7 @@ mod tests {
 
         // Roundtrip test for each
         for (req, name) in &deploy_requests {
-            let bytes = postcard::to_stdvec(req).expect("serialize");
+            let bytes = postcard::to_allocvec(req).expect("serialize");
             let decoded: ClientRpcRequest =
                 postcard::from_bytes(&bytes).unwrap_or_else(|e| panic!("Failed to deserialize {name}: {e}"));
             assert_eq!(decoded.variant_name(), *name);
@@ -1014,7 +1019,7 @@ fn test_batch_operations_postcard_roundtrip() {
     let req = ClientRpcRequest::BatchRead {
         keys: vec!["k1".into(), "k2".into(), "k3".into()],
     };
-    let bytes = postcard::to_stdvec(&req).expect("serialize BatchRead");
+    let bytes = postcard::to_allocvec(&req).expect("serialize BatchRead");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize BatchRead");
     assert_eq!(decoded.variant_name(), "BatchRead");
 
@@ -1028,7 +1033,7 @@ fn test_batch_operations_postcard_roundtrip() {
             BatchWriteOperation::Delete { key: "k2".into() },
         ],
     };
-    let bytes = postcard::to_stdvec(&req).expect("serialize BatchWrite");
+    let bytes = postcard::to_allocvec(&req).expect("serialize BatchWrite");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize BatchWrite");
     assert_eq!(decoded.variant_name(), "BatchWrite");
 
@@ -1040,7 +1045,7 @@ fn test_batch_operations_postcard_roundtrip() {
             value: vec![3, 4],
         }],
     };
-    let bytes = postcard::to_stdvec(&req).expect("serialize ConditionalBatchWrite");
+    let bytes = postcard::to_allocvec(&req).expect("serialize ConditionalBatchWrite");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize ConditionalBatchWrite");
     assert_eq!(decoded.variant_name(), "ConditionalBatchWrite");
 }
@@ -1053,12 +1058,12 @@ fn test_watch_operations_postcard_roundtrip() {
         start_index: 0,
         should_include_prev_value: true,
     };
-    let bytes = postcard::to_stdvec(&req).expect("serialize WatchCreate");
+    let bytes = postcard::to_allocvec(&req).expect("serialize WatchCreate");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize WatchCreate");
     assert_eq!(decoded.variant_name(), "WatchCreate");
 
     let req = ClientRpcRequest::WatchCancel { watch_id: 123 };
-    let bytes = postcard::to_stdvec(&req).expect("serialize WatchCancel");
+    let bytes = postcard::to_allocvec(&req).expect("serialize WatchCancel");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize WatchCancel");
     assert_eq!(decoded.variant_name(), "WatchCancel");
 }
@@ -1070,12 +1075,12 @@ fn test_lease_operations_postcard_roundtrip() {
         ttl_seconds: 60,
         lease_id: Some(789),
     };
-    let bytes = postcard::to_stdvec(&req).expect("serialize LeaseGrant");
+    let bytes = postcard::to_allocvec(&req).expect("serialize LeaseGrant");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize LeaseGrant");
     assert_eq!(decoded.variant_name(), "LeaseGrant");
 
     let req = ClientRpcRequest::LeaseRevoke { lease_id: 789 };
-    let bytes = postcard::to_stdvec(&req).expect("serialize LeaseRevoke");
+    let bytes = postcard::to_allocvec(&req).expect("serialize LeaseRevoke");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize LeaseRevoke");
     assert_eq!(decoded.variant_name(), "LeaseRevoke");
 }
@@ -1090,19 +1095,19 @@ fn test_coordination_operations_postcard_roundtrip() {
         ttl_ms: 1000,
         timeout_ms: 5000,
     };
-    let bytes = postcard::to_stdvec(&req).expect("serialize LockAcquire");
+    let bytes = postcard::to_allocvec(&req).expect("serialize LockAcquire");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize LockAcquire");
     assert_eq!(decoded.variant_name(), "LockAcquire");
 
     // Counter operations
     let req = ClientRpcRequest::CounterIncrement { key: "cnt".into() };
-    let bytes = postcard::to_stdvec(&req).expect("serialize CounterIncrement");
+    let bytes = postcard::to_allocvec(&req).expect("serialize CounterIncrement");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize CounterIncrement");
     assert_eq!(decoded.variant_name(), "CounterIncrement");
 
     // Sequence operations
     let req = ClientRpcRequest::SequenceNext { key: "seq".into() };
-    let bytes = postcard::to_stdvec(&req).expect("serialize SequenceNext");
+    let bytes = postcard::to_allocvec(&req).expect("serialize SequenceNext");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize SequenceNext");
     assert_eq!(decoded.variant_name(), "SequenceNext");
 }
@@ -1114,12 +1119,12 @@ fn test_blob_operations_postcard_roundtrip() {
         data: vec![1, 2, 3, 4, 5],
         tag: Some("important".into()),
     };
-    let bytes = postcard::to_stdvec(&req).expect("serialize AddBlob");
+    let bytes = postcard::to_allocvec(&req).expect("serialize AddBlob");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize AddBlob");
     assert_eq!(decoded.variant_name(), "AddBlob");
 
     let req = ClientRpcRequest::GetBlob { hash: "a".repeat(64) };
-    let bytes = postcard::to_stdvec(&req).expect("serialize GetBlob");
+    let bytes = postcard::to_allocvec(&req).expect("serialize GetBlob");
     let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize GetBlob");
     assert_eq!(decoded.variant_name(), "GetBlob");
 }
@@ -1156,7 +1161,7 @@ fn test_authenticated_request_with_proxy_hops() {
     assert_eq!(req.request.variant_name(), "Ping");
 
     // Test serialization with proxy hops
-    let bytes = postcard::to_stdvec(&req).expect("serialize with hops");
+    let bytes = postcard::to_allocvec(&req).expect("serialize with hops");
     let decoded: AuthenticatedRequest = postcard::from_bytes(&bytes).expect("deserialize with hops");
     assert_eq!(decoded.proxy_hops, 2);
     assert_eq!(decoded.request.variant_name(), "Ping");
@@ -1175,7 +1180,7 @@ fn test_capability_unavailable_response() {
         }],
     });
 
-    let bytes = postcard::to_stdvec(&resp).expect("serialize");
+    let bytes = postcard::to_allocvec(&resp).expect("serialize");
     let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
 
     match decoded {

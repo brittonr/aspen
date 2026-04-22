@@ -3,6 +3,9 @@
 //! Request/response types for key-value store operations including read, write,
 //! delete, scan, compare-and-swap, and vault operations.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

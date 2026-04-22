@@ -1,5 +1,8 @@
 //! Net service mesh RPC message types.
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

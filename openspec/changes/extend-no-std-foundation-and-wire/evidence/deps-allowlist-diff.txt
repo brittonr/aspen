@@ -1,0 +1,20 @@
+## Direct missing
+- none
+
+## Direct unexpected
+- none
+
+## Transitives unexpected
+- none
+
+## Allowlist entries not in graph
+- none
+
+## Denylist hits
+- none
+
+## Invalid review notes
+- none
+
+## Manifest rule failures
+- none

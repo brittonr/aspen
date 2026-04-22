@@ -13,7 +13,12 @@
 //! All traits have blanket implementations for `Arc<T>` to support easy sharing
 //! across tasks and threads.
 
-use std::sync::Arc;
+#![cfg_attr(not(test), no_std)]
+
+extern crate alloc;
+
+use alloc::boxed::Box;
+use alloc::sync::Arc;
 
 // Re-export types from aspen-cluster-types needed for ClusterController
 pub use aspen_cluster_types::AddLearnerRequest;

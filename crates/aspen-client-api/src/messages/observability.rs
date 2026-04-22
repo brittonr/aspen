@@ -9,6 +9,9 @@
 //! - Timestamps use explicit units: `_us` suffix for microseconds
 //! - No unbounded allocations
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 

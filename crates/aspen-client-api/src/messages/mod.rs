@@ -15,7 +15,10 @@
 //! - Bounded message sizes
 //! - Fail-fast on invalid requests
 
-use std::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use alloc::collections::BTreeMap;
 
 // Sub-modules
 pub mod automerge;

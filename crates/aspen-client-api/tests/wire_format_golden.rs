@@ -37,7 +37,7 @@ fn decode_varint(bytes: &[u8]) -> (u32, usize) {
 
 /// Serialize a value with postcard and return the discriminant varint.
 fn discriminant_of<T: serde::Serialize>(val: &T) -> u32 {
-    let bytes = postcard::to_stdvec(val).expect("postcard serialize");
+    let bytes = postcard::to_allocvec(val).expect("postcard serialize");
     let (disc, _) = decode_varint(&bytes);
     disc
 }

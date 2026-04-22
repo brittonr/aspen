@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use aspen_auth::Operation;
 
 use super::super::ClientRpcRequest;

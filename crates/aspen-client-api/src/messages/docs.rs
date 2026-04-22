@@ -3,6 +3,11 @@
 //! Request/response types for iroh-docs CRDT replication operations including
 //! set, get, delete, list, status, and peer cluster management.
 
+use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 use serde::Deserialize;
 use serde::Serialize;
 
