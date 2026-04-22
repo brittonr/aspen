@@ -248,8 +248,15 @@ def load_allowlist(path: Path) -> list[str]:
 
 
 def review_note_path(repo_root: Path, package_name: str) -> Path:
-    evidence_dir = repo_root / "openspec/changes/no-std-aspen-core/evidence"
-    return evidence_dir / f"deps-transitive-review-{package_name}.md"
+    review_file_name = f"deps-transitive-review-{package_name}.md"
+    candidate_paths = [
+        repo_root / "openspec/changes/no-std-aspen-core/evidence" / review_file_name,
+        repo_root / "openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence" / review_file_name,
+    ]
+    for candidate_path in candidate_paths:
+        if candidate_path.is_file():
+            return candidate_path
+    return candidate_paths[0]
 
 
 def parse_review_note(path: Path) -> dict[str, str]:
