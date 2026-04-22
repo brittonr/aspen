@@ -75,10 +75,13 @@ pub trait ContentDiscovery: Send + Sync {
 mod tests {
     use super::*;
 
+    const TEST_SECRET_KEY_LENGTH_BYTES: usize = 32;
+    const TEST_SECRET_KEY_SEED_BYTE: u8 = 0x11;
+    const TEST_SECRET_KEY_BYTES: [u8; TEST_SECRET_KEY_LENGTH_BYTES] =
+        [TEST_SECRET_KEY_SEED_BYTE; TEST_SECRET_KEY_LENGTH_BYTES];
+
     fn test_public_key() -> iroh::PublicKey {
-        // Generate a deterministic public key for testing
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
-        secret.public()
+        iroh::SecretKey::from(TEST_SECRET_KEY_BYTES).public()
     }
 
     // =========================================================================
