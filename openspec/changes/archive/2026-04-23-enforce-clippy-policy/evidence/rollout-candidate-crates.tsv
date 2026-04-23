@@ -14,7 +14,7 @@ aspen-ci-executor-nix	crates/aspen-ci-executor-nix	crates/aspen-ci-executor-nix/
 aspen-ci-executor-shell	crates/aspen-ci-executor-shell	crates/aspen-ci-executor-shell/src/lib.rs
 aspen-ci-executor-vm	crates/aspen-ci-executor-vm	crates/aspen-ci-executor-vm/src/lib.rs
 aspen-ci-handler	crates/aspen-ci-handler	crates/aspen-ci-handler/src/lib.rs
-aspen-cli	crates/aspen-cli	
+aspen-cli	crates/aspen-cli
 aspen-client	crates/aspen-client	crates/aspen-client/src/lib.rs
 aspen-client-api	crates/aspen-client-api	crates/aspen-client-api/src/lib.rs
 aspen-cluster	crates/aspen-cluster	crates/aspen-cluster/src/lib.rs
