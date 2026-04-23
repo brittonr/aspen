@@ -34,6 +34,11 @@ pub struct RecurrenceExpansionRequest<'a> {
     pub max_instances: u32,
 }
 
+struct ExpansionBounds {
+    current_ms: u64,
+    range_end_ms: u64,
+}
+
 struct ExpansionStopContext<'a> {
     parsed: &'a ParsedRrule,
     seen_instances: u32,
@@ -99,7 +104,7 @@ enum Weekday {
 pub fn expand_rrule(request: RecurrenceExpansionRequest<'_>) -> Result<Vec<RecurrenceInstance>, CalendarError> {
     let max_instances = request.max_instances.min(MAX_INSTANCES_LIMIT);
     let parsed = parse_rrule(request.rrule)?;
-    let mut instances = Vec::with_capacity(usize::try_from(max_instances).unwrap_or(usize::MAX));
+    let mut instances = Vec::with_capacity(saturating_usize_from_u32(max_instances));
     let mut current_ms = request.dtstart_ms;
     let mut seen_instances: u32 = 0;
     let max_iterations = max_instances.saturating_mul(10).min(100_000);
@@ -107,11 +112,17 @@ pub fn expand_rrule(request: RecurrenceExpansionRequest<'_>) -> Result<Vec<Recur
     debug_assert!(max_iterations <= 100_000);
 
     for _ in 0..max_iterations {
-        if should_stop_expansion(current_ms, request.range_end_ms, ExpansionStopContext {
-            parsed: &parsed,
-            seen_instances,
-            max_instances,
-        }) {
+        if should_stop_expansion(
+            ExpansionBounds {
+                current_ms,
+                range_end_ms: request.range_end_ms,
+            },
+            ExpansionStopContext {
+                parsed: &parsed,
+                seen_instances,
+                max_instances,
+            },
+        ) {
             break;
         }
 
@@ -136,14 +147,14 @@ pub fn expand_rrule(request: RecurrenceExpansionRequest<'_>) -> Result<Vec<Recur
     Ok(instances)
 }
 
-fn should_stop_expansion(current_ms: u64, range_end_ms: u64, context: ExpansionStopContext<'_>) -> bool {
+fn should_stop_expansion(bounds: ExpansionBounds, context: ExpansionStopContext<'_>) -> bool {
     debug_assert!(context.max_instances <= MAX_INSTANCES_LIMIT);
     debug_assert!(context.seen_instances <= context.max_instances || context.parsed.count.is_some());
-    if current_ms > range_end_ms || context.seen_instances >= context.max_instances {
+    if bounds.current_ms > bounds.range_end_ms || context.seen_instances >= context.max_instances {
         return true;
     }
     if let Some(until_ms) = context.parsed.until_ms
-        && current_ms > until_ms
+        && bounds.current_ms > until_ms
     {
         return true;
     }
@@ -199,7 +210,7 @@ fn append_candidate_instances(
                 dtstart_ms: candidate_ms,
                 dtend_ms,
             });
-            if instances.len() >= usize::try_from(context.max_instances).unwrap_or(usize::MAX) {
+            if instances.len() >= saturating_usize_from_u32(context.max_instances) {
                 return true;
             }
         }
@@ -359,7 +370,7 @@ fn expand_week_days(week_start_ms: u64, days: &[Weekday]) -> Vec<u64> {
 
 /// Expand BYMONTHDAY within a month starting at `month_start_ms`.
 fn expand_month_days(month_start_ms: u64, days: &[u32]) -> Vec<u64> {
-    let secs = i64::try_from(month_start_ms / MILLIS_PER_SECOND).unwrap_or(i64::MAX);
+    let secs = saturating_i64_from_u64(month_start_ms / MILLIS_PER_SECOND);
     let (_, _, current_day, _, _, _) = unix_secs_to_date(secs);
 
     let mut times = Vec::with_capacity(days.len());
@@ -374,7 +385,7 @@ fn expand_month_days(month_start_ms: u64, days: &[u32]) -> Vec<u64> {
 
 /// Get weekday (0=Mon .. 6=Sun) from Unix ms.
 fn weekday_from_ms(ms: u64) -> Weekday {
-    let elapsed_days = i64::try_from(ms / MILLIS_PER_DAY).unwrap_or(i64::MAX);
+    let elapsed_days = saturating_i64_from_u64(ms / MILLIS_PER_DAY);
     let weekday_index = elapsed_days.saturating_add(3).rem_euclid(7);
     match weekday_index {
         0 => Weekday::Mo,
@@ -437,7 +448,7 @@ fn date_to_unix_ms(parts: DateTimeParts) -> u64 {
     if total_seconds <= 0 {
         0
     } else {
-        u64::try_from(total_seconds).unwrap_or(u64::MAX).saturating_mul(MILLIS_PER_SECOND)
+        saturating_u64_from_i64(total_seconds).saturating_mul(MILLIS_PER_SECOND)
     }
 }
 
@@ -507,11 +518,39 @@ fn saturating_millis_for_days(day_count: u64) -> u64 {
     day_count.saturating_mul(MILLIS_PER_DAY)
 }
 
+fn saturating_usize_from_u32(value: u32) -> usize {
+    match usize::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn saturating_i64_from_u64(value: u64) -> i64 {
+    match i64::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => i64::MAX,
+    }
+}
+
+fn saturating_u64_from_i64(value: i64) -> u64 {
+    if value <= 0 {
+        0
+    } else {
+        match u64::try_from(value) {
+            Ok(converted_value) => converted_value,
+            Err(_) => u64::MAX,
+        }
+    }
+}
+
 fn saturating_u32_from_i64(value: i64) -> u32 {
     if value <= 0 {
         0
     } else {
-        u32::try_from(value).unwrap_or(u32::MAX)
+        match u32::try_from(value) {
+            Ok(converted_value) => converted_value,
+            Err(_) => u32::MAX,
+        }
     }
 }
 
