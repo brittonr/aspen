@@ -92,15 +92,16 @@ pub use event::TtlExpiredPayload;
 mod tests {
     use super::*;
 
+    const _: () = {
+        assert!(constants::MAX_HANDLERS > 0);
+        assert!(constants::MAX_CONCURRENT_HANDLER_EXECUTIONS > 0);
+    };
+
     #[test]
     fn test_public_api_exports() {
         // Verify main types are accessible
         let _: fn() -> HooksConfig = HooksConfig::default;
         let _event_type = HookEventType::WriteCommitted;
-
-        // Verify constants are accessible
-        assert!(constants::MAX_HANDLERS > 0);
-        assert!(constants::MAX_CONCURRENT_HANDLER_EXECUTIONS > 0);
     }
 
     #[test]

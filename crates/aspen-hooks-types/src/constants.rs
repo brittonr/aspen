@@ -103,19 +103,18 @@ const _: () = {
 mod tests {
     use super::*;
 
+    const _: () = {
+        assert!(MAX_SHELL_OUTPUT_SIZE >= 1024);
+        assert!(MAX_SHELL_COMMAND_SIZE >= 256);
+        assert!(MAX_HANDLER_NAME_SIZE >= 16);
+        assert!(MAX_PATTERN_SIZE >= 32);
+    };
+
     #[test]
     fn test_constants_are_reasonable() {
         // Verify timeouts make sense
         assert!(Duration::from_millis(DEFAULT_HANDLER_TIMEOUT_MS) > Duration::from_millis(100));
         assert!(Duration::from_millis(MAX_HANDLER_TIMEOUT_MS) < Duration::from_secs(60));
-
-        // Verify shell limits
-        assert!(MAX_SHELL_OUTPUT_SIZE >= 1024);
-        assert!(MAX_SHELL_COMMAND_SIZE >= 256);
-
-        // Verify handler limits
-        assert!(MAX_HANDLER_NAME_SIZE >= 16);
-        assert!(MAX_PATTERN_SIZE >= 32);
     }
 
     #[test]

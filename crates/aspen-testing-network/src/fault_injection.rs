@@ -678,6 +678,11 @@ impl Drop for FaultScenario {
 mod tests {
     use super::*;
 
+    const _: () = {
+        assert!(MAX_LATENCY_MS > 0);
+        assert!(MAX_PACKET_LOSS_PERCENT <= 100);
+    };
+
     #[test]
     fn test_latency_validation() {
         // Should fail with latency > MAX_LATENCY_MS
@@ -874,10 +879,6 @@ mod tests {
         // Verify the constants are reasonable
         assert_eq!(MAX_LATENCY_MS, 10000);
         assert_eq!(MAX_PACKET_LOSS_PERCENT, 100);
-
-        // Test that constants are used correctly in validation
-        assert!(MAX_LATENCY_MS > 0);
-        assert!(MAX_PACKET_LOSS_PERCENT <= 100);
     }
 
     #[test]
