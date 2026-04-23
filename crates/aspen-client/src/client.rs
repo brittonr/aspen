@@ -258,7 +258,9 @@ impl AspenClient {
             .get(peer_index)
             .or_else(|| self.ticket.bootstrap.first())
             .ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
-        let target_addr = peer.to_endpoint_addr();
+        let target_addr = peer
+            .to_endpoint_addr()
+            .context("cluster ticket contains invalid bootstrap endpoint id")?;
         self.send_to_addr(&target_addr, request).await
     }
 

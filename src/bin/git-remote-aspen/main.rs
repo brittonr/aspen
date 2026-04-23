@@ -369,11 +369,21 @@ impl RemoteHelper {
             let bootstrap_addrs: Vec<EndpointAddr> = match &self.url.target {
                 ConnectionTarget::Ticket(t) => {
                     // Ticket includes direct socket addresses for relay-less connectivity
-                    t.endpoint_addrs()
+                    t.endpoint_addrs().map_err(|error| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            format!("cluster ticket contains invalid bootstrap endpoint id: {error}"),
+                        )
+                    })?
                 }
                 ConnectionTarget::SignedTicket(s) => {
                     // Signed ticket: use endpoint addresses from inner ticket
-                    s.ticket.endpoint_addrs()
+                    s.ticket.endpoint_addrs().map_err(|error| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            format!("cluster ticket contains invalid bootstrap endpoint id: {error}"),
+                        )
+                    })?
                 }
                 ConnectionTarget::NodeId(_) => {
                     return Err(io::Error::new(

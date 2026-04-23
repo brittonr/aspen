@@ -121,7 +121,9 @@ pub fn parse_cluster_ticket_with_id(ticket: &str) -> Result<(Vec<EndpointAddr>, 
     let ticket = AspenClusterTicket::deserialize(ticket)?;
 
     let cluster_id = ticket.cluster_id.clone();
-    let endpoints = ticket.endpoint_addrs();
+    let endpoints = ticket
+        .endpoint_addrs()
+        .context("cluster ticket contains invalid bootstrap endpoint id")?;
 
     if endpoints.is_empty() {
         anyhow::bail!("no bootstrap peers in ticket");

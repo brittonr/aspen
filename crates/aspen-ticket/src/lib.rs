@@ -127,7 +127,7 @@ mod tests {
         ticket.add_bootstrap(peer2).unwrap();
 
         assert_eq!(ticket.bootstrap.len(), 2);
-        let ids = ticket.endpoint_ids();
+        let ids = ticket.endpoint_ids().unwrap();
         assert!(ids.contains(&peer1));
         assert!(ids.contains(&peer2));
     }
@@ -250,7 +250,7 @@ mod tests {
         ticket.add_bootstrap_addr(&endpoint_addr1).unwrap();
         ticket.add_bootstrap_addr(&endpoint_addr2).unwrap();
 
-        let addrs = ticket.endpoint_addrs();
+        let addrs = ticket.endpoint_addrs().unwrap();
 
         assert_eq!(addrs.len(), 2);
         assert!(addrs.iter().any(|a| a.id == endpoint_addr1.id));
@@ -267,7 +267,7 @@ mod tests {
         ticket.add_bootstrap(endpoint_id1).unwrap();
         ticket.add_bootstrap(endpoint_id2).unwrap();
 
-        let ids = ticket.endpoint_ids();
+        let ids = ticket.endpoint_ids().unwrap();
 
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&endpoint_id1));
@@ -312,7 +312,7 @@ mod tests {
             direct_addrs: vec![addr1, addr2],
         };
 
-        let endpoint_addr = peer.to_endpoint_addr();
+        let endpoint_addr = peer.to_endpoint_addr().unwrap();
 
         assert_eq!(endpoint_addr.id, endpoint_id);
         assert_eq!(endpoint_addr.addrs.len(), 2);
@@ -327,7 +327,7 @@ mod tests {
         let original = create_test_endpoint_addr(1, &[addr1, addr2]);
 
         let peer = BootstrapPeer::from_endpoint_addr(&original);
-        let roundtripped = peer.to_endpoint_addr();
+        let roundtripped = peer.to_endpoint_addr().unwrap();
 
         assert_eq!(roundtripped.id, original.id);
         assert_eq!(roundtripped.addrs, original.addrs);
@@ -812,7 +812,7 @@ mod tests {
         assert_eq!(ticket.bootstrap.len(), 2);
 
         // endpoint_ids() uses BTreeSet, so duplicates are merged
-        let ids = ticket.endpoint_ids();
+        let ids = ticket.endpoint_ids().unwrap();
         assert_eq!(ids.len(), 1);
     }
 }

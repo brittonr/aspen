@@ -187,7 +187,7 @@ async fn test_gossip_ticket_handling() -> Result<()> {
     assert_eq!(deserialized.topic_id, topic_id);
     assert_eq!(deserialized.cluster_id, TEST_CLUSTER_COOKIE);
     assert_eq!(deserialized.bootstrap.len(), 1);
-    assert!(deserialized.endpoint_ids().contains(&endpoint_id));
+    assert!(deserialized.endpoint_ids().unwrap().contains(&endpoint_id));
 
     info!("Ticket serialization/deserialization successful");
 

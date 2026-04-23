@@ -51,8 +51,8 @@ fn test_cluster_ticket_roundtrip() {
                 assert_eq!(ticket.bootstrap.len(), roundtripped.bootstrap.len());
 
                 // Verify bootstrap peers match
-                let original_ids = ticket.endpoint_ids();
-                let roundtripped_ids = roundtripped.endpoint_ids();
+                let original_ids = ticket.endpoint_ids().unwrap();
+                let roundtripped_ids = roundtripped.endpoint_ids().unwrap();
                 for peer in &original_ids {
                     assert!(roundtripped_ids.contains(peer), "Missing bootstrap peer after roundtrip");
                 }
@@ -165,7 +165,7 @@ fn test_bootstrap_peer_uniqueness() {
         assert!(ticket.bootstrap.len() <= num_peers);
 
         // endpoint_ids() returns unique IDs via BTreeSet
-        let unique_ids = ticket.endpoint_ids();
+        let unique_ids = ticket.endpoint_ids().unwrap();
         assert!(!unique_ids.is_empty());
     });
 }

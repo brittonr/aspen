@@ -524,8 +524,9 @@ async fn hook_create_url_get_cluster_info(
     let bootstrap_peers: Vec<NodeAddress> = parsed_ticket
         .bootstrap
         .iter()
-        .map(|peer| NodeAddress::new(peer.to_endpoint_addr()))
-        .collect();
+        .map(|peer| peer.to_endpoint_addr().map(NodeAddress::new))
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("cluster ticket contains invalid bootstrap endpoint id")?;
 
     if bootstrap_peers.is_empty() {
         anyhow::bail!("no bootstrap peers available in cluster ticket");

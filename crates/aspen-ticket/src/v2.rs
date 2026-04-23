@@ -458,9 +458,8 @@ mod iroh_runtime {
         }
 
         /// Convert this bootstrap peer into a runtime endpoint address.
-        pub fn to_endpoint_addr(&self) -> EndpointAddr {
+        pub fn to_endpoint_addr(&self) -> ClusterTicketResult<EndpointAddr> {
             self.try_to_endpoint_addr()
-                .expect("BootstrapPeer runtime conversion requires a valid endpoint id")
         }
     }
 
@@ -507,9 +506,8 @@ mod iroh_runtime {
         }
 
         /// Get all runtime endpoint addresses for direct connection.
-        pub fn endpoint_addrs(&self) -> Vec<EndpointAddr> {
+        pub fn endpoint_addrs(&self) -> ClusterTicketResult<Vec<EndpointAddr>> {
             self.try_endpoint_addrs()
-                .expect("AspenClusterTicket runtime conversion requires valid endpoint ids")
         }
 
         /// Get all runtime endpoint identifiers.
@@ -521,9 +519,8 @@ mod iroh_runtime {
         }
 
         /// Get all runtime endpoint identifiers.
-        pub fn endpoint_ids(&self) -> BTreeSet<PublicKey> {
+        pub fn endpoint_ids(&self) -> ClusterTicketResult<BTreeSet<PublicKey>> {
             self.try_endpoint_ids()
-                .expect("AspenClusterTicket runtime conversion requires valid endpoint ids")
         }
     }
 }
@@ -607,9 +604,8 @@ mod test_iroh_runtime {
             Ok(EndpointAddr { id: endpoint_id, addrs })
         }
 
-        pub fn to_endpoint_addr(&self) -> EndpointAddr {
+        pub fn to_endpoint_addr(&self) -> ClusterTicketResult<EndpointAddr> {
             self.try_to_endpoint_addr()
-                .expect("BootstrapPeer runtime conversion requires a valid endpoint id")
         }
     }
 
@@ -650,9 +646,8 @@ mod test_iroh_runtime {
             self.bootstrap.iter().map(BootstrapPeer::try_to_endpoint_addr).collect()
         }
 
-        pub fn endpoint_addrs(&self) -> Vec<EndpointAddr> {
+        pub fn endpoint_addrs(&self) -> ClusterTicketResult<Vec<EndpointAddr>> {
             self.try_endpoint_addrs()
-                .expect("AspenClusterTicket runtime conversion requires valid endpoint ids")
         }
 
         pub fn try_endpoint_ids(&self) -> ClusterTicketResult<BTreeSet<EndpointId>> {
@@ -662,9 +657,8 @@ mod test_iroh_runtime {
                 .collect()
         }
 
-        pub fn endpoint_ids(&self) -> BTreeSet<EndpointId> {
+        pub fn endpoint_ids(&self) -> ClusterTicketResult<BTreeSet<EndpointId>> {
             self.try_endpoint_ids()
-                .expect("AspenClusterTicket runtime conversion requires valid endpoint ids")
         }
     }
 }
