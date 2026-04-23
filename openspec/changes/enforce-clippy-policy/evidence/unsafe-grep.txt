@@ -1,3 +1,0 @@
-crates/aspen-layer/src/lib.rs:59:#![deny(clippy::undocumented_unsafe_blocks)]
----
-crates/aspen-time/src/lib.rs:21:#![deny(clippy::undocumented_unsafe_blocks)]

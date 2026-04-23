@@ -1,1 +1,0 @@
-Scope candidate: root crate + all crates/* package roots; exclude test fixtures/ui harness crates under crates/aspen-core/tests because they are not package roots in rollout scope.
