@@ -156,12 +156,21 @@ pub const MIN_SHARDS: u32 = 1;
 /// initial overhead and future scaling headroom.
 pub const DEFAULT_SHARDS: u32 = 4;
 
-/// Bits reserved for shard ID in the encoded NodeId.
-/// Upper 16 bits for shard, lower 48 bits for physical node ID.
-const SHARD_ID_BITS: u32 = 16;
+/// Bits reserved for the physical node portion of the encoded NodeId.
+/// Upper 16 bits store the shard prefix, lower 48 bits store the physical node ID.
+const PHYSICAL_NODE_BITS: u32 = 48;
+const SHARD_PREFIX_BYTES: usize = 2;
 
 /// Mask for extracting physical node ID from encoded NodeId.
-const PHYSICAL_NODE_MASK: u64 = (1u64 << (64 - SHARD_ID_BITS)) - 1;
+const PHYSICAL_NODE_MASK: u64 = 0x0000_FFFF_FFFF_FFFF;
+
+#[inline]
+fn shard_prefix(encoded_node_id: u64) -> u16 {
+    let node_bytes = encoded_node_id.to_be_bytes();
+    let shard_prefix_bytes = [node_bytes[0], node_bytes[1]];
+    debug_assert_eq!(shard_prefix_bytes.len(), SHARD_PREFIX_BYTES);
+    u16::from_be_bytes(shard_prefix_bytes)
+}
 
 /// Encode a physical node ID and shard ID into a combined NodeId.
 ///
@@ -183,7 +192,7 @@ const PHYSICAL_NODE_MASK: u64 = (1u64 << (64 - SHARD_ID_BITS)) - 1;
 pub fn encode_shard_node_id(physical_node_id: u64, shard_id: ShardId) -> u64 {
     debug_assert!(physical_node_id <= PHYSICAL_NODE_MASK, "Physical node ID exceeds 48-bit limit");
     debug_assert!(shard_id <= MAX_SHARDS, "Shard ID exceeds MAX_SHARDS limit");
-    physical_node_id | ((shard_id as u64) << (64 - SHARD_ID_BITS))
+    physical_node_id | (u64::from(shard_id) << PHYSICAL_NODE_BITS)
 }
 
 /// Decode an encoded NodeId into its physical node ID and shard ID components.
@@ -201,7 +210,7 @@ pub fn encode_shard_node_id(physical_node_id: u64, shard_id: ShardId) -> u64 {
 #[inline]
 pub fn decode_shard_node_id(encoded_node_id: u64) -> (u64, ShardId) {
     let physical_node_id = encoded_node_id & PHYSICAL_NODE_MASK;
-    let shard_id = (encoded_node_id >> (64 - SHARD_ID_BITS)) as ShardId;
+    let shard_id = u32::from(shard_prefix(encoded_node_id));
     (physical_node_id, shard_id)
 }
 
@@ -215,7 +224,7 @@ pub fn is_shard_node(encoded_node_id: u64, shard_id: ShardId) -> bool {
 /// Extract just the shard ID from an encoded NodeId.
 #[inline]
 pub fn get_shard_from_node_id(encoded_node_id: u64) -> ShardId {
-    (encoded_node_id >> (64 - SHARD_ID_BITS)) as ShardId
+    u32::from(shard_prefix(encoded_node_id))
 }
 
 /// Extract just the physical node ID from an encoded NodeId.
