@@ -213,6 +213,11 @@ impl Clone for ShardRouter {
 mod tests {
     use super::*;
 
+    const TEST_ROUTER_SHARD_COUNT: u32 = 4;
+    const DISTRIBUTION_SAMPLE_COUNT: u32 = 10_000;
+    const MIN_EXPECTED_KEYS_PER_SHARD: u32 = 2_000;
+    const MAX_EXPECTED_KEYS_PER_SHARD: u32 = 3_000;
+
     #[test]
     fn test_shard_config_default() {
         let config = ShardConfig::default();
@@ -234,12 +239,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "num_shards must be between")]
     fn test_shard_config_too_many_panics() {
-        ShardConfig::new(MAX_SHARDS + 1);
+        let too_many_shards = MAX_SHARDS.saturating_add(1);
+        ShardConfig::new(too_many_shards);
     }
 
     #[test]
     fn test_router_key_routing() {
-        let router = ShardRouter::new(ShardConfig::new(4));
+        let router = ShardRouter::new(ShardConfig::new(TEST_ROUTER_SHARD_COUNT));
 
         // Same key should always route to same shard
         let shard1 = router.get_shard_for_key("user:123");
@@ -247,23 +253,44 @@ mod tests {
         assert_eq!(shard1, shard2);
 
         // Result should be within bounds
-        assert!(shard1 < 4);
+        assert!(shard1 < TEST_ROUTER_SHARD_COUNT);
     }
 
     #[test]
     fn test_router_distribution() {
-        let router = ShardRouter::new(ShardConfig::new(4));
-        let mut counts = [0u32; 4];
+        let router = ShardRouter::new(ShardConfig::new(TEST_ROUTER_SHARD_COUNT));
+        let shard_bucket_count = match usize::try_from(TEST_ROUTER_SHARD_COUNT) {
+            Ok(count) => count,
+            Err(_) => panic!("test shard count should fit usize"),
+        };
+        let mut counts = vec![0u32; shard_bucket_count];
 
-        for i in 0..10000 {
-            let key = format!("key_{}", i);
+        for sample_index in 0..DISTRIBUTION_SAMPLE_COUNT {
+            let key = format!("key_{}", sample_index);
             let shard = router.get_shard_for_key(&key);
-            counts[shard as usize] += 1;
+            let shard_index = match usize::try_from(shard) {
+                Ok(index) => index,
+                Err(_) => panic!("shard id should fit usize"),
+            };
+            counts[shard_index] = counts[shard_index].saturating_add(1);
         }
 
         // Each shard should have roughly 25% of keys
-        for (i, &count) in counts.iter().enumerate() {
-            assert!(count > 2000 && count < 3000, "Shard {} has {} keys, expected ~2500", i, count);
+        for (shard_index, &count) in counts.iter().enumerate() {
+            assert!(
+                count > MIN_EXPECTED_KEYS_PER_SHARD,
+                "Shard {} has {} keys, expected more than {}",
+                shard_index,
+                count,
+                MIN_EXPECTED_KEYS_PER_SHARD
+            );
+            assert!(
+                count < MAX_EXPECTED_KEYS_PER_SHARD,
+                "Shard {} has {} keys, expected fewer than {}",
+                shard_index,
+                count,
+                MAX_EXPECTED_KEYS_PER_SHARD
+            );
         }
     }
 
