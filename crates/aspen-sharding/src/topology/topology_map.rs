@@ -120,13 +120,20 @@ impl ShardTopology {
     }
 
     /// Get total number of shards (including non-active).
-    pub fn shard_count(&self) -> usize {
-        self.shards.len()
+    pub fn shard_count(&self) -> u32 {
+        match u32::try_from(self.shards.len()) {
+            Ok(shard_count) => shard_count,
+            Err(_) => u32::MAX,
+        }
     }
 
     /// Get the next available shard ID.
     pub fn next_shard_id(&self) -> ShardId {
-        self.shards.keys().max().map(|&id| id + 1).unwrap_or(0)
+        self.shards
+            .keys()
+            .max()
+            .map(|&shard_id| shard_id.saturating_add(1))
+            .unwrap_or(0)
     }
 
     /// Apply a shard split operation.

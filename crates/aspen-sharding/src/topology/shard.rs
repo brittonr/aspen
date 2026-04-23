@@ -6,6 +6,8 @@ use serde::Serialize;
 use super::KeyRange;
 use crate::router::ShardId;
 
+const MILLIS_PER_SECOND: u64 = 1000;
+
 /// Lifecycle state of a shard.
 ///
 /// Shards transition through states during splits and merges:
@@ -103,12 +105,21 @@ impl ShardMetrics {
 
     /// Get queries per second based on current window.
     pub fn qps(&self, current_time_ms: u64) -> u32 {
-        let elapsed_secs = (current_time_ms.saturating_sub(self.window_start_ms)) / 1000;
+        let Some(elapsed_secs) = current_time_ms
+            .saturating_sub(self.window_start_ms)
+            .checked_div(MILLIS_PER_SECOND)
+        else {
+            return 0;
+        };
         if elapsed_secs == 0 {
             return 0;
         }
-        let total_ops = self.read_count + self.write_count;
-        (total_ops / elapsed_secs) as u32
+        let total_ops = self.read_count.saturating_add(self.write_count);
+        let qps_u64 = total_ops / elapsed_secs;
+        match u32::try_from(qps_u64) {
+            Ok(qps) => qps,
+            Err(_) => u32::MAX,
+        }
     }
 
     /// Check if this shard should be split based on thresholds.
@@ -127,14 +138,14 @@ impl ShardMetrics {
     }
 
     /// Record a write operation with size delta.
-    pub fn record_write(&mut self, key_len: usize, value_len: usize, is_delete: bool) {
+    pub fn record_write(&mut self, key_len_bytes: u32, value_len_bytes: u32, is_delete: bool) {
         self.write_count = self.write_count.saturating_add(1);
-        let entry_size = (key_len + value_len) as u64;
+        let entry_size_bytes = u64::from(key_len_bytes).saturating_add(u64::from(value_len_bytes));
         if is_delete {
-            self.size_bytes = self.size_bytes.saturating_sub(entry_size);
+            self.size_bytes = self.size_bytes.saturating_sub(entry_size_bytes);
             self.key_count = self.key_count.saturating_sub(1);
         } else {
-            self.size_bytes = self.size_bytes.saturating_add(entry_size);
+            self.size_bytes = self.size_bytes.saturating_add(entry_size_bytes);
             self.key_count = self.key_count.saturating_add(1);
         }
     }
