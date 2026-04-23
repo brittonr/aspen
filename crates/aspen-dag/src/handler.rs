@@ -73,11 +73,13 @@ impl std::fmt::Debug for DagSyncProtocolHandler {
 impl DagSyncProtocolHandler {
     /// Create a new DAG sync protocol handler with the given request callback.
     pub fn new(on_request: OnRequest) -> Self {
+        let max_connections = match usize::try_from(MAX_DAG_SYNC_CONNECTIONS) {
+            Ok(max_connections) => max_connections,
+            Err(_) => usize::MAX,
+        };
         Self {
             on_request,
-            connection_semaphore: Arc::new(Semaphore::new(
-                usize::try_from(MAX_DAG_SYNC_CONNECTIONS).unwrap_or(usize::MAX),
-            )),
+            connection_semaphore: Arc::new(Semaphore::new(max_connections)),
         }
     }
 
@@ -117,8 +119,12 @@ impl ProtocolHandler for DagSyncProtocolHandler {
             .map_err(|e| AcceptError::from_err(std::io::Error::other(e.to_string())))?;
 
         // Read request with size bound
+        let max_request_size_bytes = match usize::try_from(MAX_DAG_SYNC_REQUEST_SIZE) {
+            Ok(max_request_size_bytes) => max_request_size_bytes,
+            Err(_) => usize::MAX,
+        };
         let request_bytes = recv
-            .read_to_end(usize::try_from(MAX_DAG_SYNC_REQUEST_SIZE).unwrap_or(usize::MAX))
+            .read_to_end(max_request_size_bytes)
             .await
             .map_err(|e| AcceptError::from_err(std::io::Error::other(e.to_string())))?;
 

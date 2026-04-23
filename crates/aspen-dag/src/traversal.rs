@@ -189,10 +189,17 @@ where
             }
 
             // Visited set bound check.
-            let max_visited_set_size = usize::try_from(MAX_VISITED_SET_SIZE).unwrap_or(usize::MAX);
-            if self.visited.len() >= max_visited_set_size {
+            let max_visited_entries = match usize::try_from(MAX_VISITED_SET_SIZE) {
+                Ok(max_visited_entries) => max_visited_entries,
+                Err(_) => usize::MAX,
+            };
+            if self.visited.len() >= max_visited_entries {
+                let visited_entries = match u32::try_from(self.visited.len()) {
+                    Ok(visited_entries) => visited_entries,
+                    Err(_) => u32::MAX,
+                };
                 return Err(TraversalError::VisitedSetExceeded {
-                    size: u32::try_from(self.visited.len()).unwrap_or(u32::MAX),
+                    size: visited_entries,
                     max: MAX_VISITED_SET_SIZE,
                 });
             }
@@ -297,7 +304,10 @@ where
     type Db = T::Db;
 
     async fn next(&mut self) -> TraversalResult<Option<T::Hash>> {
-        let max_skips = usize::try_from(MAX_VISITED_SET_SIZE).unwrap_or(usize::MAX);
+        let max_skips = match usize::try_from(MAX_VISITED_SET_SIZE) {
+            Ok(max_skips) => max_skips,
+            Err(_) => usize::MAX,
+        };
         for _skip_index in 0..max_skips {
             match self.inner.next().await? {
                 Some(hash) if (self.predicate)(&hash) => continue,
