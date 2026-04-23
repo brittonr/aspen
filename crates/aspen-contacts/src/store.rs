@@ -8,6 +8,7 @@
 
 use std::sync::Arc;
 
+use aspen_core::constants::MAX_SCAN_RESULTS;
 use aspen_kv_types::DeleteRequest;
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::ScanRequest;
@@ -35,6 +36,10 @@ const GROUP_PREFIX: &str = "contacts:group:";
 const MAX_LIST_LIMIT: u32 = 1_000;
 /// Default list limit.
 const DEFAULT_LIST_LIMIT: u32 = 100;
+/// Maximum number of paginated scan pages when draining a prefix.
+const MAX_SCAN_PAGE_COUNT: u32 = MAX_SCAN_RESULTS.div_ceil(MAX_LIST_LIMIT);
+
+const _: () = assert!(MAX_LIST_LIMIT <= MAX_SCAN_RESULTS);
 
 /// Contact store backed by a distributed `KeyValueStore`.
 pub struct ContactStore<S: KeyValueStore + ?Sized> {
@@ -64,7 +69,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
             });
         }
 
-        let id = generate_id("book", name);
+        let id = generate_id(GenerateIdInput {
+            prefix: "book",
+            seed: name,
+        });
         let book = ContactBook {
             id: id.clone(),
             name: name.to_string(),
@@ -139,12 +147,12 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
 
     /// List all address books.
     pub async fn list_books(&self, limit: Option<u32>) -> Result<Vec<ContactBook>, ContactsError> {
-        let limit = clamp_limit(limit);
+        let max_results = clamp_limit(limit);
         let scan = self
             .store
             .scan(ScanRequest {
                 prefix: BOOK_PREFIX.to_string(),
-                limit_results: Some(limit),
+                limit_results: Some(max_results),
                 continuation_token: None,
             })
             .await
@@ -179,7 +187,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
             } else {
                 contact.uid.clone()
             };
-            contact.id = generate_id("contact", &seed);
+            contact.id = generate_id(GenerateIdInput {
+                prefix: "contact",
+                seed: &seed,
+            });
         }
         contact.created_at_ms = now_ms;
         contact.updated_at_ms = now_ms;
@@ -241,7 +252,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
     /// Delete a contact by ID.
     pub async fn delete_contact(&self, contact_id: &str) -> Result<(), ContactsError> {
         let contact = self.get_contact(contact_id).await?;
-        let key = contact_key(&contact.book_id, &contact.id);
+        let key = contact_key(ContactKeyInput {
+            book_id: &contact.book_id,
+            contact_id: &contact.id,
+        });
         self.store
             .delete(DeleteRequest::new(&key))
             .await
@@ -257,13 +271,13 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
         limit: Option<u32>,
         continuation_token: Option<&str>,
     ) -> Result<(Vec<Contact>, Option<String>), ContactsError> {
-        let limit = clamp_limit(limit);
+        let max_results = clamp_limit(limit);
         let prefix = format!("{ENTRY_PREFIX}{book_id}:");
         let scan = self
             .store
             .scan(ScanRequest {
                 prefix,
-                limit_results: Some(limit),
+                limit_results: Some(max_results),
                 continuation_token: continuation_token.map(|s| s.to_string()),
             })
             .await
@@ -287,7 +301,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
         book_id: Option<&str>,
         limit: Option<u32>,
     ) -> Result<Vec<Contact>, ContactsError> {
-        let limit = clamp_limit(limit);
+        let max_results = clamp_limit(limit);
         let prefix = match book_id {
             Some(bid) => format!("{ENTRY_PREFIX}{bid}:"),
             None => ENTRY_PREFIX.to_string(),
@@ -304,10 +318,11 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
             .map_err(|e| ContactsError::StorageError { reason: e.to_string() })?;
 
         let query_lower = query.to_lowercase();
-        let mut results = Vec::new();
+        let max_results_count = result_limit_count(max_results)?;
+        let mut results = Vec::with_capacity(max_results_count);
 
         for entry in &scan.entries {
-            if results.len() as u32 >= limit {
+            if results.len() >= max_results_count {
                 break;
             }
             let contact: Contact = serde_json::from_str(&entry.value).map_err(|e| ContactsError::StorageError {
@@ -342,7 +357,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
                 } else {
                     contact.uid.clone()
                 };
-                contact.id = generate_id("contact", &seed);
+                contact.id = generate_id(GenerateIdInput {
+                    prefix: "contact",
+                    seed: &seed,
+                });
             }
             contact.created_at_ms = now_ms;
             contact.updated_at_ms = now_ms;
@@ -352,7 +370,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
         let pairs: Vec<(String, String)> = contacts
             .iter()
             .map(|c| {
-                let key = contact_key(&c.book_id, &c.id);
+                let key = contact_key(ContactKeyInput {
+                    book_id: &c.book_id,
+                    contact_id: &c.id,
+                });
                 let value = serde_json::to_string(c).unwrap_or_default();
                 (key, value)
             })
@@ -410,7 +431,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
             });
         }
 
-        let id = generate_id("group", name);
+        let id = generate_id(GenerateIdInput {
+            prefix: "group",
+            seed: name,
+        });
         let group = ContactGroup {
             id: id.clone(),
             book_id: book_id.to_string(),
@@ -418,7 +442,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
             member_ids,
         };
 
-        let key = group_key(book_id, &id);
+        let key = group_key(GroupKeyInput {
+            book_id,
+            group_id: &id,
+        });
         let value = serde_json::to_string(&group).map_err(|e| ContactsError::StorageError {
             reason: format!("serialize group: {e}"),
         })?;
@@ -435,7 +462,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
     /// Delete a contact group.
     pub async fn delete_group(&self, group_id: &str) -> Result<(), ContactsError> {
         let group = self.find_group(group_id).await?;
-        let key = group_key(&group.book_id, &group.id);
+        let key = group_key(GroupKeyInput {
+            book_id: &group.book_id,
+            group_id: &group.id,
+        });
         self.store
             .delete(DeleteRequest::new(&key))
             .await
@@ -467,7 +497,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
             group.member_ids.push(contact_id.to_string());
         }
 
-        let key = group_key(&group.book_id, &group.id);
+        let key = group_key(GroupKeyInput {
+            book_id: &group.book_id,
+            group_id: &group.id,
+        });
         let value = serde_json::to_string(&group).map_err(|e| ContactsError::StorageError {
             reason: format!("serialize group: {e}"),
         })?;
@@ -484,7 +517,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
         let mut group = self.find_group(group_id).await?;
         group.member_ids.retain(|id| id != contact_id);
 
-        let key = group_key(&group.book_id, &group.id);
+        let key = group_key(GroupKeyInput {
+            book_id: &group.book_id,
+            group_id: &group.id,
+        });
         let value = serde_json::to_string(&group).map_err(|e| ContactsError::StorageError {
             reason: format!("serialize group: {e}"),
         })?;
@@ -502,7 +538,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
 
     /// Write a contact to the KV store.
     async fn write_contact(&self, contact: &Contact) -> Result<(), ContactsError> {
-        let key = contact_key(&contact.book_id, &contact.id);
+        let key = contact_key(ContactKeyInput {
+            book_id: &contact.book_id,
+            contact_id: &contact.id,
+        });
         let value = serde_json::to_string(contact).map_err(|e| ContactsError::StorageError {
             reason: format!("serialize contact: {e}"),
         })?;
@@ -524,10 +563,12 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
 
     /// Scan all entries matching a prefix (paginating through all results).
     async fn scan_all(&self, prefix: &str) -> Result<Vec<aspen_kv_types::KeyValueWithRevision>, ContactsError> {
-        let mut all_entries = Vec::new();
+        let max_scan_page_count = scan_page_count_limit()?;
+        let max_scan_results_count = result_limit_count(MAX_SCAN_RESULTS)?;
+        let mut all_entries = Vec::with_capacity(max_scan_results_count);
         let mut continuation_token = None;
 
-        loop {
+        for _page_index in 0..max_scan_page_count {
             let scan = self
                 .store
                 .scan(ScanRequest {
@@ -539,15 +580,24 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
                 .map_err(|e| ContactsError::StorageError { reason: e.to_string() })?;
 
             all_entries.extend(scan.entries);
+            debug_assert!(
+                all_entries.len() <= max_scan_results_count,
+                "scan_all accumulated {} entries, exceeding MAX_SCAN_RESULTS {}",
+                all_entries.len(),
+                MAX_SCAN_RESULTS
+            );
 
-            if scan.is_truncated {
-                continuation_token = scan.continuation_token;
-            } else {
-                break;
+            if !scan.is_truncated {
+                return Ok(all_entries);
             }
+            continuation_token = scan.continuation_token;
         }
 
-        Ok(all_entries)
+        Err(ContactsError::StorageError {
+            reason: format!(
+                "scan all exceeded page bound of {MAX_SCAN_PAGE_COUNT} for prefix {prefix}"
+            ),
+        })
     }
 
     /// Find a group by ID, scanning all books.
@@ -574,24 +624,40 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
 // ============================================================================
 
 /// Build the KV key for a contact entry.
-fn contact_key(book_id: &str, contact_id: &str) -> String {
-    format!("{ENTRY_PREFIX}{book_id}:{contact_id}")
+struct ContactKeyInput<'a> {
+    book_id: &'a str,
+    contact_id: &'a str,
+}
+
+struct GroupKeyInput<'a> {
+    book_id: &'a str,
+    group_id: &'a str,
+}
+
+struct GenerateIdInput<'a> {
+    prefix: &'a str,
+    seed: &'a str,
+}
+
+/// Build the KV key for a contact entry.
+fn contact_key(input: ContactKeyInput<'_>) -> String {
+    format!("{ENTRY_PREFIX}{}:{}", input.book_id, input.contact_id)
 }
 
 /// Build the KV key for a group.
-fn group_key(book_id: &str, group_id: &str) -> String {
-    format!("{GROUP_PREFIX}{book_id}:{group_id}")
+fn group_key(input: GroupKeyInput<'_>) -> String {
+    format!("{GROUP_PREFIX}{}:{}", input.book_id, input.group_id)
 }
 
 /// Generate a deterministic ID from a seed.
-fn generate_id(prefix: &str, seed: &str) -> String {
+fn generate_id(input: GenerateIdInput<'_>) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hash;
     use std::hash::Hasher;
 
     let mut hasher = DefaultHasher::new();
-    prefix.hash(&mut hasher);
-    seed.hash(&mut hasher);
+    input.prefix.hash(&mut hasher);
+    input.seed.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
 }
 
@@ -600,8 +666,24 @@ fn clamp_limit(limit: Option<u32>) -> u32 {
     limit.unwrap_or(DEFAULT_LIST_LIMIT).min(MAX_LIST_LIMIT)
 }
 
+fn result_limit_count(max_results: u32) -> Result<usize, ContactsError> {
+    usize::try_from(max_results).map_err(|error| ContactsError::StorageError {
+        reason: format!("convert result limit to usize: {error}"),
+    })
+}
+
+fn scan_page_count_limit() -> Result<usize, ContactsError> {
+    usize::try_from(MAX_SCAN_PAGE_COUNT).map_err(|error| ContactsError::StorageError {
+        reason: format!("convert scan page count to usize: {error}"),
+    })
+}
+
 /// Check if a contact matches a search query (name, email, phone substring match).
 fn contact_matches_query(contact: &Contact, query_lower: &str) -> bool {
+    debug_assert!(
+        !query_lower.chars().any(|character| character.is_uppercase()),
+        "search query must be normalized to lowercase before matching"
+    );
     if contact.display_name.to_lowercase().contains(query_lower) {
         return true;
     }
