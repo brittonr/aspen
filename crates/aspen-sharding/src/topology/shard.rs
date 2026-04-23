@@ -115,7 +115,9 @@ impl ShardMetrics {
             return 0;
         }
         let total_ops = self.read_count.saturating_add(self.write_count);
-        let qps_u64 = total_ops / elapsed_secs;
+        let Some(qps_u64) = total_ops.checked_div(elapsed_secs) else {
+            return 0;
+        };
         match u32::try_from(qps_u64) {
             Ok(qps) => qps,
             Err(_) => u32::MAX,
