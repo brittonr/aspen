@@ -64,6 +64,19 @@ impl Default for AutomationConfig {
 ///
 /// Periodically checks shard metrics and triggers topology changes when
 /// thresholds are exceeded. Only the cluster leader performs automation.
+pub struct ShardAutomationDependencies {
+    /// Metrics collector for all shards.
+    metrics: Arc<ShardMetricsCollector>,
+    /// Shard topology for state queries and updates.
+    topology: Arc<RwLock<ShardTopology>>,
+    /// Cluster controller for leader checks.
+    controller: Arc<dyn ClusterController>,
+    /// Node ID for leader comparison.
+    node_id: u64,
+    /// Cancellation token for graceful shutdown.
+    cancel_token: CancellationToken,
+}
+
 pub struct ShardAutomationManager {
     /// Metrics collector for all shards.
     metrics: Arc<ShardMetricsCollector>,
@@ -81,14 +94,14 @@ pub struct ShardAutomationManager {
 
 impl ShardAutomationManager {
     /// Create a new automation manager.
-    pub fn new(
-        metrics: Arc<ShardMetricsCollector>,
-        topology: Arc<RwLock<ShardTopology>>,
-        controller: Arc<dyn ClusterController>,
-        node_id: u64,
-        config: AutomationConfig,
-        cancel_token: CancellationToken,
-    ) -> Self {
+    pub fn new(deps: ShardAutomationDependencies, config: AutomationConfig) -> Self {
+        let ShardAutomationDependencies {
+            metrics,
+            topology,
+            controller,
+            node_id,
+            cancel_token,
+        } = deps;
         Self {
             metrics,
             topology,
@@ -373,8 +386,15 @@ mod tests {
             ..Default::default()
         };
         let cancel_token = CancellationToken::new();
+        let deps = ShardAutomationDependencies {
+            metrics,
+            topology,
+            controller,
+            node_id: 1,
+            cancel_token,
+        };
 
-        ShardAutomationManager::new(metrics, topology, controller, 1, config, cancel_token)
+        ShardAutomationManager::new(deps, config)
     }
 
     #[tokio::test]

@@ -99,6 +99,14 @@ struct LeaveUpdateInput<'a> {
     remaining: u32,
 }
 
+struct EnterJoinInput<'a> {
+    name: &'a str,
+    participant_id: &'a str,
+    required_count: u32,
+    key: &'a str,
+    state: &'a BarrierState,
+}
+
 /// Manager for distributed barrier operations.
 pub struct BarrierManager<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
@@ -148,7 +156,16 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
                         continue;
                     }
                 },
-                Some(state) => match self.enter_join(name, participant_id, required_count, &key, &state).await? {
+                Some(state) => match self
+                    .enter_join(EnterJoinInput {
+                        name,
+                        participant_id,
+                        required_count,
+                        key: &key,
+                        state: &state,
+                    })
+                    .await?
+                {
                     EnterResult::Ready(count) => return Ok((count, BarrierPhase::Ready.as_str().to_string())),
                     EnterResult::Waiting | EnterResult::InLeavingPhase => {
                         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -206,14 +223,14 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
     }
 
     /// Join an existing barrier.
-    async fn enter_join(
-        &self,
-        name: &str,
-        participant_id: &str,
-        required_count: u32,
-        key: &str,
-        state: &BarrierState,
-    ) -> Result<EnterResult> {
+    async fn enter_join(&self, input: EnterJoinInput<'_>) -> Result<EnterResult> {
+        let EnterJoinInput {
+            name,
+            participant_id,
+            required_count,
+            key,
+            state,
+        } = input;
         debug_assert!(
             state.participants.len() as u32 <= state.required_participant_count * 2,
             "BARRIER: participant count ({}) far exceeds required ({})",

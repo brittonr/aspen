@@ -17,6 +17,14 @@ use super::QueueManager;
 use crate::types::now_unix_ms;
 use crate::verified;
 
+struct NackMoveToDlqInput<'a> {
+    name: &'a str,
+    item_id: u64,
+    pending: &'a PendingItem,
+    explicit_reject: bool,
+    error_message: Option<String>,
+}
+
 impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Acknowledge successful processing of an item.
     ///
@@ -73,7 +81,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 && pending.delivery_attempts >= queue_state.max_delivery_attempts);
 
         if should_dlq {
-            self.nack_move_to_dlq(name, item_id, &pending, move_to_dlq, error_message).await?;
+            self.nack_move_to_dlq(NackMoveToDlqInput {
+                name,
+                item_id,
+                pending: &pending,
+                explicit_reject: move_to_dlq,
+                error_message,
+            })
+            .await?;
         } else {
             self.nack_return_to_queue(name, item_id, &pending).await?;
         }
@@ -85,14 +100,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     }
 
     /// Move a nacked item to the dead letter queue.
-    async fn nack_move_to_dlq(
-        &self,
-        name: &str,
-        item_id: u64,
-        pending: &PendingItem,
-        explicit_reject: bool,
-        error_message: Option<String>,
-    ) -> Result<()> {
+    async fn nack_move_to_dlq(&self, input: NackMoveToDlqInput<'_>) -> Result<()> {
+        let NackMoveToDlqInput {
+            name,
+            item_id,
+            pending,
+            explicit_reject,
+            error_message,
+        } = input;
         let reason = if explicit_reject {
             DLQReason::ExplicitlyRejected
         } else {

@@ -34,6 +34,14 @@ enum CasResult<T> {
 /// Returns (writer_seq, reader_seq, timeout_ms) when blocking is needed.
 type BlockingResult = Result<Option<(u64, u64, u32)>>;
 
+pub(super) struct AcquireWriteInnerInput<'a> {
+    key: &'a str,
+    name: &'a str,
+    holder_id: &'a str,
+    ttl_ms: u64,
+    deadline: Option<std::time::Instant>,
+}
+
 impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     /// Acquire a read lock, blocking until available or timeout.
     ///
@@ -253,7 +261,15 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         self.increment_pending_writers(&key, name).await?;
 
         // Try to acquire, cleaning up on failure
-        let result = self.acquire_write_inner(&key, name, holder_id, ttl_ms, deadline).await;
+        let result = self
+            .acquire_write_inner(AcquireWriteInnerInput {
+                key: &key,
+                name,
+                holder_id,
+                ttl_ms,
+                deadline,
+            })
+            .await;
 
         // Decrement pending writers if we failed
         if result.is_err()
@@ -265,14 +281,14 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         result
     }
 
-    pub(super) async fn acquire_write_inner(
-        &self,
-        key: &str,
-        name: &str,
-        holder_id: &str,
-        ttl_ms: u64,
-        deadline: Option<std::time::Instant>,
-    ) -> Result<(u64, u64)> {
+    pub(super) async fn acquire_write_inner(&self, input: AcquireWriteInnerInput<'_>) -> Result<(u64, u64)> {
+        let AcquireWriteInnerInput {
+            key,
+            name,
+            holder_id,
+            ttl_ms,
+            deadline,
+        } = input;
         loop {
             // Check timeout
             if runtime_clock::timeout_elapsed(deadline) {

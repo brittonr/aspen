@@ -28,6 +28,7 @@
 - pueue task environments can inherit `CARGO_INCREMENTAL=1`, which makes Aspen's `sccache` wrapper abort in detached baseline clones/worktrees (`sccache: incremental compilation is prohibited`). Unset `CARGO_INCREMENTAL` before long cargo rails in those captures.
 - In this shell, `env -u CARGO_INCREMENTAL cargo ...` was still not enough for compile/test rails that hit the `sccache` wrapper. Reliable escape hatch was `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo ...'`.
 - If a large targeted Aspen cargo test dies during link with `clang` wrapper text like `printf: write error: No space left on device`, check `/tmp` tmpfs before assuming repo disk is full. Rerun with `TMPDIR=/run/user/$UID/tmp` (or another disk-backed temp dir).
+- I tried to reread `autoresearch.md` on resume, but this repo currently has no such file. For Aspen autoresearch resumes, use `autoresearch.jsonl` plus recent `git log` as the durable context unless the user creates the markdown rules file.
 
 ## Tigerstyle scope (2026-04-21)
 

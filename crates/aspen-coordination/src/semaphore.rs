@@ -40,6 +40,15 @@ enum TryAcquireResult {
 
 /// Parameters for semaphore permit acquisition.
 #[derive(Clone, Copy)]
+struct SemaphoreRefreshRequest<'a> {
+    name: &'a str,
+    holder_id: &'a str,
+    ttl_ms: u64,
+    key: &'a str,
+    state: &'a SemaphoreState,
+}
+
+#[derive(Clone, Copy)]
 pub struct SemaphoreAcquireRequest<'a> {
     /// Semaphore name.
     pub name: &'a str,
@@ -180,7 +189,13 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                     // Check if already holding permits - refresh TTL
                     if state.find_holder(request.holder_id).is_some() {
                         match self
-                            .try_acquire_refresh(request.name, request.holder_id, request.ttl_ms, &key, &state)
+                            .try_acquire_refresh(SemaphoreRefreshRequest {
+                                name: request.name,
+                                holder_id: request.holder_id,
+                                ttl_ms: request.ttl_ms,
+                                key: &key,
+                                state: &state,
+                            })
                             .await?
                         {
                             TryAcquireResult::Success(result) => return Ok(Some(result)),
@@ -245,14 +260,14 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     }
 
     /// Refresh TTL for an existing holder.
-    async fn try_acquire_refresh(
-        &self,
-        name: &str,
-        holder_id: &str,
-        ttl_ms: u64,
-        key: &str,
-        state: &SemaphoreState,
-    ) -> Result<TryAcquireResult> {
+    async fn try_acquire_refresh(&self, request: SemaphoreRefreshRequest<'_>) -> Result<TryAcquireResult> {
+        let SemaphoreRefreshRequest {
+            name,
+            holder_id,
+            ttl_ms,
+            key,
+            state,
+        } = request;
         let holder_permits = state.find_holder(holder_id).map(|h| h.permits).unwrap_or(0);
 
         let mut new_state = state.clone();
