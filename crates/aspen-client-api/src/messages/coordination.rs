@@ -195,8 +195,12 @@ pub enum CoordinationRequest {
     /// Query semaphore status.
     SemaphoreStatus { name: String },
 
-    // RWLock operations
+    // RwLock operations
     /// Acquire read lock (blocking until available or timeout).
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockAcquireRead {
         name: String,
         holder_id: String,
@@ -204,12 +208,20 @@ pub enum CoordinationRequest {
         timeout_ms: u64,
     },
     /// Try to acquire read lock (non-blocking).
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockTryAcquireRead {
         name: String,
         holder_id: String,
         ttl_ms: u64,
     },
     /// Acquire write lock (blocking until available or timeout).
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockAcquireWrite {
         name: String,
         holder_id: String,
@@ -217,20 +229,36 @@ pub enum CoordinationRequest {
         timeout_ms: u64,
     },
     /// Try to acquire write lock (non-blocking).
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockTryAcquireWrite {
         name: String,
         holder_id: String,
         ttl_ms: u64,
     },
     /// Release read lock.
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockReleaseRead { name: String, holder_id: String },
     /// Release write lock.
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockReleaseWrite {
         name: String,
         holder_id: String,
         fencing_token: u64,
     },
     /// Downgrade write lock to read lock.
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockDowngrade {
         name: String,
         holder_id: String,
@@ -238,6 +266,10 @@ pub enum CoordinationRequest {
         ttl_ms: u64,
     },
     /// Query RWLock status.
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "RWLock wire names are append-only API variants shared with existing clients"
+    )]
     RWLockStatus { name: String },
 
     // Queue operations
@@ -298,8 +330,16 @@ pub enum CoordinationRequest {
     /// Get queue status.
     QueueStatus { queue_name: String },
     /// Get items from dead letter queue.
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "DLQ wire names are append-only API variants shared with existing clients"
+    )]
     QueueGetDLQ { queue_name: String, max_items: u32 },
     /// Move DLQ item back to main queue.
+    #[allow(
+        tigerstyle::acronym_style,
+        reason = "DLQ wire names are append-only API variants shared with existing clients"
+    )]
     QueueRedriveDLQ { queue_name: String, item_id: u64 },
 
     // Service registry operations
@@ -538,13 +578,14 @@ mod tests {
     use super::*;
 
     fn assert_canonical_lock_operation(operation_a: Operation, operation_b: Operation) {
-        match (operation_a, operation_b) {
-            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
-                assert_eq!(key_a, "_lock:pipeline:42");
-                assert_eq!(key_a, key_b);
-            }
-            _ => panic!("expected write operations"),
-        }
+        let Operation::Write { key: key_a, .. } = operation_a else {
+            panic!("expected write operation for canonical lock member (left)");
+        };
+        let Operation::Write { key: key_b, .. } = operation_b else {
+            panic!("expected write operation for canonical lock member (right)");
+        };
+        assert_eq!(key_a, "_lock:pipeline:42");
+        assert_eq!(key_a, key_b);
     }
 
     #[test]

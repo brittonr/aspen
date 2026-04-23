@@ -14,6 +14,7 @@ use serde::Serialize;
 /// Secrets domain request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(
+    tigerstyle::unjustified_allow,
     clippy::enum_variant_names,
     reason = "secret wire variants stay domain-prefixed to preserve the established API surface"
 )]
