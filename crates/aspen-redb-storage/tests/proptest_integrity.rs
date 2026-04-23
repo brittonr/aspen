@@ -22,9 +22,9 @@ proptest! {
         term in any::<u64>(),
         entry_bytes in prop::collection::vec(any::<u8>(), 0..1024),
     ) {
-        let hash = compute_entry_hash(&prev_hash, log_index, term, &entry_bytes);
+        let hash = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes: &entry_bytes });
         assert!(
-            verify_entry_hash(&prev_hash, log_index, term, &entry_bytes, &hash),
+            verify_entry_hash(EntryHashVerificationInput { prev_hash: &prev_hash, log_index, term, entry_bytes: &entry_bytes, expected: &hash }),
             "Entry hash must verify against itself"
         );
     }
@@ -38,13 +38,13 @@ proptest! {
         entry_bytes in prop::collection::vec(any::<u8>(), 1..256),
         flip_pos in any::<prop::sample::Index>(),
     ) {
-        let hash = compute_entry_hash(&prev_hash, log_index, term, &entry_bytes);
+        let hash = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes: &entry_bytes });
 
         let mut altered = entry_bytes.clone();
         let pos = flip_pos.index(altered.len());
         altered[pos] ^= 0xFF; // flip all bits at one position
 
-        let altered_hash = compute_entry_hash(&prev_hash, log_index, term, &altered);
+        let altered_hash = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes: &altered });
         assert_ne!(
             hash, altered_hash,
             "Flipping byte at position {} should change the hash",
@@ -60,11 +60,11 @@ proptest! {
         term in any::<u64>(),
         entry_bytes in prop::collection::vec(any::<u8>(), 0..256),
     ) {
-        let hash1 = compute_entry_hash(&prev_hash, log_index, term, &entry_bytes);
+        let hash1 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes: &entry_bytes });
 
         let mut different_prev = prev_hash;
         different_prev[0] ^= 0x01;
-        let hash2 = compute_entry_hash(&different_prev, log_index, term, &entry_bytes);
+        let hash2 = compute_entry_hash(EntryHashInput { prev_hash: &different_prev, log_index, term, entry_bytes: &entry_bytes });
 
         assert_ne!(hash1, hash2, "Different prev_hash should produce different entry hash");
     }
@@ -77,8 +77,13 @@ proptest! {
         term in any::<u64>(),
         entry_bytes in prop::collection::vec(any::<u8>(), 0..256),
     ) {
-        let hash1 = compute_entry_hash(&prev_hash, log_index, term, &entry_bytes);
-        let hash2 = compute_entry_hash(&prev_hash, log_index + 1, term, &entry_bytes);
+        let hash1 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes: &entry_bytes });
+        let hash2 = compute_entry_hash(EntryHashInput {
+            prev_hash: &prev_hash,
+            log_index: log_index.saturating_add(1),
+            term,
+            entry_bytes: &entry_bytes,
+        });
         assert_ne!(hash1, hash2, "Different log_index should produce different hash");
     }
 
@@ -90,8 +95,13 @@ proptest! {
         term in 0u64..u64::MAX,
         entry_bytes in prop::collection::vec(any::<u8>(), 0..256),
     ) {
-        let hash1 = compute_entry_hash(&prev_hash, log_index, term, &entry_bytes);
-        let hash2 = compute_entry_hash(&prev_hash, log_index, term + 1, &entry_bytes);
+        let hash1 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes: &entry_bytes });
+        let hash2 = compute_entry_hash(EntryHashInput {
+            prev_hash: &prev_hash,
+            log_index,
+            term: term.saturating_add(1),
+            entry_bytes: &entry_bytes,
+        });
         assert_ne!(hash1, hash2, "Different term should produce different hash");
     }
 
@@ -101,9 +111,9 @@ proptest! {
         a in prop::array::uniform32(any::<u8>()),
         b in prop::array::uniform32(any::<u8>()),
     ) {
-        let ct_result = constant_time_compare(&a, &b);
-        let eq_result = a == b;
-        assert_eq!(ct_result, eq_result, "constant_time_compare must agree with ==");
+        let is_ct_result = constant_time_compare(&a, &b);
+        let is_eq_result = a == b;
+        assert_eq!(is_ct_result, is_eq_result, "constant_time_compare must agree with ==");
     }
 
     /// Constant-time compare must be reflexive.
@@ -231,9 +241,10 @@ proptest! {
         now_ms in 0u64..u64::MAX / 2,
     ) {
         let result = compute_key_expiration(Some(ttl_seconds), now_ms);
-        assert!(result.is_some());
-        let expires = result.unwrap();
-        assert!(expires > now_ms, "Expiration must be in the future");
+        prop_assert!(result.is_some(), "TTL>0 must yield an expiration timestamp");
+        if let Some(expires_at_ms) = result {
+            assert!(expires_at_ms > now_ms, "Expiration must be in the future");
+        }
     }
 
     /// Lease: created lease is not expired at creation time.
@@ -244,7 +255,7 @@ proptest! {
     ) {
         let lease = create_lease_entry(ttl_seconds, now_ms);
         assert!(
-            !is_lease_expired(lease.expires_at_ms, now_ms),
+            !is_lease_expired(LeaseExpirationInput { expires_at_ms: lease.expires_at_ms, now_ms }),
             "New lease must not be expired at creation time"
         );
     }
@@ -255,9 +266,12 @@ proptest! {
         expires_at_ms in 1u64..u64::MAX,
         now_ms in 1u64..u64::MAX,
     ) {
-        if is_lease_expired(expires_at_ms, now_ms) && now_ms < u64::MAX {
+        if is_lease_expired(LeaseExpirationInput { expires_at_ms, now_ms }) && now_ms < u64::MAX {
             assert!(
-                is_lease_expired(expires_at_ms, now_ms + 1),
+                is_lease_expired(LeaseExpirationInput {
+                    expires_at_ms,
+                    now_ms: now_ms.saturating_add(1),
+                }),
                 "If expired at T, must be expired at T+1"
             );
         }

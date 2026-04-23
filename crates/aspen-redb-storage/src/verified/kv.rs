@@ -208,6 +208,14 @@ pub enum CasValidationError {
 /// - No panics for any input
 /// - Bounded length reporting (u32)
 #[inline]
+fn bounded_u32_len(value: &[u8]) -> u32 {
+    match u32::try_from(value.len()) {
+        Ok(len) => len,
+        Err(_) => u32::MAX,
+    }
+}
+
+#[inline]
 pub fn validate_cas_precondition(
     existing_value: Option<&[u8]>,
     expected_value: &[u8],
@@ -219,8 +227,8 @@ pub fn validate_cas_precondition(
                 Ok(())
             } else {
                 Err(CasValidationError::ValueMismatch {
-                    expected_len: expected_value.len().min(u32::MAX as usize) as u32,
-                    actual_len: actual.len().min(u32::MAX as usize) as u32,
+                    expected_len: bounded_u32_len(expected_value),
+                    actual_len: bounded_u32_len(actual),
                 })
             }
         }
@@ -409,9 +417,15 @@ pub fn compute_lease_refresh(ttl_seconds: u32, now_ms: u64) -> u64 {
 /// assert!(!is_lease_expired(2000, 1000));  // Before expiration
 /// assert!(!is_lease_expired(1000, 1000));  // At exact expiration time (not expired yet)
 /// ```
+#[derive(Debug, Clone, Copy)]
+pub struct LeaseExpirationInput {
+    pub expires_at_ms: u64,
+    pub now_ms: u64,
+}
+
 #[inline]
-pub fn is_lease_expired(expires_at_ms: u64, now_ms: u64) -> bool {
-    now_ms > expires_at_ms
+pub fn is_lease_expired(input: LeaseExpirationInput) -> bool {
+    input.now_ms > input.expires_at_ms
 }
 
 #[cfg(test)]
@@ -501,7 +515,7 @@ mod tests {
     fn test_compute_key_expiration_one_hour() {
         let now_ms = 1704067200000;
         let result = compute_key_expiration(Some(3600), now_ms);
-        assert_eq!(result, Some(now_ms + 3600 * 1000));
+        assert_eq!(result, Some(now_ms.saturating_add(3600 * 1000)));
     }
 
     #[test]
@@ -513,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_compute_key_expiration_overflow_protection() {
-        let now_ms = u64::MAX - 1000;
+        let now_ms = u64::MAX.saturating_sub(1000);
         let result = compute_key_expiration(Some(u32::MAX), now_ms);
         assert_eq!(result, Some(u64::MAX)); // Saturates
     }
@@ -634,7 +648,7 @@ mod tests {
         let lease = create_lease_entry(3600, now_ms);
 
         assert_eq!(lease.ttl_seconds, 3600);
-        assert_eq!(lease.expires_at_ms, now_ms + 3600 * 1000);
+        assert_eq!(lease.expires_at_ms, now_ms.saturating_add(3600 * 1000));
         assert!(lease.keys.is_empty());
     }
 
@@ -668,7 +682,7 @@ mod tests {
 
     #[test]
     fn test_create_lease_entry_overflow_protection() {
-        let now_ms = u64::MAX - 1000;
+        let now_ms = u64::MAX.saturating_sub(1000);
         let lease = create_lease_entry(u32::MAX, now_ms);
 
         assert_eq!(lease.expires_at_ms, u64::MAX); // Saturates
@@ -685,7 +699,7 @@ mod tests {
     fn test_compute_lease_refresh() {
         let now_ms = 1704067200000;
         let new_expires = compute_lease_refresh(3600, now_ms);
-        assert_eq!(new_expires, now_ms + 3600 * 1000);
+        assert_eq!(new_expires, now_ms.saturating_add(3600 * 1000));
     }
 
     #[test]
@@ -697,22 +711,34 @@ mod tests {
 
     #[test]
     fn test_is_lease_expired_true() {
-        assert!(is_lease_expired(1000, 2000));
+        assert!(is_lease_expired(LeaseExpirationInput {
+            expires_at_ms: 1000,
+            now_ms: 2000,
+        }));
     }
 
     #[test]
     fn test_is_lease_expired_false() {
-        assert!(!is_lease_expired(2000, 1000));
+        assert!(!is_lease_expired(LeaseExpirationInput {
+            expires_at_ms: 2000,
+            now_ms: 1000,
+        }));
     }
 
     #[test]
     fn test_is_lease_expired_at_boundary() {
         // At exact expiration time, lease is NOT yet expired
-        assert!(!is_lease_expired(1000, 1000));
+        assert!(!is_lease_expired(LeaseExpirationInput {
+            expires_at_ms: 1000,
+            now_ms: 1000,
+        }));
     }
 
     #[test]
     fn test_is_lease_expired_just_after() {
-        assert!(is_lease_expired(1000, 1001));
+        assert!(is_lease_expired(LeaseExpirationInput {
+            expires_at_ms: 1000,
+            now_ms: 1001,
+        }));
     }
 }

@@ -29,6 +29,8 @@ pub use heuristics::calculate_expires_at_ms;
 pub use integrity::ChainCorruption;
 pub use integrity::ChainHash;
 pub use integrity::ChainTipState;
+pub use integrity::EntryHashInput;
+pub use integrity::EntryHashVerificationInput;
 pub use integrity::GENESIS_HASH;
 pub use integrity::SnapshotIntegrity;
 pub use integrity::compute_entry_hash;
@@ -46,6 +48,7 @@ pub use kv::CasValidationError;
 pub use kv::KvVersions;
 // Lease Entry
 pub use kv::LeaseEntryData;
+pub use kv::LeaseExpirationInput;
 pub use kv::check_cas_condition;
 // TTL Expiration
 pub use kv::compute_key_expiration;

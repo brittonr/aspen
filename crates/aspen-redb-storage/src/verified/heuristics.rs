@@ -62,7 +62,7 @@ mod tests {
         let now_ms = 1704067200000; // Jan 1, 2024 00:00:00 UTC
         let ttl_seconds = 3600; // 1 hour
         let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
-        assert_eq!(expires_at, now_ms + 3600 * 1000);
+        assert_eq!(expires_at, now_ms.saturating_add(3600 * 1000));
     }
 
     #[test]
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_calculate_expires_at_ms_overflow_saturates() {
-        let now_ms = u64::MAX - 1000;
+        let now_ms = u64::MAX.saturating_sub(1000);
         let ttl_seconds = u32::MAX;
         let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
         assert_eq!(expires_at, u64::MAX);

@@ -59,6 +59,9 @@ pub use verified::GENESIS_HASH;
 pub use verified::KvVersions;
 pub use verified::LeaseEntryData;
 pub use verified::SnapshotIntegrity;
+pub use verified::EntryHashInput;
+pub use verified::EntryHashVerificationInput;
+pub use verified::LeaseExpirationInput;
 pub use verified::calculate_expires_at_ms;
 pub use verified::check_cas_condition;
 pub use verified::compute_entry_hash;
@@ -94,9 +97,20 @@ mod tests {
 
     #[test]
     fn test_chain_hash_functions_accessible() {
-        let hash = compute_entry_hash(&GENESIS_HASH, 1, 1, b"test");
+        let hash = compute_entry_hash(EntryHashInput {
+            prev_hash: &GENESIS_HASH,
+            log_index: 1,
+            term: 1,
+            entry_bytes: b"test",
+        });
         assert_ne!(hash, GENESIS_HASH);
-        assert!(verify_entry_hash(&GENESIS_HASH, 1, 1, b"test", &hash));
+        assert!(verify_entry_hash(EntryHashVerificationInput {
+            prev_hash: &GENESIS_HASH,
+            log_index: 1,
+            term: 1,
+            entry_bytes: b"test",
+            expected: &hash,
+        }));
     }
 
     #[test]
@@ -110,9 +124,15 @@ mod tests {
     fn test_lease_functions_accessible() {
         let lease = create_lease_entry(3600, 1000);
         assert_eq!(lease.ttl_seconds, 3600);
-        assert_eq!(lease.expires_at_ms, 1000 + 3600 * 1000);
+        assert_eq!(lease.expires_at_ms, 1000u64.saturating_add(3600 * 1000));
 
-        assert!(!is_lease_expired(lease.expires_at_ms, 1000));
-        assert!(is_lease_expired(lease.expires_at_ms, lease.expires_at_ms + 1));
+        assert!(!is_lease_expired(LeaseExpirationInput {
+            expires_at_ms: lease.expires_at_ms,
+            now_ms: 1000,
+        }));
+        assert!(is_lease_expired(LeaseExpirationInput {
+            expires_at_ms: lease.expires_at_ms,
+            now_ms: lease.expires_at_ms.saturating_add(1),
+        }));
     }
 }

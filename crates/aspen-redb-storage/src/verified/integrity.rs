@@ -71,7 +71,21 @@ pub const GENESIS_HASH: ChainHash = [0u8; 32];
 /// - Deterministic: same inputs always produce same hash
 /// - No allocations after initial hasher creation
 /// - Fixed output size (32 bytes)
-pub fn compute_entry_hash(prev_hash: &ChainHash, log_index: u64, term: u64, entry_bytes: &[u8]) -> ChainHash {
+#[derive(Debug, Clone, Copy)]
+pub struct EntryHashInput<'a> {
+    pub prev_hash: &'a ChainHash,
+    pub log_index: u64,
+    pub term: u64,
+    pub entry_bytes: &'a [u8],
+}
+
+pub fn compute_entry_hash(input: EntryHashInput<'_>) -> ChainHash {
+    let EntryHashInput {
+        prev_hash,
+        log_index,
+        term,
+        entry_bytes,
+    } = input;
     let mut hasher = blake3::Hasher::new();
 
     // Include previous hash (chain linkage)
@@ -103,15 +117,23 @@ pub fn compute_entry_hash(prev_hash: &ChainHash, log_index: u64, term: u64, entr
 /// # Returns
 ///
 /// `true` if the computed hash matches the expected hash, `false` otherwise.
-pub fn verify_entry_hash(
-    prev_hash: &ChainHash,
-    log_index: u64,
-    term: u64,
-    entry_bytes: &[u8],
-    expected: &ChainHash,
-) -> bool {
-    let computed = compute_entry_hash(prev_hash, log_index, term, entry_bytes);
-    constant_time_compare(&computed, expected)
+#[derive(Debug, Clone, Copy)]
+pub struct EntryHashVerificationInput<'a> {
+    pub prev_hash: &'a ChainHash,
+    pub log_index: u64,
+    pub term: u64,
+    pub entry_bytes: &'a [u8],
+    pub expected: &'a ChainHash,
+}
+
+pub fn verify_entry_hash(input: EntryHashVerificationInput<'_>) -> bool {
+    let computed = compute_entry_hash(EntryHashInput {
+        prev_hash: input.prev_hash,
+        log_index: input.log_index,
+        term: input.term,
+        entry_bytes: input.entry_bytes,
+    });
+    constant_time_compare(&computed, input.expected)
 }
 
 /// Constant-time comparison of two hashes.
@@ -237,12 +259,12 @@ impl SnapshotIntegrity {
         let data_hash = *blake3::hash(data).as_bytes();
         let meta_hash = *blake3::hash(meta_bytes).as_bytes();
 
-        let basic_valid =
+        let is_basic_valid =
             constant_time_compare(&self.data_hash, &data_hash) && constant_time_compare(&self.meta_hash, &meta_hash);
 
         match expected_chain_hash {
-            Some(expected) => basic_valid && constant_time_compare(&self.chain_hash_at_snapshot, expected),
-            None => basic_valid,
+            Some(expected) => is_basic_valid && constant_time_compare(&self.chain_hash_at_snapshot, expected),
+            None => is_basic_valid,
         }
     }
 
@@ -315,8 +337,8 @@ mod tests {
         let term = 1;
         let entry_bytes = b"test entry";
 
-        let hash1 = compute_entry_hash(&prev_hash, log_index, term, entry_bytes);
-        let hash2 = compute_entry_hash(&prev_hash, log_index, term, entry_bytes);
+        let hash1 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes });
+        let hash2 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes });
 
         assert_eq!(hash1, hash2);
     }
@@ -327,8 +349,8 @@ mod tests {
         let term = 1;
         let entry_bytes = b"test entry";
 
-        let hash1 = compute_entry_hash(&prev_hash, 1, term, entry_bytes);
-        let hash2 = compute_entry_hash(&prev_hash, 2, term, entry_bytes);
+        let hash1 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index: 1, term, entry_bytes });
+        let hash2 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index: 2, term, entry_bytes });
 
         assert_ne!(hash1, hash2);
     }
@@ -340,8 +362,8 @@ mod tests {
         let term = 1;
         let entry_bytes = b"test entry";
 
-        let hash = compute_entry_hash(&prev_hash, log_index, term, entry_bytes);
-        assert!(verify_entry_hash(&prev_hash, log_index, term, entry_bytes, &hash));
+        let hash = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes });
+        assert!(verify_entry_hash(EntryHashVerificationInput { prev_hash: &prev_hash, log_index, term, entry_bytes, expected: &hash }));
     }
 
     #[test]
@@ -352,7 +374,7 @@ mod tests {
         let entry_bytes = b"test entry";
         let wrong_hash = [1u8; 32];
 
-        assert!(!verify_entry_hash(&prev_hash, log_index, term, entry_bytes, &wrong_hash));
+        assert!(!verify_entry_hash(EntryHashVerificationInput { prev_hash: &prev_hash, log_index, term, entry_bytes, expected: &wrong_hash }));
     }
 
     #[test]
