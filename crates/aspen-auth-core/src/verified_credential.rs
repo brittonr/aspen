@@ -9,6 +9,31 @@ use alloc::vec::Vec;
 use crate::capability::Capability;
 use crate::constants::MAX_DELEGATION_DEPTH;
 
+/// Fraction denominator for the refresh threshold (20% remaining lifetime).
+const REFRESH_THRESHOLD_DIVISOR: u64 = 5;
+
+/// Inputs for token-expiration checks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TokenExpiryInput {
+    /// Token expiration time in seconds since epoch.
+    pub expires_at_secs: u64,
+    /// Current time in seconds since epoch.
+    pub now_secs: u64,
+    /// Allowed clock skew tolerance in seconds.
+    pub clock_skew_tolerance_secs: u64,
+}
+
+/// Inputs for token-refresh checks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RefreshCheckInput {
+    /// Token issue time in seconds since epoch.
+    pub issued_at_secs: u64,
+    /// Token expiration time in seconds since epoch.
+    pub expires_at_secs: u64,
+    /// Current time in seconds since epoch.
+    pub now_secs: u64,
+}
+
 /// Check if a delegation chain is valid structurally.
 ///
 /// Verifies:
@@ -31,7 +56,6 @@ pub fn is_credential_chain_valid(
     proof_caps: &[Vec<Capability>],
     proof_has_delegate: &[bool],
 ) -> bool {
-    // Chain length check
     if leaf_depth > MAX_DELEGATION_DEPTH {
         return false;
     }
@@ -39,23 +63,23 @@ pub fn is_credential_chain_valid(
         return false;
     }
 
-    // Check each level attenuates
-    // The leaf's capabilities must be a subset of proof[0]'s capabilities
-    // proof[0]'s capabilities must be a subset of proof[1]'s, etc.
-    let mut child_caps = leaf_caps;
+    debug_assert!(leaf_depth <= MAX_DELEGATION_DEPTH);
+    debug_assert_eq!(proof_caps.len(), proof_has_delegate.len());
 
-    for (i, parent_caps) in proof_caps.iter().enumerate() {
-        // Parent must have Delegate capability
-        if !proof_has_delegate[i] {
+    let mut child_caps = leaf_caps;
+    for (parent_caps, has_delegate) in proof_caps.iter().zip(proof_has_delegate.iter().copied()) {
+        if !has_delegate {
             return false;
         }
+        debug_assert!(has_delegate);
 
-        // Each child capability must be contained by some parent capability
-        for child_cap in child_caps {
-            if !parent_caps.iter().any(|pc| pc.contains(child_cap)) {
-                return false;
-            }
+        let is_parent_capability_superset = child_caps
+            .iter()
+            .all(|child_cap| parent_caps.iter().any(|parent_cap| parent_cap.contains(child_cap)));
+        if !is_parent_capability_superset {
+            return false;
         }
+        debug_assert!(is_parent_capability_superset);
 
         child_caps = parent_caps;
     }
@@ -79,22 +103,38 @@ pub fn credential_authorized_for_prefix(caps: &[Capability], prefix: &str) -> bo
 ///
 /// Accounts for clock skew tolerance.
 #[inline]
-pub fn is_token_expired(expires_at: u64, now_secs: u64, clock_skew_tolerance: u64) -> bool {
-    expires_at.saturating_add(clock_skew_tolerance) < now_secs
+pub fn is_token_expired(input: TokenExpiryInput) -> bool {
+    input
+        .expires_at_secs
+        .saturating_add(input.clock_skew_tolerance_secs)
+        < input.now_secs
 }
 
 /// Check if a token needs refresh (within 20% of remaining lifetime).
 #[inline]
-pub fn needs_refresh(issued_at: u64, expires_at: u64, now_secs: u64) -> bool {
-    let total_lifetime = expires_at.saturating_sub(issued_at);
-    let threshold = total_lifetime / 5; // 20%
-    let remaining = expires_at.saturating_sub(now_secs);
-    remaining <= threshold
+pub fn needs_refresh(input: RefreshCheckInput) -> bool {
+    let total_lifetime_secs = input.expires_at_secs.saturating_sub(input.issued_at_secs);
+    let threshold_secs = total_lifetime_secs / REFRESH_THRESHOLD_DIVISOR;
+    let remaining_secs = input.expires_at_secs.saturating_sub(input.now_secs);
+    remaining_secs <= threshold_secs
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SINGLE_LEVEL_DEPTH: u8 = 1;
+    const ONE_LEVEL_PAST_MAX_DEPTH: u8 = MAX_DELEGATION_DEPTH.saturating_add(1);
+    const BASE_EXPIRES_AT_SECS: u64 = 100;
+    const EXPIRED_NOW_SECS: u64 = 200;
+    const NON_EXPIRED_NOW_SECS: u64 = 150;
+    const ZERO_SKEW_TOLERANCE_SECS: u64 = 0;
+    const DEFAULT_CLOCK_SKEW_TOLERANCE_SECS: u64 = 60;
+    const REFRESH_ISSUED_AT_SECS: u64 = 0;
+    const REFRESH_EXPIRES_AT_SECS: u64 = 100;
+    const REFRESH_NOT_NEEDED_NOW_SECS: u64 = 70;
+    const REFRESH_THRESHOLD_NOW_SECS: u64 = 80;
+    const REFRESH_NEEDED_NOW_SECS: u64 = 85;
 
     #[test]
     fn test_valid_chain_single_level() {
@@ -103,7 +143,12 @@ mod tests {
             prefix: "data:sub:".into(),
         }];
 
-        assert!(is_credential_chain_valid(&leaf_caps, 1, &[parent_caps], &[true],));
+        assert!(is_credential_chain_valid(
+            &leaf_caps,
+            SINGLE_LEVEL_DEPTH,
+            &[parent_caps],
+            &[true],
+        ));
     }
 
     #[test]
@@ -115,9 +160,9 @@ mod tests {
 
         assert!(!is_credential_chain_valid(
             &leaf_caps,
-            1,
+            SINGLE_LEVEL_DEPTH,
             &[parent_caps],
-            &[false], // No Delegate
+            &[false],
         ));
     }
 
@@ -126,12 +171,22 @@ mod tests {
         let parent_caps = vec![Capability::Read { prefix: "data:".into() }, Capability::Delegate];
         let leaf_caps = vec![Capability::Write { prefix: "data:".into() }];
 
-        assert!(!is_credential_chain_valid(&leaf_caps, 1, &[parent_caps], &[true],));
+        assert!(!is_credential_chain_valid(
+            &leaf_caps,
+            SINGLE_LEVEL_DEPTH,
+            &[parent_caps],
+            &[true],
+        ));
     }
 
     #[test]
     fn test_invalid_chain_too_deep() {
-        assert!(!is_credential_chain_valid(&[], MAX_DELEGATION_DEPTH + 1, &[], &[],));
+        assert!(!is_credential_chain_valid(
+            &[],
+            ONE_LEVEL_PAST_MAX_DEPTH,
+            &[],
+            &[],
+        ));
     }
 
     #[test]
@@ -154,18 +209,39 @@ mod tests {
 
     #[test]
     fn test_is_token_expired() {
-        assert!(is_token_expired(100, 200, 60)); // 100 + 60 = 160 < 200
-        assert!(!is_token_expired(100, 150, 60)); // 100 + 60 = 160 >= 150
-        assert!(!is_token_expired(100, 100, 0)); // 100 >= 100
+        assert!(is_token_expired(TokenExpiryInput {
+            expires_at_secs: BASE_EXPIRES_AT_SECS,
+            now_secs: EXPIRED_NOW_SECS,
+            clock_skew_tolerance_secs: DEFAULT_CLOCK_SKEW_TOLERANCE_SECS,
+        }));
+        assert!(!is_token_expired(TokenExpiryInput {
+            expires_at_secs: BASE_EXPIRES_AT_SECS,
+            now_secs: NON_EXPIRED_NOW_SECS,
+            clock_skew_tolerance_secs: DEFAULT_CLOCK_SKEW_TOLERANCE_SECS,
+        }));
+        assert!(!is_token_expired(TokenExpiryInput {
+            expires_at_secs: BASE_EXPIRES_AT_SECS,
+            now_secs: BASE_EXPIRES_AT_SECS,
+            clock_skew_tolerance_secs: ZERO_SKEW_TOLERANCE_SECS,
+        }));
     }
 
     #[test]
     fn test_needs_refresh() {
-        // Token issued at 0, expires at 100, now at 85 → remaining 15, threshold 20
-        assert!(needs_refresh(0, 100, 85));
-        // Token issued at 0, expires at 100, now at 70 → remaining 30, threshold 20
-        assert!(!needs_refresh(0, 100, 70));
-        // Token issued at 0, expires at 100, now at 80 → remaining 20, threshold 20
-        assert!(needs_refresh(0, 100, 80));
+        assert!(needs_refresh(RefreshCheckInput {
+            issued_at_secs: REFRESH_ISSUED_AT_SECS,
+            expires_at_secs: REFRESH_EXPIRES_AT_SECS,
+            now_secs: REFRESH_NEEDED_NOW_SECS,
+        }));
+        assert!(!needs_refresh(RefreshCheckInput {
+            issued_at_secs: REFRESH_ISSUED_AT_SECS,
+            expires_at_secs: REFRESH_EXPIRES_AT_SECS,
+            now_secs: REFRESH_NOT_NEEDED_NOW_SECS,
+        }));
+        assert!(needs_refresh(RefreshCheckInput {
+            issued_at_secs: REFRESH_ISSUED_AT_SECS,
+            expires_at_secs: REFRESH_EXPIRES_AT_SECS,
+            now_secs: REFRESH_THRESHOLD_NOW_SECS,
+        }));
     }
 }

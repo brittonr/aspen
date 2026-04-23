@@ -34,6 +34,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sha2::Sha256;
 
+use crate::verified_auth::ChallengeValidityInput;
 use crate::verified_auth::constant_time_compare;
 use crate::verified_auth::derive_hmac_key;
 use crate::verified_auth::is_challenge_valid;
@@ -214,7 +215,11 @@ impl AuthContext {
     pub fn verify_response(&self, challenge: &AuthChallenge, response: &AuthResponse) -> AuthResult {
         // Check timestamp freshness using pure function
         let now = current_time_ms();
-        if !is_challenge_valid(challenge.timestamp_ms, now, AUTH_CHALLENGE_MAX_AGE_SECS) {
+        if !is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: challenge.timestamp_ms,
+            current_time_ms: now,
+            max_age_secs: AUTH_CHALLENGE_MAX_AGE_SECS,
+        }) {
             return AuthResult::ChallengeExpired;
         }
 

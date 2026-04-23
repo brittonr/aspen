@@ -280,11 +280,23 @@ fn test_verified_refresh_timing() {
     let expires = 86400u64;
 
     // At 50% — no refresh needed
-    assert!(!needs_refresh(issued, expires, 43200));
+    assert!(!needs_refresh(RefreshCheckInput {
+        issued_at_secs: issued,
+        expires_at_secs: expires,
+        now_secs: 43_200,
+    }));
     // At 80% — within refresh window
-    assert!(needs_refresh(issued, expires, 69120));
+    assert!(needs_refresh(RefreshCheckInput {
+        issued_at_secs: issued,
+        expires_at_secs: expires,
+        now_secs: 69_120,
+    }));
     // At 95% — definitely needs refresh
-    assert!(needs_refresh(issued, expires, 82080));
+    assert!(needs_refresh(RefreshCheckInput {
+        issued_at_secs: issued,
+        expires_at_secs: expires,
+        now_secs: 82_080,
+    }));
 }
 
 // =========================================================================

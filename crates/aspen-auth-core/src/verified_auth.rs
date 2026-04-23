@@ -11,13 +11,36 @@
 //!
 //! - Fixed iteration count for constant-time comparison
 //! - No early exit on mismatch (timing attack prevention)
-//! - Explicit types for all parameters
+//! - Explicit parameter structs for time-related helpers
 
 /// Size of authentication nonces (32 bytes = 256 bits).
 pub const AUTH_NONCE_SIZE: usize = 32;
 
 /// Maximum age of a valid challenge in seconds.
 pub const AUTH_CHALLENGE_MAX_AGE_SECS: u64 = 60;
+
+/// Number of milliseconds in one second.
+pub const MILLISECONDS_PER_SECOND: u64 = 1_000;
+
+/// Inputs for challenge validity checks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChallengeValidityInput {
+    /// When the challenge was created (ms since epoch).
+    pub challenge_timestamp_ms: u64,
+    /// Current time (ms since epoch).
+    pub current_time_ms: u64,
+    /// Maximum allowed age in seconds.
+    pub max_age_secs: u64,
+}
+
+/// Inputs for challenge age calculations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChallengeAgeInput {
+    /// When the challenge was created (ms since epoch).
+    pub challenge_timestamp_ms: u64,
+    /// Current time (ms since epoch).
+    pub current_time_ms: u64,
+}
 
 /// Constant-time comparison of two 32-byte arrays.
 ///
@@ -39,12 +62,6 @@ pub fn constant_time_compare(a: &[u8; 32], b: &[u8; 32]) -> bool {
 /// Challenges have a maximum age to prevent replay attacks. This function
 /// checks if the challenge is still within the validity window.
 ///
-/// # Arguments
-///
-/// * `challenge_timestamp_ms` - When the challenge was created (ms since epoch)
-/// * `current_time_ms` - Current time (ms since epoch)
-/// * `max_age_secs` - Maximum allowed age in seconds
-///
 /// # Returns
 ///
 /// `true` if the challenge is still valid, `false` if expired.
@@ -57,27 +74,34 @@ pub fn constant_time_compare(a: &[u8; 32], b: &[u8; 32]) -> bool {
 /// # Example
 ///
 /// ```rust
+/// use aspen_auth_core::verified_auth::ChallengeValidityInput;
 /// use aspen_auth_core::verified_auth::is_challenge_valid;
 ///
-/// let challenge_time = 1000000;
-/// let now = 1030000; // 30 seconds later
+/// let challenge_time_ms = 1_000_000;
+/// let current_time_ms = 1_030_000;
 ///
-/// assert!(is_challenge_valid(challenge_time, now, 60));  // 30s < 60s
-/// assert!(!is_challenge_valid(challenge_time, now, 20)); // 30s > 20s
+/// assert!(is_challenge_valid(ChallengeValidityInput {
+///     challenge_timestamp_ms: challenge_time_ms,
+///     current_time_ms,
+///     max_age_secs: 60,
+/// }));
+/// assert!(!is_challenge_valid(ChallengeValidityInput {
+///     challenge_timestamp_ms: challenge_time_ms,
+///     current_time_ms,
+///     max_age_secs: 20,
+/// }));
 /// ```
 #[inline]
-pub const fn is_challenge_valid(challenge_timestamp_ms: u64, current_time_ms: u64, max_age_secs: u64) -> bool {
-    let age_ms = current_time_ms.saturating_sub(challenge_timestamp_ms);
-    let max_age_ms = max_age_secs.saturating_mul(1000);
+pub const fn is_challenge_valid(input: ChallengeValidityInput) -> bool {
+    let age_ms = calculate_challenge_age_ms(ChallengeAgeInput {
+        challenge_timestamp_ms: input.challenge_timestamp_ms,
+        current_time_ms: input.current_time_ms,
+    });
+    let max_age_ms = input.max_age_secs.saturating_mul(MILLISECONDS_PER_SECOND);
     age_ms <= max_age_ms
 }
 
 /// Calculate the age of a challenge in milliseconds.
-///
-/// # Arguments
-///
-/// * `challenge_timestamp_ms` - When the challenge was created (ms since epoch)
-/// * `current_time_ms` - Current time (ms since epoch)
 ///
 /// # Returns
 ///
@@ -86,15 +110,34 @@ pub const fn is_challenge_valid(challenge_timestamp_ms: u64, current_time_ms: u6
 /// # Example
 ///
 /// ```rust
+/// use aspen_auth_core::verified_auth::ChallengeAgeInput;
 /// use aspen_auth_core::verified_auth::calculate_challenge_age_ms;
 ///
-/// assert_eq!(calculate_challenge_age_ms(1000, 1500), 500);
-/// assert_eq!(calculate_challenge_age_ms(1000, 1000), 0);
-/// assert_eq!(calculate_challenge_age_ms(1500, 1000), 0); // Edge case
+/// assert_eq!(
+///     calculate_challenge_age_ms(ChallengeAgeInput {
+///         challenge_timestamp_ms: 1_000,
+///         current_time_ms: 1_500,
+///     }),
+///     500,
+/// );
+/// assert_eq!(
+///     calculate_challenge_age_ms(ChallengeAgeInput {
+///         challenge_timestamp_ms: 1_000,
+///         current_time_ms: 1_000,
+///     }),
+///     0,
+/// );
+/// assert_eq!(
+///     calculate_challenge_age_ms(ChallengeAgeInput {
+///         challenge_timestamp_ms: 1_500,
+///         current_time_ms: 1_000,
+///     }),
+///     0,
+/// );
 /// ```
 #[inline]
-pub const fn calculate_challenge_age_ms(challenge_timestamp_ms: u64, current_time_ms: u64) -> u64 {
-    current_time_ms.saturating_sub(challenge_timestamp_ms)
+pub const fn calculate_challenge_age_ms(input: ChallengeAgeInput) -> u64 {
+    input.current_time_ms.saturating_sub(input.challenge_timestamp_ms)
 }
 
 /// Derive an HMAC key from a cluster cookie using Blake3.
@@ -133,6 +176,21 @@ pub fn derive_hmac_key(cookie: &str) -> [u8; 32] {
 mod tests {
     use super::*;
 
+    const BASE_CHALLENGE_TIME_MS: u64 = 1_000_000;
+    const THIRTY_SECONDS_MS: u64 = 30_000;
+    const SIXTY_SECONDS_MS: u64 = 60_000;
+    const SIXTY_ONE_SECONDS_MS: u64 = 61_000;
+    const SHORT_MAX_AGE_SECS: u64 = 20;
+    const ZERO_MAX_AGE_SECS: u64 = 0;
+    const ONE_MILLISECOND_MS: u64 = 1;
+    const FUTURE_CHALLENGE_TIME_MS: u64 = 2_000;
+    const EARLIER_CURRENT_TIME_MS: u64 = 1_000;
+    const SMALL_CHALLENGE_TIME_MS: u64 = 1_000;
+    const SMALL_LATER_TIME_MS: u64 = 1_500;
+    const ONE_MINUTE_AND_ONE_SECOND_MS: u64 = 61_000;
+    const DERIVED_HMAC_KEY_SIZE_BYTES: usize = blake3::OUT_LEN;
+    const LONG_COOKIE_LENGTH_BYTES: usize = 10_000;
+
     // ========================================================================
     // constant_time_compare tests
     // ========================================================================
@@ -165,42 +223,79 @@ mod tests {
 
     #[test]
     fn test_fresh_challenge() {
-        assert!(is_challenge_valid(1000, 1000, 60)); // 0s age
-        assert!(is_challenge_valid(1000, 1001, 60)); // 1ms age
+        assert!(is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: SMALL_CHALLENGE_TIME_MS,
+            current_time_ms: SMALL_CHALLENGE_TIME_MS,
+            max_age_secs: AUTH_CHALLENGE_MAX_AGE_SECS,
+        }));
+        assert!(is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: SMALL_CHALLENGE_TIME_MS,
+            current_time_ms: SMALL_CHALLENGE_TIME_MS.saturating_add(ONE_MILLISECOND_MS),
+            max_age_secs: AUTH_CHALLENGE_MAX_AGE_SECS,
+        }));
     }
 
     #[test]
     fn test_challenge_within_window() {
-        let challenge_time = 1_000_000;
-        let now = challenge_time + 30_000; // 30 seconds later
-        assert!(is_challenge_valid(challenge_time, now, 60));
+        let now = BASE_CHALLENGE_TIME_MS.saturating_add(THIRTY_SECONDS_MS);
+        assert!(is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: BASE_CHALLENGE_TIME_MS,
+            current_time_ms: now,
+            max_age_secs: AUTH_CHALLENGE_MAX_AGE_SECS,
+        }));
     }
 
     #[test]
     fn test_challenge_at_boundary() {
-        let challenge_time = 1_000_000;
-        let now = challenge_time + 60_000; // Exactly 60 seconds
-        assert!(is_challenge_valid(challenge_time, now, 60));
+        let now = BASE_CHALLENGE_TIME_MS.saturating_add(SIXTY_SECONDS_MS);
+        assert!(is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: BASE_CHALLENGE_TIME_MS,
+            current_time_ms: now,
+            max_age_secs: AUTH_CHALLENGE_MAX_AGE_SECS,
+        }));
     }
 
     #[test]
     fn test_challenge_expired() {
-        let challenge_time = 1_000_000;
-        let now = challenge_time + 61_000; // 61 seconds later
-        assert!(!is_challenge_valid(challenge_time, now, 60));
+        let now = BASE_CHALLENGE_TIME_MS.saturating_add(SIXTY_ONE_SECONDS_MS);
+        assert!(!is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: BASE_CHALLENGE_TIME_MS,
+            current_time_ms: now,
+            max_age_secs: AUTH_CHALLENGE_MAX_AGE_SECS,
+        }));
     }
 
     #[test]
     fn test_challenge_future_timestamp() {
-        // Edge case: challenge timestamp in the future (clock skew)
-        assert!(is_challenge_valid(2000, 1000, 60)); // age = 0 (saturating)
+        assert!(is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: FUTURE_CHALLENGE_TIME_MS,
+            current_time_ms: EARLIER_CURRENT_TIME_MS,
+            max_age_secs: AUTH_CHALLENGE_MAX_AGE_SECS,
+        }));
     }
 
     #[test]
     fn test_challenge_zero_max_age() {
-        // Zero max age means only same-millisecond is valid
-        assert!(is_challenge_valid(1000, 1000, 0));
-        assert!(!is_challenge_valid(1000, 1001, 0));
+        assert!(is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: SMALL_CHALLENGE_TIME_MS,
+            current_time_ms: SMALL_CHALLENGE_TIME_MS,
+            max_age_secs: ZERO_MAX_AGE_SECS,
+        }));
+        assert!(!is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: SMALL_CHALLENGE_TIME_MS,
+            current_time_ms: SMALL_CHALLENGE_TIME_MS.saturating_add(ONE_MILLISECOND_MS),
+            max_age_secs: ZERO_MAX_AGE_SECS,
+        }));
+    }
+
+    #[test]
+    fn test_short_max_age_expires_challenge() {
+        let now = BASE_CHALLENGE_TIME_MS.saturating_add(THIRTY_SECONDS_MS);
+        assert!(!is_challenge_valid(ChallengeValidityInput {
+            challenge_timestamp_ms: BASE_CHALLENGE_TIME_MS,
+            current_time_ms: now,
+            max_age_secs: SHORT_MAX_AGE_SECS,
+        }));
     }
 
     // ========================================================================
@@ -209,19 +304,42 @@ mod tests {
 
     #[test]
     fn test_age_normal() {
-        assert_eq!(calculate_challenge_age_ms(1000, 1500), 500);
-        assert_eq!(calculate_challenge_age_ms(1000, 61000), 60000);
+        assert_eq!(
+            calculate_challenge_age_ms(ChallengeAgeInput {
+                challenge_timestamp_ms: SMALL_CHALLENGE_TIME_MS,
+                current_time_ms: SMALL_LATER_TIME_MS,
+            }),
+            500,
+        );
+        assert_eq!(
+            calculate_challenge_age_ms(ChallengeAgeInput {
+                challenge_timestamp_ms: SMALL_CHALLENGE_TIME_MS,
+                current_time_ms: ONE_MINUTE_AND_ONE_SECOND_MS,
+            }),
+            60_000,
+        );
     }
 
     #[test]
     fn test_age_same_time() {
-        assert_eq!(calculate_challenge_age_ms(1000, 1000), 0);
+        assert_eq!(
+            calculate_challenge_age_ms(ChallengeAgeInput {
+                challenge_timestamp_ms: SMALL_CHALLENGE_TIME_MS,
+                current_time_ms: SMALL_CHALLENGE_TIME_MS,
+            }),
+            0,
+        );
     }
 
     #[test]
     fn test_age_future_challenge() {
-        // Challenge in the future returns 0 (saturating)
-        assert_eq!(calculate_challenge_age_ms(2000, 1000), 0);
+        assert_eq!(
+            calculate_challenge_age_ms(ChallengeAgeInput {
+                challenge_timestamp_ms: FUTURE_CHALLENGE_TIME_MS,
+                current_time_ms: EARLIER_CURRENT_TIME_MS,
+            }),
+            0,
+        );
     }
 
     // ========================================================================
@@ -244,16 +362,14 @@ mod tests {
 
     #[test]
     fn test_key_empty_cookie() {
-        // Empty cookie should produce a valid key
         let key = derive_hmac_key("");
-        assert_eq!(key.len(), 32);
+        assert_eq!(key.len(), DERIVED_HMAC_KEY_SIZE_BYTES);
     }
 
     #[test]
     fn test_key_long_cookie() {
-        // Long cookie should work fine
-        let long_cookie = "a".repeat(10000);
+        let long_cookie = "a".repeat(LONG_COOKIE_LENGTH_BYTES);
         let key = derive_hmac_key(&long_cookie);
-        assert_eq!(key.len(), 32);
+        assert_eq!(key.len(), DERIVED_HMAC_KEY_SIZE_BYTES);
     }
 }
