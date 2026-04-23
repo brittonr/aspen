@@ -18,8 +18,10 @@ macro_rules! func_name {
         fn type_name_of<T>(_: T) -> &'static str {
             std::any::type_name::<T>()
         }
+        const FUNCTION_SUFFIX_LEN: usize = 3;
         let name = type_name_of(f);
-        let n = &name[..name.len() - 3];
+        let trimmed_name_len = name.len().saturating_sub(FUNCTION_SUFFIX_LEN);
+        let n = &name[..trimmed_name_len];
         let nn = n.replace("::{{closure}}", "");
         nn
         // nn.split("::").last().unwrap_or_default()
