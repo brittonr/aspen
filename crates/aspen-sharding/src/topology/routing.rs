@@ -9,34 +9,34 @@ const DOUBLE_DIGIT_BUCKET_COUNT: u32 = 256;
 const HEX_PAIR_WIDTH_BYTES: usize = 2;
 
 #[inline]
-fn checked_boundary_index(index_u32: u32) -> usize {
-    usize::try_from(index_u32).unwrap_or(usize::MAX)
+fn single_digit_boundary(boundary_index: u32) -> String {
+    let mut current_index = 0_u32;
+    for digit in SINGLE_HEX_DIGITS.chars() {
+        if current_index == boundary_index {
+            return digit.to_string();
+        }
+        current_index = current_index.saturating_add(1);
+    }
+    String::new()
 }
 
 #[inline]
-fn checked_shard_capacity(num_shards: u32) -> usize {
-    usize::try_from(num_shards).unwrap_or(usize::MAX)
-}
-
-#[inline]
-fn single_digit_boundary(idx_u32: u32) -> String {
-    let idx = checked_boundary_index(idx_u32);
-    SINGLE_HEX_DIGITS.chars().nth(idx).unwrap_or('0').to_string()
-}
-
-#[inline]
-fn double_digit_boundary(idx_u32: u32) -> String {
-    let start_idx = checked_boundary_index(idx_u32).saturating_mul(HEX_PAIR_WIDTH_BYTES);
-    let end_idx = start_idx.saturating_add(HEX_PAIR_WIDTH_BYTES);
-    DOUBLE_HEX_BOUNDARIES
-        .get(start_idx..end_idx)
-        .unwrap_or_default()
-        .to_string()
+fn double_digit_boundary(boundary_index: u32) -> String {
+    let mut current_index = 0_u32;
+    for hex_pair_bytes in DOUBLE_HEX_BOUNDARIES.as_bytes().chunks(HEX_PAIR_WIDTH_BYTES) {
+        if current_index == boundary_index {
+            return String::from_utf8_lossy(hex_pair_bytes).into_owned();
+        }
+        current_index = current_index.saturating_add(1);
+    }
+    String::new()
 }
 
 #[inline]
 fn generate_single_digit_boundaries(num_shards: u32) -> Vec<String> {
-    let step = SINGLE_DIGIT_BUCKET_COUNT / num_shards;
+    let Some(step) = SINGLE_DIGIT_BUCKET_COUNT.checked_div(num_shards) else {
+        return Vec::new();
+    };
     (0..num_shards)
         .map(|shard_index| {
             if shard_index == 0 {
@@ -50,7 +50,9 @@ fn generate_single_digit_boundaries(num_shards: u32) -> Vec<String> {
 
 #[inline]
 fn generate_double_digit_boundaries(num_shards: u32) -> Vec<String> {
-    let step = DOUBLE_DIGIT_BUCKET_COUNT / num_shards;
+    let Some(step) = DOUBLE_DIGIT_BUCKET_COUNT.checked_div(num_shards) else {
+        return Vec::new();
+    };
     (0..num_shards)
         .map(|shard_index| {
             if shard_index == 0 {
@@ -63,17 +65,15 @@ fn generate_double_digit_boundaries(num_shards: u32) -> Vec<String> {
 }
 
 #[inline]
-fn build_ranges(boundaries: &[String], num_shards: u32) -> Vec<(String, String)> {
-    let shard_count = checked_shard_capacity(num_shards);
-    let mut ranges = Vec::with_capacity(shard_count);
-    for shard_index in 0..shard_count {
-        let start = boundaries[shard_index].clone();
-        let end = if shard_index.saturating_add(1) < boundaries.len() {
-            boundaries[shard_index.saturating_add(1)].clone()
+fn build_ranges(boundaries: &[String]) -> Vec<(String, String)> {
+    let mut ranges = Vec::with_capacity(boundaries.len());
+    for (shard_index, start) in boundaries.iter().enumerate() {
+        let end = if let Some(end_boundary) = boundaries.get(shard_index.saturating_add(1)) {
+            end_boundary.clone()
         } else {
             String::new()
         };
-        ranges.push((start, end));
+        ranges.push((start.clone(), end));
     }
     ranges
 }
@@ -92,5 +92,5 @@ pub(super) fn generate_hex_boundaries(num_shards: u32) -> Vec<(String, String)> 
         generate_double_digit_boundaries(num_shards)
     };
 
-    build_ranges(&boundaries, num_shards)
+    build_ranges(&boundaries)
 }
