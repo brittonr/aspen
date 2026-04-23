@@ -61,7 +61,10 @@ impl Tuple {
 
     /// Get the number of elements in the tuple.
     pub fn len(&self) -> u32 {
-        u32::try_from(self.elements.len()).unwrap_or(u32::MAX)
+        match u32::try_from(self.elements.len()) {
+            Ok(count) => count,
+            Err(_) => u32::MAX,
+        }
     }
 
     /// Check if the tuple is empty.

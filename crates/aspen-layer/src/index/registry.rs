@@ -127,7 +127,10 @@ impl IndexRegistry {
 
     /// Get the number of registered indexes.
     pub fn len(&self) -> u32 {
-        u32::try_from(self.indexes.len()).unwrap_or(u32::MAX)
+        match u32::try_from(self.indexes.len()) {
+            Ok(count) => count,
+            Err(_) => u32::MAX,
+        }
     }
 
     /// Check if the registry is empty.
