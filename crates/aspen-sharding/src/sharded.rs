@@ -65,6 +65,9 @@ pub struct ShardedKeyValueStore<KV: KeyValueStore> {
     /// Router for determining which shard owns each key.
     router: ShardRouter,
     /// Map from shard ID to the KeyValueStore for that shard.
+    ///
+    /// Lock ordering: acquire `topology` before `shards` when both guards are
+    /// needed in one path, and drop the first guard before awaiting.
     shards: Arc<RwLock<HashMap<ShardId, Arc<KV>>>>,
     /// Optional topology reference for ShardMoved error generation.
     /// When set, enables proper redirect responses with successor info.
@@ -78,8 +81,17 @@ fn requested_scan_limit_results(limit_results: Option<u32>) -> u32 {
     limit_results.unwrap_or(DEFAULT_SCAN_LIMIT_RESULTS)
 }
 
-fn scan_result_capacity(limit_results: Option<u32>) -> usize {
-    usize::try_from(requested_scan_limit_results(limit_results)).unwrap_or(usize::MAX)
+fn scan_result_capacity(limit_results: Option<u32>) -> Result<usize, KeyValueStoreError> {
+    let requested_max_results = requested_scan_limit_results(limit_results);
+    match usize::try_from(requested_max_results) {
+        Ok(max_results) => Ok(max_results),
+        Err(_) => Err(KeyValueStoreError::Failed {
+            reason: format!(
+                "scan limit {} does not fit this platform's usize",
+                requested_max_results
+            ),
+        }),
+    }
 }
 
 fn max_scan_results_per_shard(limit_results: Option<u32>, shard_count: usize) -> u32 {
@@ -467,7 +479,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         let shard_ids = self.router.get_shards_for_prefix(&request.prefix);
         let shards = self.shards.read().await;
 
-        let max_results = scan_result_capacity(request.limit_results);
+        let max_results = scan_result_capacity(request.limit_results)?;
         let mut all_entries = Vec::with_capacity(max_results);
         let max_results_per_shard = max_scan_results_per_shard(request.limit_results, shard_ids.len());
 
