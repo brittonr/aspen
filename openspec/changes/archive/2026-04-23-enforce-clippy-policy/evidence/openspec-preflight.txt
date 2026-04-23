@@ -1,0 +1,4 @@
+OK: openspec/changes/enforce-clippy-policy
+  tasks: 9 total / 8 checked
+  changed files listed: 4
+  verification artifacts: 4
