@@ -50,7 +50,15 @@ pub fn normalize_lockset_member_tokens(
 
 #[inline]
 fn validate_lockset_count(member_count: usize, max_members: u32) -> Result<(), LockSetValidationError> {
-    let count = u32::try_from(member_count).unwrap_or(u32::MAX);
+    let count = match u32::try_from(member_count) {
+        Ok(count) => count,
+        Err(_) => {
+            return Err(LockSetValidationError::TooManyMembers {
+                count: max_members.saturating_add(1),
+                max: max_members,
+            });
+        }
+    };
     if count == 0 {
         return Err(LockSetValidationError::EmptySet);
     }
@@ -86,16 +94,17 @@ pub fn compute_lockset_member_token(current_entry: Option<&LockEntry>) -> u64 {
 
 /// Count how many members are taken over from expired holders.
 #[inline]
-pub fn compute_lockset_takeover_count(entries: &[Option<LockEntry>], now_ms: u64) -> u32 {
-    let takeover_count = entries
-        .iter()
-        .filter(|entry| {
-            entry
-                .as_ref()
-                .is_some_and(|member| member.deadline_ms != 0 && is_lock_expired(member.deadline_ms, now_ms))
-        })
-        .count();
-    u32::try_from(takeover_count).unwrap_or(u32::MAX)
+pub fn compute_lockset_takeover_count(entries: &[Option<LockEntry>], now_ms: u64) -> u64 {
+    entries.iter().fold(0_u64, |takeover_count, entry| {
+        if entry
+            .as_ref()
+            .is_some_and(|member| member.deadline_ms != 0 && is_lock_expired(member.deadline_ms, now_ms))
+        {
+            takeover_count.saturating_add(1)
+        } else {
+            takeover_count
+        }
+    })
 }
 
 /// Decide whether a retrying acquire should continue.

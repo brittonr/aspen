@@ -12,8 +12,8 @@ use crate::verified;
 use crate::verified::DiscoveryFilterMatchInput;
 
 #[inline]
-fn discovery_limit_usize(limit: u32) -> usize {
-    usize::try_from(limit).unwrap_or(usize::MAX)
+fn discovery_limit_usize(limit: u32) -> Result<usize> {
+    usize::try_from(limit).map_err(|_| anyhow::anyhow!("service discovery limit {} does not fit this platform usize", limit))
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
@@ -30,7 +30,8 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         let limit = filter.limit.unwrap_or(MAX_SERVICE_DISCOVERY_RESULTS).min(MAX_SERVICE_DISCOVERY_RESULTS);
 
         let keys = self.scan_keys(&prefix, limit).await?;
-        let mut instances = Vec::with_capacity(keys.len().min(discovery_limit_usize(limit)));
+        let discovery_limit = discovery_limit_usize(limit)?;
+        let mut instances = Vec::with_capacity(keys.len().min(discovery_limit));
 
         for key in keys {
             // Skip the service metadata key (no instance ID suffix)
@@ -55,7 +56,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
                 instances.push(instance);
 
-                if instances.len() >= discovery_limit_usize(limit) {
+                if instances.len() >= discovery_limit {
                     break;
                 }
             }
@@ -72,9 +73,10 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         let limit = limit.min(MAX_SERVICE_DISCOVERY_RESULTS);
 
         let keys = self.scan_keys(&full_prefix, limit).await?;
+        let discovery_limit = discovery_limit_usize(limit)?;
 
         // Extract unique service names from keys
-        let mut services = Vec::with_capacity(keys.len().min(discovery_limit_usize(limit)));
+        let mut services = Vec::with_capacity(keys.len().min(discovery_limit));
         let mut seen = std::collections::HashSet::with_capacity(keys.len());
 
         for key in keys {

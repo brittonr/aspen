@@ -139,7 +139,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLockSet<S> {
             return Err(self.describe_acquire_conflict().await?);
         }
         if prepared.takeover_count > 0 {
-            metrics::counter!("aspen.lockset.takeovers_total").increment(u64::from(prepared.takeover_count));
+            metrics::counter!("aspen.lockset.takeovers_total").increment(prepared.takeover_count);
             info!(holder_id = %self.request.holder_id, takeovers = prepared.takeover_count, members = ?self.request.members, "lockset takeover after expiry");
         }
         metrics::counter!("aspen.lockset.acquire_attempts_total", "outcome" => "success").increment(1);
@@ -541,7 +541,7 @@ struct PreparedGuardWrite {
     operations: Vec<BatchOperation>,
     deadline_ms: u64,
     member_tokens: Vec<LockSetMemberToken>,
-    takeover_count: u32,
+    takeover_count: u64,
 }
 
 impl PreparedGuardWrite {
