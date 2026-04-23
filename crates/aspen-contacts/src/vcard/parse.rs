@@ -18,8 +18,44 @@ use crate::types::ContactPhone;
 /// `created_at_ms`, `updated_at_ms`).
 pub fn parse_vcard(input: &str) -> Result<Contact, ContactsError> {
     let lines = unfold_lines(input);
-    let mut in_vcard = false;
-    let mut contact = Contact {
+    let mut is_in_vcard = false;
+    let mut contact = empty_contact();
+
+    for line in &lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.eq_ignore_ascii_case("BEGIN:VCARD") {
+            is_in_vcard = true;
+            continue;
+        }
+        if trimmed.eq_ignore_ascii_case("END:VCARD") {
+            break;
+        }
+        if !is_in_vcard || is_version_line(trimmed) {
+            continue;
+        }
+
+        let (name, params, value) = parse_property(trimmed);
+        apply_property(&mut contact, name, &params, value);
+    }
+
+    if contact.display_name.is_empty() && contact.uid.is_empty() {
+        return Err(ContactsError::ParseVcard {
+            reason: "missing FN or UID property".to_string(),
+        });
+    }
+
+    debug_assert!(
+        !contact.display_name.is_empty() || !contact.uid.is_empty(),
+        "valid vCard must expose FN or UID"
+    );
+    Ok(contact)
+}
+
+fn empty_contact() -> Contact {
+    Contact {
         id: String::new(),
         book_id: String::new(),
         uid: String::new(),
@@ -39,108 +75,91 @@ pub fn parse_vcard(input: &str) -> Result<Contact, ContactsError> {
         custom_fields: Vec::new(),
         created_at_ms: 0,
         updated_at_ms: 0,
-    };
-
-    for line in &lines {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        if trimmed.eq_ignore_ascii_case("BEGIN:VCARD") {
-            in_vcard = true;
-            continue;
-        }
-        if trimmed.eq_ignore_ascii_case("END:VCARD") {
-            break;
-        }
-        if !in_vcard {
-            continue;
-        }
-
-        // Skip VERSION line
-        if trimmed.to_ascii_uppercase().starts_with("VERSION:") {
-            continue;
-        }
-
-        let (name, params, value) = parse_property(trimmed);
-        let name_upper = name.to_ascii_uppercase();
-
-        match name_upper.as_str() {
-            "FN" => contact.display_name = value.to_string(),
-            "N" => parse_structured_name(&mut contact, value),
-            "EMAIL" => {
-                let label = extract_type_param(&params);
-                let is_primary = params.iter().any(|(k, _)| k.eq_ignore_ascii_case("PREF"));
-                contact.emails.push(ContactEmail {
-                    address: value.to_string(),
-                    label,
-                    is_primary,
-                });
-            }
-            "TEL" => {
-                let label = extract_type_param(&params);
-                let is_primary = params.iter().any(|(k, _)| k.eq_ignore_ascii_case("PREF"));
-                contact.phones.push(ContactPhone {
-                    number: value.to_string(),
-                    label,
-                    is_primary,
-                });
-            }
-            "ADR" => {
-                let label = extract_type_param(&params);
-                parse_address(&mut contact, value, label);
-            }
-            "ORG" => contact.organization = Some(value.to_string()),
-            "TITLE" => contact.title = Some(value.to_string()),
-            "BDAY" => contact.birthday = Some(value.to_string()),
-            "NOTE" => contact.notes = Some(value.to_string()),
-            "CATEGORIES" => {
-                contact.categories = value.split(',').map(|s| s.trim().to_string()).collect();
-            }
-            "URL" => contact.url = Some(value.to_string()),
-            "UID" => contact.uid = value.to_string(),
-            _ if name_upper.starts_with("X-") => {
-                contact.custom_fields.push((name.to_string(), value.to_string()));
-            }
-            _ => {} // Ignore unknown properties
-        }
     }
+}
 
-    if contact.display_name.is_empty() && contact.uid.is_empty() {
-        return Err(ContactsError::ParseVcard {
-            reason: "missing FN or UID property".to_string(),
-        });
+fn is_version_line(line: &str) -> bool {
+    line.to_ascii_uppercase().starts_with("VERSION:")
+}
+
+fn apply_property(contact: &mut Contact, name: &str, params: &[(&str, &str)], value: &str) {
+    debug_assert!(!name.is_empty(), "parsed property names should be non-empty");
+    let name_upper = name.to_ascii_uppercase();
+    match name_upper.as_str() {
+        "FN" => contact.display_name = value.to_string(),
+        "N" => parse_structured_name(contact, value),
+        "EMAIL" => {
+            let label = extract_type_param(params);
+            let is_primary = params.iter().any(|(key, _)| key.eq_ignore_ascii_case("PREF"));
+            contact.emails.push(ContactEmail {
+                address: value.to_string(),
+                label,
+                is_primary,
+            });
+        }
+        "TEL" => {
+            let label = extract_type_param(params);
+            let is_primary = params.iter().any(|(key, _)| key.eq_ignore_ascii_case("PREF"));
+            contact.phones.push(ContactPhone {
+                number: value.to_string(),
+                label,
+                is_primary,
+            });
+        }
+        "ADR" => {
+            let label = extract_type_param(params);
+            parse_address(contact, value, label);
+        }
+        "ORG" => contact.organization = Some(value.to_string()),
+        "TITLE" => contact.title = Some(value.to_string()),
+        "BDAY" => contact.birthday = Some(value.to_string()),
+        "NOTE" => contact.notes = Some(value.to_string()),
+        "CATEGORIES" => {
+            contact.categories = value.split(',').map(|part| part.trim().to_string()).collect();
+        }
+        "URL" => contact.url = Some(value.to_string()),
+        "UID" => contact.uid = value.to_string(),
+        _ if name_upper.starts_with("X-") => {
+            contact.custom_fields.push((name.to_string(), value.to_string()));
+        }
+        _ => {}
     }
-
-    Ok(contact)
 }
 
 /// Parse multiple vCards from a single text block.
 ///
 /// Splits on BEGIN:VCARD / END:VCARD boundaries.
 pub fn parse_vcards(input: &str) -> Result<Vec<Contact>, ContactsError> {
-    let mut contacts = Vec::new();
+    let mut contacts = Vec::with_capacity(
+        input.lines().filter(|line| line.trim().eq_ignore_ascii_case("BEGIN:VCARD")).count(),
+    );
     let mut current = String::new();
-    let mut in_vcard = false;
+    let mut is_in_vcard = false;
 
     for line in input.lines() {
-        if line.trim().eq_ignore_ascii_case("BEGIN:VCARD") {
-            in_vcard = true;
+        let trimmed = line.trim();
+        if trimmed.eq_ignore_ascii_case("BEGIN:VCARD") {
+            is_in_vcard = true;
             current.clear();
             current.push_str(line);
             current.push('\n');
-        } else if line.trim().eq_ignore_ascii_case("END:VCARD") {
+            continue;
+        }
+        if trimmed.eq_ignore_ascii_case("END:VCARD") {
+            debug_assert!(is_in_vcard, "END:VCARD should follow BEGIN:VCARD");
             current.push_str(line);
             current.push('\n');
-            in_vcard = false;
+            is_in_vcard = false;
             contacts.push(parse_vcard(&current)?);
-        } else if in_vcard {
+            continue;
+        }
+        if is_in_vcard {
             current.push_str(line);
             current.push('\n');
         }
     }
 
+    debug_assert!(!is_in_vcard, "all BEGIN:VCARD blocks should terminate");
     Ok(contacts)
 }
 
@@ -148,15 +167,16 @@ pub fn parse_vcards(input: &str) -> Result<Vec<Contact>, ContactsError> {
 ///
 /// Lines starting with a space or tab are continuations of the previous line.
 fn unfold_lines(input: &str) -> Vec<String> {
-    let mut result: Vec<String> = Vec::new();
+    let mut result: Vec<String> = Vec::with_capacity(input.lines().count());
 
     for raw_line in input.lines() {
-        // Strip trailing \r (lines() splits on \n but leaves \r)
         let line = raw_line.trim_end_matches('\r');
         if (line.starts_with(' ') || line.starts_with('\t')) && !result.is_empty() {
-            // Continuation: append to previous line (strip leading whitespace)
             if let Some(last) = result.last_mut() {
-                last.push_str(&line[1..]);
+                match line.get(1..) {
+                    Some(continuation) => last.push_str(continuation),
+                    None => debug_assert!(false, "continuation lines always have a leading character"),
+                }
             }
         } else {
             result.push(line.to_string());
@@ -166,29 +186,33 @@ fn unfold_lines(input: &str) -> Vec<String> {
     result
 }
 
+fn slice_after(text: &str, index: usize) -> &str {
+    match index.checked_add(1).and_then(|next_index| text.get(next_index..)) {
+        Some(suffix) => suffix,
+        None => "",
+    }
+}
+
 /// Parse a property line into (name, params, value).
 ///
 /// Format: `NAME;PARAM1=VAL1;PARAM2=VAL2:VALUE`
 fn parse_property(line: &str) -> (&str, Vec<(&str, &str)>, &str) {
-    // Find the colon that separates name+params from value.
-    // Need to handle quoted parameter values that might contain colons.
     let colon_pos = find_value_colon(line);
-
     let (name_params, value) = if let Some(pos) = colon_pos {
-        (&line[..pos], &line[pos + 1..])
+        (&line[..pos], slice_after(line, pos))
     } else {
         (line, "")
     };
 
-    // Split name from params on first semicolon
     let mut params = Vec::new();
     let name;
     if let Some(semi_pos) = name_params.find(';') {
         name = &name_params[..semi_pos];
-        let params_str = &name_params[semi_pos + 1..];
+        let params_str = slice_after(name_params, semi_pos);
+        params = Vec::with_capacity(params_str.split(';').count());
         for param in params_str.split(';') {
             if let Some(eq_pos) = param.find('=') {
-                params.push((&param[..eq_pos], &param[eq_pos + 1..]));
+                params.push((&param[..eq_pos], slice_after(param, eq_pos)));
             } else {
                 params.push((param, ""));
             }
@@ -197,6 +221,7 @@ fn parse_property(line: &str) -> (&str, Vec<(&str, &str)>, &str) {
         name = name_params;
     }
 
+    debug_assert!(!name.is_empty() || line.is_empty(), "non-empty property lines should expose a name");
     (name, params, value)
 }
 
@@ -204,11 +229,11 @@ fn parse_property(line: &str) -> (&str, Vec<(&str, &str)>, &str) {
 ///
 /// Skips colons inside quoted parameter values.
 fn find_value_colon(line: &str) -> Option<usize> {
-    let mut in_quotes = false;
+    let mut is_in_quotes = false;
     for (i, ch) in line.char_indices() {
         match ch {
-            '"' => in_quotes = !in_quotes,
-            ':' if !in_quotes => return Some(i),
+            '"' => is_in_quotes = !is_in_quotes,
+            ':' if !is_in_quotes => return Some(i),
             _ => {}
         }
     }
