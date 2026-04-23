@@ -444,7 +444,18 @@ fn date_time_parts_to_unix_ms(date_time: DateTimeParts) -> u64 {
     if total_seconds < 0 {
         0
     } else {
-        u64::try_from(total_seconds).unwrap_or(u64::MAX).saturating_mul(MILLIS_PER_SECOND_U64)
+        saturating_u64_from_i64(total_seconds).saturating_mul(MILLIS_PER_SECOND_U64)
+    }
+}
+
+fn saturating_u64_from_i64(value: i64) -> u64 {
+    if value <= 0 {
+        0
+    } else {
+        match u64::try_from(value) {
+            Ok(converted_value) => converted_value,
+            Err(_) => u64::MAX,
+        }
     }
 }
 

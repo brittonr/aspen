@@ -192,7 +192,10 @@ fn saturating_u32_from_i64(value: i64) -> u32 {
     if value <= 0 {
         0
     } else {
-        u32::try_from(value).unwrap_or(u32::MAX)
+        match u32::try_from(value) {
+            Ok(converted_value) => converted_value,
+            Err(_) => u32::MAX,
+        }
     }
 }
 
