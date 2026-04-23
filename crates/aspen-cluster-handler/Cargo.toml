@@ -13,7 +13,7 @@ aspen-rpc-core = { path = "../aspen-rpc-core" }
 aspen-client-api = { workspace = true }
 aspen-client = { path = "../aspen-client" }
 aspen-core = { path = "../aspen-core" }
-aspen-ticket = { workspace = true }
+aspen-ticket = { workspace = true, features = ["iroh"] }
 aspen-docs = { path = "../aspen-docs", optional = true }
 aspen-deploy = { path = "../aspen-deploy", optional = true }
 aspen-cluster = { path = "../aspen-cluster", optional = true, features = ["deploy"] }

@@ -1,0 +1,30 @@
+error[E0432]: unresolved import `aspen_ticket::parse_ticket_to_addrs`
+ --> tests/ui/iroh_helpers_require_feature.rs:1:20
+  |
+1 | use aspen_ticket::{parse_ticket_to_addrs, AspenClusterTicket};
+  |                    ^^^^^^^^^^^^^^^^^^^^^ no `parse_ticket_to_addrs` in the root
+  |
+note: found an item that was configured out
+ --> src/lib.rs
+  |
+  | #[cfg(any(test, feature = "iroh"))]
+  |          ------------------------ the item is gated here
+  | pub use parse::parse_ticket_to_addrs;
+  |                ^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no associated function or constant named `with_bootstrap_addr` found for struct `AspenClusterTicket` in the current scope
+ --> tests/ui/iroh_helpers_require_feature.rs:7:39
+  |
+7 |     let _ticket = AspenClusterTicket::with_bootstrap_addr(
+  |                                       ^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `AspenClusterTicket`
+  |
+note: if you're trying to build a new `AspenClusterTicket` consider using one of the following associated functions:
+      AspenClusterTicket::new
+      AspenClusterTicket::deserialize
+ --> src/v2.rs
+  |
+  |     pub fn new(topic_id: impl Into<ClusterTopicId>, cluster_id: String) -> Self {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  |     pub fn deserialize(input: &str) -> ClusterTicketResult<Self> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

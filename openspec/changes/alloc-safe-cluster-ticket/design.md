@@ -91,7 +91,7 @@ Direct `aspen-ticket` consumers today are:
 | Consumer | Current use shape | Planned `aspen-ticket` features | Manifest changes? | Compile rail |
 | --- | --- | --- | --- | --- |
 | `Cargo.toml` workspace stanza | shared source for workspace consumers | explicit alloc-safe workspace stanza (`default-features = false`) | yes | `rg -n '^aspen-ticket\s*=\s*\{' Cargo.toml` |
-| `crates/aspen-ci-executor-vm` | deserialize unsigned ticket for VM lifecycle/bootstrap flows | `iroh` | yes | `cargo check -p aspen-ci-executor-vm` |
+| `crates/aspen-ci-executor-vm` | deserialize and rewrite alloc-safe unsigned tickets for VM lifecycle/bootstrap flows | bare/default | no local stanza change expected | `cargo check -p aspen-ci-executor-vm` |
 | `crates/aspen-cluster-handler` | construct unsigned tickets from runtime endpoint metadata | `iroh` | yes | `cargo check -p aspen-cluster-handler --tests` |
 | `crates/aspen-cluster` | re-export unsigned parse helpers and signed ticket surface for runtime cluster paths | `iroh`, `std` | yes | `cargo check -p aspen-cluster` |
 | `crates/aspen-rpc-handlers` | direct dependency only; no ticket helper hits in the helper-usage audit | bare/default (workspace-inherited) | no local stanza change expected | `cargo check -p aspen-rpc-handlers` |

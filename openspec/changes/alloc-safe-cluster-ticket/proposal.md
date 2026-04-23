@@ -34,7 +34,7 @@ That makes `aspen-ticket` the next same-family seam after `aspen-cluster-types` 
 | Consumer | Planned feature surface | Manifest changes? | Planned compile / audit rail |
 | --- | --- | --- | --- |
 | `Cargo.toml` workspace stanza | explicit alloc-safe workspace stanza (`default-features = false`) | yes | `rg -n '^aspen-ticket\\s*=\\s*\\{' Cargo.toml` |
-| `crates/aspen-ci-executor-vm` | `iroh` | yes | `cargo check -p aspen-ci-executor-vm` |
+| `crates/aspen-ci-executor-vm` | bare/default | no local stanza change expected | `cargo check -p aspen-ci-executor-vm` |
 | `crates/aspen-cluster-handler` | `iroh` | yes | `cargo check -p aspen-cluster-handler --tests` |
 | `crates/aspen-cluster` | `iroh`, `std` | yes | `cargo check -p aspen-cluster` |
 | `crates/aspen-rpc-handlers` | bare/default | no local stanza change expected | `cargo check -p aspen-rpc-handlers` |

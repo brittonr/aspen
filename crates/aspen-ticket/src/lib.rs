@@ -1,38 +1,43 @@
 //! Aspen cluster tickets for peer discovery bootstrap.
 //!
-//! Tickets provide a compact, URL-safe way to share cluster membership information.
-//! They contain the gossip topic ID and bootstrap peer endpoint IDs with direct
-//! socket addresses, encoded as a base32 string following the iroh ticket pattern.
+//! The unsigned ticket payload stays alloc-safe by default. Runtime iroh and
+//! signed-ticket helpers are explicit opt-ins.
 //!
 //! # Example
 //!
-//! ```
+//! ```ignore
 //! use aspen_ticket::AspenClusterTicket;
-//! use iroh_gossip::proto::TopicId;
+//! use aspen_ticket::ClusterTopicId;
 //!
-//! // Create a new ticket
-//! let topic_id = TopicId::from_bytes([23u8; 32]);
+//! let topic_id = ClusterTopicId::from_bytes([23u8; 32]);
 //! let ticket = AspenClusterTicket::new(topic_id, "my-cluster".to_string());
-//!
-//! // Serialize for sharing
 //! let ticket_str = ticket.serialize();
-//! println!("Join with: --ticket {}", ticket_str);
-//!
-//! // Deserialize on another node
 //! let parsed = AspenClusterTicket::deserialize(&ticket_str)?;
 //! assert_eq!(parsed.topic_id, topic_id);
-//! # Ok::<(), anyhow::Error>(())
+//! # Ok::<(), aspen_ticket::ClusterTicketError>(())
 //! ```
 
+#![cfg_attr(not(any(test, feature = "std", feature = "iroh")), no_std)]
+
+extern crate alloc;
+
 mod constants;
+#[cfg(any(test, feature = "iroh"))]
 mod parse;
+#[cfg(any(test, feature = "signed", feature = "std"))]
 mod signed;
 mod v2;
 
+#[cfg(any(test, feature = "iroh"))]
 pub use parse::parse_ticket_to_addrs;
+#[cfg(any(test, feature = "signed", feature = "std"))]
 pub use signed::SignedAspenClusterTicket;
 pub use v2::AspenClusterTicket;
 pub use v2::BootstrapPeer;
+pub use v2::ClusterEndpointId;
+pub use v2::ClusterTicketError;
+pub use v2::ClusterTicketResult;
+pub use v2::ClusterTopicId;
 
 #[cfg(test)]
 mod tests {
@@ -80,7 +85,7 @@ mod tests {
         let topic_id = TopicId::from_bytes([23u8; 32]);
         let ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
 
-        assert_eq!(ticket.topic_id, topic_id);
+        assert_eq!(ticket.topic_id, topic_id.into());
         assert_eq!(ticket.cluster_id, "test-cluster");
         assert!(ticket.bootstrap.is_empty());
     }
@@ -303,7 +308,7 @@ mod tests {
         let addr2 = create_test_socket_addr(8888);
 
         let peer = BootstrapPeer {
-            endpoint_id,
+            endpoint_id: endpoint_id.into(),
             direct_addrs: vec![addr1, addr2],
         };
 
@@ -704,7 +709,7 @@ mod tests {
 
         let mut ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
         ticket.bootstrap.push(BootstrapPeer {
-            endpoint_id,
+            endpoint_id: endpoint_id.into(),
             direct_addrs: vec![ipv6_addr],
         });
 
@@ -728,7 +733,7 @@ mod tests {
 
         let mut ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
         ticket.bootstrap.push(BootstrapPeer {
-            endpoint_id,
+            endpoint_id: endpoint_id.into(),
             direct_addrs: vec![ipv4_addr, ipv6_addr],
         });
 
@@ -771,12 +776,12 @@ mod tests {
         let addr2 = create_test_socket_addr(8888);
 
         let peer1 = BootstrapPeer {
-            endpoint_id,
+            endpoint_id: endpoint_id.into(),
             direct_addrs: vec![addr1, addr2],
         };
 
         let peer2 = BootstrapPeer {
-            endpoint_id,
+            endpoint_id: endpoint_id.into(),
             direct_addrs: vec![addr1, addr2],
         };
 
@@ -785,7 +790,7 @@ mod tests {
 
         // Different order = not equal (Vec comparison)
         let peer3 = BootstrapPeer {
-            endpoint_id,
+            endpoint_id: endpoint_id.into(),
             direct_addrs: vec![addr2, addr1],
         };
         assert_ne!(peer1, peer3);

@@ -1,0 +1,11 @@
+error[E0599]: no associated function or constant named `sign` found for struct `SignedAspenClusterTicket` in the current scope
+ --> tests/ui/std_wrappers_require_feature.rs:6:44
+  |
+6 |     let signed = SignedAspenClusterTicket::sign(ticket, &secret_key).unwrap();
+  |                                            ^^^^ associated function or constant not found in `SignedAspenClusterTicket`
+  |
+note: if you're trying to build a new `SignedAspenClusterTicket`, consider using `SignedAspenClusterTicket::deserialize` which returns `Result<SignedAspenClusterTicket, ClusterTicketError>`
+ --> src/signed.rs
+  |
+  |     pub fn deserialize(input: &str) -> ClusterTicketResult<Self> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

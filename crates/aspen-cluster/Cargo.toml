@@ -11,7 +11,7 @@ authors = ["Aspen Contributors"]
 aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-crypto = { path = "../aspen-crypto" }
 aspen-disk = { path = "../aspen-disk" }
-aspen-ticket = { path = "../aspen-ticket" }
+aspen-ticket = { path = "../aspen-ticket", default-features = false, features = ["iroh", "std"] }
 aspen-auth = { path = "../aspen-auth" }
 aspen-raft = { path = "../aspen-raft" }
 aspen-raft-types = { path = "../aspen-raft-types" }

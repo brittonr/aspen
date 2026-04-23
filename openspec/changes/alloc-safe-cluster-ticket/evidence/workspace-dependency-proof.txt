@@ -1,0 +1,13 @@
+Evidence-ID: alloc-safe-cluster-ticket.v1-workspace-dependency-proof
+Task-ID: V4
+Artifact-Type: command-transcript
+Covers: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable
+
+## `rg -n ^'aspen-ticket\s*=\s*\{' Cargo.toml`
+
+286:aspen-ticket = { path = "crates/aspen-ticket", default-features = false }
+
+## Negative assertion
+
+aspen-ticket = { path = "crates/aspen-ticket", default-features = false }
+workspace stanza ok: explicit alloc-safe default with no iroh/signed/std defaults

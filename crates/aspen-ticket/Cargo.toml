@@ -5,20 +5,25 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Aspen cluster ticket types for peer discovery and bootstrap"
 
+[features]
+default = []
+iroh = ["dep:iroh-base", "dep:iroh-gossip", "aspen-cluster-types/iroh"]
+signed = ["dep:iroh-base"]
+std = ["signed", "dep:rand"]
+
 [dependencies]
-# P2P networking
-iroh = { version = "0.97.0" }
-iroh-gossip = "0.97.0"
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
 iroh-tickets = "0.4.0"
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-postcard = { version = "1.0", features = ["alloc"] }
-
-# Error handling
-anyhow = "1.0"
-
-# Random nonce generation
-rand = "0.9"
+iroh-base = { version = "0.97.0", optional = true }
+iroh-gossip = { version = "0.97.0", optional = true }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+thiserror = { version = "2.0", default-features = false }
+rand = { version = "0.9", optional = true }
 
 [dev-dependencies]
+iroh = { version = "0.97.0" }
+iroh-base = "0.97.0"
+iroh-gossip = "0.97.0"
+rand = "0.9"
+trybuild = "1"

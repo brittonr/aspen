@@ -1,254 +1,80 @@
-//! Signed cluster tickets with Ed25519 signature verification.
+//! Signed cluster tickets with explicit-time verification helpers.
 
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
-use anyhow::Context;
-use anyhow::Result;
-use iroh::PublicKey;
-use iroh::SecretKey;
-use iroh::Signature;
+use iroh_base::PublicKey;
+use iroh_base::Signature;
 use iroh_tickets::Ticket;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::AspenClusterTicket;
+use crate::ClusterTicketError;
+use crate::ClusterTicketResult;
 use crate::constants::CLOCK_SKEW_TOLERANCE_SECS;
+#[cfg(any(test, feature = "std"))]
 use crate::constants::DEFAULT_TICKET_VALIDITY_SECS;
 use crate::constants::SIGNED_TICKET_VERSION;
 
+#[cfg(any(test, feature = "std"))]
+use iroh_base::SecretKey;
+#[cfg(any(test, feature = "std"))]
+use std::time::SystemTime;
+#[cfg(any(test, feature = "std"))]
+use std::time::UNIX_EPOCH;
+
 /// Signed cluster ticket with Ed25519 signature verification.
-///
-/// Provides cryptographic authentication for cluster join tickets:
-/// - Proves ticket was created by a known cluster member
-/// - Prevents ticket forgery by malicious actors
-/// - Includes timestamp-based expiration for replay prevention
-/// - Uses 128-bit nonce for additional replay protection
-///
-/// Tiger Style: Fixed-size signature (64 bytes), bounded fields, fail-fast verification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedAspenClusterTicket {
     /// Protocol version for forward compatibility.
     pub version: u8,
-    /// The inner ticket payload (topic, bootstrap, cluster_id).
+    /// The inner ticket payload.
     pub ticket: AspenClusterTicket,
-    /// Public key of the ticket creator (cluster member who signed).
+    /// Public key of the ticket creator.
     pub issuer: PublicKey,
-    /// Unix timestamp when ticket was created (seconds since epoch).
+    /// Unix timestamp when ticket was created.
     pub issued_at_secs: u64,
-    /// Unix timestamp when ticket expires (seconds since epoch).
+    /// Unix timestamp when ticket expires.
     pub expires_at_secs: u64,
-    /// Random nonce for replay prevention (128 bits).
+    /// Nonce for replay prevention.
     pub nonce: [u8; 16],
-    /// Ed25519 signature over the serialized payload (64 bytes).
+    /// Ed25519 signature over the serialized payload.
     pub signature: Signature,
 }
 
-#[allow(unknown_lints)]
-#[allow(
-    ambient_clock,
-    reason = "signed tickets need current wall-clock seconds to stamp issuance and expiry"
-)]
-fn current_unix_time_secs_result() -> Result<u64> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system time before Unix epoch")
-        .map(|duration| duration.as_secs())
-}
-
-#[allow(unknown_lints)]
-#[allow(
-    ambient_clock,
-    reason = "signed ticket verification compares stored wall-clock timestamps against the current time"
-)]
-fn current_unix_time_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_secs()).unwrap_or(0)
-}
-
 impl SignedAspenClusterTicket {
-    /// Create and sign a new cluster ticket.
-    ///
-    /// Signs the ticket payload with the provided secret key. The issuer's
-    /// public key is derived from the secret key and embedded in the ticket.
-    ///
-    /// # Arguments
-    /// * `ticket` - The unsigned cluster ticket payload
-    /// * `secret_key` - The signer's Iroh secret key
-    ///
-    /// # Returns
-    /// A signed ticket with 24-hour validity (default TTL).
-    pub fn sign(ticket: AspenClusterTicket, secret_key: &SecretKey) -> Result<Self> {
-        Self::sign_with_validity(ticket, secret_key, DEFAULT_TICKET_VALIDITY_SECS)
+    /// Verify the signature and timestamps against an explicit validation time.
+    pub fn verify_at(&self, now_secs: u64) -> Option<&AspenClusterTicket> {
+        self.verify_with_error_at(now_secs).ok()
     }
 
-    /// Create and sign a ticket with custom validity duration.
-    ///
-    /// # Arguments
-    /// * `ticket` - The unsigned cluster ticket payload
-    /// * `secret_key` - The signer's Iroh secret key
-    /// * `validity_secs` - How long the ticket is valid (in seconds)
-    pub fn sign_with_validity(ticket: AspenClusterTicket, secret_key: &SecretKey, validity_secs: u64) -> Result<Self> {
-        let now = current_unix_time_secs_result()?;
-
-        // Generate random nonce for replay prevention
-        let mut nonce = [0u8; 16];
-        {
-            use rand::RngCore;
-            rand::rng().fill_bytes(&mut nonce);
-        }
-
-        // Build the unsigned payload for signing
-        let payload = SignedTicketPayload {
-            version: SIGNED_TICKET_VERSION,
-            ticket: &ticket,
-            issuer: secret_key.public(),
-            issued_at_secs: now,
-            expires_at_secs: now.saturating_add(validity_secs),
-            nonce,
-        };
-
-        // Serialize payload to canonical bytes
-        let payload_bytes = payload.to_bytes()?;
-
-        // Sign with Ed25519
-        let signature = secret_key.sign(&payload_bytes);
-
-        Ok(Self {
-            version: SIGNED_TICKET_VERSION,
-            ticket,
-            issuer: secret_key.public(),
-            issued_at_secs: now,
-            expires_at_secs: now.saturating_add(validity_secs),
-            nonce,
-            signature,
-        })
-    }
-
-    /// Verify the signature and return the inner ticket if valid.
-    ///
-    /// Performs the following checks:
-    /// 1. Signature verification using issuer's public key
-    /// 2. Timestamp validation (not expired, not in future)
-    /// 3. Version compatibility check
-    ///
-    /// Returns `None` if any validation fails (fail-fast, no error details
-    /// to prevent information leakage to attackers).
-    pub fn verify(&self) -> Option<&AspenClusterTicket> {
-        // Reject unknown future versions
-        if self.version > SIGNED_TICKET_VERSION {
-            return None;
-        }
-
-        // Build the payload for signature verification
-        let payload = SignedTicketPayload {
-            version: self.version,
-            ticket: &self.ticket,
-            issuer: self.issuer,
-            issued_at_secs: self.issued_at_secs,
-            expires_at_secs: self.expires_at_secs,
-            nonce: self.nonce,
-        };
-
-        // Serialize payload to canonical bytes
-        let payload_bytes = payload.to_bytes().ok()?;
-
-        // Verify Ed25519 signature
+    /// Verify the signature and timestamps with detailed errors.
+    pub fn verify_with_error_at(&self, now_secs: u64) -> ClusterTicketResult<&AspenClusterTicket> {
+        validate_signed_version(self.version)?;
+        let payload_bytes = self.payload_bytes();
         if self.issuer.verify(&payload_bytes, &self.signature).is_err() {
-            return None;
+            return Err(ClusterTicketError::InvalidSignature);
         }
-
-        // Verify timestamps (with clock skew tolerance)
-        if !self.is_timestamp_valid() {
-            return None;
-        }
-
-        Some(&self.ticket)
-    }
-
-    /// Verify signature and timestamps, returning detailed error on failure.
-    ///
-    /// Unlike `verify()`, this method provides error context for debugging.
-    /// Use this for logging/diagnostics, NOT for security decisions.
-    pub fn verify_with_error(&self) -> Result<&AspenClusterTicket> {
-        // Reject unknown future versions
-        if self.version > SIGNED_TICKET_VERSION {
-            anyhow::bail!("unsupported ticket version {} (max supported: {})", self.version, SIGNED_TICKET_VERSION);
-        }
-
-        // Build the payload for signature verification
-        let payload = SignedTicketPayload {
-            version: self.version,
-            ticket: &self.ticket,
-            issuer: self.issuer,
-            issued_at_secs: self.issued_at_secs,
-            expires_at_secs: self.expires_at_secs,
-            nonce: self.nonce,
-        };
-
-        // Serialize payload to canonical bytes
-        let payload_bytes = payload.to_bytes().context("failed to serialize ticket payload for verification")?;
-
-        // Verify Ed25519 signature
-        self.issuer.verify(&payload_bytes, &self.signature).context("signature verification failed")?;
-
-        // Verify timestamps
-        self.verify_timestamps()?;
-
+        validate_signed_timestamps(self.issued_at_secs, self.expires_at_secs, now_secs)?;
         Ok(&self.ticket)
     }
 
-    /// Check if the timestamp is valid (not expired, not in future).
-    fn is_timestamp_valid(&self) -> bool {
-        let now = current_unix_time_secs();
-
-        // Check not issued in the future (with clock skew tolerance)
-        if self.issued_at_secs > now.saturating_add(CLOCK_SKEW_TOLERANCE_SECS) {
-            return false;
-        }
-
-        // Check not expired
-        if self.expires_at_secs < now {
-            return false;
-        }
-
-        true
-    }
-
-    /// Verify timestamps with detailed error messages.
-    fn verify_timestamps(&self) -> Result<()> {
-        let now = current_unix_time_secs_result()?;
-
-        // Check not issued in the future (with clock skew tolerance)
-        if self.issued_at_secs > now.saturating_add(CLOCK_SKEW_TOLERANCE_SECS) {
-            anyhow::bail!(
-                "ticket issued_at {} is in the future (now: {}, tolerance: {}s)",
-                self.issued_at_secs,
-                now,
-                CLOCK_SKEW_TOLERANCE_SECS
-            );
-        }
-
-        // Check not expired
-        if self.expires_at_secs < now {
-            anyhow::bail!("ticket expired at {} (now: {})", self.expires_at_secs, now);
-        }
-
-        Ok(())
+    /// Returns whether the ticket is expired at the supplied validation time.
+    pub fn is_expired_at(&self, now_secs: u64) -> bool {
+        self.expires_at_secs < now_secs
     }
 
     /// Serialize the signed ticket to a base32-encoded string.
-    ///
-    /// Format: `aspensigned{base32-encoded-postcard-payload}`
     pub fn serialize(&self) -> String {
         <Self as Ticket>::serialize(self)
     }
 
     /// Deserialize a signed ticket from a base32-encoded string.
-    ///
-    /// Note: This only parses the ticket, it does NOT verify the signature.
-    /// Call `verify()` after deserialization to validate the ticket.
-    pub fn deserialize(input: &str) -> Result<Self> {
-        <Self as Ticket>::deserialize(input).context("failed to deserialize signed Aspen ticket")
+    pub fn deserialize(input: &str) -> ClusterTicketResult<Self> {
+        <Self as Ticket>::deserialize(input).map_err(|error| ClusterTicketError::Deserialize {
+            reason: error.to_string(),
+        })
     }
 
     /// Returns the issuer's public key.
@@ -261,10 +87,51 @@ impl SignedAspenClusterTicket {
         self.expires_at_secs
     }
 
-    /// Returns whether the ticket has expired.
+    fn payload_bytes(&self) -> Vec<u8> {
+        SignedTicketPayload {
+            version: self.version,
+            ticket: &self.ticket,
+            issuer: self.issuer,
+            issued_at_secs: self.issued_at_secs,
+            expires_at_secs: self.expires_at_secs,
+            nonce: self.nonce,
+        }
+        .to_bytes()
+    }
+}
+
+#[cfg(any(test, feature = "std"))]
+impl SignedAspenClusterTicket {
+    /// Create and sign a new cluster ticket using the current wall clock.
+    pub fn sign(ticket: AspenClusterTicket, secret_key: &SecretKey) -> ClusterTicketResult<Self> {
+        Self::sign_with_validity(ticket, secret_key, DEFAULT_TICKET_VALIDITY_SECS)
+    }
+
+    /// Create and sign a ticket with a custom validity duration.
+    pub fn sign_with_validity(
+        ticket: AspenClusterTicket,
+        secret_key: &SecretKey,
+        validity_secs: u64,
+    ) -> ClusterTicketResult<Self> {
+        let now_secs = current_unix_time_secs()?;
+        let expires_at_secs = now_secs.saturating_add(validity_secs);
+        let nonce = generate_nonce();
+        Ok(sign_with_material(ticket, secret_key, now_secs, expires_at_secs, nonce))
+    }
+
+    /// Verify the signature and timestamps using the current wall clock.
+    pub fn verify(&self) -> Option<&AspenClusterTicket> {
+        self.verify_at(current_unix_time_secs_or_zero())
+    }
+
+    /// Verify with detailed errors using the current wall clock.
+    pub fn verify_with_error(&self) -> ClusterTicketResult<&AspenClusterTicket> {
+        self.verify_with_error_at(current_unix_time_secs()?)
+    }
+
+    /// Returns whether the ticket is expired using the current wall clock.
     pub fn is_expired(&self) -> bool {
-        let now = current_unix_time_secs();
-        self.expires_at_secs < now
+        self.is_expired_at(current_unix_time_secs_or_zero())
     }
 }
 
@@ -272,13 +139,8 @@ impl Ticket for SignedAspenClusterTicket {
     const KIND: &'static str = "aspensigned";
 
     fn to_bytes(&self) -> Vec<u8> {
-        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
-        // All fields are fixed-size or bounded (version: u8, Signature: 64 bytes,
-        // PublicKey: 32 bytes, nonce: 16 bytes, timestamps: u64, inner ticket bounded by
-        // AspenClusterTicket::MAX_BOOTSTRAP_PEERS=16). Postcard serialization should be infallible.
-        let encoded = postcard::to_stdvec(&self);
-        debug_assert!(encoded.is_ok(), "SignedAspenClusterTicket serialization unexpectedly failed");
-        encoded.unwrap_or_default()
+        postcard::to_allocvec(self)
+            .expect("SignedAspenClusterTicket serialization is infallible for bounded fields")
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
@@ -287,10 +149,6 @@ impl Ticket for SignedAspenClusterTicket {
     }
 }
 
-/// Internal payload structure for signing (excludes the signature field).
-///
-/// This struct is used to serialize the data that gets signed, ensuring
-/// the signature is computed over a canonical byte representation.
 #[derive(Serialize)]
 struct SignedTicketPayload<'a> {
     version: u8,
@@ -302,19 +160,102 @@ struct SignedTicketPayload<'a> {
 }
 
 impl SignedTicketPayload<'_> {
-    fn to_bytes(&self) -> Result<Vec<u8>> {
-        postcard::to_stdvec(self).context("failed to serialize ticket payload")
+    fn to_bytes(&self) -> Vec<u8> {
+        postcard::to_allocvec(self)
+            .expect("SignedAspenClusterTicket payload serialization is infallible for bounded fields")
     }
+}
+
+fn validate_signed_version(version: u8) -> ClusterTicketResult<()> {
+    if version > SIGNED_TICKET_VERSION {
+        return Err(ClusterTicketError::UnsupportedSignedVersion {
+            version,
+            max_supported: SIGNED_TICKET_VERSION,
+        });
+    }
+    Ok(())
+}
+
+fn validate_signed_timestamps(issued_at_secs: u64, expires_at_secs: u64, now_secs: u64) -> ClusterTicketResult<()> {
+    let max_issued_at_secs = now_secs.saturating_add(CLOCK_SKEW_TOLERANCE_SECS);
+    if issued_at_secs > max_issued_at_secs {
+        return Err(ClusterTicketError::SignedTicketIssuedInFuture {
+            issued_at_secs,
+            now_secs,
+        });
+    }
+    if expires_at_secs < now_secs {
+        return Err(ClusterTicketError::ExpiredSignedTicket {
+            expires_at_secs,
+            now_secs,
+        });
+    }
+    Ok(())
+}
+
+#[cfg(any(test, feature = "std"))]
+fn sign_with_material(
+    ticket: AspenClusterTicket,
+    secret_key: &SecretKey,
+    issued_at_secs: u64,
+    expires_at_secs: u64,
+    nonce: [u8; 16],
+) -> SignedAspenClusterTicket {
+    let payload = SignedTicketPayload {
+        version: SIGNED_TICKET_VERSION,
+        ticket: &ticket,
+        issuer: secret_key.public(),
+        issued_at_secs,
+        expires_at_secs,
+        nonce,
+    };
+    let payload_bytes = payload.to_bytes();
+    let signature = secret_key.sign(&payload_bytes);
+    SignedAspenClusterTicket {
+        version: SIGNED_TICKET_VERSION,
+        ticket,
+        issuer: secret_key.public(),
+        issued_at_secs,
+        expires_at_secs,
+        nonce,
+        signature,
+    }
+}
+
+#[cfg(any(test, feature = "std"))]
+fn current_unix_time_secs() -> ClusterTicketResult<u64> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| ClusterTicketError::Deserialize {
+            reason: error.to_string(),
+        })?;
+    Ok(duration.as_secs())
+}
+
+#[cfg(any(test, feature = "std"))]
+fn current_unix_time_secs_or_zero() -> u64 {
+    current_unix_time_secs().unwrap_or(0)
+}
+
+#[cfg(any(test, feature = "std"))]
+fn generate_nonce() -> [u8; 16] {
+    use rand::RngCore;
+
+    let mut nonce = [0u8; 16];
+    rand::rng().fill_bytes(&mut nonce);
+    nonce
 }
 
 #[cfg(test)]
 mod tests {
     use iroh_gossip::proto::TopicId;
+    use iroh_tickets::Ticket;
 
-    use super::*;
+    use super::SignedAspenClusterTicket;
+    use crate::AspenClusterTicket;
 
     fn make_signed_ticket() -> SignedAspenClusterTicket {
-        let key = SecretKey::from([1u8; 32]);
+        let key = iroh::SecretKey::from([1u8; 32]);
         let inner = AspenClusterTicket::with_bootstrap(
             TopicId::from_bytes([42u8; 32]),
             "test-cluster".to_string(),

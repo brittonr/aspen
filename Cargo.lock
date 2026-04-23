@@ -2948,13 +2948,16 @@ dependencies = [
 name = "aspen-ticket"
 version = "0.1.0"
 dependencies = [
- "anyhow",
+ "aspen-cluster-types",
  "iroh",
+ "iroh-base",
  "iroh-gossip",
  "iroh-tickets",
  "postcard",
  "rand 0.9.2",
  "serde",
+ "thiserror 2.0.18",
+ "trybuild",
 ]
 
 [[package]]

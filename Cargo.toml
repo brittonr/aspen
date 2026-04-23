@@ -283,7 +283,7 @@ aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
 aspen-rpc-core = { path = "crates/aspen-rpc-core" }
 aspen-core-essentials-handler = { path = "crates/aspen-core-essentials-handler" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
-aspen-ticket = { path = "crates/aspen-ticket" }
+aspen-ticket = { path = "crates/aspen-ticket", default-features = false }
 aspen-hooks-types = { path = "crates/aspen-hooks-types" }
 aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
 aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
