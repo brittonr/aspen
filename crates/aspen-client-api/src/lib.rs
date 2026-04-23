@@ -291,6 +291,12 @@ mod tests {
             (ClientRpcResponse::error("X", "X"), 14, "Error"), // 14 = after Pong(12) + ClusterState(13)
         ];
 
+        assert_eq!(golden.len(), 3, "golden response table must pin three critical variants");
+        assert!(
+            golden.iter().all(|(_, expected, name)| *expected < 128 && !name.is_empty()),
+            "golden response table entries must stay single-byte discriminants with stable names"
+        );
+
         for (variant, expected, name) in &golden {
             let actual = discriminant_of(variant);
             assert_eq!(
@@ -633,6 +639,12 @@ mod tests {
             ),
         ];
 
+        assert_eq!(golden.len(), 4, "golden request table must pin four critical variants");
+        assert!(
+            golden.iter().all(|(_, expected, name)| *expected < 128 && !name.is_empty()),
+            "golden request table entries must stay single-byte discriminants with stable names"
+        );
+
         for (variant, expected, name) in &golden {
             let actual = discriminant_of(variant);
             assert_eq!(
@@ -723,21 +735,12 @@ mod tests {
         const MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES: usize = 16_usize * 1024 * 1024;
         const MAX_REASONABLE_CLUSTER_NODES: usize = 256;
 
-        let does_client_message_size_bytes_remain_positive = MAX_CLIENT_MESSAGE_SIZE > 0;
-        let does_client_message_size_bytes_remain_bounded =
-            MAX_CLIENT_MESSAGE_SIZE <= MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES;
-        let is_cluster_nodes_positive = MAX_CLUSTER_NODES > 0;
-        let is_cluster_nodes_bounded = MAX_CLUSTER_NODES <= MAX_REASONABLE_CLUSTER_NODES;
-        let is_client_connections_positive = MAX_CLIENT_CONNECTIONS > 0;
-        let does_git_chunk_size_bytes_remain_ordered =
-            DEFAULT_GIT_CHUNK_SIZE_BYTES <= MAX_GIT_CHUNK_SIZE_BYTES;
-
-        assert!(does_client_message_size_bytes_remain_positive);
-        assert!(does_client_message_size_bytes_remain_bounded);
-        assert!(is_cluster_nodes_positive);
-        assert!(is_cluster_nodes_bounded);
-        assert!(is_client_connections_positive);
-        assert!(does_git_chunk_size_bytes_remain_ordered);
+        assert!(MAX_CLIENT_MESSAGE_SIZE > 0);
+        assert!(MAX_CLIENT_MESSAGE_SIZE <= MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES);
+        assert!(MAX_CLUSTER_NODES > 0);
+        assert!(MAX_CLUSTER_NODES <= MAX_REASONABLE_CLUSTER_NODES);
+        assert!(MAX_CLIENT_CONNECTIONS > 0);
+        assert!(DEFAULT_GIT_CHUNK_SIZE_BYTES <= MAX_GIT_CHUNK_SIZE_BYTES);
     }
 
     #[test]

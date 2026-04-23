@@ -147,6 +147,7 @@ Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 - For narrow Tiger Style slice benchmarks, parse the summary/index output and count unique `path:line` locations (or unique `(path,line,lint)` tuples if you truly want lint-level counts), not raw grep hits.
 - `cargo tigerstyle check` in this repo still needs `env -u CARGO_INCREMENTAL RUSTC_WRAPPER=` or the `sccache: incremental compilation is prohibited` wrapper aborts before linting.
 - When the unit-suffix lint fires on timer-ish locals such as `check_interval`, renaming to a non-quantity name like `check_tick_timer` is cleaner than inventing fake unit suffixes for non-numeric values.
+- The corrected Aspen-only broad metric should parse the Tiger Style summary index crate column (`aspen_*`) instead of raw path matches; vendored `openraft` still prints bare `src/...` paths. Also remember that this parser excludes `/tests/` and `/examples/` paths only — `#[cfg(test)]` modules that live inside `src/` still count on the broad rail until you move to an explicit local slice.
 
 ## OpenSpec archive preflight gotcha (2026-04-21)
 
