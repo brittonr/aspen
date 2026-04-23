@@ -33,6 +33,11 @@ enum TryAcquireResult {
     RetryAfterMs(u64),
 }
 
+struct RetryState {
+    attempt: u32,
+    backoff_ms: u64,
+}
+
 /// Configuration for distributed rate limiter.
 #[derive(Debug, Clone)]
 pub struct RateLimiterConfig {
@@ -125,8 +130,10 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             self.config.capacity_tokens
         );
 
-        let mut attempt = 0u32;
-        let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
+        let mut retry_state = RetryState {
+            attempt: 0,
+            backoff_ms: CAS_RETRY_INITIAL_BACKOFF_MS,
+        };
 
         loop {
             let now_ms = now_unix_ms();
@@ -153,7 +160,10 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             };
 
             // Atomic update
-            match self.try_acquire_n_cas_update(n, &current, &new_state, &mut attempt, &mut backoff_ms).await {
+            match self
+                .try_acquire_n_cas_update(n, &current, &new_state, &mut retry_state)
+                .await
+            {
                 TryAcquireResult::Success(remaining) => return Ok(remaining),
                 TryAcquireResult::Exhausted(err) => return Err(err),
                 TryAcquireResult::StorageError(err) => return Err(err),
@@ -207,8 +217,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         n: u64,
         current: &BucketState,
         new_state: &BucketState,
-        attempt: &mut u32,
-        backoff_ms: &mut u64,
+        retry_state: &mut RetryState,
     ) -> TryAcquireResult {
         match self.cas_state(current, new_state).await {
             Ok(_) => {
@@ -221,16 +230,16 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                 TryAcquireResult::Success(new_state.tokens as u64)
             }
             Err(CoordinationError::CasConflict) => {
-                *attempt += 1;
-                if *attempt >= MAX_CAS_RETRIES {
+                retry_state.attempt += 1;
+                if retry_state.attempt >= MAX_CAS_RETRIES {
                     return TryAcquireResult::Exhausted(RateLimitError::TokensExhausted {
                         requested: n,
                         available: 0,
                         retry_after_ms: 1000,
                     });
                 }
-                let sleep_ms = *backoff_ms;
-                *backoff_ms = (*backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
+                let sleep_ms = retry_state.backoff_ms;
+                retry_state.backoff_ms = (retry_state.backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
                 TryAcquireResult::RetryAfterMs(sleep_ms)
             }
             Err(CoordinationError::Storage { source }) => self.try_acquire_n_handle_storage_error(n, new_state, source),
