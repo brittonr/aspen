@@ -181,13 +181,14 @@ mod tests {
     use super::*;
 
     fn assert_canonical_lock_operation(operation_a: Operation, operation_b: Operation) {
-        match (operation_a, operation_b) {
-            (Operation::Write { key: key_a, .. }, Operation::Write { key: key_b, .. }) => {
-                assert_eq!(key_a, "_lock:pipeline:42");
-                assert_eq!(key_a, key_b);
-            }
-            _ => panic!("expected write operations"),
-        }
+        let Operation::Write { key: key_a, .. } = operation_a else {
+            panic!("expected write operation for canonical lock member (left)");
+        };
+        let Operation::Write { key: key_b, .. } = operation_b else {
+            panic!("expected write operation for canonical lock member (right)");
+        };
+        assert_eq!(key_a, "_lock:pipeline:42");
+        assert_eq!(key_a, key_b);
     }
 
     #[test]

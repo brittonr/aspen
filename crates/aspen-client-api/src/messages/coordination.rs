@@ -198,7 +198,7 @@ pub enum CoordinationRequest {
     // RwLock operations
     /// Acquire read lock (blocking until available or timeout).
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockAcquireRead {
@@ -209,7 +209,7 @@ pub enum CoordinationRequest {
     },
     /// Try to acquire read lock (non-blocking).
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockTryAcquireRead {
@@ -219,7 +219,7 @@ pub enum CoordinationRequest {
     },
     /// Acquire write lock (blocking until available or timeout).
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockAcquireWrite {
@@ -230,7 +230,7 @@ pub enum CoordinationRequest {
     },
     /// Try to acquire write lock (non-blocking).
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockTryAcquireWrite {
@@ -240,13 +240,13 @@ pub enum CoordinationRequest {
     },
     /// Release read lock.
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockReleaseRead { name: String, holder_id: String },
     /// Release write lock.
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockReleaseWrite {
@@ -256,7 +256,7 @@ pub enum CoordinationRequest {
     },
     /// Downgrade write lock to read lock.
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockDowngrade {
@@ -267,7 +267,7 @@ pub enum CoordinationRequest {
     },
     /// Query RWLock status.
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "RWLock wire names are append-only API variants shared with existing clients"
     )]
     RWLockStatus { name: String },
@@ -331,13 +331,13 @@ pub enum CoordinationRequest {
     QueueStatus { queue_name: String },
     /// Get items from dead letter queue.
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "DLQ wire names are append-only API variants shared with existing clients"
     )]
     QueueGetDLQ { queue_name: String, max_items: u32 },
     /// Move DLQ item back to main queue.
     #[allow(
-        tigerstyle::acronym_style,
+        acronym_style,
         reason = "DLQ wire names are append-only API variants shared with existing clients"
     )]
     QueueRedriveDLQ { queue_name: String, item_id: u64 },

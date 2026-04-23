@@ -1468,6 +1468,10 @@ pub enum ClientRpcRequest {
     // Read-Write Lock operations
     // =========================================================================
     /// Acquire read lock (blocking until available or timeout).
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockAcquireRead {
         /// Lock name.
         name: String,
@@ -1480,6 +1484,10 @@ pub enum ClientRpcRequest {
     },
 
     /// Try to acquire read lock (non-blocking).
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockTryAcquireRead {
         /// Lock name.
         name: String,
@@ -1490,6 +1498,10 @@ pub enum ClientRpcRequest {
     },
 
     /// Acquire write lock (blocking until available or timeout).
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockAcquireWrite {
         /// Lock name.
         name: String,
@@ -1502,6 +1514,10 @@ pub enum ClientRpcRequest {
     },
 
     /// Try to acquire write lock (non-blocking).
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockTryAcquireWrite {
         /// Lock name.
         name: String,
@@ -1512,6 +1528,10 @@ pub enum ClientRpcRequest {
     },
 
     /// Release read lock.
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockReleaseRead {
         /// Lock name.
         name: String,
@@ -1520,6 +1540,10 @@ pub enum ClientRpcRequest {
     },
 
     /// Release write lock.
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockReleaseWrite {
         /// Lock name.
         name: String,
@@ -1530,6 +1554,10 @@ pub enum ClientRpcRequest {
     },
 
     /// Downgrade write lock to read lock.
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockDowngrade {
         /// Lock name.
         name: String,
@@ -1542,6 +1570,10 @@ pub enum ClientRpcRequest {
     },
 
     /// Query RWLock status.
+    #[allow(
+        acronym_style,
+        reason = "RWLock request wire names are append-only API variants shared with existing clients"
+    )]
     RWLockStatus {
         /// Lock name.
         name: String,
@@ -4226,27 +4258,59 @@ pub enum ClientRpcResponse {
     // Read-Write Lock responses
     // =========================================================================
     /// RWLock acquire read result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockAcquireReadResult(RwLockResultResponse),
 
     /// RWLock try-acquire read result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockTryAcquireReadResult(RwLockResultResponse),
 
     /// RWLock acquire write result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockAcquireWriteResult(RwLockResultResponse),
 
     /// RWLock try-acquire write result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockTryAcquireWriteResult(RwLockResultResponse),
 
     /// RWLock release read result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockReleaseReadResult(RwLockResultResponse),
 
     /// RWLock release write result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockReleaseWriteResult(RwLockResultResponse),
 
     /// RWLock downgrade result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockDowngradeResult(RwLockResultResponse),
 
     /// RWLock status result.
+    #[allow(
+        acronym_style,
+        reason = "RWLock response wire names are append-only API variants shared with existing clients"
+    )]
     RWLockStatusResult(RwLockResultResponse),
 
     // =========================================================================
@@ -4283,9 +4347,17 @@ pub enum ClientRpcResponse {
     QueueStatusResult(QueueStatusResultResponse),
 
     /// Queue get DLQ result.
+    #[allow(
+        acronym_style,
+        reason = "DLQ response wire names are append-only API variants shared with existing clients"
+    )]
     QueueGetDLQResult(QueueGetDlqResultResponse),
 
     /// Queue redrive DLQ result.
+    #[allow(
+        acronym_style,
+        reason = "DLQ response wire names are append-only API variants shared with existing clients"
+    )]
     QueueRedriveDLQResult(QueueRedriveDlqResultResponse),
 
     // =========================================================================
