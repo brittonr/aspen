@@ -68,6 +68,28 @@ pub struct ShardedKeyValueStore<KV: KeyValueStore> {
     topology: Option<Arc<RwLock<ShardTopology>>>,
 }
 
+const DEFAULT_SCAN_LIMIT_RESULTS: u32 = 1_000;
+const MIN_SCAN_RESULTS_PER_SHARD: u32 = 1;
+
+fn requested_scan_limit_results(limit_results: Option<u32>) -> u32 {
+    limit_results.unwrap_or(DEFAULT_SCAN_LIMIT_RESULTS)
+}
+
+fn scan_result_capacity(limit_results: Option<u32>) -> usize {
+    usize::try_from(requested_scan_limit_results(limit_results)).unwrap_or(usize::MAX)
+}
+
+fn max_scan_results_per_shard(limit_results: Option<u32>, shard_count: usize) -> u32 {
+    let requested_max_results = requested_scan_limit_results(limit_results);
+    let shard_count_u32 = match u32::try_from(shard_count) {
+        Ok(0) | Err(_) => MIN_SCAN_RESULTS_PER_SHARD,
+        Ok(count) => count,
+    };
+    debug_assert!(shard_count_u32 > 0, "scan shard count should never be zero after normalization");
+    let max_results_per_shard = requested_max_results / shard_count_u32;
+    max_results_per_shard.max(MIN_SCAN_RESULTS_PER_SHARD)
+}
+
 impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
     /// Create a new sharded store with the given configuration.
     ///
@@ -442,17 +464,15 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         let shard_ids = self.router.get_shards_for_prefix(&request.prefix);
         let shards = self.shards.read().await;
 
-        let mut all_entries = Vec::new();
-        let mut max_entries_per_shard = request.limit_results.unwrap_or(1000) / shard_ids.len().max(1) as u32;
-        if max_entries_per_shard == 0 {
-            max_entries_per_shard = 1;
-        }
+        let max_results = scan_result_capacity(request.limit_results);
+        let mut all_entries = Vec::with_capacity(max_results);
+        let max_results_per_shard = max_scan_results_per_shard(request.limit_results, shard_ids.len());
 
         for shard_id in shard_ids {
             if let Some(shard) = shards.get(&shard_id) {
                 let shard_request = ScanRequest {
                     prefix: request.prefix.clone(),
-                    limit_results: Some(max_entries_per_shard),
+                    limit_results: Some(max_results_per_shard),
                     continuation_token: None, // Can't use tokens across shards
                 };
 
@@ -472,13 +492,12 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         all_entries.sort_by(|a, b| a.key.cmp(&b.key));
 
         // Apply overall limit
-        let limit = request.limit_results.unwrap_or(1000) as usize;
-        if all_entries.len() > limit {
-            all_entries.truncate(limit);
+        if all_entries.len() > max_results {
+            all_entries.truncate(max_results);
         }
 
         // Generate continuation token if there might be more
-        let is_truncated = all_entries.len() >= limit;
+        let is_truncated = all_entries.len() >= max_results;
         let continuation_token = if is_truncated {
             all_entries.last().map(|e| e.key.clone())
         } else {
