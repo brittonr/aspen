@@ -280,10 +280,18 @@ pub struct TestReconfigCtx {
     /// GetShare requests sent.
     pub get_share_requests: Vec<(u64, u64)>,
     /// Proposals submitted.
-    pub proposals: Vec<(BTreeMap<u64, Share>, BTreeMap<u64, ShareDigest>, EncryptedSecretChain, u64)>,
+    pub proposals: Vec<ReconfigProposalRecord>,
     /// Simulated connected members.
     pub connected: BTreeSet<u64>,
 }
+
+#[cfg(test)]
+type ReconfigProposalRecord = (
+    BTreeMap<u64, Share>,
+    BTreeMap<u64, ShareDigest>,
+    EncryptedSecretChain,
+    u64,
+);
 
 #[cfg(test)]
 impl TestReconfigCtx {
@@ -370,8 +378,8 @@ mod tests {
             new_epoch: 2,
             old_threshold: 2,
             new_threshold: 2,
-            old_members: old_members,
-            new_members: new_members,
+            old_members,
+            new_members,
             expected_digests: digests,
             cluster_id: b"test-cluster".to_vec(),
             prior_secrets: BTreeMap::new(),
@@ -461,8 +469,8 @@ mod tests {
             new_epoch: 2,
             old_threshold: 2,
             new_threshold: 2,
-            old_members: old_members,
-            new_members: new_members,
+            old_members,
+            new_members,
             expected_digests: digests,
             cluster_id: b"cluster".to_vec(),
             prior_secrets: BTreeMap::new(),
@@ -488,8 +496,8 @@ mod tests {
             new_epoch: 2,
             old_threshold: 2,
             new_threshold: 2,
-            old_members: old_members,
-            new_members: new_members,
+            old_members,
+            new_members,
             expected_digests: digests,
             cluster_id: b"cluster".to_vec(),
             prior_secrets: BTreeMap::new(),
@@ -511,8 +519,8 @@ mod tests {
             new_epoch: 2,
             old_threshold: 2,
             new_threshold: 2,
-            old_members: old_members,
-            new_members: new_members,
+            old_members,
+            new_members,
             expected_digests: digests,
             cluster_id: b"cluster".to_vec(),
             prior_secrets: BTreeMap::new(),
@@ -563,13 +571,13 @@ mod tests {
 
             let old_epoch = 7u64;
             let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
-            old_epoch: old_epoch,
+            old_epoch,
             new_epoch: 19,
-            old_threshold: old_threshold,
-            new_threshold: new_threshold,
+            old_threshold,
+            new_threshold,
             old_members: old_members.clone(),
             new_members: new_members.clone(),
-            expected_digests: expected_digests,
+            expected_digests,
             cluster_id: b"prop-cluster".to_vec(),
             prior_secrets: BTreeMap::new(),
         });

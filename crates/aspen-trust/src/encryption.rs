@@ -381,7 +381,7 @@ mod tests {
         assert!(matches!(try_decrypt(&enc, &[0x01, 0x02, 0x03]), DecryptOutcome::NotAnEnvelope));
 
         // Long plaintext
-        assert!(matches!(try_decrypt(&enc, &vec![0x01u8; 100]), DecryptOutcome::NotAnEnvelope));
+        assert!(matches!(try_decrypt(&enc, &[0x01u8; 100]), DecryptOutcome::NotAnEnvelope));
     }
 
     #[test]
