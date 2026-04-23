@@ -138,6 +138,16 @@ Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 - `AspenHookTicket` now lives in `crates/aspen-hooks-ticket/`. If a consumer only needs hook config/event schema, depend on `aspen-hooks-types`; if it needs ticket URLs, use `aspen-hooks-ticket` or `aspen-hooks` re-exports.
 - `aspen-client-api` test code uses `postcard::to_stdvec`, so if you tighten postcard features for that crate you must keep `use-std` enabled or rewrite the tests to use alloc-only serializers.
 
+## Tiger Style slice benchmarking (2026-04-23)
+
+**Discovery**: `cargo tigerstyle check -p <crate>` can report the same source location multiple times when the crate builds both `lib` and `lib test`, so per-file autoresearch slices need a deduped `file:line` metric instead of raw match counts.
+
+### What To Do
+
+- For narrow Tiger Style slice benchmarks, parse the summary/index output and count unique `path:line` locations (or unique `(path,line,lint)` tuples if you truly want lint-level counts), not raw grep hits.
+- `cargo tigerstyle check` in this repo still needs `env -u CARGO_INCREMENTAL RUSTC_WRAPPER=` or the `sccache: incremental compilation is prohibited` wrapper aborts before linting.
+- When the unit-suffix lint fires on timer-ish locals such as `check_interval`, renaming to a non-quantity name like `check_tick_timer` is cleaner than inventing fake unit suffixes for non-numeric values.
+
 ## OpenSpec archive preflight gotcha (2026-04-21)
 
 **Discovery**: Archiving a change can break `scripts/openspec-preflight.sh` if archived docs still point at `openspec/changes/<name>/...`.

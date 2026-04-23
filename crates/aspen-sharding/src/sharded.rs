@@ -57,6 +57,9 @@ use crate::topology::ShardTopology;
 /// When a shard is not available locally (due to split/merge), the store
 /// returns `ShardMoved` errors with redirect information so clients can
 /// update their topology cache and retry.
+///
+/// Lock ordering: acquire `topology` before `shards` when future code needs
+/// both guards, and drop the first guard before awaiting or taking the second.
 #[derive(Clone)]
 pub struct ShardedKeyValueStore<KV: KeyValueStore> {
     /// Router for determining which shard owns each key.
@@ -792,8 +795,9 @@ mod tests {
         assert_eq!(result.entries.len(), 10);
 
         // Results should be sorted
-        for i in 0..result.entries.len() - 1 {
-            assert!(result.entries[i].key < result.entries[i + 1].key);
+        for adjacent_entries in result.entries.windows(2) {
+            assert_eq!(adjacent_entries.len(), 2, "windowed shard scan comparison should include two entries");
+            assert!(adjacent_entries[0].key < adjacent_entries[1].key);
         }
     }
 }
