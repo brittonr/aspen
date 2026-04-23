@@ -40,7 +40,7 @@ Direct `aspen-ticket` consumers today are:
 
 **Choice:** the unsigned `AspenClusterTicket` payload will store a crate-local `ClusterTopicId([u8; 32])` and transport-neutral bootstrap peers as `Vec<aspen_cluster_types::NodeAddress>`.
 
-**Boundary contract:** `ClusterTopicId` is exactly 32 bytes, preserves bytes as-is with no normalization or canonicalization step, and converts to/from `iroh_gossip::proto::TopicId` by direct byte copy only. Malformed payloads that cannot decode that fixed-width topic will fail through the crate-local unsigned ticket error surface instead of falling back or normalizing.
+**Boundary contract:** `ClusterTopicId` is exactly 32 bytes, preserves bytes as-is with no normalization or canonicalization step, and converts to/from `iroh_gossip::proto::TopicId` by direct byte copy only. Malformed payloads that cannot decode that fixed-width topic will fail through the crate-local unsigned ticket error surface instead of falling back or normalizing. The `NodeAddress` field comes from `aspen-cluster-types` via an alloc-safe manifest edge (`default-features = false`) so the unsigned default surface does not inherit iroh helpers transitively.
 
 **Rationale:** those two fields are the public runtime leaks in the unsigned ticket surface. `NodeAddress` already gives Aspen an alloc-safe endpoint contract, and a fixed-size topic newtype removes the default `iroh-gossip::proto::TopicId` dependency from the shared payload.
 
@@ -86,7 +86,7 @@ Direct `aspen-ticket` consumers today are:
 
 **Choice:** remove implicit runtime enablement from the root `Cargo.toml` workspace dependency stanza, classify every direct consumer of `aspen-ticket`, and save exact compile rails for every direct consumer whose manifest classification changes in this seam.
 
-**Direct-consumer feature matrix (derived from `rg -n 'aspen-ticket\\s*=\\s*\\{' . -g 'Cargo.toml'` plus the helper-usage audit command below):**
+**Direct-consumer feature matrix (derived from a workspace-graph query over `cargo metadata --format-version 1 --no-deps` plus the helper-usage audit command below):**
 
 | Consumer | Current use shape | Planned `aspen-ticket` features | Manifest changes? | Compile rail |
 | --- | --- | --- | --- | --- |
@@ -99,7 +99,7 @@ Direct `aspen-ticket` consumers today are:
 | `crates/aspen-ci` | direct dependency only; no ticket helper hits in the helper-usage audit | bare/default (workspace-inherited) | no local stanza change expected | `cargo check -p aspen-ci` |
 
 **Deterministic audit commands and artifact paths:**
-- Save `rg -n 'aspen-ticket\s*=\s*\{' . -g 'Cargo.toml'` under `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`.
+- Save a repo-wide direct-consumer discovery proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md` using a `cargo metadata --format-version 1 --no-deps` query so every direct `aspen-ticket` dependency is found regardless of manifest syntax.
 - Save `rg -n 'SignedAspenClusterTicket|parse_ticket_to_addrs|with_bootstrap_addr|with_bootstrap\(|endpoint_addrs\(|endpoint_ids\(|AspenClusterTicket::deserialize|AspenClusterTicket::new|iroh::EndpointAddr|iroh::EndpointId|iroh_gossip::proto::TopicId|ClusterTopicId|try_into_iroh|to_topic_id|from_topic_id' crates/aspen-ci-executor-vm crates/aspen-cluster-handler crates/aspen-cluster crates/aspen-rpc-handlers crates/aspen-client crates/aspen-ci -g '*.rs'` alongside the same audit artifact to justify the feature classification.
 - In that same audit artifact, record one exact source citation for each `iroh` consumer (`crates/aspen-ci-executor-vm`, `crates/aspen-cluster-handler`, `crates/aspen-cluster`, `crates/aspen-client`) showing the shell-boundary conversion site, then map each citation to its compile rail.
 - Save a deterministic negative assertion for the root workspace stanza under `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt` that fails review if the `Cargo.toml` `aspen-ticket` workspace stanza reintroduces `iroh`, `signed`, or `std` defaults.
@@ -127,6 +127,7 @@ Direct `aspen-ticket` consumers today are:
 - `cargo check -p aspen-ticket --no-default-features --features signed --target wasm32-unknown-unknown`
 - `cargo check -p aspen-ticket --features std`
 - a dedicated default-vs-`--no-default-features` comparison artifact at `evidence/default-vs-no-default-equivalence.md`
+- deterministic proof that the `aspen-cluster-types` dependency edge stays alloc-safe, including the manifest stanza and dependency-tree evidence that `NodeAddress` does not re-enable iroh helpers on the unsigned default surface
 - a dedicated unsigned wire-break artifact at `evidence/unsigned-wire-break.md` that shows current alloc-safe roundtrip success and legacy unsigned payload rejection side by side
 - a checked-in legacy unsigned fixture source at `crates/aspen-ticket/tests/legacy.rs` to generate or hold the pre-change payload bytes used by `evidence/unsigned-wire-break.md`
 - targeted unsigned roundtrip, invalid-input, malformed-topic rejection, lossless alloc-safe-topic ↔ `iroh_gossip::proto::TopicId` conversion, and legacy-schema rejection tests
@@ -137,6 +138,7 @@ Direct `aspen-ticket` consumers today are:
 - deterministic source audit proving the signed encoder no longer uses `unwrap_or_default()` / empty-payload fallback
 - deterministic direct-consumer audit for every `aspen-ticket` dependency stanza
 - exact compile rails for every direct `aspen-ticket` consumer named in the audit scope
+- representative transitive re-export leak proofs for downstream consumers, specifically `cargo tree -p aspen-fuse -e features -i aspen-ticket` and `cargo tree -p aspen-cli -e features -i aspen-ticket`
 - root workspace stanza proof showing `Cargo.toml` no longer re-enables runtime features implicitly via `evidence/workspace-dependency-proof.txt`
 - synchronized `verification.md`, `implementation-diff.txt`, and `openspec-preflight.txt`
 

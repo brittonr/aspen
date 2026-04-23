@@ -41,6 +41,14 @@ ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neut
 - **AND** conversion between the alloc-safe topic identifier and `iroh_gossip::proto::TopicId` SHALL be lossless when the payload is valid
 - **AND** saved verification SHALL include one valid alloc-safe-topic ↔ `iroh_gossip::proto::TopicId` roundtrip proof and one malformed-topic rejection proof through the crate-local error type
 
+#### Scenario: NodeAddress dependency edge stays alloc-safe
+ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe
+
+- **GIVEN** the unsigned ticket imports `aspen_cluster_types::NodeAddress`
+- **WHEN** that dependency edge is wired into `crates/aspen-ticket`
+- **THEN** the `aspen-cluster-types` dependency SHALL use `default-features = false`
+- **AND** the bare/default and explicit `--no-default-features` `aspen-ticket` surfaces SHALL not receive iroh runtime helpers through that edge unless `iroh` is explicitly selected
+
 ### Requirement: Cluster ticket runtime helpers require explicit shell opt-in
 ID: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in
 
@@ -83,8 +91,9 @@ ID: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shel
 - **THEN** saved dependency, compile, and targeted test transcripts under `openspec/changes/alloc-safe-cluster-ticket/evidence/` SHALL include exact command/results for full-graph `cargo tree -p aspen-ticket -e normal`, full-graph `cargo tree -p aspen-ticket -e features`, full-graph `cargo tree -p aspen-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features -e features`, full-graph `cargo tree -p aspen-ticket --features iroh -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features --features signed -e normal`, full-graph `cargo tree -p aspen-ticket --features std -e normal`, `cargo check -p aspen-ticket`, `cargo check -p aspen-ticket --no-default-features`, `cargo check -p aspen-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features iroh`, `cargo check -p aspen-ticket --no-default-features --features signed`, `cargo check -p aspen-ticket --no-default-features --features signed --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features std`, and exact compile rails for every direct `aspen-ticket` consumer named in the audit scope
 - **AND** those saved artifacts SHALL prove the bare/default and explicit `--no-default-features` unsigned surfaces exclude `iroh`, `iroh-gossip`, `rand`, and `anyhow`
 - **AND** a dedicated artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md` SHALL record the bare/default vs `--no-default-features` comparison
-- **AND** a dedicated artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt` SHALL prove the root `Cargo.toml` `aspen-ticket` workspace stanza keeps the alloc-safe default surface
-- **AND** the saved direct-consumer audit SHALL classify every direct `aspen-ticket` consumer, map each consumer to its exact compile evidence, and cite the shell-boundary conversion site for each consumer that opts into `iroh`
+- **AND** a dedicated artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt` SHALL prove the root `Cargo.toml` `aspen-ticket` workspace stanza explicitly sets `default-features = false`
+- **AND** the saved direct-consumer audit SHALL preserve a repo-wide discovery proof derived from the workspace dependency graph (for example a `cargo metadata --format-version 1 --no-deps` query) so every direct `aspen-ticket` consumer is discovered regardless of manifest syntax, then classify each direct consumer, map each consumer to its exact compile evidence, and cite the shell-boundary conversion site for each consumer that opts into `iroh`
+- **AND** saved artifacts SHALL also include representative transitive re-export leak proofs for downstream consumers reached through the `aspen-client` and `aspen-cluster` re-export paths so feature propagation stays reviewable beyond direct manifests
 - **AND** `openspec/changes/alloc-safe-cluster-ticket/verification.md` SHALL map each checked task to those saved artifacts
 
 ### Requirement: Cluster ticket parse and validation errors stay alloc-safe and explicit
