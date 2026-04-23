@@ -53,7 +53,7 @@ blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-core/blob"]
 aspen-testing = { workspace = true }
 aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
 aspen-deploy = { path = "../aspen-deploy" }
-aspen-cluster-types = { path = "../aspen-cluster-types" }
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
 aspen-client-api = { workspace = true }
 aspen-traits = { path = "../aspen-traits" }
 async-trait = "0.1"

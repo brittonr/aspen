@@ -1,0 +1,10 @@
+Evidence-ID: cluster-types-iroh-opt-in.i1-workspace-proof
+Task-ID: I1
+Artifact-Type: command-transcript
+Covers: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
+
+Root workspace stanza:
+258:aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
+
+Forbidden root workspace iroh feature flag matches:
+none

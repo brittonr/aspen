@@ -1,0 +1,9 @@
+Evidence-ID: alloc-safe-hooks-ticket.v1-preflight
+Task-ID: V1
+Artifact-Type: command-transcript
+Covers: architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable, architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable, ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable
+
+OK: openspec/changes/alloc-safe-hooks-ticket
+  tasks: 5 total / 5 checked
+  changed files listed: 24
+  verification artifacts: 5

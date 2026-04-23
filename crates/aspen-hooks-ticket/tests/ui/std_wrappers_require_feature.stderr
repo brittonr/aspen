@@ -1,0 +1,11 @@
+error[E0599]: no method named `with_expiry_hours` found for struct `AspenHookTicket` in the current scope
+ --> tests/ui/std_wrappers_require_feature.rs:5:20
+  |
+5 |     let _ = ticket.with_expiry_hours(1);
+  |                    ^^^^^^^^^^^^^^^^^
+  |
+help: there is a method `with_expiry` with a similar name
+  |
+5 -     let _ = ticket.with_expiry_hours(1);
+5 +     let _ = ticket.with_expiry(1);
+  |

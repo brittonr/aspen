@@ -11,7 +11,7 @@ authors = ["Aspen Contributors"]
 aspen-core = { package = "aspen-core-shell", version = "0.1.0", path = "../aspen-core-shell" }
 aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
 aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
 aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
 aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
 aspen-raft = { version = "0.1.0", path = "../aspen-raft", features = ["testing"] }

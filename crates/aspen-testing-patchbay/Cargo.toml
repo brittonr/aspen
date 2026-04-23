@@ -18,7 +18,7 @@ aspen-raft-types = { path = "../aspen-raft-types" }
 aspen-raft-network = { path = "../aspen-raft-network" }
 aspen-redb-storage = { path = "../aspen-redb-storage" }
 aspen-cluster = { path = "../aspen-cluster" }
-aspen-cluster-types = { path = "../aspen-cluster-types" }
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
 aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-testing-core = { path = "../aspen-testing-core" }
 aspen-traits = { path = "../aspen-traits" }

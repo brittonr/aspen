@@ -1,0 +1,1630 @@
+Evidence-ID: cluster-types-iroh-opt-in.v1-diff
+Task-ID: V1
+Artifact-Type: diff
+Covers: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
+
+diff --git a/Cargo.toml b/Cargo.toml
+index a051ef63f..4a7aaf579 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -255,7 +255,7 @@ opentelemetry = "0.30"
+ aspen-client = { path = "crates/aspen-client" }
+ aspen-client-api = { path = "crates/aspen-client-api" }
+ aspen-constants = { path = "crates/aspen-constants" }
+-aspen-cluster-types = { path = "crates/aspen-cluster-types" }
++aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
+ aspen-core = { path = "crates/aspen-core" }
+ aspen-core-shell = { path = "crates/aspen-core-shell" }
+ aspen-hlc = { path = "crates/aspen-hlc" }
+diff --git a/crates/aspen-cluster-handler/Cargo.toml b/crates/aspen-cluster-handler/Cargo.toml
+index f111aa1e3..7fd3c0494 100644
+--- a/crates/aspen-cluster-handler/Cargo.toml
++++ b/crates/aspen-cluster-handler/Cargo.toml
+@@ -53,7 +53,7 @@ blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-core/blob"]
+ aspen-testing = { workspace = true }
+ aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
+ aspen-deploy = { path = "../aspen-deploy" }
+-aspen-cluster-types = { path = "../aspen-cluster-types" }
++aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
+ aspen-client-api = { workspace = true }
+ aspen-traits = { path = "../aspen-traits" }
+ async-trait = "0.1"
+diff --git a/crates/aspen-cluster-types/Cargo.toml b/crates/aspen-cluster-types/Cargo.toml
+index 76bdeced9..a32cb104f 100644
+--- a/crates/aspen-cluster-types/Cargo.toml
++++ b/crates/aspen-cluster-types/Cargo.toml
+@@ -10,7 +10,7 @@ description = "Cluster management types for Aspen distributed systems"
+ serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+ 
+ # Error handling
+-thiserror = "2.0"
++thiserror = { version = "2.0", default-features = false }
+ 
+ # Optional P2P address conversion helpers
+ iroh-base = { version = "0.97.0", default-features = false, features = ["key"], optional = true }
+@@ -19,5 +19,5 @@ iroh-base = { version = "0.97.0", default-features = false, features = ["key"],
+ serde_json = "1.0"
+ 
+ [features]
+-default = ["iroh"]
++default = []
+ iroh = ["dep:iroh-base"]
+diff --git a/crates/aspen-cluster-types/src/lib.rs b/crates/aspen-cluster-types/src/lib.rs
+index 05949c5cf..394e52971 100644
+--- a/crates/aspen-cluster-types/src/lib.rs
++++ b/crates/aspen-cluster-types/src/lib.rs
+@@ -3,6 +3,9 @@
+ //! This crate provides types for managing cluster membership and topology,
+ //! including node identifiers, addresses, states, and error types.
+ //!
++//! Production data types stay alloc-safe by default. Runtime iroh conversion
++//! helpers remain behind the explicit `iroh` feature.
++//!
+ //! ## Key Types
+ //!
+ //! - [`NodeId`]: Type-safe node identifier
+@@ -13,7 +16,7 @@
+ //! - [`ClusterMetrics`]: Raft metrics wrapper
+ //! - [`ControlPlaneError`]: Errors for cluster control plane operations
+ 
+-#![cfg_attr(not(any(test, feature = "iroh")), no_std)]
++#![cfg_attr(not(test), no_std)]
+ 
+ extern crate alloc;
+ 
+diff --git a/crates/aspen-jobs/Cargo.toml b/crates/aspen-jobs/Cargo.toml
+index 010184db4..b3ab06ee0 100644
+--- a/crates/aspen-jobs/Cargo.toml
++++ b/crates/aspen-jobs/Cargo.toml
+@@ -25,7 +25,7 @@ aspen-coordination = { path = "../aspen-coordination" }
+ aspen-constants = { path = "../aspen-constants" }
+ aspen-hlc = { path = "../aspen-hlc" }
+ aspen-kv-types = { path = "../aspen-kv-types" }
+-aspen-cluster-types = { path = "../aspen-cluster-types" }
++aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+ aspen-time = { path = "../aspen-time" }
+ aspen-traits = { path = "../aspen-traits" }
+ aspen-blob = { path = "../aspen-blob", optional = true }
+diff --git a/crates/aspen-raft/Cargo.toml b/crates/aspen-raft/Cargo.toml
+index 1bd6dd70b..30baf7c21 100644
+--- a/crates/aspen-raft/Cargo.toml
++++ b/crates/aspen-raft/Cargo.toml
+@@ -16,7 +16,7 @@ aspen-raft-network = { workspace = true }
+ aspen-constants = { workspace = true }
+ aspen-hlc = { workspace = true }
+ aspen-kv-types = { workspace = true }
+-aspen-cluster-types = { workspace = true }
++aspen-cluster-types = { workspace = true, features = ["iroh"] }
+ aspen-traits = { workspace = true }
+ aspen-redb-storage = { workspace = true }
+ aspen-auth = { workspace = true }
+diff --git a/crates/aspen-testing-core/Cargo.toml b/crates/aspen-testing-core/Cargo.toml
+index 0d39e49f2..40899c023 100644
+--- a/crates/aspen-testing-core/Cargo.toml
++++ b/crates/aspen-testing-core/Cargo.toml
+@@ -8,7 +8,7 @@ authors = ["Aspen Contributors"]
+ 
+ [dependencies]
+ # Core Aspen type crates (minimal dependencies)
+-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+diff --git a/crates/aspen-testing-fixtures/Cargo.toml b/crates/aspen-testing-fixtures/Cargo.toml
+index 2aff47d19..8f6cdffe7 100644
+--- a/crates/aspen-testing-fixtures/Cargo.toml
++++ b/crates/aspen-testing-fixtures/Cargo.toml
+@@ -9,7 +9,7 @@ authors = ["Aspen Contributors"]
+ [dependencies]
+ # Core Aspen type crates
+ aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
+-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+diff --git a/crates/aspen-testing-madsim/Cargo.toml b/crates/aspen-testing-madsim/Cargo.toml
+index bbf7aee61..dc0239563 100644
+--- a/crates/aspen-testing-madsim/Cargo.toml
++++ b/crates/aspen-testing-madsim/Cargo.toml
+@@ -11,7 +11,7 @@ authors = ["Aspen Contributors"]
+ aspen-core = { package = "aspen-core-shell", version = "0.1.0", path = "../aspen-core-shell" }
+ aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
+ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+ aspen-raft = { version = "0.1.0", path = "../aspen-raft", features = ["testing"] }
+diff --git a/crates/aspen-testing-patchbay/Cargo.toml b/crates/aspen-testing-patchbay/Cargo.toml
+index 8efd12eb6..f29b6b689 100644
+--- a/crates/aspen-testing-patchbay/Cargo.toml
++++ b/crates/aspen-testing-patchbay/Cargo.toml
+@@ -18,7 +18,7 @@ aspen-raft-types = { path = "../aspen-raft-types" }
+ aspen-raft-network = { path = "../aspen-raft-network" }
+ aspen-redb-storage = { path = "../aspen-redb-storage" }
+ aspen-cluster = { path = "../aspen-cluster" }
+-aspen-cluster-types = { path = "../aspen-cluster-types" }
++aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
+ aspen-kv-types = { path = "../aspen-kv-types" }
+ aspen-testing-core = { path = "../aspen-testing-core" }
+ aspen-traits = { path = "../aspen-traits" }
+diff --git a/crates/aspen-testing/Cargo.toml b/crates/aspen-testing/Cargo.toml
+index 7b00131e0..91a30ce10 100644
+--- a/crates/aspen-testing/Cargo.toml
++++ b/crates/aspen-testing/Cargo.toml
+@@ -24,7 +24,7 @@ aspen-testing-network = { version = "0.1.0", path = "../aspen-testing-network",
+ 
+ # Extracted crates for lighter dependencies
+ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+ 
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/.openspec.yaml b/openspec/changes/cluster-types-iroh-opt-in/.openspec.yaml
+new file mode 100644
+index 000000000..25345f420
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/.openspec.yaml
+@@ -0,0 +1,2 @@
++schema: spec-driven
++created: 2026-04-22
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/design.md b/openspec/changes/cluster-types-iroh-opt-in/design.md
+new file mode 100644
+index 000000000..0fd2d8104
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/design.md
+@@ -0,0 +1,51 @@
++## Context
++
++The last no-std split removed larger runtime leaks from `aspen-core`, `aspen-storage-types`, `aspen-traits`, and wire crates, but `aspen-cluster-types` still defaulted to `iroh` conversion helpers. That meant a bare dependency could still resolve `iroh-base`, and a workspace dependency entry with `features = ["iroh"]` could silently re-enable runtime helpers for every `workspace = true` consumer.
++
++## Goals / Non-Goals
++
++**Goals**
++- Make `aspen-cluster-types` alloc-safe by default.
++- Keep `NodeAddress` / `ClusterNode` runtime conversion helpers behind explicit feature opt-in.
++- Audit direct consumers so only crates that actually call runtime helper APIs enable `iroh`.
++- Save deterministic evidence for the bare/default graph, explicit `iroh` graph, and representative consumers.
++
++**Non-Goals**
++- Changing `NodeAddress` data layout or transport semantics.
++- Reworking unrelated no-std seams such as tickets or hook tickets in this change.
++- Changing transitive runtime crates that do not depend on `aspen-cluster-types` directly.
++
++## Decisions
++
++### 1. `aspen-cluster-types` defaults to alloc-safe mode
++
++**Choice:** keep crate root `#![cfg_attr(not(test), no_std)]`, set `default = []`, and leave `iroh-base` behind the existing `iroh` feature.
++
++**Rationale:** the types crate already compiles alloc-only; the bug is feature topology, not the core type model.
++
++### 2. Runtime crates opt into `iroh` in their own dependency stanzas
++
++**Choice:** remove workspace-level implicit `features = ["iroh"]`, then add explicit `features = ["iroh"]` only in crates that use runtime helper APIs.
++
++**Implementation:** enumerate every direct `aspen-cluster-types` dependency stanza from repo manifests with `rg 'aspen-cluster-types\\s*=\\s*\\{' . -g 'Cargo.toml'`, classify each consumer as `iroh-opt-in` or `alloc-safe`, and tie the classification to concrete helper usage or non-usage using `rg 'NodeAddress::new|ClusterNode::with_iroh_addr|\\.iroh_addr\\(|try_into_iroh\\(' . -g '*.rs'`. Representative compile rails must include every direct consumer changed by the audit, unchanged consumers must still be traced to saved manifest/helper-usage evidence in `direct-consumer-audit.md`, and every `iroh-opt-in` classification must correspond to an explicit consumer manifest stanza after workspace-level feature removal.
++
++**Rationale:** the dependency edge that needs runtime transport helpers should declare that requirement locally. That keeps consumer audits reviewable and prevents `workspace = true` inheritance from masking leaks.
++
++### 3. Verification separates bare/default and explicit-`iroh` proofs
++
++**Choice:** save distinct artifacts for:
++- bare/default `aspen-cluster-types` trees and checks
++- explicit `--features iroh` trees and checks
++- a root-workspace dependency proof showing `Cargo.toml` no longer re-enables `iroh`
++- a complete direct-consumer manifest audit
++- representative runtime/test consumer compile rails
++- `verification.md` mapping each claim to saved artifacts
++
++**Implementation:** save the exact results for `cargo check -p aspen-cluster-types --no-default-features`, `cargo check -p aspen-cluster-types --no-default-features --target wasm32-unknown-unknown`, `cargo test -p aspen-cluster-types`, `cargo test -p aspen-cluster-types --features iroh`, `cargo tree -p aspen-cluster-types -e normal --depth 2`, `cargo tree -p aspen-cluster-types --features iroh -e normal --depth 2`, and `cargo tree -p aspen-traits -e normal --depth 2` under `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`. Save the root-workspace stanza proof under `openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt`, and make that proof fail review if the root workspace dependency still enables `features = ["iroh"]`. Save the full direct-consumer inventory, opt-in classification, helper-usage justification, and per-consumer evidence references under `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`. Save representative runtime/test consumer compile rails under `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`. Keep `openspec/changes/cluster-types-iroh-opt-in/verification.md` synchronized with those artifacts.
++
++**Rationale:** the review failure came from claiming the bare graph was clean while only showing an explicit-`iroh` graph. The fixed evidence must show both modes separately, prove the workspace stanza is alloc-safe, and prove the consumer audit is complete.
++
++## Risks / Trade-offs
++
++- **Missed consumer opt-in** → mitigate with a direct dependency audit plus representative compile rails.
++- **Workspace inheritance confusion** → mitigate by making root workspace dependency alloc-safe and requiring local feature stanzas where needed.
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md b/openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md
+new file mode 100644
+index 000000000..22cc711c0
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md
+@@ -0,0 +1,15 @@
++Evidence-ID: cluster-types-iroh-opt-in.i1-baseline
++Task-ID: I1
++Artifact-Type: baseline-note
++Covers: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++# Baseline feature leak
++
++## Root workspace stanza
++```
++258:aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false, features = ["iroh"] }
++```
++
++## Failure mode summary
++
++The pre-fix problem was not the package-local bare tree for `cargo tree -p aspen-cluster-types`; that tree stayed alloc-safe. The leak came from the root workspace stanza enabling `features = ["iroh"]`, which let `workspace = true` consumers inherit `iroh` implicitly unless they overrode the dependency locally.
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md b/openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md
+new file mode 100644
+index 000000000..c99b233df
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md
+@@ -0,0 +1,284 @@
++Evidence-ID: cluster-types-iroh-opt-in.v1-validation
++Task-ID: V1
++Artifact-Type: verification
++Covers: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-default-to-alloc-safe-builds, architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++# Cluster-types validation
++
++## cargo check -p aspen-cluster-types --no-default-features
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
++```
++
++## cargo check -p aspen-cluster-types --no-default-features --target wasm32-unknown-unknown
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
++```
++
++## cargo test -p aspen-cluster-types
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
++     Running unittests src/lib.rs (target/debug/deps/aspen_cluster_types-96a21fbc26eafb4d)
++
++running 69 tests
++test tests::add_learner_request_creation ... ok
++test tests::change_membership_request_empty_members ... ok
++test tests::change_membership_request_creation ... ok
++test tests::add_learner_request_serialization_roundtrip ... ok
++test tests::change_membership_request_serialization_roundtrip ... ok
++test tests::cluster_metrics_clone ... ok
++test tests::cluster_metrics_creation ... ok
++test tests::cluster_metrics_follower ... ok
++test tests::cluster_metrics_debug ... ok
++test tests::cluster_metrics_with_replication ... ok
++test tests::cluster_node_clone ... ok
++test tests::cluster_node_debug_format ... ok
++test tests::cluster_node_equality ... ok
++test tests::cluster_node_new_creates_with_legacy_address ... ok
++test tests::cluster_node_new_without_raft_addr ... ok
++test tests::cluster_node_serialization_roundtrip ... ok
++test tests::cluster_state_clone ... ok
++test tests::cluster_state_default_is_empty ... ok
++test tests::cluster_state_with_nodes ... ok
++test tests::control_plane_error_clone ... ok
++test tests::cluster_state_serialization_roundtrip ... ok
++test tests::control_plane_error_debug ... ok
++test tests::control_plane_error_equality ... ok
++test tests::control_plane_error_failed_display ... ok
++test tests::control_plane_error_invalid_request_display ... ok
++test tests::control_plane_error_not_initialized_display ... ok
++test tests::control_plane_error_timeout_display ... ok
++test tests::control_plane_error_unsupported_display ... ok
++test tests::init_request_validate_duplicate_node_ids_fails ... ok
++test tests::init_request_validate_empty_members_fails ... ok
++test tests::init_request_serialization_roundtrip ... ok
++test tests::init_request_validate_large_node_ids_succeeds ... ok
++test tests::init_request_validate_node_id_zero_fails ... ok
++test tests::init_request_validate_multiple_valid_nodes_succeeds ... ok
++test tests::node_address_debug ... ok
++test tests::node_address_clone ... ok
++test tests::init_request_validate_node_id_zero_in_middle_fails ... ok
++test tests::node_id_copy ... ok
++test tests::node_id_default ... ok
++test tests::node_id_from_str_negative ... ok
++test tests::node_id_from_u64 ... ok
++test tests::node_id_from_str_invalid ... ok
++test tests::node_id_ordering ... ok
++test tests::node_state_can_serve_reads ... ok
++test tests::node_id_serialization_roundtrip ... ok
++test tests::node_state_equality ... ok
++test tests::node_state_is_leader ... ok
++test tests::node_state_hash ... ok
++test tests::node_id_max_value ... ok
++test tests::node_id_clone ... ok
++test tests::node_address_equality ... ok
++test tests::snapshot_log_id_clone ... ok
++test tests::node_id_display ... ok
++test tests::snapshot_log_id_copy ... ok
++test tests::snapshot_log_id_creation ... ok
++test tests::snapshot_log_id_debug ... ok
++test tests::snapshot_log_id_equality ... ok
++test tests::node_id_equality ... ok
++test tests::node_id_from_str ... ok
++test tests::node_id_hash ... ok
++test tests::node_id_new ... ok
++test tests::node_id_into_u64 ... ok
++test tests::node_address_from_parts_preserves_id_and_display ... ok
++test tests::node_state_as_u8 ... ok
++test tests::init_request_validate_single_valid_node_succeeds ... ok
++test tests::node_state_debug ... ok
++test tests::node_state_copy ... ok
++test tests::node_state_clone ... ok
++test tests::node_state_is_healthy ... ok
++
++test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++
++   Doc-tests aspen_cluster_types
++
++running 0 tests
++
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++
++```
++
++## cargo test -p aspen-cluster-types --features iroh
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
++     Running unittests src/lib.rs (target/debug/deps/aspen_cluster_types-76f545968d55453f)
++
++running 75 tests
++test tests::change_membership_request_creation ... ok
++test tests::add_learner_request_creation ... ok
++test tests::change_membership_request_empty_members ... ok
++test tests::cluster_metrics_clone ... ok
++test tests::change_membership_request_serialization_roundtrip ... ok
++test tests::add_learner_request_serialization_roundtrip ... ok
++test tests::cluster_metrics_creation ... ok
++test tests::cluster_metrics_debug ... ok
++test tests::cluster_metrics_follower ... ok
++test tests::cluster_metrics_with_replication ... ok
++test tests::cluster_node_clone ... ok
++test tests::cluster_node_equality ... ok
++test tests::cluster_node_debug_format ... ok
++test tests::cluster_node_iroh_addr_returns_none_when_not_set ... ok
++test tests::cluster_node_new_creates_with_legacy_address ... ok
++test tests::cluster_node_new_without_raft_addr ... ok
++test tests::cluster_node_serialization_roundtrip ... ok
++test tests::cluster_state_clone ... ok
++test tests::cluster_state_default_is_empty ... ok
++test tests::cluster_state_serialization_roundtrip ... ok
++test tests::cluster_state_with_nodes ... ok
++test tests::control_plane_error_clone ... ok
++test tests::control_plane_error_debug ... ok
++test tests::control_plane_error_equality ... ok
++test tests::control_plane_error_failed_display ... ok
++test tests::control_plane_error_invalid_request_display ... ok
++test tests::cluster_node_with_node_addr ... ok
++test tests::control_plane_error_not_initialized_display ... ok
++test tests::control_plane_error_timeout_display ... ok
++test tests::cluster_node_with_iroh_addr ... ok
++test tests::control_plane_error_unsupported_display ... ok
++test tests::init_request_validate_duplicate_node_ids_fails ... ok
++test tests::init_request_serialization_roundtrip ... ok
++test tests::init_request_validate_empty_members_fails ... ok
++test tests::init_request_validate_large_node_ids_succeeds ... ok
++test tests::init_request_validate_multiple_valid_nodes_succeeds ... ok
++test tests::init_request_validate_node_id_zero_fails ... ok
++test tests::init_request_validate_node_id_zero_in_middle_fails ... ok
++test tests::init_request_validate_single_valid_node_succeeds ... ok
++test tests::node_address_clone ... ok
++test tests::node_address_debug ... ok
++test tests::node_address_equality ... ok
++test tests::node_address_from_parts_preserves_id_and_display ... ok
++test tests::node_address_try_into_iroh_rejects_invalid_endpoint_id ... ok
++test tests::node_id_clone ... ok
++test tests::node_id_copy ... ok
++test tests::node_id_default ... ok
++test tests::node_id_display ... ok
++test tests::node_id_equality ... ok
++test tests::node_id_from_str ... ok
++test tests::node_id_from_str_invalid ... ok
++test tests::node_id_from_str_negative ... ok
++test tests::node_address_new_round_trips_endpoint_addr ... ok
++test tests::node_id_from_u64 ... ok
++test tests::node_id_into_u64 ... ok
++test tests::node_id_hash ... ok
++test tests::node_address_try_into_iroh_rejects_invalid_relay_url ... ok
++test tests::node_id_max_value ... ok
++test tests::node_id_new ... ok
++test tests::node_id_ordering ... ok
++test tests::node_state_as_u8 ... ok
++test tests::node_id_serialization_roundtrip ... ok
++test tests::node_state_can_serve_reads ... ok
++test tests::node_state_hash ... ok
++test tests::snapshot_log_id_creation ... ok
++test tests::node_state_clone ... ok
++test tests::node_state_debug ... ok
++test tests::node_state_is_leader ... ok
++test tests::snapshot_log_id_copy ... ok
++test tests::snapshot_log_id_clone ... ok
++test tests::node_state_equality ... ok
++test tests::snapshot_log_id_equality ... ok
++test tests::node_state_copy ... ok
++test tests::node_state_is_healthy ... ok
++test tests::snapshot_log_id_debug ... ok
++
++test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++
++   Doc-tests aspen_cluster_types
++
++running 0 tests
++
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++
++```
++
++## cargo tree -p aspen-cluster-types -e normal --depth 2
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
++├── serde v1.0.228
++│   ├── serde_core v1.0.228
++│   └── serde_derive v1.0.228 (proc-macro)
++└── thiserror v2.0.18
++    └── thiserror-impl v2.0.18 (proc-macro)
++```
++
++## cargo tree -p aspen-cluster-types --features iroh -e normal --depth 2
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
++├── iroh-base v0.97.0
++│   ├── curve25519-dalek v5.0.0-pre.1
++│   ├── data-encoding v2.10.0
++│   ├── derive_more v2.1.1
++│   ├── digest v0.11.0-rc.10
++│   ├── ed25519-dalek v3.0.0-pre.1
++│   ├── n0-error v0.1.3
++│   ├── rand_core v0.9.5
++│   ├── serde v1.0.228
++│   ├── sha2 v0.11.0-rc.2
++│   ├── url v2.5.8
++│   ├── zeroize v1.8.2
++│   └── zeroize_derive v1.4.3 (proc-macro)
++├── serde v1.0.228 (*)
++└── thiserror v2.0.18
++    └── thiserror-impl v2.0.18 (proc-macro)
++```
++
++## cargo tree -p aspen-traits -e normal --depth 2
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
++├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
++│   ├── serde v1.0.228
++│   └── thiserror v2.0.18
++├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
++│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
++│   ├── serde v1.0.228 (*)
++│   └── thiserror v2.0.18 (*)
++└── async-trait v0.1.89 (proc-macro)
++    ├── proc-macro2 v1.0.106
++    ├── quote v1.0.45
++    └── syn v2.0.117
++```
++
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md b/openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md
+new file mode 100644
+index 000000000..00f2b3a57
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md
+@@ -0,0 +1,76 @@
++Evidence-ID: cluster-types-iroh-opt-in.i1-consumer-audit
++Task-ID: I1
++Artifact-Type: audit
++Covers: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++# Direct consumer audit
++
++## Inventory command
++```
++rg -n 'aspen-cluster-types\s*=\s*\{' . -g 'Cargo.toml'
++./Cargo.toml:258:aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
++./crates/aspen-traits/Cargo.toml:13:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
++./crates/aspen-cluster-handler/Cargo.toml:56:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
++./crates/aspen-testing/Cargo.toml:27:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++./crates/aspen-testing-fixtures/Cargo.toml:12:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++./crates/aspen-jobs/Cargo.toml:28:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
++./crates/aspen-testing-patchbay/Cargo.toml:21:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
++./crates/aspen-testing-madsim/Cargo.toml:14:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++./crates/aspen-raft/Cargo.toml:19:aspen-cluster-types = { workspace = true, features = ["iroh"] }
++./crates/aspen-testing-core/Cargo.toml:11:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++./crates/aspen-core/Cargo.toml:16:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
++```
++
++## Helper-usage command (direct consumer crates only)
++```
++rg -n 'NodeAddress::new|ClusterNode::with_iroh_addr|\.iroh_addr\(|try_into_iroh\(' crates/aspen-core crates/aspen-traits crates/aspen-jobs crates/aspen-testing-core crates/aspen-testing-fixtures crates/aspen-testing crates/aspen-testing-madsim crates/aspen-raft crates/aspen-cluster-handler crates/aspen-testing-patchbay -g '*.rs'
++crates/aspen-testing-patchbay/src/harness.rs:150:                node_addr: Some(NodeAddress::new(addr.clone())),
++crates/aspen-testing-madsim/src/madsim_tester/node.rs:35:    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
++crates/aspen-testing/src/router/mod.rs:503:    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:137:                if let Some(addr) = node.iroh_addr() {
++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:293:    let target_node = ClusterNode::with_iroh_addr(2, target_addr);
++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:382:    let target_node = ClusterNode::with_iroh_addr(2, target_addr);
++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:405:    let target_node = ClusterNode::with_iroh_addr(2, target_addr);
++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:485:    let node1 = ClusterNode::with_iroh_addr(1, coord_addr);
++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:486:    let node2 = ClusterNode::with_iroh_addr(2, addr2);
++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:487:    let node3 = ClusterNode::with_iroh_addr(3, addr3);
++crates/aspen-cluster-handler/src/handler/state.rs:38:            node.iroh_addr().map(|a| format!("{:?}", a)).unwrap_or_default()
++crates/aspen-cluster-handler/src/handler/state.rs:58:        let endpoint_addr = learner.iroh_addr().map(|a| format!("{:?}", a)).unwrap_or_default();
++crates/aspen-cluster-handler/src/handler/membership.rs:55:                    learner: ClusterNode::with_iroh_addr(node_id, iroh_addr),
++crates/aspen-cluster-handler/src/handler/tickets.rs:37:            if let Some(iroh_addr) = node.iroh_addr() {
++crates/aspen-cluster-handler/src/handler/tickets.rs:109:            if let Some(iroh_addr) = node.iroh_addr() {
++crates/aspen-testing/src/lib.rs:289:    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
++crates/aspen-cluster-handler/src/handler/init.rs:23:    let this_node = ClusterNode::with_iroh_addr(ctx.node_id, endpoint_addr.clone());
++crates/aspen-raft/src/types.rs:37:        .try_into_iroh()
++crates/aspen-raft/src/types.rs:170:        let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
++crates/aspen-raft/src/types.rs:403:        let info = RaftMemberInfo::new(aspen_core::NodeAddress::new(addr.clone()));
++crates/aspen-raft/src/node/trust.rs:282:        .try_into_iroh()
++crates/aspen-raft/src/node/trust.rs:921:            initial_members: ids.iter().map(|id| ClusterNode::with_iroh_addr(*id, endpoint_addr())).collect(),
++crates/aspen-raft/src/node/trust.rs:1077:        addresses.insert(2, NodeAddress::new(remote_addr.clone()));
++crates/aspen-raft/src/node/tests.rs:159:    node.node_addr = Some(aspen_cluster_types::NodeAddress::new(endpoint));
++crates/aspen-raft/src/node/tests.rs:627:            node.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
++crates/aspen-raft/src/node/tests.rs:2183:        cn.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
++crates/aspen-raft/src/node/membership_refresh.rs:170:        let addr_hash = hash_addrs(&aspen_core::NodeAddress::new(new_addr.clone()));
++crates/aspen-raft/src/node/membership_refresh.rs:183:        let mut updated_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(new_addr.clone()));
++crates/aspen-raft/src/node/membership_refresh.rs:265:        let node_addr = aspen_core::NodeAddress::new(addr);
++crates/aspen-raft/src/node/membership_refresh.rs:283:        assert_ne!(hash_addrs(&aspen_core::NodeAddress::new(addr1)), hash_addrs(&aspen_core::NodeAddress::new(addr2)));
++crates/aspen-raft/src/storage_shared/trust.rs:459:        NodeAddress::new(EndpointAddr::new(key.public()))
++crates/aspen-raft/src/network/tests.rs:184:    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
++crates/aspen-raft/src/network/tests.rs:207:    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr));
++```
++
++## Classification
++
++| Consumer stanza | Classification | Justification | Evidence |
++| --- | --- | --- | --- |
++| `Cargo.toml` workspace dependency | alloc-safe | Root workspace stanza keeps `default-features = false` and no `features = ["iroh"]`. | `evidence/workspace-dependency-proof.txt` |
++| `crates/aspen-core/Cargo.toml` | alloc-safe | Keeps `default-features = false`; direct crate sources do not call `NodeAddress::new`, `ClusterNode::with_iroh_addr`, `.iroh_addr()`, or `try_into_iroh()`. | Inventory + helper-usage commands above |
++| `crates/aspen-traits/Cargo.toml` | alloc-safe | Keeps `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/cluster-types-validation.md` (`cargo tree -p aspen-traits -e normal --depth 2`) |
++| `crates/aspen-jobs/Cargo.toml` | alloc-safe | Now sets `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
++| `crates/aspen-testing-core/Cargo.toml` | alloc-safe | Now sets `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
++| `crates/aspen-testing-fixtures/Cargo.toml` | alloc-safe | Now sets `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
++| `crates/aspen-testing/Cargo.toml` | alloc-safe | Now sets `default-features = false`; helper-style calls in this crate go through `aspen_core::NodeAddress::new`, not direct `aspen-cluster-types` helper use. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
++| `crates/aspen-testing-madsim/Cargo.toml` | alloc-safe | Now sets `default-features = false`; helper-style calls in this crate go through `aspen_core::NodeAddress::new`, not direct `aspen-cluster-types` helper use. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
++| `crates/aspen-raft/Cargo.toml` | iroh-opt-in | Direct crate sources call `NodeAddress::new` and `try_into_iroh()`, so this crate now opts into `features = ["iroh"]` explicitly. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
++| `crates/aspen-cluster-handler/Cargo.toml` | iroh-opt-in | Direct crate sources/tests call `ClusterNode::with_iroh_addr` and `.iroh_addr()`, so this dev-dependency stanza keeps explicit `features = ["iroh"]`. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
++| `crates/aspen-testing-patchbay/Cargo.toml` | iroh-opt-in | Direct crate sources call `NodeAddress::new`, so this crate keeps explicit `features = ["iroh"]`. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt b/openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt
+new file mode 100644
+index 000000000..35052baa2
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt
+@@ -0,0 +1,620 @@
++Evidence-ID: cluster-types-iroh-opt-in.v1-diff
++Task-ID: V1
++Artifact-Type: diff
++Covers: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++diff --git a/Cargo.toml b/Cargo.toml
++index a051ef63f..4a7aaf579 100644
++--- a/Cargo.toml
+++++ b/Cargo.toml
++@@ -255,7 +255,7 @@ opentelemetry = "0.30"
++ aspen-client = { path = "crates/aspen-client" }
++ aspen-client-api = { path = "crates/aspen-client-api" }
++ aspen-constants = { path = "crates/aspen-constants" }
++-aspen-cluster-types = { path = "crates/aspen-cluster-types" }
+++aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
++ aspen-core = { path = "crates/aspen-core" }
++ aspen-core-shell = { path = "crates/aspen-core-shell" }
++ aspen-hlc = { path = "crates/aspen-hlc" }
++diff --git a/crates/aspen-cluster-handler/Cargo.toml b/crates/aspen-cluster-handler/Cargo.toml
++index f111aa1e3..7fd3c0494 100644
++--- a/crates/aspen-cluster-handler/Cargo.toml
+++++ b/crates/aspen-cluster-handler/Cargo.toml
++@@ -53,7 +53,7 @@ blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-core/blob"]
++ aspen-testing = { workspace = true }
++ aspen-rpc-core = { path = "../aspen-rpc-core", features = ["testing"] }
++ aspen-deploy = { path = "../aspen-deploy" }
++-aspen-cluster-types = { path = "../aspen-cluster-types" }
+++aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
++ aspen-client-api = { workspace = true }
++ aspen-traits = { path = "../aspen-traits" }
++ async-trait = "0.1"
++diff --git a/crates/aspen-cluster-types/Cargo.toml b/crates/aspen-cluster-types/Cargo.toml
++index 76bdeced9..a32cb104f 100644
++--- a/crates/aspen-cluster-types/Cargo.toml
+++++ b/crates/aspen-cluster-types/Cargo.toml
++@@ -10,7 +10,7 @@ description = "Cluster management types for Aspen distributed systems"
++ serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
++ 
++ # Error handling
++-thiserror = "2.0"
+++thiserror = { version = "2.0", default-features = false }
++ 
++ # Optional P2P address conversion helpers
++ iroh-base = { version = "0.97.0", default-features = false, features = ["key"], optional = true }
++@@ -19,5 +19,5 @@ iroh-base = { version = "0.97.0", default-features = false, features = ["key"],
++ serde_json = "1.0"
++ 
++ [features]
++-default = ["iroh"]
+++default = []
++ iroh = ["dep:iroh-base"]
++diff --git a/crates/aspen-cluster-types/src/lib.rs b/crates/aspen-cluster-types/src/lib.rs
++index 05949c5cf..394e52971 100644
++--- a/crates/aspen-cluster-types/src/lib.rs
+++++ b/crates/aspen-cluster-types/src/lib.rs
++@@ -3,6 +3,9 @@
++ //! This crate provides types for managing cluster membership and topology,
++ //! including node identifiers, addresses, states, and error types.
++ //!
+++//! Production data types stay alloc-safe by default. Runtime iroh conversion
+++//! helpers remain behind the explicit `iroh` feature.
+++//!
++ //! ## Key Types
++ //!
++ //! - [`NodeId`]: Type-safe node identifier
++@@ -13,7 +16,7 @@
++ //! - [`ClusterMetrics`]: Raft metrics wrapper
++ //! - [`ControlPlaneError`]: Errors for cluster control plane operations
++ 
++-#![cfg_attr(not(any(test, feature = "iroh")), no_std)]
+++#![cfg_attr(not(test), no_std)]
++ 
++ extern crate alloc;
++ 
++diff --git a/crates/aspen-jobs/Cargo.toml b/crates/aspen-jobs/Cargo.toml
++index 010184db4..b3ab06ee0 100644
++--- a/crates/aspen-jobs/Cargo.toml
+++++ b/crates/aspen-jobs/Cargo.toml
++@@ -25,7 +25,7 @@ aspen-coordination = { path = "../aspen-coordination" }
++ aspen-constants = { path = "../aspen-constants" }
++ aspen-hlc = { path = "../aspen-hlc" }
++ aspen-kv-types = { path = "../aspen-kv-types" }
++-aspen-cluster-types = { path = "../aspen-cluster-types" }
+++aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
++ aspen-time = { path = "../aspen-time" }
++ aspen-traits = { path = "../aspen-traits" }
++ aspen-blob = { path = "../aspen-blob", optional = true }
++diff --git a/crates/aspen-raft/Cargo.toml b/crates/aspen-raft/Cargo.toml
++index 1bd6dd70b..30baf7c21 100644
++--- a/crates/aspen-raft/Cargo.toml
+++++ b/crates/aspen-raft/Cargo.toml
++@@ -16,7 +16,7 @@ aspen-raft-network = { workspace = true }
++ aspen-constants = { workspace = true }
++ aspen-hlc = { workspace = true }
++ aspen-kv-types = { workspace = true }
++-aspen-cluster-types = { workspace = true }
+++aspen-cluster-types = { workspace = true, features = ["iroh"] }
++ aspen-traits = { workspace = true }
++ aspen-redb-storage = { workspace = true }
++ aspen-auth = { workspace = true }
++diff --git a/crates/aspen-testing-core/Cargo.toml b/crates/aspen-testing-core/Cargo.toml
++index 0d39e49f2..40899c023 100644
++--- a/crates/aspen-testing-core/Cargo.toml
+++++ b/crates/aspen-testing-core/Cargo.toml
++@@ -8,7 +8,7 @@ authors = ["Aspen Contributors"]
++ 
++ [dependencies]
++ # Core Aspen type crates (minimal dependencies)
++-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
++ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
++ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
++diff --git a/crates/aspen-testing-fixtures/Cargo.toml b/crates/aspen-testing-fixtures/Cargo.toml
++index 2aff47d19..8f6cdffe7 100644
++--- a/crates/aspen-testing-fixtures/Cargo.toml
+++++ b/crates/aspen-testing-fixtures/Cargo.toml
++@@ -9,7 +9,7 @@ authors = ["Aspen Contributors"]
++ [dependencies]
++ # Core Aspen type crates
++ aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
++-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
++ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
++ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
++diff --git a/crates/aspen-testing-madsim/Cargo.toml b/crates/aspen-testing-madsim/Cargo.toml
++index bbf7aee61..dc0239563 100644
++--- a/crates/aspen-testing-madsim/Cargo.toml
+++++ b/crates/aspen-testing-madsim/Cargo.toml
++@@ -11,7 +11,7 @@ authors = ["Aspen Contributors"]
++ aspen-core = { package = "aspen-core-shell", version = "0.1.0", path = "../aspen-core-shell" }
++ aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
++ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
++-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
++ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
++ aspen-raft = { version = "0.1.0", path = "../aspen-raft", features = ["testing"] }
++diff --git a/crates/aspen-testing-patchbay/Cargo.toml b/crates/aspen-testing-patchbay/Cargo.toml
++index 8efd12eb6..f29b6b689 100644
++--- a/crates/aspen-testing-patchbay/Cargo.toml
+++++ b/crates/aspen-testing-patchbay/Cargo.toml
++@@ -18,7 +18,7 @@ aspen-raft-types = { path = "../aspen-raft-types" }
++ aspen-raft-network = { path = "../aspen-raft-network" }
++ aspen-redb-storage = { path = "../aspen-redb-storage" }
++ aspen-cluster = { path = "../aspen-cluster" }
++-aspen-cluster-types = { path = "../aspen-cluster-types" }
+++aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
++ aspen-kv-types = { path = "../aspen-kv-types" }
++ aspen-testing-core = { path = "../aspen-testing-core" }
++ aspen-traits = { path = "../aspen-traits" }
++diff --git a/crates/aspen-testing/Cargo.toml b/crates/aspen-testing/Cargo.toml
++index 7b00131e0..91a30ce10 100644
++--- a/crates/aspen-testing/Cargo.toml
+++++ b/crates/aspen-testing/Cargo.toml
++@@ -24,7 +24,7 @@ aspen-testing-network = { version = "0.1.0", path = "../aspen-testing-network",
++ 
++ # Extracted crates for lighter dependencies
++ aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
++-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+++aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
++ aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
++ aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
++ 
++diff --git a/openspec/changes/cluster-types-iroh-opt-in/.openspec.yaml b/openspec/changes/cluster-types-iroh-opt-in/.openspec.yaml
++new file mode 100644
++index 000000000..25345f420
++--- /dev/null
+++++ b/openspec/changes/cluster-types-iroh-opt-in/.openspec.yaml
++@@ -0,0 +1,2 @@
+++schema: spec-driven
+++created: 2026-04-22
++diff --git a/openspec/changes/cluster-types-iroh-opt-in/design.md b/openspec/changes/cluster-types-iroh-opt-in/design.md
++new file mode 100644
++index 000000000..0fd2d8104
++--- /dev/null
+++++ b/openspec/changes/cluster-types-iroh-opt-in/design.md
++@@ -0,0 +1,51 @@
+++## Context
+++
+++The last no-std split removed larger runtime leaks from `aspen-core`, `aspen-storage-types`, `aspen-traits`, and wire crates, but `aspen-cluster-types` still defaulted to `iroh` conversion helpers. That meant a bare dependency could still resolve `iroh-base`, and a workspace dependency entry with `features = ["iroh"]` could silently re-enable runtime helpers for every `workspace = true` consumer.
+++
+++## Goals / Non-Goals
+++
+++**Goals**
+++- Make `aspen-cluster-types` alloc-safe by default.
+++- Keep `NodeAddress` / `ClusterNode` runtime conversion helpers behind explicit feature opt-in.
+++- Audit direct consumers so only crates that actually call runtime helper APIs enable `iroh`.
+++- Save deterministic evidence for the bare/default graph, explicit `iroh` graph, and representative consumers.
+++
+++**Non-Goals**
+++- Changing `NodeAddress` data layout or transport semantics.
+++- Reworking unrelated no-std seams such as tickets or hook tickets in this change.
+++- Changing transitive runtime crates that do not depend on `aspen-cluster-types` directly.
+++
+++## Decisions
+++
+++### 1. `aspen-cluster-types` defaults to alloc-safe mode
+++
+++**Choice:** keep crate root `#![cfg_attr(not(test), no_std)]`, set `default = []`, and leave `iroh-base` behind the existing `iroh` feature.
+++
+++**Rationale:** the types crate already compiles alloc-only; the bug is feature topology, not the core type model.
+++
+++### 2. Runtime crates opt into `iroh` in their own dependency stanzas
+++
+++**Choice:** remove workspace-level implicit `features = ["iroh"]`, then add explicit `features = ["iroh"]` only in crates that use runtime helper APIs.
+++
+++**Implementation:** enumerate every direct `aspen-cluster-types` dependency stanza from repo manifests with `rg 'aspen-cluster-types\\s*=\\s*\\{' . -g 'Cargo.toml'`, classify each consumer as `iroh-opt-in` or `alloc-safe`, and tie the classification to concrete helper usage or non-usage using `rg 'NodeAddress::new|ClusterNode::with_iroh_addr|\\.iroh_addr\\(|try_into_iroh\\(' . -g '*.rs'`. Representative compile rails must include every direct consumer changed by the audit, unchanged consumers must still be traced to saved manifest/helper-usage evidence in `direct-consumer-audit.md`, and every `iroh-opt-in` classification must correspond to an explicit consumer manifest stanza after workspace-level feature removal.
+++
+++**Rationale:** the dependency edge that needs runtime transport helpers should declare that requirement locally. That keeps consumer audits reviewable and prevents `workspace = true` inheritance from masking leaks.
+++
+++### 3. Verification separates bare/default and explicit-`iroh` proofs
+++
+++**Choice:** save distinct artifacts for:
+++- bare/default `aspen-cluster-types` trees and checks
+++- explicit `--features iroh` trees and checks
+++- a root-workspace dependency proof showing `Cargo.toml` no longer re-enables `iroh`
+++- a complete direct-consumer manifest audit
+++- representative runtime/test consumer compile rails
+++- `verification.md` mapping each claim to saved artifacts
+++
+++**Implementation:** save the exact results for `cargo check -p aspen-cluster-types --no-default-features`, `cargo check -p aspen-cluster-types --no-default-features --target wasm32-unknown-unknown`, `cargo test -p aspen-cluster-types`, `cargo test -p aspen-cluster-types --features iroh`, `cargo tree -p aspen-cluster-types -e normal --depth 2`, `cargo tree -p aspen-cluster-types --features iroh -e normal --depth 2`, and `cargo tree -p aspen-traits -e normal --depth 2` under `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`. Save the root-workspace stanza proof under `openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt`, and make that proof fail review if the root workspace dependency still enables `features = ["iroh"]`. Save the full direct-consumer inventory, opt-in classification, helper-usage justification, and per-consumer evidence references under `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`. Save representative runtime/test consumer compile rails under `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`. Keep `openspec/changes/cluster-types-iroh-opt-in/verification.md` synchronized with those artifacts.
+++
+++**Rationale:** the review failure came from claiming the bare graph was clean while only showing an explicit-`iroh` graph. The fixed evidence must show both modes separately, prove the workspace stanza is alloc-safe, and prove the consumer audit is complete.
+++
+++## Risks / Trade-offs
+++
+++- **Missed consumer opt-in** → mitigate with a direct dependency audit plus representative compile rails.
+++- **Workspace inheritance confusion** → mitigate by making root workspace dependency alloc-safe and requiring local feature stanzas where needed.
++diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md b/openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md
++new file mode 100644
++index 000000000..22cc711c0
++--- /dev/null
+++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md
++@@ -0,0 +1,15 @@
+++Evidence-ID: cluster-types-iroh-opt-in.i1-baseline
+++Task-ID: I1
+++Artifact-Type: baseline-note
+++Covers: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
+++
+++# Baseline feature leak
+++
+++## Root workspace stanza
+++```
+++258:aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false, features = ["iroh"] }
+++```
+++
+++## Failure mode summary
+++
+++The pre-fix problem was not the package-local bare tree for `cargo tree -p aspen-cluster-types`; that tree stayed alloc-safe. The leak came from the root workspace stanza enabling `features = ["iroh"]`, which let `workspace = true` consumers inherit `iroh` implicitly unless they overrode the dependency locally.
++diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md b/openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md
++new file mode 100644
++index 000000000..c99b233df
++--- /dev/null
+++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md
++@@ -0,0 +1,284 @@
+++Evidence-ID: cluster-types-iroh-opt-in.v1-validation
+++Task-ID: V1
+++Artifact-Type: verification
+++Covers: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-default-to-alloc-safe-builds, architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
+++
+++# Cluster-types validation
+++
+++## cargo check -p aspen-cluster-types --no-default-features
+++```
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+++```
+++
+++## cargo check -p aspen-cluster-types --no-default-features --target wasm32-unknown-unknown
+++```
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
+++```
+++
+++## cargo test -p aspen-cluster-types
+++```
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+++     Running unittests src/lib.rs (target/debug/deps/aspen_cluster_types-96a21fbc26eafb4d)
+++
+++running 69 tests
+++test tests::add_learner_request_creation ... ok
+++test tests::change_membership_request_empty_members ... ok
+++test tests::change_membership_request_creation ... ok
+++test tests::add_learner_request_serialization_roundtrip ... ok
+++test tests::change_membership_request_serialization_roundtrip ... ok
+++test tests::cluster_metrics_clone ... ok
+++test tests::cluster_metrics_creation ... ok
+++test tests::cluster_metrics_follower ... ok
+++test tests::cluster_metrics_debug ... ok
+++test tests::cluster_metrics_with_replication ... ok
+++test tests::cluster_node_clone ... ok
+++test tests::cluster_node_debug_format ... ok
+++test tests::cluster_node_equality ... ok
+++test tests::cluster_node_new_creates_with_legacy_address ... ok
+++test tests::cluster_node_new_without_raft_addr ... ok
+++test tests::cluster_node_serialization_roundtrip ... ok
+++test tests::cluster_state_clone ... ok
+++test tests::cluster_state_default_is_empty ... ok
+++test tests::cluster_state_with_nodes ... ok
+++test tests::control_plane_error_clone ... ok
+++test tests::cluster_state_serialization_roundtrip ... ok
+++test tests::control_plane_error_debug ... ok
+++test tests::control_plane_error_equality ... ok
+++test tests::control_plane_error_failed_display ... ok
+++test tests::control_plane_error_invalid_request_display ... ok
+++test tests::control_plane_error_not_initialized_display ... ok
+++test tests::control_plane_error_timeout_display ... ok
+++test tests::control_plane_error_unsupported_display ... ok
+++test tests::init_request_validate_duplicate_node_ids_fails ... ok
+++test tests::init_request_validate_empty_members_fails ... ok
+++test tests::init_request_serialization_roundtrip ... ok
+++test tests::init_request_validate_large_node_ids_succeeds ... ok
+++test tests::init_request_validate_node_id_zero_fails ... ok
+++test tests::init_request_validate_multiple_valid_nodes_succeeds ... ok
+++test tests::node_address_debug ... ok
+++test tests::node_address_clone ... ok
+++test tests::init_request_validate_node_id_zero_in_middle_fails ... ok
+++test tests::node_id_copy ... ok
+++test tests::node_id_default ... ok
+++test tests::node_id_from_str_negative ... ok
+++test tests::node_id_from_u64 ... ok
+++test tests::node_id_from_str_invalid ... ok
+++test tests::node_id_ordering ... ok
+++test tests::node_state_can_serve_reads ... ok
+++test tests::node_id_serialization_roundtrip ... ok
+++test tests::node_state_equality ... ok
+++test tests::node_state_is_leader ... ok
+++test tests::node_state_hash ... ok
+++test tests::node_id_max_value ... ok
+++test tests::node_id_clone ... ok
+++test tests::node_address_equality ... ok
+++test tests::snapshot_log_id_clone ... ok
+++test tests::node_id_display ... ok
+++test tests::snapshot_log_id_copy ... ok
+++test tests::snapshot_log_id_creation ... ok
+++test tests::snapshot_log_id_debug ... ok
+++test tests::snapshot_log_id_equality ... ok
+++test tests::node_id_equality ... ok
+++test tests::node_id_from_str ... ok
+++test tests::node_id_hash ... ok
+++test tests::node_id_new ... ok
+++test tests::node_id_into_u64 ... ok
+++test tests::node_address_from_parts_preserves_id_and_display ... ok
+++test tests::node_state_as_u8 ... ok
+++test tests::init_request_validate_single_valid_node_succeeds ... ok
+++test tests::node_state_debug ... ok
+++test tests::node_state_copy ... ok
+++test tests::node_state_clone ... ok
+++test tests::node_state_is_healthy ... ok
+++
+++test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+++
+++   Doc-tests aspen_cluster_types
+++
+++running 0 tests
+++
+++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+++
+++```
+++
+++## cargo test -p aspen-cluster-types --features iroh
+++```
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+++     Running unittests src/lib.rs (target/debug/deps/aspen_cluster_types-76f545968d55453f)
+++
+++running 75 tests
+++test tests::change_membership_request_creation ... ok
+++test tests::add_learner_request_creation ... ok
+++test tests::change_membership_request_empty_members ... ok
+++test tests::cluster_metrics_clone ... ok
+++test tests::change_membership_request_serialization_roundtrip ... ok
+++test tests::add_learner_request_serialization_roundtrip ... ok
+++test tests::cluster_metrics_creation ... ok
+++test tests::cluster_metrics_debug ... ok
+++test tests::cluster_metrics_follower ... ok
+++test tests::cluster_metrics_with_replication ... ok
+++test tests::cluster_node_clone ... ok
+++test tests::cluster_node_equality ... ok
+++test tests::cluster_node_debug_format ... ok
+++test tests::cluster_node_iroh_addr_returns_none_when_not_set ... ok
+++test tests::cluster_node_new_creates_with_legacy_address ... ok
+++test tests::cluster_node_new_without_raft_addr ... ok
+++test tests::cluster_node_serialization_roundtrip ... ok
+++test tests::cluster_state_clone ... ok
+++test tests::cluster_state_default_is_empty ... ok
+++test tests::cluster_state_serialization_roundtrip ... ok
+++test tests::cluster_state_with_nodes ... ok
+++test tests::control_plane_error_clone ... ok
+++test tests::control_plane_error_debug ... ok
+++test tests::control_plane_error_equality ... ok
+++test tests::control_plane_error_failed_display ... ok
+++test tests::control_plane_error_invalid_request_display ... ok
+++test tests::cluster_node_with_node_addr ... ok
+++test tests::control_plane_error_not_initialized_display ... ok
+++test tests::control_plane_error_timeout_display ... ok
+++test tests::cluster_node_with_iroh_addr ... ok
+++test tests::control_plane_error_unsupported_display ... ok
+++test tests::init_request_validate_duplicate_node_ids_fails ... ok
+++test tests::init_request_serialization_roundtrip ... ok
+++test tests::init_request_validate_empty_members_fails ... ok
+++test tests::init_request_validate_large_node_ids_succeeds ... ok
+++test tests::init_request_validate_multiple_valid_nodes_succeeds ... ok
+++test tests::init_request_validate_node_id_zero_fails ... ok
+++test tests::init_request_validate_node_id_zero_in_middle_fails ... ok
+++test tests::init_request_validate_single_valid_node_succeeds ... ok
+++test tests::node_address_clone ... ok
+++test tests::node_address_debug ... ok
+++test tests::node_address_equality ... ok
+++test tests::node_address_from_parts_preserves_id_and_display ... ok
+++test tests::node_address_try_into_iroh_rejects_invalid_endpoint_id ... ok
+++test tests::node_id_clone ... ok
+++test tests::node_id_copy ... ok
+++test tests::node_id_default ... ok
+++test tests::node_id_display ... ok
+++test tests::node_id_equality ... ok
+++test tests::node_id_from_str ... ok
+++test tests::node_id_from_str_invalid ... ok
+++test tests::node_id_from_str_negative ... ok
+++test tests::node_address_new_round_trips_endpoint_addr ... ok
+++test tests::node_id_from_u64 ... ok
+++test tests::node_id_into_u64 ... ok
+++test tests::node_id_hash ... ok
+++test tests::node_address_try_into_iroh_rejects_invalid_relay_url ... ok
+++test tests::node_id_max_value ... ok
+++test tests::node_id_new ... ok
+++test tests::node_id_ordering ... ok
+++test tests::node_state_as_u8 ... ok
+++test tests::node_id_serialization_roundtrip ... ok
+++test tests::node_state_can_serve_reads ... ok
+++test tests::node_state_hash ... ok
+++test tests::snapshot_log_id_creation ... ok
+++test tests::node_state_clone ... ok
+++test tests::node_state_debug ... ok
+++test tests::node_state_is_leader ... ok
+++test tests::snapshot_log_id_copy ... ok
+++test tests::snapshot_log_id_clone ... ok
+++test tests::node_state_equality ... ok
+++test tests::snapshot_log_id_equality ... ok
+++test tests::node_state_copy ... ok
+++test tests::node_state_is_healthy ... ok
+++test tests::snapshot_log_id_debug ... ok
+++
+++test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+++
+++   Doc-tests aspen_cluster_types
+++
+++running 0 tests
+++
+++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+++
+++```
+++
+++## cargo tree -p aspen-cluster-types -e normal --depth 2
+++```
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+++├── serde v1.0.228
+++│   ├── serde_core v1.0.228
+++│   └── serde_derive v1.0.228 (proc-macro)
+++└── thiserror v2.0.18
+++    └── thiserror-impl v2.0.18 (proc-macro)
+++```
+++
+++## cargo tree -p aspen-cluster-types --features iroh -e normal --depth 2
+++```
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+++├── iroh-base v0.97.0
+++│   ├── curve25519-dalek v5.0.0-pre.1
+++│   ├── data-encoding v2.10.0
+++│   ├── derive_more v2.1.1
+++│   ├── digest v0.11.0-rc.10
+++│   ├── ed25519-dalek v3.0.0-pre.1
+++│   ├── n0-error v0.1.3
+++│   ├── rand_core v0.9.5
+++│   ├── serde v1.0.228
+++│   ├── sha2 v0.11.0-rc.2
+++│   ├── url v2.5.8
+++│   ├── zeroize v1.8.2
+++│   └── zeroize_derive v1.4.3 (proc-macro)
+++├── serde v1.0.228 (*)
+++└── thiserror v2.0.18
+++    └── thiserror-impl v2.0.18 (proc-macro)
+++```
+++
+++## cargo tree -p aspen-traits -e normal --depth 2
+++```
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+++workspace: /home/brittonr/git/aspen/Cargo.toml
+++aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+++├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+++│   ├── serde v1.0.228
+++│   └── thiserror v2.0.18
+++├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+++│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+++│   ├── serde v1.0.228 (*)
+++│   └── thiserror v2.0.18 (*)
+++└── async-trait v0.1.89 (proc-macro)
+++    ├── proc-macro2 v1.0.106
+++    ├── quote v1.0.45
+++    └── syn v2.0.117
+++```
+++
++diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md b/openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md
++new file mode 100644
++index 000000000..00f2b3a57
++--- /dev/null
+++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md
++@@ -0,0 +1,76 @@
+++Evidence-ID: cluster-types-iroh-opt-in.i1-consumer-audit
+++Task-ID: I1
+++Artifact-Type: audit
+++Covers: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
+++
+++# Direct consumer audit
+++
+++## Inventory command
+++```
+++rg -n 'aspen-cluster-types\s*=\s*\{' . -g 'Cargo.toml'
+++./Cargo.toml:258:aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
+++./crates/aspen-traits/Cargo.toml:13:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+++./crates/aspen-cluster-handler/Cargo.toml:56:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
+++./crates/aspen-testing/Cargo.toml:27:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+++./crates/aspen-testing-fixtures/Cargo.toml:12:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+++./crates/aspen-jobs/Cargo.toml:28:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+++./crates/aspen-testing-patchbay/Cargo.toml:21:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
+++./crates/aspen-testing-madsim/Cargo.toml:14:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+++./crates/aspen-raft/Cargo.toml:19:aspen-cluster-types = { workspace = true, features = ["iroh"] }
+++./crates/aspen-testing-core/Cargo.toml:11:aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+++./crates/aspen-core/Cargo.toml:16:aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+++```
+++
+++## Helper-usage command (direct consumer crates only)
+++```
+++rg -n 'NodeAddress::new|ClusterNode::with_iroh_addr|\.iroh_addr\(|try_into_iroh\(' crates/aspen-core crates/aspen-traits crates/aspen-jobs crates/aspen-testing-core crates/aspen-testing-fixtures crates/aspen-testing crates/aspen-testing-madsim crates/aspen-raft crates/aspen-cluster-handler crates/aspen-testing-patchbay -g '*.rs'
+++crates/aspen-testing-patchbay/src/harness.rs:150:                node_addr: Some(NodeAddress::new(addr.clone())),
+++crates/aspen-testing-madsim/src/madsim_tester/node.rs:35:    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
+++crates/aspen-testing/src/router/mod.rs:503:    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
+++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:137:                if let Some(addr) = node.iroh_addr() {
+++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:293:    let target_node = ClusterNode::with_iroh_addr(2, target_addr);
+++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:382:    let target_node = ClusterNode::with_iroh_addr(2, target_addr);
+++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:405:    let target_node = ClusterNode::with_iroh_addr(2, target_addr);
+++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:485:    let node1 = ClusterNode::with_iroh_addr(1, coord_addr);
+++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:486:    let node2 = ClusterNode::with_iroh_addr(2, addr2);
+++crates/aspen-cluster-handler/tests/deploy_rpc_integration.rs:487:    let node3 = ClusterNode::with_iroh_addr(3, addr3);
+++crates/aspen-cluster-handler/src/handler/state.rs:38:            node.iroh_addr().map(|a| format!("{:?}", a)).unwrap_or_default()
+++crates/aspen-cluster-handler/src/handler/state.rs:58:        let endpoint_addr = learner.iroh_addr().map(|a| format!("{:?}", a)).unwrap_or_default();
+++crates/aspen-cluster-handler/src/handler/membership.rs:55:                    learner: ClusterNode::with_iroh_addr(node_id, iroh_addr),
+++crates/aspen-cluster-handler/src/handler/tickets.rs:37:            if let Some(iroh_addr) = node.iroh_addr() {
+++crates/aspen-cluster-handler/src/handler/tickets.rs:109:            if let Some(iroh_addr) = node.iroh_addr() {
+++crates/aspen-testing/src/lib.rs:289:    RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr))
+++crates/aspen-cluster-handler/src/handler/init.rs:23:    let this_node = ClusterNode::with_iroh_addr(ctx.node_id, endpoint_addr.clone());
+++crates/aspen-raft/src/types.rs:37:        .try_into_iroh()
+++crates/aspen-raft/src/types.rs:170:        let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
+++crates/aspen-raft/src/types.rs:403:        let info = RaftMemberInfo::new(aspen_core::NodeAddress::new(addr.clone()));
+++crates/aspen-raft/src/node/trust.rs:282:        .try_into_iroh()
+++crates/aspen-raft/src/node/trust.rs:921:            initial_members: ids.iter().map(|id| ClusterNode::with_iroh_addr(*id, endpoint_addr())).collect(),
+++crates/aspen-raft/src/node/trust.rs:1077:        addresses.insert(2, NodeAddress::new(remote_addr.clone()));
+++crates/aspen-raft/src/node/tests.rs:159:    node.node_addr = Some(aspen_cluster_types::NodeAddress::new(endpoint));
+++crates/aspen-raft/src/node/tests.rs:627:            node.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
+++crates/aspen-raft/src/node/tests.rs:2183:        cn.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
+++crates/aspen-raft/src/node/membership_refresh.rs:170:        let addr_hash = hash_addrs(&aspen_core::NodeAddress::new(new_addr.clone()));
+++crates/aspen-raft/src/node/membership_refresh.rs:183:        let mut updated_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(new_addr.clone()));
+++crates/aspen-raft/src/node/membership_refresh.rs:265:        let node_addr = aspen_core::NodeAddress::new(addr);
+++crates/aspen-raft/src/node/membership_refresh.rs:283:        assert_ne!(hash_addrs(&aspen_core::NodeAddress::new(addr1)), hash_addrs(&aspen_core::NodeAddress::new(addr2)));
+++crates/aspen-raft/src/storage_shared/trust.rs:459:        NodeAddress::new(EndpointAddr::new(key.public()))
+++crates/aspen-raft/src/network/tests.rs:184:    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr.clone()));
+++crates/aspen-raft/src/network/tests.rs:207:    let member_info = RaftMemberInfo::new(aspen_core::NodeAddress::new(endpoint_addr));
+++```
+++
+++## Classification
+++
+++| Consumer stanza | Classification | Justification | Evidence |
+++| --- | --- | --- | --- |
+++| `Cargo.toml` workspace dependency | alloc-safe | Root workspace stanza keeps `default-features = false` and no `features = ["iroh"]`. | `evidence/workspace-dependency-proof.txt` |
+++| `crates/aspen-core/Cargo.toml` | alloc-safe | Keeps `default-features = false`; direct crate sources do not call `NodeAddress::new`, `ClusterNode::with_iroh_addr`, `.iroh_addr()`, or `try_into_iroh()`. | Inventory + helper-usage commands above |
+++| `crates/aspen-traits/Cargo.toml` | alloc-safe | Keeps `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/cluster-types-validation.md` (`cargo tree -p aspen-traits -e normal --depth 2`) |
+++| `crates/aspen-jobs/Cargo.toml` | alloc-safe | Now sets `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
+++| `crates/aspen-testing-core/Cargo.toml` | alloc-safe | Now sets `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
+++| `crates/aspen-testing-fixtures/Cargo.toml` | alloc-safe | Now sets `default-features = false`; no direct helper usage in crate sources. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
+++| `crates/aspen-testing/Cargo.toml` | alloc-safe | Now sets `default-features = false`; helper-style calls in this crate go through `aspen_core::NodeAddress::new`, not direct `aspen-cluster-types` helper use. | Inventory + helper-usage commands above; `evidence/runtime-consumers.md` |
+++| `cra
+\ No newline at end of file
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/openspec-preflight.txt b/openspec/changes/cluster-types-iroh-opt-in/evidence/openspec-preflight.txt
+new file mode 100644
+index 000000000..f4a985bdb
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/openspec-preflight.txt
+@@ -0,0 +1,9 @@
++Evidence-ID: cluster-types-iroh-opt-in.v1-preflight
++Task-ID: V1
++Artifact-Type: command-transcript
++Covers: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++OK: openspec/changes/cluster-types-iroh-opt-in
++  tasks: 3 total / 3 checked
++  changed files listed: 23
++  verification artifacts: 18
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md b/openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md
+new file mode 100644
+index 000000000..96336d5fb
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md
+@@ -0,0 +1,95 @@
++Evidence-ID: cluster-types-iroh-opt-in.v1-runtime-consumers
++Task-ID: V1
++Artifact-Type: command-transcript
++Covers: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++# Runtime and direct-consumer compile rails
++
++## cargo check -p aspen-jobs
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
++```
++
++## cargo check -p aspen-testing-core
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
++```
++
++## cargo check -p aspen-testing-fixtures
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
++```
++
++## cargo check -p aspen-testing
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
++```
++
++## cargo check -p aspen-testing-madsim
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
++```
++
++## cargo check -p aspen-raft
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
++```
++
++## cargo check -p aspen-cluster-handler --tests
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
++```
++
++## cargo check -p aspen-testing-patchbay
++```
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
++```
++
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt b/openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt
+new file mode 100644
+index 000000000..8cc7be165
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt
+@@ -0,0 +1,10 @@
++Evidence-ID: cluster-types-iroh-opt-in.i1-workspace-proof
++Task-ID: I1
++Artifact-Type: command-transcript
++Covers: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++Root workspace stanza:
++258:aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
++
++Forbidden root workspace iroh feature flag matches:
++none
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/proposal.md b/openspec/changes/cluster-types-iroh-opt-in/proposal.md
+new file mode 100644
+index 000000000..b0864fe69
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/proposal.md
+@@ -0,0 +1,29 @@
++## Why
++
++`aspen-cluster-types` sits on the alloc-only foundation path, but its manifest still defaulted to `iroh` helpers. That let bare or `workspace = true` consumers re-enable `iroh-base` implicitly, which hid no-std boundary regressions and contradicted the intended explicit opt-in model.
++
++## What Changes
++
++- Make `crates/aspen-cluster-types` alloc-safe by default with `default = []`.
++- Keep runtime conversion helpers behind an explicit `iroh` feature only.
++- Remove workspace-level implicit `iroh` enablement for `aspen-cluster-types` and save a reviewable proof artifact for the root `Cargo.toml` stanza.
++- Audit every direct `aspen-cluster-types` dependency stanza so only crates that call `NodeAddress::new`, `ClusterNode::with_iroh_addr`, `.iroh_addr()`, or `try_into_iroh()` opt into `features = ["iroh"]`.
++- Save reviewable dependency-tree and consumer-audit evidence for the bare/default graph, the explicit `iroh` graph, an alloc-safe workspace-consumer path, and the full direct-consumer inventory.
++
++## Non-Goals
++
++- No changes to `NodeAddress` serialization or transport semantics.
++- No ticket or hook-ticket transport-neutral cleanup in this change.
++- No broad rework of unrelated no-std seams beyond direct `aspen-cluster-types` consumers.
++
++## Capabilities
++
++### Modified Capabilities
++- `architecture-modularity`: tighten the leaf-crate contract so `aspen-cluster-types` stays alloc-safe by default and runtime transport helpers require explicit per-crate opt-in.
++
++## Impact
++
++- **Files**: `crates/aspen-cluster-types/`, direct consumer `Cargo.toml` files, `Cargo.toml`, and OpenSpec artifacts/evidence for this seam.
++- **APIs**: runtime `iroh` helper methods stay available, but only when the consuming crate opts into the `iroh` feature explicitly.
++- **Dependencies**: bare/default `aspen-cluster-types` no longer pulls `iroh-base`.
++- **Testing**: verify bare/default and explicit-`iroh` trees separately, prove at least one alloc-safe workspace-consumer path stays clean, and map every direct consumer in the audit to saved evidence or a deterministic validation rule.
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/specs/architecture-modularity/spec.md b/openspec/changes/cluster-types-iroh-opt-in/specs/architecture-modularity/spec.md
+new file mode 100644
+index 000000000..fdcf5bea6
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/specs/architecture-modularity/spec.md
+@@ -0,0 +1,42 @@
++## MODIFIED Requirements
++
++### Requirement: Acyclic no-std core boundary
++ID: architecture.modularity.acyclic-no-std-core-boundary
++
++Aspen MUST maintain an acyclic dependency boundary where the alloc-only `aspen-core` surface depends only on alloc-safe leaf crates, and `std`-bound runtime shells depend on that core rather than the reverse.
++
++#### Scenario: Cluster types default to alloc-safe builds
++ID: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-default-to-alloc-safe-builds
++
++- **GIVEN** `aspen-cluster-types` on the alloc-only foundation path
++- **WHEN** the crate is built with its default production configuration or `--no-default-features`
++- **THEN** it MUST compile as an alloc-safe crate without `iroh-base` in its bare/default production graph
++- **AND** runtime conversion helpers MUST remain unavailable unless the consumer opts into the `iroh` feature explicitly
++
++#### Scenario: Cluster-type verification is reviewable
++ID: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable
++
++- **GIVEN** the alloc-safe-by-default contract for `aspen-cluster-types`
++- **WHEN** the seam is verified for review
++- **THEN** the exact commands and results for `cargo check -p aspen-cluster-types --no-default-features`, `cargo check -p aspen-cluster-types --no-default-features --target wasm32-unknown-unknown`, `cargo test -p aspen-cluster-types`, `cargo test -p aspen-cluster-types --features iroh`, `cargo tree -p aspen-cluster-types -e normal --depth 2`, `cargo tree -p aspen-cluster-types --features iroh -e normal --depth 2`, and `cargo tree -p aspen-traits -e normal --depth 2` SHALL be saved under `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++- **AND** the saved bare/default tree artifact SHALL prove `iroh-base` is absent until `--features iroh` is enabled
++- **AND** the saved alloc-safe consumer-path artifact for `aspen-traits` SHALL prove a bare/default workspace consumer path does not receive `iroh` implicitly
++- **AND** the exact root-workspace stanza proof for `Cargo.toml` SHALL be saved under `openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt`
++- **AND** `openspec/changes/cluster-types-iroh-opt-in/verification.md` SHALL identify which artifact proves each cluster-types claim
++
++### Requirement: Feature bundles are explicit and bounded
++ID: architecture.modularity.feature-bundles-are-explicit-and-bounded
++
++The build feature graph SHALL distinguish alloc-only core surfaces, `std`-only shell features, and higher-level convenience bundles so enabling foundational Aspen contracts does not silently pull runtime dependencies.
++
++#### Scenario: Cluster-type runtime helpers require per-crate opt-in
++ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
++
++- **GIVEN** a crate that directly depends on `aspen-cluster-types`
++- **WHEN** it needs runtime helper APIs such as `NodeAddress::new`, `ClusterNode::with_iroh_addr`, `.iroh_addr()`, or `try_into_iroh()`
++- **THEN** that crate MUST opt into `features = ["iroh"]` in its own dependency stanza
++- **AND** workspace-level dependency defaults MUST NOT re-enable `iroh` implicitly for unrelated consumers
++- **AND** a deterministic direct-consumer audit generated from `rg 'aspen-cluster-types\\s*=\\s*\\{' . -g 'Cargo.toml'` SHALL be saved under `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`
++- **AND** that audit SHALL classify every direct consumer as either `iroh-opt-in` or `alloc-safe`, cite helper API use or non-use from `rg 'NodeAddress::new|ClusterNode::with_iroh_addr|\\.iroh_addr\\(|try_into_iroh\\(' . -g '*.rs'`, and map every consumer to saved evidence or an explicit deterministic validation rule
++- **AND** every `iroh-opt-in` classification in the audit SHALL correspond to an explicit consumer manifest stanza after workspace-level feature removal rather than inherited workspace defaults
++- **AND** the saved runtime/test consumer artifact SHALL include exact command/results for every direct consumer whose manifest classification changed in this seam
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/tasks.md b/openspec/changes/cluster-types-iroh-opt-in/tasks.md
+new file mode 100644
+index 000000000..64ef3e64b
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/tasks.md
+@@ -0,0 +1,8 @@
++## 1. Cluster-types feature topology
++
++- [x] I1 Record the current `aspen-cluster-types` feature leak and direct-consumer baseline, then remove implicit workspace-level `iroh` enablement and update every direct `aspen-cluster-types` dependency stanza so only crates that call runtime helper APIs opt into `features = ["iroh"]`. [covers=architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit]
++- [x] I2 Keep `crates/aspen-cluster-types` alloc-safe by default (`default = []`, `#![cfg_attr(not(test), no_std)]`, alloc-safe error/dependency settings) while preserving runtime helper behavior behind the explicit `iroh` feature. [covers=architecture.modularity.acyclic-no-std-core-boundary.cluster-types-default-to-alloc-safe-builds,architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable]
++
++## 2. Verification
++
++- [x] V1 Save reviewable evidence for the bare/default graph, explicit-`iroh` graph, the alloc-safe consumer-path proof for `cargo tree -p aspen-traits -e normal --depth 2`, the root-workspace stanza proof under `evidence/workspace-dependency-proof.txt`, the deterministic direct consumer audit, exact command/results for every direct consumer whose manifest classification changed in this seam, and `scripts/openspec-preflight.sh cluster-types-iroh-opt-in`, then map those artifacts in `verification.md`. [covers=architecture.modularity.acyclic-no-std-core-boundary.cluster-types-default-to-alloc-safe-builds,architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable,architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit] [evidence=openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md]
+diff --git a/openspec/changes/cluster-types-iroh-opt-in/verification.md b/openspec/changes/cluster-types-iroh-opt-in/verification.md
+new file mode 100644
+index 000000000..2583d2643
+--- /dev/null
++++ b/openspec/changes/cluster-types-iroh-opt-in/verification.md
+@@ -0,0 +1,145 @@
++# Verification Evidence
++
++This file maps the `cluster-types-iroh-opt-in` tasks to durable repo evidence.
++Baseline context for the review failure is captured in `openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md`.
++
++## Implementation Evidence
++
++- Changed file: `Cargo.toml`
++- Changed file: `crates/aspen-cluster-handler/Cargo.toml`
++- Changed file: `crates/aspen-cluster-types/Cargo.toml`
++- Changed file: `crates/aspen-cluster-types/src/lib.rs`
++- Changed file: `crates/aspen-jobs/Cargo.toml`
++- Changed file: `crates/aspen-raft/Cargo.toml`
++- Changed file: `crates/aspen-testing-core/Cargo.toml`
++- Changed file: `crates/aspen-testing-fixtures/Cargo.toml`
++- Changed file: `crates/aspen-testing-madsim/Cargo.toml`
++- Changed file: `crates/aspen-testing-patchbay/Cargo.toml`
++- Changed file: `crates/aspen-testing/Cargo.toml`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/proposal.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/design.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/tasks.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/specs/architecture-modularity/spec.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/verification.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt`
++- Changed file: `openspec/changes/cluster-types-iroh-opt-in/evidence/openspec-preflight.txt`
++
++## Task Coverage
++
++- [x] I1 Record the current `aspen-cluster-types` feature leak and direct-consumer baseline, then remove implicit workspace-level `iroh` enablement and update every direct `aspen-cluster-types` dependency stanza so only crates that call runtime helper APIs opt into `features = ["iroh"]`. [covers=architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit]
++  - Evidence: `Cargo.toml`, `crates/aspen-cluster-handler/Cargo.toml`, `crates/aspen-jobs/Cargo.toml`, `crates/aspen-raft/Cargo.toml`, `crates/aspen-testing-core/Cargo.toml`, `crates/aspen-testing-fixtures/Cargo.toml`, `crates/aspen-testing-madsim/Cargo.toml`, `crates/aspen-testing-patchbay/Cargo.toml`, `crates/aspen-testing/Cargo.toml`, `openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md`, `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`, `openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt`, `openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt`
++
++- [x] I2 Keep `crates/aspen-cluster-types` alloc-safe by default (`default = []`, `#![cfg_attr(not(test), no_std)]`, alloc-safe error/dependency settings) while preserving runtime helper behavior behind the explicit `iroh` feature. [covers=architecture.modularity.acyclic-no-std-core-boundary.cluster-types-default-to-alloc-safe-builds,architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable]
++  - Evidence: `crates/aspen-cluster-types/Cargo.toml`, `crates/aspen-cluster-types/src/lib.rs`, `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`, `openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt`
++
++- [x] V1 Save reviewable evidence for the bare/default graph, explicit-`iroh` graph, the alloc-safe consumer-path proof for `cargo tree -p aspen-traits -e normal --depth 2`, the root-workspace stanza proof under `evidence/workspace-dependency-proof.txt`, the deterministic direct consumer audit, exact command/results for every direct consumer whose manifest classification changed in this seam, and `scripts/openspec-preflight.sh cluster-types-iroh-opt-in`, then map those artifacts in `verification.md`. [covers=architecture.modularity.acyclic-no-std-core-boundary.cluster-types-default-to-alloc-safe-builds,architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable,architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit] [evidence=openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md]
++  - Evidence: `openspec/changes/cluster-types-iroh-opt-in/verification.md`, `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`, `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`, `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`, `openspec/changes/cluster-types-iroh-opt-in/evidence/workspace-dependency-proof.txt`, `openspec/changes/cluster-types-iroh-opt-in/evidence/openspec-preflight.txt`, `openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt`
++
++## Review Scope Snapshot
++
++### `git diff --cached -- Cargo.toml crates/aspen-cluster-handler/Cargo.toml crates/aspen-cluster-types/Cargo.toml crates/aspen-cluster-types/src/lib.rs crates/aspen-jobs/Cargo.toml crates/aspen-raft/Cargo.toml crates/aspen-testing-core/Cargo.toml crates/aspen-testing-fixtures/Cargo.toml crates/aspen-testing-madsim/Cargo.toml crates/aspen-testing-patchbay/Cargo.toml crates/aspen-testing/Cargo.toml openspec/changes/cluster-types-iroh-opt-in`
++
++- Status: captured
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/implementation-diff.txt`
++
++## Verification Commands
++
++### `cargo check -p aspen-cluster-types --no-default-features`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++
++### `cargo check -p aspen-cluster-types --no-default-features --target wasm32-unknown-unknown`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++
++### `cargo test -p aspen-cluster-types`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++
++### `cargo test -p aspen-cluster-types --features iroh`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++
++### `cargo tree -p aspen-cluster-types -e normal --depth 2`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++
++### `cargo tree -p aspen-cluster-types --features iroh -e normal --depth 2`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++
++### `cargo tree -p aspen-traits -e normal --depth 2`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/cluster-types-validation.md`
++
++### `rg -n 'aspen-cluster-types\s*=\s*\{' . -g 'Cargo.toml'`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`
++
++### `rg -n 'NodeAddress::new|ClusterNode::with_iroh_addr|\.iroh_addr\(|try_into_iroh\(' . -g '*.rs'`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/direct-consumer-audit.md`
++
++### `cargo check -p aspen-jobs`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `cargo check -p aspen-testing-core`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `cargo check -p aspen-testing-fixtures`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `cargo check -p aspen-testing`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `cargo check -p aspen-testing-madsim`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `cargo check -p aspen-raft`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `cargo check -p aspen-cluster-handler --tests`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `cargo check -p aspen-testing-patchbay`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/runtime-consumers.md`
++
++### `scripts/openspec-preflight.sh cluster-types-iroh-opt-in`
++
++- Status: pass
++- Artifact: `openspec/changes/cluster-types-iroh-opt-in/evidence/openspec-preflight.txt`
++
++## Notes
++
++- `openspec/changes/cluster-types-iroh-opt-in/evidence/baseline-feature-leak.md` records the original workspace-level failure mode that hid the leak.
++- The bare/default proof for `aspen-cluster-types` is the tree in `cluster-types-validation.md`, not the earlier incorrect claim from chat.

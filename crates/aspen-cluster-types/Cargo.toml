@@ -10,7 +10,7 @@ description = "Cluster management types for Aspen distributed systems"
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 
 # Error handling
-thiserror = "2.0"
+thiserror = { version = "2.0", default-features = false }
 
 # Optional P2P address conversion helpers
 iroh-base = { version = "0.97.0", default-features = false, features = ["key"], optional = true }
@@ -19,5 +19,5 @@ iroh-base = { version = "0.97.0", default-features = false, features = ["key"], 
 serde_json = "1.0"
 
 [features]
-default = ["iroh"]
+default = []
 iroh = ["dep:iroh-base"]

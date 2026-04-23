@@ -3,6 +3,9 @@
 //! This crate provides types for managing cluster membership and topology,
 //! including node identifiers, addresses, states, and error types.
 //!
+//! Production data types stay alloc-safe by default. Runtime iroh conversion
+//! helpers remain behind the explicit `iroh` feature.
+//!
 //! ## Key Types
 //!
 //! - [`NodeId`]: Type-safe node identifier
@@ -13,7 +16,7 @@
 //! - [`ClusterMetrics`]: Raft metrics wrapper
 //! - [`ControlPlaneError`]: Errors for cluster control plane operations
 
-#![cfg_attr(not(any(test, feature = "iroh")), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
 

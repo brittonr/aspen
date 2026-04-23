@@ -1,0 +1,1768 @@
+Evidence-ID: alloc-safe-hooks-ticket.r1-baseline
+Task-ID: R1
+Artifact-Type: command-transcript
+Covers: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe
+
+# Baseline validation
+
+## `cargo tree -p aspen-hooks-ticket -e normal`
+
+```text
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hooks-ticket)
+├── anyhow v1.0.102
+├── iroh v0.97.0
+│   ├── backon v1.6.0
+│   │   ├── fastrand v2.3.0
+│   │   └── tokio v1.50.0
+│   │       ├── bytes v1.11.1
+│   │       ├── libc v0.2.183
+│   │       ├── mio v1.1.1
+│   │       │   └── libc v0.2.183
+│   │       ├── pin-project-lite v0.2.17
+│   │       ├── socket2 v0.6.3
+│   │       │   └── libc v0.2.183
+│   │       └── tokio-macros v2.6.1 (proc-macro)
+│   │           ├── proc-macro2 v1.0.106
+│   │           │   └── unicode-ident v1.0.24
+│   │           ├── quote v1.0.45
+│   │           │   └── proc-macro2 v1.0.106 (*)
+│   │           └── syn v2.0.117
+│   │               ├── proc-macro2 v1.0.106 (*)
+│   │               ├── quote v1.0.45 (*)
+│   │               └── unicode-ident v1.0.24
+│   ├── bytes v1.11.1
+│   ├── data-encoding v2.10.0
+│   ├── derive_more v2.1.1
+│   │   └── derive_more-impl v2.1.1 (proc-macro)
+│   │       ├── convert_case v0.10.0
+│   │       │   └── unicode-segmentation v1.12.0
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       ├── syn v2.0.117 (*)
+│   │       └── unicode-xid v0.2.6
+│   ├── ed25519-dalek v3.0.0-pre.1
+│   │   ├── curve25519-dalek v5.0.0-pre.1
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── cpufeatures v0.2.17
+│   │   │   ├── curve25519-dalek-derive v0.1.1 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   ├── digest v0.11.0-rc.10
+│   │   │   │   ├── block-buffer v0.11.0
+│   │   │   │   │   └── hybrid-array v0.4.8
+│   │   │   │   │       └── typenum v1.19.0
+│   │   │   │   ├── const-oid v0.10.2
+│   │   │   │   └── crypto-common v0.2.1
+│   │   │   │       └── hybrid-array v0.4.8 (*)
+│   │   │   ├── rand_core v0.9.5
+│   │   │   │   └── getrandom v0.3.4
+│   │   │   │       ├── cfg-if v1.0.4
+│   │   │   │       └── libc v0.2.183
+│   │   │   ├── serde v1.0.228
+│   │   │   │   ├── serde_core v1.0.228
+│   │   │   │   └── serde_derive v1.0.228 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.45 (*)
+│   │   │   │       └── syn v2.0.117 (*)
+│   │   │   ├── subtle v2.6.1
+│   │   │   └── zeroize v1.8.2
+│   │   │       └── zeroize_derive v1.4.3 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── syn v2.0.117 (*)
+│   │   ├── ed25519 v3.0.0-rc.4
+│   │   │   ├── pkcs8 v0.11.0-rc.11
+│   │   │   │   ├── der v0.8.0
+│   │   │   │   │   ├── const-oid v0.10.2
+│   │   │   │   │   ├── pem-rfc7468 v1.0.0
+│   │   │   │   │   │   └── base64ct v1.8.3
+│   │   │   │   │   └── zeroize v1.8.2 (*)
+│   │   │   │   └── spki v0.8.0-rc.4
+│   │   │   │       └── der v0.8.0 (*)
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   └── signature v3.0.0-rc.10
+│   │   ├── rand_core v0.9.5 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── sha2 v0.11.0-rc.2
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── cpufeatures v0.2.17
+│   │   │   └── digest v0.11.0-rc.10 (*)
+│   │   ├── signature v3.0.0-rc.10
+│   │   ├── subtle v2.6.1
+│   │   └── zeroize v1.8.2 (*)
+│   ├── futures-util v0.3.32
+│   │   ├── futures-channel v0.3.32
+│   │   │   ├── futures-core v0.3.32
+│   │   │   └── futures-sink v0.3.32
+│   │   ├── futures-core v0.3.32
+│   │   ├── futures-io v0.3.32
+│   │   ├── futures-macro v0.3.32 (proc-macro)
+│   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   ├── quote v1.0.45 (*)
+│   │   │   └── syn v2.0.117 (*)
+│   │   ├── futures-sink v0.3.32
+│   │   ├── futures-task v0.3.32
+│   │   ├── memchr v2.8.0
+│   │   ├── pin-project-lite v0.2.17
+│   │   └── slab v0.4.12
+│   ├── hickory-resolver v0.25.2
+│   │   ├── cfg-if v1.0.4
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── hickory-proto v0.25.2
+│   │   │   ├── async-trait v0.1.89 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── data-encoding v2.10.0
+│   │   │   ├── enum-as-inner v0.6.1 (proc-macro)
+│   │   │   │   ├── heck v0.5.0
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   ├── futures-channel v0.3.32 (*)
+│   │   │   ├── futures-io v0.3.32
+│   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   ├── h2 v0.4.13
+│   │   │   │   ├── atomic-waker v1.1.2
+│   │   │   │   ├── bytes v1.11.1
+│   │   │   │   ├── fnv v1.0.7
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   ├── futures-sink v0.3.32
+│   │   │   │   ├── http v1.4.0
+│   │   │   │   │   ├── bytes v1.11.1
+│   │   │   │   │   └── itoa v1.0.17
+│   │   │   │   ├── indexmap v2.13.0
+│   │   │   │   │   ├── equivalent v1.0.2
+│   │   │   │   │   └── hashbrown v0.16.1
+│   │   │   │   │       ├── allocator-api2 v0.2.21
+│   │   │   │   │       ├── equivalent v1.0.2
+│   │   │   │   │       └── foldhash v0.2.0
+│   │   │   │   ├── slab v0.4.12
+│   │   │   │   ├── tokio v1.50.0 (*)
+│   │   │   │   ├── tokio-util v0.7.18
+│   │   │   │   │   ├── bytes v1.11.1
+│   │   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   │   ├── futures-sink v0.3.32
+│   │   │   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   │   │   ├── pin-project-lite v0.2.17
+│   │   │   │   │   └── tokio v1.50.0 (*)
+│   │   │   │   └── tracing v0.1.44
+│   │   │   │       ├── log v0.4.29
+│   │   │   │       ├── pin-project-lite v0.2.17
+│   │   │   │       ├── tracing-attributes v0.1.31 (proc-macro)
+│   │   │   │       │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       │   ├── quote v1.0.45 (*)
+│   │   │   │       │   └── syn v2.0.117 (*)
+│   │   │   │       └── tracing-core v0.1.36
+│   │   │   │           └── once_cell v1.21.4
+│   │   │   │               ├── critical-section v1.2.0
+│   │   │   │               └── portable-atomic v1.13.1
+│   │   │   │                   └── serde v1.0.228 (*)
+│   │   │   ├── http v1.4.0 (*)
+│   │   │   ├── idna v1.1.0
+│   │   │   │   ├── idna_adapter v1.2.1
+│   │   │   │   │   ├── icu_normalizer v2.1.1
+│   │   │   │   │   │   ├── icu_collections v2.1.1
+│   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro)
+│   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │   └── syn v2.0.117 (*)
+│   │   │   │   │   │   │   ├── potential_utf v0.1.4
+│   │   │   │   │   │   │   │   └── zerovec v0.11.5
+│   │   │   │   │   │   │   │       ├── yoke v0.8.1
+│   │   │   │   │   │   │   │       │   ├── stable_deref_trait v1.2.1
+│   │   │   │   │   │   │   │       │   ├── yoke-derive v0.8.1 (proc-macro)
+│   │   │   │   │   │   │   │       │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │       │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │       │   │   ├── syn v2.0.117 (*)
+│   │   │   │   │   │   │   │       │   │   └── synstructure v0.13.2
+│   │   │   │   │   │   │   │       │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │       │   │       ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │       │   │       └── syn v2.0.117 (*)
+│   │   │   │   │   │   │   │       │   └── zerofrom v0.1.6
+│   │   │   │   │   │   │   │       │       └── zerofrom-derive v0.1.6 (proc-macro)
+│   │   │   │   │   │   │   │       │           ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │       │           ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │       │           ├── syn v2.0.117 (*)
+│   │   │   │   │   │   │   │       │           └── synstructure v0.13.2 (*)
+│   │   │   │   │   │   │   │       ├── zerofrom v0.1.6 (*)
+│   │   │   │   │   │   │   │       └── zerovec-derive v0.11.2 (proc-macro)
+│   │   │   │   │   │   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │           ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │           └── syn v2.0.117 (*)
+│   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
+│   │   │   │   │   │   │   ├── zerofrom v0.1.6 (*)
+│   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
+│   │   │   │   │   │   ├── icu_normalizer_data v2.1.1
+│   │   │   │   │   │   ├── icu_provider v2.1.1
+│   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   ├── icu_locale_core v2.1.1
+│   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   │   ├── litemap v0.8.1
+│   │   │   │   │   │   │   │   ├── tinystr v0.8.2
+│   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
+│   │   │   │   │   │   │   │   ├── writeable v0.6.2
+│   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
+│   │   │   │   │   │   │   ├── writeable v0.6.2
+│   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
+│   │   │   │   │   │   │   ├── zerofrom v0.1.6 (*)
+│   │   │   │   │   │   │   ├── zerotrie v0.2.3
+│   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
+│   │   │   │   │   │   │   │   └── zerofrom v0.1.6 (*)
+│   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
+│   │   │   │   │   │   ├── smallvec v1.15.1
+│   │   │   │   │   │   └── zerovec v0.11.5 (*)
+│   │   │   │   │   └── icu_properties v2.1.2
+│   │   │   │   │       ├── icu_collections v2.1.1 (*)
+│   │   │   │   │       ├── icu_locale_core v2.1.1 (*)
+│   │   │   │   │       ├── icu_properties_data v2.1.2
+│   │   │   │   │       ├── icu_provider v2.1.1 (*)
+│   │   │   │   │       ├── zerotrie v0.2.3 (*)
+│   │   │   │   │       └── zerovec v0.11.5 (*)
+│   │   │   │   ├── smallvec v1.15.1
+│   │   │   │   └── utf8_iter v1.0.4
+│   │   │   ├── ipnet v2.12.0
+│   │   │   ├── once_cell v1.21.4 (*)
+│   │   │   ├── rand v0.9.2
+│   │   │   │   ├── rand_chacha v0.9.0
+│   │   │   │   │   ├── ppv-lite86 v0.2.21
+│   │   │   │   │   │   └── zerocopy v0.8.42
+│   │   │   │   │   └── rand_core v0.9.5 (*)
+│   │   │   │   └── rand_core v0.9.5 (*)
+│   │   │   ├── rustls v0.23.37
+│   │   │   │   ├── log v0.4.29
+│   │   │   │   ├── once_cell v1.21.4 (*)
+│   │   │   │   ├── ring v0.17.14
+│   │   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   │   ├── getrandom v0.2.17
+│   │   │   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   │   │   └── libc v0.2.183
+│   │   │   │   │   └── untrusted v0.9.0
+│   │   │   │   ├── rustls-pki-types v1.14.0
+│   │   │   │   │   └── zeroize v1.8.2 (*)
+│   │   │   │   ├── rustls-webpki v0.103.9
+│   │   │   │   │   ├── ring v0.17.14 (*)
+│   │   │   │   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   │   │   │   └── untrusted v0.9.0
+│   │   │   │   ├── subtle v2.6.1
+│   │   │   │   └── zeroize v1.8.2 (*)
+│   │   │   ├── thiserror v2.0.18
+│   │   │   │   └── thiserror-impl v2.0.18 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.45 (*)
+│   │   │   │       └── syn v2.0.117 (*)
+│   │   │   ├── tinyvec v1.11.0
+│   │   │   │   └── tinyvec_macros v0.1.1
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   ├── tokio-rustls v0.26.4
+│   │   │   │   ├── rustls v0.23.37 (*)
+│   │   │   │   └── tokio v1.50.0 (*)
+│   │   │   ├── tracing v0.1.44 (*)
+│   │   │   └── url v2.5.8
+│   │   │       ├── form_urlencoded v1.2.2
+│   │   │       │   └── percent-encoding v2.3.2
+│   │   │       ├── idna v1.1.0 (*)
+│   │   │       ├── percent-encoding v2.3.2
+│   │   │       ├── serde v1.0.228 (*)
+│   │   │       └── serde_derive v1.0.228 (proc-macro) (*)
+│   │   ├── moka v0.12.14
+│   │   │   ├── crossbeam-channel v0.5.15
+│   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   ├── crossbeam-epoch v0.9.18
+│   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   ├── crossbeam-utils v0.8.21
+│   │   │   ├── equivalent v1.0.2
+│   │   │   ├── parking_lot v0.12.5
+│   │   │   │   ├── lock_api v0.4.14
+│   │   │   │   │   └── scopeguard v1.2.0
+│   │   │   │   └── parking_lot_core v0.9.12
+│   │   │   │       ├── cfg-if v1.0.4
+│   │   │   │       ├── libc v0.2.183
+│   │   │   │       └── smallvec v1.15.1
+│   │   │   ├── portable-atomic v1.13.1 (*)
+│   │   │   ├── smallvec v1.15.1
+│   │   │   ├── tagptr v0.2.0
+│   │   │   └── uuid v1.22.0
+│   │   │       └── getrandom v0.4.2
+│   │   │           ├── cfg-if v1.0.4
+│   │   │           └── libc v0.2.183
+│   │   ├── once_cell v1.21.4 (*)
+│   │   ├── parking_lot v0.12.5 (*)
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── resolv-conf v0.7.6
+│   │   ├── rustls v0.23.37 (*)
+│   │   ├── smallvec v1.15.1
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-rustls v0.26.4 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── http v1.4.0 (*)
+│   ├── ipnet v2.12.0
+│   ├── iroh-base v0.97.0
+│   │   ├── curve25519-dalek v5.0.0-pre.1 (*)
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── digest v0.11.0-rc.10 (*)
+│   │   ├── ed25519-dalek v3.0.0-pre.1 (*)
+│   │   ├── n0-error v0.1.3
+│   │   │   ├── n0-error-macros v0.1.3 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   └── spez v0.1.2 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       ├── quote v1.0.45 (*)
+│   │   │       └── syn v2.0.117 (*)
+│   │   ├── rand_core v0.9.5 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── sha2 v0.11.0-rc.2 (*)
+│   │   ├── url v2.5.8 (*)
+│   │   ├── zeroize v1.8.2 (*)
+│   │   └── zeroize_derive v1.4.3 (proc-macro) (*)
+│   ├── iroh-metrics v0.38.3
+│   │   ├── iroh-metrics-derive v0.4.1 (proc-macro)
+│   │   │   ├── heck v0.5.0
+│   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   ├── quote v1.0.45 (*)
+│   │   │   └── syn v2.0.117 (*)
+│   │   ├── itoa v1.0.17
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── portable-atomic v1.13.1 (*)
+│   │   ├── postcard v1.1.3
+│   │   │   ├── cobs v0.3.0
+│   │   │   │   └── thiserror v2.0.18 (*)
+│   │   │   ├── heapless v0.7.17
+│   │   │   │   ├── hash32 v0.2.1
+│   │   │   │   │   └── byteorder v1.5.0
+│   │   │   │   ├── serde v1.0.228 (*)
+│   │   │   │   ├── spin v0.9.8
+│   │   │   │   │   └── lock_api v0.4.14 (*)
+│   │   │   │   └── stable_deref_trait v1.2.1
+│   │   │   ├── postcard-derive v0.2.2 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   └── serde v1.0.228 (*)
+│   │   ├── ryu v1.0.23
+│   │   ├── serde v1.0.228 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── iroh-relay v0.97.0
+│   │   ├── blake3 v1.8.3
+│   │   │   ├── arrayref v0.3.9
+│   │   │   ├── arrayvec v0.7.6
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── constant_time_eq v0.4.2
+│   │   │   └── cpufeatures v0.2.17
+│   │   ├── bytes v1.11.1
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── hickory-resolver v0.25.2 (*)
+│   │   ├── http v1.4.0 (*)
+│   │   ├── http-body-util v0.1.3
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-core v0.3.32
+│   │   │   ├── http v1.4.0 (*)
+│   │   │   ├── http-body v1.0.1
+│   │   │   │   ├── bytes v1.11.1
+│   │   │   │   └── http v1.4.0 (*)
+│   │   │   └── pin-project-lite v0.2.17
+│   │   ├── hyper v1.8.1
+│   │   │   ├── atomic-waker v1.1.2
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-channel v0.3.32 (*)
+│   │   │   ├── futures-core v0.3.32
+│   │   │   ├── h2 v0.4.13 (*)
+│   │   │   ├── http v1.4.0 (*)
+│   │   │   ├── http-body v1.0.1 (*)
+│   │   │   ├── httparse v1.10.1
+│   │   │   ├── httpdate v1.0.3
+│   │   │   ├── itoa v1.0.17
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── pin-utils v0.1.0
+│   │   │   ├── smallvec v1.15.1
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   └── want v0.3.1
+│   │   │       └── try-lock v0.2.5
+│   │   ├── hyper-util v0.1.20
+│   │   │   ├── base64 v0.22.1
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-channel v0.3.32 (*)
+│   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   ├── http v1.4.0 (*)
+│   │   │   ├── http-body v1.0.1 (*)
+│   │   │   ├── hyper v1.8.1 (*)
+│   │   │   ├── ipnet v2.12.0
+│   │   │   ├── libc v0.2.183
+│   │   │   ├── percent-encoding v2.3.2
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── socket2 v0.6.3 (*)
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   ├── tower-service v0.3.3
+│   │   │   └── tracing v0.1.44 (*)
+│   │   ├── iroh-base v0.97.0 (*)
+│   │   ├── iroh-metrics v0.38.3 (*)
+│   │   ├── lru v0.16.3
+│   │   │   └── hashbrown v0.16.1 (*)
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── n0-future v0.3.2
+│   │   │   ├── derive_more v2.1.1 (*)
+│   │   │   ├── futures-buffered v0.2.13
+│   │   │   │   ├── cordyceps v0.3.4
+│   │   │   │   ├── diatomic-waker v0.2.3
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   ├── pin-project-lite v0.2.17
+│   │   │   │   └── spin v0.10.0
+│   │   │   ├── futures-lite v2.6.1
+│   │   │   │   ├── fastrand v2.3.0
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   ├── futures-io v0.3.32
+│   │   │   │   ├── parking v2.2.1
+│   │   │   │   └── pin-project-lite v0.2.17
+│   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   ├── pin-project v1.1.11
+│   │   │   │   └── pin-project-internal v1.1.11 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.45 (*)
+│   │   │   │       └── syn v2.0.117 (*)
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   └── tokio-util v0.7.18 (*)
+│   │   ├── noq v0.17.0
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── noq-proto v0.16.0
+│   │   │   │   ├── aes-gcm v0.10.3
+│   │   │   │   │   ├── aead v0.5.2
+│   │   │   │   │   │   ├── crypto-common v0.1.7
+│   │   │   │   │   │   │   ├── generic-array v0.14.7
+│   │   │   │   │   │   │   │   └── typenum v1.19.0
+│   │   │   │   │   │   │   └── typenum v1.19.0
+│   │   │   │   │   │   └── generic-array v0.14.7 (*)
+│   │   │   │   │   ├── aes v0.8.4
+│   │   │   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   │   │   ├── cipher v0.4.4
+│   │   │   │   │   │   │   ├── crypto-common v0.1.7 (*)
+│   │   │   │   │   │   │   └── inout v0.1.4
+│   │   │   │   │   │   │       └── generic-array v0.14.7 (*)
+│   │   │   │   │   │   └── cpufeatures v0.2.17
+│   │   │   │   │   ├── cipher v0.4.4 (*)
+│   │   │   │   │   ├── ctr v0.9.2
+│   │   │   │   │   │   └── cipher v0.4.4 (*)
+│   │   │   │   │   ├── ghash v0.5.1
+│   │   │   │   │   │   ├── opaque-debug v0.3.1
+│   │   │   │   │   │   └── polyval v0.6.2
+│   │   │   │   │   │       ├── cfg-if v1.0.4
+│   │   │   │   │   │       ├── cpufeatures v0.2.17
+│   │   │   │   │   │       ├── opaque-debug v0.3.1
+│   │   │   │   │   │       └── universal-hash v0.5.1
+│   │   │   │   │   │           ├── crypto-common v0.1.7 (*)
+│   │   │   │   │   │           └── subtle v2.6.1
+│   │   │   │   │   └── subtle v2.6.1
+│   │   │   │   ├── bytes v1.11.1
+│   │   │   │   ├── derive_more v2.1.1 (*)
+│   │   │   │   ├── enum-assoc v1.3.0 (proc-macro)
+│   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   └── syn v2.0.117 (*)
+│   │   │   │   ├── fastbloom v0.14.1
+│   │   │   │   │   ├── getrandom v0.3.4 (*)
+│   │   │   │   │   ├── libm v0.2.16
+│   │   │   │   │   ├── rand v0.9.2 (*)
+│   │   │   │   │   └── siphasher v1.0.2
+│   │   │   │   ├── identity-hash v0.1.0
+│   │   │   │   ├── lru-slab v0.1.2
+│   │   │   │   ├── rand v0.9.2 (*)
+│   │   │   │   ├── ring v0.17.14 (*)
+│   │   │   │   ├── rustc-hash v2.1.1
+│   │   │   │   ├── rustls v0.23.37 (*)
+│   │   │   │   ├── slab v0.4.12
+│   │   │   │   ├── sorted-index-buffer v0.2.1
+│   │   │   │   ├── thiserror v2.0.18 (*)
+│   │   │   │   ├── tinyvec v1.11.0 (*)
+│   │   │   │   └── tracing v0.1.44 (*)
+│   │   │   ├── noq-udp v0.9.0
+│   │   │   │   ├── libc v0.2.183
+│   │   │   │   ├── socket2 v0.6.3 (*)
+│   │   │   │   └── tracing v0.1.44 (*)
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── rustc-hash v2.1.1
+│   │   │   ├── rustls v0.23.37 (*)
+│   │   │   ├── socket2 v0.6.3 (*)
+│   │   │   ├── thiserror v2.0.18 (*)
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   ├── tokio-stream v0.1.18
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   ├── pin-project-lite v0.2.17
+│   │   │   │   ├── tokio v1.50.0 (*)
+│   │   │   │   └── tokio-util v0.7.18 (*)
+│   │   │   └── tracing v0.1.44 (*)
+│   │   ├── noq-proto v0.16.0 (*)
+│   │   ├── num_enum v0.7.6
+│   │   │   ├── num_enum_derive v0.7.6 (proc-macro)
+│   │   │   │   ├── proc-macro-crate v3.5.0
+│   │   │   │   │   └── toml_edit v0.25.5+spec-1.1.0
+│   │   │   │   │       ├── indexmap v2.13.0 (*)
+│   │   │   │   │       ├── toml_datetime v1.0.1+spec-1.1.0
+│   │   │   │   │       ├── toml_parser v1.0.10+spec-1.1.0
+│   │   │   │   │       │   └── winnow v1.0.0
+│   │   │   │   │       └── winnow v1.0.0
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   └── rustversion v1.0.22 (proc-macro)
+│   │   ├── pin-project v1.1.11 (*)
+│   │   ├── pkarr v5.0.2
+│   │   │   ├── base32 v0.5.1
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── document-features v0.2.12 (proc-macro)
+│   │   │   │   └── litrs v1.0.0
+│   │   │   ├── ed25519-dalek v3.0.0-pre.1 (*)
+│   │   │   ├── getrandom v0.3.4 (*)
+│   │   │   ├── ntimestamp v1.0.0
+│   │   │   │   ├── base32 v0.5.1
+│   │   │   │   ├── document-features v0.2.12 (proc-macro) (*)
+│   │   │   │   ├── getrandom v0.2.17 (*)
+│   │   │   │   ├── httpdate v1.0.3
+│   │   │   │   ├── once_cell v1.21.4 (*)
+│   │   │   │   └── serde v1.0.228 (*)
+│   │   │   ├── self_cell v1.2.2
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   ├── simple-dns v0.9.3
+│   │   │   │   └── bitflags v2.11.0
+│   │   │   └── thiserror v2.0.18 (*)
+│   │   ├── postcard v1.1.3 (*)
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── reqwest v0.12.28
+│   │   │   ├── base64 v0.22.1
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-core v0.3.32
+│   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   ├── http v1.4.0 (*)
+│   │   │   ├── http-body v1.0.1 (*)
+│   │   │   ├── http-body-util v0.1.3 (*)
+│   │   │   ├── hyper v1.8.1 (*)
+│   │   │   ├── hyper-rustls v0.27.7
+│   │   │   │   ├── http v1.4.0 (*)
+│   │   │   │   ├── hyper v1.8.1 (*)
+│   │   │   │   ├── hyper-util v0.1.20 (*)
+│   │   │   │   ├── rustls v0.23.37 (*)
+│   │   │   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   │   │   ├── tokio v1.50.0 (*)
+│   │   │   │   ├── tokio-rustls v0.26.4 (*)
+│   │   │   │   ├── tower-service v0.3.3
+│   │   │   │   └── webpki-roots v1.0.6
+│   │   │   │       └── rustls-pki-types v1.14.0 (*)
+│   │   │   ├── hyper-util v0.1.20 (*)
+│   │   │   ├── log v0.4.29
+│   │   │   ├── percent-encoding v2.3.2
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── rustls v0.23.37 (*)
+│   │   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   ├── serde_urlencoded v0.7.1
+│   │   │   │   ├── form_urlencoded v1.2.2 (*)
+│   │   │   │   ├── itoa v1.0.17
+│   │   │   │   ├── ryu v1.0.23
+│   │   │   │   └── serde v1.0.228 (*)
+│   │   │   ├── sync_wrapper v1.0.2
+│   │   │   │   └── futures-core v0.3.32
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   ├── tokio-rustls v0.26.4 (*)
+│   │   │   ├── tokio-util v0.7.18 (*)
+│   │   │   ├── tower v0.5.3
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   │   ├── pin-project-lite v0.2.17
+│   │   │   │   ├── sync_wrapper v1.0.2 (*)
+│   │   │   │   ├── tokio v1.50.0 (*)
+│   │   │   │   ├── tower-layer v0.3.3
+│   │   │   │   └── tower-service v0.3.3
+│   │   │   ├── tower-http v0.6.8
+│   │   │   │   ├── bitflags v2.11.0
+│   │   │   │   ├── bytes v1.11.1
+│   │   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   │   ├── http v1.4.0 (*)
+│   │   │   │   ├── http-body v1.0.1 (*)
+│   │   │   │   ├── iri-string v0.7.10
+│   │   │   │   ├── pin-project-lite v0.2.17
+│   │   │   │   ├── tower v0.5.3 (*)
+│   │   │   │   ├── tower-layer v0.3.3
+│   │   │   │   └── tower-service v0.3.3
+│   │   │   ├── tower-service v0.3.3
+│   │   │   ├── url v2.5.8 (*)
+│   │   │   └── webpki-roots v1.0.6 (*)
+│   │   ├── rustls v0.23.37 (*)
+│   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_bytes v0.11.19
+│   │   │   └── serde_core v1.0.228
+│   │   ├── strum v0.28.0
+│   │   │   └── strum_macros v0.28.0 (proc-macro)
+│   │   │       ├── heck v0.5.0
+│   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       ├── quote v1.0.45 (*)
+│   │   │       └── syn v2.0.117 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-rustls v0.26.4 (*)
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   ├── tokio-websockets v0.12.3
+│   │   │   ├── base64 v0.22.1
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-core v0.3.32
+│   │   │   ├── futures-sink v0.3.32
+│   │   │   ├── getrandom v0.3.4 (*)
+│   │   │   ├── http v1.4.0 (*)
+│   │   │   ├── httparse v1.10.1
+│   │   │   ├── rand v0.9.2 (*)
+│   │   │   ├── ring v0.17.14 (*)
+│   │   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   │   ├── simdutf8 v0.1.5
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   ├── tokio-rustls v0.26.4 (*)
+│   │   │   └── tokio-util v0.7.18 (*)
+│   │   ├── tracing v0.1.44 (*)
+│   │   ├── url v2.5.8 (*)
+│   │   ├── webpki-roots v1.0.6 (*)
+│   │   └── z32 v1.3.0
+│   ├── n0-error v0.1.3 (*)
+│   ├── n0-future v0.3.2 (*)
+│   ├── n0-watcher v0.6.1
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── n0-error v0.1.3 (*)
+│   │   └── n0-future v0.3.2 (*)
+│   ├── netwatch v0.15.0
+│   │   ├── atomic-waker v1.1.2
+│   │   ├── bytes v1.11.1
+│   │   ├── libc v0.2.183
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── n0-future v0.3.2 (*)
+│   │   ├── n0-watcher v0.6.1 (*)
+│   │   ├── netdev v0.40.1
+│   │   │   ├── ipnet v2.12.0
+│   │   │   ├── libc v0.2.183
+│   │   │   ├── mac-addr v0.3.0
+│   │   │   ├── netlink-packet-core v0.8.1
+│   │   │   │   └── paste v1.0.15 (proc-macro)
+│   │   │   ├── netlink-packet-route v0.29.0
+│   │   │   │   ├── bitflags v2.11.0
+│   │   │   │   ├── libc v0.2.183
+│   │   │   │   ├── log v0.4.29
+│   │   │   │   └── netlink-packet-core v0.8.1 (*)
+│   │   │   └── netlink-sys v0.8.8
+│   │   │       ├── bytes v1.11.1
+│   │   │       ├── futures-util v0.3.32 (*)
+│   │   │       ├── libc v0.2.183
+│   │   │       ├── log v0.4.29
+│   │   │       └── tokio v1.50.0 (*)
+│   │   ├── netlink-packet-core v0.8.1 (*)
+│   │   ├── netlink-packet-route v0.29.0 (*)
+│   │   ├── netlink-proto v0.12.0
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures v0.3.32
+│   │   │   │   ├── futures-channel v0.3.32 (*)
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   ├── futures-executor v0.3.32
+│   │   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   │   ├── futures-task v0.3.32
+│   │   │   │   │   └── futures-util v0.3.32 (*)
+│   │   │   │   ├── futures-io v0.3.32
+│   │   │   │   ├── futures-sink v0.3.32
+│   │   │   │   ├── futures-task v0.3.32
+│   │   │   │   └── futures-util v0.3.32 (*)
+│   │   │   ├── log v0.4.29
+│   │   │   ├── netlink-packet-core v0.8.1 (*)
+│   │   │   ├── netlink-sys v0.8.8 (*)
+│   │   │   └── thiserror v2.0.18 (*)
+│   │   ├── netlink-sys v0.8.8 (*)
+│   │   ├── noq-udp v0.9.0 (*)
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── socket2 v0.6.3 (*)
+│   │   ├── time v0.3.47
+│   │   │   ├── deranged v0.5.8
+│   │   │   │   └── powerfmt v0.2.0
+│   │   │   ├── num-conv v0.2.0
+│   │   │   ├── powerfmt v0.2.0
+│   │   │   └── time-core v0.1.8
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── noq v0.17.0 (*)
+│   ├── noq-proto v0.16.0 (*)
+│   ├── noq-udp v0.9.0 (*)
+│   ├── papaya v0.2.3
+│   │   ├── equivalent v1.0.2
+│   │   └── seize v0.5.1
+│   │       └── libc v0.2.183
+│   ├── pin-project v1.1.11 (*)
+│   ├── pkarr v5.0.2 (*)
+│   ├── pkcs8 v0.11.0-rc.11 (*)
+│   ├── portable-atomic v1.13.1 (*)
+│   ├── portmapper v0.15.0
+│   │   ├── base64 v0.22.1
+│   │   ├── bytes v1.11.1
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── futures-lite v2.6.1 (*)
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── hyper-util v0.1.20 (*)
+│   │   ├── igd-next v0.16.2
+│   │   │   ├── async-trait v0.1.89 (proc-macro) (*)
+│   │   │   ├── attohttpc v0.30.1
+│   │   │   │   ├── base64 v0.22.1
+│   │   │   │   ├── http v1.4.0 (*)
+│   │   │   │   ├── log v0.4.29
+│   │   │   │   └── url v2.5.8 (*)
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures v0.3.32 (*)
+│   │   │   ├── http v1.4.0 (*)
+│   │   │   ├── http-body-util v0.1.3 (*)
+│   │   │   ├── hyper v1.8.1 (*)
+│   │   │   ├── hyper-util v0.1.20 (*)
+│   │   │   ├── log v0.4.29
+│   │   │   ├── rand v0.9.2 (*)
+│   │   │   ├── tokio v1.50.0 (*)
+│   │   │   ├── url v2.5.8 (*)
+│   │   │   └── xmltree v0.10.3
+│   │   │       └── xml-rs v0.8.28
+│   │   ├── iroh-metrics v0.38.3 (*)
+│   │   ├── libc v0.2.183
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── netwatch v0.15.0 (*)
+│   │   ├── num_enum v0.7.6 (*)
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1
+│   │   ├── socket2 v0.6.3 (*)
+│   │   ├── time v0.3.47 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   ├── tower-layer v0.3.3
+│   │   ├── tracing v0.1.44 (*)
+│   │   └── url v2.5.8 (*)
+│   ├── rand v0.9.2 (*)
+│   ├── reqwest v0.12.28 (*)
+│   ├── rustc-hash v2.1.1
+│   ├── rustls v0.23.37 (*)
+│   ├── rustls-pki-types v1.14.0 (*)
+│   ├── rustls-webpki v0.103.9 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── smallvec v1.15.1
+│   ├── strum v0.28.0 (*)
+│   ├── sync_wrapper v1.0.2 (*)
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio-stream v0.1.18 (*)
+│   ├── tokio-util v0.7.18 (*)
+│   ├── tracing v0.1.44 (*)
+│   ├── url v2.5.8 (*)
+│   └── webpki-roots v1.0.6 (*)
+├── iroh-tickets v0.4.0
+│   ├── data-encoding v2.10.0
+│   ├── derive_more v2.1.1 (*)
+│   ├── iroh-base v0.97.0 (*)
+│   ├── n0-error v0.1.3 (*)
+│   ├── postcard v1.1.3 (*)
+│   └── serde v1.0.228 (*)
+├── postcard v1.1.3 (*)
+├── serde v1.0.228 (*)
+└── serde_json v1.0.149
+    ├── itoa v1.0.17
+    ├── memchr v2.8.0
+    ├── serde_core v1.0.228
+    └── zmij v1.0.21
+```
+
+## `cargo test -p aspen-hooks-ticket`
+
+```text
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling libc v0.2.183
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling serde v1.0.228
+   Compiling pin-project-lite v0.2.17
+   Compiling bytes v1.11.1
+   Compiling futures-core v0.3.32
+   Compiling portable-atomic v1.13.1
+   Compiling futures-sink v0.3.32
+   Compiling memchr v2.8.0
+   Compiling typenum v1.19.0
+   Compiling slab v0.4.12
+   Compiling futures-io v0.3.32
+   Compiling critical-section v1.2.0
+   Compiling futures-task v0.3.32
+   Compiling stable_deref_trait v1.2.1
+   Compiling fnv v1.0.7
+   Compiling log v0.4.29
+   Compiling itoa v1.0.17
+   Compiling cfg_aliases v0.2.1
+   Compiling getrandom v0.3.4
+   Compiling equivalent v1.0.2
+   Compiling smallvec v1.15.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling rustversion v1.0.22
+   Compiling shlex v1.3.0
+   Compiling subtle v2.6.1
+   Compiling version_check v0.9.5
+   Compiling litemap v0.8.1
+   Compiling writeable v0.6.2
+   Compiling thiserror v2.0.18
+   Compiling icu_normalizer_data v2.1.1
+   Compiling zerocopy v0.8.42
+   Compiling futures-channel v0.3.32
+   Compiling semver v1.0.27
+   Compiling icu_properties_data v2.1.2
+   Compiling cpufeatures v0.2.17
+   Compiling percent-encoding v2.3.2
+   Compiling foldhash v0.2.0
+   Compiling bitflags v2.11.0
+   Compiling ident_case v1.0.1
+   Compiling allocator-api2 v0.2.21
+   Compiling strsim v0.11.1
+   Compiling const-oid v0.10.2
+   Compiling untrusted v0.9.0
+   Compiling unicode-segmentation v1.12.0
+   Compiling scopeguard v1.2.0
+   Compiling unicode-xid v0.2.6
+   Compiling utf8_iter v1.0.4
+   Compiling atomic-waker v1.1.2
+   Compiling rustls v0.23.37
+   Compiling cc v1.2.57
+   Compiling ipnet v2.12.0
+   Compiling lock_api v0.4.14
+   Compiling fastrand v2.3.0
+   Compiling form_urlencoded v1.2.2
+   Compiling httparse v1.10.1
+   Compiling base64ct v1.8.3
+   Compiling anyhow v1.0.102
+   Compiling getrandom v0.4.2
+   Compiling heck v0.5.0
+   Compiling powerfmt v0.2.0
+   Compiling httpdate v1.0.3
+   Compiling base64 v0.22.1
+   Compiling paste v1.0.15
+   Compiling tower-service v0.3.3
+   Compiling try-lock v0.2.5
+   Compiling time-core v0.1.8
+   Compiling rustc_version v0.4.1
+   Compiling deranged v0.5.8
+   Compiling generic-array v0.14.7
+   Compiling num-conv v0.2.0
+   Compiling want v0.3.1
+   Compiling pin-utils v0.1.0
+   Compiling winnow v1.0.0
+   Compiling byteorder v1.5.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling hashbrown v0.16.1
+   Compiling noq-udp v0.9.0
+   Compiling n0-future v0.3.2
+   Compiling opaque-debug v0.3.1
+   Compiling libm v0.2.16
+   Compiling toml_datetime v1.0.1+spec-1.1.0
+   Compiling spin v0.9.8
+   Compiling pem-rfc7468 v1.0.0
+   Compiling diatomic-waker v0.2.3
+   Compiling spin v0.10.0
+   Compiling cordyceps v0.3.4
+   Compiling signature v3.0.0-rc.10
+   Compiling hash32 v0.2.1
+   Compiling parking v2.2.1
+   Compiling tinyvec_macros v0.1.1
+   Compiling convert_case v0.10.0
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling heapless v0.7.17
+   Compiling parking_lot_core v0.9.12
+   Compiling tinyvec v1.11.0
+   Compiling ryu v1.0.23
+   Compiling data-encoding v2.10.0
+   Compiling tower-layer v0.3.3
+   Compiling futures-lite v2.6.1
+   Compiling num_threads v0.1.7
+   Compiling vergen-lib v9.1.0
+   Compiling vergen-lib v0.1.6
+   Compiling vergen v9.1.0
+   Compiling vergen-gitcl v1.0.8
+   Compiling http v1.4.0
+   Compiling sync_wrapper v1.0.2
+   Compiling siphasher v1.0.2
+   Compiling litrs v1.0.0
+   Compiling pkarr v5.0.2
+   Compiling netwatch v0.15.0
+   Compiling noq v0.17.0
+   Compiling sorted-index-buffer v0.2.1
+   Compiling rustc-hash v2.1.1
+   Compiling iri-string v0.7.10
+   Compiling futures-buffered v0.2.13
+   Compiling mac-addr v0.3.0
+   Compiling rustix v1.1.4
+   Compiling lru-slab v0.1.2
+   Compiling tagptr v0.2.0
+   Compiling base32 v0.5.1
+   Compiling identity-hash v0.1.0
+   Compiling netlink-packet-core v0.8.1
+   Compiling xml-rs v0.8.28
+   Compiling simple-dns v0.9.3
+   Compiling resolv-conf v0.7.6
+   Compiling constant_time_eq v0.4.2
+   Compiling autocfg v1.5.0
+   Compiling arrayref v0.3.9
+   Compiling linux-raw-sys v0.12.1
+   Compiling zmij v1.0.21
+   Compiling arrayvec v0.7.6
+   Compiling simdutf8 v0.1.5
+   Compiling self_cell v1.2.2
+   Compiling syn v2.0.117
+   Compiling iroh v0.97.0
+   Compiling serde_json v1.0.149
+   Compiling z32 v1.3.0
+   Compiling crossbeam-channel v0.5.15
+   Compiling crossbeam-epoch v0.9.18
+   Compiling bit-vec v0.8.0
+   Compiling indexmap v2.13.0
+   Compiling quick-error v1.2.3
+   Compiling unarray v0.1.4
+   Compiling regex-syntax v0.8.10
+   Compiling document-features v0.2.12
+   Compiling num-traits v0.2.19
+   Compiling bit-set v0.8.0
+   Compiling hybrid-array v0.4.8
+   Compiling lru v0.16.3
+   Compiling ring v0.17.14
+   Compiling blake3 v1.8.3
+   Compiling xmltree v0.10.3
+   Compiling socket2 v0.6.3
+   Compiling mio v1.1.1
+   Compiling getrandom v0.2.17
+   Compiling netlink-packet-route v0.29.0
+   Compiling seize v0.5.1
+   Compiling wait-timeout v0.2.1
+   Compiling uuid v1.22.0
+   Compiling toml_parser v1.0.10+spec-1.1.0
+   Compiling rand_core v0.9.5
+   Compiling papaya v0.2.3
+   Compiling http-body v1.0.1
+   Compiling parking_lot v0.12.5
+   Compiling http-body-util v0.1.3
+   Compiling time v0.3.47
+   Compiling crypto-common v0.2.1
+   Compiling block-buffer v0.11.0
+   Compiling rand_xorshift v0.4.0
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling cipher v0.4.4
+   Compiling polyval v0.6.2
+   Compiling toml_edit v0.25.5+spec-1.1.0
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling ghash v0.5.1
+   Compiling digest v0.11.0-rc.10
+   Compiling aes-gcm v0.10.3
+   Compiling sha2 v0.11.0-rc.2
+   Compiling proc-macro-crate v3.5.0
+   Compiling serde_bytes v0.11.19
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.2
+   Compiling synstructure v0.13.2
+   Compiling darling_core v0.20.11
+   Compiling fastbloom v0.14.1
+   Compiling serde_derive v1.0.228
+   Compiling tokio-macros v2.6.1
+   Compiling futures-macro v0.3.32
+   Compiling zerofrom-derive v0.1.6
+   Compiling zeroize_derive v1.4.3
+   Compiling yoke-derive v0.8.1
+   Compiling zerovec-derive v0.11.2
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v2.0.18
+   Compiling derive_more-impl v2.1.1
+   Compiling n0-error-macros v0.1.3
+   Compiling spez v0.1.2
+   Compiling pin-project-internal v1.1.11
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling async-trait v0.1.89
+   Compiling postcard-derive v0.2.2
+   Compiling num_enum_derive v0.7.6
+   Compiling enum-as-inner v0.6.1
+   Compiling iroh-metrics-derive v0.4.1
+   Compiling enum-assoc v1.3.0
+   Compiling strum_macros v0.28.0
+   Compiling zeroize v1.8.2
+   Compiling tokio v1.50.0
+   Compiling rustls-pki-types v1.14.0
+   Compiling der v0.8.0
+   Compiling futures-util v0.3.32
+   Compiling zerofrom v0.1.6
+   Compiling yoke v0.8.1
+   Compiling num_enum v0.7.6
+   Compiling webpki-roots v1.0.6
+   Compiling pin-project v1.1.11
+   Compiling n0-error v0.1.3
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling cobs v0.3.0
+   Compiling darling_macro v0.20.11
+   Compiling spki v0.8.0-rc.4
+   Compiling strum v0.28.0
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling darling v0.20.11
+   Compiling pkcs8 v0.11.0-rc.11
+   Compiling icu_collections v2.1.1
+   Compiling derive_builder_core v0.20.2
+   Compiling icu_locale_core v2.1.1
+   Compiling rustls-webpki v0.103.9
+   Compiling derive_more v2.1.1
+   Compiling derive_builder_macro v0.20.2
+   Compiling icu_provider v2.1.1
+   Compiling derive_builder v0.20.2
+   Compiling icu_normalizer v2.1.1
+   Compiling icu_properties v2.1.2
+   Compiling iroh-relay v0.97.0
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling serde_urlencoded v0.7.1
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling futures-executor v0.3.32
+   Compiling once_cell v1.21.4
+   Compiling moka v0.12.14
+   Compiling postcard v1.1.3
+   Compiling futures v0.3.32
+   Compiling tracing-core v0.1.36
+   Compiling ntimestamp v1.0.0
+   Compiling tempfile v3.27.0
+   Compiling url v2.5.8
+   Compiling rusty-fork v0.3.1
+   Compiling tracing v0.1.44
+   Compiling proptest v1.10.0
+   Compiling ed25519-dalek v3.0.0-pre.1
+   Compiling iroh-metrics v0.38.3
+   Compiling iroh-base v0.97.0
+   Compiling attohttpc v0.30.1
+   Compiling iroh-tickets v0.4.0
+   Compiling tokio-util v0.7.18
+   Compiling netlink-sys v0.8.8
+   Compiling tower v0.5.3
+   Compiling backon v1.6.0
+   Compiling netlink-proto v0.12.0
+   Compiling netdev v0.40.1
+   Compiling tower-http v0.6.8
+   Compiling h2 v0.4.13
+   Compiling tokio-stream v0.1.18
+   Compiling n0-watcher v0.6.1
+   Compiling tokio-rustls v0.26.4
+   Compiling noq-proto v0.16.0
+   Compiling tokio-websockets v0.12.3
+   Compiling hyper v1.8.1
+   Compiling hickory-proto v0.25.2
+   Compiling hyper-util v0.1.20
+   Compiling hyper-rustls v0.27.7
+   Compiling igd-next v0.16.2
+   Compiling reqwest v0.12.28
+   Compiling hickory-resolver v0.25.2
+   Compiling portmapper v0.15.0
+   Compiling aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hooks-ticket)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.39s
+     Running unittests src/lib.rs (target/debug/deps/aspen_hooks_ticket-e6f599d0733b609e)
+
+running 13 tests
+test tests::test_invalid_ticket_string ... ok
+test tests::test_expiry ... ok
+test tests::test_deserialize_expired_ticket ... ok
+test tests::test_ticket_builder ... ok
+test tests::test_ticket_new ... ok
+test tests::test_validation_no_peers ... ok
+test tests::test_validation_empty_cluster_id ... ok
+test tests::test_ticket_roundtrip ... ok
+test tests::test_ticket_with_auth_roundtrip ... ok
+test tests::test_validation_empty_event_type ... ok
+test tests::test_validation_invalid_payload_json ... ok
+test tests::test_multiple_bootstrap_peers ... ok
+test tests::test_add_bootstrap_peer_limit ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_hooks_ticket
+
+running 4 tests
+test crates/aspen-hooks-ticket/src/lib.rs - (line 17) ... ignored
+test crates/aspen-hooks-ticket/src/lib.rs - AspenHookTicket::deserialize (line 330) ... ignored
+test crates/aspen-hooks-ticket/src/lib.rs - AspenHookTicket::new (line 146) ... ignored
+test crates/aspen-hooks-ticket/src/lib.rs - AspenHookTicket::serialize (line 314) ... ignored
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.21s; merged doctests compilation took 0.21s
+```
+
+## `cargo check -p aspen-hooks`
+
+```text
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+   Compiling libc v0.2.183
+    Checking cfg-if v1.0.4
+    Checking pin-project-lite v0.2.17
+    Checking futures-core v0.3.32
+    Checking subtle v2.6.1
+    Checking log v0.4.29
+    Checking memchr v2.8.0
+    Checking critical-section v1.2.0
+    Checking stable_deref_trait v1.2.1
+    Checking futures-io v0.3.32
+    Checking futures-sink v0.3.32
+    Checking slab v0.4.12
+    Checking smallvec v1.15.1
+    Checking futures-task v0.3.32
+    Checking cpufeatures v0.2.17
+    Checking itoa v1.0.17
+    Checking litemap v0.8.1
+    Checking writeable v0.6.2
+    Checking percent-encoding v2.3.2
+    Checking serde_core v1.0.228
+    Checking typenum v1.19.0
+    Checking utf8_iter v1.0.4
+    Checking const-oid v0.10.2
+    Checking scopeguard v1.2.0
+    Checking base64ct v1.8.3
+    Checking equivalent v1.0.2
+    Checking futures-channel v0.3.32
+    Checking icu_properties_data v2.1.2
+    Checking icu_normalizer_data v2.1.1
+    Checking base64 v0.22.1
+    Checking anyhow v1.0.102
+    Checking untrusted v0.9.0
+    Checking allocator-api2 v0.2.21
+    Checking foldhash v0.2.0
+    Checking zeroize v1.8.2
+    Checking zerofrom v0.1.6
+    Checking thiserror v2.0.18
+    Checking zerocopy v0.8.42
+   Compiling derive_more-impl v2.1.1
+    Checking lock_api v0.4.14
+    Checking form_urlencoded v1.2.2
+    Checking pin-project v1.1.11
+    Checking signature v3.0.0-rc.10
+    Checking spin v0.10.0
+    Checking data-encoding v2.10.0
+   Compiling fnv v1.0.7
+    Checking fastrand v2.3.0
+    Checking arrayvec v0.7.6
+    Checking atomic-waker v1.1.2
+    Checking bitflags v2.11.0
+    Checking ipnet v2.12.0
+    Checking yoke v0.8.1
+    Checking byteorder v1.5.0
+    Checking opaque-debug v0.3.1
+    Checking parking v2.2.1
+   Compiling darling_core v0.20.11
+    Checking constant_time_eq v0.4.2
+    Checking arrayref v0.3.9
+    Checking httparse v1.10.1
+    Checking rustls-pki-types v1.14.0
+    Checking cobs v0.3.0
+    Checking httpdate v1.0.3
+    Checking tinyvec_macros v0.1.1
+    Checking diatomic-waker v0.2.3
+    Checking try-lock v0.2.5
+    Checking tower-service v0.3.3
+    Checking cordyceps v0.3.4
+    Checking pem-rfc7468 v1.0.0
+    Checking pin-utils v0.1.0
+    Checking tinyvec v1.11.0
+    Checking want v0.3.1
+    Checking powerfmt v0.2.0
+    Checking sync_wrapper v1.0.2
+    Checking n0-error v0.1.3
+    Checking time-core v0.1.8
+    Checking num-conv v0.2.0
+    Checking libm v0.2.16
+    Checking hash32 v0.2.1
+    Checking futures-lite v2.6.1
+   Compiling indexmap v2.13.0
+   Compiling num-traits v0.2.19
+    Checking zerovec v0.11.5
+    Checking zerotrie v0.2.3
+    Checking der v0.8.0
+    Checking ryu v1.0.23
+    Checking spin v0.9.8
+    Checking siphasher v1.0.2
+    Checking tower-layer v0.3.3
+    Checking deranged v0.5.8
+    Checking netlink-packet-core v0.8.1
+    Checking crossbeam-utils v0.8.21
+    Checking futures-buffered v0.2.13
+    Checking futures-util v0.3.32
+    Checking dyn-clone v1.0.20
+    Checking hashbrown v0.16.1
+    Checking rustc-hash v2.1.1
+    Checking identity-hash v0.1.0
+    Checking sorted-index-buffer v0.2.1
+    Checking lru-slab v0.1.2
+   Compiling snafu-derive v0.8.9
+    Checking iri-string v0.7.10
+    Checking crc-catalog v2.4.0
+    Checking zmij v1.0.21
+    Checking flume v0.11.1
+   Compiling acto v0.8.0
+   Compiling pkarr v5.0.2
+    Checking lazy_static v1.5.0
+    Checking webpki-roots v1.0.6
+    Checking crc v3.4.0
+    Checking base32 v0.5.1
+    Checking mac-addr v0.3.0
+    Checking xml-rs v0.8.28
+    Checking tagptr v0.2.0
+    Checking sha1_smol v1.0.1
+    Checking humantime v2.3.0
+    Checking simple-dns v0.9.3
+    Checking smol_str v0.1.24
+    Checking resolv-conf v0.7.6
+    Checking aspen-constants v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-constants)
+    Checking hex v0.4.3
+    Checking simdutf8 v0.1.5
+    Checking self_cell v1.2.2
+    Checking strum v0.28.0
+   Compiling iroh v0.97.0
+    Checking z32 v1.3.0
+    Checking iana-time-zone v0.1.65
+    Checking utf8parse v0.2.2
+    Checking pem v3.0.6
+   Compiling ahash v0.8.12
+    Checking colorchoice v1.0.5
+   Compiling redb v2.6.3
+    Checking anstyle-query v1.1.5
+    Checking anstyle-parse v1.0.0
+   Compiling pkg-config v0.3.32
+    Checking crossbeam-epoch v0.9.18
+    Checking crossbeam-channel v0.5.15
+   Compiling rust_decimal v1.40.0
+    Checking is_terminal_polyfill v1.70.2
+    Checking anstyle v1.0.14
+   Compiling irpc-derive v0.10.0
+    Checking tinystr v0.8.2
+    Checking potential_utf v0.1.4
+    Checking clap_lex v1.1.0
+    Checking aspen-time v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-time)
+    Checking anstream v1.0.0
+    Checking icu_collections v2.1.1
+    Checking strsim v0.11.1
+   Compiling clap_derive v4.6.0
+    Checking icu_locale_core v2.1.1
+   Compiling derive_more-impl v1.0.0
+    Checking xmltree v0.10.3
+    Checking utf8-width v0.1.8
+    Checking keccak v0.1.6
+    Checking lru v0.16.3
+   Compiling zstd-safe v7.2.4
+    Checking generic-array v0.14.7
+    Checking hybrid-array v0.4.8
+    Checking clap_builder v4.6.0
+   Compiling toml_edit v0.25.5+spec-1.1.0
+    Checking maplit v1.0.2
+   Compiling crc32fast v1.5.0
+    Checking fixedbitset v0.5.7
+   Compiling serde_derive_internals v0.29.1
+    Checking adler2 v2.0.1
+    Checking simd-adler32 v0.3.8
+    Checking linux-raw-sys v0.12.1
+    Checking minimal-lexical v0.2.1
+   Compiling schemars v0.8.22
+    Checking miniz_oxide v0.8.9
+   Compiling nix v0.29.0
+    Checking spki v0.8.0-rc.4
+    Checking futures-concurrency v7.7.1
+   Compiling jobserver v0.1.34
+    Checking rmp v0.8.15
+    Checking nom v7.1.3
+    Checking pkcs8 v0.11.0-rc.11
+    Checking glob v0.3.3
+   Compiling cc v1.2.57
+    Checking byte-unit v5.2.0
+   Compiling chrono v0.4.44
+    Checking rustix v1.1.4
+    Checking block-buffer v0.11.0
+    Checking crypto-common v0.2.1
+    Checking inout v0.1.4
+    Checking block-buffer v0.10.4
+    Checking time v0.3.47
+    Checking flate2 v1.1.9
+   Compiling schemars_derive v0.8.22
+   Compiling proc-macro-crate v3.5.0
+    Checking icu_provider v2.1.1
+    Checking snafu v0.8.9
+    Checking icu_properties v2.1.2
+    Checking icu_normalizer v2.1.1
+   Compiling num_enum_derive v0.7.6
+   Compiling darling_macro v0.20.11
+    Checking getrandom v0.2.17
+    Checking socket2 v0.6.3
+    Checking errno v0.3.14
+    Checking mio v1.1.1
+    Checking getrandom v0.3.4
+    Checking parking_lot_core v0.9.12
+    Checking getrandom v0.4.2
+    Checking netlink-packet-route v0.29.0
+    Checking seize v0.5.1
+    Checking aspen-disk v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-disk)
+    Checking digest v0.11.0-rc.10
+    Checking signal-hook-registry v1.4.8
+    Checking yasna v0.5.2
+    Checking rand_core v0.6.4
+    Checking papaya v0.2.3
+    Checking rand_core v0.9.5
+    Checking sha2 v0.11.0-rc.2
+   Compiling darling v0.20.11
+    Checking parking_lot v0.12.5
+    Checking crypto-common v0.1.7
+   Compiling derive_builder_core v0.20.2
+    Checking cipher v0.4.4
+    Checking universal-hash v0.5.1
+    Checking aead v0.5.2
+    Checking digest v0.10.7
+    Checking polyval v0.6.2
+    Checking poly1305 v0.8.0
+    Checking serde v1.0.228
+    Checking serde_bytes v0.11.19
+    Checking uuid v1.22.0
+    Checking ctr v0.9.2
+    Checking aes v0.8.4
+    Checking serde_json v1.0.149
+    Checking chacha20 v0.9.1
+    Checking hmac v0.12.1
+    Checking ghash v0.5.1
+    Checking sha3 v0.10.8
+    Checking sha2 v0.10.9
+    Checking num_enum v0.7.6
+    Checking hkdf v0.12.4
+    Checking derive_more v1.0.0
+    Checking chacha20poly1305 v0.10.1
+   Compiling ring v0.17.14
+   Compiling blake3 v1.8.3
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+    Checking clap v4.6.0
+   Compiling openraft-macros v0.10.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/openraft/macros)
+    Checking derive_more v2.1.1
+    Checking aes-gcm v0.10.3
+    Checking bytes v1.11.1
+    Checking portable-atomic v1.13.1
+    Checking ed25519 v3.0.0-rc.4
+    Checking curve25519-dalek v5.0.0-pre.1
+    Checking heapless v0.7.17
+    Checking serde_urlencoded v0.7.1
+    Checking serde_bencode v0.2.4
+    Checking uhlc v0.8.2 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/uhlc)
+    Checking bincode v1.3.3
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-kv-types)
+    Checking anyerror v0.1.13
+    Checking secrecy v0.10.3
+    Checking aspen-layer v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-layer)
+    Checking aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-coordination-protocol)
+    Checking aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-forge-protocol)
+    Checking idna_adapter v1.2.1
+    Checking aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-jobs-protocol)
+    Checking rmp-serde v1.3.1
+   Compiling derive_builder_macro v0.20.2
+    Checking idna v1.1.0
+    Checking validit v0.2.5
+   Compiling derive_builder v0.20.2
+   Compiling vergen-lib v9.1.0
+   Compiling vergen-lib v0.1.6
+    Checking aspen-storage-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-storage-types)
+    Checking url v2.5.8
+   Compiling vergen v9.1.0
+   Compiling vergen-gitcl v1.0.8
+    Checking futures-executor v0.3.32
+    Checking tokio v1.50.0
+    Checking http v1.4.0
+    Checking once_cell v1.21.4
+    Checking postcard v1.1.3
+    Checking futures v0.3.32
+    Checking moka v0.12.14
+    Checking tracing-core v0.1.36
+    Checking ntimestamp v1.0.0
+    Checking tempfile v3.27.0
+   Compiling iroh-relay v0.97.0
+    Checking tracing v0.1.44
+    Checking ed25519-dalek v3.0.0-pre.1
+    Checking cron v0.13.0
+   Compiling rustls v0.23.37
+    Checking noq-udp v0.9.0
+    Checking iroh-metrics v0.38.3
+    Checking tracing-futures v0.2.5
+    Checking http-body v1.0.1
+    Checking attohttpc v0.30.1
+    Checking iroh-base v0.97.0
+    Checking mainline v6.0.1
+    Checking http-body-util v0.1.3
+    Checking aspen-hlc v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hlc)
+    Checking ppv-lite86 v0.2.21
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-cluster-types)
+    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-auth-core)
+    Checking iroh-tickets v0.4.0
+    Checking aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hooks-types)
+    Checking metrics v0.24.3
+    Checking rand_chacha v0.9.0
+    Checking rand v0.9.2
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-traits)
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-core)
+    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-client-api)
+    Checking rustls-webpki v0.103.9
+    Checking rcgen v0.14.7
+    Checking fastbloom v0.14.1
+    Checking zstd v0.13.3
+    Checking tokio-util v0.7.18
+    Checking netlink-sys v0.8.8
+    Checking tower v0.5.3
+    Checking async-compat v0.2.5
+    Checking backon v1.6.0
+    Checking openraft v0.10.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/openraft/openraft)
+    Checking aspen-trust v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-trust)
+    Checking aspen-coordination v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-coordination)
+    Checking netdev v0.40.1
+    Checking netlink-proto v0.12.0
+    Checking tower-http v0.6.8
+    Checking h2 v0.4.13
+    Checking n0-future v0.3.2
+    Checking tokio-stream v0.1.18
+    Checking aspen-sharding v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-sharding)
+    Checking n0-watcher v0.6.1
+    Checking netwatch v0.15.0
+    Checking tokio-rustls v0.26.4
+    Checking noq-proto v0.16.0
+    Checking tokio-websockets v0.12.3
+    Checking hyper v1.8.1
+    Checking hickory-proto v0.25.2
+    Checking noq v0.17.0
+    Checking hyper-util v0.1.20
+    Checking irpc v0.13.0
+    Checking hyper-rustls v0.27.7
+    Checking igd-next v0.16.2
+    Checking reqwest v0.12.28
+    Checking hickory-resolver v0.25.2
+    Checking swarm-discovery v0.5.0
+    Checking portmapper v0.15.0
+    Checking aspen-raft-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-raft-types)
+    Checking aspen-core-shell v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-core-shell)
+    Checking iroh-gossip v0.97.0
+    Checking aspen-jobs v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-jobs)
+    Checking aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hooks-ticket)
+    Checking aspen-auth v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-auth)
+    Checking aspen-transport v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-transport)
+    Checking aspen-ticket v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-ticket)
+    Checking aspen-client v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-client)
+    Checking aspen-hooks v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hooks)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.55s
+```
+
+## `cargo check -p aspen-cli`
+
+```text
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/Cargo.toml
+   Compiling dunce v1.0.5
+   Compiling fs_extra v1.3.0
+   Compiling aws-lc-rs v1.16.1
+    Checking arrayvec v0.7.6
+    Checking libc v0.2.183
+   Compiling rustls v0.23.37
+    Checking openssl-probe v0.2.1
+   Compiling derive_more-impl v2.1.1
+    Checking smallvec v1.15.1
+   Compiling rustix v1.1.4
+    Checking tracing-core v0.1.36
+   Compiling noq v0.17.0
+   Compiling num-traits v0.2.19
+    Checking snafu v0.8.9
+    Checking rustls-native-certs v0.8.3
+   Compiling syn v1.0.109
+   Compiling proc-macro-error-attr v0.4.12
+   Compiling proc-macro-error v0.4.12
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling ref-cast v1.0.25
+   Compiling ref-cast-impl v1.0.25
+    Checking binary-merge v0.1.2
+    Checking genawaiter-macro v0.99.1
+    Checking concurrent-queue v2.5.0
+   Compiling iroh-blobs v0.99.0
+   Compiling thiserror v1.0.69
+   Compiling nested_enum_utils v0.2.3
+   Compiling thiserror-impl v1.0.69
+    Checking raw-cpuid v11.6.0
+    Checking unicode-width v0.2.2
+    Checking foldhash v0.1.5
+   Compiling bitcoin-io v0.1.4
+   Compiling object v0.37.3
+    Checking regex-syntax v0.8.10
+    Checking sketches-ddsketch v0.3.1
+    Checking gimli v0.32.3
+    Checking static_assertions v1.1.0
+    Checking hex-conservative v0.2.2
+    Checking miniz_oxide v0.8.9
+    Checking anstyle-parse v0.2.7
+    Checking toml_datetime v0.6.11
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.7.5+spec-1.1.0
+    Checking serde_spanned v1.0.4
+    Checking hashbrown v0.15.5
+    Checking toml_writer v1.0.7+spec-1.1.0
+    Checking aspen-layer v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-layer)
+    Checking winnow v0.7.15
+    Checking rustc-demangle v0.1.27
+    Checking icu_normalizer v2.1.1
+    Checking inplace-vec-builder v0.1.1
+    Checking event-listener v5.4.1
+    Checking futures-concurrency v7.7.1
+    Checking toml_write v0.1.2
+    Checking option-ext v0.2.0
+    Checking anstream v0.6.21
+    Checking hex-conservative v0.3.2
+    Checking sharded-slab v0.1.7
+    Checking thread_local v1.1.9
+    Checking nu-ansi-term v0.50.3
+    Checking toml v0.9.12+spec-1.1.0
+    Checking number_prefix v0.4.0
+    Checking unicode-segmentation v1.12.0
+    Checking shell-words v1.1.1
+    Checking event-listener-strategy v0.5.4
+    Checking tracing v0.1.44
+    Checking tracing-log v0.2.0
+    Checking bech32 v0.11.1
+   Compiling aspen-cli v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-cli)
+    Checking bitcoin_hashes v0.14.1
+    Checking colored v2.2.0
+    Checking async-channel v2.5.0
+    Checking bitcoin_hashes v0.15.0
+    Checking iroh-metrics v0.38.3
+    Checking tracing-futures v0.2.5
+    Checking range-collections v0.4.6
+    Checking idna_adapter v1.2.1
+    Checking idna v1.1.0
+    Checking chrono v0.4.44
+    Checking rust_decimal v1.40.0
+    Checking url v2.5.8
+    Checking getrandom v0.2.17
+    Checking socket2 v0.6.3
+    Checking errno v0.3.14
+    Checking mio v1.1.1
+    Checking getrandom v0.3.4
+    Checking parking_lot_core v0.9.12
+    Checking getrandom v0.4.2
+    Checking netlink-packet-route v0.29.0
+    Checking seize v0.5.1
+    Checking redb v2.6.3
+    Checking aspen-disk v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-disk)
+    Checking positioned-io v0.3.5
+    Checking console v0.15.11
+    Checking dirs-sys v0.4.1
+    Checking filetime v0.2.27
+    Checking num_cpus v1.17.0
+    Checking sysinfo v0.37.2
+   Compiling jobserver v0.1.34
+    Checking signal-hook-registry v1.4.8
+   Compiling time v0.3.47
+    Checking byte-unit v5.2.0
+    Checking rand_core v0.6.4
+    Checking ntimestamp v1.0.0
+    Checking regex-automata v0.4.14
+    Checking dirs v5.0.1
+    Checking rand_core v0.9.5
+    Checking uuid v1.22.0
+    Checking parking_lot v0.12.5
+    Checking papaya v0.2.3
+    Checking crypto-common v0.1.7
+    Checking rand_chacha v0.3.1
+    Checking attohttpc v0.30.1
+    Checking rand_chacha v0.9.0
+    Checking curve25519-dalek v5.0.0-pre.1
+    Checking rand_xoshiro v0.7.0
+    Checking indicatif v0.17.11
+   Compiling cc v1.2.57
+    Checking tokio v1.50.0
+    Checking noq-udp v0.9.0
+    Checking universal-hash v0.5.1
+    Checking cipher v0.4.4
+    Checking aead v0.5.2
+    Checking digest v0.10.7
+    Checking polyval v0.6.2
+    Checking poly1305 v0.8.0
+    Checking rand v0.8.5
+    Checking rand v0.9.2
+    Checking moka v0.12.14
+    Checking ctr v0.9.2
+    Checking aes v0.8.4
+    Checking chacha20 v0.9.1
+    Checking hmac v0.12.1
+    Checking sha2 v0.10.9
+    Checking sha3 v0.10.8
+    Checking ghash v0.5.1
+    Checking quanta v0.12.6
+    Checking toml_edit v0.22.27
+    Checking hkdf v0.12.4
+    Checking chacha20poly1305 v0.10.1
+    Checking terminal_size v0.4.3
+    Checking reflink-copy v0.1.29
+    Checking crossterm v0.29.0
+    Checking tempfile v3.27.0
+    Checking xattr v1.6.1
+    Checking aspen-ci-core v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-ci-core)
+    Checking clap_builder v4.6.0
+    Checking tar v0.4.44
+    Checking aes-gcm v0.10.3
+    Checking dialoguer v0.11.0
+    Checking fastbloom v0.14.1
+    Checking metrics-util v0.19.1
+    Checking addr2line v0.25.1
+    Checking comfy-table v7.2.2
+   Compiling cmake v0.1.57
+    Checking ed25519-dalek v3.0.0-pre.1
+   Compiling ring v0.17.14
+   Compiling blake3 v1.8.3
+   Compiling secp256k1-sys v0.10.1
+   Compiling syn-mid v0.5.4
+    Checking mainline v6.0.1
+   Compiling aws-lc-sys v0.38.0
+    Checking derive_more v2.1.1
+    Checking iroh-base v0.97.0
+   Compiling vergen-gitcl v1.0.8
+    Checking matchers v0.2.0
+    Checking toml v0.8.23
+    Checking tracing-subscriber v0.3.23
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-cluster-types)
+    Checking iroh-tickets v0.4.0
+   Compiling genawaiter-proc-macro v0.99.1
+   Compiling iroh-relay v0.97.0
+    Checking backtrace v0.3.76
+    Checking clap v4.6.0
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-traits)
+    Checking genawaiter v0.99.1
+    Checking human-panic v2.0.6
+    Checking aspen-hlc v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hlc)
+    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-auth-core)
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-core)
+    Checking aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hooks-types)
+    Checking aspen-redb-storage v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-redb-storage)
+    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-client-api)
+    Checking rcgen v0.14.7
+    Checking tokio-util v0.7.18
+    Checking tower v0.5.3
+    Checking netlink-sys v0.8.8
+    Checking async-compat v0.2.5
+    Checking acto v0.8.0
+    Checking backon v1.6.0
+    Checking openraft v0.10.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/openraft/openraft)
+    Checking aspen-trust v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-trust)
+    Checking iroh-io v0.6.2
+    Checking aspen-coordination v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-coordination)
+    Checking netlink-proto v0.12.0
+    Checking netdev v0.40.1
+    Checking bao-tree v0.16.0
+    Checking secp256k1 v0.29.1
+    Checking tower-http v0.6.8
+    Checking h2 v0.4.13
+    Checking n0-future v0.3.2
+    Checking tokio-stream v0.1.18
+    Checking aspen-sharding v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-sharding)
+    Checking nostr v0.44.2
+    Checking n0-watcher v0.6.1
+    Checking netwatch v0.15.0
+    Checking hyper v1.8.1
+    Checking hyper-util v0.1.20
+    Checking rustls-webpki v0.103.9
+    Checking igd-next v0.16.2
+    Checking portmapper v0.15.0
+    Checking tokio-rustls v0.26.4
+    Checking rustls-platform-verifier v0.6.2
+    Checking noq-proto v0.16.0
+    Checking hyper-rustls v0.27.7
+    Checking hickory-proto v0.25.2
+    Checking tokio-websockets v0.12.3
+    Checking reqwest v0.12.28
+    Checking metrics-exporter-prometheus v0.16.2
+    Checking pkarr v5.0.2
+    Checking hickory-resolver v0.25.2
+    Checking swarm-discovery v0.5.0
+    Checking irpc v0.13.0
+    Checking aspen-raft-types v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-raft-types)
+    Checking iroh v0.97.0
+    Checking aspen-core-shell v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-core-shell)
+    Checking iroh-gossip v0.97.0
+    Checking aspen-crypto v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-crypto)
+    Checking aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-hooks-ticket)
+    Checking aspen-auth v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-auth)
+    Checking aspen-transport v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-transport)
+    Checking aspen-ticket v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-ticket)
+    Checking aspen-raft-network v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-raft-network)
+    Checking aspen-client v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-client)
+    Checking aspen-raft v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-raft)
+    Checking aspen-dht-discovery v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-dht-discovery)
+    Checking aspen-dag v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-dag)
+    Checking aspen-cluster v0.1.0 (/home/brittonr/git/aspen-hooks-ticket-baseline-snapshot/aspen/crates/aspen-cluster)
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/calendar.rs:277:5
+    |
+277 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/cluster.rs:846:5
+    |
+846 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/cluster.rs:854:5
+    |
+854 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+    --> crates/aspen-cli/src/bin/aspen-cli/commands/federation.rs:1005:5
+     |
+1005 |     ambient_clock,
+     |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/job.rs:468:5
+    |
+468 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: unknown lint: `ambient_clock`
+   --> crates/aspen-cli/src/bin/aspen-cli/commands/job.rs:476:5
+    |
+476 |     ambient_clock,
+    |     ^^^^^^^^^^^^^
+
+warning: `aspen-cli` (bin "aspen-cli") generated 6 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.13s
+```
+

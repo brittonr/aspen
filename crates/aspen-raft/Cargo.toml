@@ -16,7 +16,7 @@ aspen-raft-network = { workspace = true }
 aspen-constants = { workspace = true }
 aspen-hlc = { workspace = true }
 aspen-kv-types = { workspace = true }
-aspen-cluster-types = { workspace = true }
+aspen-cluster-types = { workspace = true, features = ["iroh"] }
 aspen-traits = { workspace = true }
 aspen-redb-storage = { workspace = true }
 aspen-auth = { workspace = true }

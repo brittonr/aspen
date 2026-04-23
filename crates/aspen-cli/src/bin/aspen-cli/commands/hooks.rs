@@ -9,6 +9,7 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_client_api::CLIENT_ALPN;
+use aspen_cluster_types::NodeAddress;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::HookHandlerInfo;
@@ -508,7 +509,7 @@ fn hook_create_url_validate_inputs(args: &CreateUrlArgs) -> Result<()> {
 /// Fetch the cluster ticket and extract bootstrap peers.
 async fn hook_create_url_get_cluster_info(
     client: &AspenClient,
-) -> Result<(aspen_cluster::ticket::AspenClusterTicket, Vec<EndpointAddr>)> {
+) -> Result<(aspen_cluster::ticket::AspenClusterTicket, Vec<NodeAddress>)> {
     let response = client.send(ClientRpcRequest::GetClusterTicket).await?;
 
     let ticket_response = match response {
@@ -520,7 +521,11 @@ async fn hook_create_url_get_cluster_info(
     let parsed_ticket = aspen_cluster::ticket::AspenClusterTicket::deserialize(&ticket_response.ticket)
         .context("failed to parse cluster ticket")?;
 
-    let bootstrap_peers: Vec<EndpointAddr> = parsed_ticket.bootstrap.iter().map(|p| p.to_endpoint_addr()).collect();
+    let bootstrap_peers: Vec<NodeAddress> = parsed_ticket
+        .bootstrap
+        .iter()
+        .map(|peer| NodeAddress::new(peer.to_endpoint_addr()))
+        .collect();
 
     if bootstrap_peers.is_empty() {
         anyhow::bail!("no bootstrap peers available in cluster ticket");
@@ -532,7 +537,7 @@ async fn hook_create_url_get_cluster_info(
 /// Build an AspenHookTicket with the given parameters.
 fn hook_create_url_build_ticket(
     cluster_id: &str,
-    bootstrap_peers: Vec<EndpointAddr>,
+    bootstrap_peers: Vec<NodeAddress>,
     args: &CreateUrlArgs,
 ) -> Result<AspenHookTicket> {
     let mut hook_ticket = AspenHookTicket::new(cluster_id, bootstrap_peers).with_event_type(&args.event_type);
@@ -554,9 +559,13 @@ fn hook_create_url_build_ticket(
     Ok(hook_ticket)
 }
 
+fn parse_hook_trigger_ticket(url: &str) -> Result<AspenHookTicket> {
+    AspenHookTicket::deserialize(url).context("failed to parse hook trigger URL")
+}
+
 async fn hook_trigger_url(args: TriggerUrlArgs, is_json_output: bool) -> Result<()> {
     // Parse the hook ticket
-    let ticket = AspenHookTicket::deserialize(&args.url).context("failed to parse hook trigger URL")?;
+    let ticket = parse_hook_trigger_ticket(&args.url)?;
 
     // Determine the payload to use
     let payload = args.payload.unwrap_or_else(|| ticket.default_payload.clone().unwrap_or_else(|| "{}".to_string()));
@@ -581,11 +590,24 @@ async fn hook_trigger_url(args: TriggerUrlArgs, is_json_output: bool) -> Result<
     // Try each bootstrap peer
     let mut last_error = None;
     for peer_addr in &ticket.bootstrap_peers {
+        let runtime_peer_addr = match convert_hook_bootstrap_peer(peer_addr) {
+            Ok(peer_addr) => peer_addr,
+            Err(error) => {
+                tracing::debug!(
+                    endpoint_id = %peer_addr.endpoint_id(),
+                    error = %error,
+                    "invalid hook bootstrap peer"
+                );
+                last_error = Some(error);
+                continue;
+            }
+        };
+
         let request = RemoteHookTriggerRequest {
             event_type: &ticket.event_type,
             payload_json: &payload,
         };
-        match send_hook_trigger(&endpoint, peer_addr, &request, rpc_budget).await {
+        match send_hook_trigger(&endpoint, &runtime_peer_addr, &request, rpc_budget).await {
             Ok(result) => {
                 let output = HookTriggerUrlOutput {
                     is_success: result.is_success,
@@ -603,7 +625,7 @@ async fn hook_trigger_url(args: TriggerUrlArgs, is_json_output: bool) -> Result<
                 return Ok(());
             }
             Err(e) => {
-                tracing::debug!(peer = ?peer_addr, error = %e, "failed to connect to peer");
+                tracing::debug!(peer = ?runtime_peer_addr, error = %e, "failed to connect to peer");
                 last_error = Some(e);
             }
         }
@@ -616,6 +638,12 @@ async fn hook_trigger_url(args: TriggerUrlArgs, is_json_output: bool) -> Result<
 struct RemoteHookTriggerRequest<'a> {
     event_type: &'a str,
     payload_json: &'a str,
+}
+
+fn convert_hook_bootstrap_peer(peer_addr: &NodeAddress) -> Result<EndpointAddr> {
+    peer_addr.try_into_iroh().map_err(|error| {
+        anyhow::anyhow!("invalid hook bootstrap peer {}: {error}", peer_addr.endpoint_id())
+    })
 }
 
 #[allow(unknown_lints)]
@@ -710,4 +738,90 @@ struct HookTriggerResult {
     dispatched_count: u32,
     error: Option<String>,
     handler_failures: Vec<(String, String)>,
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_cluster_types::NodeTransportAddr;
+    use core::net::SocketAddr;
+    use iroh_tickets::Ticket;
+    use serde::Deserialize;
+    use serde::Serialize;
+
+    use super::*;
+
+    const HOOK_TICKET_PREFIX: &str = "aspenhook";
+    const TICKET_VERSION: u8 = 1;
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct LegacyAspenHookTicket {
+        version: u8,
+        cluster_id: String,
+        bootstrap_peers: Vec<EndpointAddr>,
+        event_type: String,
+        default_payload: Option<String>,
+        auth_token: Option<[u8; 32]>,
+        expires_at_secs: u64,
+        relay_url: Option<String>,
+        priority: u8,
+    }
+
+    impl Ticket for LegacyAspenHookTicket {
+        const KIND: &'static str = HOOK_TICKET_PREFIX;
+
+        fn to_bytes(&self) -> Vec<u8> {
+            postcard::to_allocvec(self).expect("legacy hook ticket serialization should succeed in tests")
+        }
+
+        fn from_bytes(bytes: &[u8]) -> core::result::Result<Self, iroh_tickets::ParseError> {
+            postcard::from_bytes(bytes).map_err(Into::into)
+        }
+    }
+
+    fn valid_test_node_address(seed: u8) -> NodeAddress {
+        let secret_key = iroh::SecretKey::from([seed; 32]);
+        let endpoint_addr = EndpointAddr::from(secret_key.public());
+        NodeAddress::new(endpoint_addr)
+    }
+
+    #[test]
+    fn test_convert_hook_bootstrap_peer_accepts_valid_node_address() {
+        let node_addr = valid_test_node_address(1);
+        let endpoint_addr = convert_hook_bootstrap_peer(&node_addr).expect("valid node address should convert");
+        assert_eq!(endpoint_addr.id.to_string(), node_addr.endpoint_id());
+    }
+
+    #[test]
+    fn test_convert_hook_bootstrap_peer_rejects_invalid_node_address() {
+        let invalid_addr = NodeAddress::from_parts(
+            "not-an-endpoint-id",
+            [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7777)))],
+        );
+        let result = convert_hook_bootstrap_peer(&invalid_addr);
+        assert!(result.is_err());
+        let error_text = result.unwrap_err().to_string();
+        assert!(error_text.contains("invalid hook bootstrap peer"));
+    }
+
+    #[test]
+    fn test_parse_hook_trigger_ticket_surfaces_legacy_decode_failure() {
+        let secret_key = iroh::SecretKey::from([11u8; 32]);
+        let legacy_ticket = LegacyAspenHookTicket {
+            version: TICKET_VERSION,
+            cluster_id: "legacy-cluster".to_string(),
+            bootstrap_peers: vec![EndpointAddr::from(secret_key.public())],
+            event_type: "write_committed".to_string(),
+            default_payload: None,
+            auth_token: None,
+            expires_at_secs: 0,
+            relay_url: None,
+            priority: 0,
+        };
+
+        let serialized = Ticket::serialize(&legacy_ticket);
+        let result = parse_hook_trigger_ticket(&serialized);
+        assert!(result.is_err());
+        let error_text = result.unwrap_err().to_string();
+        assert!(error_text.contains("failed to parse hook trigger URL"));
+    }
 }

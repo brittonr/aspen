@@ -24,7 +24,7 @@ aspen-testing-network = { version = "0.1.0", path = "../aspen-testing-network", 
 
 # Extracted crates for lighter dependencies
 aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
-aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types" }
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
 aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
 aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
 

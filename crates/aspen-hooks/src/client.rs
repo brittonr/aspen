@@ -44,6 +44,7 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_client_api::CLIENT_ALPN;
+use aspen_cluster_types::NodeAddress;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
@@ -143,11 +144,11 @@ impl HookClient {
     /// let client = HookClient::from_url("aspenhook7g2wc...")?;
     /// ```
     pub fn from_url(url: &str) -> Result<Self, HookClientError> {
-        let ticket = AspenHookTicket::deserialize(url).map_err(|e| HookClientError::InvalidUrl(e.to_string()))?;
-
-        if ticket.is_expired() {
-            return Err(HookClientError::Expired);
-        }
+        let ticket = match AspenHookTicket::deserialize(url) {
+            Ok(ticket) => ticket,
+            Err(crate::HookTicketError::ExpiredTicket { .. }) => return Err(HookClientError::Expired),
+            Err(error) => return Err(HookClientError::InvalidUrl(error.to_string())),
+        };
 
         Ok(Self {
             ticket,
@@ -214,16 +215,29 @@ impl HookClient {
         // Try each bootstrap peer
         let mut last_error = None;
         for peer_addr in &self.ticket.bootstrap_peers {
+            let runtime_peer_addr = match convert_bootstrap_peer(peer_addr) {
+                Ok(peer_addr) => peer_addr,
+                Err(error) => {
+                    tracing::debug!(
+                        endpoint_id = %peer_addr.endpoint_id(),
+                        error = %error,
+                        "invalid hook bootstrap peer"
+                    );
+                    last_error = Some(error);
+                    continue;
+                }
+            };
+
             for attempt in 0..MAX_RETRIES_PER_PEER {
                 if attempt > 0 {
                     tokio::time::sleep(Duration::from_millis(RETRY_DELAY_MS)).await;
                 }
 
-                match self.send_trigger(&endpoint, peer_addr, payload).await {
+                match self.send_trigger(&endpoint, &runtime_peer_addr, payload).await {
                     Ok(result) => return Ok(result),
                     Err(e) => {
                         tracing::debug!(
-                            peer = ?peer_addr,
+                            peer = ?runtime_peer_addr,
                             attempt,
                             error = %e,
                             "trigger attempt failed"
@@ -370,9 +384,56 @@ fn remaining_timeout_hook(deadline: std::time::Instant) -> Result<std::time::Dur
     }
 }
 
+fn convert_bootstrap_peer(peer_addr: &NodeAddress) -> Result<iroh::EndpointAddr, HookClientError> {
+    peer_addr.try_into_iroh().map_err(|error| {
+        HookClientError::ConnectionFailed(format!("invalid hook bootstrap peer {}: {error}", peer_addr.endpoint_id()))
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    use aspen_cluster_types::NodeTransportAddr;
+    use core::net::SocketAddr;
+    use iroh_tickets::Ticket;
+    use serde::Deserialize;
+    use serde::Serialize;
+
     use super::*;
+
+    const HOOK_TICKET_PREFIX: &str = "aspenhook";
+    const TICKET_VERSION: u8 = 1;
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct LegacyAspenHookTicket {
+        version: u8,
+        cluster_id: String,
+        bootstrap_peers: Vec<iroh::EndpointAddr>,
+        event_type: String,
+        default_payload: Option<String>,
+        auth_token: Option<[u8; 32]>,
+        expires_at_secs: u64,
+        relay_url: Option<String>,
+        priority: u8,
+    }
+
+    impl Ticket for LegacyAspenHookTicket {
+        const KIND: &'static str = HOOK_TICKET_PREFIX;
+
+        fn to_bytes(&self) -> Vec<u8> {
+            postcard::to_allocvec(self).expect("legacy hook ticket serialization should succeed in tests")
+        }
+
+        fn from_bytes(bytes: &[u8]) -> core::result::Result<Self, iroh_tickets::ParseError> {
+            postcard::from_bytes(bytes).map_err(Into::into)
+        }
+    }
+
+    fn valid_test_node_address(seed: u8) -> NodeAddress {
+        let secret_key = iroh::SecretKey::from([seed; 32]);
+        let endpoint_id = secret_key.public();
+        let endpoint_addr = iroh::EndpointAddr::from(endpoint_id);
+        NodeAddress::new(endpoint_addr)
+    }
 
     #[test]
     fn test_invalid_url() {
@@ -383,6 +444,53 @@ mod tests {
     #[test]
     fn test_invalid_prefix() {
         let result = HookClient::from_url("aspen7g2wc...");
+        assert!(matches!(result, Err(HookClientError::InvalidUrl(_))));
+    }
+
+    #[test]
+    fn test_expired_url_maps_to_expired_error() {
+        let ticket = AspenHookTicket::new("cluster", vec![valid_test_node_address(1)])
+            .with_event_type("write_committed")
+            .with_expiry(1);
+        let serialized = ticket.serialize();
+        let result = HookClient::from_url(&serialized);
+        assert!(matches!(result, Err(HookClientError::Expired)));
+    }
+
+    #[test]
+    fn test_convert_bootstrap_peer_rejects_invalid_node_address() {
+        let invalid_addr = NodeAddress::from_parts(
+            "not-an-endpoint-id",
+            [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7777)))],
+        );
+        let result = convert_bootstrap_peer(&invalid_addr);
+        assert!(matches!(result, Err(HookClientError::ConnectionFailed(_))));
+    }
+
+    #[test]
+    fn test_convert_bootstrap_peer_accepts_valid_node_address() {
+        let valid_addr = valid_test_node_address(2);
+        let result = convert_bootstrap_peer(&valid_addr).expect("valid node address should convert");
+        assert_eq!(result.id.to_string(), valid_addr.endpoint_id());
+    }
+
+    #[test]
+    fn test_legacy_url_surfaces_decode_failure() {
+        let secret_key = iroh::SecretKey::from([9u8; 32]);
+        let legacy_ticket = LegacyAspenHookTicket {
+            version: TICKET_VERSION,
+            cluster_id: "legacy-cluster".to_string(),
+            bootstrap_peers: vec![iroh::EndpointAddr::from(secret_key.public())],
+            event_type: "write_committed".to_string(),
+            default_payload: None,
+            auth_token: None,
+            expires_at_secs: 0,
+            relay_url: None,
+            priority: 0,
+        };
+
+        let serialized = Ticket::serialize(&legacy_ticket);
+        let result = HookClient::from_url(&serialized);
         assert!(matches!(result, Err(HookClientError::InvalidUrl(_))));
     }
 }

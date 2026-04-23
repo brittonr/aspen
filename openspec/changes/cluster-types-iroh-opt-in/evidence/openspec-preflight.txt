@@ -1,0 +1,9 @@
+Evidence-ID: cluster-types-iroh-opt-in.v1-preflight
+Task-ID: V1
+Artifact-Type: command-transcript
+Covers: architecture.modularity.acyclic-no-std-core-boundary.cluster-types-verification-is-reviewable, architecture.modularity.feature-bundles-are-explicit-and-bounded.cluster-types-iroh-opt-in-is-explicit
+
+OK: openspec/changes/cluster-types-iroh-opt-in
+  tasks: 3 total / 3 checked
+  changed files listed: 23
+  verification artifacts: 18
