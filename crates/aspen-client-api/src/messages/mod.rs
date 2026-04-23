@@ -24,6 +24,10 @@ fn default_optional_string() -> Option<String> {
     None
 }
 
+const CLIENT_MESSAGE_SIZE_BYTES_MAX: usize = 16_777_216;
+const GIT_CHUNK_SIZE_BYTES_DEFAULT: u64 = 1_048_576;
+const GIT_CHUNK_SIZE_BYTES_MAX: u64 = 4_194_304;
+
 // Sub-modules
 pub mod automerge;
 pub mod batch;
@@ -418,12 +422,12 @@ pub use watch::WatchKeyEvent;
 pub use watch::WatchRequest;
 pub use watch::WatchStatusResultResponse;
 
-/// Maximum Client RPC message size (4 MB).
+/// Maximum Client RPC message size (16 MiB).
 ///
 /// Tiger Style: Bounded to prevent memory exhaustion attacks.
-/// Reduced from 256MB to 4MB after implementing chunked transfer for git bridge
+/// Reduced from 256 MiB to 16 MiB after implementing chunked transfer for git bridge
 /// operations. Large git pushes now use GitBridgePushStart/Chunk/Complete protocol.
-pub const MAX_CLIENT_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
+pub const MAX_CLIENT_MESSAGE_SIZE: usize = CLIENT_MESSAGE_SIZE_BYTES_MAX;
 
 /// Maximum number of nodes in cluster state response.
 ///
@@ -441,15 +445,15 @@ pub const MAX_CLIENT_CONNECTIONS: u32 = 50;
 /// Maximum concurrent streams per Client connection.
 pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u32 = 10;
 
-/// Default chunk size for git bridge chunked transfers (1 MB).
+/// Default chunk size for git bridge chunked transfers (1 MiB).
 ///
 /// Tiger Style: Bounded to prevent memory exhaustion while allowing efficient transfer.
-pub const DEFAULT_GIT_CHUNK_SIZE_BYTES: u64 = 1024 * 1024;
+pub const DEFAULT_GIT_CHUNK_SIZE_BYTES: u64 = GIT_CHUNK_SIZE_BYTES_DEFAULT;
 
-/// Maximum chunk size for git bridge chunked transfers (4 MB).
+/// Maximum chunk size for git bridge chunked transfers (4 MiB).
 ///
 /// Tiger Style: Upper bound to prevent abuse while supporting large objects.
-pub const MAX_GIT_CHUNK_SIZE_BYTES: u64 = 4 * 1024 * 1024;
+pub const MAX_GIT_CHUNK_SIZE_BYTES: u64 = GIT_CHUNK_SIZE_BYTES_MAX;
 
 /// Authenticated request wrapper for client RPC.
 ///
