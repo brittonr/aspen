@@ -92,6 +92,15 @@ pub struct ShardAutomationManager {
     cancel_token: CancellationToken,
 }
 
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "automation shell boundary timestamps topology changes")]
+fn current_topology_timestamp_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
+}
+
 impl ShardAutomationManager {
     /// Create a new automation manager.
     pub fn new(deps: ShardAutomationDependencies, config: AutomationConfig) -> Self {
@@ -123,8 +132,8 @@ impl ShardAutomationManager {
     ///
     /// Periodically checks metrics and triggers operations when appropriate.
     async fn run(self) {
-        let mut check_interval = interval(self.config.check_interval);
-        check_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let mut check_tick_timer = interval(self.config.check_interval);
+        check_tick_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         info!(
             node_id = self.node_id,
@@ -139,7 +148,7 @@ impl ShardAutomationManager {
                     info!("Shard automation manager shutting down");
                     break;
                 }
-                _ = check_interval.tick() => {
+                _ = check_tick_timer.tick() => {
                     if let Err(e) = self.check_and_trigger().await {
                         warn!(error = %e, "Automation check failed");
                     }
@@ -228,10 +237,9 @@ impl ShardAutomationManager {
 
         // Apply the split to the topology
         let mut topology = self.topology.write().await;
-        let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let timestamp_secs = current_topology_timestamp_secs();
 
-        topology.apply_split(shard_id, split_key, new_shard_id, timestamp)?;
+        topology.apply_split(shard_id, split_key, new_shard_id, timestamp_secs)?;
 
         info!(shard_id, new_shard_id, new_version = topology.version, "Split completed");
 
@@ -330,9 +338,9 @@ impl ShardAutomationManager {
                 // Check combined size is acceptable
                 let source_metrics = self.metrics.get(source)?;
                 let target_metrics = self.metrics.get(target)?;
-                let combined_size = source_metrics.size_bytes() + target_metrics.size_bytes();
+                let combined_size_bytes = source_metrics.size_bytes().saturating_add(target_metrics.size_bytes());
 
-                if combined_size <= DEFAULT_MERGE_MAX_COMBINED_BYTES {
+                if combined_size_bytes <= DEFAULT_MERGE_MAX_COMBINED_BYTES {
                     return Some((source, target));
                 }
             }
@@ -351,10 +359,9 @@ impl ShardAutomationManager {
         info!(source, target, "Triggering automatic shard merge");
 
         let mut topology = self.topology.write().await;
-        let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let timestamp_secs = current_topology_timestamp_secs();
 
-        topology.apply_merge(source, target, timestamp)?;
+        topology.apply_merge(source, target, timestamp_secs)?;
 
         info!(source, target, new_version = topology.version, "Merge completed");
 
