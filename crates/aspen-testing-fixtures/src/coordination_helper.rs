@@ -93,8 +93,11 @@ impl CoordinationTestHelper {
 
     /// Advance simulated time by the given duration.
     pub fn advance_time(&mut self, duration: Duration) {
-        self.current_time_ms =
-            self.current_time_ms.saturating_add(u64::try_from(duration.as_millis()).unwrap_or(u64::MAX));
+        let duration_ms = match u64::try_from(duration.as_millis()) {
+            Ok(duration_ms) => duration_ms,
+            Err(_) => u64::MAX,
+        };
+        self.current_time_ms = self.current_time_ms.saturating_add(duration_ms);
     }
 
     /// Set the simulated time to a specific value.
@@ -134,8 +137,13 @@ impl CoordinationTestHelper {
     /// Assert that a lock is held by a specific holder.
     pub async fn assert_locked(&self, lock_key: &str, expected_holder: &str) {
         let value = self.get_value(lock_key).await;
-        assert!(value.is_some(), "Lock at {} should be held", lock_key);
-        let holder = value.unwrap();
+        let holder = match value {
+            Some(holder) => holder,
+            None => {
+                assert!(false, "Lock at {} should be held", lock_key);
+                return;
+            }
+        };
         assert!(
             holder.contains(expected_holder),
             "Lock at {} should be held by {}, but is held by {}",

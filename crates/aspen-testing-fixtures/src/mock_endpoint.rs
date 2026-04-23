@@ -32,6 +32,8 @@ pub struct MockEndpointProvider {
     /// Registered node endpoints.
     endpoints: Arc<RwLock<HashMap<u64, String>>>,
     /// Whether the provider is in a "connected" state.
+    ///
+    /// Lock ordering: `endpoints` -> `connected` when both locks are needed.
     connected: Arc<RwLock<bool>>,
 }
 
@@ -83,9 +85,9 @@ impl MockEndpointProvider {
     /// Set the connected state.
     ///
     /// When disconnected, operations that require connectivity may fail.
-    pub async fn set_connected(&self, connected: bool) {
+    pub async fn set_connected(&self, is_connected: bool) {
         let mut state = self.connected.write().await;
-        *state = connected;
+        *state = is_connected;
     }
 
     /// Check if the provider is connected.

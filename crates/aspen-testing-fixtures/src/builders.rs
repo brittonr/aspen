@@ -26,7 +26,7 @@ use aspen_testing_core::DeterministicKeyValueStore;
 #[derive(Debug, Clone)]
 pub struct ClusterBuilder {
     /// Number of nodes in the cluster.
-    node_count: usize,
+    node_count: u32,
     /// Operation timeout in milliseconds.
     timeout_ms: u64,
     /// Heartbeat interval in milliseconds.
@@ -56,7 +56,7 @@ impl ClusterBuilder {
     }
 
     /// Set the number of nodes in the cluster.
-    pub fn with_nodes(mut self, count: usize) -> Self {
+    pub fn with_nodes(mut self, count: u32) -> Self {
         self.node_count = count;
         self
     }
@@ -103,7 +103,7 @@ impl ClusterBuilder {
 #[derive(Clone)]
 pub struct ClusterConfig {
     /// Number of nodes in the cluster.
-    pub node_count: usize,
+    pub node_count: u32,
     /// Operation timeout in milliseconds.
     pub timeout_ms: u64,
     /// Heartbeat interval in milliseconds.
@@ -192,7 +192,10 @@ impl KvStoreBuilder {
                 Some(prefix) => format!("{}{}", prefix, key),
                 None => key,
             };
-            let _ = store.write(WriteRequest::set(full_key, value)).await;
+            let write_result = store.write(WriteRequest::set(full_key, value)).await;
+            if let Err(error) = write_result {
+                debug_assert!(false, "initial entry write should succeed: {error}");
+            }
         }
 
         store

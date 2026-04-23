@@ -78,7 +78,10 @@ use std::time::UNIX_EPOCH;
 )]
 pub fn current_time_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |duration| {
-        u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+        match u64::try_from(duration.as_millis()) {
+            Ok(duration_ms) => duration_ms,
+            Err(_) => u64::MAX,
+        }
     })
 }
 
