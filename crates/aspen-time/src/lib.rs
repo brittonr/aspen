@@ -3,10 +3,10 @@
 //! This module provides safe, panic-free time access functions following Tiger Style
 //! resource management principles.
 //!
-//! # TimeProvider Trait
+//! # `TimeProvider` Trait
 //!
 //! The [`TimeProvider`] trait enables injectable time for deterministic simulation testing.
-//! Use [`SystemTimeProvider`] for production and [`SimulatedTimeProvider`] (behind the
+//! Use [`SystemTimeProvider`] for production and `SimulatedTimeProvider` (behind the
 //! `simulation` feature) for tests.
 //!
 //! # Tiger Style
@@ -14,6 +14,12 @@
 //! - No panic-on-time-conversion paths - safe fallback to 0
 //! - Inline for hot path performance
 //! - Pure functions with no external dependencies
+
+#![deny(missing_docs)]
+#![deny(clippy::all)]
+#![deny(clippy::pedantic)]
+#![deny(clippy::undocumented_unsafe_blocks)]
+#![allow(clippy::module_name_repetitions)]
 
 // Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
 // crates while suppressing noisier families until Aspen has cleanup bandwidth.
@@ -65,12 +71,15 @@ use std::time::UNIX_EPOCH;
 /// - No panic-on-time-conversion paths - safe fallback to 0
 /// - Inline for hot path performance
 #[inline]
+#[must_use]
 #[allow(
     ambient_clock,
     reason = "aspen-time owns the wall-clock boundary for unix timestamp helpers"
 )]
 pub fn current_time_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |duration| {
+        u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+    })
 }
 
 /// Get current Unix timestamp in seconds.
@@ -83,12 +92,13 @@ pub fn current_time_ms() -> u64 {
 /// - No panic-on-time-conversion paths - safe fallback to 0
 /// - Inline for hot path performance
 #[inline]
+#[must_use]
 #[allow(
     ambient_clock,
     reason = "aspen-time owns the wall-clock boundary for unix timestamp helpers"
 )]
 pub fn current_time_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |duration| duration.as_secs())
 }
 
 // ============================================================================
@@ -99,7 +109,7 @@ pub fn current_time_secs() -> u64 {
 ///
 /// This trait enables deterministic simulation testing by allowing time to be
 /// controlled externally. In production, use [`SystemTimeProvider`]. For tests,
-/// use [`SimulatedTimeProvider`] (requires `simulation` feature).
+/// use `SimulatedTimeProvider` when the `simulation` feature is enabled.
 ///
 /// # Example
 ///
@@ -261,8 +271,8 @@ mod tests {
         let time = current_time_ms();
         let year_2020_ms = 1_577_836_800_000u64;
         let year_2100_ms = 4_102_444_800_000u64;
-        assert!(time > year_2020_ms, "current_time_ms {} should be after year 2020", time);
-        assert!(time < year_2100_ms, "current_time_ms {} should be before year 2100", time);
+        assert!(time > year_2020_ms, "current_time_ms {time} should be after year 2020");
+        assert!(time < year_2100_ms, "current_time_ms {time} should be before year 2100");
     }
 
     #[test]
@@ -284,8 +294,8 @@ mod tests {
         let time = current_time_secs();
         let year_2020 = 1_577_836_800u64;
         let year_2100 = 4_102_444_800u64;
-        assert!(time > year_2020, "current_time_secs {} should be after year 2020", time);
-        assert!(time < year_2100, "current_time_secs {} should be before year 2100", time);
+        assert!(time > year_2020, "current_time_secs {time} should be after year 2020");
+        assert!(time < year_2100, "current_time_secs {time} should be before year 2100");
     }
 
     #[test]
@@ -296,15 +306,11 @@ mod tests {
         let ms_as_secs = ms / 1000;
         assert!(
             ms_as_secs >= secs.saturating_sub(1),
-            "ms/1000 ({}) should not trail secs ({}) by more than 1",
-            ms_as_secs,
-            secs
+            "ms/1000 ({ms_as_secs}) should not trail secs ({secs}) by more than 1"
         );
         assert!(
             ms_as_secs <= secs.saturating_add(1),
-            "ms/1000 ({}) should not lead secs ({}) by more than 1",
-            ms_as_secs,
-            secs
+            "ms/1000 ({ms_as_secs}) should not lead secs ({secs}) by more than 1"
         );
     }
 

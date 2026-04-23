@@ -1,0 +1,19 @@
+    Checking enforce-clippy-policy-negative-proof v0.1.0 (/home/brittonr/git/aspen/openspec/changes/enforce-clippy-policy/evidence/negative-proof-module)
+error: missing documentation for the crate
+ --> main.rs:1:1
+  |
+1 | / #![deny(missing_docs)]
+2 | | #![deny(clippy::all)]
+3 | | #![deny(clippy::pedantic)]
+4 | | #![deny(clippy::undocumented_unsafe_blocks)]
+... |
+7 | | fn main() {}
+  | |____________^
+  |
+note: the lint level is defined here
+ --> main.rs:1:9
+  |
+1 | #![deny(missing_docs)]
+  |         ^^^^^^^^^^^^
+
+error: could not compile `enforce-clippy-policy-negative-proof` (bin "enforce-clippy-policy-negative-proof") due to 1 previous error
