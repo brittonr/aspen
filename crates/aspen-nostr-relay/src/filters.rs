@@ -164,7 +164,11 @@ pub fn bounded_range(prefix: &str, _since: Option<&str>, until: Option<&str>) ->
 pub fn apply_limit_and_sort(events: &mut Vec<Event>, limit: Option<u32>) {
     events.sort_by_key(|e| std::cmp::Reverse(e.created_at));
     if let Some(limit) = limit {
-        events.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+        let max_events = match usize::try_from(limit) {
+            Ok(max_events) => max_events,
+            Err(_) => usize::MAX,
+        };
+        events.truncate(max_events);
     }
 }
 

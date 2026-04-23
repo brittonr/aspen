@@ -60,8 +60,10 @@ pub struct SubscriptionRegistry {
 impl SubscriptionRegistry {
     /// Create a new registry with the given per-connection subscription limit.
     pub fn new(max_subs_per_conn: u32) -> Self {
-        let (event_tx, _) =
-            broadcast::channel(usize::try_from(constants::BROADCAST_CHANNEL_CAPACITY).unwrap_or(usize::MAX));
+        let (event_tx, _) = broadcast::channel(match usize::try_from(constants::BROADCAST_CHANNEL_CAPACITY) {
+            Ok(broadcast_capacity_entries) => broadcast_capacity_entries,
+            Err(_) => usize::MAX,
+        });
         Self {
             connections: RwLock::new(HashMap::new()),
             event_tx,
