@@ -201,15 +201,26 @@ pub fn detect_stalled_participants(
 /// # Returns
 ///
 /// Deadlock check result.
+#[derive(Debug, Clone, Copy)]
+pub struct BarrierDeadlockCheckInput<'a> {
+    pub phase: BarrierPhase,
+    pub participant_count: u32,
+    pub required_count: u32,
+    pub participants: &'a [ParticipantActivity],
+    pub now_ms: u64,
+    pub stall_timeout_ms: u64,
+}
+
 #[inline]
-pub fn check_barrier_deadlock(
-    phase: BarrierPhase,
-    participant_count: u32,
-    required_count: u32,
-    participants: &[ParticipantActivity],
-    now_ms: u64,
-    stall_timeout_ms: u64,
-) -> DeadlockCheckResult {
+pub fn check_barrier_deadlock(input: BarrierDeadlockCheckInput<'_>) -> DeadlockCheckResult {
+    let BarrierDeadlockCheckInput {
+        phase,
+        participant_count,
+        required_count,
+        participants,
+        now_ms,
+        stall_timeout_ms,
+    } = input;
     debug_assert!(
         participant_count as usize <= participants.len() || participants.is_empty(),
         "BARRIER: participant_count ({participant_count}) inconsistent with activity records ({})",
@@ -430,7 +441,7 @@ mod tests {
             participant_id: "p1".to_string(),
             last_activity_ms: 950,
         }];
-        let result = check_barrier_deadlock(BarrierPhase::Waiting, 1, 3, &participants, 1000, 200);
+        let result = check_barrier_deadlock(BarrierDeadlockCheckInput { phase: BarrierPhase::Waiting, participant_count: 1, required_count: 3, participants: &participants, now_ms: 1000, stall_timeout_ms: 200 });
         assert_eq!(result, DeadlockCheckResult::Healthy);
     }
 
@@ -440,7 +451,7 @@ mod tests {
             participant_id: "p1".to_string(),
             last_activity_ms: 500,
         }];
-        let result = check_barrier_deadlock(BarrierPhase::Waiting, 1, 3, &participants, 1000, 200);
+        let result = check_barrier_deadlock(BarrierDeadlockCheckInput { phase: BarrierPhase::Waiting, participant_count: 1, required_count: 3, participants: &participants, now_ms: 1000, stall_timeout_ms: 200 });
         assert!(matches!(result, DeadlockCheckResult::PotentialDeadlock { .. }));
     }
 
@@ -503,13 +514,13 @@ mod tests {
             participant_id: "p1".to_string(),
             last_activity_ms: 100, // very old
         }];
-        let result = check_barrier_deadlock(BarrierPhase::Leaving, 1, 1, &participants, 1000, 200);
+        let result = check_barrier_deadlock(BarrierDeadlockCheckInput { phase: BarrierPhase::Leaving, participant_count: 1, required_count: 1, participants: &participants, now_ms: 1000, stall_timeout_ms: 200 });
         assert!(matches!(result, DeadlockCheckResult::PotentialDeadlock { .. }));
     }
 
     #[test]
     fn test_check_barrier_deadlock_ready_phase_healthy() {
-        let result = check_barrier_deadlock(BarrierPhase::Ready, 3, 3, &[], 1000, 200);
+        let result = check_barrier_deadlock(BarrierDeadlockCheckInput { phase: BarrierPhase::Ready, participant_count: 3, required_count: 3, participants: &[], now_ms: 1000, stall_timeout_ms: 200 });
         assert_eq!(result, DeadlockCheckResult::Healthy);
     }
 }

@@ -106,15 +106,27 @@ pub fn should_step_down_exec(
 /// # Returns
 ///
 /// Validation result indicating whether tokens are valid.
+#[derive(Debug, Clone, Copy)]
+pub struct FencingValidationInput {
+    pub lock_token: u64,
+    pub election_token: u64,
+    pub rwlock_token: u64,
+    pub min_lock_token: u64,
+    pub min_election_token: u64,
+    pub min_rwlock_token: u64,
+}
+
 #[inline]
-pub fn validate_consistent_fencing_tokens(
-    lock_token: u64,
-    election_token: u64,
-    rwlock_token: u64,
-    min_lock_token: u64,
-    min_election_token: u64,
-    min_rwlock_token: u64,
-) -> FencingValidation {
+pub fn validate_consistent_fencing_tokens(input: FencingValidationInput) -> FencingValidation {
+    let FencingValidationInput {
+        lock_token,
+        election_token,
+        rwlock_token,
+        min_lock_token,
+        min_election_token,
+        min_rwlock_token,
+    } = input;
+
     // Check each token against its minimum
     if lock_token < min_lock_token {
         return FencingValidation::StaleToken {
@@ -482,13 +494,13 @@ mod tests {
 
     #[test]
     fn test_validate_consistent_fencing_tokens_all_valid() {
-        let result = validate_consistent_fencing_tokens(10, 20, 30, 5, 15, 25);
+        let result = validate_consistent_fencing_tokens(FencingValidationInput { lock_token: 10, election_token: 20, rwlock_token: 30, min_lock_token: 5, min_election_token: 15, min_rwlock_token: 25 });
         assert_eq!(result, FencingValidation::Valid);
     }
 
     #[test]
     fn test_validate_consistent_fencing_tokens_stale_lock() {
-        let result = validate_consistent_fencing_tokens(4, 20, 30, 5, 15, 25);
+        let result = validate_consistent_fencing_tokens(FencingValidationInput { lock_token: 4, election_token: 20, rwlock_token: 30, min_lock_token: 5, min_election_token: 15, min_rwlock_token: 25 });
         assert!(matches!(result, FencingValidation::StaleToken {
             token: 4,
             min_expected: 5
@@ -497,7 +509,7 @@ mod tests {
 
     #[test]
     fn test_validate_consistent_fencing_tokens_stale_election() {
-        let result = validate_consistent_fencing_tokens(10, 14, 30, 5, 15, 25);
+        let result = validate_consistent_fencing_tokens(FencingValidationInput { lock_token: 10, election_token: 14, rwlock_token: 30, min_lock_token: 5, min_election_token: 15, min_rwlock_token: 25 });
         assert!(matches!(result, FencingValidation::StaleToken {
             token: 14,
             min_expected: 15

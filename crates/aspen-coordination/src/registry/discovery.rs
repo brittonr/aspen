@@ -9,6 +9,7 @@ use super::ServiceRegistry;
 use super::types::DiscoveryFilter;
 use super::types::ServiceInstance;
 use crate::verified;
+use crate::verified::DiscoveryFilterMatchInput;
 
 #[inline]
 fn discovery_limit_usize(limit: u32) -> usize {
@@ -41,14 +42,14 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                 && !instance.is_expired()
             {
                 // Apply filters using pure function
-                if !crate::verified::matches_discovery_filter(
-                    instance.health_status,
-                    &instance.metadata.tags,
-                    &instance.metadata.version,
-                    filter.healthy_only,
-                    &filter.tags,
-                    filter.version_prefix.as_deref(),
-                ) {
+                if !crate::verified::matches_discovery_filter(DiscoveryFilterMatchInput {
+                    health_status: instance.health_status,
+                    tags: &instance.metadata.tags,
+                    version: &instance.metadata.version,
+                    healthy_only: filter.healthy_only,
+                    required_tags: &filter.tags,
+                    version_prefix: filter.version_prefix.as_deref(),
+                }) {
                     continue;
                 }
 

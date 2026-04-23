@@ -69,6 +69,7 @@ pub mod worker;
 // ============================================================================
 
 // Fencing Token
+pub use barrier::BarrierDeadlockCheckInput;
 pub use barrier::DeadlockCheckResult;
 pub use barrier::ParticipantActivity;
 // Deadlock Detection
@@ -155,6 +156,7 @@ pub use election::should_step_down_exec;
 pub use election::should_stop_running_after_stepdown;
 pub use fencing::FailoverDecision;
 pub use fencing::FencingValidation;
+pub use fencing::FencingValidationInput;
 pub use fencing::SplitBrainCheck;
 // Split-Brain Detection
 pub use fencing::check_for_split_brain;
@@ -297,6 +299,7 @@ pub use rate_limiter::is_acquire_valid as rate_limiter_is_acquire_valid;
 pub use rate_limiter::is_refill_time_valid;
 pub use rate_limiter::refill_tokens;
 // Constants
+pub use registry::DiscoveryFilterMatchInput;
 pub use registry::MAX_REGISTRY_TTL_MS;
 pub use registry::MAX_SERVICE_WEIGHT;
 pub use registry::MIN_SERVICE_WEIGHT;
@@ -451,7 +454,9 @@ pub use strategies::worker_matches_tags;
 // ============================================================================
 
 // Key Prefixes
+pub use worker::PressureCapacityInput;
 pub use worker::STEAL_HINT_PREFIX;
+pub use worker::StealTargetInput;
 pub use worker::WORKER_GROUP_PREFIX;
 pub use worker::WORKER_STATS_PREFIX;
 // Capacity

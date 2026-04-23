@@ -113,15 +113,27 @@ pub fn instance_remaining_ttl(deadline_ms: u64, now_ms: u64) -> u64 {
 /// # Returns
 ///
 /// `true` if the instance matches all filter criteria.
+#[derive(Debug, Clone, Copy)]
+pub struct DiscoveryFilterMatchInput<'a, S: AsRef<str>> {
+    pub health_status: HealthStatus,
+    pub tags: &'a [S],
+    pub version: &'a str,
+    pub healthy_only: bool,
+    pub required_tags: &'a [S],
+    pub version_prefix: Option<&'a str>,
+}
+
 #[inline]
-pub fn matches_discovery_filter<S: AsRef<str>>(
-    health_status: HealthStatus,
-    tags: &[S],
-    version: &str,
-    healthy_only: bool,
-    required_tags: &[S],
-    version_prefix: Option<&str>,
-) -> bool {
+pub fn matches_discovery_filter<S: AsRef<str>>(input: DiscoveryFilterMatchInput<'_, S>) -> bool {
+    let DiscoveryFilterMatchInput {
+        health_status,
+        tags,
+        version,
+        healthy_only,
+        required_tags,
+        version_prefix,
+    } = input;
+
     // Check health filter
     if healthy_only && health_status != HealthStatus::Healthy {
         return false;
@@ -450,34 +462,41 @@ mod tests {
     fn test_matches_filter_no_filters() {
         let tags: Vec<String> = vec![];
         let required: Vec<String> = vec![];
-        assert!(matches_discovery_filter(HealthStatus::Healthy, &tags, "1.0.0", false, &required, None));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: false, required_tags: &required, version_prefix: None }));
     }
 
     #[test]
     fn test_matches_filter_healthy_only() {
         let tags: Vec<String> = vec![];
         let required: Vec<String> = vec![];
-        assert!(matches_discovery_filter(HealthStatus::Healthy, &tags, "1.0.0", true, &required, None));
-        assert!(!matches_discovery_filter(HealthStatus::Unhealthy, &tags, "1.0.0", true, &required, None));
-        assert!(!matches_discovery_filter(HealthStatus::Unknown, &tags, "1.0.0", true, &required, None));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: true, required_tags: &required, version_prefix: None }));
+        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Unhealthy, tags: &tags, version: "1.0.0", healthy_only: true, required_tags: &required, version_prefix: None }));
+        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Unknown, tags: &tags, version: "1.0.0", healthy_only: true, required_tags: &required, version_prefix: None }));
     }
 
     #[test]
     fn test_matches_filter_tags() {
         let tags = vec!["region:us-east".to_string(), "env:prod".to_string()];
         let required = vec!["region:us-east".to_string()];
-        assert!(matches_discovery_filter(HealthStatus::Healthy, &tags, "1.0.0", false, &required, None));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: false, required_tags: &required, version_prefix: None }));
 
         let missing = vec!["region:us-west".to_string()];
-        assert!(!matches_discovery_filter(HealthStatus::Healthy, &tags, "1.0.0", false, &missing, None));
+        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Healthy,
+            tags: &tags,
+            version: "1.0.0",
+            healthy_only: false,
+            required_tags: &missing,
+            version_prefix: None,
+        }));
     }
 
     #[test]
     fn test_matches_filter_version_prefix() {
         let tags: Vec<String> = vec![];
         let required: Vec<String> = vec![];
-        assert!(matches_discovery_filter(HealthStatus::Healthy, &tags, "1.0.0", false, &required, Some("1.")));
-        assert!(!matches_discovery_filter(HealthStatus::Healthy, &tags, "2.0.0", false, &required, Some("1.")));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: false, required_tags: &required, version_prefix: Some("1.") }));
+        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "2.0.0", healthy_only: false, required_tags: &required, version_prefix: Some("1.") }));
     }
 
     #[test]

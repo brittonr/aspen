@@ -146,8 +146,10 @@ async fn test_worker_deregistration() {
 #[tokio::test]
 async fn test_worker_selection_round_robin() {
     let store = create_test_store().await;
-    let mut config = WorkerCoordinatorConfig::default();
-    config.strategy = LoadBalancingStrategy::RoundRobin;
+    let config = WorkerCoordinatorConfig {
+        strategy: LoadBalancingStrategy::RoundRobin,
+        ..Default::default()
+    };
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers
@@ -172,8 +174,10 @@ async fn test_worker_selection_round_robin() {
 #[tokio::test]
 async fn test_worker_selection_least_loaded() {
     let store = create_test_store().await;
-    let mut config = WorkerCoordinatorConfig::default();
-    config.strategy = LoadBalancingStrategy::LeastLoaded;
+    let config = WorkerCoordinatorConfig {
+        strategy: LoadBalancingStrategy::LeastLoaded,
+        ..Default::default()
+    };
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers with different loads
@@ -254,9 +258,11 @@ async fn test_worker_filtering() {
 #[tokio::test]
 async fn test_work_stealing_targets() {
     let store = create_test_store().await;
-    let mut config = WorkerCoordinatorConfig::default();
-    config.steal_load_threshold = 0.3;
-    config.steal_queue_threshold = 5;
+    let config = WorkerCoordinatorConfig {
+        steal_load_threshold: 0.3,
+        steal_queue_threshold: 5,
+        ..Default::default()
+    };
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers with different loads
@@ -333,8 +339,10 @@ async fn test_worker_groups() {
 #[tokio::test]
 async fn test_affinity_selection() {
     let store = create_test_store().await;
-    let mut config = WorkerCoordinatorConfig::default();
-    config.strategy = LoadBalancingStrategy::Affinity;
+    let config = WorkerCoordinatorConfig {
+        strategy: LoadBalancingStrategy::Affinity,
+        ..Default::default()
+    };
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers
@@ -363,8 +371,10 @@ async fn test_affinity_selection() {
 #[tokio::test]
 async fn test_max_workers_limit() {
     let store = create_test_store().await;
-    let mut config = WorkerCoordinatorConfig::default();
-    config.max_workers = 3;
+    let config = WorkerCoordinatorConfig {
+        max_workers: 3,
+        ..Default::default()
+    };
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers up to limit
@@ -383,8 +393,10 @@ async fn test_max_workers_limit() {
 #[tokio::test]
 async fn test_max_groups_limit() {
     let store = create_test_store().await;
-    let mut config = WorkerCoordinatorConfig::default();
-    config.max_groups = 2;
+    let config = WorkerCoordinatorConfig {
+        max_groups: 2,
+        ..Default::default()
+    };
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers

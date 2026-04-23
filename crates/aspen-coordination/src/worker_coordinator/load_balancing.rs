@@ -97,16 +97,18 @@ mod tests {
     use crate::types::now_unix_ms;
     use crate::verified::worker::PressureThresholds;
 
-    fn create_test_worker_with_pressure(
-        id: &str,
+    struct TestWorkerPressureInput<'a> {
+        id: &'a str,
         cpu_pressure: f32,
         memory_pressure: f32,
         io_pressure: f32,
         disk_build_free: f64,
         disk_store_free: f64,
-    ) -> WorkerInfo {
+    }
+
+    fn create_test_worker_with_pressure(input: TestWorkerPressureInput<'_>) -> WorkerInfo {
         WorkerInfo {
-            worker_id: id.to_string(),
+            worker_id: input.id.to_string(),
             node_id: "n1".to_string(),
             peer_id: None,
             capabilities: vec!["test".to_string()],
@@ -122,11 +124,11 @@ mod tests {
             total_failed: 2,
             avg_processing_time_ms: 50,
             groups: HashSet::new(),
-            cpu_pressure_avg10: cpu_pressure,
-            memory_pressure_avg10: memory_pressure,
-            io_pressure_avg10: io_pressure,
-            disk_free_build_pct: disk_build_free,
-            disk_free_store_pct: disk_store_free,
+            cpu_pressure_avg10: input.cpu_pressure,
+            memory_pressure_avg10: input.memory_pressure,
+            io_pressure_avg10: input.io_pressure,
+            disk_free_build_pct: input.disk_build_free,
+            disk_free_store_pct: input.disk_store_free,
             is_ready: true,
         }
     }
@@ -147,9 +149,23 @@ mod tests {
         let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
         // Add one healthy low-pressure worker
-        let good_worker = create_test_worker_with_pressure("good", 10.0, 10.0, 10.0, 50.0, 50.0);
+        let good_worker = create_test_worker_with_pressure(TestWorkerPressureInput {
+            id: "good",
+            cpu_pressure: 10.0,
+            memory_pressure: 10.0,
+            io_pressure: 10.0,
+            disk_build_free: 50.0,
+            disk_store_free: 50.0,
+        });
         // Add one worker with high CPU pressure (exceeds 50.0 threshold)
-        let bad_worker = create_test_worker_with_pressure("bad", 80.0, 10.0, 10.0, 50.0, 50.0);
+        let bad_worker = create_test_worker_with_pressure(TestWorkerPressureInput {
+            id: "bad",
+            cpu_pressure: 80.0,
+            memory_pressure: 10.0,
+            io_pressure: 10.0,
+            disk_build_free: 50.0,
+            disk_store_free: 50.0,
+        });
 
         {
             let mut workers = coordinator.workers.write().await;
@@ -179,7 +195,14 @@ mod tests {
         let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
         // Add worker with high CPU pressure initially
-        let mut worker = create_test_worker_with_pressure("w1", 80.0, 10.0, 10.0, 50.0, 50.0);
+        let mut worker = create_test_worker_with_pressure(TestWorkerPressureInput {
+            id: "w1",
+            cpu_pressure: 80.0,
+            memory_pressure: 10.0,
+            io_pressure: 10.0,
+            disk_build_free: 50.0,
+            disk_store_free: 50.0,
+        });
 
         {
             let mut workers = coordinator.workers.write().await;

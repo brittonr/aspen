@@ -79,15 +79,27 @@ pub fn should_skip_for_message_group(pending_groups: &[String], message_group_id
 /// # Returns
 ///
 /// Eligibility result indicating whether item can be dequeued.
+#[derive(Debug, Clone, Copy)]
+pub struct DequeueEligibilityInput<'a> {
+    pub expires_at_ms: u64,
+    pub delivery_attempts: u32,
+    pub max_delivery_attempts: u32,
+    pub message_group_id: Option<&'a str>,
+    pub pending_groups: &'a [String],
+    pub now_ms: u64,
+}
+
 #[inline]
-pub fn check_dequeue_eligibility(
-    expires_at_ms: u64,
-    delivery_attempts: u32,
-    max_delivery_attempts: u32,
-    message_group_id: Option<&str>,
-    pending_groups: &[String],
-    now_ms: u64,
-) -> DequeueEligibility {
+pub fn check_dequeue_eligibility(input: DequeueEligibilityInput<'_>) -> DequeueEligibility {
+    let DequeueEligibilityInput {
+        expires_at_ms,
+        delivery_attempts,
+        max_delivery_attempts,
+        message_group_id,
+        pending_groups,
+        now_ms,
+    } = input;
+
     // Check expiration
     if is_queue_item_expired(expires_at_ms, now_ms) {
         return DequeueEligibility::Expired;

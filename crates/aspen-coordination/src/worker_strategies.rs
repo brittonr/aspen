@@ -656,8 +656,10 @@ mod tests {
         let mut strategy = AffinityStrategy::new(fallback);
         let workers = create_test_workers();
 
-        let mut context = RoutingContext::default();
-        context.affinity_key = Some("user123".to_string());
+        let context = RoutingContext {
+            affinity_key: Some("user123".to_string()),
+            ..Default::default()
+        };
 
         // First call should create affinity
         let idx1 = strategy.select(&workers, "email", &context).unwrap().unwrap();
@@ -672,8 +674,10 @@ mod tests {
         let mut strategy = ConsistentHashStrategy::new();
         let workers = create_test_workers();
 
-        let mut context = RoutingContext::default();
-        context.affinity_key = Some("job123".to_string());
+        let mut context = RoutingContext {
+            affinity_key: Some("job123".to_string()),
+            ..Default::default()
+        };
 
         // Same key should always map to same worker
         let idx1 = strategy.select(&workers, "email", &context).unwrap().unwrap();

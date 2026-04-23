@@ -89,14 +89,14 @@ impl WorkerInfo {
 
     /// Check if worker is within pressure thresholds.
     pub fn is_pressure_ok(&self, thresholds: &crate::verified::worker::PressureThresholds) -> bool {
-        crate::verified::worker::has_pressure_capacity(
-            self.cpu_pressure_avg10,
-            self.memory_pressure_avg10,
-            self.io_pressure_avg10,
-            self.disk_free_build_pct,
-            self.disk_free_store_pct,
+        crate::verified::worker::has_pressure_capacity(crate::verified::worker::PressureCapacityInput {
+            cpu_pressure_avg10: self.cpu_pressure_avg10,
+            memory_pressure_avg10: self.memory_pressure_avg10,
+            io_pressure_avg10: self.io_pressure_avg10,
+            disk_free_build_pct: self.disk_free_build_pct,
+            disk_free_store_pct: self.disk_free_store_pct,
             thresholds,
-        )
+        })
     }
 }
 

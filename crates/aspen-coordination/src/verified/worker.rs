@@ -362,15 +362,26 @@ pub fn is_worker_ready(lag: Option<u64>, threshold: u64, is_healthy: bool) -> bo
 /// # Returns
 ///
 /// `true` if the worker is a good steal target.
+#[derive(Debug, Clone, Copy)]
+pub struct StealTargetInput {
+    pub is_healthy: bool,
+    pub is_alive: bool,
+    pub load: f32,
+    pub steal_load_threshold: f32,
+    pub active_jobs: u32,
+    pub max_concurrent: u32,
+}
+
 #[inline]
-pub fn is_steal_target(
-    is_healthy: bool,
-    is_alive: bool,
-    load: f32,
-    steal_load_threshold: f32,
-    active_jobs: u32,
-    max_concurrent: u32,
-) -> bool {
+pub fn is_steal_target(input: StealTargetInput) -> bool {
+    let StealTargetInput {
+        is_healthy,
+        is_alive,
+        load,
+        steal_load_threshold,
+        active_jobs,
+        max_concurrent,
+    } = input;
     // Worker must be operational
     let is_operational = is_healthy && is_alive;
     // Worker must have capacity to receive work
@@ -646,20 +657,23 @@ impl Default for PressureThresholds {
 ///
 /// Returns `true` if ALL pressure metrics are within thresholds.
 /// A worker that exceeds any single threshold is considered over-pressured.
+#[derive(Debug, Clone, Copy)]
+pub struct PressureCapacityInput<'a> {
+    pub cpu_pressure_avg10: f32,
+    pub memory_pressure_avg10: f32,
+    pub io_pressure_avg10: f32,
+    pub disk_free_build_pct: f64,
+    pub disk_free_store_pct: f64,
+    pub thresholds: &'a PressureThresholds,
+}
+
 #[inline]
-pub fn has_pressure_capacity(
-    cpu_pressure_avg10: f32,
-    memory_pressure_avg10: f32,
-    io_pressure_avg10: f32,
-    disk_free_build_pct: f64,
-    disk_free_store_pct: f64,
-    thresholds: &PressureThresholds,
-) -> bool {
-    cpu_pressure_avg10 <= thresholds.cpu_psi_max
-        && memory_pressure_avg10 <= thresholds.memory_psi_max
-        && io_pressure_avg10 <= thresholds.io_psi_max
-        && disk_free_build_pct >= thresholds.disk_free_build_min_pct
-        && disk_free_store_pct >= thresholds.disk_free_store_min_pct
+pub fn has_pressure_capacity(input: PressureCapacityInput<'_>) -> bool {
+    input.cpu_pressure_avg10 <= input.thresholds.cpu_psi_max
+        && input.memory_pressure_avg10 <= input.thresholds.memory_psi_max
+        && input.io_pressure_avg10 <= input.thresholds.io_psi_max
+        && input.disk_free_build_pct >= input.thresholds.disk_free_build_min_pct
+        && input.disk_free_store_pct >= input.thresholds.disk_free_store_min_pct
 }
 
 #[cfg(test)]
@@ -827,11 +841,11 @@ mod tests {
 
     #[test]
     fn test_is_steal_target() {
-        assert!(is_steal_target(true, true, 0.1, 0.2, 1u32, 10u32));
-        assert!(!is_steal_target(false, true, 0.1, 0.2, 1u32, 10u32)); // Not healthy
-        assert!(!is_steal_target(true, false, 0.1, 0.2, 1u32, 10u32)); // Not alive
-        assert!(!is_steal_target(true, true, 0.3, 0.2, 1u32, 10u32)); // Load too high
-        assert!(!is_steal_target(true, true, 0.1, 0.2, 10u32, 10u32)); // At capacity
+        assert!(is_steal_target(StealTargetInput { is_healthy: true, is_alive: true, load: 0.1, steal_load_threshold: 0.2, active_jobs: 1u32, max_concurrent: 10u32 }));
+        assert!(!is_steal_target(StealTargetInput { is_healthy: false, is_alive: true, load: 0.1, steal_load_threshold: 0.2, active_jobs: 1u32, max_concurrent: 10u32 })); // Not healthy
+        assert!(!is_steal_target(StealTargetInput { is_healthy: true, is_alive: false, load: 0.1, steal_load_threshold: 0.2, active_jobs: 1u32, max_concurrent: 10u32 })); // Not alive
+        assert!(!is_steal_target(StealTargetInput { is_healthy: true, is_alive: true, load: 0.3, steal_load_threshold: 0.2, active_jobs: 1u32, max_concurrent: 10u32 })); // Load too high
+        assert!(!is_steal_target(StealTargetInput { is_healthy: true, is_alive: true, load: 0.1, steal_load_threshold: 0.2, active_jobs: 10u32, max_concurrent: 10u32 })); // At capacity
     }
 
     #[test]
@@ -908,56 +922,56 @@ mod tests {
     #[test]
     fn test_has_pressure_capacity_all_within_thresholds() {
         let thresholds = PressureThresholds::default();
-        assert!(has_pressure_capacity(50.0, 30.0, 60.0, 10.0, 15.0, &thresholds));
+        assert!(has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 50.0, memory_pressure_avg10: 30.0, io_pressure_avg10: 60.0, disk_free_build_pct: 10.0, disk_free_store_pct: 15.0, thresholds: &thresholds }));
     }
 
     #[test]
     fn test_has_pressure_capacity_cpu_exceeded() {
         let thresholds = PressureThresholds::default();
-        assert!(!has_pressure_capacity(80.0, 30.0, 60.0, 10.0, 15.0, &thresholds));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 80.0, memory_pressure_avg10: 30.0, io_pressure_avg10: 60.0, disk_free_build_pct: 10.0, disk_free_store_pct: 15.0, thresholds: &thresholds }));
     }
 
     #[test]
     fn test_has_pressure_capacity_memory_exceeded() {
         let thresholds = PressureThresholds::default();
-        assert!(!has_pressure_capacity(50.0, 60.0, 60.0, 10.0, 15.0, &thresholds));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 50.0, memory_pressure_avg10: 60.0, io_pressure_avg10: 60.0, disk_free_build_pct: 10.0, disk_free_store_pct: 15.0, thresholds: &thresholds }));
     }
 
     #[test]
     fn test_has_pressure_capacity_io_exceeded() {
         let thresholds = PressureThresholds::default();
-        assert!(!has_pressure_capacity(50.0, 30.0, 90.0, 10.0, 15.0, &thresholds));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 50.0, memory_pressure_avg10: 30.0, io_pressure_avg10: 90.0, disk_free_build_pct: 10.0, disk_free_store_pct: 15.0, thresholds: &thresholds }));
     }
 
     #[test]
     fn test_has_pressure_capacity_build_disk_too_low() {
         let thresholds = PressureThresholds::default();
-        assert!(!has_pressure_capacity(50.0, 30.0, 60.0, 2.0, 15.0, &thresholds));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 50.0, memory_pressure_avg10: 30.0, io_pressure_avg10: 60.0, disk_free_build_pct: 2.0, disk_free_store_pct: 15.0, thresholds: &thresholds }));
     }
 
     #[test]
     fn test_has_pressure_capacity_store_disk_too_low() {
         let thresholds = PressureThresholds::default();
-        assert!(!has_pressure_capacity(50.0, 30.0, 60.0, 10.0, 2.0, &thresholds));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 50.0, memory_pressure_avg10: 30.0, io_pressure_avg10: 60.0, disk_free_build_pct: 10.0, disk_free_store_pct: 2.0, thresholds: &thresholds }));
     }
 
     #[test]
     fn test_has_pressure_capacity_all_exceeded() {
         let thresholds = PressureThresholds::default();
-        assert!(!has_pressure_capacity(80.0, 60.0, 90.0, 2.0, 1.0, &thresholds));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 80.0, memory_pressure_avg10: 60.0, io_pressure_avg10: 90.0, disk_free_build_pct: 2.0, disk_free_store_pct: 1.0, thresholds: &thresholds }));
     }
 
     #[test]
     fn test_has_pressure_capacity_boundary_values() {
         let thresholds = PressureThresholds::default();
         // All exactly at thresholds - should pass
-        assert!(has_pressure_capacity(75.0, 50.0, 80.0, 5.0, 5.0, &thresholds));
+        assert!(has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 75.0, memory_pressure_avg10: 50.0, io_pressure_avg10: 80.0, disk_free_build_pct: 5.0, disk_free_store_pct: 5.0, thresholds: &thresholds }));
         // Just over thresholds - should fail
-        assert!(!has_pressure_capacity(75.1, 50.0, 80.0, 5.0, 5.0, &thresholds));
-        assert!(!has_pressure_capacity(75.0, 50.1, 80.0, 5.0, 5.0, &thresholds));
-        assert!(!has_pressure_capacity(75.0, 50.0, 80.1, 5.0, 5.0, &thresholds));
-        assert!(!has_pressure_capacity(75.0, 50.0, 80.0, 4.9, 5.0, &thresholds));
-        assert!(!has_pressure_capacity(75.0, 50.0, 80.0, 5.0, 4.9, &thresholds));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 75.1, memory_pressure_avg10: 50.0, io_pressure_avg10: 80.0, disk_free_build_pct: 5.0, disk_free_store_pct: 5.0, thresholds: &thresholds }));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 75.0, memory_pressure_avg10: 50.1, io_pressure_avg10: 80.0, disk_free_build_pct: 5.0, disk_free_store_pct: 5.0, thresholds: &thresholds }));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 75.0, memory_pressure_avg10: 50.0, io_pressure_avg10: 80.1, disk_free_build_pct: 5.0, disk_free_store_pct: 5.0, thresholds: &thresholds }));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 75.0, memory_pressure_avg10: 50.0, io_pressure_avg10: 80.0, disk_free_build_pct: 4.9, disk_free_store_pct: 5.0, thresholds: &thresholds }));
+        assert!(!has_pressure_capacity(PressureCapacityInput { cpu_pressure_avg10: 75.0, memory_pressure_avg10: 50.0, io_pressure_avg10: 80.0, disk_free_build_pct: 5.0, disk_free_store_pct: 4.9, thresholds: &thresholds }));
     }
 }
 

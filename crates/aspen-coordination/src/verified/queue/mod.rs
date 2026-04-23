@@ -49,6 +49,7 @@ pub use delivery::increment_delivery_count_for_dequeue;
 // Re-exports: Dequeue
 // ============================================================================
 pub use dequeue::DequeueEligibility;
+pub use dequeue::DequeueEligibilityInput;
 pub use dequeue::PendingGroupInfo;
 pub use dequeue::are_dequeue_params_valid;
 pub use dequeue::can_dequeue_from_group;
@@ -585,35 +586,35 @@ mod tests {
     #[test]
     fn test_check_dequeue_eligibility_eligible() {
         let pending: Vec<String> = vec![];
-        let result = check_dequeue_eligibility(0, 1, 3, None, &pending, 1000);
+        let result = check_dequeue_eligibility(DequeueEligibilityInput { expires_at_ms: 0, delivery_attempts: 1, max_delivery_attempts: 3, message_group_id: None, pending_groups: &pending, now_ms: 1000 });
         assert_eq!(result, DequeueEligibility::Eligible);
     }
 
     #[test]
     fn test_check_dequeue_eligibility_expired() {
         let pending: Vec<String> = vec![];
-        let result = check_dequeue_eligibility(500, 1, 3, None, &pending, 1000);
+        let result = check_dequeue_eligibility(DequeueEligibilityInput { expires_at_ms: 500, delivery_attempts: 1, max_delivery_attempts: 3, message_group_id: None, pending_groups: &pending, now_ms: 1000 });
         assert_eq!(result, DequeueEligibility::Expired);
     }
 
     #[test]
     fn test_check_dequeue_eligibility_max_attempts() {
         let pending: Vec<String> = vec![];
-        let result = check_dequeue_eligibility(0, 3, 3, None, &pending, 1000);
+        let result = check_dequeue_eligibility(DequeueEligibilityInput { expires_at_ms: 0, delivery_attempts: 3, max_delivery_attempts: 3, message_group_id: None, pending_groups: &pending, now_ms: 1000 });
         assert_eq!(result, DequeueEligibility::MaxAttemptsExceeded);
     }
 
     #[test]
     fn test_check_dequeue_eligibility_group_pending() {
         let pending = vec!["group-a".to_string()];
-        let result = check_dequeue_eligibility(0, 1, 3, Some("group-a"), &pending, 1000);
+        let result = check_dequeue_eligibility(DequeueEligibilityInput { expires_at_ms: 0, delivery_attempts: 1, max_delivery_attempts: 3, message_group_id: Some("group-a"), pending_groups: &pending, now_ms: 1000 });
         assert_eq!(result, DequeueEligibility::GroupPending);
     }
 
     #[test]
     fn test_check_dequeue_eligibility_group_not_pending() {
         let pending = vec!["group-b".to_string()];
-        let result = check_dequeue_eligibility(0, 1, 3, Some("group-a"), &pending, 1000);
+        let result = check_dequeue_eligibility(DequeueEligibilityInput { expires_at_ms: 0, delivery_attempts: 1, max_delivery_attempts: 3, message_group_id: Some("group-a"), pending_groups: &pending, now_ms: 1000 });
         assert_eq!(result, DequeueEligibility::Eligible);
     }
 }

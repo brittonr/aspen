@@ -142,16 +142,16 @@ mod tests {
         let registry = ServiceRegistry::new(store);
 
         let (token, initial_deadline) = registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions {
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions {
                     ttl_ms: Some(1000),
                     ..Default::default()
                 },
-            )
+            })
             .await
             .unwrap();
 
@@ -208,13 +208,13 @@ mod tests {
 
         // Register unhealthy instance
         let (token2, _) = registry
-            .register(
-                "test-service",
-                "instance-2",
-                "127.0.0.1:8081",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-2".to_string(),
+                address: "127.0.0.1:8081".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
@@ -243,30 +243,30 @@ mod tests {
 
         // Register with tags
         registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata {
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata {
                     tags: vec!["region:us-east".to_string(), "env:prod".to_string()],
                     ..Default::default()
                 },
-                RegisterOptions::default(),
-            )
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
         registry
-            .register(
-                "test-service",
-                "instance-2",
-                "127.0.0.1:8081",
-                ServiceInstanceMetadata {
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-2".to_string(),
+                address: "127.0.0.1:8081".to_string(),
+                metadata: ServiceInstanceMetadata {
                     tags: vec!["region:us-west".to_string(), "env:prod".to_string()],
                     ..Default::default()
                 },
-                RegisterOptions::default(),
-            )
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
@@ -330,13 +330,13 @@ mod tests {
         // Register multiple instances
         for i in 1..=5 {
             registry
-                .register(
-                    "test-service",
-                    &format!("instance-{}", i),
-                    &format!("127.0.0.1:808{}", i),
-                    ServiceInstanceMetadata::default(),
-                    RegisterOptions::default(),
-                )
+                .register(RegisterInstanceInput {
+                    service_name: "test-service".to_string(),
+                    instance_id: format!("instance-{}", i),
+                    address: format!("127.0.0.1:808{}", i),
+                    metadata: ServiceInstanceMetadata::default(),
+                    options: RegisterOptions::default(),
+                })
                 .await
                 .unwrap();
         }
@@ -353,35 +353,35 @@ mod tests {
 
         // Register instances for different services
         registry
-            .register(
-                "api-gateway",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "api-gateway".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
         registry
-            .register(
-                "api-users",
-                "instance-1",
-                "127.0.0.1:8081",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "api-users".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8081".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
         registry
-            .register(
-                "worker-jobs",
-                "instance-1",
-                "127.0.0.1:8082",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "worker-jobs".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8082".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
@@ -398,17 +398,17 @@ mod tests {
         let registry = ServiceRegistry::new(store);
 
         let (token, _) = registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata {
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata {
                     version: "1.0.0".to_string(),
                     weight: 100,
                     ..Default::default()
                 },
-                RegisterOptions::default(),
-            )
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
