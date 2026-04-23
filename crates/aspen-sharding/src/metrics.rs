@@ -201,6 +201,8 @@ pub struct ShardMetricsCollector {
 
 impl ShardMetricsCollector {
     /// Create a new metrics collector.
+    #[allow(unknown_lints)]
+    #[allow(ambient_clock, reason = "Shard metrics own the local monotonic timing boundary for window accounting")]
     pub fn new() -> Self {
         Self {
             shards: RwLock::new(HashMap::new()),
@@ -262,7 +264,6 @@ impl ShardMetricsCollector {
     }
 
     /// Get current time in milliseconds since collector creation.
-    #[allow(ambient_clock, reason = "Shard metrics own the local monotonic timing boundary for window accounting")]
     fn current_time_ms(&self) -> u64 {
         match u64::try_from(self.created_at.elapsed().as_millis()) {
             Ok(elapsed_ms) => elapsed_ms,
