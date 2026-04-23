@@ -12,15 +12,15 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WatchRequest {
     /// Create a watch on keys matching a prefix.
-    WatchCreate {
+    Create {
         prefix: String,
         start_index: u64,
         should_include_prev_value: bool,
     },
     /// Cancel an active watch.
-    WatchCancel { watch_id: u64 },
+    Cancel { watch_id: u64 },
     /// Get current watch status and statistics.
-    WatchStatus { watch_id: Option<u64> },
+    Status { watch_id: Option<u64> },
 }
 
 #[cfg(feature = "auth")]
@@ -29,8 +29,8 @@ impl WatchRequest {
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
         use aspen_auth::Operation;
         match self {
-            Self::WatchCreate { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
-            Self::WatchCancel { .. } | Self::WatchStatus { .. } => None,
+            Self::Create { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
+            Self::Cancel { .. } | Self::Status { .. } => None,
         }
     }
 }

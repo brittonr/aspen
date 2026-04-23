@@ -68,13 +68,15 @@ pub fn build_scan_metadata(count: u32, is_truncated: bool, last_key: Option<&str
     (count, is_truncated, continuation_token)
 }
 
+type ScanPage<T> = (Vec<T>, u32, bool, Option<String>);
+
 /// Complete scan pipeline: normalize, filter, sort, paginate.
 pub fn execute_scan<K, V>(
     mut entries: Vec<(K, V)>,
     prefix: &str,
     continuation_token: Option<&str>,
     limit: Option<u32>,
-) -> (Vec<(K, V)>, u32, bool, Option<String>)
+) -> ScanPage<(K, V)>
 where
     K: AsRef<str> + Ord + Clone,
     V: Clone,

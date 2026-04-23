@@ -614,10 +614,8 @@ fn cfg_is_enabled(attributes: &[Attribute]) -> bool {
 }
 
 fn feature_is_enabled(feature_name: &str) -> bool {
-    match feature_name {
-        FEATURE_AUTH => cfg!(feature = "auth"),
-        FEATURE_AUTOMERGE => cfg!(feature = "automerge"),
-        FEATURE_CI => cfg!(feature = "ci"),
-        _ => false,
-    }
+    let is_auth_feature = feature_name == FEATURE_AUTH && cfg!(feature = "auth");
+    let is_automerge_feature = feature_name == FEATURE_AUTOMERGE && cfg!(feature = "automerge");
+    let is_ci_feature = feature_name == FEATURE_CI && cfg!(feature = "ci");
+    is_auth_feature || is_automerge_feature || is_ci_feature
 }

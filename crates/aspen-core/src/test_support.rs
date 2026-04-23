@@ -150,10 +150,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 }
             }
             WriteCommand::CompareAndDelete { key, expected } => {
-                if let Some(v) = data.get(key) {
-                    if &v.value == expected {
-                        data.remove(key);
-                    }
+                if let Some(v) = data.get(key)
+                    && &v.value == expected
+                {
+                    data.remove(key);
                 }
             }
             WriteCommand::Batch { operations } => {

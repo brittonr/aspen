@@ -14,15 +14,15 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LeaseRequest {
     /// Grant a new lease with specified TTL.
-    LeaseGrant { ttl_seconds: u32, lease_id: Option<u64> },
+    Grant { ttl_seconds: u32, lease_id: Option<u64> },
     /// Revoke a lease and delete all attached keys.
-    LeaseRevoke { lease_id: u64 },
+    Revoke { lease_id: u64 },
     /// Refresh a lease's TTL (keepalive).
-    LeaseKeepalive { lease_id: u64 },
+    Keepalive { lease_id: u64 },
     /// Get lease information including TTL and attached keys.
-    LeaseTimeToLive { lease_id: u64, should_include_keys: bool },
+    TimeToLive { lease_id: u64, should_include_keys: bool },
     /// List all active leases.
-    LeaseList,
+    List,
 }
 
 #[cfg(feature = "auth")]
@@ -31,13 +31,11 @@ impl LeaseRequest {
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
         use aspen_auth::Operation;
         match self {
-            Self::LeaseGrant { .. } | Self::LeaseRevoke { .. } | Self::LeaseKeepalive { .. } => {
-                Some(Operation::Write {
-                    key: "_lease:".to_string(),
-                    value: vec![],
-                })
-            }
-            Self::LeaseTimeToLive { .. } | Self::LeaseList => Some(Operation::Read {
+            Self::Grant { .. } | Self::Revoke { .. } | Self::Keepalive { .. } => Some(Operation::Write {
+                key: "_lease:".to_string(),
+                value: vec![],
+            }),
+            Self::TimeToLive { .. } | Self::List => Some(Operation::Read {
                 key: "_lease:".to_string(),
             }),
         }

@@ -718,12 +718,22 @@ mod tests {
 
     #[test]
     fn test_constants_are_bounded() {
-        assert!(MAX_CLIENT_MESSAGE_SIZE > 0);
-        assert!(MAX_CLIENT_MESSAGE_SIZE <= 16 * 1024 * 1024);
-        assert!(MAX_CLUSTER_NODES > 0);
-        assert!(MAX_CLUSTER_NODES <= 256);
-        assert!(MAX_CLIENT_CONNECTIONS > 0);
-        assert!(DEFAULT_GIT_CHUNK_SIZE_BYTES <= MAX_GIT_CHUNK_SIZE_BYTES);
+        const MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES: usize = 16_usize * 1024 * 1024;
+        const MAX_REASONABLE_CLUSTER_NODES: usize = 256;
+
+        let client_message_size_is_positive = MAX_CLIENT_MESSAGE_SIZE > 0;
+        let client_message_size_is_bounded = MAX_CLIENT_MESSAGE_SIZE <= MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES;
+        let cluster_nodes_is_positive = MAX_CLUSTER_NODES > 0;
+        let cluster_nodes_is_bounded = MAX_CLUSTER_NODES <= MAX_REASONABLE_CLUSTER_NODES;
+        let client_connections_is_positive = MAX_CLIENT_CONNECTIONS > 0;
+        let git_chunk_defaults_are_ordered = DEFAULT_GIT_CHUNK_SIZE_BYTES <= MAX_GIT_CHUNK_SIZE_BYTES;
+
+        assert!(client_message_size_is_positive);
+        assert!(client_message_size_is_bounded);
+        assert!(cluster_nodes_is_positive);
+        assert!(cluster_nodes_is_bounded);
+        assert!(client_connections_is_positive);
+        assert!(git_chunk_defaults_are_ordered);
     }
 
     #[test]

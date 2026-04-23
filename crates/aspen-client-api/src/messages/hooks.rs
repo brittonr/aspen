@@ -14,11 +14,11 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HooksRequest {
     /// List configured hook handlers.
-    HookList,
+    List,
     /// Get hook execution metrics.
-    HookGetMetrics { handler_name: Option<String> },
+    GetMetrics { handler_name: Option<String> },
     /// Manually trigger a hook event for testing.
-    HookTrigger { event_type: String, payload_json: String },
+    Trigger { event_type: String, payload_json: String },
 }
 
 #[cfg(feature = "auth")]
@@ -27,10 +27,10 @@ impl HooksRequest {
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
         use aspen_auth::Operation;
         match self {
-            Self::HookList | Self::HookGetMetrics { .. } => Some(Operation::Read {
+            Self::List | Self::GetMetrics { .. } => Some(Operation::Read {
                 key: "_hooks:".to_string(),
             }),
-            Self::HookTrigger { .. } => Some(Operation::Write {
+            Self::Trigger { .. } => Some(Operation::Write {
                 key: "_hooks:".to_string(),
                 value: vec![],
             }),

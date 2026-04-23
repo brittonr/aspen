@@ -15,7 +15,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AutomergeRequest {
     /// Create a new Automerge document.
-    AutomergeCreate {
+    Create {
         document_id: Option<String>,
         namespace: Option<String>,
         title: Option<String>,
@@ -23,40 +23,40 @@ pub enum AutomergeRequest {
         tags: Vec<String>,
     },
     /// Get an Automerge document.
-    AutomergeGet { document_id: String },
+    Get { document_id: String },
     /// Save/update an Automerge document.
-    AutomergeSave {
+    Save {
         document_id: String,
         document_bytes: String,
     },
     /// Delete an Automerge document.
-    AutomergeDelete { document_id: String },
+    Delete { document_id: String },
     /// Apply incremental changes to an Automerge document.
-    AutomergeApplyChanges { document_id: String, changes: Vec<String> },
+    ApplyChanges { document_id: String, changes: Vec<String> },
     /// Merge two Automerge documents.
-    AutomergeMerge {
+    Merge {
         target_document_id: String,
         source_document_id: String,
     },
     /// List Automerge documents.
-    AutomergeList {
+    List {
         namespace: Option<String>,
         tag: Option<String>,
         limit: Option<u32>,
         continuation_token: Option<String>,
     },
     /// Get Automerge document metadata (without content).
-    AutomergeGetMetadata { document_id: String },
+    GetMetadata { document_id: String },
     /// Check if an Automerge document exists.
-    AutomergeExists { document_id: String },
+    Exists { document_id: String },
     /// Generate a sync message for peer synchronization.
-    AutomergeGenerateSyncMessage {
+    GenerateSyncMessage {
         document_id: String,
         peer_id: String,
         sync_state: Option<String>,
     },
     /// Receive a sync message from a peer.
-    AutomergeReceiveSyncMessage {
+    ReceiveSyncMessage {
         document_id: String,
         peer_id: String,
         message: String,
@@ -70,20 +70,20 @@ impl AutomergeRequest {
     pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
         use aspen_auth::Operation;
         match self {
-            Self::AutomergeCreate { .. }
-            | Self::AutomergeSave { .. }
-            | Self::AutomergeDelete { .. }
-            | Self::AutomergeApplyChanges { .. }
-            | Self::AutomergeMerge { .. }
-            | Self::AutomergeReceiveSyncMessage { .. } => Some(Operation::Write {
+            Self::Create { .. }
+            | Self::Save { .. }
+            | Self::Delete { .. }
+            | Self::ApplyChanges { .. }
+            | Self::Merge { .. }
+            | Self::ReceiveSyncMessage { .. } => Some(Operation::Write {
                 key: "_automerge:".to_string(),
                 value: vec![],
             }),
-            Self::AutomergeGet { .. }
-            | Self::AutomergeList { .. }
-            | Self::AutomergeGetMetadata { .. }
-            | Self::AutomergeExists { .. }
-            | Self::AutomergeGenerateSyncMessage { .. } => Some(Operation::Read {
+            Self::Get { .. }
+            | Self::List { .. }
+            | Self::GetMetadata { .. }
+            | Self::Exists { .. }
+            | Self::GenerateSyncMessage { .. } => Some(Operation::Read {
                 key: "_automerge:".to_string(),
             }),
         }
