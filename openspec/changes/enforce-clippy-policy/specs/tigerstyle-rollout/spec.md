@@ -3,7 +3,7 @@
 ### Requirement: Clippy policy rollout scope is explicit
 ID: tigerstyle-rollout.clippy-policy-rollout-scope-is-explicit
 
-Aspen SHALL roll out enforced Clippy deny policy through an explicit, reviewable crate inventory rather than an implicit workspace-wide assumption.
+The system SHALL roll out enforced Clippy deny policy through an explicit, reviewable crate inventory rather than an implicit workspace-wide assumption.
 
 #### Scenario: Initial enforcement pass names participating crates
 ID: tigerstyle-rollout.clippy-policy-rollout-scope-is-explicit.initial-enforcement-pass-names-participating-crates

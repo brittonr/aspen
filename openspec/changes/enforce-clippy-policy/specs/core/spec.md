@@ -3,7 +3,7 @@
 ### Requirement: Crate roots enforce Clippy as policy
 ID: core.crate-roots-enforce-clippy-as-policy
 
-Aspen crate roots in the documented rollout scope MUST enforce the repository Clippy baseline through crate-level attributes instead of warning-only defaults.
+The system MUST ensure Aspen crate roots in the documented rollout scope enforce the repository Clippy baseline through crate-level attributes instead of warning-only defaults.
 
 The required baseline for each participating crate root is:
 
@@ -34,7 +34,7 @@ ID: core.crate-roots-enforce-clippy-as-policy.module-name-repetition-stays-expli
 ### Requirement: Repository Clippy thresholds travel with the checkout
 ID: core.repository-clippy-thresholds-travel-with-the-checkout
 
-Aspen MUST version its project-wide Clippy threshold policy in a repository-root `clippy.toml` so local and CI Clippy runs share the same executable standards.
+The system MUST version its project-wide Clippy threshold policy in a repository-root `clippy.toml` so local and CI Clippy runs share the same executable standards.
 
 #### Scenario: Clone-local thresholds match repository policy
 ID: core.repository-clippy-thresholds-travel-with-the-checkout.clone-local-thresholds-match-repository-policy
@@ -48,7 +48,7 @@ ID: core.repository-clippy-thresholds-travel-with-the-checkout.clone-local-thres
 ### Requirement: Rollout-scope warnings and threshold overruns fail
 ID: core.rollout-scope-warnings-and-threshold-overruns-fail
 
-Aspen MUST treat rollout-scope warnings and configured Clippy threshold overruns as enforcement failures rather than advisory output.
+The system MUST treat rollout-scope warnings and configured Clippy threshold overruns as enforcement failures rather than advisory output.
 
 #### Scenario: Canonical lint path fails on warning-level feedback
 ID: core.rollout-scope-warnings-and-threshold-overruns-fail.canonical-lint-path-fails-on-warning-level-feedback
@@ -61,7 +61,7 @@ ID: core.rollout-scope-warnings-and-threshold-overruns-fail.canonical-lint-path-
 ### Requirement: Rustdoc warnings are enforced as policy
 ID: core.rustdoc-warnings-are-enforced-as-policy
 
-Aspen MUST enforce rustdoc warnings as errors for the same documented rollout scope that adopts the crate-root Clippy deny baseline.
+The system MUST enforce rustdoc warnings as errors for the same documented rollout scope that adopts the crate-root Clippy deny baseline.
 
 #### Scenario: Rollout-scope docs warnings fail the build
 ID: core.rustdoc-warnings-are-enforced-as-policy.rollout-scope-docs-warnings-fail-the-build
@@ -74,7 +74,7 @@ ID: core.rustdoc-warnings-are-enforced-as-policy.rollout-scope-docs-warnings-fai
 ### Requirement: Local and CI lint semantics stay identical
 ID: core.local-and-ci-lint-semantics-stay-identical
 
-Aspen MUST keep the rollout-scope local lint command semantics and CI lint command semantics identical so contributors are taught the same standards locally that automation enforces remotely.
+The system MUST keep the rollout-scope local lint command semantics and CI lint command semantics identical so contributors are taught the same standards locally that automation enforces remotely.
 
 #### Scenario: Canonical lint command matches CI behavior
 ID: core.local-and-ci-lint-semantics-stay-identical.canonical-lint-command-matches-ci-behavior
@@ -87,7 +87,7 @@ ID: core.local-and-ci-lint-semantics-stay-identical.canonical-lint-command-match
 ### Requirement: Canonical lint entrypoint is checked in and shared
 ID: core.canonical-lint-entrypoint-is-checked-in-and-shared
 
-Aspen MUST provide one canonical checked-in lint entrypoint for the rollout scope so contributors and CI share the same obvious enforcement path.
+The system MUST provide one canonical checked-in lint entrypoint for the rollout scope so contributors and CI share the same obvious enforcement path.
 
 #### Scenario: Contributor and CI use the same lint entrypoint semantics
 ID: core.canonical-lint-entrypoint-is-checked-in-and-shared.contributor-and-ci-use-the-same-lint-entrypoint-semantics
@@ -101,7 +101,7 @@ ID: core.canonical-lint-entrypoint-is-checked-in-and-shared.contributor-and-ci-u
 ### Requirement: Canonical lint entrypoint has no ambient setup assumptions
 ID: core.canonical-lint-entrypoint-has-no-ambient-setup-assumptions
 
-Aspen MUST keep the canonical rollout-scope lint entrypoint free of hidden per-user setup assumptions.
+The system MUST keep the canonical rollout-scope lint entrypoint free of hidden per-user setup assumptions.
 
 #### Scenario: New contributor can run the canonical path from the checkout
 ID: core.canonical-lint-entrypoint-has-no-ambient-setup-assumptions.new-contributor-can-run-the-canonical-path-from-the-checkout
@@ -114,7 +114,7 @@ ID: core.canonical-lint-entrypoint-has-no-ambient-setup-assumptions.new-contribu
 ### Requirement: Additional lint exceptions stay narrow and justified
 ID: core.additional-lint-exceptions-stay-narrow-and-justified
 
-Aspen MUST treat new lint suppressions in the rollout scope as explicit exceptions rather than broad policy escapes.
+The system MUST treat new lint suppressions in the rollout scope as explicit exceptions rather than broad policy escapes.
 
 #### Scenario: Non-standard lint allow is justified inline
 ID: core.additional-lint-exceptions-stay-narrow-and-justified.non-standard-lint-allow-is-justified-inline
@@ -128,7 +128,7 @@ ID: core.additional-lint-exceptions-stay-narrow-and-justified.non-standard-lint-
 ### Requirement: Item-scoped lint allows are the default
 ID: core.item-scoped-lint-allows-are-the-default
 
-Aspen MUST prefer item-scoped lint suppressions over broader scopes in the rollout policy.
+The system MUST prefer item-scoped lint suppressions over broader scopes in the rollout policy.
 
 #### Scenario: Broader suppression requires extra justification
 ID: core.item-scoped-lint-allows-are-the-default.broader-suppression-requires-extra-justification
@@ -141,7 +141,7 @@ ID: core.item-scoped-lint-allows-are-the-default.broader-suppression-requires-ex
 ### Requirement: Rollout-scope crate policy text stays uniform
 ID: core.rollout-scope-crate-policy-text-stays-uniform
 
-Aspen MUST keep the rollout-scope crate-root deny policy text uniform unless a documented exception explicitly permits deviation.
+The system MUST keep the rollout-scope crate-root deny policy text uniform unless a documented exception explicitly permits deviation.
 
 #### Scenario: Participating crates share the same deny block
 ID: core.rollout-scope-crate-policy-text-stays-uniform.participating-crates-share-the-same-deny-block
@@ -154,7 +154,7 @@ ID: core.rollout-scope-crate-policy-text-stays-uniform.participating-crates-shar
 ### Requirement: Rollout-scope unsafe sites are inventoried and documented
 ID: core.rollout-scope-unsafe-sites-are-inventoried-and-documented
 
-Aspen MUST save reviewable evidence for `unsafe` usage in rollout-scope crates.
+The system MUST save reviewable evidence for `unsafe` usage in rollout-scope crates.
 
 #### Scenario: Unsafe sites remain explicit under enforced policy
 ID: core.rollout-scope-unsafe-sites-are-inventoried-and-documented.unsafe-sites-remain-explicit-under-enforced-policy
@@ -167,7 +167,7 @@ ID: core.rollout-scope-unsafe-sites-are-inventoried-and-documented.unsafe-sites-
 ### Requirement: Negative proof shows enforcement bites
 ID: core.negative-proof-shows-enforcement-bites
 
-Aspen MUST verify not only that the cleaned rollout scope passes, but also that the canonical enforcement path fails on a representative violation.
+The system MUST verify not only that the cleaned rollout scope passes, but also that the canonical enforcement path fails on a representative violation.
 
 #### Scenario: Representative violation fails under canonical entrypoint
 ID: core.negative-proof-shows-enforcement-bites.representative-violation-fails-under-canonical-entrypoint
