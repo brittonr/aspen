@@ -31,6 +31,8 @@ use crate::topology::DEFAULT_MERGE_SIZE_BYTES;
 use crate::topology::DEFAULT_SPLIT_QPS;
 use crate::topology::DEFAULT_SPLIT_SIZE_BYTES;
 
+const MILLIS_PER_SECOND: u64 = 1000;
+
 /// Duration of the metrics measurement window.
 pub const METRICS_WINDOW_DURATION: Duration = Duration::from_secs(60);
 
@@ -74,10 +76,10 @@ impl ShardMetricsAtomic {
 
     /// Record a write operation.
     #[inline]
-    pub fn record_write(&self, key_len: usize, value_len: usize, is_new_key: bool) {
+    pub fn record_write(&self, key_len_bytes: u32, value_len_bytes: u32, is_new_key: bool) {
         self.write_count.fetch_add(1, Ordering::Relaxed);
-        let entry_size = (key_len + value_len) as u64;
-        self.size_bytes.fetch_add(entry_size, Ordering::Relaxed);
+        let entry_size_bytes = u64::from(key_len_bytes).saturating_add(u64::from(value_len_bytes));
+        self.size_bytes.fetch_add(entry_size_bytes, Ordering::Relaxed);
         if is_new_key {
             self.key_count.fetch_add(1, Ordering::Relaxed);
         }
@@ -85,12 +87,12 @@ impl ShardMetricsAtomic {
 
     /// Record a delete operation.
     #[inline]
-    pub fn record_delete(&self, key_len: usize, value_len: usize) {
+    pub fn record_delete(&self, key_len_bytes: u32, value_len_bytes: u32) {
         self.write_count.fetch_add(1, Ordering::Relaxed);
-        let entry_size = (key_len + value_len) as u64;
+        let entry_size_bytes = u64::from(key_len_bytes).saturating_add(u64::from(value_len_bytes));
         // Use fetch_sub with saturating behavior
         let old = self.size_bytes.load(Ordering::Relaxed);
-        let new = old.saturating_sub(entry_size);
+        let new = old.saturating_sub(entry_size_bytes);
         self.size_bytes.store(new, Ordering::Relaxed);
 
         let old_count = self.key_count.load(Ordering::Relaxed);
@@ -119,13 +121,24 @@ impl ShardMetricsAtomic {
 
     /// Calculate queries per second based on current window.
     pub fn qps(&self, current_time_ms: u64) -> u32 {
-        let window_start = self.window_start_ms.load(Ordering::Relaxed);
-        let elapsed_secs = current_time_ms.saturating_sub(window_start) / 1000;
+        let window_start_ms = self.window_start_ms.load(Ordering::Relaxed);
+        let Some(elapsed_secs) = current_time_ms
+            .saturating_sub(window_start_ms)
+            .checked_div(MILLIS_PER_SECOND)
+        else {
+            return 0;
+        };
         if elapsed_secs == 0 {
             return 0;
         }
-        let total = self.read_count() + self.write_count();
-        (total / elapsed_secs) as u32
+        let total_ops = self.read_count().saturating_add(self.write_count());
+        let Some(qps_u64) = total_ops.checked_div(elapsed_secs) else {
+            return 0;
+        };
+        match u32::try_from(qps_u64) {
+            Ok(qps) => qps,
+            Err(_) => u32::MAX,
+        }
     }
 
     /// Reset the measurement window.
@@ -249,8 +262,12 @@ impl ShardMetricsCollector {
     }
 
     /// Get current time in milliseconds since collector creation.
+    #[allow(ambient_clock, reason = "Shard metrics own the local monotonic timing boundary for window accounting")]
     fn current_time_ms(&self) -> u64 {
-        self.created_at.elapsed().as_millis() as u64
+        match u64::try_from(self.created_at.elapsed().as_millis()) {
+            Ok(elapsed_ms) => elapsed_ms,
+            Err(_) => u64::MAX,
+        }
     }
 }
 
