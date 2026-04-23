@@ -34,10 +34,19 @@ impl Histogram {
     /// Each bucket group uses 3 bits: 1 MSB + 2 offset bits.
     const WIDTH: usize = 3;
 
+    /// Number of offset bits after the group MSB.
+    const OFFSET_BIT_COUNT: usize = 2;
+
+    /// Number of exact buckets in group 0.
+    const GROUP_ZERO_BUCKET_COUNT: usize = 4;
+
+    /// Bitmask for extracting the offset within a bucket group.
+    const OFFSET_MASK: u64 = 0b11;
+
     /// The MSB bit pattern for bucket groups.
     ///
-    /// Sets the most significant bit to 1: 1 << (WIDTH - 1) = 0b100
-    const GROUP_MSB_BIT: usize = 1 << (Self::WIDTH - 1);
+    /// Sets the most significant bit to 1: 1 << OFFSET_BIT_COUNT = 0b100
+    const GROUP_MSB_BIT: usize = 1 << Self::OFFSET_BIT_COUNT;
 
     /// Number of buckets per group.
     ///
@@ -46,16 +55,12 @@ impl Histogram {
     const GROUP_SIZE: usize = Self::GROUP_MSB_BIT;
 
     /// Mask for extracting the offset within a bucket group.
-    ///
-    /// Extracts the (WIDTH-1) bits after the MSB: GROUP_MSB_BIT - 1 = 0b11
-    const MASK: u64 = (Self::GROUP_MSB_BIT - 1) as u64;
+    const MASK: u64 = Self::OFFSET_MASK;
 
     /// The exact number of buckets needed to cover all u64 values with logarithmic precision.
     ///
-    /// Calculated as: GROUP_SIZE * (66 - WIDTH)
-    /// For WIDTH=3: 4 * (66 - 3) = 4 * 63 = 252
-    /// This equals bucket_index(u64::MAX) + 1
-    const BUCKETS_FOR_U64: usize = Self::GROUP_SIZE * (66 - Self::WIDTH);
+    /// For WIDTH=3 this is 252 buckets, which equals `bucket_index(u64::MAX) + 1`.
+    const BUCKETS_FOR_U64: usize = 252;
 
     /// Creates a new histogram with 252 buckets, covering all u64 values.
     ///
@@ -64,15 +69,7 @@ impl Histogram {
         let mut bucket_min_values = vec![0u64; Self::BUCKETS_FOR_U64];
         #[allow(clippy::needless_range_loop)]
         for i in 0..Self::BUCKETS_FOR_U64 {
-            if i < 4 {
-                // Group 0: [0, 1, 2, 3]
-                bucket_min_values[i] = i as u64;
-            } else {
-                let group_index = (i - 4) / Self::GROUP_SIZE;
-                let offset_in_group = (i - 4) % Self::GROUP_SIZE;
-                // Minimum value: (offset_in_group | GROUP_MSB_BIT) << group_index
-                bucket_min_values[i] = ((offset_in_group | Self::GROUP_MSB_BIT) << group_index) as u64;
-            }
+            bucket_min_values[i] = Self::bucket_min_value_for_index(i);
         }
 
         Self {
@@ -98,16 +95,34 @@ impl Histogram {
     ///    - Extract offset within that group using the 2 bits after MSB
     ///    - Bucket index = base of this group + offset within group
     fn calculate_bucket(value: u64) -> usize {
-        if value < Self::GROUP_SIZE as u64 {
-            return value as usize;
+        if value < saturating_u64_from_usize(Self::GROUP_SIZE) {
+            return saturating_usize_from_u64(value);
         }
 
-        let bits_upto_msb = (u64::BITS - value.leading_zeros()) as usize;
-        let group_index = bits_upto_msb - Self::WIDTH;
-        let offset_in_group = ((value >> group_index) & Self::MASK) as usize;
+        let bits_upto_msb = saturating_usize_from_u32(u64::BITS.saturating_sub(value.leading_zeros()));
+        let group_index = bits_upto_msb.saturating_sub(Self::WIDTH);
+        let bucket_slot_index = saturating_usize_from_u64((value >> group_index) & Self::MASK);
 
-        let buckets_before_this_group = Self::GROUP_SIZE + group_index * Self::GROUP_SIZE;
-        buckets_before_this_group + offset_in_group
+        let buckets_before_this_group = Self::GROUP_SIZE.saturating_add(group_index.saturating_mul(Self::GROUP_SIZE));
+        buckets_before_this_group.saturating_add(bucket_slot_index)
+    }
+
+    fn bucket_min_value_for_index(bucket_index: usize) -> u64 {
+        if bucket_index < Self::GROUP_ZERO_BUCKET_COUNT {
+            return saturating_u64_from_usize(bucket_index);
+        }
+
+        let relative_bucket_index = bucket_index.saturating_sub(Self::GROUP_ZERO_BUCKET_COUNT);
+        let group_index = split_relative_bucket_group_index(relative_bucket_index);
+        let consumed_bucket_count = group_index.saturating_mul(Self::GROUP_SIZE);
+        let bucket_slot_index = relative_bucket_index.saturating_sub(consumed_bucket_count);
+        let bucket_pattern = bucket_slot_index | Self::GROUP_MSB_BIT;
+        let shift_bits = saturating_u32_from_usize(group_index);
+        let shifted_bucket_pattern = match bucket_pattern.checked_shl(shift_bits) {
+            Some(shifted_bucket_pattern) => shifted_bucket_pattern,
+            None => usize::MAX,
+        };
+        saturating_u64_from_usize(shifted_bucket_pattern)
     }
 
     /// Returns the total number of values recorded.
@@ -166,6 +181,43 @@ impl Histogram {
     #[cfg(test)]
     pub(crate) fn num_buckets(&self) -> usize {
         self.buckets.len()
+    }
+}
+
+fn split_relative_bucket_group_index(relative_bucket_index: usize) -> usize {
+    let group_size = Histogram::GROUP_SIZE;
+    if group_size == 0 {
+        return 0;
+    }
+
+    relative_bucket_index / group_size
+}
+
+fn saturating_u32_from_usize(value: usize) -> u32 {
+    match u32::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => u32::MAX,
+    }
+}
+
+fn saturating_u64_from_usize(value: usize) -> u64 {
+    match u64::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => u64::MAX,
+    }
+}
+
+fn saturating_usize_from_u32(value: u32) -> usize {
+    match usize::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn saturating_usize_from_u64(value: u64) -> usize {
+    match usize::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => usize::MAX,
     }
 }
 
