@@ -60,42 +60,38 @@ where C: RaftTypeConfig
         let first = range.start().clone();
         let last = range.end().clone();
 
-        let mut res: Vec<LogIdOf<C>> = vec![];
+        let max_log_id_count = inclusive_log_id_count(first.index(), last.index());
+        let mut res = Vec::with_capacity(max_log_id_count);
 
         // Recursion stack
-        let mut stack = vec![(first, last.clone())];
+        let mut stack = Vec::with_capacity(max_log_id_count);
+        stack.push((first, last.clone()));
 
-        loop {
-            let (first, last) = match stack.pop() {
-                None => {
-                    break;
-                }
-                Some(x) => x,
-            };
+        while let Some((first, last)) = stack.pop() {
 
             // Case AA
             if first.committed_leader_id() == last.committed_leader_id() {
-                if res.last().map(|x| x.committed_leader_id()) < Some(first.committed_leader_id()) {
+                if last_result_leader_id(&res) < Some(first.committed_leader_id().clone()) {
                     res.push(first);
                 }
                 continue;
             }
 
             // Two adjacent logs with different leader_id, no need to binary search
-            if first.index() + 1 == last.index() {
-                if res.last().committed_leader_id() < Some(first.committed_leader_id()) {
+            if are_adjacent_log_indices(first.index(), last.index()) {
+                if last_result_leader_id(&res) < Some(first.committed_leader_id().clone()) {
                     res.push(first);
                 }
                 res.push(last);
                 continue;
             }
 
-            let mid_index = (first.index() + last.index()) / 2;
+            let mid_index = midpoint_log_index(first.index(), last.index());
             let mid = sto.get_log_id(mid_index).await?;
 
             if first.committed_leader_id() == mid.committed_leader_id() {
                 // Case AAC
-                if res.last().committed_leader_id() < Some(first.committed_leader_id()) {
+                if last_result_leader_id(&res) < Some(first.committed_leader_id().clone()) {
                     res.push(first);
                 }
                 stack.push((mid, last));
@@ -111,7 +107,7 @@ where C: RaftTypeConfig
             }
         }
 
-        if res.last() != Some(&last) {
+        if res.last().cloned() != Some(last.clone()) {
             res.push(last);
         }
 
@@ -170,7 +166,7 @@ where C: RaftTypeConfig
             }
 
             #[allow(clippy::collapsible_if)]
-            if i == len - 1 {
+            if i == last_item_index(len) {
                 if self.last_ref() != Some(log_id.to_ref()) {
                     self.append(log_id.to_log_id());
                 }
@@ -187,33 +183,35 @@ where C: RaftTypeConfig
     /// NOTE: The last two in `key_log_ids` may be with the same `leader_id`, because `last_log_id`
     /// is always present in `log_ids`.
     pub(crate) fn append(&mut self, new_log_id: LogIdOf<C>) {
-        let l = self.key_log_ids.len();
-        if l == 0 {
+        let log_id_count = self.key_log_ids.len();
+        if log_id_count == 0 {
             self.key_log_ids.push(new_log_id);
             return;
         }
 
         // l >= 1
 
+        let last_slot_index = last_item_index(log_id_count);
         debug_assert!(
-            new_log_id > self.key_log_ids[l - 1],
+            new_log_id > self.key_log_ids[last_slot_index],
             "new_log_id: {}, last: {}",
             new_log_id,
-            self.key_log_ids[l - 1]
+            self.key_log_ids[last_slot_index]
         );
 
-        if l == 1 {
+        if log_id_count == 1 {
             self.key_log_ids.push(new_log_id);
             return;
         }
 
         // l >= 2
 
-        let last = &self.key_log_ids[l - 1];
+        let last = &self.key_log_ids[last_slot_index];
+        let previous_slot_index = last_slot_index.saturating_sub(1);
 
-        if self.key_log_ids.get(l - 2).map(|x| x.committed_leader_id()) == Some(last.committed_leader_id()) {
+        if self.key_log_ids.get(previous_slot_index).map(|x| x.committed_leader_id()) == Some(last.committed_leader_id()) {
             // Replace the **last log id**.
-            self.key_log_ids[l - 1] = new_log_id;
+            self.key_log_ids[last_slot_index] = new_log_id;
             return;
         }
 
@@ -245,8 +243,9 @@ where C: RaftTypeConfig
         let last = self.key_log_ids.last();
         if let Some(last) = last {
             let (last_leader_id, last_index) = (last.committed_leader_id().clone(), last.index());
-            if last_index < at - 1 {
-                self.append(LogIdOf::<C>::new(last_leader_id, at - 1));
+            let previous_index = at.saturating_sub(1);
+            if last_index < previous_index {
+                self.append(LogIdOf::<C>::new(last_leader_id, previous_index));
             }
         }
     }
@@ -275,7 +274,8 @@ where C: RaftTypeConfig
                 }
             }
             Err(i) => {
-                self.key_log_ids = self.key_log_ids.split_off(i - 1);
+                let retained_slot_index = i.saturating_sub(1);
+                self.key_log_ids = self.key_log_ids.split_off(retained_slot_index);
                 self.key_log_ids[0].index = upto.index();
             }
         }
@@ -305,7 +305,7 @@ where C: RaftTypeConfig
                 if i == 0 || i == self.key_log_ids.len() {
                     return None;
                 } else {
-                    i - 1
+                    i.saturating_sub(1)
                 }
             }
         };
@@ -342,18 +342,51 @@ where C: RaftTypeConfig
     #[allow(dead_code)]
     pub(crate) fn by_last_leader(&self) -> LeaderLogIds<C> {
         let ks = &self.key_log_ids;
-        let l = ks.len();
-        if l < 2 {
+        if ks.len() < 2 {
             let last = self.last();
             return LeaderLogIds::new(last.map(|x| x.clone()..=x.clone()));
         }
 
         // There are at most two(adjacent) key log ids with the same leader_id
-        if ks[l - 1].committed_leader_id() == ks[l - 2].committed_leader_id() {
-            LeaderLogIds::new_start_end(ks[l - 2].clone(), ks[l - 1].clone())
+        let last_slot_index = last_item_index(ks.len());
+        let previous_slot_index = last_slot_index.saturating_sub(1);
+        if ks[last_slot_index].committed_leader_id() == ks[previous_slot_index].committed_leader_id() {
+            LeaderLogIds::new_start_end(ks[previous_slot_index].clone(), ks[last_slot_index].clone())
         } else {
-            let last = self.last().cloned().unwrap();
-            LeaderLogIds::new_single(last)
+            match self.last().cloned() {
+                Some(last) => LeaderLogIds::new_single(last),
+                None => LeaderLogIds::new(None),
+            }
         }
     }
+}
+
+#[allow(clippy::clone_on_copy)]
+fn last_result_leader_id<C>(log_ids: &[LogIdOf<C>]) -> Option<CommittedLeaderIdOf<C>>
+where
+    C: RaftTypeConfig,
+{
+    log_ids.last().map(|log_id| log_id.committed_leader_id().clone())
+}
+
+fn are_adjacent_log_indices(first_index: u64, last_index: u64) -> bool {
+    first_index.saturating_add(1) == last_index
+}
+
+fn midpoint_log_index(first_index: u64, last_index: u64) -> u64 {
+    let distance = last_index.saturating_sub(first_index);
+    first_index.saturating_add(distance / 2)
+}
+
+fn inclusive_log_id_count(first_index: u64, last_index: u64) -> usize {
+    let distance = last_index.saturating_sub(first_index);
+    let log_count_u64 = distance.saturating_add(1);
+    match usize::try_from(log_count_u64) {
+        Ok(log_count) => log_count,
+        Err(_) => usize::MAX,
+    }
+}
+
+fn last_item_index(item_count: usize) -> usize {
+    item_count.saturating_sub(1)
 }
