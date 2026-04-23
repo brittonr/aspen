@@ -104,10 +104,10 @@ const MINUTES_PER_HOUR: u64 = 60;
 const HOURS_PER_DAY: u64 = 24;
 
 /// Number of seconds in one hour.
-const SECONDS_PER_HOUR: u64 = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;
+const SECONDS_PER_HOUR: u64 = 3_600;
 
 /// Number of seconds in one day.
-const SECONDS_PER_DAY: u64 = SECONDS_PER_HOUR * HOURS_PER_DAY;
+const SECONDS_PER_DAY: u64 = 86_400;
 
 /// Current ticket protocol version.
 const TICKET_VERSION: u8 = 1;
@@ -398,7 +398,16 @@ impl Ticket for AspenHookTicket {
     const KIND: &'static str = HOOK_TICKET_PREFIX;
 
     fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("AspenHookTicket serialization is infallible for bounded fields")
+        match postcard::to_allocvec(self) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                debug_assert!(
+                    false,
+                    "AspenHookTicket serialization should remain infallible for bounded fields: {error}"
+                );
+                Vec::new()
+            }
+        }
     }
 
     fn from_bytes(bytes: &[u8]) -> core::result::Result<Self, iroh_tickets::ParseError> {
@@ -416,6 +425,8 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
             max_bytes: saturating_usize_to_u32(MAX_CLUSTER_ID_SIZE),
         });
     }
+    debug_assert!(!ticket.cluster_id.is_empty(), "validated ticket must have a cluster id");
+    debug_assert!(ticket.cluster_id.len() <= MAX_CLUSTER_ID_SIZE, "validated cluster id must fit bounds");
 
     if ticket.bootstrap_peers.is_empty() {
         return Err(HookTicketError::NoBootstrapPeers);
@@ -426,6 +437,8 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
             max_peers: saturating_usize_to_u32(MAX_BOOTSTRAP_PEERS),
         });
     }
+    debug_assert!(!ticket.bootstrap_peers.is_empty(), "validated ticket must have bootstrap peers");
+    debug_assert!(ticket.bootstrap_peers.len() <= MAX_BOOTSTRAP_PEERS, "validated bootstrap peer count must fit bounds");
 
     if ticket.event_type.is_empty() {
         return Err(HookTicketError::EmptyEventType);
@@ -436,6 +449,8 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
             max_bytes: saturating_usize_to_u32(MAX_EVENT_TYPE_SIZE),
         });
     }
+    debug_assert!(!ticket.event_type.is_empty(), "validated ticket must have an event type");
+    debug_assert!(ticket.event_type.len() <= MAX_EVENT_TYPE_SIZE, "validated event type must fit bounds");
 
     if let Some(payload) = &ticket.default_payload {
         if payload.len() > MAX_PAYLOAD_SIZE {
@@ -447,15 +462,17 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
         serde_json::from_str::<serde_json::Value>(payload).map_err(|error| HookTicketError::InvalidDefaultPayloadJson {
             reason: error.to_string(),
         })?;
+        debug_assert!(payload.len() <= MAX_PAYLOAD_SIZE, "validated payload must fit bounds");
     }
 
-    if let Some(relay_url) = &ticket.relay_url
-        && relay_url.len() > MAX_RELAY_URL_SIZE
-    {
-        return Err(HookTicketError::RelayUrlTooLong {
-            actual_bytes: saturating_usize_to_u32(relay_url.len()),
-            max_bytes: saturating_usize_to_u32(MAX_RELAY_URL_SIZE),
-        });
+    if let Some(relay_url) = &ticket.relay_url {
+        if relay_url.len() > MAX_RELAY_URL_SIZE {
+            return Err(HookTicketError::RelayUrlTooLong {
+                actual_bytes: saturating_usize_to_u32(relay_url.len()),
+                max_bytes: saturating_usize_to_u32(MAX_RELAY_URL_SIZE),
+            });
+        }
+        debug_assert!(relay_url.len() <= MAX_RELAY_URL_SIZE, "validated relay url must fit bounds");
     }
 
     if ticket.version > TICKET_VERSION {
@@ -464,12 +481,16 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
             max_supported: TICKET_VERSION,
         });
     }
+    debug_assert!(ticket.version <= TICKET_VERSION, "validated ticket version must be supported");
 
     Ok(())
 }
 
 fn saturating_usize_to_u32(value: usize) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
+    match u32::try_from(value) {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
+    }
 }
 
 #[cfg(feature = "std")]
