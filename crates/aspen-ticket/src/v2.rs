@@ -1,5 +1,6 @@
 //! Aspen cluster tickets with alloc-safe bootstrap metadata.
 
+use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
@@ -117,6 +118,14 @@ impl ClusterTopicId {
     /// Create a new topic identifier from raw bytes.
     pub const fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
+    }
+
+    /// Create a topic identifier from an arbitrary byte slice.
+    pub fn try_from_slice(bytes: &[u8]) -> ClusterTicketResult<Self> {
+        let fixed_bytes: [u8; 32] = bytes.try_into().map_err(|_| ClusterTicketError::InvalidTopicId {
+            reason: format!("expected 32 bytes, got {}", bytes.len()),
+        })?;
+        Ok(Self::from_bytes(fixed_bytes))
     }
 
     /// Borrow the raw bytes.
