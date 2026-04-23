@@ -17,6 +17,14 @@ use super::types::ServiceInstance;
 use super::types::ServiceInstanceMetadata;
 use crate::types::now_unix_ms;
 
+pub struct RegisterInstanceInput {
+    pub service_name: String,
+    pub instance_id: String,
+    pub address: String,
+    pub metadata: ServiceInstanceMetadata,
+    pub options: RegisterOptions,
+}
+
 struct RegisterBuildInstanceInput<'a> {
     service_name: &'a str,
     instance_id: &'a str,
@@ -34,14 +42,14 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     ///
     /// Returns (fencing_token, deadline_ms) on success.
     /// If instance already exists, updates it and returns new token.
-    pub async fn register(
-        &self,
-        service_name: &str,
-        instance_id: &str,
-        address: &str,
-        metadata: ServiceInstanceMetadata,
-        options: RegisterOptions,
-    ) -> Result<(u64, u64)> {
+    pub async fn register(&self, input: RegisterInstanceInput) -> Result<(u64, u64)> {
+        let RegisterInstanceInput {
+            service_name,
+            instance_id,
+            address,
+            metadata,
+            options,
+        } = input;
         // Tiger Style: argument validation
         debug_assert!(!service_name.is_empty(), "REGISTRY: service_name must not be empty");
         debug_assert!(!instance_id.is_empty(), "REGISTRY: instance_id must not be empty");
@@ -52,16 +60,16 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         let is_lease_based = options.lease_id.is_some();
         let deadline_ms = crate::verified::compute_heartbeat_deadline(now, ttl_ms, is_lease_based);
 
-        let key = Self::instance_key(service_name, instance_id);
+        let key = Self::instance_key(&service_name, &instance_id);
 
         loop {
             // Read existing instance if any
             let existing = self.read_json::<ServiceInstance>(&key).await?;
 
             let instance = self.register_build_instance(RegisterBuildInstanceInput {
-                service_name,
-                instance_id,
-                address,
+                service_name: &service_name,
+                instance_id: &instance_id,
+                address: &address,
                 metadata: &metadata,
                 options: &options,
                 now,

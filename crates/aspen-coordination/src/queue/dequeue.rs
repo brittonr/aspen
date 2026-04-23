@@ -48,11 +48,27 @@ struct DequeueProcessContext<'a> {
     now: u64,
 }
 
+pub struct DequeueExcludingGroupsInput<'a> {
+    pub name: &'a str,
+    pub consumer_id: &'a str,
+    pub max_items: u32,
+    pub visibility_timeout_ms: u64,
+    pub excluded_groups: &'a [String],
+}
+
 struct ClaimItemContext<'a> {
     name: &'a str,
     consumer_id: &'a str,
     visibility_timeout_ms: u64,
     now: u64,
+}
+
+pub struct DequeueWaitInput<'a> {
+    pub name: &'a str,
+    pub consumer_id: &'a str,
+    pub max_items: u32,
+    pub visibility_timeout_ms: u64,
+    pub wait_timeout_ms: u64,
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
@@ -133,14 +149,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Items with excluded groups are left in the queue untouched — they are never
     /// claimed, so delivery_attempts is not incremented and they cannot be moved to
     /// the DLQ by workers that cannot handle them.
-    pub async fn dequeue_excluding_groups(
-        &self,
-        name: &str,
-        consumer_id: &str,
-        max_items: u32,
-        visibility_timeout_ms: u64,
-        excluded_groups: &[String],
-    ) -> Result<Vec<DequeuedItem>> {
+    pub async fn dequeue_excluding_groups(&self, input: DequeueExcludingGroupsInput<'_>) -> Result<Vec<DequeuedItem>> {
+        let DequeueExcludingGroupsInput {
+            name,
+            consumer_id,
+            max_items,
+            visibility_timeout_ms,
+            excluded_groups,
+        } = input;
         let max_items = max_items.min(MAX_QUEUE_BATCH_SIZE);
         let visibility_timeout_ms = visibility_timeout_ms.min(MAX_QUEUE_VISIBILITY_TIMEOUT_MS);
 
@@ -346,14 +362,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Dequeue items with blocking wait.
     ///
     /// Polls until items are available or timeout expires.
-    pub async fn dequeue_wait(
-        &self,
-        name: &str,
-        consumer_id: &str,
-        max_items: u32,
-        visibility_timeout_ms: u64,
-        wait_timeout_ms: u64,
-    ) -> Result<Vec<DequeuedItem>> {
+    pub async fn dequeue_wait(&self, input: DequeueWaitInput<'_>) -> Result<Vec<DequeuedItem>> {
+        let DequeueWaitInput {
+            name,
+            consumer_id,
+            max_items,
+            visibility_timeout_ms,
+            wait_timeout_ms,
+        } = input;
         let deadline = runtime_clock::deadline_after(Duration::from_millis(wait_timeout_ms));
         let mut poll_interval = DEFAULT_QUEUE_POLL_INTERVAL_MS;
 

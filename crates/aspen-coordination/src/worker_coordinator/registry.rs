@@ -14,6 +14,7 @@ use super::DistributedWorkerCoordinator;
 use super::types::WorkerFilter;
 use super::types::WorkerInfo;
 use super::types::WorkerStats;
+use crate::registry::RegisterInstanceInput;
 use crate::registry::RegisterOptions;
 use crate::registry::ServiceInstanceMetadata;
 use crate::types::now_unix_ms;
@@ -61,10 +62,16 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         };
 
         self.registry
-            .register("distributed-worker", &info.worker_id, &info.node_id, metadata, RegisterOptions {
-                ttl_ms: Some(self.config.heartbeat_timeout_ms),
-                initial_status: Some(info.health),
-                lease_id: None,
+            .register(RegisterInstanceInput {
+                service_name: "distributed-worker".to_string(),
+                instance_id: info.worker_id.clone(),
+                address: info.node_id.clone(),
+                metadata,
+                options: RegisterOptions {
+                    ttl_ms: Some(self.config.heartbeat_timeout_ms),
+                    initial_status: Some(info.health),
+                    lease_id: None,
+                },
             })
             .await?;
         Ok(())

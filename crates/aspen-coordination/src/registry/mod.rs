@@ -15,18 +15,18 @@
 //! ## Example
 //!
 //! ```ignore
-//! use aspen::coordination::{ServiceRegistry, HealthStatus, RegisterOptions};
+//! use aspen::coordination::{RegisterInstanceInput, ServiceRegistry, HealthStatus, RegisterOptions};
 //!
 //! let registry = ServiceRegistry::new(store);
 //!
 //! // Register a service instance
-//! let (token, deadline) = registry.register(
-//!     "api-gateway",
-//!     "instance-1",
-//!     "192.168.1.100:8080",
-//!     ServiceInstanceMetadata::default(),
-//!     RegisterOptions::default(),
-//! ).await?;
+//! let (token, deadline) = registry.register(RegisterInstanceInput {
+//!     service_name: "api-gateway".to_string(),
+//!     instance_id: "instance-1".to_string(),
+//!     address: "192.168.1.100:8080".to_string(),
+//!     metadata: ServiceInstanceMetadata::default(),
+//!     options: RegisterOptions::default(),
+//! }).await?;
 //!
 //! // Discover healthy instances
 //! let instances = registry.discover(
@@ -49,6 +49,7 @@ use std::sync::Arc;
 use aspen_traits::KeyValueStore;
 pub use types::DiscoveryFilter;
 pub use types::HealthStatus;
+pub use registration::RegisterInstanceInput;
 pub use types::RegisterOptions;
 pub use types::ServiceInstance;
 pub use types::ServiceInstanceMetadata;
@@ -85,16 +86,16 @@ mod tests {
 
         // Register an instance
         let (token, deadline) = registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata {
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata {
                     version: "1.0.0".to_string(),
                     ..Default::default()
                 },
-                RegisterOptions::default(),
-            )
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
@@ -116,13 +117,13 @@ mod tests {
         let registry = ServiceRegistry::new(store);
 
         let (token, _) = registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
@@ -170,13 +171,13 @@ mod tests {
         let registry = ServiceRegistry::new(store);
 
         let (token, _) = registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
@@ -195,13 +196,13 @@ mod tests {
 
         // Register healthy instance
         registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
@@ -287,25 +288,25 @@ mod tests {
         let registry = ServiceRegistry::new(store);
 
         let (token1, _) = registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
         // Re-register (simulating another process)
         let (token2, _) = registry
-            .register(
-                "test-service",
-                "instance-1",
-                "127.0.0.1:8080",
-                ServiceInstanceMetadata::default(),
-                RegisterOptions::default(),
-            )
+            .register(RegisterInstanceInput {
+                service_name: "test-service".to_string(),
+                instance_id: "instance-1".to_string(),
+                address: "127.0.0.1:8080".to_string(),
+                metadata: ServiceInstanceMetadata::default(),
+                options: RegisterOptions::default(),
+            })
             .await
             .unwrap();
 
