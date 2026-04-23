@@ -665,6 +665,7 @@ mod tests {
             message: String::new(),
         });
         let plugin_discriminant = discriminant_of(&plugin);
+        assert!(plugin_discriminant > 0, "PluginReloadResult discriminant must remain non-zero");
 
         let automerge = ClientRpcResponse::AutomergeCreateResult(automerge::AutomergeCreateResultResponse {
             is_success: true,
@@ -694,6 +695,7 @@ mod tests {
             error: None,
         });
         let ci_discriminant = discriminant_of(&ci_variant);
+        assert!(ci_discriminant > 0, "CI-gated discriminant must remain non-zero");
 
         let am_variant = ClientRpcResponse::AutomergeCreateResult(automerge::AutomergeCreateResultResponse {
             is_success: true,
@@ -721,19 +723,21 @@ mod tests {
         const MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES: usize = 16_usize * 1024 * 1024;
         const MAX_REASONABLE_CLUSTER_NODES: usize = 256;
 
-        let client_message_size_is_positive = MAX_CLIENT_MESSAGE_SIZE > 0;
-        let client_message_size_is_bounded = MAX_CLIENT_MESSAGE_SIZE <= MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES;
-        let cluster_nodes_is_positive = MAX_CLUSTER_NODES > 0;
-        let cluster_nodes_is_bounded = MAX_CLUSTER_NODES <= MAX_REASONABLE_CLUSTER_NODES;
-        let client_connections_is_positive = MAX_CLIENT_CONNECTIONS > 0;
-        let git_chunk_defaults_are_ordered = DEFAULT_GIT_CHUNK_SIZE_BYTES <= MAX_GIT_CHUNK_SIZE_BYTES;
+        let does_client_message_size_bytes_remain_positive = MAX_CLIENT_MESSAGE_SIZE > 0;
+        let does_client_message_size_bytes_remain_bounded =
+            MAX_CLIENT_MESSAGE_SIZE <= MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES;
+        let is_cluster_nodes_positive = MAX_CLUSTER_NODES > 0;
+        let is_cluster_nodes_bounded = MAX_CLUSTER_NODES <= MAX_REASONABLE_CLUSTER_NODES;
+        let is_client_connections_positive = MAX_CLIENT_CONNECTIONS > 0;
+        let does_git_chunk_size_bytes_remain_ordered =
+            DEFAULT_GIT_CHUNK_SIZE_BYTES <= MAX_GIT_CHUNK_SIZE_BYTES;
 
-        assert!(client_message_size_is_positive);
-        assert!(client_message_size_is_bounded);
-        assert!(cluster_nodes_is_positive);
-        assert!(cluster_nodes_is_bounded);
-        assert!(client_connections_is_positive);
-        assert!(git_chunk_defaults_are_ordered);
+        assert!(does_client_message_size_bytes_remain_positive);
+        assert!(does_client_message_size_bytes_remain_bounded);
+        assert!(is_cluster_nodes_positive);
+        assert!(is_cluster_nodes_bounded);
+        assert!(is_client_connections_positive);
+        assert!(does_git_chunk_size_bytes_remain_ordered);
     }
 
     #[test]

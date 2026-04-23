@@ -206,8 +206,10 @@ mod tests {
 
         let operation_a = to_operation(&request_a).flatten().unwrap();
         let operation_b = to_operation(&request_b).flatten().unwrap();
-        assert_eq!(super::canonical_lockset_member(&request_a.members), Some("pipeline:42"));
-        assert_eq!(super::canonical_lockset_member(&request_b.members), Some("pipeline:42"));
+        let members_a = vec!["repo:a".to_string(), "pipeline:42".to_string()];
+        let members_b = vec!["pipeline:42".to_string(), "repo:a".to_string()];
+        assert_eq!(super::canonical_lockset_member(&members_a), Some("pipeline:42"));
+        assert_eq!(super::canonical_lockset_member(&members_b), Some("pipeline:42"));
         assert_canonical_lock_operation(operation_a, operation_b);
     }
 
