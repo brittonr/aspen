@@ -20,6 +20,10 @@ use alloc::vec::Vec;
 
 use alloc::collections::BTreeMap;
 
+fn default_optional_string() -> Option<String> {
+    None
+}
+
 // Sub-modules
 pub mod automerge;
 pub mod batch;
@@ -2244,16 +2248,16 @@ pub enum ClientRpcRequest {
     /// Pull a repo from a remote cluster or update an existing mirror.
     FederationPull {
         /// Local mirror repo ID (hex-encoded). For mirror-pull mode.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         mirror_repo_id: Option<String>,
         /// Remote peer's iroh node ID (base32). For cold-pull mode.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         peer_node_id: Option<String>,
         /// Optional direct socket address hint.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         peer_addr: Option<String>,
         /// Remote repo ID (hex-encoded). For cold-pull mode.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         repo_id: Option<String>,
     },
     /// Push a local repo's objects and refs to a remote cluster.

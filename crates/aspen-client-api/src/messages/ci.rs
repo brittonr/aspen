@@ -13,6 +13,10 @@ use alloc::collections::BTreeMap;
 use serde::Deserialize;
 use serde::Serialize;
 
+fn default_completed_at_ms() -> Option<u64> {
+    None
+}
+
 /// CI domain request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CiRequest {
@@ -265,7 +269,7 @@ pub struct CiRunInfo {
     pub created_at_ms: u64,
     /// Completion time (Unix timestamp in milliseconds).
     /// `None` for running/pending pipelines.
-    #[serde(default)]
+    #[serde(default = "default_completed_at_ms")]
     pub completed_at_ms: Option<u64>,
 }
 

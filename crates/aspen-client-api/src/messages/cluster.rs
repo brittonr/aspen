@@ -11,6 +11,14 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+fn default_membership_node_count() -> Option<u32> {
+    None
+}
+
+fn default_iroh_node_id() -> Option<String> {
+    None
+}
+
 /// Cluster domain request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClusterRequest {
@@ -145,10 +153,10 @@ pub struct HealthResponse {
     #[serde(default)]
     pub is_initialized: bool,
     /// Number of nodes in the current membership configuration.
-    #[serde(default)]
+    #[serde(default = "default_membership_node_count")]
     pub membership_node_count: Option<u32>,
     /// Iroh node ID (base32-encoded PublicKey) for P2P addressing.
-    #[serde(default)]
+    #[serde(default = "default_iroh_node_id")]
     pub iroh_node_id: Option<String>,
 }
 

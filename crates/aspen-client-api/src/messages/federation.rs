@@ -10,6 +10,14 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+fn default_optional_string() -> Option<String> {
+    None
+}
+
+fn default_ref_heads() -> Vec<(String, String)> {
+    Vec::new()
+}
+
 /// Federation domain request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FederationRequest {
@@ -113,16 +121,16 @@ pub enum FederationRequest {
     ///   incremental fetch.
     FederationPull {
         /// Local mirror repo ID (hex-encoded). Used for mirror-pull mode.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         mirror_repo_id: Option<String>,
         /// Remote peer's iroh node ID (base32-encoded PublicKey). Used for cold-pull mode.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         peer_node_id: Option<String>,
         /// Optional direct socket address hint for the remote peer.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         peer_addr: Option<String>,
         /// Remote repo ID (hex-encoded). Used for cold-pull mode.
-        #[serde(default)]
+        #[serde(default = "default_optional_string")]
         repo_id: Option<String>,
     },
 
@@ -447,10 +455,10 @@ pub struct SyncPeerResourceInfo {
     /// Ref head names.
     pub ref_names: Vec<String>,
     /// Ref heads: (ref_name, hex_hash) pairs.
-    #[serde(default)]
+    #[serde(default = "default_ref_heads")]
     pub ref_heads: Vec<(String, String)>,
     /// Federated ID string for this resource.
-    #[serde(default)]
+    #[serde(default = "default_optional_string")]
     pub fed_id: Option<String>,
 }
 
