@@ -206,6 +206,8 @@ mod tests {
 
         let operation_a = to_operation(&request_a).flatten().unwrap();
         let operation_b = to_operation(&request_b).flatten().unwrap();
+        assert_eq!(super::canonical_lockset_member(&request_a.members), Some("pipeline:42"));
+        assert_eq!(super::canonical_lockset_member(&request_b.members), Some("pipeline:42"));
         assert_canonical_lock_operation(operation_a, operation_b);
     }
 
@@ -239,6 +241,8 @@ mod tests {
             holder_id: "holder-a".to_string(),
             member_tokens: tokens_b.clone(),
         };
+        assert_eq!(super::canonical_lockset_token_member(&tokens_a), Some("pipeline:42"));
+        assert_eq!(super::canonical_lockset_token_member(&tokens_b), Some("pipeline:42"));
         let renew_a = ClientRpcRequest::LockSetRenew {
             holder_id: "holder-a".to_string(),
             member_tokens: tokens_a,
@@ -249,7 +253,6 @@ mod tests {
             member_tokens: tokens_b,
             ttl_ms: 1_000,
         };
-
         assert_canonical_lock_operation(
             to_operation(&release_a).flatten().unwrap(),
             to_operation(&release_b).flatten().unwrap(),

@@ -605,6 +605,8 @@ mod tests {
 
         let operation_a = request_a.to_operation().unwrap();
         let operation_b = request_b.to_operation().unwrap();
+        assert_eq!(canonical_lockset_member(&request_a.members), Some("pipeline:42"));
+        assert_eq!(canonical_lockset_member(&request_b.members), Some("pipeline:42"));
         assert_canonical_lock_operation(operation_a, operation_b);
     }
 
@@ -649,6 +651,8 @@ mod tests {
             ttl_ms: 1_000,
         };
 
+        assert_eq!(canonical_lockset_token_member(&tokens_a), Some("pipeline:42"));
+        assert_eq!(canonical_lockset_token_member(&tokens_b), Some("pipeline:42"));
         assert_canonical_lock_operation(release_a.to_operation().unwrap(), release_b.to_operation().unwrap());
         assert_canonical_lock_operation(renew_a.to_operation().unwrap(), renew_b.to_operation().unwrap());
     }
