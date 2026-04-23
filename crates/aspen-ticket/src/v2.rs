@@ -256,8 +256,13 @@ impl AspenClusterTicket {
 
     /// Serialize the ticket to a base32-encoded string.
     pub fn serialize(&self) -> String {
-        self.validate().expect("AspenClusterTicket must be valid before serialization");
-        <Self as Ticket>::serialize(self)
+        match self.validate() {
+            Ok(()) => <Self as Ticket>::serialize(self),
+            Err(error) => {
+                debug_assert!(false, "AspenClusterTicket must be valid before serialization: {error}");
+                String::new()
+            }
+        }
     }
 
     /// Deserialize a ticket from a base32-encoded string.
@@ -290,7 +295,7 @@ impl Ticket for AspenClusterTicket {
     const KIND: &'static str = "aspen";
 
     fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("AspenClusterTicket serialization is infallible for bounded fields")
+        serialize_postcard_fail_closed(self, "AspenClusterTicket")
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
@@ -300,7 +305,7 @@ impl Ticket for AspenClusterTicket {
 }
 
 fn direct_addrs_from_node_address(node_addr: &NodeAddress) -> Vec<SocketAddr> {
-    let mut direct_addrs = Vec::new();
+    let mut direct_addrs = Vec::with_capacity(MAX_DIRECT_ADDRS_PER_PEER);
     for transport_addr in node_addr.transport_addrs() {
         if let NodeTransportAddr::Ip(socket_addr) = transport_addr {
             direct_addrs.push(*socket_addr);
@@ -313,11 +318,28 @@ fn direct_addr_transports(addrs: &[SocketAddr]) -> Vec<NodeTransportAddr> {
     addrs.iter().copied().map(NodeTransportAddr::Ip).collect()
 }
 
+fn serialize_postcard_fail_closed<T: Serialize>(value: &T, type_name: &str) -> Vec<u8> {
+    match postcard::to_allocvec(value) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            debug_assert!(false, "{type_name} serialization must succeed for bounded fields: {error}");
+            Vec::new()
+        }
+    }
+}
+
+fn saturating_u32_from_usize(value: usize) -> u32 {
+    match u32::try_from(value) {
+        Ok(value_u32) => value_u32,
+        Err(_) => u32::MAX,
+    }
+}
+
 fn ensure_bootstrap_capacity(current_len: usize) -> ClusterTicketResult<()> {
     if current_len >= MAX_BOOTSTRAP_PEERS {
         return Err(ClusterTicketError::TooManyBootstrapPeers {
-            actual_peers: u32::try_from(current_len.saturating_add(1)).unwrap_or(u32::MAX),
-            max_peers: u32::try_from(MAX_BOOTSTRAP_PEERS).unwrap_or(u32::MAX),
+            actual_peers: saturating_u32_from_usize(current_len.saturating_add(1)),
+            max_peers: saturating_u32_from_usize(MAX_BOOTSTRAP_PEERS),
         });
     }
     Ok(())
@@ -330,8 +352,8 @@ fn truncate_direct_addrs(direct_addrs: &mut Vec<SocketAddr>) {
 fn validate_bootstrap_count(count: usize) -> ClusterTicketResult<()> {
     if count > MAX_BOOTSTRAP_PEERS {
         return Err(ClusterTicketError::TooManyBootstrapPeers {
-            actual_peers: u32::try_from(count).unwrap_or(u32::MAX),
-            max_peers: u32::try_from(MAX_BOOTSTRAP_PEERS).unwrap_or(u32::MAX),
+            actual_peers: saturating_u32_from_usize(count),
+            max_peers: saturating_u32_from_usize(MAX_BOOTSTRAP_PEERS),
         });
     }
     Ok(())
@@ -341,8 +363,8 @@ fn validate_cluster_id(cluster_id: &str) -> ClusterTicketResult<()> {
     let actual_bytes = cluster_id.len();
     if actual_bytes > MAX_CLUSTER_ID_BYTES {
         return Err(ClusterTicketError::ClusterIdTooLong {
-            actual_bytes: u32::try_from(actual_bytes).unwrap_or(u32::MAX),
-            max_bytes: u32::try_from(MAX_CLUSTER_ID_BYTES).unwrap_or(u32::MAX),
+            actual_bytes: saturating_u32_from_usize(actual_bytes),
+            max_bytes: saturating_u32_from_usize(MAX_CLUSTER_ID_BYTES),
         });
     }
     Ok(())
@@ -351,8 +373,8 @@ fn validate_cluster_id(cluster_id: &str) -> ClusterTicketResult<()> {
 fn validate_direct_addr_count(count: usize) -> ClusterTicketResult<()> {
     if count > MAX_DIRECT_ADDRS_PER_PEER {
         return Err(ClusterTicketError::TooManyDirectAddrs {
-            actual_addrs: u32::try_from(count).unwrap_or(u32::MAX),
-            max_addrs: u32::try_from(MAX_DIRECT_ADDRS_PER_PEER).unwrap_or(u32::MAX),
+            actual_addrs: saturating_u32_from_usize(count),
+            max_addrs: saturating_u32_from_usize(MAX_DIRECT_ADDRS_PER_PEER),
         });
     }
     Ok(())
@@ -683,8 +705,10 @@ mod tests {
             let seed = [offset.saturating_add(10); 32];
             let secret_key = iroh::SecretKey::from(seed);
             let mut addr = iroh::EndpointAddr::new(secret_key.public());
-            let port = 7000u16.saturating_add(u16::from(offset));
-            addr.addrs.insert(iroh::TransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], port))));
+            addr.addrs.insert(iroh::TransportAddr::Ip(SocketAddr::from((
+                [127, 0, 0, 1],
+                7000u16.saturating_add(u16::from(offset)),
+            ))));
             ticket.add_bootstrap_addr(&addr).unwrap();
         }
         let serialized = ticket.serialize();

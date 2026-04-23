@@ -43,6 +43,22 @@ pub struct SignedAspenClusterTicket {
     pub signature: Signature,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SignedTimestampValidationInput {
+    issued_at_secs: u64,
+    expires_at_secs: u64,
+    now_secs: u64,
+}
+
+#[cfg(any(test, feature = "std"))]
+struct SignMaterialInput<'a> {
+    ticket: AspenClusterTicket,
+    secret_key: &'a SecretKey,
+    issued_at_secs: u64,
+    expires_at_secs: u64,
+    nonce: [u8; 16],
+}
+
 impl SignedAspenClusterTicket {
     /// Verify the signature and timestamps against an explicit validation time.
     pub fn verify_at(&self, now_secs: u64) -> Option<&AspenClusterTicket> {
@@ -56,7 +72,11 @@ impl SignedAspenClusterTicket {
         if self.issuer.verify(&payload_bytes, &self.signature).is_err() {
             return Err(ClusterTicketError::InvalidSignature);
         }
-        validate_signed_timestamps(self.issued_at_secs, self.expires_at_secs, now_secs)?;
+        validate_signed_timestamps(SignedTimestampValidationInput {
+            issued_at_secs: self.issued_at_secs,
+            expires_at_secs: self.expires_at_secs,
+            now_secs,
+        })?;
         Ok(&self.ticket)
     }
 
@@ -116,7 +136,13 @@ impl SignedAspenClusterTicket {
         let now_secs = current_unix_time_secs()?;
         let expires_at_secs = now_secs.saturating_add(validity_secs);
         let nonce = generate_nonce();
-        Ok(sign_with_material(ticket, secret_key, now_secs, expires_at_secs, nonce))
+        Ok(sign_with_material(SignMaterialInput {
+            ticket,
+            secret_key,
+            issued_at_secs: now_secs,
+            expires_at_secs,
+            nonce,
+        }))
     }
 
     /// Verify the signature and timestamps using the current wall clock.
@@ -139,8 +165,7 @@ impl Ticket for SignedAspenClusterTicket {
     const KIND: &'static str = "aspensigned";
 
     fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self)
-            .expect("SignedAspenClusterTicket serialization is infallible for bounded fields")
+        serialize_postcard_fail_closed(self, "SignedAspenClusterTicket")
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
@@ -161,8 +186,17 @@ struct SignedTicketPayload<'a> {
 
 impl SignedTicketPayload<'_> {
     fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self)
-            .expect("SignedAspenClusterTicket payload serialization is infallible for bounded fields")
+        serialize_postcard_fail_closed(self, "SignedTicketPayload")
+    }
+}
+
+fn serialize_postcard_fail_closed<T: Serialize>(value: &T, type_name: &str) -> Vec<u8> {
+    match postcard::to_allocvec(value) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            debug_assert!(false, "{type_name} serialization must succeed for bounded fields: {error}");
+            Vec::new()
+        }
     }
 }
 
@@ -176,65 +210,67 @@ fn validate_signed_version(version: u8) -> ClusterTicketResult<()> {
     Ok(())
 }
 
-fn validate_signed_timestamps(issued_at_secs: u64, expires_at_secs: u64, now_secs: u64) -> ClusterTicketResult<()> {
-    let max_issued_at_secs = now_secs.saturating_add(CLOCK_SKEW_TOLERANCE_SECS);
-    if issued_at_secs > max_issued_at_secs {
+fn validate_signed_timestamps(input: SignedTimestampValidationInput) -> ClusterTicketResult<()> {
+    let max_issued_at_secs = input.now_secs.saturating_add(CLOCK_SKEW_TOLERANCE_SECS);
+    if input.issued_at_secs > max_issued_at_secs {
         return Err(ClusterTicketError::SignedTicketIssuedInFuture {
-            issued_at_secs,
-            now_secs,
+            issued_at_secs: input.issued_at_secs,
+            now_secs: input.now_secs,
         });
     }
-    if expires_at_secs < now_secs {
+    if input.expires_at_secs < input.now_secs {
         return Err(ClusterTicketError::ExpiredSignedTicket {
-            expires_at_secs,
-            now_secs,
+            expires_at_secs: input.expires_at_secs,
+            now_secs: input.now_secs,
         });
     }
     Ok(())
 }
 
 #[cfg(any(test, feature = "std"))]
-fn sign_with_material(
-    ticket: AspenClusterTicket,
-    secret_key: &SecretKey,
-    issued_at_secs: u64,
-    expires_at_secs: u64,
-    nonce: [u8; 16],
-) -> SignedAspenClusterTicket {
+fn sign_with_material(input: SignMaterialInput<'_>) -> SignedAspenClusterTicket {
+    debug_assert!(input.expires_at_secs >= input.issued_at_secs);
+
+    let issuer = input.secret_key.public();
     let payload = SignedTicketPayload {
         version: SIGNED_TICKET_VERSION,
-        ticket: &ticket,
-        issuer: secret_key.public(),
-        issued_at_secs,
-        expires_at_secs,
-        nonce,
+        ticket: &input.ticket,
+        issuer,
+        issued_at_secs: input.issued_at_secs,
+        expires_at_secs: input.expires_at_secs,
+        nonce: input.nonce,
     };
     let payload_bytes = payload.to_bytes();
-    let signature = secret_key.sign(&payload_bytes);
+    let signature = input.secret_key.sign(&payload_bytes);
     SignedAspenClusterTicket {
         version: SIGNED_TICKET_VERSION,
-        ticket,
-        issuer: secret_key.public(),
-        issued_at_secs,
-        expires_at_secs,
-        nonce,
+        ticket: input.ticket,
+        issuer,
+        issued_at_secs: input.issued_at_secs,
+        expires_at_secs: input.expires_at_secs,
+        nonce: input.nonce,
         signature,
     }
 }
 
 #[cfg(any(test, feature = "std"))]
+#[allow(unknown_lints)]
+#[allow(ambient_clock, reason = "signed ticket helpers are the std shell boundary for wall-clock time")]
 fn current_unix_time_secs() -> ClusterTicketResult<u64> {
-    let duration = SystemTime::now()
+    let elapsed_since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| ClusterTicketError::Deserialize {
             reason: error.to_string(),
         })?;
-    Ok(duration.as_secs())
+    Ok(elapsed_since_epoch.as_secs())
 }
 
 #[cfg(any(test, feature = "std"))]
 fn current_unix_time_secs_or_zero() -> u64 {
-    current_unix_time_secs().unwrap_or(0)
+    match current_unix_time_secs() {
+        Ok(now_secs) => now_secs,
+        Err(_) => 0,
+    }
 }
 
 #[cfg(any(test, feature = "std"))]
