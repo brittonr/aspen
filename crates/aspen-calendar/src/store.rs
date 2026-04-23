@@ -287,7 +287,7 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
             .await
             .map_err(|e| CalendarError::StorageError { reason: e.to_string() })?;
 
-        let max_result_entries = usize::try_from(max_results).unwrap_or(usize::MAX);
+        let max_result_entries = saturating_usize_from_u32(max_results);
         let mut events = Vec::with_capacity(scan.entries.len().min(max_result_entries));
         for entry in &scan.entries {
             if events.len() >= max_result_entries {
@@ -329,7 +329,7 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
             .map_err(|e| CalendarError::StorageError { reason: e.to_string() })?;
 
         let query_lower = query.to_lowercase();
-        let max_result_entries = usize::try_from(max_results).unwrap_or(usize::MAX);
+        let max_result_entries = saturating_usize_from_u32(max_results);
         let mut results = Vec::with_capacity(scan.entries.len().min(max_result_entries));
 
         for entry in &scan.entries {
@@ -523,7 +523,7 @@ impl<S: KeyValueStore + ?Sized + 'static> CalendarStore<S> {
 
     /// Scan all entries matching a prefix (paginating through all results).
     async fn scan_all(&self, prefix: &str) -> Result<Vec<aspen_kv_types::KeyValueWithRevision>, CalendarError> {
-        let mut all_entries = Vec::with_capacity(usize::try_from(MAX_LIST_LIMIT).unwrap_or(usize::MAX));
+        let mut all_entries = Vec::with_capacity(saturating_usize_from_u32(MAX_LIST_LIMIT));
         let mut continuation_token = None;
 
         for _ in 0..MAX_SCAN_PAGES {
@@ -586,6 +586,13 @@ fn generate_id(id_seed: IdSeed<'_>) -> String {
 /// Clamp a limit to the valid range.
 fn clamp_limit(limit: Option<u32>) -> u32 {
     limit.unwrap_or(DEFAULT_LIST_LIMIT).min(MAX_LIST_LIMIT)
+}
+
+fn saturating_usize_from_u32(value: u32) -> usize {
+    match usize::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => usize::MAX,
+    }
 }
 
 /// Check if an event falls within a time range.
