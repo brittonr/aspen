@@ -281,4 +281,3 @@ aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
     ├── quote v1.0.45
     └── syn v2.0.117
 ```
-

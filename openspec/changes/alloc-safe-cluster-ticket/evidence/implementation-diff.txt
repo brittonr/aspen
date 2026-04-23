@@ -23,7 +23,7 @@ index e44da7706..a92ab0ea0 100644
 + "thiserror 2.0.18",
 + "trybuild",
  ]
- 
+
  [[package]]
 diff --git a/Cargo.toml b/Cargo.toml
 index 4a7aaf579..c5566b0ec 100644
@@ -49,7 +49,7 @@ index 0e95aac7b..6abfe5560 100644
 -aspen-ticket = { path = "../aspen-ticket" }
 +aspen-ticket = { path = "../aspen-ticket", default-features = false, features = ["iroh"] }
  aspen-transport = { path = "../aspen-transport" }
- 
+
  # P2P networking for Iroh connections
 diff --git a/crates/aspen-cluster-handler/Cargo.toml b/crates/aspen-cluster-handler/Cargo.toml
 index 7fd3c0494..ebbd10b45 100644
@@ -110,7 +110,7 @@ index 85953da69..e771f6a0b 100644
 @@ -5,20 +5,25 @@ edition = "2024"
  license = "AGPL-3.0-or-later"
  description = "Aspen cluster ticket types for peer discovery and bootstrap"
- 
+
 +[features]
 +default = []
 +iroh = ["dep:iroh-base", "dep:iroh-gossip", "aspen-cluster-types/iroh"]
@@ -139,7 +139,7 @@ index 85953da69..e771f6a0b 100644
 +serde = { version = "1.0", default-features = false, features = ["derive"] }
 +thiserror = { version = "2.0", default-features = false }
 +rand = { version = "0.9", optional = true }
- 
+
  [dev-dependencies]
 +iroh = { version = "0.97.0" }
 +iroh-base = "0.97.0"
@@ -182,7 +182,7 @@ index 4c1e67bcf..c34f50625 100644
 -//! # Ok::<(), anyhow::Error>(())
 +//! # Ok::<(), aspen_ticket::ClusterTicketError>(())
  //! ```
- 
+
 +#![cfg_attr(not(any(test, feature = "std", feature = "iroh")), no_std)]
 +
 +extern crate alloc;
@@ -193,7 +193,7 @@ index 4c1e67bcf..c34f50625 100644
 +#[cfg(any(test, feature = "signed", feature = "std"))]
  mod signed;
  mod v2;
- 
+
 +#[cfg(any(test, feature = "iroh"))]
  pub use parse::parse_ticket_to_addrs;
 +#[cfg(any(test, feature = "signed", feature = "std"))]
@@ -204,13 +204,13 @@ index 4c1e67bcf..c34f50625 100644
 +pub use v2::ClusterTicketError;
 +pub use v2::ClusterTicketResult;
 +pub use v2::ClusterTopicId;
- 
+
  #[cfg(test)]
  mod tests {
 @@ -80,7 +85,7 @@ mod tests {
          let topic_id = TopicId::from_bytes([23u8; 32]);
          let ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
- 
+
 -        assert_eq!(ticket.topic_id, topic_id);
 +        assert_eq!(ticket.topic_id, topic_id.into());
          assert_eq!(ticket.cluster_id, "test-cluster");
@@ -218,48 +218,48 @@ index 4c1e67bcf..c34f50625 100644
      }
 @@ -303,7 +308,7 @@ mod tests {
          let addr2 = create_test_socket_addr(8888);
- 
+
          let peer = BootstrapPeer {
 -            endpoint_id,
 +            endpoint_id: endpoint_id.into(),
              direct_addrs: vec![addr1, addr2],
          };
- 
+
 @@ -704,7 +709,7 @@ mod tests {
- 
+
          let mut ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
          ticket.bootstrap.push(BootstrapPeer {
 -            endpoint_id,
 +            endpoint_id: endpoint_id.into(),
              direct_addrs: vec![ipv6_addr],
          });
- 
+
 @@ -728,7 +733,7 @@ mod tests {
- 
+
          let mut ticket = AspenClusterTicket::new(topic_id, "test-cluster".into());
          ticket.bootstrap.push(BootstrapPeer {
 -            endpoint_id,
 +            endpoint_id: endpoint_id.into(),
              direct_addrs: vec![ipv4_addr, ipv6_addr],
          });
- 
+
 @@ -771,12 +776,12 @@ mod tests {
          let addr2 = create_test_socket_addr(8888);
- 
+
          let peer1 = BootstrapPeer {
 -            endpoint_id,
 +            endpoint_id: endpoint_id.into(),
              direct_addrs: vec![addr1, addr2],
          };
- 
+
          let peer2 = BootstrapPeer {
 -            endpoint_id,
 +            endpoint_id: endpoint_id.into(),
              direct_addrs: vec![addr1, addr2],
          };
- 
+
 @@ -785,7 +790,7 @@ mod tests {
- 
+
          // Different order = not equal (Vec comparison)
          let peer3 = BootstrapPeer {
 -            endpoint_id,
@@ -273,19 +273,19 @@ index cdd956d3c..3f29fc897 100644
 +++ b/crates/aspen-ticket/src/parse.rs
 @@ -1,32 +1,40 @@
  //! Ticket parsing utilities.
- 
+
 -use anyhow::Result;
 -use iroh::EndpointAddr;
 +#[cfg(feature = "iroh")]
 +use iroh_base::EndpointAddr;
 +#[cfg(feature = "iroh")]
  use iroh_gossip::proto::TopicId;
- 
+
 +#[cfg(feature = "iroh")]
  use crate::AspenClusterTicket;
 +#[cfg(feature = "iroh")]
 +use crate::ClusterTicketResult;
- 
+
 -/// Parse a ticket string and return endpoint addresses.
 -///
 -/// Returns the topic ID, cluster ID, and list of endpoint addresses
@@ -341,12 +341,12 @@ index d2c6f49ad..fa04591f3 100644
 @@ -1,270 +1,137 @@
 -//! Signed cluster tickets with Ed25519 signature verification.
 +//! Signed cluster tickets with explicit-time verification helpers.
- 
+
 -use std::time::SystemTime;
 -use std::time::UNIX_EPOCH;
 +use alloc::string::{String, ToString};
 +use alloc::vec::Vec;
- 
+
 -use anyhow::Context;
 -use anyhow::Result;
 -use iroh::PublicKey;
@@ -357,7 +357,7 @@ index d2c6f49ad..fa04591f3 100644
  use iroh_tickets::Ticket;
  use serde::Deserialize;
  use serde::Serialize;
- 
+
  use crate::AspenClusterTicket;
 +use crate::ClusterTicketError;
 +use crate::ClusterTicketResult;
@@ -365,7 +365,7 @@ index d2c6f49ad..fa04591f3 100644
 +#[cfg(any(test, feature = "std"))]
  use crate::constants::DEFAULT_TICKET_VALIDITY_SECS;
  use crate::constants::SIGNED_TICKET_VERSION;
- 
+
 +#[cfg(any(test, feature = "std"))]
 +use iroh_base::SecretKey;
 +#[cfg(any(test, feature = "std"))]
@@ -405,7 +405,7 @@ index d2c6f49ad..fa04591f3 100644
 +    /// Ed25519 signature over the serialized payload.
      pub signature: Signature,
  }
- 
+
 -#[allow(unknown_lints)]
 -#[allow(
 -    ambient_clock,
@@ -445,7 +445,7 @@ index d2c6f49ad..fa04591f3 100644
 +    pub fn verify_at(&self, now_secs: u64) -> Option<&AspenClusterTicket> {
 +        self.verify_with_error_at(now_secs).ok()
      }
- 
+
 -    /// Create and sign a ticket with custom validity duration.
 -    ///
 -    /// # Arguments
@@ -496,7 +496,7 @@ index d2c6f49ad..fa04591f3 100644
 +        validate_signed_timestamps(self.issued_at_secs, self.expires_at_secs, now_secs)?;
 +        Ok(&self.ticket)
      }
- 
+
 -    /// Verify the signature and return the inner ticket if valid.
 -    ///
 -    /// Performs the following checks:
@@ -528,7 +528,7 @@ index d2c6f49ad..fa04591f3 100644
 +    pub fn is_expired_at(&self, now_secs: u64) -> bool {
 +        self.expires_at_secs < now_secs
 +    }
- 
+
 -        // Verify Ed25519 signature
 -        if self.issuer.verify(&payload_bytes, &self.signature).is_err() {
 -            return None;
@@ -537,7 +537,7 @@ index d2c6f49ad..fa04591f3 100644
 +    pub fn serialize(&self) -> String {
 +        <Self as Ticket>::serialize(self)
 +    }
- 
+
 -        // Verify timestamps (with clock skew tolerance)
 -        if !self.is_timestamp_valid() {
 -            return None;
@@ -548,13 +548,13 @@ index d2c6f49ad..fa04591f3 100644
 +            reason: error.to_string(),
 +        })
 +    }
- 
+
 -        Some(&self.ticket)
 +    /// Returns the issuer's public key.
 +    pub fn issuer(&self) -> &PublicKey {
 +        &self.issuer
      }
- 
+
 -    /// Verify signature and timestamps, returning detailed error on failure.
 -    ///
 -    /// Unlike `verify()`, this method provides error context for debugging.
@@ -568,7 +568,7 @@ index d2c6f49ad..fa04591f3 100644
 +    pub fn expires_at(&self) -> u64 {
 +        self.expires_at_secs
 +    }
- 
+
 -        // Build the payload for signature verification
 -        let payload = SignedTicketPayload {
 +    fn payload_bytes(&self) -> Vec<u8> {
@@ -633,7 +633,7 @@ index d2c6f49ad..fa04591f3 100644
 +        .to_bytes()
      }
 +}
- 
+
 -    /// Serialize the signed ticket to a base32-encoded string.
 -    ///
 -    /// Format: `aspensigned{base32-encoded-postcard-payload}`
@@ -645,7 +645,7 @@ index d2c6f49ad..fa04591f3 100644
 +    pub fn sign(ticket: AspenClusterTicket, secret_key: &SecretKey) -> ClusterTicketResult<Self> {
 +        Self::sign_with_validity(ticket, secret_key, DEFAULT_TICKET_VALIDITY_SECS)
      }
- 
+
 -    /// Deserialize a signed ticket from a base32-encoded string.
 -    ///
 -    /// Note: This only parses the ticket, it does NOT verify the signature.
@@ -663,7 +663,7 @@ index d2c6f49ad..fa04591f3 100644
 +        let nonce = generate_nonce();
 +        Ok(sign_with_material(ticket, secret_key, now_secs, expires_at_secs, nonce))
      }
- 
+
 -    /// Returns the issuer's public key.
 -    pub fn issuer(&self) -> &PublicKey {
 -        &self.issuer
@@ -671,7 +671,7 @@ index d2c6f49ad..fa04591f3 100644
 +    pub fn verify(&self) -> Option<&AspenClusterTicket> {
 +        self.verify_at(current_unix_time_secs_or_zero())
      }
- 
+
 -    /// Returns the ticket expiration timestamp.
 -    pub fn expires_at(&self) -> u64 {
 -        self.expires_at_secs
@@ -679,7 +679,7 @@ index d2c6f49ad..fa04591f3 100644
 +    pub fn verify_with_error(&self) -> ClusterTicketResult<&AspenClusterTicket> {
 +        self.verify_with_error_at(current_unix_time_secs()?)
      }
- 
+
 -    /// Returns whether the ticket has expired.
 +    /// Returns whether the ticket is expired using the current wall clock.
      pub fn is_expired(&self) -> bool {
@@ -688,10 +688,10 @@ index d2c6f49ad..fa04591f3 100644
 +        self.is_expired_at(current_unix_time_secs_or_zero())
      }
  }
- 
+
 @@ -272,13 +139,8 @@ impl Ticket for SignedAspenClusterTicket {
      const KIND: &'static str = "aspensigned";
- 
+
      fn to_bytes(&self) -> Vec<u8> {
 -        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
 -        // All fields are fixed-size or bounded (version: u8, Signature: 64 bytes,
@@ -703,12 +703,12 @@ index d2c6f49ad..fa04591f3 100644
 +        postcard::to_allocvec(self)
 +            .expect("SignedAspenClusterTicket serialization is infallible for bounded fields")
      }
- 
+
      fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
 @@ -287,10 +149,6 @@ impl Ticket for SignedAspenClusterTicket {
      }
  }
- 
+
 -/// Internal payload structure for signing (excludes the signature field).
 -///
 -/// This struct is used to serialize the data that gets signed, ensuring
@@ -718,7 +718,7 @@ index d2c6f49ad..fa04591f3 100644
      version: u8,
 @@ -302,19 +160,102 @@ struct SignedTicketPayload<'a> {
  }
- 
+
  impl SignedTicketPayload<'_> {
 -    fn to_bytes(&self) -> Result<Vec<u8>> {
 -        postcard::to_stdvec(self).context("failed to serialize ticket payload")
@@ -783,7 +783,7 @@ index d2c6f49ad..fa04591f3 100644
 +        signature,
      }
  }
- 
+
 +#[cfg(any(test, feature = "std"))]
 +fn current_unix_time_secs() -> ClusterTicketResult<u64> {
 +    let duration = SystemTime::now()
@@ -812,11 +812,11 @@ index d2c6f49ad..fa04591f3 100644
  mod tests {
      use iroh_gossip::proto::TopicId;
 +    use iroh_tickets::Ticket;
- 
+
 -    use super::*;
 +    use super::SignedAspenClusterTicket;
 +    use crate::AspenClusterTicket;
- 
+
      fn make_signed_ticket() -> SignedAspenClusterTicket {
 -        let key = SecretKey::from([1u8; 32]);
 +        let key = iroh::SecretKey::from([1u8; 32]);
@@ -830,7 +830,7 @@ index 81ce5366c..ce1cbd166 100644
 @@ -1,106 +1,225 @@
 -//! Aspen cluster tickets with direct address support.
 +//! Aspen cluster tickets with alloc-safe bootstrap metadata.
- 
+
 -use std::collections::BTreeSet;
 -use std::net::SocketAddr;
 +use alloc::format;
@@ -838,7 +838,7 @@ index 81ce5366c..ce1cbd166 100644
 +use alloc::vec::Vec;
 +use core::fmt;
 +use core::net::SocketAddr;
- 
+
 -use anyhow::Context;
 -use anyhow::Result;
 -use iroh::EndpointAddr;
@@ -994,7 +994,7 @@ index 81ce5366c..ce1cbd166 100644
 +        f.write_str(&self.0)
 +    }
 +}
- 
+
  /// Bootstrap peer information including direct socket addresses.
 -///
 -/// Unlike legacy tickets which only stored EndpointId (public key), this struct
@@ -1017,7 +1017,7 @@ index 81ce5366c..ce1cbd166 100644
 +    /// Direct socket addresses for this peer.
      pub direct_addrs: Vec<SocketAddr>,
  }
- 
+
  impl BootstrapPeer {
 -    /// Create a new bootstrap peer with only the endpoint ID (no direct addresses).
 -    pub fn new(endpoint_id: EndpointId) -> Self {
@@ -1029,7 +1029,7 @@ index 81ce5366c..ce1cbd166 100644
              direct_addrs: Vec::new(),
          }
      }
- 
+
 -    /// Create a bootstrap peer with direct addresses from an EndpointAddr.
 -    pub fn from_endpoint_addr(addr: &EndpointAddr) -> Self {
 -        // Extract direct IP addresses from TransportAddr enum
@@ -1051,7 +1051,7 @@ index 81ce5366c..ce1cbd166 100644
 +            direct_addrs: direct_addrs_from_node_address(&node_addr),
          }
      }
- 
+
 -    /// Convert to an EndpointAddr for connection.
 -    pub fn to_endpoint_addr(&self) -> EndpointAddr {
 -        let addrs: BTreeSet<TransportAddr> = self.direct_addrs.iter().map(|addr| TransportAddr::Ip(*addr)).collect();
@@ -1059,7 +1059,7 @@ index 81ce5366c..ce1cbd166 100644
 +    pub fn to_node_address(&self) -> NodeAddress {
 +        NodeAddress::from_parts(self.endpoint_id.to_string(), direct_addr_transports(&self.direct_addrs))
 +    }
- 
+
 -        EndpointAddr {
 -            id: self.endpoint_id,
 -            addrs,
@@ -1070,7 +1070,7 @@ index 81ce5366c..ce1cbd166 100644
          }
      }
  }
- 
+
 -impl From<&EndpointAddr> for BootstrapPeer {
 -    fn from(addr: &EndpointAddr) -> Self {
 -        Self::from_endpoint_addr(addr)
@@ -1082,7 +1082,7 @@ index 81ce5366c..ce1cbd166 100644
 +        self.to_node_address().serialize(serializer)
      }
  }
- 
+
 -impl From<EndpointId> for BootstrapPeer {
 -    fn from(id: EndpointId) -> Self {
 -        Self::new(id)
@@ -1095,7 +1095,7 @@ index 81ce5366c..ce1cbd166 100644
 +        Ok(Self::from_node_address(node_addr))
      }
  }
- 
+
  /// Aspen cluster ticket for gossip-based peer discovery.
 -///
 -/// Contains all information needed to join an Aspen cluster via iroh-gossip:
@@ -1121,18 +1121,18 @@ index 81ce5366c..ce1cbd166 100644
      /// Human-readable cluster identifier.
      pub cluster_id: String,
 @@ -108,150 +227,70 @@ pub struct AspenClusterTicket {
- 
+
  impl AspenClusterTicket {
      /// Maximum number of bootstrap peers in a ticket.
 -    ///
 -    /// Tiger Style: Fixed limit to prevent unbounded ticket size.
 -    pub const MAX_BOOTSTRAP_PEERS: usize = 16;
 +    pub const MAX_BOOTSTRAP_PEERS: usize = MAX_BOOTSTRAP_PEERS;
- 
+
      /// Maximum direct addresses per peer.
 -    pub const MAX_DIRECT_ADDRS_PER_PEER: usize = 8;
 +    pub const MAX_DIRECT_ADDRS_PER_PEER: usize = MAX_DIRECT_ADDRS_PER_PEER;
- 
+
      /// Create a new ticket with a topic ID and cluster identifier.
 -    ///
 -    /// The bootstrap peer list is initially empty. Use `with_bootstrap_addr()` or
@@ -1146,7 +1146,7 @@ index 81ce5366c..ce1cbd166 100644
              cluster_id,
          }
      }
- 
+
 -    /// Create a ticket with a single bootstrap peer from an EndpointAddr.
 -    pub fn with_bootstrap_addr(topic_id: TopicId, cluster_id: String, addr: &EndpointAddr) -> Self {
 -        let mut ticket = Self::new(topic_id, cluster_id);
@@ -1180,7 +1180,7 @@ index 81ce5366c..ce1cbd166 100644
          self.bootstrap.push(peer);
          Ok(())
      }
- 
+
 -    /// Add a bootstrap peer from just an EndpointId (no direct addresses).
 -    ///
 -    /// Returns `Err` if the maximum number of bootstrap peers (16) is reached.
@@ -1206,7 +1206,7 @@ index 81ce5366c..ce1cbd166 100644
 +    pub fn add_node_address(&mut self, node_addr: NodeAddress) -> ClusterTicketResult<()> {
 +        self.add_bootstrap_peer(BootstrapPeer::from_node_address(node_addr))
      }
- 
+
      /// Serialize the ticket to a base32-encoded string.
 -    ///
 -    /// The format is: `aspen{base32-encoded-postcard-payload}`
@@ -1227,7 +1227,7 @@ index 81ce5366c..ce1cbd166 100644
 +        self.validate().expect("AspenClusterTicket must be valid before serialization");
          <Self as Ticket>::serialize(self)
      }
- 
+
      /// Deserialize a ticket from a base32-encoded string.
 -    ///
 -    /// Returns an error if the string is not a valid Aspen ticket.
@@ -1255,7 +1255,7 @@ index 81ce5366c..ce1cbd166 100644
 +        ticket.validate()?;
 +        Ok(ticket)
      }
- 
+
      /// Inject an additional direct address into all bootstrap peers.
 -    ///
 -    /// This is used for VM connectivity where the bridge IP must be added
@@ -1286,10 +1286,10 @@ index 81ce5366c..ce1cbd166 100644
 +        Ok(())
 +    }
  }
- 
+
  impl Ticket for AspenClusterTicket {
      const KIND: &'static str = "aspen";
- 
+
      fn to_bytes(&self) -> Vec<u8> {
 -        // Ticket trait requires `fn to_bytes(&self) -> Vec<u8>` — cannot return Result.
 -        // All fields are bounded (MAX_BOOTSTRAP_PEERS=16, MAX_DIRECT_ADDRS_PER_PEER=8)
@@ -1298,12 +1298,12 @@ index 81ce5366c..ce1cbd166 100644
 -        postcard::to_stdvec(&self).expect("AspenClusterTicket serialization is infallible for bounded fields")
 +        postcard::to_allocvec(self).expect("AspenClusterTicket serialization is infallible for bounded fields")
      }
- 
+
      fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
 @@ -260,14 +299,366 @@ impl Ticket for AspenClusterTicket {
      }
  }
- 
+
 +fn direct_addrs_from_node_address(node_addr: &NodeAddress) -> Vec<SocketAddr> {
 +    let mut direct_addrs = Vec::new();
 +    for transport_addr in node_addr.transport_addrs() {
@@ -1660,7 +1660,7 @@ index 81ce5366c..ce1cbd166 100644
 +    use super::AspenClusterTicket;
 +    use super::ClusterTopicId;
 +    use iroh_tickets::Ticket;
- 
+
      fn make_test_ticket() -> AspenClusterTicket {
          let key = iroh::SecretKey::from([1u8; 32]);
 -        let addr = EndpointAddr::new(key.public());
@@ -1668,11 +1668,11 @@ index 81ce5366c..ce1cbd166 100644
 +        let addr = iroh::EndpointAddr::new(key.public());
 +        AspenClusterTicket::with_bootstrap_addr(ClusterTopicId::from_bytes([42u8; 32]).to_topic_id(), "test-cluster".to_string(), &addr)
      }
- 
+
      #[test]
 @@ -286,13 +677,14 @@ mod tests {
      }
- 
+
      #[test]
 -    #[allow(raw_arithmetic_overflow, reason = "test values are bounded small constants")]
      fn roundtrip_with_multiple_peers_and_addrs() {
@@ -1970,7 +1970,7 @@ index c7966f2f2..4b7669122 100644
 -Artifact-Type: placeholder
 +Artifact-Type: command-transcript
  Covers: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.bare-cluster-ticket-dependency-stays-alloc-safe, architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent, architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe
- 
+
 -Placeholder target for alloc-safe validation evidence.
 -Populate after implementation rails run.
 +## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo tree -p aspen-ticket -e normal'`
@@ -13424,7 +13424,7 @@ index 59fe6b58b..48f16f2d8 100644
 -Artifact-Type: placeholder
 +Artifact-Type: command-transcript
  Covers: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.iroh-conversion-happens-at-the-shell-boundary, architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable
- 
+
 -Placeholder target for direct consumer and transitive leak audit evidence.
 -Populate after implementation rails run.
 +## Baseline direct-consumer discovery
@@ -14502,7 +14502,7 @@ index 54d97cdb5..f6114c634 100644
 -Artifact-Type: placeholder
 +Artifact-Type: command-transcript
  Covers: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-ticket-support-requires-explicit-opt-in, architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-only-surface-stays-distinct-from-std-conveniences, ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks.signed-cluster-ticket-encoder-fails-loudly-on-impossible-serializer-bug, ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.invalid-signed-cluster-ticket-string-is-still-rejected
- 
+
 -Placeholder target for signed validation evidence.
 -Populate after implementation rails run.
 +## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo tree -p aspen-ticket --no-default-features --features signed -e normal'`
@@ -15005,7 +15005,7 @@ index 547a8adc6..48557b8ce 100644
 -Artifact-Type: placeholder
 +Artifact-Type: command-transcript
  Covers: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.topic-and-bootstrap-roundtrip-in-alloc-safe-form, architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.alloc-safe-topic-identifier-stays-fixed-width-and-lossless-at-the-iroh-boundary, architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-cluster-ticket-errors, architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-unsigned-cluster-tickets-are-rejected-explicitly, architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.unsigned-wire-break-proof-is-reviewable
- 
+
 -Placeholder target for unsigned wire-break evidence.
 -Populate after implementation rails run.
 +## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo test -p aspen-ticket --lib test_serialize_deserialize -- --exact'`
@@ -15150,44 +15150,44 @@ index d2440d6f6..dc66ecea6 100644
 +++ b/openspec/changes/alloc-safe-cluster-ticket/tasks.md
 @@ -1,31 +1,31 @@
  ## 1. Baseline
- 
+
 -- [ ] R1 Capture the current `aspen-ticket` dependency and consumer baseline under `openspec/changes/alloc-safe-cluster-ticket/evidence/baseline-validation.md`, including full-graph `cargo tree -p aspen-ticket -e normal`, full-graph `cargo tree -p aspen-ticket -e features`, full-graph `cargo tree -p aspen-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features -e features`, `cargo check -p aspen-ticket`, a deterministic direct-consumer discovery snapshot from the workspace dependency graph, and the baseline helper-usage classification search transcript recorded as a labeled baseline section in `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md` using the design's `rg -n 'SignedAspenClusterTicket|parse_ticket_to_addrs|with_bootstrap_addr|with_bootstrap\(|endpoint_addrs\(|endpoint_ids\(|AspenClusterTicket::deserialize|AspenClusterTicket::new|iroh::EndpointAddr|iroh::EndpointId|iroh_gossip::proto::TopicId|ClusterTopicId|try_into_iroh|to_topic_id|from_topic_id' ...` audit. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable]
 +- [x] R1 Capture the current `aspen-ticket` dependency and consumer baseline under `openspec/changes/alloc-safe-cluster-ticket/evidence/baseline-validation.md`, including full-graph `cargo tree -p aspen-ticket -e normal`, full-graph `cargo tree -p aspen-ticket -e features`, full-graph `cargo tree -p aspen-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features -e features`, `cargo check -p aspen-ticket`, a deterministic direct-consumer discovery snapshot from the workspace dependency graph, and the baseline helper-usage classification search transcript recorded as a labeled baseline section in `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md` using the design's `rg -n 'SignedAspenClusterTicket|parse_ticket_to_addrs|with_bootstrap_addr|with_bootstrap\(|endpoint_addrs\(|endpoint_ids\(|AspenClusterTicket::deserialize|AspenClusterTicket::new|iroh::EndpointAddr|iroh::EndpointId|iroh_gossip::proto::TopicId|ClusterTopicId|try_into_iroh|to_topic_id|from_topic_id' ...` audit. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable]
- 
+
  ## 2. Unsigned alloc-safe core
- 
+
 -- [ ] I1 Refactor the unsigned `crates/aspen-ticket` core into an alloc-safe leaf surface: add `no_std` / `alloc` scaffolding, switch the unsigned payload to crate-local `ClusterTopicId` plus `aspen_cluster_types::NodeAddress`, and keep the `aspen-cluster-types` dependency edge alloc-safe with `default-features = false`. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.bare-cluster-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.topic-and-bootstrap-roundtrip-in-alloc-safe-form,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe]
 +- [x] I1 Refactor the unsigned `crates/aspen-ticket` core into an alloc-safe leaf surface: add `no_std` / `alloc` scaffolding, switch the unsigned payload to crate-local `ClusterTopicId` plus `aspen_cluster_types::NodeAddress`, and keep the `aspen-cluster-types` dependency edge alloc-safe with `default-features = false`. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.bare-cluster-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.topic-and-bootstrap-roundtrip-in-alloc-safe-form,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe]
- 
+
 -- [ ] I2 Add the unsigned boundary rules around that alloc-safe core: keep `ClusterTopicId` fixed-width and lossless at the optional iroh boundary, replace unsigned parse/validation `anyhow` results with crate-local errors, reject malformed topics through that error surface, reject legacy unsigned payloads through the checked-in fixture path `crates/aspen-ticket/tests/legacy.rs`, and surface the requirement that callers regenerate tickets with the current alloc-safe schema after legacy rejection. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.alloc-safe-topic-identifier-stays-fixed-width-and-lossless-at-the-iroh-boundary,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-cluster-ticket-errors,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-unsigned-cluster-tickets-are-rejected-explicitly,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.unsigned-wire-break-proof-is-reviewable]
 +- [x] I2 Add the unsigned boundary rules around that alloc-safe core: keep `ClusterTopicId` fixed-width and lossless at the optional iroh boundary, replace unsigned parse/validation `anyhow` results with crate-local errors, reject malformed topics through that error surface, reject legacy unsigned payloads through the checked-in fixture path `crates/aspen-ticket/tests/legacy.rs`, and surface the requirement that callers regenerate tickets with the current alloc-safe schema after legacy rejection. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.alloc-safe-topic-identifier-stays-fixed-width-and-lossless-at-the-iroh-boundary,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-cluster-ticket-errors,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-unsigned-cluster-tickets-are-rejected-explicitly,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.unsigned-wire-break-proof-is-reviewable]
- 
+
  ## 3. Runtime and signed feature boundaries
- 
+
 -- [ ] I3 Set the `crates/aspen-ticket` feature map to `default = []` with explicit `iroh`, `signed`, and `std` features, make `std` imply `signed`, move runtime-only unsigned conversions behind `iroh`, move signed explicit-time helpers behind `signed`, keep convenience wrappers behind `std`, keep signed-only distinct from `std`, and replace the signed encoder's empty-payload fallback with an `expect(...)`-style invariant break that carries contextual diagnostics from the encoder path. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-ticket-support-requires-explicit-opt-in,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-only-surface-stays-distinct-from-std-conveniences,ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks.signed-cluster-ticket-encoder-fails-loudly-on-impossible-serializer-bug,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.invalid-signed-cluster-ticket-string-is-still-rejected]
 +- [x] I3 Set the `crates/aspen-ticket` feature map to `default = []` with explicit `iroh`, `signed`, and `std` features, make `std` imply `signed`, move runtime-only unsigned conversions behind `iroh`, move signed explicit-time helpers behind `signed`, keep convenience wrappers behind `std`, keep signed-only distinct from `std`, and replace the signed encoder's empty-payload fallback with an `expect(...)`-style invariant break that carries contextual diagnostics from the encoder path. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-ticket-support-requires-explicit-opt-in,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-only-surface-stays-distinct-from-std-conveniences,ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks.signed-cluster-ticket-encoder-fails-loudly-on-impossible-serializer-bug,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.invalid-signed-cluster-ticket-string-is-still-rejected]
- 
+
 -- [ ] I4 Update the root workspace dependency stanza plus every direct `aspen-ticket` consumer in the audit scope so feature opt-in is explicit where needed, bare/default consumers stay intentionally alloc-safe, each `iroh` consumer's shell-boundary conversion site is reviewable, and the plan is reopened before checking implementation tasks if the saved `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md` artifact shows `crates/aspen-rpc-handlers` or `crates/aspen-ci` actually use ticket helpers or discovers any new direct `aspen-ticket` consumer outside the current audit list. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.iroh-conversion-happens-at-the-shell-boundary]
 +- [x] I4 Update the root workspace dependency stanza plus every direct `aspen-ticket` consumer in the audit scope so feature opt-in is explicit where needed, bare/default consumers stay intentionally alloc-safe, each `iroh` consumer's shell-boundary conversion site is reviewable, and the plan is reopened before checking implementation tasks if the saved `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md` artifact shows `crates/aspen-rpc-handlers` or `crates/aspen-ci` actually use ticket helpers or discovers any new direct `aspen-ticket` consumer outside the current audit list. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.iroh-conversion-happens-at-the-shell-boundary]
- 
+
  ## 4. Verification plumbing
- 
+
 -- [ ] I5 Add durable review plumbing for this seam: keep default-vs-`--no-default-features` equivalence reviewable, preserve the workspace-stanza proof with a negative guard against reintroducing `iroh`, `signed`, or `std`, preserve the direct-consumer discovery/classification audit, keep the concrete transitive re-export leak proofs `cargo tree -p aspen-fuse -e features -i aspen-ticket` and `cargo tree -p aspen-cli -e features -i aspen-ticket`, and keep `verification.md`, `implementation-diff.txt`, and `openspec-preflight.txt` synchronized with the evidence plan. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.signed-cluster-ticket-encoding-proof-is-reviewable]
 +- [x] I5 Add durable review plumbing for this seam: keep default-vs-`--no-default-features` equivalence reviewable, preserve the workspace-stanza proof with a negative guard against reintroducing `iroh`, `signed`, or `std`, preserve the direct-consumer discovery/classification audit, keep the concrete transitive re-export leak proofs `cargo tree -p aspen-fuse -e features -i aspen-ticket` and `cargo tree -p aspen-cli -e features -i aspen-ticket`, and keep `verification.md`, `implementation-diff.txt`, and `openspec-preflight.txt` synchronized with the evidence plan. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.signed-cluster-ticket-encoding-proof-is-reviewable]
- 
+
  ## 5. Final verification
- 
+
 -- [ ] V1 Save alloc-safe default-vs-`--no-default-features` proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md`, and save the dedicated comparison artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`, including full-graph `cargo tree -p aspen-ticket -e normal`, full-graph `cargo tree -p aspen-ticket -e features`, full-graph `cargo tree -p aspen-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features -e features`, `cargo check -p aspen-ticket`, `cargo check -p aspen-ticket --no-default-features`, `cargo check -p aspen-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --no-default-features --target wasm32-unknown-unknown`, the `aspen-cluster-types` alloc-safe dependency-edge proof, an explicit deterministic negative assertion that both alloc-safe surfaces exclude `iroh`, `iroh-gossip`, `rand`, and `anyhow`, and a deterministic proof that bare/default unsigned code cannot reach ambient-clock-only or other std-shell entry points without `std`. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.bare-cluster-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md]
 +- [x] V1 Save alloc-safe default-vs-`--no-default-features` proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md`, and save the dedicated comparison artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`, including full-graph `cargo tree -p aspen-ticket -e normal`, full-graph `cargo tree -p aspen-ticket -e features`, full-graph `cargo tree -p aspen-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features -e features`, `cargo check -p aspen-ticket`, `cargo check -p aspen-ticket --no-default-features`, `cargo check -p aspen-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --no-default-features --target wasm32-unknown-unknown`, the `aspen-cluster-types` alloc-safe dependency-edge proof, an explicit deterministic negative assertion that both alloc-safe surfaces exclude `iroh`, `iroh-gossip`, `rand`, and `anyhow`, and a deterministic proof that bare/default unsigned code cannot reach ambient-clock-only or other std-shell entry points without `std`. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.bare-cluster-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md]
- 
+
 -- [ ] V2 Save unsigned payload and wire-break proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md`, including current alloc-safe roundtrip success, generic malformed unsigned-input rejection through the crate-local error type, malformed-topic rejection, lossless alloc-safe-topic ↔ `iroh_gossip::proto::TopicId` conversion, legacy unsigned payload rejection, explicit regeneration guidance after legacy rejection, and the checked-in fixture path `crates/aspen-ticket/tests/legacy.rs`. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.topic-and-bootstrap-roundtrip-in-alloc-safe-form,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.alloc-safe-topic-identifier-stays-fixed-width-and-lossless-at-the-iroh-boundary,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-cluster-ticket-errors,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-unsigned-cluster-tickets-are-rejected-explicitly,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.unsigned-wire-break-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md]
 +- [x] V2 Save unsigned payload and wire-break proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md`, including current alloc-safe roundtrip success, generic malformed unsigned-input rejection through the crate-local error type, malformed-topic rejection, lossless alloc-safe-topic ↔ `iroh_gossip::proto::TopicId` conversion, legacy unsigned payload rejection, explicit regeneration guidance after legacy rejection, and the checked-in fixture path `crates/aspen-ticket/tests/legacy.rs`. [covers=architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.topic-and-bootstrap-roundtrip-in-alloc-safe-form,architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.alloc-safe-topic-identifier-stays-fixed-width-and-lossless-at-the-iroh-boundary,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-cluster-ticket-errors,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-unsigned-cluster-tickets-are-rejected-explicitly,architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.unsigned-wire-break-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md]
- 
+
 -- [ ] V3 Save signed/signed-vs-std proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/signed-validation.md`, including full-graph `cargo tree -p aspen-ticket --no-default-features --features signed -e normal`, full-graph `cargo tree -p aspen-ticket --features std -e normal`, `cargo check -p aspen-ticket --no-default-features --features signed`, `cargo check -p aspen-ticket --no-default-features --features signed --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features std`, positive proof that explicit-time signed helpers work under the signed-only surface, explicit proof that the `--features std` surface also exposes the signed surface's explicit-time helpers/types, explicit negative assertions that the signed-only surface excludes `rand`, `iroh`, `iroh-gossip`, and `anyhow`, deterministic negative proof that `sign` / `sign_with_validity` / `verify` / `is_expired` stay behind `std`, explicit positive `std` proof for those convenience wrappers, explicit negative assertion that `--features std` alone does not enable `iroh` or `iroh-gossip`, malformed/corrupted signed-input rejection, and deterministic source proof that `SignedAspenClusterTicket::to_bytes()` uses an `expect(...)`-style invariant break with contextual diagnostics instead of an empty-payload fallback. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-ticket-support-requires-explicit-opt-in,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-only-surface-stays-distinct-from-std-conveniences,ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks.signed-cluster-ticket-encoder-fails-loudly-on-impossible-serializer-bug,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.invalid-signed-cluster-ticket-string-is-still-rejected] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/signed-validation.md]
 +- [x] V3 Save signed/signed-vs-std proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/signed-validation.md`, including full-graph `cargo tree -p aspen-ticket --no-default-features --features signed -e normal`, full-graph `cargo tree -p aspen-ticket --features std -e normal`, `cargo check -p aspen-ticket --no-default-features --features signed`, `cargo check -p aspen-ticket --no-default-features --features signed --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features std`, positive proof that explicit-time signed helpers work under the signed-only surface, explicit proof that the `--features std` surface also exposes the signed surface's explicit-time helpers/types, explicit negative assertions that the signed-only surface excludes `rand`, `iroh`, `iroh-gossip`, and `anyhow`, deterministic negative proof that `sign` / `sign_with_validity` / `verify` / `is_expired` stay behind `std`, explicit positive `std` proof for those convenience wrappers, explicit negative assertion that `--features std` alone does not enable `iroh` or `iroh-gossip`, malformed/corrupted signed-input rejection, and deterministic source proof that `SignedAspenClusterTicket::to_bytes()` uses an `expect(...)`-style invariant break with contextual diagnostics instead of an empty-payload fallback. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-ticket-support-requires-explicit-opt-in,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.signed-only-surface-stays-distinct-from-std-conveniences,ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks.signed-cluster-ticket-encoder-fails-loudly-on-impossible-serializer-bug,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.invalid-signed-cluster-ticket-string-is-still-rejected] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/signed-validation.md]
- 
+
 -- [ ] V4 Save consumer, workspace, and transitive leak proof as the final labeled section in `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`, and save the dedicated root-workspace artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`, including full-graph `cargo tree -p aspen-ticket --features iroh -e normal`, `cargo check -p aspen-ticket --features iroh`, the root `Cargo.toml` `default-features = false` proof plus a deterministic negative assertion that fails if the workspace stanza reintroduces `iroh`, `signed`, or `std`, repo-wide direct-consumer discovery proof from the workspace graph, exact compile rails for every direct consumer named in the audit scope, shell-boundary conversion-site citations for every `iroh` consumer, the concrete transitive re-export leak proofs `cargo tree -p aspen-fuse -e features -i aspen-ticket` and `cargo tree -p aspen-cli -e features -i aspen-ticket`, deterministic negative proof that bare/default `aspen-ticket` cannot use iroh-only constructors/conversions without `iroh`, and an explicit reopen/escalation record if the saved audit for `crates/aspen-rpc-handlers` or `crates/aspen-ci` is non-empty or if repo-wide discovery finds any new direct `aspen-ticket` consumer outside the current audit list. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.iroh-conversion-happens-at-the-shell-boundary,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md]
 +- [x] V4 Save consumer, workspace, and transitive leak proof as the final labeled section in `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`, and save the dedicated root-workspace artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`, including full-graph `cargo tree -p aspen-ticket --features iroh -e normal`, `cargo check -p aspen-ticket --features iroh`, the root `Cargo.toml` `default-features = false` proof plus a deterministic negative assertion that fails if the workspace stanza reintroduces `iroh`, `signed`, or `std`, repo-wide direct-consumer discovery proof from the workspace graph, exact compile rails for every direct consumer named in the audit scope, shell-boundary conversion-site citations for every `iroh` consumer, the concrete transitive re-export leak proofs `cargo tree -p aspen-fuse -e features -i aspen-ticket` and `cargo tree -p aspen-cli -e features -i aspen-ticket`, deterministic negative proof that bare/default `aspen-ticket` cannot use iroh-only constructors/conversions without `iroh`, and an explicit reopen/escalation record if the saved audit for `crates/aspen-rpc-handlers` or `crates/aspen-ci` is non-empty or if repo-wide discovery finds any new direct `aspen-ticket` consumer outside the current audit list. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.iroh-conversion-happens-at-the-shell-boundary,architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md]
- 
+
 -- [ ] V5 Save final synchronized review packet under `openspec/changes/alloc-safe-cluster-ticket/evidence/final-validation.md`, keeping `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt` aligned with the evidence above so the full seam remains reviewable. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.signed-cluster-ticket-encoding-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/final-validation.md]
 +- [x] V5 Save final synchronized review packet under `openspec/changes/alloc-safe-cluster-ticket/evidence/final-validation.md`, keeping `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt` aligned with the evidence above so the full seam remains reviewable. [covers=architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.cluster-ticket-seam-proof-is-reviewable,ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.signed-cluster-ticket-encoding-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-cluster-ticket/evidence/final-validation.md]

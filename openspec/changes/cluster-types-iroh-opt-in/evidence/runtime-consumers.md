@@ -92,4 +92,3 @@ package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
 workspace: /home/brittonr/git/aspen/Cargo.toml
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
 ```
-

@@ -6007,4 +6007,3 @@ bash: -c: line 1: `print('ok: AspenHookTicket::to_bytes uses expect and no Vec::
 ```text
 bash: line 1: PY: command not found
 ```
-
