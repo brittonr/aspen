@@ -582,6 +582,9 @@ mod tests {
                 break;
             }
         }
+        assert!(!test_key.is_empty(), "expected to find a key for a missing shard");
+        assert_ne!(expected_shard, 0, "missing-shard test should target a non-local shard");
+        assert_eq!(store.router.get_shard_for_key(&test_key), expected_shard);
 
         // Attempt to write should fail with ShardMoved error
         let write_req = WriteRequest {
@@ -624,6 +627,8 @@ mod tests {
                 break;
             }
         }
+        assert!(!test_key.is_empty(), "expected to find a tombstoned shard key");
+        assert_eq!(store.router.get_shard_for_key(&test_key), 1);
 
         // Should return ShardMoved pointing to successor (shard 0)
         let read_req = ReadRequest::new(test_key.clone());
@@ -667,6 +672,8 @@ mod tests {
                 break;
             }
         }
+        assert!(!test_key.is_empty(), "expected to find a splitting shard key");
+        assert_eq!(store.router.get_shard_for_key(&test_key), 0);
 
         // Write should fail with ShardNotReady
         let write_req = WriteRequest {
@@ -712,6 +719,8 @@ mod tests {
                 break;
             }
         }
+        assert!(!test_key.is_empty(), "expected to find a merging shard key");
+        assert_eq!(store.router.get_shard_for_key(&test_key), 1);
 
         // Write to merging shard should fail with ShardMoved pointing to target
         let write_req = WriteRequest {
