@@ -43,7 +43,7 @@ pub(super) fn derive_gossip_topic_from_config(config: &NodeConfig) -> TopicId {
                     bootstrap_peers = ticket.bootstrap.len(),
                     "using topic ID from cluster ticket"
                 );
-                return ticket.topic_id;
+                return ticket.topic_id.to_topic_id();
             }
             Err(err) => {
                 warn!(

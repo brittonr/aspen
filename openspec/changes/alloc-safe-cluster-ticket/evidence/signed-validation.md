@@ -5,6 +5,12 @@ Covers: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-
 
 ## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo tree -p aspen-ticket --no-default-features --features signed -e normal'`
 
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
 aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
 ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
 │   ├── serde v1.0.228
@@ -177,6 +183,12 @@ aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
 
 ## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo tree -p aspen-ticket --features std -e normal'`
 
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
 aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
 ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
 │   ├── serde v1.0.228
@@ -358,25 +370,112 @@ aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
 
 ## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo check -p aspen-ticket --no-default-features --features signed'`
 
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.36s
 
 ## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo check -p aspen-ticket --no-default-features --features signed --target wasm32-unknown-unknown'`
 
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
 
 ## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo check -p aspen-ticket --features std'`
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.36s
+
+## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo test -p aspen-ticket --no-default-features --features signed --test signed'`
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running tests/signed.rs (target/debug/deps/signed-681dd1d6ac4530c8)
+
+running 3 tests
+test signed_only_deserialize_rejects_corrupted_input ... ok
+test signed_only_helpers_reject_expired_ticket ... ok
+test signed_only_helpers_verify_at_explicit_time ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
 
 ## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo test -p aspen-ticket --no-default-features --features signed --test ui'`
 
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running tests/ui.rs (target/debug/deps/ui-934f39dd9e28a35d)
 
 running 2 tests
-test std_wrappers_require_feature ... ok
-test iroh_helpers_require_feature ... ok
+warning: patch `snix-glue v0.1.0 (/home/brittonr/git/aspen/vendor/snix-glue)` was not used in the crate graph
+warning: patch `cargo-hyperlight v0.1.5 (/home/brittonr/git/aspen/vendor/cargo-hyperlight)` was not used in the crate graph
+warning: patch `uhlc v0.8.2 (/home/brittonr/git/aspen/vendor/uhlc)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+    Checking aspen-ticket-tests v0.0.0 (/home/brittonr/git/aspen/crates/aspen-ticket/target/tests/trybuild/aspen-ticket)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.47s
+
+test [0m[1mtests/ui/iroh_helpers_require_feature.rs[0m ... [0m[32mok
+[0m
+
+test iroh_helpers_require_feature ... ok
+warning: patch `snix-glue v0.1.0 (/home/brittonr/git/aspen/vendor/snix-glue)` was not used in the crate graph
+warning: patch `cargo-hyperlight v0.1.5 (/home/brittonr/git/aspen/vendor/cargo-hyperlight)` was not used in the crate graph
+warning: patch `uhlc v0.8.2 (/home/brittonr/git/aspen/vendor/uhlc)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+    Checking aspen-ticket-tests v0.0.0 (/home/brittonr/git/aspen/crates/aspen-ticket/target/tests/trybuild/aspen-ticket)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+
+
+test [0m[1mtests/ui/std_wrappers_require_feature.rs[0m ... [0m[32mok
+[0m
+
+test std_wrappers_require_feature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
 
 
 ## `env -u CARGO_INCREMENTAL RUSTC_WRAPPER= bash -lc 'cargo test -p aspen-ticket --features std --test std'`
 
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running tests/std.rs (target/debug/deps/std-e762c76514830cf4)
 
 running 2 tests
 test std_sign_with_validity_uses_current_time_wrappers ... ok
@@ -387,7 +486,7 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 ## Deterministic negative assertions
 
-Confirmed by the saved signed-only and std-only trees above: the signed-only surface excludes rand/iroh/iroh-gossip/anyhow, and the std-only surface does not pull iroh or iroh-gossip.
+Confirmed by the saved signed-only and std-only trees above: the signed-only surface excludes `rand`, `iroh`, `iroh-gossip`, and `anyhow`, and the `std` surface still excludes `iroh` and `iroh-gossip`.
 
 ## Deterministic source audit
 

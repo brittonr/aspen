@@ -534,7 +534,7 @@ fn bootstrap_base_node_derive_topic_id(config: &NodeConfig) -> TopicId {
                     bootstrap_peers = ticket.bootstrap.len(),
                     "using topic ID from cluster ticket"
                 );
-                return ticket.topic_id;
+                return ticket.topic_id.to_topic_id();
             }
             Err(err) => {
                 warn!(error = %err, "failed to parse gossip ticket, falling back to cookie-derived topic");
