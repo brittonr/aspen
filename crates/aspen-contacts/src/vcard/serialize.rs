@@ -3,107 +3,145 @@
 //! Serializes Contact structs to vCard text format (RFC 6350).
 
 use crate::types::Contact;
+use crate::types::ContactAddress;
+use crate::types::ContactEmail;
+use crate::types::ContactPhone;
+
+const VCARD_START_LINE: &str = "BEGIN:VCARD";
+const VCARD_END_LINE: &str = "END:VCARD";
+const VCARD_VERSION_LINE: &str = "VERSION:4.0";
+const VCARD_LINE_SEPARATOR: &str = "\r\n";
+const VCARD_LINE_CAPACITY: usize = 20;
+const MIN_VCARD_LINE_COUNT: usize = 4;
 
 /// Serialize a Contact to vCard 4.0 format.
 pub fn serialize_vcard(contact: &Contact) -> String {
-    let mut lines = Vec::with_capacity(20);
+    let mut lines = Vec::with_capacity(VCARD_LINE_CAPACITY);
 
-    lines.push("BEGIN:VCARD".to_string());
-    lines.push("VERSION:4.0".to_string());
+    push_required_lines(&mut lines, contact);
+    push_email_lines(&mut lines, &contact.emails);
+    push_phone_lines(&mut lines, &contact.phones);
+    push_address_lines(&mut lines, &contact.addresses);
+    push_optional_lines(&mut lines, contact);
+    push_custom_field_lines(&mut lines, &contact.custom_fields);
+    lines.push(VCARD_END_LINE.to_string());
+
+    debug_assert!(
+        !contact.display_name.is_empty(),
+        "vCard serialization expects a non-empty display name"
+    );
+    debug_assert!(lines.len() >= MIN_VCARD_LINE_COUNT);
+    debug_assert_eq!(lines.first().map(String::as_str), Some(VCARD_START_LINE));
+    debug_assert_eq!(lines.last().map(String::as_str), Some(VCARD_END_LINE));
+
+    join_vcard_lines(lines)
+}
+
+/// Serialize multiple contacts to a concatenated vCard block.
+pub fn serialize_vcards(contacts: &[Contact]) -> String {
+    contacts.iter().map(serialize_vcard).collect::<Vec<_>>().join("")
+}
+
+fn push_required_lines(lines: &mut Vec<String>, contact: &Contact) {
+    lines.push(VCARD_START_LINE.to_string());
+    lines.push(VCARD_VERSION_LINE.to_string());
 
     if !contact.uid.is_empty() {
         lines.push(format!("UID:{}", contact.uid));
     }
 
     lines.push(format!("FN:{}", contact.display_name));
+    lines.push(format!(
+        "N:{};{};;;",
+        contact.family_name.as_deref().unwrap_or(""),
+        contact.given_name.as_deref().unwrap_or("")
+    ));
+}
 
-    // N: Family;Given;Additional;Prefix;Suffix
-    let family = contact.family_name.as_deref().unwrap_or("");
-    let given = contact.given_name.as_deref().unwrap_or("");
-    lines.push(format!("N:{family};{given};;;"));
+fn push_email_lines(lines: &mut Vec<String>, emails: &[ContactEmail]) {
+    for email in emails {
+        let param_suffix = format_typed_param_suffix(email.label.as_deref(), email.is_primary);
+        lines.push(format!("EMAIL{param_suffix}:{}", email.address));
+    }
+}
 
-    for email in &contact.emails {
-        let mut params = Vec::new();
-        if let Some(ref label) = email.label {
-            params.push(format!("TYPE={label}"));
-        }
-        if email.is_primary {
-            params.push("PREF".to_string());
-        }
-        let param_str = if params.is_empty() {
-            String::new()
-        } else {
-            format!(";{}", params.join(";"))
-        };
-        lines.push(format!("EMAIL{param_str}:{}", email.address));
+fn push_phone_lines(lines: &mut Vec<String>, phones: &[ContactPhone]) {
+    for phone in phones {
+        let param_suffix = format_typed_param_suffix(phone.label.as_deref(), phone.is_primary);
+        lines.push(format!("TEL{param_suffix}:{}", phone.number));
     }
+}
 
-    for phone in &contact.phones {
-        let mut params = Vec::new();
-        if let Some(ref label) = phone.label {
-            params.push(format!("TYPE={label}"));
-        }
-        if phone.is_primary {
-            params.push("PREF".to_string());
-        }
-        let param_str = if params.is_empty() {
-            String::new()
-        } else {
-            format!(";{}", params.join(";"))
-        };
-        lines.push(format!("TEL{param_str}:{}", phone.number));
+fn push_address_lines(lines: &mut Vec<String>, addresses: &[ContactAddress]) {
+    for address in addresses {
+        let param_suffix = format_labeled_param_suffix(address.label.as_deref());
+        lines.push(format!(
+            "ADR{param_suffix}:;;{};{};{};{};{}",
+            address.street.as_deref().unwrap_or(""),
+            address.city.as_deref().unwrap_or(""),
+            address.region.as_deref().unwrap_or(""),
+            address.postal_code.as_deref().unwrap_or(""),
+            address.country.as_deref().unwrap_or("")
+        ));
     }
+}
 
-    for addr in &contact.addresses {
-        let mut params = Vec::new();
-        if let Some(ref label) = addr.label {
-            params.push(format!("TYPE={label}"));
-        }
-        let param_str = if params.is_empty() {
-            String::new()
-        } else {
-            format!(";{}", params.join(";"))
-        };
-        // ADR: PO;Ext;Street;City;Region;PostalCode;Country
-        let street = addr.street.as_deref().unwrap_or("");
-        let city = addr.city.as_deref().unwrap_or("");
-        let region = addr.region.as_deref().unwrap_or("");
-        let postal = addr.postal_code.as_deref().unwrap_or("");
-        let country = addr.country.as_deref().unwrap_or("");
-        lines.push(format!("ADR{param_str}:;;{street};{city};{region};{postal};{country}"));
-    }
+fn push_optional_lines(lines: &mut Vec<String>, contact: &Contact) {
+    push_optional_line(lines, "ORG", contact.organization.as_deref());
+    push_optional_line(lines, "TITLE", contact.title.as_deref());
+    push_optional_line(lines, "BDAY", contact.birthday.as_deref());
+    push_optional_line(lines, "NOTE", contact.notes.as_deref());
 
-    if let Some(ref org) = contact.organization {
-        lines.push(format!("ORG:{org}"));
-    }
-    if let Some(ref title) = contact.title {
-        lines.push(format!("TITLE:{title}"));
-    }
-    if let Some(ref bday) = contact.birthday {
-        lines.push(format!("BDAY:{bday}"));
-    }
-    if let Some(ref note) = contact.notes {
-        lines.push(format!("NOTE:{note}"));
-    }
     if !contact.categories.is_empty() {
         lines.push(format!("CATEGORIES:{}", contact.categories.join(",")));
     }
-    if let Some(ref url) = contact.url {
-        lines.push(format!("URL:{url}"));
-    }
 
-    for (name, value) in &contact.custom_fields {
-        lines.push(format!("{name}:{value}"));
-    }
-
-    lines.push("END:VCARD".to_string());
-
-    lines.join("\r\n") + "\r\n"
+    push_optional_line(lines, "URL", contact.url.as_deref());
 }
 
-/// Serialize multiple contacts to a concatenated vCard block.
-pub fn serialize_vcards(contacts: &[Contact]) -> String {
-    contacts.iter().map(serialize_vcard).collect::<Vec<_>>().join("")
+fn push_optional_line(lines: &mut Vec<String>, key: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        lines.push(format!("{key}:{value}"));
+    }
+}
+
+fn push_custom_field_lines(lines: &mut Vec<String>, custom_fields: &[(String, String)]) {
+    for (name, value) in custom_fields {
+        lines.push(format!("{name}:{value}"));
+    }
+}
+
+fn format_typed_param_suffix(label: Option<&str>, is_primary: bool) -> String {
+    let mut params = Vec::with_capacity(2);
+    if let Some(label) = label {
+        params.push(format!("TYPE={label}"));
+    }
+    if is_primary {
+        params.push("PREF".to_string());
+    }
+    format_param_suffix(params)
+}
+
+fn format_labeled_param_suffix(label: Option<&str>) -> String {
+    let mut params = Vec::with_capacity(1);
+    if let Some(label) = label {
+        params.push(format!("TYPE={label}"));
+    }
+    format_param_suffix(params)
+}
+
+fn format_param_suffix(params: Vec<String>) -> String {
+    if params.is_empty() {
+        String::new()
+    } else {
+        format!(";{}", params.join(";"))
+    }
+}
+
+fn join_vcard_lines(lines: Vec<String>) -> String {
+    let mut serialized = lines.join(VCARD_LINE_SEPARATOR);
+    serialized.push_str(VCARD_LINE_SEPARATOR);
+    serialized
 }
 
 #[cfg(test)]
