@@ -148,7 +148,8 @@ where C: RaftTypeConfig
             start = purge_upto_next;
         }
 
-        let end = std::cmp::min(start + max_entries, last_next);
+        let max_end = start.saturating_add(max_entries);
+        let end = std::cmp::min(max_end, last_next);
 
         if start == end {
             self.inflight = Inflight::None;
@@ -174,10 +175,15 @@ where C: RaftTypeConfig
     }
 
     fn calc_mid(matching_next: u64, end: u64) -> u64 {
+        const SEARCH_DISTANCE_DIVISOR: u64 = 16;
+        const SEARCH_DISTANCE_MULTIPLIER: u64 = 8;
+
         debug_assert!(matching_next <= end);
-        let d = end - matching_next;
-        let offset = d / 16 * 8;
-        matching_next + offset
+        let distance_entries = end.saturating_sub(matching_next);
+        let offset_entries = distance_entries
+            .saturating_div(SEARCH_DISTANCE_DIVISOR)
+            .saturating_mul(SEARCH_DISTANCE_MULTIPLIER);
+        matching_next.saturating_add(offset_entries)
     }
 }
 
