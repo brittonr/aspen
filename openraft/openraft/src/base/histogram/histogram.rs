@@ -185,12 +185,13 @@ impl Histogram {
 }
 
 fn split_relative_bucket_group_index(relative_bucket_index: usize) -> usize {
-    let group_size = Histogram::GROUP_SIZE;
-    if group_size == 0 {
-        return 0;
+    match relative_bucket_index.checked_div(Histogram::GROUP_SIZE) {
+        Some(group_index) => group_index,
+        None => {
+            debug_assert!(false, "histogram group size must be non-zero");
+            0
+        }
     }
-
-    relative_bucket_index / group_size
 }
 
 fn saturating_u32_from_usize(value: usize) -> u32 {
