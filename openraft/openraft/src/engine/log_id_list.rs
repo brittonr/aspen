@@ -60,7 +60,8 @@ where C: RaftTypeConfig
         let first = range.start().clone();
         let last = range.end().clone();
 
-        let max_log_id_count = inclusive_log_id_count(first.index(), last.index());
+        let search_bounds = LogIndexBounds::new(first.index(), last.index());
+        let max_log_id_count = search_bounds.inclusive_log_id_count();
         let mut res = Vec::with_capacity(max_log_id_count);
 
         // Recursion stack
@@ -78,7 +79,7 @@ where C: RaftTypeConfig
             }
 
             // Two adjacent logs with different leader_id, no need to binary search
-            if are_adjacent_log_indices(first.index(), last.index()) {
+            if LogIndexBounds::new(first.index(), last.index()).are_adjacent() {
                 if last_result_leader_id(&res) < Some(first.committed_leader_id().clone()) {
                     res.push(first);
                 }
@@ -86,7 +87,7 @@ where C: RaftTypeConfig
                 continue;
             }
 
-            let mid_index = midpoint_log_index(first.index(), last.index());
+            let mid_index = LogIndexBounds::new(first.index(), last.index()).midpoint_log_index();
             let mid = sto.get_log_id(mid_index).await?;
 
             if first.committed_leader_id() == mid.committed_leader_id() {
@@ -361,7 +362,6 @@ where C: RaftTypeConfig
     }
 }
 
-#[allow(clippy::clone_on_copy)]
 fn last_result_leader_id<C>(log_ids: &[LogIdOf<C>]) -> Option<CommittedLeaderIdOf<C>>
 where
     C: RaftTypeConfig,
@@ -369,21 +369,36 @@ where
     log_ids.last().map(|log_id| log_id.committed_leader_id().clone())
 }
 
-fn are_adjacent_log_indices(first_index: u64, last_index: u64) -> bool {
-    first_index.saturating_add(1) == last_index
+#[derive(Clone, Copy)]
+struct LogIndexBounds {
+    first_log_index: u64,
+    last_log_index: u64,
 }
 
-fn midpoint_log_index(first_index: u64, last_index: u64) -> u64 {
-    let distance = last_index.saturating_sub(first_index);
-    first_index.saturating_add(distance / 2)
-}
+impl LogIndexBounds {
+    fn new(first_log_index: u64, last_log_index: u64) -> Self {
+        Self {
+            first_log_index,
+            last_log_index,
+        }
+    }
 
-fn inclusive_log_id_count(first_index: u64, last_index: u64) -> usize {
-    let distance = last_index.saturating_sub(first_index);
-    let log_count_u64 = distance.saturating_add(1);
-    match usize::try_from(log_count_u64) {
-        Ok(log_count) => log_count,
-        Err(_) => usize::MAX,
+    fn are_adjacent(self) -> bool {
+        self.first_log_index.saturating_add(1) == self.last_log_index
+    }
+
+    fn midpoint_log_index(self) -> u64 {
+        let distance = self.last_log_index.saturating_sub(self.first_log_index);
+        self.first_log_index.saturating_add(distance / 2)
+    }
+
+    fn inclusive_log_id_count(self) -> usize {
+        let distance = self.last_log_index.saturating_sub(self.first_log_index);
+        let log_count_u64 = distance.saturating_add(1);
+        match usize::try_from(log_count_u64) {
+            Ok(log_count) => log_count,
+            Err(_) => usize::MAX,
+        }
     }
 }
 
