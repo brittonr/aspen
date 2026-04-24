@@ -27,8 +27,8 @@ impl<C> LogHandler<'_, C>
 where C: RaftTypeConfig
 {
     /// Purge log entries up to `RaftState.purge_upto()`, inclusive.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn purge_log(&mut self) {
+        let _span = log_handler_debug_span("purge_log").entered();
         let st = &mut self.state;
         let purge_upto = st.purge_upto();
 
@@ -42,7 +42,14 @@ where C: RaftTypeConfig
             return;
         }
 
-        let upto = purge_upto.unwrap().clone();
+        let upto = match purge_upto.cloned() {
+            Some(upto) => upto,
+            None => {
+                tracing::warn!("missing purge target despite purge_upto > last_purged_log_id");
+                debug_assert!(false, "purge_upto must exist before purging logs");
+                return;
+            }
+        };
 
         st.purge_log(&upto);
         self.output.push_command(Command::PurgeLog { upto });
@@ -53,16 +60,16 @@ where C: RaftTypeConfig
     ///
     /// This method is called after building a snapshot because openraft only purges logs that are
     /// already included in the snapshot.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn schedule_policy_based_purge(&mut self) {
+        let _span = log_handler_debug_span("schedule_policy_based_purge").entered();
         if let Some(purge_upto) = self.calc_purge_upto() {
             self.update_purge_upto(purge_upto);
         }
     }
 
     /// Update the log id it expects to purge up to. It won't trigger the purge immediately.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn update_purge_upto(&mut self, purge_upto: LogIdOf<C>) {
+        let _span = log_handler_debug_span("update_purge_upto").entered();
         debug_assert!(self.state.purge_upto() <= Some(&purge_upto));
         self.state.purge_upto = Some(purge_upto);
     }
@@ -72,38 +79,43 @@ where C: RaftTypeConfig
     /// Only logs included in the snapshot will be purged.
     /// It may return None if there is no log to purge.
     ///
-    /// `max_keep` specifies the number of applied logs to keep.
-    /// `max_keep==0` means every applied log can be purged.
-    #[tracing::instrument(level = "debug", skip_all)]
+    /// `max_keep_log_count` specifies the number of applied logs to keep.
+    /// `max_keep_log_count==0` means every applied log can be purged.
     pub(crate) fn calc_purge_upto(&self) -> Option<LogIdOf<C>> {
+        let _span = log_handler_debug_span("calc_purge_upto").entered();
         let st = &self.state;
-        let max_keep = self.config.max_in_snapshot_log_to_keep;
-        let batch_size = self.config.purge_batch_size;
+        let max_keep_log_count = self.config.max_in_snapshot_log_to_keep;
+        let purge_batch_size = self.config.purge_batch_size;
 
-        let purge_end = self.state.snapshot_meta.last_log_id.next_index().saturating_sub(max_keep);
+        let purge_end = self.state.snapshot_meta.last_log_id.next_index().saturating_sub(max_keep_log_count);
 
         tracing::debug!(
             snapshot_last_log_id = debug(self.state.snapshot_meta.last_log_id.clone()),
-            max_keep,
+            max_keep_log_count,
             "try purge: (-oo, {})",
             purge_end
         );
 
-        if st.last_purged_log_id().next_index() + batch_size > purge_end {
+        if st.last_purged_log_id().next_index().saturating_add(purge_batch_size) > purge_end {
             tracing::debug!(
                 snapshot_last_log_id = debug(self.state.snapshot_meta.last_log_id.clone()),
-                max_keep,
+                max_keep_log_count,
                 last_purged_log_id = display(st.last_purged_log_id().display()),
-                batch_size,
+                purge_batch_size,
                 purge_end,
                 "no need to purge",
             );
             return None;
         }
 
-        let log_id = self.state.log_ids.ref_at(purge_end - 1);
-        debug_assert!(log_id.is_some(), "log id not found at {}, engine.state:{:?}", purge_end - 1, st);
+        let purge_log_index = purge_end.saturating_sub(1);
+        let log_id = self.state.log_ids.ref_at(purge_log_index);
+        debug_assert!(log_id.is_some(), "log id not found at {}, engine.state:{:?}", purge_log_index, st);
 
         log_id.to_log_id()
     }
+}
+
+fn log_handler_debug_span(operation: &'static str) -> tracing::Span {
+    tracing::span!(tracing::Level::DEBUG, "log_handler", operation = operation)
 }
