@@ -707,9 +707,9 @@ fn create_shard_context_resources(config: &NodeConfig, num_shards: u32) -> Shard
 
     // Create base Raft config (shared across shards with per-shard cluster name)
     let base_raft_config = RaftConfig {
-        heartbeat_interval: config.heartbeat_interval_ms,
-        election_timeout_min: config.election_timeout_min_ms,
-        election_timeout_max: config.election_timeout_max_ms,
+        heartbeat_interval_ms: config.heartbeat_interval_ms,
+        election_timeout_min_ms: config.election_timeout_min_ms,
+        election_timeout_max_ms: config.election_timeout_max_ms,
         replication_lag_threshold: 10000,
         snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(10_000),
         max_in_snapshot_log_to_keep: 1_000,

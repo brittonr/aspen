@@ -90,7 +90,7 @@ where
                 continue;
             };
 
-            let heartbeat_timeout_duration = Duration::from_millis(self.config.heartbeat_interval);
+            let heartbeat_timeout_duration = Duration::from_millis(self.config.heartbeat_interval_ms);
             let option = RPCOption::new(heartbeat_timeout_duration);
 
             let payload = AppendEntriesRequest {

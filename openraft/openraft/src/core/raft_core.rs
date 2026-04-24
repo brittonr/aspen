@@ -307,7 +307,7 @@ where
 
         let my_id = self.id.clone();
         let my_vote = self.engine.state.vote_ref().clone();
-        let ttl = Duration::from_millis(self.config.heartbeat_interval);
+        let ttl = Duration::from_millis(self.config.heartbeat_interval_ms);
         let eff_mem = self.engine.state.membership_state.effective().clone();
         let core_tx = self.tx_notification.clone();
 
@@ -1217,7 +1217,7 @@ where
 
             let tx = self.tx_notification.clone();
 
-            let ttl = Duration::from_millis(self.config.election_timeout_min);
+            let ttl = Duration::from_millis(self.config.election_timeout_min_ms);
             let id = self.id.clone();
             let option = RPCOption::new(ttl);
 
@@ -1284,7 +1284,7 @@ where
             let target_node = self.engine.state.membership_state.effective().get_node(&target).unwrap().clone();
             let mut client = self.network_factory.new_client(target.clone(), &target_node).await;
 
-            let ttl = Duration::from_millis(self.config.election_timeout_min);
+            let ttl = Duration::from_millis(self.config.election_timeout_min_ms);
             let option = RPCOption::new(ttl);
 
             let fut = {
@@ -1548,7 +1548,7 @@ where
 
                     // Install next heartbeat
                     if let Some(l) = self.engine.leader_mut() {
-                        l.next_heartbeat = C::now() + Duration::from_millis(self.config.heartbeat_interval);
+                        l.next_heartbeat = C::now() + Duration::from_millis(self.config.heartbeat_interval_ms);
                     }
                 }
 

@@ -60,9 +60,9 @@ pub async fn setup_three_node_cluster() -> Result<(AspenRouter, NodeId)> {
     let config = Arc::new(
         Config {
             is_tick_enabled: true,
-            heartbeat_interval: 100,
-            election_timeout_min: 500,
-            election_timeout_max: 1000,
+            heartbeat_interval_ms: 100,
+            election_timeout_min_ms: 500,
+            election_timeout_max_ms: 1000,
             ..Default::default()
         }
         .validate()?,

@@ -24,9 +24,9 @@
 //! use openraft::Config;
 //!
 //! let config = Config {
-//!     heartbeat_interval: 50,
-//!     election_timeout_min: 150,
-//!     election_timeout_max: 300,
+//!     heartbeat_interval_ms: 50,
+//!     election_timeout_min_ms: 150,
+//!     election_timeout_max_ms: 300,
 //!     ..Default::default()
 //! };
 //!

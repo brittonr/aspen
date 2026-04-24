@@ -162,9 +162,9 @@ async fn test_append_entries_backoff_seed_2002() {
 
     let config = Arc::new(
         Config {
-            heartbeat_interval: 5000, // Long heartbeat to avoid excessive RPCs
-            election_timeout_min: 10000,
-            election_timeout_max: 10001,
+            heartbeat_interval_ms: 5000, // Long heartbeat to avoid excessive RPCs
+            election_timeout_min_ms: 10000,
+            election_timeout_max_ms: 10001,
             ..Default::default()
         }
         .validate()

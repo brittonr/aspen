@@ -60,15 +60,15 @@ See: [`leader-id`](`crate::docs::data::leader_id`) for details.
 
 **Question**: When a leader node fails or is terminated, how do followers detect this and start a new election?
 
-**Answer**: Followers automatically trigger elections when they stop receiving messages from the leader for longer than the configured `election_timeout_max`.
+**Answer**: Followers automatically trigger elections when they stop receiving messages from the leader for longer than the configured `election_timeout_max_ms`.
 
 **How it works**:
 
-1. **Heartbeat mechanism**: The leader periodically sends `AppendEntries` messages (heartbeats) to all followers and learners at intervals defined by [`Config::heartbeat_interval`][].
+1. **Heartbeat mechanism**: The leader periodically sends `AppendEntries` messages (heartbeats) to all followers and learners at intervals defined by [`Config::heartbeat_interval_ms`][].
 
 2. **Election timeout**: Each follower maintains an internal timer. When a follower receives an `AppendEntries` message from the leader, it resets this timer.
 
-3. **Entering candidate state**: If a follower does not receive any `AppendEntries` messages for longer than [`Config::election_timeout_max`][], it transitions to the `Candidate` state and begins a new election by requesting votes from other nodes.
+3. **Entering candidate state**: If a follower does not receive any `AppendEntries` messages for longer than [`Config::election_timeout_max_ms`][], it transitions to the `Candidate` state and begins a new election by requesting votes from other nodes.
 
 4. **Required configuration**: For elections to trigger automatically, ensure:
    - [`Config::is_tick_enabled`][] = `true` (enables time-based events)
@@ -81,7 +81,7 @@ See: [`leader-id`](`crate::docs::data::leader_id`) for details.
   - Verify `enable_tick = true` and `enable_elect = true` in your configuration
   - Ensure at least a quorum of nodes are online and can communicate
   - Check that network connectivity allows nodes to reach each other
-  - Confirm the election timeout is properly configured (typically `election_timeout_min` should be at least 3× `heartbeat_interval`)
+  - Confirm the election timeout is properly configured (typically `election_timeout_min_ms` should be at least 3× `heartbeat_interval_ms`)
 
 - **Environmental differences**: Elections may work in some environments (e.g., Docker) but not others (e.g., local tests) due to:
   - Network configuration differences
@@ -90,15 +90,15 @@ See: [`leader-id`](`crate::docs::data::leader_id`) for details.
 
 **Timing recommendations**:
 
-Follow the Raft timing inequality: `heartbeat_interval ≪ election_timeout ≪ MTBF` (mean time between failures)
+Follow the Raft timing inequality: `heartbeat_interval_ms ≪ election_timeout ≪ MTBF` (mean time between failures)
 
 A typical configuration:
 
 ```rust,ignore
 Config {
-    heartbeat_interval: 100,           // milliseconds
-    election_timeout_min: 300,         // 3× heartbeat_interval
-    election_timeout_max: 600,         // 2× election_timeout_min
+    heartbeat_interval_ms: 100,           // milliseconds
+    election_timeout_min_ms: 300,         // 3× heartbeat_interval_ms
+    election_timeout_max_ms: 600,         // 2× election_timeout_min_ms
     is_tick_enabled: true,
     is_heartbeat_enabled: true,
     is_election_enabled: true,
@@ -106,8 +106,8 @@ Config {
 }
 ```
 
-[`Config::heartbeat_interval`]: `crate::config::Config::heartbeat_interval`
-[`Config::election_timeout_max`]: `crate::config::Config::election_timeout_max`
+[`Config::heartbeat_interval_ms`]: `crate::config::Config::heartbeat_interval_ms`
+[`Config::election_timeout_max_ms`]: `crate::config::Config::election_timeout_max_ms`
 [`Config::is_tick_enabled`]: `crate::config::Config::is_tick_enabled`
 [`Config::is_election_enabled`]: `crate::config::Config::is_election_enabled`
 [`Config::is_heartbeat_enabled`]: `crate::config::Config::is_heartbeat_enabled`
@@ -136,16 +136,16 @@ This allows full control over when snapshots are created based on your applicati
 
 **Symptom**: Logs show repeated leader elections, or [`RaftMetrics::current_leader`][] changes frequently
 
-**Cause**: [`Config::election_timeout_min`][] is too small for your storage or network latency.
+**Cause**: [`Config::election_timeout_min_ms`][] is too small for your storage or network latency.
 If [`RaftLogStorage::append`][] takes longer than the election timeout, heartbeats time out and
 trigger elections.
 
-**Solution**: Increase both [`Config::election_timeout_min`][] and [`Config::election_timeout_max`][].
-Ensure `heartbeat_interval < election_timeout_min / 2` and that election timeout is at least
+**Solution**: Increase both [`Config::election_timeout_min_ms`][] and [`Config::election_timeout_max_ms`][].
+Ensure `heartbeat_interval_ms < election_timeout_min_ms / 2` and that election timeout is at least
 10× your typical [`RaftLogStorage::append`][] latency.
 
 [`RaftMetrics::current_leader`]: `crate::metrics::RaftMetrics::current_leader`
-[`Config::election_timeout_min`]: `crate::config::Config::election_timeout_min`
+[`Config::election_timeout_min_ms`]: `crate::config::Config::election_timeout_min_ms`
 [`RaftLogStorage::append`]: `crate::storage::RaftLogStorage::append`
 
 
@@ -193,13 +193,13 @@ When a follower is more than [`Config::replication_lag_threshold`][] entries beh
 sends a snapshot instead of individual log entries.
 
 For large snapshots that timeout during transfer, increase [`Config::install_snapshot_timeout`][].
-The snapshot is sent in chunks of [`Config::snapshot_max_chunk_size`][] bytes.
+The snapshot is sent in chunks of [`Config::snapshot_max_chunk_size_bytes`][] bytes.
 
 [`RaftStateMachine::get_snapshot_builder`]: `crate::storage::RaftStateMachine::get_snapshot_builder`
 [`RaftStateMachine::apply`]: `crate::storage::RaftStateMachine::apply`
 [`Config::replication_lag_threshold`]: `crate::config::Config::replication_lag_threshold`
 [`Config::install_snapshot_timeout`]: `crate::config::Config::install_snapshot_timeout`
-[`Config::snapshot_max_chunk_size`]: `crate::config::Config::snapshot_max_chunk_size`
+[`Config::snapshot_max_chunk_size_bytes`]: `crate::config::Config::snapshot_max_chunk_size_bytes`
 
 
 ## Monitoring & Observability

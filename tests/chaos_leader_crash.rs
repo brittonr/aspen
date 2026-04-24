@@ -37,9 +37,9 @@ async fn run_leader_crash_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // Use shorter timeouts for faster leader election in chaos scenarios
     let config = Arc::new(
         Config {
-            heartbeat_interval: 500,    // 500ms heartbeat
-            election_timeout_min: 1500, // 1.5s min election timeout
-            election_timeout_max: 3000, // 3s max election timeout
+            heartbeat_interval_ms: 500,    // 500ms heartbeat
+            election_timeout_min_ms: 1500, // 1.5s min election timeout
+            election_timeout_max_ms: 3000, // 3s max election timeout
             ..Default::default()
         }
         .validate()?,

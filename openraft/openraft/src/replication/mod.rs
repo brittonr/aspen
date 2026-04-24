@@ -398,10 +398,10 @@ where
             payload = display(&payload),
             now = display(leader_time.display()),
             "start sending append_entries, timeout: {:?}",
-            self.task_state.config.heartbeat_interval
+            self.task_state.config.heartbeat_interval_ms
         );
 
-        let rpc_timeout_duration = Duration::from_millis(self.task_state.config.heartbeat_interval);
+        let rpc_timeout_duration = Duration::from_millis(self.task_state.config.heartbeat_interval_ms);
         let option = RPCOption::new(rpc_timeout_duration);
         let res = C::timeout(rpc_timeout_duration, self.network.append_entries(payload, option)).await;
 

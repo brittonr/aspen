@@ -149,9 +149,9 @@ fn invalid_snapshot_policy_error(src: &str) -> ConfigError {
 ///
 /// let config = Config {
 ///     cluster_name: "my-cluster".to_string(),
-///     heartbeat_interval: 50,
-///     election_timeout_min: 150,
-///     election_timeout_max: 300,
+///     heartbeat_interval_ms: 50,
+///     election_timeout_min_ms: 150,
+///     election_timeout_max_ms: 300,
 ///     ..Default::default()
 /// };
 ///
@@ -163,7 +163,7 @@ fn invalid_snapshot_policy_error(src: &str) -> ConfigError {
 ///
 /// Follow the Raft timing inequality: `broadcastTime ≪ electionTimeout ≪ MTBF`
 ///
-/// **Rule of thumb**: Set `heartbeat_interval ≈ election_timeout / 3` and ensure election timeout
+/// **Rule of thumb**: Set `heartbeat_interval_ms ≈ election_timeout / 3` and ensure election timeout
 /// is 10-20× your typical network round-trip time.
 ///
 /// # See Also
@@ -180,16 +180,16 @@ pub struct Config {
     pub cluster_name: String,
 
     /// The minimum election timeout in milliseconds
-    #[clap(long, default_value = "150")]
-    pub election_timeout_min: u64,
+    #[clap(long = "election-timeout-min", default_value = "150")]
+    pub election_timeout_min_ms: u64,
 
     /// The maximum election timeout in milliseconds
-    #[clap(long, default_value = "300")]
-    pub election_timeout_max: u64,
+    #[clap(long = "election-timeout-max", default_value = "300")]
+    pub election_timeout_max_ms: u64,
 
     /// The heartbeat interval in milliseconds at which leaders will send heartbeats to followers
-    #[clap(long, default_value = "50")]
-    pub heartbeat_interval: u64,
+    #[clap(long = "heartbeat-interval", default_value = "50")]
+    pub heartbeat_interval_ms: u64,
 
     /// The timeout for sending then installing the last snapshot segment,
     /// in millisecond. It is also used as the timeout for sending a non-last segment if
@@ -234,8 +234,8 @@ pub struct Config {
     pub snapshot_policy: SnapshotPolicy,
 
     /// The maximum snapshot chunk size allowed when transmitting snapshots (in bytes)
-    #[clap(long, default_value = "3MiB", value_parser=parse_bytes_with_unit)]
-    pub snapshot_max_chunk_size: u64,
+    #[clap(long = "snapshot-max-chunk-size", default_value = "3MiB", value_parser=parse_bytes_with_unit)]
+    pub snapshot_max_chunk_size_bytes: u64,
 
     /// The maximum number of logs to keep that are already included in **snapshot**.
     ///
@@ -244,8 +244,8 @@ pub struct Config {
     pub max_in_snapshot_log_to_keep: u64,
 
     /// The minimal number of applied logs to purge in a batch.
-    #[clap(long, default_value = "1")]
-    pub purge_batch_size: u64,
+    #[clap(long = "purge-batch-size", default_value = "1")]
+    pub purge_batch_log_count: u64,
 
     /// The size of the bounded API channel for sending messages to RaftCore.
     ///
@@ -269,7 +269,7 @@ pub struct Config {
     ///
     /// **Critical for elections**: When `false`, followers cannot detect leader failures and will
     /// never trigger elections, even with `is_election_enabled = true`. The tick mechanism provides the
-    /// timing infrastructure that allows followers to detect when `election_timeout_max` has passed
+    /// timing infrastructure that allows followers to detect when `election_timeout_max_ms` has passed
     /// without receiving heartbeats from the leader.
     ///
     /// This flag is mainly used for testing or to build a consensus system that does not depend on
@@ -304,7 +304,7 @@ pub struct Config {
     ///
     /// When enabled (`true`), followers automatically trigger elections by entering the `Candidate`
     /// state when they don't receive `AppendEntries` messages (heartbeats) from the leader for
-    /// longer than `election_timeout_max`. This is essential for automatic failover when a leader
+    /// longer than `election_timeout_max_ms`. This is essential for automatic failover when a leader
     /// becomes unavailable.
     ///
     /// When disabled (`false`), followers will never initiate elections, even if the leader fails.
@@ -367,7 +367,7 @@ impl Default for Config {
 impl Config {
     /// Generate a new random election timeout within the configured min and max values.
     pub fn new_rand_election_timeout<RT: AsyncRuntime>(&self) -> u64 {
-        RT::thread_rng().random_range(self.election_timeout_min..self.election_timeout_max)
+        RT::thread_rng().random_range(self.election_timeout_min_ms..self.election_timeout_max_ms)
     }
 
     /// Get the timeout for sending and installing the last snapshot segment.
@@ -438,17 +438,17 @@ impl Config {
 
     /// Validate the state of this config.
     pub fn validate(self) -> Result<Config, ConfigError> {
-        if self.election_timeout_min >= self.election_timeout_max {
+        if self.election_timeout_min_ms >= self.election_timeout_max_ms {
             return Err(ConfigError::ElectionTimeout {
-                min: self.election_timeout_min,
-                max: self.election_timeout_max,
+                min: self.election_timeout_min_ms,
+                max: self.election_timeout_max_ms,
             });
         }
 
-        if self.election_timeout_min <= self.heartbeat_interval {
+        if self.election_timeout_min_ms <= self.heartbeat_interval_ms {
             return Err(ConfigError::ElectionTimeoutLTHeartBeat {
-                election_timeout_min: self.election_timeout_min,
-                heartbeat_interval: self.heartbeat_interval,
+                election_timeout_min_ms: self.election_timeout_min_ms,
+                heartbeat_interval_ms: self.heartbeat_interval_ms,
             });
         }
 

@@ -33,8 +33,8 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
         Config {
             is_heartbeat_enabled: false,
             is_election_enabled: false,
-            election_timeout_min: 500,
-            election_timeout_max: 501,
+            election_timeout_min_ms: 500,
+            election_timeout_max_ms: 501,
             ..Default::default()
         }
         .validate()?,

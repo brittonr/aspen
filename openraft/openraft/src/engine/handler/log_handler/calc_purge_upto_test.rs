@@ -62,7 +62,7 @@ fn test_calc_purge_upto() -> anyhow::Result<()> {
     for (last_purged, snapshot_last_log_id, max_keep, want) in cases {
         let mut eng = eng();
         eng.config.max_in_snapshot_log_to_keep = max_keep;
-        eng.config.purge_batch_size = 1;
+        eng.config.purge_batch_log_count = 1;
 
         if let Some(last_purged) = last_purged {
             eng.state.log_ids.purge(&last_purged);

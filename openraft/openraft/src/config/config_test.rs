@@ -8,14 +8,14 @@ use crate::config::error::ConfigError;
 fn test_config_defaults() {
     let cfg = Config::default();
 
-    assert!(cfg.election_timeout_min >= 150);
-    assert!(cfg.election_timeout_max <= 300);
+    assert!(cfg.election_timeout_min_ms >= 150);
+    assert!(cfg.election_timeout_max_ms <= 300);
 
-    assert_eq!(50, cfg.heartbeat_interval);
+    assert_eq!(50, cfg.heartbeat_interval_ms);
     assert_eq!(300, cfg.max_payload_entries);
     assert_eq!(5000, cfg.replication_lag_threshold);
 
-    assert_eq!(3 * 1024 * 1024, cfg.snapshot_max_chunk_size);
+    assert_eq!(3 * 1024 * 1024, cfg.snapshot_max_chunk_size_bytes);
     assert_eq!(SnapshotPolicy::LogsSinceLast(5000), cfg.snapshot_policy);
     assert_eq!(Some(65536), cfg.api_channel_size);
     assert_eq!(Some(65536), cfg.notification_channel_size);
@@ -24,8 +24,8 @@ fn test_config_defaults() {
 #[test]
 fn test_invalid_election_timeout_config_produces_expected_error() {
     let config = Config {
-        election_timeout_min: 1000,
-        election_timeout_max: 700,
+        election_timeout_min_ms: 1000,
+        election_timeout_max_ms: 700,
         ..Default::default()
     };
 
@@ -34,17 +34,17 @@ fn test_invalid_election_timeout_config_produces_expected_error() {
     assert_eq!(err, ConfigError::ElectionTimeout { min: 1000, max: 700 });
 
     let config = Config {
-        election_timeout_min: 1000,
-        election_timeout_max: 2000,
-        heartbeat_interval: 1500,
+        election_timeout_min_ms: 1000,
+        election_timeout_max_ms: 2000,
+        heartbeat_interval_ms: 1500,
         ..Default::default()
     };
 
     let res = config.validate();
     let err = res.unwrap_err();
     assert_eq!(err, ConfigError::ElectionTimeoutLTHeartBeat {
-        election_timeout_min: 1000,
-        heartbeat_interval: 1500
+        election_timeout_min_ms: 1000,
+        heartbeat_interval_ms: 1500
     });
 }
 
@@ -69,9 +69,9 @@ fn test_build() -> anyhow::Result<()> {
     ])?;
 
     assert_eq!("bar", config.cluster_name);
-    assert_eq!(10, config.election_timeout_min);
-    assert_eq!(20, config.election_timeout_max);
-    assert_eq!(5, config.heartbeat_interval);
+    assert_eq!(10, config.election_timeout_min_ms);
+    assert_eq!(20, config.election_timeout_max_ms);
+    assert_eq!(5, config.heartbeat_interval_ms);
 
     #[allow(deprecated)]
     {
@@ -81,9 +81,9 @@ fn test_build() -> anyhow::Result<()> {
     assert_eq!(201, config.max_payload_entries);
     assert_eq!(SnapshotPolicy::LogsSinceLast(202), config.snapshot_policy);
     assert_eq!(203, config.replication_lag_threshold);
-    assert_eq!(204, config.snapshot_max_chunk_size);
+    assert_eq!(204, config.snapshot_max_chunk_size_bytes);
     assert_eq!(205, config.max_in_snapshot_log_to_keep);
-    assert_eq!(207, config.purge_batch_size);
+    assert_eq!(207, config.purge_batch_log_count);
     assert_eq!(Some(208), config.api_channel_size);
     assert_eq!(Some(209), config.notification_channel_size);
 

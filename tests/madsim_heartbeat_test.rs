@@ -55,9 +55,9 @@ async fn test_enable_heartbeat_seed_3001() {
     let config = Arc::new(
         Config {
             is_heartbeat_enabled: false,
-            heartbeat_interval: 100,   // 100ms heartbeat interval when enabled
-            election_timeout_min: 500, // Must be > heartbeat_interval
-            election_timeout_max: 1000,
+            heartbeat_interval_ms: 100,   // 100ms heartbeat interval when enabled
+            election_timeout_min_ms: 500, // Must be > heartbeat_interval_ms
+            election_timeout_max_ms: 1000,
             ..Default::default()
         }
         .validate()

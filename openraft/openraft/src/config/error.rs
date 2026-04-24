@@ -27,12 +27,12 @@ pub enum ConfigError {
     MaxPayloadIs0,
 
     /// Election timeout must be greater than heartbeat interval.
-    #[error("election_timeout_min({election_timeout_min}) must be > heartbeat_interval({heartbeat_interval})")]
+    #[error("election_timeout_min_ms({election_timeout_min_ms}) must be > heartbeat_interval_ms({heartbeat_interval_ms})")]
     ElectionTimeoutLTHeartBeat {
         /// Minimum election timeout value.
-        election_timeout_min: u64,
+        election_timeout_min_ms: u64,
         /// Heartbeat interval value.
-        heartbeat_interval: u64,
+        heartbeat_interval_ms: u64,
     },
 
     /// Invalid snapshot policy string format.

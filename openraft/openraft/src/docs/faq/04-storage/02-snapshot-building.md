@@ -8,10 +8,10 @@ When a follower is more than [`Config::replication_lag_threshold`][] entries beh
 sends a snapshot instead of individual log entries.
 
 For large snapshots that timeout during transfer, increase [`Config::install_snapshot_timeout`][].
-The snapshot is sent in chunks of [`Config::snapshot_max_chunk_size`][] bytes.
+The snapshot is sent in chunks of [`Config::snapshot_max_chunk_size_bytes`][] bytes.
 
 [`RaftStateMachine::get_snapshot_builder`]: `crate::storage::RaftStateMachine::get_snapshot_builder`
 [`RaftStateMachine::apply`]: `crate::storage::RaftStateMachine::apply`
 [`Config::replication_lag_threshold`]: `crate::config::Config::replication_lag_threshold`
 [`Config::install_snapshot_timeout`]: `crate::config::Config::install_snapshot_timeout`
-[`Config::snapshot_max_chunk_size`]: `crate::config::Config::snapshot_max_chunk_size`
+[`Config::snapshot_max_chunk_size_bytes`]: `crate::config::Config::snapshot_max_chunk_size_bytes`

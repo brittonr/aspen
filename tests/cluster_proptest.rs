@@ -84,9 +84,9 @@ fn test_config_timeout_constraints() {
     check!()
         .with_iterations(50)
         .with_type::<(ValidTimeoutMs, ValidTimeoutMs, ValidTimeoutMs)>()
-        .for_each(|(heartbeat_interval, election_timeout_min, election_timeout_max)| {
-            // Property: election_timeout_max should be >= election_timeout_min
-            // And heartbeat should be < election_timeout_min (typically)
+        .for_each(|(heartbeat_interval_ms, election_timeout_min_ms, election_timeout_max_ms)| {
+            // Property: election_timeout_max_ms should be >= election_timeout_min_ms
+            // And heartbeat should be < election_timeout_min_ms (typically)
 
             // Parse a TOML config with these values
             let toml_str = format!(
@@ -96,15 +96,15 @@ fn test_config_timeout_constraints() {
                 election_timeout_min_ms = {}
                 election_timeout_max_ms = {}
                 "#,
-                heartbeat_interval.0, election_timeout_min.0, election_timeout_max.0
+                heartbeat_interval_ms.0, election_timeout_min_ms.0, election_timeout_max_ms.0
             );
 
             let config: NodeConfig = toml::from_str(&toml_str).expect("Failed to parse config TOML");
 
             // Verify config captures values
-            assert_eq!(config.heartbeat_interval_ms, heartbeat_interval.0);
-            assert_eq!(config.election_timeout_min_ms, election_timeout_min.0);
-            assert_eq!(config.election_timeout_max_ms, election_timeout_max.0);
+            assert_eq!(config.heartbeat_interval_ms, heartbeat_interval_ms.0);
+            assert_eq!(config.election_timeout_min_ms, election_timeout_min_ms.0);
+            assert_eq!(config.election_timeout_max_ms, election_timeout_max_ms.0);
         });
 }
 

@@ -211,7 +211,7 @@ where
 
         let mut option = RPCOption::new(self.replication_context.config.install_snapshot_timeout());
         option.snapshot_chunk_size = Some(snapshot_chunk_size_limit(
-            self.replication_context.config.snapshot_max_chunk_size,
+            self.replication_context.config.snapshot_max_chunk_size_bytes,
         ));
 
         self.send_snapshot(snapshot, option).await

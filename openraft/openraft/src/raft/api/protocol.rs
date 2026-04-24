@@ -192,7 +192,7 @@ where C: RaftTypeConfig
 
         let metrics_res = self
             .inner
-            .wait(Some(Duration::from_millis(self.inner.config().election_timeout_min)))
+            .wait(Some(Duration::from_millis(self.inner.config().election_timeout_min_ms)))
             .metrics(|st| ok(st) || fail(st), "transfer_leader await flushed log")
             .await;
 

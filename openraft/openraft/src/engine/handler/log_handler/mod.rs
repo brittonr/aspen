@@ -85,7 +85,7 @@ where C: RaftTypeConfig
         let _span = log_handler_debug_span("calc_purge_upto").entered();
         let st = &self.state;
         let max_keep_log_count = self.config.max_in_snapshot_log_to_keep;
-        let purge_batch_size = self.config.purge_batch_size;
+        let purge_batch_log_count = self.config.purge_batch_log_count;
 
         let purge_end = self.state.snapshot_meta.last_log_id.next_index().saturating_sub(max_keep_log_count);
 
@@ -96,12 +96,12 @@ where C: RaftTypeConfig
             purge_end
         );
 
-        if st.last_purged_log_id().next_index().saturating_add(purge_batch_size) > purge_end {
+        if st.last_purged_log_id().next_index().saturating_add(purge_batch_log_count) > purge_end {
             tracing::debug!(
                 snapshot_last_log_id = debug(self.state.snapshot_meta.last_log_id.clone()),
                 max_keep_log_count,
                 last_purged_log_id = display(st.last_purged_log_id().display()),
-                purge_batch_size,
+                purge_batch_log_count,
                 purge_end,
                 "no need to purge",
             );

@@ -99,9 +99,9 @@ async fn create_raft_node_shared_redb(
     injector: Arc<FailureInjector>,
 ) -> Raft<AppTypeConfig> {
     let config = Config {
-        heartbeat_interval: 500,
-        election_timeout_min: 1500,
-        election_timeout_max: 3000,
+        heartbeat_interval_ms: 500,
+        election_timeout_min_ms: 1500,
+        election_timeout_max_ms: 3000,
         ..Default::default()
     };
     let config = Arc::new(config.validate().expect("invalid raft config"));

@@ -79,9 +79,9 @@ pub(super) fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<Raft
 
     let raft_config = Arc::new(RaftConfig {
         cluster_name: config.cookie.clone(),
-        heartbeat_interval: config.heartbeat_interval_ms,
-        election_timeout_min: election_min,
-        election_timeout_max: election_max,
+        heartbeat_interval_ms: config.heartbeat_interval_ms,
+        election_timeout_min_ms: election_min,
+        election_timeout_max_ms: election_max,
         replication_lag_threshold: 10000,
         snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(10_000),
         max_in_snapshot_log_to_keep: 1_000,

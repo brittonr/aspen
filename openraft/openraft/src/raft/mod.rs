@@ -417,7 +417,7 @@ where C: RaftTypeConfig
         let (tx_shutdown, rx_shutdown) = C::oneshot();
 
         let tick_handle = Tick::spawn(
-            Duration::from_millis(config.heartbeat_interval * 3 / 2),
+            Duration::from_millis(config.heartbeat_interval_ms * 3 / 2),
             tx_notify.clone(),
             config.is_tick_enabled,
         );

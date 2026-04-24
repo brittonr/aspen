@@ -32,8 +32,8 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
     // Configure with manual election control
     let config = Arc::new(
         Config {
-            election_timeout_min: 100,
-            election_timeout_max: 200,
+            election_timeout_min_ms: 100,
+            election_timeout_max_ms: 200,
             is_election_enabled: false, // Manual election control
             is_heartbeat_enabled: true,
             ..Default::default()

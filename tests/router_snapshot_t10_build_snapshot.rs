@@ -48,7 +48,7 @@ async fn test_build_snapshot() -> Result<()> {
         Config {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 2,
-            purge_batch_size: 1,
+            purge_batch_log_count: 1,
             is_tick_enabled: false,
             ..Default::default()
         }
@@ -139,7 +139,7 @@ async fn test_snapshot_during_concurrent_writes() -> Result<()> {
         Config {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 2,
-            purge_batch_size: 1,
+            purge_batch_log_count: 1,
             is_tick_enabled: false,
             ..Default::default()
         }
@@ -212,7 +212,7 @@ async fn test_snapshot_data_completeness() -> Result<()> {
         Config {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 0, // Aggressive log compaction
-            purge_batch_size: 1,
+            purge_batch_log_count: 1,
             is_tick_enabled: false,
             ..Default::default()
         }

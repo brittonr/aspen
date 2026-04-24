@@ -21,7 +21,7 @@ pub(crate) struct EngineConfig<C: RaftTypeConfig> {
     pub(crate) max_in_snapshot_log_to_keep: u64,
 
     /// The minimal number of applied logs to purge in a batch.
-    pub(crate) purge_batch_size: u64,
+    pub(crate) purge_batch_log_count: u64,
 
     /// The maximum number of entries per payload allowed to be transmitted during replication
     pub(crate) max_payload_entries: u64,
@@ -33,8 +33,8 @@ pub(crate) struct EngineConfig<C: RaftTypeConfig> {
     /// Election timeout bounds for re-randomization on each election attempt.
     /// Per Raft §5.2, a new random timeout must be chosen for each election
     /// to resolve split-votes quickly.
-    pub(crate) election_timeout_min: u64,
-    pub(crate) election_timeout_max: u64,
+    pub(crate) election_timeout_min_ms: u64,
+    pub(crate) election_timeout_max_ms: u64,
 }
 
 impl<C> EngineConfig<C>
@@ -42,12 +42,12 @@ where C: RaftTypeConfig
 {
     pub(crate) fn new(id: C::NodeId, config: &Config) -> Self {
         let smaller_log_timeout_ms = config
-            .election_timeout_max
+            .election_timeout_max_ms
             .saturating_mul(u64::from(SMALLER_LOG_TIMEOUT_MULTIPLIER));
         Self {
             id,
             max_in_snapshot_log_to_keep: config.max_in_snapshot_log_to_keep,
-            purge_batch_size: config.purge_batch_size,
+            purge_batch_log_count: config.purge_batch_log_count,
             max_payload_entries: config.max_payload_entries,
             allow_log_reversion: config.get_allow_log_reversion(),
 
@@ -56,10 +56,10 @@ where C: RaftTypeConfig
                     config.new_rand_election_timeout::<AsyncRuntimeOf<C>>(),
                 ),
                 smaller_log_timeout: Duration::from_millis(smaller_log_timeout_ms),
-                leader_lease: Duration::from_millis(config.election_timeout_max),
+                leader_lease: Duration::from_millis(config.election_timeout_max_ms),
             },
-            election_timeout_min: config.election_timeout_min,
-            election_timeout_max: config.election_timeout_max,
+            election_timeout_min_ms: config.election_timeout_min_ms,
+            election_timeout_max_ms: config.election_timeout_max_ms,
         }
     }
 
@@ -68,12 +68,12 @@ where C: RaftTypeConfig
         Self {
             id,
             max_in_snapshot_log_to_keep: 1000,
-            purge_batch_size: 256,
+            purge_batch_log_count: 256,
             max_payload_entries: 300,
             allow_log_reversion: false,
             timer_config: time_state::Config::default(),
-            election_timeout_min: 150,
-            election_timeout_max: 300,
+            election_timeout_min_ms: 150,
+            election_timeout_max_ms: 300,
         }
     }
 
@@ -82,7 +82,7 @@ where C: RaftTypeConfig
     /// split-votes when nodes have similar initial timeouts.
     pub(crate) fn rerandomize_election_timeout(&mut self) {
         let new_election_timeout_ms =
-            AsyncRuntimeOf::<C>::thread_rng().random_range(self.election_timeout_min..self.election_timeout_max);
+            AsyncRuntimeOf::<C>::thread_rng().random_range(self.election_timeout_min_ms..self.election_timeout_max_ms);
         self.timer_config.election_timeout = Duration::from_millis(new_election_timeout_ms);
     }
 }

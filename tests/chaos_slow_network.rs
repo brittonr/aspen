@@ -38,9 +38,9 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     let config = Arc::new(
         Config {
             is_tick_enabled: false,         // Disable automatic ticking for manual control
-            heartbeat_interval: 1000,   // 1 second heartbeat (was ~100ms)
-            election_timeout_min: 3000, // 3 seconds min election timeout
-            election_timeout_max: 6000, // 6 seconds max election timeout
+            heartbeat_interval_ms: 1000,   // 1 second heartbeat (was ~100ms)
+            election_timeout_min_ms: 3000, // 3 seconds min election timeout
+            election_timeout_max_ms: 6000, // 6 seconds max election timeout
             max_in_snapshot_log_to_keep: 1000,
             install_snapshot_timeout: 20000, // 20 seconds for installing snapshots
             ..Default::default()
