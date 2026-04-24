@@ -85,15 +85,21 @@ fn parse_snapshot_policy(src: &str) -> Result<SnapshotPolicy, ConfigError> {
         return Ok(SnapshotPolicy::Never);
     }
 
-    let (policy_name, value) = split_snapshot_policy(src)?;
-    if policy_name != SNAPSHOT_POLICY_SINCE_LAST {
+    let snapshot_policy_parts = split_snapshot_policy(src)?;
+    if snapshot_policy_parts.policy_name != SNAPSHOT_POLICY_SINCE_LAST {
         return Err(invalid_snapshot_policy_error(src));
     }
 
-    parse_logs_since_last(src, value)
+    parse_logs_since_last(snapshot_policy_parts)
 }
 
-fn split_snapshot_policy<'a>(src: &'a str) -> Result<(&'a str, &'a str), ConfigError> {
+struct SnapshotPolicyParts<'a> {
+    original_input: &'a str,
+    policy_name: &'a str,
+    value: &'a str,
+}
+
+fn split_snapshot_policy<'a>(src: &'a str) -> Result<SnapshotPolicyParts<'a>, ConfigError> {
     let parts = src.split(':').collect::<Vec<_>>();
     if parts.len() != SNAPSHOT_POLICY_PART_COUNT {
         return Err(invalid_snapshot_policy_error(src));
@@ -103,14 +109,21 @@ fn split_snapshot_policy<'a>(src: &'a str) -> Result<(&'a str, &'a str), ConfigE
     let value = parts[1];
     debug_assert!(!policy_name.is_empty(), "snapshot policy name should not be empty");
     debug_assert!(!value.is_empty(), "snapshot policy value should not be empty");
-    Ok((policy_name, value))
+    Ok(SnapshotPolicyParts {
+        original_input: src,
+        policy_name,
+        value,
+    })
 }
 
-fn parse_logs_since_last(src: &str, value: &str) -> Result<SnapshotPolicy, ConfigError> {
-    let log_count = value.parse::<u64>().map_err(|e| ConfigError::InvalidNumber {
-        invalid: src.to_string(),
-        reason: e.to_string(),
-    })?;
+fn parse_logs_since_last(snapshot_policy_parts: SnapshotPolicyParts<'_>) -> Result<SnapshotPolicy, ConfigError> {
+    let log_count = snapshot_policy_parts
+        .value
+        .parse::<u64>()
+        .map_err(|e| ConfigError::InvalidNumber {
+            invalid: snapshot_policy_parts.original_input.to_string(),
+            reason: e.to_string(),
+        })?;
     Ok(SnapshotPolicy::LogsSinceLast(log_count))
 }
 
@@ -447,11 +460,11 @@ impl Config {
     }
 }
 
-fn channel_capacity_to_usize(capacity: Option<u64>) -> usize {
-    let requested_capacity = capacity.unwrap_or(DEFAULT_CHANNEL_CAPACITY);
-    debug_assert!(requested_capacity > 0, "channel capacity should be positive");
-    match usize::try_from(requested_capacity) {
-        Ok(capacity_usize) => capacity_usize,
+fn channel_capacity_to_usize(capacity_count_opt: Option<u64>) -> usize {
+    let requested_capacity_count = capacity_count_opt.unwrap_or(DEFAULT_CHANNEL_CAPACITY);
+    debug_assert!(requested_capacity_count > 0, "channel capacity should be positive");
+    match usize::try_from(requested_capacity_count) {
+        Ok(channel_capacity_count) => channel_capacity_count,
         Err(_) => usize::MAX,
     }
 }
