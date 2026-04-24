@@ -70,13 +70,15 @@ where
     }
 
     pub(crate) async fn do_run(mut self, mut rx_shutdown: OneshotReceiverOf<C, ()>) -> Result<(), Stopped> {
-        loop {
+        let mut should_continue_running = true;
+        while should_continue_running {
             tracing::debug!("{} is waiting for a new heartbeat event.", self);
 
             futures::select! {
                 _ = (&mut rx_shutdown).fuse() => {
                     tracing::info!("{} is shutdown.", self);
-                    return Err(Stopped::ReceivedShutdown);
+                    should_continue_running = false;
+                    continue;
                 },
                 _ = self.rx.changed().fuse() => {},
             }
@@ -88,8 +90,8 @@ where
                 continue;
             };
 
-            let timeout = Duration::from_millis(self.config.heartbeat_interval);
-            let option = RPCOption::new(timeout);
+            let heartbeat_timeout_duration = Duration::from_millis(self.config.heartbeat_interval);
+            let option = RPCOption::new(heartbeat_timeout_duration);
 
             let payload = AppendEntriesRequest {
                 vote: heartbeat.session_id.leader_vote.clone().into_vote(),
@@ -103,7 +105,7 @@ where
                 entries: vec![],
             };
 
-            let res = C::timeout(timeout, self.network.append_entries(payload, option)).await;
+            let res = C::timeout(heartbeat_timeout_duration, self.network.append_entries(payload, option)).await;
             tracing::debug!("{} sent a heartbeat: {}, result: {:?}", self, heartbeat, res);
 
             match res {
@@ -129,10 +131,14 @@ where
                         }
                         AppendEntriesResponse::Conflict => {
                             // The follower does not have `matching` log id.
-                            // Use `matching` (which may be None) as the conflict point.
-                            //
-                            // Safe unwrap(): a None never conflict
-                            let conflict_log_id = heartbeat.matching.clone().unwrap();
+                            // Use `matching` as the conflict point when it is present.
+                            let Some(conflict_log_id) = heartbeat.matching.clone() else {
+                                tracing::warn!(
+                                    "{} received a conflicting heartbeat response without a matching log id",
+                                    self
+                                );
+                                continue;
+                            };
 
                             let noti = Notification::ReplicationProgress {
                                 progress: Progress {
@@ -160,6 +166,8 @@ where
                 }
             }
         }
+
+        Err(Stopped::ReceivedShutdown)
     }
 
     async fn send_notification(
