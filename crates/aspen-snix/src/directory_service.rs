@@ -20,7 +20,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use aspen_core::circuit_breaker::CircuitBreaker;
 use async_trait::async_trait;
@@ -38,6 +37,7 @@ use tracing::instrument;
 use tracing::warn;
 
 use crate::BoxStream;
+use crate::circuit_breaker_time;
 use crate::constants::DIRECTORY_KEY_PREFIX;
 use crate::constants::MAX_DIRECTORY_DEPTH;
 use crate::constants::MAX_RECURSIVE_BUFFER;
@@ -90,7 +90,7 @@ impl<K: ?Sized> RaftDirectoryService<K> {
     /// Check if the circuit breaker is open and return an error if so.
     async fn check_circuit(&self) -> Result<(), Error> {
         let cb = self.circuit_breaker.lock().await;
-        if cb.should_reject(Instant::now()) {
+        if cb.should_reject(circuit_breaker_time::now_ms()) {
             return Err("directory service circuit breaker is open — too many consecutive failures".into());
         }
         Ok(())
@@ -106,9 +106,10 @@ impl<K: ?Sized> RaftDirectoryService<K> {
     /// Record a failed operation. Logs a warning when the breaker trips open.
     async fn record_failure(&self) {
         let mut cb = self.circuit_breaker.lock().await;
-        let was_open = cb.should_reject(Instant::now());
-        cb.record_failure(Instant::now());
-        if !was_open && cb.should_reject(Instant::now()) {
+        let now_ms = circuit_breaker_time::now_ms();
+        let was_open = cb.should_reject(now_ms);
+        cb.record_failure(now_ms);
+        if !was_open && cb.should_reject(now_ms) {
             warn!(
                 failures = cb.consecutive_failures(),
                 open_duration_secs = cb.open_duration().as_secs(),

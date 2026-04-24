@@ -27,7 +27,6 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
-use std::time::Instant;
 
 use aspen_core::circuit_breaker::CircuitBreaker;
 use async_trait::async_trait;
@@ -42,6 +41,7 @@ use tracing::debug;
 use tracing::instrument;
 use tracing::warn;
 
+use crate::circuit_breaker_time;
 use crate::constants::MAX_BLOB_SIZE_BYTES;
 
 /// Default consecutive failure threshold for the blob service circuit breaker.
@@ -81,7 +81,7 @@ impl<S> IrohBlobService<S> {
     /// Check if the circuit breaker is open and return an error if so.
     async fn check_circuit(&self) -> io::Result<()> {
         let cb = self.circuit_breaker.lock().await;
-        if cb.should_reject(Instant::now()) {
+        if cb.should_reject(circuit_breaker_time::now_ms()) {
             return Err(io::Error::other("iroh blob service circuit breaker is open — too many consecutive failures"));
         }
         Ok(())
@@ -97,9 +97,10 @@ impl<S> IrohBlobService<S> {
     /// Record a failed operation. Logs a warning when the breaker trips open.
     async fn record_failure(&self) {
         let mut cb = self.circuit_breaker.lock().await;
-        let was_open = cb.should_reject(Instant::now());
-        cb.record_failure(Instant::now());
-        if !was_open && cb.should_reject(Instant::now()) {
+        let now_ms = circuit_breaker_time::now_ms();
+        let was_open = cb.should_reject(now_ms);
+        cb.record_failure(now_ms);
+        if !was_open && cb.should_reject(now_ms) {
             warn!(
                 failures = cb.consecutive_failures(),
                 open_duration_secs = cb.open_duration().as_secs(),
@@ -281,7 +282,7 @@ where S: aspen_blob::BlobStore + Send + Sync + 'static
         // Check circuit breaker before attempting write
         {
             let cb = self.circuit_breaker.lock().await;
-            if cb.should_reject(Instant::now()) {
+            if cb.should_reject(circuit_breaker_time::now_ms()) {
                 return Err(io::Error::other(
                     "iroh blob service circuit breaker is open — too many consecutive failures",
                 ));
@@ -302,9 +303,10 @@ where S: aspen_blob::BlobStore + Send + Sync + 'static
             }
             Err(e) => {
                 let mut cb = self.circuit_breaker.lock().await;
-                let was_open = cb.should_reject(Instant::now());
-                cb.record_failure(Instant::now());
-                if !was_open && cb.should_reject(Instant::now()) {
+                let now_ms = circuit_breaker_time::now_ms();
+                let was_open = cb.should_reject(now_ms);
+                cb.record_failure(now_ms);
+                if !was_open && cb.should_reject(now_ms) {
                     warn!(
                         failures = cb.consecutive_failures(),
                         "iroh blob service circuit breaker tripped open during write"

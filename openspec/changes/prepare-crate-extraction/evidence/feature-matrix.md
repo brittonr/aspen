@@ -1,6 +1,6 @@
 # Feature Matrix Evidence (partial)
 
-Status: partial. This artifact records the reusable/default and impacted foundational compile slice completed while preparing I9. `V1` remains unchecked until Aspen compatibility consumers and all named reusable feature sets are added.
+Status: partial. This artifact records the reusable/default and impacted foundational compile slice completed while preparing I9, plus prepared Aspen compatibility consumer rails for `V7`, `V8`, and `V9`. `V7`-`V9` remain unchecked because they are post-migration verification rails for `I10`-`I12`; `V1` remains unchecked until future named reusable storage/facade feature sets from `I10`-`I12` exist and are added.
 
 ## Reusable/default compile slice
 
@@ -18,8 +18,16 @@ Status: partial. This artifact records the reusable/default and impacted foundat
 
 Transcript: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix-core-slice.txt`.
 
+## Aspen compatibility consumer rails
+
+| Task | Artifact | Status | Notes |
+| --- | --- | --- | --- |
+| `V7` | `openspec/changes/prepare-crate-extraction/evidence/compat-node-cluster.md` | prepared/pass; unchecked | Node-runtime root package, cluster library, and RPC handler aggregate compile after the reusable KV boundary changes. |
+| `V8` | `openspec/changes/prepare-crate-extraction/evidence/compat-cli-dogfood-handlers.md` | prepared/pass; unchecked | CLI, dogfood, aggregate handlers, and exact handler package list compile. This rail exposed stale worker dependencies on the alloc-only `aspen-core`; worker crates now alias `aspen-core-shell` where Redb table definitions are required. |
+| `V9` | `openspec/changes/prepare-crate-extraction/evidence/compat-bridges-web-tui.md` | prepared/pass; unchecked | Bridge/gateway/web/TUI package list compiles. This rail exposed stale SNIX circuit-breaker callers that still passed `Instant`; SNIX services now pass explicit wall-clock milliseconds to the pure circuit-breaker core. |
+
 ## Remaining before `V1` can be checked
 
-- Add compile evidence for Aspen compatibility consumers named by `V7`, `V8`, and `V9`.
-- Add/refresh feature-topology evidence for any named reusable feature sets introduced by `I10`-`I12` (for example future `aspen-redb-storage/raft-storage`).
+- Add the core UI no-std regression rail now required by `V1`: `cargo test -p aspen-core --test ui`.
+- Add/refresh feature-topology evidence for named reusable feature sets introduced by `I10`-`I12` (for example future `aspen-redb-storage/raft-storage`).
 - Re-run dependency-boundary checker once owner-needed exceptions are either assigned or intentionally left as expected failures in a verification task.

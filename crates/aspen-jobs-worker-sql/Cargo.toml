@@ -8,7 +8,7 @@ description = "SQL query worker for the Aspen distributed job system"
 [dependencies]
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-blob = { path = "../aspen-blob" }
-aspen-core = { path = "../aspen-core" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 
 async-trait = "0.1"
 bincode = "1.3"

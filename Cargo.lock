@@ -2119,7 +2119,7 @@ name = "aspen-jobs-worker-maintenance"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
- "aspen-core",
+ "aspen-core-shell",
  "aspen-jobs",
  "aspen-traits",
  "async-trait",
@@ -2135,7 +2135,7 @@ name = "aspen-jobs-worker-replication"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
- "aspen-core",
+ "aspen-core-shell",
  "aspen-jobs",
  "aspen-kv-types",
  "aspen-traits",
@@ -2172,7 +2172,7 @@ name = "aspen-jobs-worker-sql"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
- "aspen-core",
+ "aspen-core-shell",
  "aspen-jobs",
  "async-trait",
  "bincode",

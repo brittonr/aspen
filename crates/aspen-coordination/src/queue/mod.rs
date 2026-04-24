@@ -25,6 +25,8 @@ mod visibility;
 use std::sync::Arc;
 
 use aspen_traits::KeyValueStore;
+pub use dequeue::DequeueExcludingGroupsInput;
+pub use dequeue::DequeueWaitInput;
 pub use types::DLQItem;
 pub use types::DLQReason;
 pub use types::DequeuedItem;

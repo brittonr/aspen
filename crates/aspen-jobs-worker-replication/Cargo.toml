@@ -8,7 +8,7 @@ description = "Replication worker for the Aspen distributed job system"
 [dependencies]
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-blob = { path = "../aspen-blob" }
-aspen-core = { path = "../aspen-core" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-traits = { path = "../aspen-traits" }
 

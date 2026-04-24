@@ -148,6 +148,8 @@ pub use lockset::LockSetGuard;
 pub use lockset::LockSetRequest;
 pub use queue::DLQItem;
 pub use queue::DLQReason;
+pub use queue::DequeueExcludingGroupsInput;
+pub use queue::DequeueWaitInput;
 pub use queue::DequeuedItem;
 pub use queue::EnqueueOptions;
 pub use queue::PendingItem;

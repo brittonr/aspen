@@ -1,5 +1,6 @@
 //! Job lifecycle operations: submit, cancel, start, complete, ack, nack.
 
+use aspen_coordination::DequeueExcludingGroupsInput;
 use aspen_coordination::DequeuedItem;
 use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
@@ -173,14 +174,15 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             // incrementing delivery_attempts on items the worker cannot
             // handle, which previously caused them to hit max_delivery_attempts
             // and get moved to the DLQ before a capable worker could claim them.
+            let input = DequeueExcludingGroupsInput {
+                name: &queue_name,
+                consumer_id: worker_id,
+                max_items: items_to_dequeue,
+                visibility_timeout_ms,
+                excluded_groups: excluded_types,
+            };
             let items = queue_manager
-                .dequeue_excluding_groups(
-                    &queue_name,
-                    worker_id,
-                    items_to_dequeue,
-                    visibility_timeout_ms,
-                    excluded_types,
-                )
+                .dequeue_excluding_groups(input)
                 .await
                 .map_err(|e| JobError::QueueError { source: e })?;
 

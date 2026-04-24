@@ -5,28 +5,28 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 ## Implementation Evidence
 
 - Changed file: `Cargo.lock`
-- Changed file: `crates/aspen-redb-storage/Cargo.toml`
-- Changed file: `crates/aspen-redb-storage/src/lib.rs`
-- Changed file: `crates/aspen-redb-storage/src/verified/kv.rs`
-- Changed file: `docs/crate-extraction.md`
-- Changed file: `docs/crate-extraction/aspen-redb-storage.md`
-- Changed file: `docs/crate-extraction/aspen-raft-network.md`
+- Changed file: `crates/aspen-coordination/src/lib.rs`
+- Changed file: `crates/aspen-coordination/src/queue/mod.rs`
+- Changed file: `crates/aspen-jobs/src/manager/lifecycle.rs`
+- Changed file: `crates/aspen-jobs-worker-maintenance/Cargo.toml`
+- Changed file: `crates/aspen-jobs-worker-replication/Cargo.toml`
+- Changed file: `crates/aspen-jobs-worker-sql/Cargo.toml`
+- Changed file: `crates/aspen-snix/src/blob_service.rs`
+- Changed file: `crates/aspen-snix/src/circuit_breaker_time.rs`
+- Changed file: `crates/aspen-snix/src/directory_service.rs`
+- Changed file: `crates/aspen-snix/src/lib.rs`
+- Changed file: `crates/aspen-snix/src/pathinfo_service.rs`
 - Changed file: `openspec/changes/prepare-crate-extraction/tasks.md`
 - Changed file: `openspec/changes/prepare-crate-extraction/verification.md`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-adapter-boundary.md`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/baseline-redb-storage-doctest-failure.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-tests.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-boundary-check.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-compile-matrix-after.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-tree-after.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-types-tree.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-tree.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-network-tree.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-no-iroh-grep.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-forbidden-after.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i9.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-jobs-worker-shell-alias-check.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-snix-circuit-breaker-time-check.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/compat-bridges-web-tui.md`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/compat-cli-dogfood-handlers.md`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/compat-node-cluster.md`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/family-manifest-index.md`
 - Changed file: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix-core-slice.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-v7-v9.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/redb-raft-kv-manifest-index.md`
 
 ## Task Coverage
 
@@ -43,7 +43,7 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
   - Evidence: `docs/crate-extraction.md`, `openspec/changes/prepare-crate-extraction/evidence/extraction-inventory-baseline.md`
 
 - [x] I2 Add the six canonical Redb Raft KV target-layer manifests (`docs/crate-extraction/aspen-kv-types.md`, `docs/crate-extraction/aspen-raft-kv-types.md`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-kv.md`, `docs/crate-extraction/aspen-raft-network.md`, and `docs/crate-extraction/aspen-raft-compat.md`), including candidate name/family, intended audience, crate/category class, documentation entrypoint, package description, license policy, repository/homepage policy, default feature set, optional feature set, feature table, public API owner, semver or compatibility policy, internal Aspen dependencies, external dependencies, binary/runtime dependencies, per-dependency keep/move/feature-gate/remove decisions, release-readiness state, dependency-policy class, canonical crate or compatibility path, representative workspace consumers/re-exporters, compatibility re-export and dependency-key/package alias plan (including tests, owner, and removal criteria when aliasing is used), dependency exception entries with candidate, feature set, dependency path, owner, and reason, and the full mandatory first-slice readiness rails from design Decision 4. [covers=architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-has-extraction-manifest,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defines-documentation-and-release-metadata,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layers-have-manifests,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.openraft-dependency-boundary-is-explicit,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.extracted-libraries-keep-compatibility-reexports-during-migration]
-  - Evidence: `docs/crate-extraction/aspen-kv-types.md`, `docs/crate-extraction/aspen-raft-kv-types.md`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-kv.md`, `docs/crate-extraction/aspen-raft-network.md`, `docs/crate-extraction/aspen-raft-compat.md`
+  - Evidence: `docs/crate-extraction/aspen-kv-types.md`, `docs/crate-extraction/aspen-raft-kv-types.md`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-kv.md`, `docs/crate-extraction/aspen-raft-network.md`, `docs/crate-extraction/aspen-raft-compat.md`, `openspec/changes/prepare-crate-extraction/evidence/redb-raft-kv-manifest-index.md`
 
 - [x] I3 Add typed `docs/crate-extraction/policy.ncl` defining candidate classes, forbidden crate categories, allowed exceptions, tested feature sets, representative workspace consumers/re-exporters per candidate or family, required exception metadata fields (`candidate`, `feature_set`, `dependency_path`, `owner`, `reason`), and the rule that `publishable from monorepo` / `future repository split candidate` readiness states are rejected until license and publication policy is decided. [covers=architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles,architecture.modularity.extractable-crate-boundaries-are-explicit.typed-dependency-policy-is-source-of-truth,architecture.modularity.extractable-crate-boundaries-are-explicit.dependency-checks-catch-transitive-and-reexport-leaks,architecture.modularity.extractable-crate-boundaries-are-explicit.extraction-artifacts-have-canonical-locations,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defines-documentation-and-release-metadata]
   - Evidence: `docs/crate-extraction/policy.ncl`, `openspec/changes/prepare-crate-extraction/evidence/nickel-policy-typecheck.txt`
@@ -63,13 +63,13 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
   - Evidence prepared but task left unchecked until the broader `V1` compile and feature-topology rail is checked: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-adapter-boundary.md`, `openspec/changes/prepare-crate-extraction/evidence/i9-compile-matrix-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-tree-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-types-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-network-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-no-iroh-grep.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-forbidden-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-tests.txt`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-network.md`
 
 - [x] I13 Add one family manifest stub at `docs/crate-extraction/foundational-types.md` for foundational type/helper candidates, explicitly including `crates/aspen-storage-types`, `crates/aspen-cluster-types`, and `crates/aspen-traits`, recording owner, readiness state, default-feature contract, `aspen-storage-types` `SM_KV_TABLE` / `redb::TableDefinition` cleanup status, `aspen-traits` transitive default-feature leak status, and next action without moving code in this task. [covers=architecture.modularity.extraction-inventory-is-maintained.inventory-includes-high-value-candidates-beyond-raft-kv,architecture.modularity.extraction-inventory-is-maintained.required-family-manifest-stubs-exist,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles,architecture.modularity.extraction-inventory-is-maintained.inventory-entries-link-to-manifests-and-owners]
-  - Evidence: `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction.md`
+  - Evidence: `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction.md`, `openspec/changes/prepare-crate-extraction/evidence/family-manifest-index.md`
 
 - [x] I14 Add one family manifest stub at `docs/crate-extraction/auth-ticket.md` for auth/ticket candidates, recording owner, readiness state, runtime feature contract, and next action without moving code in this task. [covers=architecture.modularity.extraction-inventory-is-maintained.inventory-includes-high-value-candidates-beyond-raft-kv,architecture.modularity.extraction-inventory-is-maintained.required-family-manifest-stubs-exist,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles,architecture.modularity.extraction-inventory-is-maintained.inventory-entries-link-to-manifests-and-owners]
-  - Evidence: `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction.md`
+  - Evidence: `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction.md`, `openspec/changes/prepare-crate-extraction/evidence/family-manifest-index.md`
 
 - [x] I15 Add one family manifest stub at `docs/crate-extraction/protocol-wire.md` for protocol/wire candidates, explicitly including `crates/aspen-client-api`, recording owner, readiness state, wire-compatibility rails, and next action without moving code in this task. [covers=architecture.modularity.extraction-inventory-is-maintained.inventory-includes-high-value-candidates-beyond-raft-kv,architecture.modularity.extraction-inventory-is-maintained.required-family-manifest-stubs-exist,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles,architecture.modularity.extraction-inventory-is-maintained.inventory-entries-link-to-manifests-and-owners]
-  - Evidence: `docs/crate-extraction/protocol-wire.md`, `docs/crate-extraction.md`
+  - Evidence: `docs/crate-extraction/protocol-wire.md`, `docs/crate-extraction.md`, `openspec/changes/prepare-crate-extraction/evidence/family-manifest-index.md`
 
 - [x] I16 Add inventory follow-up entries for service/runtime candidates that need separate changes, including coordination, blob/castore/cache, commit DAG/KV branch, jobs/CI core, transport/RPC, trust/crypto, plugin/config, testing harnesses, and binary shell cleanup, and record owner plus manifest link or explicit `manifest not yet created` status without combining their implementation into this change. [covers=architecture.modularity.extraction-inventory-is-maintained.inventory-includes-high-value-candidates-beyond-raft-kv,architecture.modularity.extraction-inventory-is-maintained.required-family-manifest-stubs-exist,architecture.modularity.extraction-inventory-is-maintained.inventory-entries-link-to-manifests-and-owners]
   - Evidence: `docs/crate-extraction.md`, `openspec/changes/prepare-crate-extraction/evidence/service-follow-up-selection.md`
@@ -78,14 +78,25 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
   - Evidence: `docs/crate-extraction.md`, `openspec/changes/prepare-crate-extraction/evidence/service-follow-up-selection.md`
 
 - [x] I18 Refresh `docs/crate-extraction.md` after `I13`-`I17` so every affected inventory row has current owner, exact manifest link (`foundational-types.md`, `auth-ticket.md`, `protocol-wire.md`) or `manifest not yet created`, readiness state, and next-action fields synchronized with the family manifests and follow-up/deferred decisions. [covers=architecture.modularity.extraction-inventory-is-maintained.inventory-entries-link-to-manifests-and-owners,architecture.modularity.extraction-inventory-is-maintained.required-family-manifest-stubs-exist,architecture.modularity.extraction-inventory-is-maintained.inventory-includes-high-value-candidates-beyond-raft-kv]
-  - Evidence: `docs/crate-extraction.md`, `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction/protocol-wire.md`
+  - Evidence: `docs/crate-extraction.md`, `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction/protocol-wire.md`, `openspec/changes/prepare-crate-extraction/evidence/family-manifest-index.md`
 
 - [x] I19 Capture the pre-migration baseline audit for affected binary and app-shell paths (`src/bin/aspen_node`, `crates/aspen-cli`, dogfood, handlers, bridges, gateways, web, and TUI), recording reusable behavior risks before Redb Raft KV code movement; post-migration binary-shell verification remains covered by `V5`, `V7`, `V8`, `V9`, and `V12`. [covers=architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.binary-only-code-does-not-own-reusable-behavior]
   - Evidence: `openspec/changes/prepare-crate-extraction/evidence/binary-shell-audit.md`, `docs/crate-extraction.md`
 
+<!-- Pending compatibility evidence; V7/V8/V9 remain unchecked until the post-migration Redb Raft KV move tasks they verify are complete. -->
+
+- [ ] V7 Save node and cluster compatibility evidence for `cargo check -p aspen --no-default-features --features node-runtime`, `cargo check -p aspen-cluster`, and `cargo check -p aspen-rpc-handlers`, with artifacts under `openspec/changes/prepare-crate-extraction/evidence/compat-node-cluster.md`. [covers=architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.binary-only-code-does-not-own-reusable-behavior,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.aspen-compatibility-consumers-stay-verified-during-migration]
+  - Evidence prepared but task left unchecked until post-migration verification is valid: `openspec/changes/prepare-crate-extraction/evidence/compat-node-cluster.md`, `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
+
+- [ ] V8 Save CLI, dogfood, and handler compatibility evidence for `cargo check -p aspen-cli`, `cargo check -p aspen-dogfood`, and the exact handler package list `aspen-rpc-handlers`, `aspen-core-essentials-handler`, `aspen-cluster-handler`, `aspen-blob-handler`, `aspen-forge-handler`, `aspen-docs-handler`, `aspen-secrets-handler`, `aspen-ci-handler`, `aspen-job-handler`, and `aspen-nix-handler`, with artifacts under `openspec/changes/prepare-crate-extraction/evidence/compat-cli-dogfood-handlers.md`. [covers=architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.binary-only-code-does-not-own-reusable-behavior,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.aspen-compatibility-consumers-stay-verified-during-migration]
+  - Evidence prepared but task left unchecked until post-migration verification is valid: `openspec/changes/prepare-crate-extraction/evidence/compat-cli-dogfood-handlers.md`, `openspec/changes/prepare-crate-extraction/evidence/aspen-jobs-worker-shell-alias-check.txt`, `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
+
+- [ ] V9 Save bridge, gateway, web, and TUI compatibility evidence for the exact bridge/gateway package list `aspen-cluster-bridges`, `aspen-snix-bridge`, `aspen-nix-cache-gateway`, and `aspen-h3-proxy`, plus `cargo check -p aspen-forge-web` and `cargo check -p aspen-tui`, with artifacts under `openspec/changes/prepare-crate-extraction/evidence/compat-bridges-web-tui.md`. [covers=architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.binary-only-code-does-not-own-reusable-behavior,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.aspen-compatibility-consumers-stay-verified-during-migration]
+  - Evidence prepared but task left unchecked until post-migration verification is valid: `openspec/changes/prepare-crate-extraction/evidence/compat-bridges-web-tui.md`, `openspec/changes/prepare-crate-extraction/evidence/aspen-snix-circuit-breaker-time-check.txt`, `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
+
 ## Review Scope Snapshot
 
-Implementation diff artifacts are prepared for the pending I7 reusable `aspen-raft-kv-types` boundary and I8 reusable `aspen-raft-kv` facade work. I9 evidence now proves the default storage/type/facade graphs do not reach concrete iroh or transport dependencies while `aspen-raft-network` remains the explicit adapter; I9 remains unchecked until the broader `V1` compile and feature-topology rail can be checked. A partial V1 feature matrix now records reusable/core compile rails, but V1 remains unchecked until compatibility consumers and future named storage features are covered. Checked tasks still cover committed OpenSpec planning artifacts, extraction docs, baseline evidence, binary-shell audit, and the readiness checker. Verification task text now enumerates deterministic handler/bridge/gateway package rails plus impacted core/core-shell/foundational compile rails for the later V-stage evidence.
+Implementation diff artifacts are prepared for the pending I7 reusable `aspen-raft-kv-types` boundary and I8 reusable `aspen-raft-kv` facade work. I9 evidence proves the default storage/type/facade graphs do not reach concrete iroh or transport dependencies while `aspen-raft-network` remains the explicit adapter; I9 remains unchecked until the broader `V1` compile and feature-topology rail can be checked. The partial V1 feature matrix records reusable/core compile rails plus prepared V7/V8/V9 compatibility consumer rails, but those compatibility tasks remain unchecked because they are post-migration verification rails for I10-I12. V1 remains unchecked until the newly required core UI rail, future named storage/facade features from I10-I12, and dependency-boundary owners are covered or explicitly triaged. Checked tasks still cover committed OpenSpec planning artifacts, extraction docs, baseline evidence, binary-shell audit, and the readiness checker; compatibility consumer proof is saved for later reuse.
 
 ## Verification Commands
 
@@ -168,12 +179,42 @@ Implementation diff artifacts are prepared for the pending I7 reusable `aspen-ra
 - Summary: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-adapter-boundary.md`
 - Artifacts: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-tree-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-types-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-network-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-no-iroh-grep.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-forbidden-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-boundary-check.txt`
 
+### V7 node and cluster compatibility commands
+
+- Status: pass
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/compat-node-cluster.md`
+- Commands: `cargo check -p aspen --no-default-features --features node-runtime`, `cargo check -p aspen-cluster`, `cargo check -p aspen-rpc-handlers`
+
+### V8 CLI, dogfood, and handler compatibility commands
+
+- Status: pass
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/compat-cli-dogfood-handlers.md`
+- Commands: `cargo check -p aspen-cli`, `cargo check -p aspen-dogfood`, `cargo check -p aspen-rpc-handlers`, `cargo check -p aspen-core-essentials-handler`, `cargo check -p aspen-cluster-handler`, `cargo check -p aspen-blob-handler`, `cargo check -p aspen-forge-handler`, `cargo check -p aspen-docs-handler`, `cargo check -p aspen-secrets-handler`, `cargo check -p aspen-ci-handler`, `cargo check -p aspen-job-handler`, `cargo check -p aspen-nix-handler`
+
+### `cargo check -p aspen-jobs-worker-maintenance && cargo check -p aspen-jobs-worker-replication && cargo check -p aspen-jobs-worker-sql`
+
+- Status: pass
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-jobs-worker-shell-alias-check.txt`
+
+### V9 bridge, gateway, web, and TUI compatibility commands
+
+- Status: pass
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/compat-bridges-web-tui.md`
+- Commands: `cargo check -p aspen-cluster-bridges`, `cargo check -p aspen-snix-bridge`, `cargo check -p aspen-nix-cache-gateway`, `cargo check -p aspen-h3-proxy`, `cargo check -p aspen-forge-web`, `cargo check -p aspen-tui`
+
+### `cargo check -p aspen-snix && cargo test -p aspen-snix circuit_breaker_time`
+
+- Status: pass
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-snix-circuit-breaker-time-check.txt`
+
 ### `scripts/openspec-preflight.sh prepare-crate-extraction`
 
 - Prior status: pass
 - Prior artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i7.txt`
-- Current status after preparing I9 evidence while leaving I9 unchecked: pass
-- Current artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i9.txt`
+- I9-prep status after preparing I9 evidence while leaving I9 unchecked: pass
+- I9-prep artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i9.txt`
+- Current status after preparing V7/V8/V9 compatibility evidence while leaving those post-migration rails unchecked: pass
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-v7-v9.txt`
 
 ## Notes
 

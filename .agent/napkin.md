@@ -36,6 +36,7 @@
 - The rust-scripts skill's older Fenix pin (`092bd45...` / Cargo 1.76 nightly) cannot compile Aspen 2024-edition cargo scripts with current crates like `clap_lex`; for repo-owned scripts in Aspen, prefer the repo-pinned `nix develop -c cargo -q -Zscript` shebang unless a newer explicit Fenix pin is chosen.
 - `nix run .#rustfmt` is repo-wide and can reformat dozens of unrelated files. For focused crate-extraction work, either avoid claiming Rust formatting unless using a targeted `rustfmt path/to/file.rs`, or immediately restore unrelated rustfmt churn before staging.
 - OpenSpec tasks gate may reject checked implementation tasks when broad proof tasks (`V1`/`V2`/`V5`) remain todo. For `prepare-crate-extraction`, keep I7/I8 code/evidence staged but leave those tasks unchecked until the full verification rails are complete, or narrow task text before checking.
+- `prepare-crate-extraction` compatibility probes exposed two stale shell-boundary issues: job worker crates that use `SM_KV_TABLE` must alias `aspen-core-shell` under dependency key `aspen-core`, and `aspen-snix` circuit-breaker callers must pass explicit `u64` wall-clock milliseconds (not `Instant`) into `aspen_core::circuit_breaker::CircuitBreaker`.
 
 ## Tigerstyle scope (2026-04-21)
 
