@@ -9,7 +9,7 @@ pub trait LogIndexOptionExt {
 
     /// Return the previous log index.
     ///
-    /// If self is `None`, it panics.
+    /// If self is `None`, it returns `None`.
     fn prev_index(&self) -> Self;
 
     // TODO: unused, remove it
@@ -21,26 +21,20 @@ impl LogIndexOptionExt for Option<u64> {
     fn next_index(&self) -> u64 {
         match self {
             None => 0,
-            Some(v) => v + 1,
+            Some(v) => v.saturating_add(1),
         }
     }
 
     fn prev_index(&self) -> Self {
         match self {
-            None => {
-                panic!("None has no previous value");
-            }
-            Some(v) => {
-                if *v == 0 {
-                    None
-                } else {
-                    Some(*v - 1)
-                }
-            }
+            None => None,
+            Some(v) => v.checked_sub(1),
         }
     }
 
     fn add(&self, v: u64) -> Self {
-        Some(self.next_index() + v).prev_index()
+        let next_index = self.next_index();
+        let sum = next_index.saturating_add(v);
+        Some(sum).prev_index()
     }
 }
