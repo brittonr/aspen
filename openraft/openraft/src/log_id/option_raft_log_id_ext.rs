@@ -39,7 +39,7 @@ where
     fn next_index(&self) -> u64 {
         match self {
             None => 0,
-            Some(log_id) => log_id.index() + 1,
+            Some(log_id) => log_id.index().saturating_add(1),
         }
     }
 
