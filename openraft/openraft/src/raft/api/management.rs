@@ -1,7 +1,11 @@
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 
 use maplit::btreemap;
 use openraft_macros::since;
+use tracing::Instrument;
+use tracing::Level;
+use tracing::Span;
 
 use crate::ChangeMembers;
 use crate::LogIdOptionExt;
@@ -41,138 +45,171 @@ where C: RaftTypeConfig
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) async fn initialize<T>(&self, members: T) -> Result<Result<(), InitializeError<C>>, Fatal<C>>
     where T: IntoNodes<C::NodeId, C::Node> + Debug {
-        let (tx, rx) = C::oneshot();
-        self.inner
-            .call_core(
-                RaftMsg::Initialize {
-                    members: members.into_nodes(),
-                    tx,
-                },
-                rx,
-            )
-            .await
+        async move {
+            let (tx, rx) = C::oneshot();
+            self.inner
+                .call_core(
+                    RaftMsg::Initialize {
+                        members: members.into_nodes(),
+                        tx,
+                    },
+                    rx,
+                )
+                .await
+        }
+        .instrument(tracing::span!(parent: &Span::current(), Level::DEBUG, "initialize"))
+        .await
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "info", skip_all)]
     pub(crate) async fn change_membership(
         &self,
         members: impl Into<ChangeMembers<C>>,
-        retain: bool,
+        should_retain: bool,
     ) -> Result<ClientWriteResult<C>, Fatal<C>> {
-        let changes: ChangeMembers<C> = members.into();
+        async move {
+            let changes: ChangeMembers<C> = members.into();
 
-        tracing::info!(
-            changes = debug(&changes),
-            retain = display(retain),
-            "change_membership: start to commit joint config"
-        );
+            tracing::info!(
+                changes = debug(&changes),
+                retain = display(should_retain),
+                "change_membership: start to commit joint config"
+            );
 
-        let (tx, rx) = new_responder_pair::<C, _>();
+            let (tx, rx) = new_responder_pair::<C, _>();
 
-        // res is error if membership cannot be changed.
-        // If no error, it will enter a joint state
-        let client_write_result = self
-            .inner
-            .call_core(
-                RaftMsg::ChangeMembership {
-                    changes: changes.clone(),
-                    retain,
-                    tx,
-                },
-                rx,
-            )
-            .await?;
+            // res is error if membership cannot be changed.
+            // If no error, it will enter a joint state
+            let client_write_result = self
+                .inner
+                .call_core(
+                    RaftMsg::ChangeMembership {
+                        changes: changes.clone(),
+                        retain: should_retain,
+                        tx,
+                    },
+                    rx,
+                )
+                .await?;
 
-        let resp = match client_write_result {
-            Ok(x) => x,
-            Err(e) => {
-                tracing::error!("the first step error: {}", e);
-                return Ok(Err(e));
+            let resp = match client_write_result {
+                Ok(x) => x,
+                Err(e) => {
+                    tracing::error!("the first step error: {}", e);
+                    return Ok(Err(e));
+                }
+            };
+
+            tracing::debug!("res of first step: {}", resp);
+
+            let joint_membership = match resp.membership.clone() {
+                Some(membership) => membership,
+                None => {
+                    tracing::warn!(log_id = display(&resp.log_id), "ChangeMembership succeeded without membership; skip joint flatten step");
+                    return Ok(Ok(resp));
+                }
+            };
+
+            if joint_membership.get_joint_config().len() == 1 {
+                return Ok(Ok(resp));
             }
-        };
 
-        tracing::debug!("res of first step: {}", resp);
+            tracing::debug!("committed a joint config: {} {:?}", resp.log_id, joint_membership);
+            tracing::debug!("the second step is to change to uniform config: {:?}", changes);
 
-        let (log_id, joint) = (&resp.log_id, resp.membership.clone().unwrap());
+            let (tx, rx) = new_responder_pair::<C, _>();
 
-        if joint.get_joint_config().len() == 1 {
-            return Ok(Ok(resp));
+            // The second step, send a NOOP change to flatten the joint config.
+            let noop_changes = ChangeMembers::AddVoterIds(BTreeSet::new());
+            let client_write_result = self
+                .inner
+                .call_core(
+                    RaftMsg::ChangeMembership {
+                        changes: noop_changes,
+                        retain: should_retain,
+                        tx,
+                    },
+                    rx,
+                )
+                .await?;
+
+            tracing::info!("result of second step of change_membership: {}", client_write_result.display());
+
+            if let Err(e) = &client_write_result {
+                tracing::error!("the second step error: {}", e);
+            }
+
+            Ok(client_write_result)
         }
-
-        tracing::debug!("committed a joint config: {} {:?}", log_id, joint);
-        tracing::debug!("the second step is to change to uniform config: {:?}", changes);
-
-        let (tx, rx) = new_responder_pair::<C, _>();
-
-        // The second step, send a NOOP change to flatten the joint config.
-        let changes = ChangeMembers::AddVoterIds(Default::default());
-        let client_write_result = self.inner.call_core(RaftMsg::ChangeMembership { changes, retain, tx }, rx).await?;
-
-        tracing::info!("result of second step of change_membership: {}", client_write_result.display());
-
-        if let Err(e) = &client_write_result {
-            tracing::error!("the second step error: {}", e);
-        }
-
-        Ok(client_write_result)
+        .instrument(tracing::span!(parent: &Span::current(), Level::INFO, "change_membership"))
+        .await
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip(self, id), fields(target=display(&id)))]
     pub(crate) async fn add_learner(
         &self,
         id: C::NodeId,
         node: C::Node,
-        blocking: bool,
+        should_block_until_ready: bool,
     ) -> Result<ClientWriteResult<C>, Fatal<C>> {
-        let (tx, rx) = new_responder_pair::<C, _>();
+        let span_target = id.clone();
+        async move {
+            let (tx, rx) = new_responder_pair::<C, _>();
 
-        let msg = RaftMsg::ChangeMembership {
-            changes: ChangeMembers::AddNodes(btreemap! {id.clone()=>node}),
-            retain: true,
-            tx,
-        };
+            let msg = RaftMsg::ChangeMembership {
+                changes: ChangeMembers::AddNodes(btreemap! {id.clone()=>node}),
+                retain: true,
+                tx,
+            };
 
-        let client_write_result = self.inner.call_core(msg, rx).await?;
+            let client_write_result = self.inner.call_core(msg, rx).await?;
 
-        let resp = match client_write_result {
-            Ok(x) => x,
-            Err(e) => return Ok(Err(e)),
-        };
+            let resp = match client_write_result {
+                Ok(x) => x,
+                Err(e) => return Ok(Err(e)),
+            };
 
-        if !blocking {
-            return Ok(Ok(resp));
+            if !should_block_until_ready {
+                return Ok(Ok(resp));
+            }
+
+            if self.inner.id == id {
+                return Ok(Ok(resp));
+            }
+
+            // Otherwise, blocks until the replication to the new learner becomes up to date.
+
+            // The log id of the membership that contains the added learner.
+            let membership_log_id = &resp.log_id;
+
+            let wait_res = self
+                .inner
+                .wait(None)
+                .metrics(
+                    |metrics| match self.check_replication_upto_date(metrics, &id, Some(membership_log_id)) {
+                        Ok(_matching) => true,
+                        // keep waiting
+                        Err(_) => false,
+                    },
+                    "wait new learner to become line-rate",
+                )
+                .await;
+
+            tracing::info!(wait_res = display(DisplayResult(&wait_res)), "waiting for replication to new learner");
+
+            Ok(Ok(resp))
         }
-
-        if self.inner.id == id {
-            return Ok(Ok(resp));
-        }
-
-        // Otherwise, blocks until the replication to the new learner becomes up to date.
-
-        // The log id of the membership that contains the added learner.
-        let membership_log_id = &resp.log_id;
-
-        let wait_res = self
-            .inner
-            .wait(None)
-            .metrics(
-                |metrics| match self.check_replication_upto_date(metrics, &id, Some(membership_log_id)) {
-                    Ok(_matching) => true,
-                    // keep waiting
-                    Err(_) => false,
-                },
-                "wait new learner to become line-rate",
-            )
-            .await;
-
-        tracing::info!(wait_res = display(DisplayResult(&wait_res)), "waiting for replication to new learner");
-
-        Ok(Ok(resp))
+        .instrument(
+            tracing::span!(
+                parent: &Span::current(),
+                Level::DEBUG,
+                "add_learner",
+                target = display(&span_target)
+            ),
+        )
+        .await
     }
 
     #[since(version = "0.10.0")]
