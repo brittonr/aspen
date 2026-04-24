@@ -14,7 +14,8 @@ where C: RaftTypeConfig
 {
     /// Get previous log id, i.e., the log id at index - 1
     fn prev_log_id(&self, index: u64) -> Option<LogIdOf<C>> {
-        if index == 0 { None } else { self.get_log_id(index - 1) }
+        let previous_index = index.checked_sub(1)?;
+        self.get_log_id(previous_index)
     }
 
     /// Return if a log id exists.
