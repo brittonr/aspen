@@ -3,6 +3,9 @@ use std::time::Duration;
 
 use futures::Stream;
 use openraft_macros::since;
+use tracing::Instrument;
+use tracing::Level;
+use tracing::Span;
 
 use crate::LogIdOptionExt;
 use crate::LogIndexOptionExt;
@@ -76,24 +79,30 @@ where C: RaftTypeConfig
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip(self, rpc))]
     pub(crate) async fn vote(&self, rpc: VoteRequest<C>) -> Result<VoteResponse<C>, Fatal<C>> {
-        tracing::info!(rpc = display(&rpc), "Raft::vote()");
+        async move {
+            tracing::info!(rpc = display(&rpc), "Raft::vote()");
 
-        let (tx, rx) = C::oneshot();
-        self.inner.call_core(RaftMsg::RequestVote { rpc, tx }, rx).await
+            let (tx, rx) = C::oneshot();
+            self.inner.call_core(RaftMsg::RequestVote { rpc, tx }, rx).await
+        }
+        .instrument(tracing::span!(parent: &Span::current(), Level::DEBUG, "vote"))
+        .await
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip(self, rpc))]
     pub(crate) async fn append_entries(
         &self,
         rpc: AppendEntriesRequest<C>,
     ) -> Result<AppendEntriesResponse<C>, Fatal<C>> {
-        tracing::debug!(rpc = display(&rpc), "Raft::append_entries");
+        async move {
+            tracing::debug!(rpc = display(&rpc), "Raft::append_entries");
 
-        let (tx, rx) = C::oneshot();
-        self.inner.call_core(RaftMsg::AppendEntries { rpc, tx }, rx).await
+            let (tx, rx) = C::oneshot();
+            self.inner.call_core(RaftMsg::AppendEntries { rpc, tx }, rx).await
+        }
+        .instrument(tracing::span!(parent: &Span::current(), Level::DEBUG, "append_entries"))
+        .await
     }
 
     #[since(version = "0.10.0")]
@@ -108,35 +117,44 @@ where C: RaftTypeConfig
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) async fn get_snapshot(&self) -> Result<Option<Snapshot<C>>, Fatal<C>> {
-        tracing::debug!("Raft::get_snapshot()");
+        async move {
+            tracing::debug!("Raft::get_snapshot()");
 
-        let (tx, rx) = C::oneshot();
-        let cmd = ExternalCommand::GetSnapshot { tx };
-        self.inner.call_core(RaftMsg::ExternalCommand { cmd }, rx).await
+            let (tx, rx) = C::oneshot();
+            let cmd = ExternalCommand::GetSnapshot { tx };
+            self.inner.call_core(RaftMsg::ExternalCommand { cmd }, rx).await
+        }
+        .instrument(tracing::span!(parent: &Span::current(), Level::DEBUG, "get_snapshot"))
+        .await
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) async fn begin_receiving_snapshot(&self) -> Result<SnapshotDataOf<C>, Fatal<C>> {
-        tracing::info!("Raft::begin_receiving_snapshot()");
+        async move {
+            tracing::info!("Raft::begin_receiving_snapshot()");
 
-        let (tx, rx) = C::oneshot();
-        self.inner.call_core(RaftMsg::BeginReceivingSnapshot { tx }, rx).await
+            let (tx, rx) = C::oneshot();
+            self.inner.call_core(RaftMsg::BeginReceivingSnapshot { tx }, rx).await
+        }
+        .instrument(tracing::span!(parent: &Span::current(), Level::DEBUG, "begin_receiving_snapshot"))
+        .await
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) async fn install_full_snapshot(
         &self,
         vote: VoteOf<C>,
         snapshot: Snapshot<C>,
     ) -> Result<SnapshotResponse<C>, Fatal<C>> {
-        tracing::info!("Raft::install_full_snapshot()");
+        async move {
+            tracing::info!("Raft::install_full_snapshot()");
 
-        let (tx, rx) = C::oneshot();
-        self.inner.call_core(RaftMsg::InstallFullSnapshot { vote, snapshot, tx }, rx).await
+            let (tx, rx) = C::oneshot();
+            self.inner.call_core(RaftMsg::InstallFullSnapshot { vote, snapshot, tx }, rx).await
+        }
+        .instrument(tracing::span!(parent: &Span::current(), Level::DEBUG, "install_full_snapshot"))
+        .await
     }
 
     #[since(version = "0.10.0")]
@@ -172,9 +190,11 @@ where C: RaftTypeConfig
         #[allow(clippy::neg_cmp_op_on_partial_ord)]
         let fail = |m: &RaftMetrics<C>| !(req.from_leader.as_ref_vote() >= m.vote.as_ref_vote());
 
-        let timeout = Some(Duration::from_millis(self.inner.config().election_timeout_min));
-        let metrics_res =
-            self.inner.wait(timeout).metrics(|st| ok(st) || fail(st), "transfer_leader await flushed log").await;
+        let metrics_res = self
+            .inner
+            .wait(Some(Duration::from_millis(self.inner.config().election_timeout_min)))
+            .metrics(|st| ok(st) || fail(st), "transfer_leader await flushed log")
+            .await;
 
         match metrics_res {
             Ok(metrics) => {
