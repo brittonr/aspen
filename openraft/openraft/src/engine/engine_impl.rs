@@ -122,10 +122,8 @@ where C: RaftTypeConfig
 
         let membership = self.state.membership_state.effective().membership();
 
-        self.candidate =
-            Some(Candidate::new(now, vote, last_log_id, membership.to_quorum_set(), membership.learner_ids()));
-
-        self.candidate.as_mut().unwrap()
+        self.candidate
+            .insert(Candidate::new(now, vote, last_log_id, membership.to_quorum_set(), membership.learner_ids()))
     }
 
     /// Create a default Engine for testing.
@@ -136,8 +134,8 @@ where C: RaftTypeConfig
         Self::new(state, config)
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn startup(&mut self) {
+        let _span = engine_span("startup").entered();
         // Allows starting up as a leader.
 
         tracing::info!(
@@ -177,8 +175,8 @@ where C: RaftTypeConfig
     /// differently.
     ///
     /// [precondition]: crate::docs::cluster_control::cluster_formation#preconditions-for-initialization
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn initialize(&mut self, mut entry: C::Entry) -> Result<(), InitializeError<C>> {
+        let _span = engine_span("initialize").entered();
         self.check_initialize()?;
 
         // The very first log id
@@ -190,15 +188,15 @@ where C: RaftTypeConfig
         // FollowingHandler requires vote to be committed.
         let leader_id = LeaderIdOf::<C>::new(TermOf::<C>::default(), self.config.id.clone());
         let vote = <VoteOf<C> as RaftVote<C>>::from_leader_id(leader_id, true);
-        self.state.vote.update(C::now(), Duration::default(), vote);
+        self.state.vote.update(C::now(), Duration::ZERO, vote);
         self.following_handler().do_append_entries(vec![entry]);
 
         Ok(())
     }
 
     /// Start to elect this node as leader
-    #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) fn elect(&mut self) {
+        let _span = engine_span("elect").entered();
         // Re-randomize election timeout for this attempt (Raft §5.2).
         // Without this, nodes that picked similar initial timeouts will
         // persistently split votes on every subsequent election.
@@ -215,8 +213,12 @@ where C: RaftTypeConfig
         let last_log_id = candidate.last_log_id().cloned();
 
         // Simulate sending RequestVote RPC to local node.
-        // Safe unwrap(): it won't reject itself ˙–˙
-        self.vote_handler().update_vote(&new_vote).unwrap();
+        let update_result = self.vote_handler().update_vote(&new_vote);
+        if let Err(error) = update_result {
+            debug_assert!(false, "self vote update unexpectedly failed: {:?}", error);
+            tracing::warn!(error = debug(&error), "failed to update self vote while starting election");
+            return;
+        }
 
         self.output.push_command(Command::SendVote {
             vote_req: VoteRequest::new(new_vote, last_log_id),
@@ -251,7 +253,6 @@ where C: RaftTypeConfig
     /// operations.
     ///
     /// [`C::Responder`]: RaftTypeConfig::Responder
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn get_leader_handler_or_reject<R>(
         &mut self,
         tx: Option<R>,
@@ -259,6 +260,7 @@ where C: RaftTypeConfig
     where
         R: Responder<C, ClientWriteResult<C>>,
     {
+        let _span = engine_span("get_leader_handler_or_reject").entered();
         let res = self.leader_handler();
         let forward_err = match res {
             Ok(lh) => {
@@ -275,8 +277,8 @@ where C: RaftTypeConfig
         None
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn handle_vote_req(&mut self, req: VoteRequest<C>) -> VoteResponse<C> {
+        let _span = engine_span("handle_vote_req").entered();
         let now = C::now();
         let local_leased_vote = &self.state.vote;
 
@@ -329,8 +331,8 @@ where C: RaftTypeConfig
         VoteResponse::new(self.state.vote_ref(), self.state.last_log_id().cloned(), res.is_ok())
     }
 
-    #[tracing::instrument(level = "debug", skip(self, resp))]
     pub(crate) fn handle_vote_resp(&mut self, target: C::NodeId, resp: VoteResponse<C>) {
+        let _span = engine_span("handle_vote_resp").entered();
         tracing::info!(
             resp = display(&resp),
             target = display(&target),
@@ -348,8 +350,8 @@ where C: RaftTypeConfig
 
         // If resp.vote is different, it may be a delay response to previous voting.
         if resp.vote_granted && &resp.vote == candidate.vote_ref() {
-            let quorum_granted = candidate.grant_by(&target);
-            if quorum_granted {
+            let is_quorum_granted = candidate.grant_by(&target);
+            if is_quorum_granted {
                 tracing::info!("a quorum granted my vote");
                 self.establish_leader();
             }
@@ -388,13 +390,15 @@ where C: RaftTypeConfig
         let vote = resp.vote.to_non_committed().into_vote();
 
         // Update if resp.vote is greater.
-        let _ = self.vote_handler().update_vote(&vote);
+        let update_result = self.vote_handler().update_vote(&vote);
+        if let Err(error) = update_result {
+            tracing::debug!(error = debug(&error), "ignored stale or rejected higher-log vote response update");
+        }
     }
 
     /// Append entries to follower/learner.
     ///
     /// Also clean conflicting entries and update membership state.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn handle_append_entries(
         &mut self,
         vote: &VoteOf<C>,
@@ -402,6 +406,7 @@ where C: RaftTypeConfig
         entries: Vec<C::Entry>,
         tx: AppendEntriesTx<C>,
     ) {
+        let _span = engine_span("handle_append_entries").entered();
         tracing::debug!(
             vote = display(vote),
             prev_log_id = display(prev_log_id.display()),
@@ -418,9 +423,7 @@ where C: RaftTypeConfig
         let resp: AppendEntriesResponse<C> = res.into();
 
         let condition = if is_ok {
-            Some(Condition::IOFlushed {
-                io_id: self.state.accepted_log_io().unwrap().clone(),
-            })
+            self.state.accepted_log_io().cloned().map(|io_id| Condition::IOFlushed { io_id })
         } else {
             None
         };
@@ -449,13 +452,13 @@ where C: RaftTypeConfig
     }
 
     /// Install a completely received snapshot on a follower.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn handle_install_full_snapshot(
         &mut self,
         vote: VoteOf<C>,
         snapshot: Snapshot<C>,
         tx: OneshotSenderOf<C, SnapshotResponse<C>>,
     ) {
+        let _span = engine_span("handle_install_full_snapshot").entered();
         tracing::info!(vote = display(&vote), snapshot = display(&snapshot), "{}", func_name!());
 
         let vote_res = self
@@ -482,8 +485,8 @@ where C: RaftTypeConfig
     }
 
     /// Install a completely received snapshot on a follower.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn handle_begin_receiving_snapshot(&mut self, tx: OneshotSenderOf<C, SnapshotDataOf<C>>) {
+        let _span = engine_span("handle_begin_receiving_snapshot").entered();
         tracing::info!("{}", func_name!());
         self.output.push_command(Command::from(sm::Command::begin_receiving_snapshot(tx)));
     }
@@ -527,8 +530,8 @@ where C: RaftTypeConfig
     ///
     /// To handle this, we use `try_update_all()` which only updates progress if still behind,
     /// preventing regression of the snapshot cursor.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn on_building_snapshot_done(&mut self, meta: Option<SnapshotMeta<C>>) {
+        let _span = engine_span("on_building_snapshot_done").entered();
         tracing::info!("{}: snapshot_meta: {}", func_name!(), meta.display());
 
         self.state.io_state_mut().set_building_snapshot(false);
@@ -547,8 +550,8 @@ where C: RaftTypeConfig
 
         let mut h = self.snapshot_handler();
 
-        let updated = h.update_snapshot(meta);
-        if !updated {
+        let is_updated = h.update_snapshot(meta);
+        if !is_updated {
             return;
         }
 
@@ -563,8 +566,8 @@ where C: RaftTypeConfig
     ///
     /// If the node is a follower or learner, it will always purge the logs immediately since no
     /// other tasks are using the logs.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn try_purge_log(&mut self) {
+        let _span = engine_span("try_purge_log").entered();
         tracing::debug!(purge_upto = display(self.state.purge_upto().display()), "{}", func_name!());
 
         if self.leader.is_some() {
@@ -577,8 +580,8 @@ where C: RaftTypeConfig
     }
 
     /// This is a to user API that triggers log purging up to `index`, inclusive.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn trigger_purge_log(&mut self, mut index: u64) {
+        let _span = engine_span("trigger_purge_log").entered();
         tracing::info!(index = display(index), "{}", func_name!());
 
         let snapshot_last_log_id = self.state.snapshot_last_log_id();
@@ -605,8 +608,11 @@ where C: RaftTypeConfig
             index = snapshot_last_log_id.index();
         }
 
-        // Safe unwrap: `index` is ensured to be present in the above code.
-        let log_id = self.state.get_log_id(index).unwrap();
+        let Some(log_id) = self.state.get_log_id(index) else {
+            debug_assert!(false, "purge index must exist in local log state: {}", index);
+            tracing::warn!(index, "purge index missing from local log state");
+            return;
+        };
 
         tracing::info!(purge_upto = display(&log_id), "{}", func_name!());
 
@@ -665,7 +671,9 @@ where C: RaftTypeConfig
             let applicable_upto = log_submitted.min(apply_accepted);
 
             if apply_submitted.next_index() < applicable_upto.next_index() {
-                let apply_upto = applicable_upto.cloned().unwrap();
+                let Some(apply_upto) = applicable_upto.cloned() else {
+                    return None;
+                };
 
                 return Some(Command::SaveCommittedAndApply {
                     already_applied: apply_submitted.cloned(),
@@ -683,11 +691,15 @@ impl<C> Engine<C>
 where C: RaftTypeConfig
 {
     /// Vote is granted by a quorum, leader established.
-    #[tracing::instrument(level = "debug", skip_all)]
     fn establish_leader(&mut self) {
+        let _span = engine_span("establish_leader").entered();
         tracing::info!("{}", func_name!());
 
-        let candidate = self.candidate.take().unwrap();
+        let Some(candidate) = self.candidate.take() else {
+            debug_assert!(false, "candidate must exist when establishing leader");
+            tracing::warn!("missing candidate while establishing leader");
+            return;
+        };
         let leader = self.establish_handler().establish(candidate);
 
         // There may already be a Leader with higher vote
@@ -709,9 +721,13 @@ where C: RaftTypeConfig
         // No need to submit UpdateIOProgress command,
         // IO progress is updated by the new blank log
 
-        self.leader_handler()
-            .unwrap()
-            .leader_append_entries(vec![C::Entry::new_blank(LogIdOf::<C>::default())]);
+        let leader_handler_result = self.leader_handler();
+        let Ok(mut leader_handler) = leader_handler_result else {
+            debug_assert!(false, "leader handler missing after leader establishment");
+            tracing::warn!("missing leader handler after leader establishment");
+            return;
+        };
+        leader_handler.leader_append_entries(vec![C::Entry::new_blank(LogIdOf::<C>::default())]);
     }
 
     /// Check if a raft node is in a state that allows to initialize.
@@ -864,6 +880,10 @@ where C: RaftTypeConfig
             leader: &mut self.leader,
         }
     }
+}
+
+fn engine_span(operation: &'static str) -> tracing::Span {
+    tracing::span!(tracing::Level::DEBUG, "engine_impl", operation = operation)
 }
 
 /// Supporting utilities for unit test
