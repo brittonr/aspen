@@ -56,13 +56,13 @@ mod tokio_rt {
         {
             let subject_verb = || (ErrorSubject::Snapshot(Some(snapshot.meta.signature())), ErrorVerb::Read);
 
-            let mut offset = 0;
+            let mut offset_bytes = 0_u64;
             let end = snapshot.snapshot.seek(SeekFrom::End(0)).await.sto_res(subject_verb)?;
 
-            let mut c = std::pin::pin!(cancel);
-            loop {
+            let mut cancellation = std::pin::pin!(cancel);
+            while offset_bytes <= end {
                 // If canceled, return at once
-                if let Some(err) = c.as_mut().now_or_never() {
+                if let Some(err) = cancellation.as_mut().now_or_never() {
                     return Err(err.into());
                 }
 
@@ -71,12 +71,17 @@ mod tokio_rt {
                 // Because network implementation does not yield.
                 C::sleep(Duration::from_millis(1)).await;
 
-                snapshot.snapshot.seek(SeekFrom::Start(offset)).await.sto_res(subject_verb)?;
+                snapshot
+                    .snapshot
+                    .seek(SeekFrom::Start(offset_bytes))
+                    .await
+                    .sto_res(subject_verb)?;
 
-                // Safe unwrap(): this function is called only by default implementation of
-                // `RaftNetwork::full_snapshot()` and it is always set.
-                let chunk_size = option.snapshot_chunk_size().unwrap();
-                let mut buf = Vec::with_capacity(chunk_size);
+                let Some(chunk_size_bytes) = option.snapshot_chunk_size() else {
+                    debug_assert!(false, "snapshot chunk size must be set by full_snapshot caller");
+                    return Err(ReplicationClosed::new("snapshot chunk size missing").into());
+                };
+                let mut buf = Vec::with_capacity(chunk_size_bytes);
                 while buf.capacity() > buf.len() {
                     let n = snapshot.snapshot.read_buf(&mut buf).await.sto_res(subject_verb)?;
                     if n == 0 {
@@ -84,19 +89,29 @@ mod tokio_rt {
                     }
                 }
 
-                let n_read = buf.len();
-
-                let done = (offset + n_read as u64) == end;
+                let read_size_bytes = buf.len();
+                let read_size_bytes_u64 = match u64::try_from(read_size_bytes) {
+                    Ok(size_bytes) => size_bytes,
+                    Err(_) => {
+                        debug_assert!(false, "snapshot chunk length must fit in u64");
+                        return Err(ReplicationClosed::new("snapshot chunk length overflow").into());
+                    }
+                };
+                let next_offset_bytes = offset_bytes.saturating_add(read_size_bytes_u64);
+                let is_done = next_offset_bytes == end;
+                if read_size_bytes == 0 && !is_done {
+                    return Err(ReplicationClosed::new("snapshot reader made no progress").into());
+                }
                 let req = InstallSnapshotRequest {
                     vote: vote.clone(),
                     meta: snapshot.meta.clone(),
-                    offset,
+                    offset: offset_bytes,
                     data: buf,
-                    done,
+                    done: is_done,
                 };
 
                 // Send the RPC over to the target.
-                tracing::debug!(snapshot_size = req.data.len(), req.offset, end, req.done, "sending snapshot chunk");
+                tracing::debug!(snapshot_size_bytes = req.data.len(), req.offset, end, req.done, "sending snapshot chunk");
 
                 #[allow(deprecated)]
                 let res = C::timeout(option.hard_ttl(), net.install_snapshot(req, option.clone())).await;
@@ -126,7 +141,7 @@ mod tokio_rt {
                                                         mismatch = display(&mismatch),
                                                         "snapshot mismatch, reset offset and retry"
                                                     );
-                                                    offset = 0;
+                                                    offset_bytes = 0;
                                                 }
                                             }
                                         }
@@ -148,12 +163,15 @@ mod tokio_rt {
                     return Ok(SnapshotResponse::new(resp.vote));
                 }
 
-                if done {
+                if is_done {
                     return Ok(SnapshotResponse::new(resp.vote));
                 }
 
-                offset += n_read as u64;
+                offset_bytes = next_offset_bytes;
             }
+
+            debug_assert!(false, "snapshot send loop exited without a terminal response");
+            Ok(SnapshotResponse::new(vote))
         }
 
         async fn receive_snapshot(
@@ -163,7 +181,7 @@ mod tokio_rt {
         ) -> Result<Option<Snapshot<C>>, RaftError<C, InstallSnapshotError>> {
             let snapshot_id = &req.meta.snapshot_id;
             let snapshot_meta = req.meta.clone();
-            let done = req.done;
+            let is_done = req.done;
 
             tracing::info!(req = display(&req), "{}", func_name!());
 
@@ -185,24 +203,30 @@ mod tokio_rt {
                 }
 
                 // Changed to another stream. re-init snapshot state.
-                let snapshot_data = raft.begin_receiving_snapshot().await.map_err(|e| {
-                    // Safe unwrap: `RaftError<Infallible>` is always a Fatal.
-                    RaftError::Fatal(e.unwrap_fatal())
+                let snapshot_data = raft.begin_receiving_snapshot().await.map_err(|error| match error {
+                    RaftError::Fatal(fatal) => RaftError::Fatal(fatal),
+                    RaftError::APIError(infallible) => match infallible {},
                 })?;
 
                 *streaming = Some(Streaming::new(snapshot_id.clone(), snapshot_data));
             }
 
             {
-                let s = streaming.as_mut().unwrap();
-                s.receive(req).await?;
+                let Some(streaming_state) = streaming.as_mut() else {
+                    debug_assert!(false, "streaming snapshot state must exist before receiving chunk");
+                    return Err(RaftError::Fatal(crate::error::Fatal::Stopped));
+                };
+                streaming_state.receive(req).await?;
             }
 
             tracing::info!("Done received snapshot chunk");
 
-            if done {
-                let streaming = streaming.take().unwrap();
-                let mut data = streaming.into_snapshot_data();
+            if is_done {
+                let Some(streaming_state) = streaming.take() else {
+                    debug_assert!(false, "streaming snapshot state must exist before finalizing chunked snapshot");
+                    return Err(RaftError::Fatal(crate::error::Fatal::Stopped));
+                };
+                let mut data = streaming_state.into_snapshot_data();
 
                 data.shutdown().await.sto_write_snapshot(Some(snapshot_meta.signature()))?;
 
