@@ -1,0 +1,4 @@
+OK: openspec/changes/prepare-crate-extraction
+  tasks: 34 total / 18 checked
+  changed files listed: 17
+  verification artifacts: 24

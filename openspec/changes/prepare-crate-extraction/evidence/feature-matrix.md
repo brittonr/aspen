@@ -8,8 +8,8 @@ Status: partial. This artifact records the reusable/default and impacted foundat
 | --- | --- | --- | --- | --- |
 | `aspen-kv-types` | no default features | `cargo check -p aspen-kv-types --no-default-features` | pass | Reusable KV operation/response type default. |
 | `aspen-redb-storage` | no default features | `cargo check -p aspen-redb-storage --no-default-features` | pass | Storage pure-helper default; direct deps now leaf constants, BLAKE3, hex, serde. |
-| `aspen-raft-kv-types` | no default features | `cargo check -p aspen-raft-kv-types --no-default-features` | pass | Reusable OpenRaft app types without Aspen app/runtime defaults. |
-| `aspen-raft-kv` | no default features | `cargo check -p aspen-raft-kv --no-default-features` | pass | Facade config/trait surface without concrete iroh endpoint construction. |
+| `aspen-raft-kv-types` | no default features | `cargo check -p aspen-raft-kv-types --no-default-features` | pass | Reusable OpenRaft app types without Aspen app/runtime defaults; legacy `aspen-raft-types` package/API transition now documented in the manifest. |
+| `aspen-raft-kv` | no default features | `cargo check -p aspen-raft-kv --no-default-features` | pass | Facade config/trait operation surface without concrete Redb storage or iroh endpoint construction. |
 | `aspen-raft-network` | no default features | `cargo check -p aspen-raft-network --no-default-features` | pass | Explicit iroh/IRPC adapter crate; transport dependencies are allowed here, not in storage/facade defaults. |
 | `aspen-traits` | default | `cargo check -p aspen-traits` | pass | Impacted foundational trait rail. |
 | `aspen-core` | no default features | `cargo check -p aspen-core --no-default-features` | pass | Impacted core no-std/default-boundary rail. |

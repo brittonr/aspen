@@ -57,12 +57,26 @@ None allowed in default reusable features.
 
 ## Compatibility and aliases
 
-- **Old path**: `aspen_raft::types::*` and `aspen_raft_types::*`.
-- **New path**: `aspen_raft_kv_types::*`.
+- **Old API paths**: `aspen_raft::types::*` and `aspen_raft_types::*`.
+- **New API path**: `aspen_raft_kv_types::*`.
 - **Compatibility re-exports**: `aspen_raft::types::* -> aspen_raft_kv_types::*` during migration.
 - **Owner**: owner needed.
 - **Tests**: compile both old and new paths until removal.
 - **Removal criteria**: all in-repo consumers and downstream fixture import `aspen_raft_kv_types` directly.
+
+### `aspen-raft-types` package transition plan
+
+The legacy `aspen-raft-types` package is an Aspen app-compatibility package until `I12` migrates or aliases direct consumers. The reusable package/API transition is tracked separately from the `aspen_raft::types::*` re-export path.
+
+| Direct consumer | Current dependency | Transition decision | Owner | Verification rail | Removal criteria |
+| --- | --- | --- | --- | --- | --- |
+| `crates/aspen-raft` | `aspen-raft-types` | Keep as compatibility shell until storage migration and non-storage app payloads are split; migrate reusable `AppTypeConfig` use to `aspen-raft-kv-types` in `I12`. | owner needed | `cargo check -p aspen-raft` plus storage migration rails. | No reusable consumer imports `aspen_raft_types::*`; app-only trust payloads stay outside reusable default features. |
+| `crates/aspen-raft-network` | `aspen-raft-types` | Keep as explicit adapter dependency during `I9`; migrate reusable adapter type aliases to `aspen-raft-kv-types` or document app-only network types in `I12`. | owner needed | `cargo check -p aspen-raft-network --no-default-features`. | Adapter defaults compile against `aspen-raft-kv-types` without pulling trust/secrets/app bundles, or legacy dependency is manifest-tracked as app-only. |
+| `crates/aspen-transport` | `aspen-raft-types` | Leave on app-compatibility package until transport/RPC extraction change; do not make it part of reusable KV defaults. | owner needed | `cargo check -p aspen-transport`. | Transport/RPC manifest owns any remaining app-type dependency. |
+| `crates/aspen-cluster` | `aspen-raft-types` | Migrate reusable membership/type references through `aspen-raft-kv-types` or `aspen-raft` compatibility re-exports after `I10`; cluster bootstrap remains app shell. | owner needed | `cargo check -p aspen-cluster`. | Cluster imports reusable KV types only through canonical crate or tracked compatibility re-export. |
+| `crates/aspen-testing-patchbay` | `aspen-raft-types` | Keep as test harness dependency until legacy compatibility imports are migrated in `I12`. | owner needed | `cargo check -p aspen-testing-patchbay`. | Patchbay harness imports canonical reusable types or documented app-compatibility aliases only. |
+
+No dependency-key alias or temporary compatibility crate may be removed until every row has passing verification evidence and the downstream reusable fixture imports `aspen_raft_kv_types` directly.
 
 ## Representative consumers and re-exporters
 

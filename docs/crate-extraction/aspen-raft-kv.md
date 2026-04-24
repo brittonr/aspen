@@ -42,7 +42,7 @@ OpenRaft consensus types and traits are allowed as documented public API or impl
 | `aspen-kv-types` | keep | Reusable KV command/response contract. |
 | `aspen-raft-kv-types` | keep | OpenRaft app type config and metadata. |
 | `aspen-redb-storage` | future named feature | Redb backend integration follows the storage migration task. |
-| `aspen-traits` or extracted trait subset | review | Operation traits may be reused, but transitive default leaks must be proven absent. |
+| `aspen-traits` | keep, leaf-only | Provides `KeyValueStore` / `ClusterController` style operation traits; current default graph reaches only `aspen-cluster-types` and `aspen-kv-types`, and must be rechecked after any trait dependency change. |
 | `aspen-constants` / `aspen-time` | keep if leaf-only | Resource limits and explicit time boundaries. |
 | `aspen-cluster`, `aspen-core-shell`, `aspen-auth`, `aspen-client-api`, handlers | remove/gate | Aspen app integration belongs in compatibility shells. |
 

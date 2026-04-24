@@ -1,305 +1,34 @@
-$ git diff -- Cargo.toml Cargo.lock crates/aspen-raft-kv-types docs/crate-extraction.md docs/crate-extraction/aspen-raft-kv-types.md scripts/check-crate-extraction-readiness.rs
-diff --git a/crates/aspen-raft-kv-types/src/lib.rs b/crates/aspen-raft-kv-types/src/lib.rs
-index 4c1ca51f6..4e054649b 100644
---- a/crates/aspen-raft-kv-types/src/lib.rs
-+++ b/crates/aspen-raft-kv-types/src/lib.rs
-@@ -85,27 +85,44 @@ pub enum RaftKvRequest {
-     /// Set a single key-value pair.
-     Set { key: String, value: String },
-     /// Set a single key-value pair until an absolute Unix timestamp in milliseconds.
--    SetWithTtl { key: String, value: String, expires_at_ms: u64 },
-+    SetWithTtl {
-+        key: String,
-+        value: String,
-+        expires_at_ms: u64,
-+    },
-     /// Set a single key-value pair attached to a lease.
-     SetWithLease { key: String, value: String, lease_id: u64 },
-     /// Set multiple key-value pairs atomically.
-     SetMulti { pairs: Vec<(String, String)> },
-     /// Set multiple key-value pairs with a shared absolute expiration timestamp.
--    SetMultiWithTtl { pairs: Vec<(String, String)>, expires_at_ms: u64 },
-+    SetMultiWithTtl {
-+        pairs: Vec<(String, String)>,
-+        expires_at_ms: u64,
-+    },
-     /// Set multiple key-value pairs attached to a lease.
--    SetMultiWithLease { pairs: Vec<(String, String)>, lease_id: u64 },
-+    SetMultiWithLease {
-+        pairs: Vec<(String, String)>,
-+        lease_id: u64,
-+    },
-     /// Delete one key.
-     Delete { key: String },
-     /// Delete multiple keys atomically.
-     DeleteMulti { keys: Vec<String> },
-     /// Compare-and-swap one key.
--    CompareAndSwap { key: String, expected: Option<String>, new_value: String },
-+    CompareAndSwap {
-+        key: String,
-+        expected: Option<String>,
-+        new_value: String,
-+    },
-     /// Compare-and-delete one key.
-     CompareAndDelete { key: String, expected: String },
-     /// Batch set/delete operations.
-     Batch { operations: Vec<BatchWriteOp> },
-     /// Conditional batch set/delete operations.
--    ConditionalBatch { conditions: Vec<BatchCondition>, operations: Vec<BatchWriteOp> },
-+    ConditionalBatch {
-+        conditions: Vec<BatchCondition>,
-+        operations: Vec<BatchWriteOp>,
-+    },
-     /// Grant or refresh lease state.
-     LeaseGrant { lease_id: u64, ttl_seconds: u32 },
-     /// Revoke a lease and delete attached keys.
-@@ -113,31 +130,62 @@ pub enum RaftKvRequest {
-     /// Keep a lease alive.
-     LeaseKeepalive { lease_id: u64 },
-     /// Etcd-style transaction.
--    Transaction { compare: Vec<TxnCompareSpec>, success: Vec<TxnOpSpec>, failure: Vec<TxnOpSpec> },
-+    Transaction {
-+        compare: Vec<TxnCompareSpec>,
-+        success: Vec<TxnOpSpec>,
-+        failure: Vec<TxnOpSpec>,
-+    },
-     /// Optimistic transaction with read-set validation.
--    OptimisticTransaction { read_set: Vec<(String, i64)>, write_set: Vec<BatchWriteOp> },
-+    OptimisticTransaction {
-+        read_set: Vec<(String, i64)>,
-+        write_set: Vec<BatchWriteOp>,
-+    },
- }
-
- impl fmt::Display for RaftKvRequest {
-     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-         match self {
-             Self::Set { key, .. } => write!(f, "Set {{ key: {key} }}"),
--            Self::SetWithTtl { key, expires_at_ms, .. } => write!(f, "SetWithTtl {{ key: {key}, expires_at_ms: {expires_at_ms} }}"),
--            Self::SetWithLease { key, lease_id, .. } => write!(f, "SetWithLease {{ key: {key}, lease_id: {lease_id} }}"),
-+            Self::SetWithTtl { key, expires_at_ms, .. } => {
-+                write!(f, "SetWithTtl {{ key: {key}, expires_at_ms: {expires_at_ms} }}")
-+            }
-+            Self::SetWithLease { key, lease_id, .. } => {
-+                write!(f, "SetWithLease {{ key: {key}, lease_id: {lease_id} }}")
-+            }
-             Self::SetMulti { pairs } => write!(f, "SetMulti {{ pairs: {} }}", pairs.len()),
--            Self::SetMultiWithTtl { pairs, expires_at_ms } => write!(f, "SetMultiWithTtl {{ pairs: {}, expires_at_ms: {expires_at_ms} }}", pairs.len()),
--            Self::SetMultiWithLease { pairs, lease_id } => write!(f, "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}", pairs.len()),
-+            Self::SetMultiWithTtl { pairs, expires_at_ms } => {
-+                write!(f, "SetMultiWithTtl {{ pairs: {}, expires_at_ms: {expires_at_ms} }}", pairs.len())
-+            }
-+            Self::SetMultiWithLease { pairs, lease_id } => {
-+                write!(f, "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}", pairs.len())
-+            }
-             Self::Delete { key } => write!(f, "Delete {{ key: {key} }}"),
-             Self::DeleteMulti { keys } => write!(f, "DeleteMulti {{ keys: {} }}", keys.len()),
-             Self::CompareAndSwap { key, .. } => write!(f, "CompareAndSwap {{ key: {key} }}"),
-             Self::CompareAndDelete { key, .. } => write!(f, "CompareAndDelete {{ key: {key} }}"),
-             Self::Batch { operations } => write!(f, "Batch {{ operations: {} }}", operations.len()),
--            Self::ConditionalBatch { conditions, operations } => write!(f, "ConditionalBatch {{ conditions: {}, operations: {} }}", conditions.len(), operations.len()),
--            Self::LeaseGrant { lease_id, ttl_seconds } => write!(f, "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}"),
-+            Self::ConditionalBatch { conditions, operations } => {
-+                write!(f, "ConditionalBatch {{ conditions: {}, operations: {} }}", conditions.len(), operations.len())
-+            }
-+            Self::LeaseGrant { lease_id, ttl_seconds } => {
-+                write!(f, "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}")
-+            }
-             Self::LeaseRevoke { lease_id } => write!(f, "LeaseRevoke {{ lease_id: {lease_id} }}"),
-             Self::LeaseKeepalive { lease_id } => write!(f, "LeaseKeepalive {{ lease_id: {lease_id} }}"),
--            Self::Transaction { compare, success, failure } => write!(f, "Transaction {{ compare: {}, success: {}, failure: {} }}", compare.len(), success.len(), failure.len()),
--            Self::OptimisticTransaction { read_set, write_set } => write!(f, "OptimisticTransaction {{ read_set: {}, write_set: {} }}", read_set.len(), write_set.len()),
-+            Self::Transaction {
-+                compare,
-+                success,
-+                failure,
-+            } => write!(
-+                f,
-+                "Transaction {{ compare: {}, success: {}, failure: {} }}",
-+                compare.len(),
-+                success.len(),
-+                failure.len()
-+            ),
-+            Self::OptimisticTransaction { read_set, write_set } => {
-+                write!(f, "OptimisticTransaction {{ read_set: {}, write_set: {} }}", read_set.len(), write_set.len())
-+            }
-         }
-     }
- }
-@@ -285,16 +333,17 @@ mod tests {
-     const RELAY_URL: &str = "https://relay.example";
-     const TEST_KEY: &str = "alpha";
-     const TEST_VALUE: &str = "one";
-+    const TRANSPORT_ADDR: &str = "quic://127.0.0.1:1234";
-+    const BAD_HASH_REASON: &str = "bad hash";
-     const EXPIRES_AT_MS: u64 = 1_000;
-     const LEASE_ID: u64 = 42;
-+    const TTL_SECONDS: u32 = 60;
-+    const CHAIN_INDEX: u64 = 7;
-
-     #[test]
-     fn member_info_records_transport_without_runtime_types() {
--        let info = RaftKvMemberInfo::with_relay(
--            NODE_ID.to_string(),
--            vec!["quic://127.0.0.1:1234".to_string()],
--            RELAY_URL.to_string(),
--        );
-+        let info =
-+            RaftKvMemberInfo::with_relay(NODE_ID.to_string(), vec![TRANSPORT_ADDR.to_string()], RELAY_URL.to_string());
-         assert_eq!(info.endpoint_id, NODE_ID);
-         assert_eq!(info.transport_addr_count(), 1);
-         assert_eq!(info.relay_url.as_deref(), Some(RELAY_URL));
-@@ -324,24 +373,24 @@ mod tests {
-     fn response_carries_lease_and_transaction_results() {
-         let response = RaftKvResponse {
-             lease_id: Some(LEASE_ID),
--            ttl_seconds: Some(60),
-+            ttl_seconds: Some(TTL_SECONDS),
-             txn_results: Some(Vec::new()),
-             ..RaftKvResponse::default()
-         };
-         assert_eq!(response.lease_id, Some(LEASE_ID));
--        assert_eq!(response.ttl_seconds, Some(60));
-+        assert_eq!(response.ttl_seconds, Some(TTL_SECONDS));
-         assert_eq!(response.txn_results.as_ref().map(Vec::len), Some(0));
-     }
-
-     #[test]
-     fn storage_error_display_includes_context() {
-         let error = RaftKvStorageError::ChainIntegrity {
--            index: 7,
--            reason: "bad hash".to_string(),
-+            index: CHAIN_INDEX,
-+            reason: BAD_HASH_REASON.to_string(),
-         };
-         let rendered = error.to_string();
--        assert!(rendered.contains("7"));
--        assert!(rendered.contains("bad hash"));
-+        assert!(rendered.contains(&CHAIN_INDEX.to_string()));
-+        assert!(rendered.contains(BAD_HASH_REASON));
-     }
-
-     #[test]
-diff --git a/docs/crate-extraction.md b/docs/crate-extraction.md
-index cf18eab78..371855d05 100644
---- a/docs/crate-extraction.md
-+++ b/docs/crate-extraction.md
-@@ -78,7 +78,7 @@ The checker must fail on unowned exceptions, missing required exception fields,
- | Layer | Canonical path | Manifest | Current source | Readiness | Next action |
- | --- | --- | --- | --- | --- | --- |
- | KV operation/response types | `aspen-kv-types` | `docs/crate-extraction/aspen-kv-types.md` | `crates/aspen-kv-types` | `workspace-internal` | Document feature/API contract and prove default boundary. |
--| OpenRaft app types | `aspen-raft-kv-types` | `docs/crate-extraction/aspen-raft-kv-types.md` | split from `crates/aspen-raft-types` | `workspace-internal` | Remove Aspen core/trust coupling and classify OpenRaft exposure. |
-+| OpenRaft app types | `aspen-raft-kv-types` | `docs/crate-extraction/aspen-raft-kv-types.md` | `crates/aspen-raft-kv-types` plus legacy `crates/aspen-raft-types` | `workspace-internal` | Migrate compatibility paths and keep OpenRaft exposure documented. |
- | Redb storage backend | `aspen-redb-storage` | `docs/crate-extraction/aspen-redb-storage.md` | `crates/aspen-redb-storage` plus `crates/aspen-raft/src/storage*` | `workspace-internal` | Move concrete Redb/OpenRaft storage modules and preserve atomicity rails. |
- | Consensus KV facade | `aspen-raft-kv` | `docs/crate-extraction/aspen-raft-kv.md` | new facade over reusable storage/types | `workspace-internal` | Expose node config, membership, resource limits, and KV operations without Aspen binary config. |
- | Iroh/IRPC adapter | `aspen-raft-network` | `docs/crate-extraction/aspen-raft-network.md` | `crates/aspen-raft-network` | `workspace-internal` | Keep concrete iroh transport as explicit adapter. |
 diff --git a/docs/crate-extraction/aspen-raft-kv-types.md b/docs/crate-extraction/aspen-raft-kv-types.md
-index 56613f2a0..e3e852a47 100644
+index e3e852a47..a9cab2ebc 100644
 --- a/docs/crate-extraction/aspen-raft-kv-types.md
 +++ b/docs/crate-extraction/aspen-raft-kv-types.md
-@@ -4,7 +4,7 @@
+@@ -57,13 +57,27 @@ None allowed in default reusable features.
 
- - **Family**: Redb Raft KV
- - **Canonical class**: `protocol/wire`
--- **Canonical crate/path**: future `crates/aspen-raft-kv-types`, split from current `crates/aspen-raft-types`
-+- **Canonical crate/path**: `crates/aspen-raft-kv-types`, split from current `crates/aspen-raft-types`
- - **Intended audience**: Rust projects that need OpenRaft app type configuration, membership metadata, app requests/responses, and storage error types for the reusable KV stack.
- - **Public API owner**: owner needed
- - **Readiness state**: `workspace-internal`
-@@ -37,9 +37,10 @@ Vendored `openraft` 0.10 is a required public/trait dependency for this layer wh
+ ## Compatibility and aliases
 
- | Dependency | Decision | Reason |
- | --- | --- | --- |
--| current `aspen-constants` | keep or move | Shared limits are allowed if they do not pull app runtime. |
--| current `aspen-core` | remove/gate | Current dependency blocks neutral type-crate reuse. |
--| current `aspen-trust` | remove/gate | Trust is app/security integration, not default KV type surface. |
-+| `aspen-kv-types` | keep | Provides reusable transaction result payloads without app runtime. |
-+| current `aspen-constants` | not used in new default crate | Shared limits can move later if reusable resource policies need them. |
-+| current `aspen-core` | removed from new default crate | Current legacy dependency blocks neutral type-crate reuse. |
-+| current `aspen-trust` | removed from new default crate | Trust is app/security integration, not default KV type surface. |
+-- **Old path**: `aspen_raft::types::*` and `aspen_raft_types::*`.
+-- **New path**: `aspen_raft_kv_types::*`.
++- **Old API paths**: `aspen_raft::types::*` and `aspen_raft_types::*`.
++- **New API path**: `aspen_raft_kv_types::*`.
+ - **Compatibility re-exports**: `aspen_raft::types::* -> aspen_raft_kv_types::*` during migration.
+ - **Owner**: owner needed.
+ - **Tests**: compile both old and new paths until removal.
+ - **Removal criteria**: all in-repo consumers and downstream fixture import `aspen_raft_kv_types` directly.
 
- ### External dependencies
++### `aspen-raft-types` package transition plan
++
++The legacy `aspen-raft-types` package is an Aspen app-compatibility package until `I12` migrates or aliases direct consumers. The reusable package/API transition is tracked separately from the `aspen_raft::types::*` re-export path.
++
++| Direct consumer | Current dependency | Transition decision | Owner | Verification rail | Removal criteria |
++| --- | --- | --- | --- | --- | --- |
++| `crates/aspen-raft` | `aspen-raft-types` | Keep as compatibility shell until storage migration and non-storage app payloads are split; migrate reusable `AppTypeConfig` use to `aspen-raft-kv-types` in `I12`. | owner needed | `cargo check -p aspen-raft` plus storage migration rails. | No reusable consumer imports `aspen_raft_types::*`; app-only trust payloads stay outside reusable default features. |
++| `crates/aspen-raft-network` | `aspen-raft-types` | Keep as explicit adapter dependency during `I9`; migrate reusable adapter type aliases to `aspen-raft-kv-types` or document app-only network types in `I12`. | owner needed | `cargo check -p aspen-raft-network --no-default-features`. | Adapter defaults compile against `aspen-raft-kv-types` without pulling trust/secrets/app bundles, or legacy dependency is manifest-tracked as app-only. |
++| `crates/aspen-transport` | `aspen-raft-types` | Leave on app-compatibility package until transport/RPC extraction change; do not make it part of reusable KV defaults. | owner needed | `cargo check -p aspen-transport`. | Transport/RPC manifest owns any remaining app-type dependency. |
++| `crates/aspen-cluster` | `aspen-raft-types` | Migrate reusable membership/type references through `aspen-raft-kv-types` or `aspen-raft` compatibility re-exports after `I10`; cluster bootstrap remains app shell. | owner needed | `cargo check -p aspen-cluster`. | Cluster imports reusable KV types only through canonical crate or tracked compatibility re-export. |
++| `crates/aspen-testing-patchbay` | `aspen-raft-types` | Keep as test harness dependency until legacy compatibility imports are migrated in `I12`. | owner needed | `cargo check -p aspen-testing-patchbay`. | Patchbay harness imports canonical reusable types or documented app-compatibility aliases only. |
++
++No dependency-key alias or temporary compatibility crate may be removed until every row has passing verification evidence and the downstream reusable fixture imports `aspen_raft_kv_types` directly.
++
+ ## Representative consumers and re-exporters
 
-@@ -76,11 +77,11 @@ None allowed in default reusable features.
- | candidate | feature_set | dependency_path | owner | reason |
- | --- | --- | --- | --- | --- |
- | `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> openraft` | owner needed | OpenRaft trait/type exposure is the crate purpose and must be semver-documented. |
--| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> aspen-constants` | owner needed | Reusable resource limits may remain if the path does not pull app runtime. |
-+| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> aspen-kv-types` | owner needed | KV transaction result payloads are the app-data contract for this reusable layer. |
-
- ## Verification rails
-
--- compile current `aspen-raft-types` baseline and future `aspen-raft-kv-types` default feature set
-+- compile current `aspen-raft-types` baseline and `aspen-raft-kv-types` default feature set
- - dependency-boundary check proving no default path to root `aspen`, `aspen-core-shell`, trust, secrets, SQL, coordination, handler registries, binaries, or concrete iroh transport
- - positive downstream example using `aspen_raft_kv_types` directly
- - negative boundary check proving Aspen bootstrap/trust/secrets APIs are unavailable by default
-@@ -88,4 +89,4 @@ None allowed in default reusable features.
-
- ## First-slice status
-
--Current status is `workspace-internal`. The baseline shows current `aspen-raft-types` still depends on `aspen-core` and `aspen-trust`; those dependencies must be removed, moved, or feature-gated before readiness.
-+Current status is `workspace-internal`. The new `crates/aspen-raft-kv-types` default feature set compiles with OpenRaft and KV type dependencies only. Legacy `crates/aspen-raft-types` still depends on `aspen-core` and `aspen-trust` until compatibility migration completes.
-diff --git a/scripts/check-crate-extraction-readiness.rs b/scripts/check-crate-extraction-readiness.rs
-index ae1a257a1..39850af3b 100755
---- a/scripts/check-crate-extraction-readiness.rs
-+++ b/scripts/check-crate-extraction-readiness.rs
-@@ -114,10 +114,7 @@ struct Report {
- }
-
- fn run_command_text(program: &str, args: &[&str]) -> Result<String> {
--    let output = Command::new(program)
--        .args(args)
--        .output()
--        .with_context(|| format!("failed to run {program}"))?;
-+    let output = Command::new(program).args(args).output().with_context(|| format!("failed to run {program}"))?;
-     if !output.status.success() {
-         let stderr = String::from_utf8_lossy(&output.stderr);
-         anyhow::bail!("{program} failed: {stderr}");
-@@ -126,13 +123,8 @@ fn run_command_text(program: &str, args: &[&str]) -> Result<String> {
- }
-
- fn export_policy(policy_path: &Path) -> Result<Policy> {
--    let path_text = policy_path
--        .to_str()
--        .context("policy path is not valid UTF-8")?;
--    let json = run_command_text(
--        "nix",
--        &["run", "nixpkgs#nickel", "--", "export", "--format", "json", path_text],
--    )?;
-+    let path_text = policy_path.to_str().context("policy path is not valid UTF-8")?;
-+    let json = run_command_text("nix", &["run", "nixpkgs#nickel", "--", "export", "--format", "json", path_text])?;
-     serde_json::from_str(&json).context("failed to parse exported Nickel policy JSON")
- }
-
-@@ -177,8 +169,8 @@ fn check_exception(candidate_key: &str, exception: &Exception, failures: &mut Ve
-
- fn check_manifest(candidate_key: &str, candidate: &Candidate, failures: &mut Vec<String>) -> Result<String> {
-     let manifest_path = Path::new(&candidate.manifest);
--    let text = fs::read_to_string(manifest_path)
--        .with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
-+    let text =
-+        fs::read_to_string(manifest_path).with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
-     for section in MANIFEST_REQUIRED_SECTIONS {
-         if !text.contains(section) {
-             failures.push(format!("{candidate_key}: manifest missing `{section}`"));
-@@ -244,9 +236,7 @@ fn check_transitive_deps(
-     if is_runtime_shell(candidate) {
-         return;
-     }
--    let output = Command::new("cargo")
--        .args(["tree", "-p", package_name, "-e", "normal"])
--        .output();
-+    let output = Command::new("cargo").args(["tree", "-p", package_name, "-e", "normal"]).output();
-     let Ok(output) = output else {
-         warnings.push(format!("{candidate_key}: could not run cargo tree"));
-         return;
-@@ -315,7 +305,8 @@ fn build_report(args: &Args) -> Result<Report> {
-         check_direct_deps(candidate_key, candidate, &metadata, &forbidden, &mut failures, &mut warnings);
-         check_transitive_deps(candidate_key, candidate, &forbidden, &mut failures, &mut warnings);
-         if !candidate.forbidden_unless_feature.is_empty() && candidate.named_reusable_feature_sets.is_empty() {
--            failures.push(format!("{candidate_key}: feature-gated forbiddens listed but no named reusable feature sets"));
-+            failures
-+                .push(format!("{candidate_key}: feature-gated forbiddens listed but no named reusable feature sets"));
-         }
-     }
+ - `aspen-redb-storage`

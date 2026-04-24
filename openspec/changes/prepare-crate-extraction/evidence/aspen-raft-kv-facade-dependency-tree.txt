@@ -1,10 +1,3 @@
-$ cargo tree -p aspen-raft-kv --no-default-features
-warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
-package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
-workspace: /home/brittonr/git/aspen/Cargo.toml
-warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
-package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
-workspace: /home/brittonr/git/aspen/Cargo.toml
 aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
 ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
 │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
@@ -33,12 +26,10 @@ aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
 │   │   │   ├── rust_decimal v1.40.0
 │   │   │   │   ├── arrayvec v0.7.6
 │   │   │   │   └── num-traits v0.2.19
-│   │   │   │       [build-dependencies]
-│   │   │   │       └── autocfg v1.5.0
 │   │   │   └── utf8-width v0.1.8
 │   │   ├── chrono v0.4.44
 │   │   │   ├── iana-time-zone v0.1.65
-│   │   │   └── num-traits v0.2.19 (*)
+│   │   │   └── num-traits v0.2.19
 │   │   ├── clap v4.6.0
 │   │   │   ├── clap_builder v4.6.0
 │   │   │   │   ├── anstream v1.0.0
@@ -150,24 +141,3 @@ aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
 │       └── syn v2.0.117 (*)
 ├── serde v1.0.228 (*)
 └── thiserror v2.0.18 (*)
-[dev-dependencies]
-├── static_assertions v1.1.0
-└── tempfile v3.27.0
-    ├── fastrand v2.3.0
-    ├── getrandom v0.4.2
-    │   ├── cfg-if v1.0.4
-    │   └── libc v0.2.183
-    ├── once_cell v1.21.4
-    └── rustix v1.1.4
-        ├── bitflags v2.11.0
-        └── linux-raw-sys v0.12.1
-
-$ cargo tree -p aspen-raft-kv --edges normal | rg "aspen-(trust|secrets|sql|coordination|rpc-handlers|dogfood|cli|tui|client-api|core-shell|raft-network|transport)|^aspen v"
-warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
-package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
-workspace: /home/brittonr/git/aspen/Cargo.toml
-warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
-package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
-workspace: /home/brittonr/git/aspen/Cargo.toml
-forbidden_dependency_matches=none
-exit_code=0

@@ -15,10 +15,13 @@ use std::sync::Arc;
 pub use aspen_kv_types::DeleteRequest;
 pub use aspen_kv_types::DeleteResult;
 pub use aspen_kv_types::KeyValueStoreError;
+pub use aspen_kv_types::KeyValueWithRevision;
+pub use aspen_kv_types::ReadConsistency;
 pub use aspen_kv_types::ReadRequest;
 pub use aspen_kv_types::ReadResult;
 pub use aspen_kv_types::ScanRequest;
 pub use aspen_kv_types::ScanResult;
+pub use aspen_kv_types::WriteCommand;
 pub use aspen_kv_types::WriteRequest;
 pub use aspen_kv_types::WriteResult;
 use aspen_raft_kv_types::NodeId;
@@ -27,8 +30,15 @@ pub use aspen_raft_kv_types::RaftKvRequest;
 pub use aspen_raft_kv_types::RaftKvResponse;
 pub use aspen_raft_kv_types::RaftKvStorageError;
 pub use aspen_raft_kv_types::RaftKvTypeConfig;
+pub use aspen_traits::AddLearnerRequest;
+pub use aspen_traits::ChangeMembershipRequest;
 pub use aspen_traits::ClusterController;
+pub use aspen_traits::ClusterMetrics;
+pub use aspen_traits::ClusterState;
+pub use aspen_traits::ControlPlaneError;
+pub use aspen_traits::InitRequest;
 pub use aspen_traits::KeyValueStore;
+pub use aspen_traits::SnapshotLogId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -210,6 +220,77 @@ impl RaftKvServices {
     pub fn cluster_controller(&self) -> Arc<dyn ClusterController> {
         Arc::clone(&self.cluster_controller)
     }
+
+    /// Write one or more key-value commands through the reusable operation surface.
+    pub async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+        self.kv_store.write(request).await
+    }
+
+    /// Read one key through the reusable operation surface.
+    pub async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+        self.kv_store.read(request).await
+    }
+
+    /// Delete one key through the reusable operation surface.
+    pub async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+        self.kv_store.delete(request).await
+    }
+
+    /// Scan keys through the reusable operation surface.
+    pub async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        self.kv_store.scan(request).await
+    }
+
+    /// Scan local state without linearizability guarantees through the reusable operation surface.
+    pub async fn scan_local(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        self.kv_store.scan_local(request).await
+    }
+
+    /// Initialize the cluster through the reusable control-plane surface.
+    pub async fn init_cluster(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+        self.cluster_controller.init(request).await
+    }
+
+    /// Add a learner through the reusable control-plane surface.
+    pub async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
+        self.cluster_controller.add_learner(request).await
+    }
+
+    /// Change voting membership through the reusable control-plane surface.
+    pub async fn change_membership(&self, request: ChangeMembershipRequest) -> Result<ClusterState, ControlPlaneError> {
+        self.cluster_controller.change_membership(request).await
+    }
+
+    /// Read current cluster state through the reusable control-plane surface.
+    pub async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
+        self.cluster_controller.current_state().await
+    }
+
+    /// Read cluster metrics through the reusable control-plane surface.
+    pub async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
+        self.cluster_controller.get_metrics().await
+    }
+
+    /// Trigger a snapshot through the reusable control-plane surface.
+    pub async fn trigger_snapshot(&self) -> Result<Option<SnapshotLogId>, ControlPlaneError> {
+        self.cluster_controller.trigger_snapshot().await
+    }
+
+    /// Read the current leader through the reusable control-plane surface.
+    pub async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
+        self.cluster_controller.get_leader().await
+    }
+
+    /// Transfer leadership through the reusable control-plane surface.
+    pub async fn transfer_leader(&self, target: u64) -> Result<(), ControlPlaneError> {
+        self.cluster_controller.transfer_leader(target).await
+    }
+
+    /// Return whether the wrapped cluster controller has been initialized.
+    #[must_use]
+    pub fn is_initialized(&self) -> bool {
+        self.cluster_controller.is_initialized()
+    }
 }
 
 /// Config validation error.
@@ -374,5 +455,215 @@ mod tests {
     fn public_operation_traits_remain_reexported() {
         static_assertions::assert_obj_safe!(KeyValueStore);
         static_assertions::assert_obj_safe!(ClusterController);
+    }
+
+    const TEST_KEY: &str = "alpha";
+    const TEST_VALUE: &str = "one";
+    const TEST_VERSION: u64 = 1;
+    const TEST_CREATE_REVISION: u64 = 2;
+    const TEST_MOD_REVISION: u64 = 3;
+    const TRANSFER_TARGET_NODE_ID: u64 = 4;
+    const KV_FAILURE_REASON: &str = "kv failure";
+
+    struct EchoKeyValueStore;
+
+    #[async_trait::async_trait]
+    impl KeyValueStore for EchoKeyValueStore {
+        async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+            Ok(WriteResult {
+                command: Some(request.command),
+                ..WriteResult::default()
+            })
+        }
+
+        async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+            Ok(ReadResult {
+                kv: Some(KeyValueWithRevision {
+                    key: request.key,
+                    value: TEST_VALUE.to_string(),
+                    version: TEST_VERSION,
+                    create_revision: TEST_CREATE_REVISION,
+                    mod_revision: TEST_MOD_REVISION,
+                }),
+            })
+        }
+
+        async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+            Ok(DeleteResult {
+                key: request.key,
+                is_deleted: true,
+            })
+        }
+
+        async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+            Ok(ScanResult {
+                entries: Vec::new(),
+                result_count: 0,
+                is_truncated: false,
+                continuation_token: None,
+            })
+        }
+    }
+
+    struct FailingKeyValueStore;
+
+    #[async_trait::async_trait]
+    impl KeyValueStore for FailingKeyValueStore {
+        async fn write(&self, _request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+            Err(KeyValueStoreError::Failed {
+                reason: KV_FAILURE_REASON.to_string(),
+            })
+        }
+
+        async fn read(&self, _request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+            Err(KeyValueStoreError::Failed {
+                reason: KV_FAILURE_REASON.to_string(),
+            })
+        }
+
+        async fn delete(&self, _request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+            Err(KeyValueStoreError::Failed {
+                reason: KV_FAILURE_REASON.to_string(),
+            })
+        }
+
+        async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+            Err(KeyValueStoreError::Failed {
+                reason: KV_FAILURE_REASON.to_string(),
+            })
+        }
+    }
+
+    struct ReadyClusterController;
+
+    #[async_trait::async_trait]
+    impl ClusterController for ReadyClusterController {
+        async fn init(&self, _request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn add_learner(&self, _request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn change_membership(
+            &self,
+            _request: ChangeMembershipRequest,
+        ) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
+            Err(ControlPlaneError::Unsupported {
+                backend: "test".to_string(),
+                operation: "get_metrics".to_string(),
+            })
+        }
+
+        async fn trigger_snapshot(&self) -> Result<Option<SnapshotLogId>, ControlPlaneError> {
+            Ok(None)
+        }
+
+        async fn transfer_leader(&self, _target: u64) -> Result<(), ControlPlaneError> {
+            Ok(())
+        }
+
+        fn is_initialized(&self) -> bool {
+            true
+        }
+    }
+
+    struct FailingClusterController;
+
+    #[async_trait::async_trait]
+    impl ClusterController for FailingClusterController {
+        async fn init(&self, _request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+            Err(ControlPlaneError::NotInitialized)
+        }
+
+        async fn add_learner(&self, _request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
+            Err(ControlPlaneError::NotInitialized)
+        }
+
+        async fn change_membership(
+            &self,
+            _request: ChangeMembershipRequest,
+        ) -> Result<ClusterState, ControlPlaneError> {
+            Err(ControlPlaneError::NotInitialized)
+        }
+
+        async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
+            Err(ControlPlaneError::NotInitialized)
+        }
+
+        async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
+            Err(ControlPlaneError::NotInitialized)
+        }
+
+        async fn trigger_snapshot(&self) -> Result<Option<SnapshotLogId>, ControlPlaneError> {
+            Err(ControlPlaneError::NotInitialized)
+        }
+
+        async fn transfer_leader(&self, _target: u64) -> Result<(), ControlPlaneError> {
+            Err(ControlPlaneError::NotInitialized)
+        }
+
+        fn is_initialized(&self) -> bool {
+            false
+        }
+    }
+
+    fn scan_request() -> ScanRequest {
+        ScanRequest {
+            prefix: TEST_KEY.to_string(),
+            limit_results: Some(MIN_RESOURCE_LIMIT),
+            continuation_token: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn services_forward_kv_and_cluster_operations() {
+        let services = RaftKvServices::new(Arc::new(EchoKeyValueStore), Arc::new(ReadyClusterController));
+
+        let write_result = services.write(WriteRequest::set(TEST_KEY, TEST_VALUE)).await.expect("write succeeds");
+        assert!(matches!(write_result.command, Some(WriteCommand::Set { .. })));
+
+        let read_result = services.read(ReadRequest::new(TEST_KEY)).await.expect("read succeeds");
+        let kv = read_result.kv.expect("read returns value");
+        assert_eq!(kv.key, TEST_KEY);
+        assert_eq!(kv.value, TEST_VALUE);
+
+        let delete_result = services.delete(DeleteRequest::new(TEST_KEY)).await.expect("delete succeeds");
+        assert_eq!(delete_result.key, TEST_KEY);
+        assert!(delete_result.is_deleted);
+
+        let scan_result = services.scan(scan_request()).await.expect("scan succeeds");
+        assert_eq!(scan_result.result_count, 0);
+        assert!(scan_result.entries.is_empty());
+
+        let local_scan_result = services.scan_local(scan_request()).await.expect("local scan succeeds");
+        assert_eq!(local_scan_result.result_count, 0);
+
+        let cluster_state = services.current_state().await.expect("cluster state succeeds");
+        assert!(cluster_state.nodes.is_empty());
+        assert!(services.trigger_snapshot().await.expect("snapshot trigger succeeds").is_none());
+        services.transfer_leader(TRANSFER_TARGET_NODE_ID).await.expect("transfer succeeds");
+        assert!(services.is_initialized());
+    }
+
+    #[tokio::test]
+    async fn services_propagate_underlying_errors() {
+        let services = RaftKvServices::new(Arc::new(FailingKeyValueStore), Arc::new(FailingClusterController));
+
+        let write_error = services.write(WriteRequest::set(TEST_KEY, TEST_VALUE)).await.expect_err("write fails");
+        assert!(matches!(write_error, KeyValueStoreError::Failed { .. }));
+
+        let state_error = services.current_state().await.expect_err("cluster state fails");
+        assert!(matches!(state_error, ControlPlaneError::NotInitialized));
+        assert!(!services.is_initialized());
     }
 }

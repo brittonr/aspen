@@ -1,0 +1,45 @@
+# openspec_gate tasks transcript
+
+Timestamp: 2026-04-24T23:22:27.069Z
+Command: openspec_gate(stage="tasks", change="prepare-crate-extraction")
+
+```text
+OpenSpec tasks gate (prepare-crate-extraction)
+
+Strategy: same-family
+
+VERDICT: FAIL
+
+## Findings
+
+- [blocker] [class=omission] [scope=review] [route=human] [promoted=yes] Task-status claim lacks the required task-gate transcript.
+  - Evidence: `tasks summary` claims “18 done, 0 in progress, 16 todo”; `tasks.md` task `V11` says “Before any intermediate or final task-status claim, keep ... actual `openspec_gate tasks` transcript synchronized for all checked tasks”; Last User Prompt says “Re-run and capture the actual openspec_gate tasks transcript before claiming its status.” No actual `openspec_gate tasks` transcript is supplied in the gate evidence.
+
+- [blocker] [class=omission] [scope=review] [route=deterministic-check] [promoted=yes] Checked evidence-producing tasks cannot be accepted from supplied artifacts.
+  - Evidence: `tasks.md` task `R0` requires `openspec/changes/prepare-crate-extraction/verification.md` to be created and updated with each evidence artifact “before the related task is checked”; `R1` requires `openspec/changes/prepare-crate-extraction/evidence/extraction-inventory-baseline.md`; `R2` requires `openspec/changes/prepare-crate-extraction/evidence/redb-raft-kv-coupling-baseline.md`; `I17` requires `openspec/changes/prepare-crate-extraction/evidence/service-follow-up-selection.md`; the delta spec scenario `architecture.modularity.extractable-crate-boundaries-are-explicit.extraction-artifacts-have-canonical-locations` requires each evidence artifact to be referenced from `verification.md` before the related task is checked complete. The supplied artifacts do not include `verification.md` contents or the evidence files.
+
+- [warning] [class=omission] [scope=tasks] [route=guidance] [promoted=no] Conditional `.agent/napkin.md` review-path handling is not represented.
+  - Evidence: Last User Prompt says “Include `.agent/napkin.md` in review paths when it is committed, or avoid committing it with implementation changes.” No task in `tasks.md` `R0`-`V12` names `.agent/napkin.md` or a review-path check. Supplied evidence does not show whether `.agent/napkin.md` is committed, so this is conditional.
+
+## Stage Check
+
+- The task plan broadly traces to the proposal/design/spec through explicit `[covers=...]` references.
+- The plan includes the requested repeated-omission escalation guard in `V11`, including `openspec/changes/prepare-crate-extraction/evidence/human-oracle-escalation-checkpoint.md`.
+- The plan includes relevant verification rails for napkin-identified failure modes: `V1` covers `aspen-core`, `aspen-core-no-std-smoke`, `aspen-core-shell`, and `aspen-traits`; `V2` covers transitive/re-export dependency leaks; `V3` covers downstream-style consumer path isolation.
+- The stage is not ready to proceed with additional task checkoffs because the current completed-task status is not backed by the required `openspec_gate tasks` transcript or supplied `verification.md` evidence links.
+- Archive/sync is not applicable yet: `tasks summary` shows 16 todo tasks, including all `V1`-`V12` verification tasks.
+
+## Next Actions
+
+- Re-run and attach the actual `openspec_gate tasks` transcript for `prepare-crate-extraction`.
+- Supply or update `openspec/changes/prepare-crate-extraction/verification.md` with links to evidence for every checked task.
+- Do not check more tasks complete until `V11`’s status-synchronization rule is satisfied.
+- If `.agent/napkin.md` is committed in the implementation diff, add it to review paths or remove it from the implementation commit.
+
+## Promotion Hints
+- repeated 4x [class=omission] [scope=tasks] [route=guidance]
+  suggestion: Promote into OpenSpec rule/template/stage-gate check.
+  task: Strengthen OpenSpec tasks gate/template to block repeated omission findings. Example trigger: Implementation traceability for protocol-identifier collision handling is implicit but not explicit in the build tasks. Evidence: `specs/plugins/spec.md` adds scenario **“Protocol identifier collision”** requiring conflicting registration/activation rejection. `tasks.md` has `5.5` for tests proving collisions are rejected, but implementation is only indirectly implied by `1.4` (“manifest and routing path”) rather than called out as a deliverable. This is probably implementable under `1.4`, but the task text does not state it.
+  sources: openspec-gate=4
+[19:21:24]
+```
