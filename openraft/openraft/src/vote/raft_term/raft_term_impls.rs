@@ -5,7 +5,7 @@ macro_rules! impl_raft_term {
         $(
             impl RaftTerm for $t {
                 fn next(&self) -> Self {
-                    self + 1
+                    self.saturating_add(1)
                 }
             }
         )*
