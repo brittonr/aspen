@@ -77,6 +77,7 @@ pub enum RaftError<C, E = Infallible>
 where C: RaftTypeConfig
 {
     /// API-specific error returned by Raft API methods.
+    #[allow(acronym_style, reason = "preserve established public error variant spelling")]
     #[error(transparent)]
     APIError(E),
 
@@ -94,7 +95,10 @@ where C: RaftTypeConfig
     /// otherwise panic.
     #[since(version = "0.10.0")]
     pub fn unwrap_fatal(self) -> Fatal<C> {
-        self.into_fatal().unwrap()
+        match self {
+            RaftError::Fatal(fatal_error) => fatal_error,
+            RaftError::APIError(infallible) => match infallible {},
+        }
     }
 }
 
@@ -283,6 +287,7 @@ where C: RaftTypeConfig
     serde(bound(serialize = "E: serde::Serialize")),
     serde(bound(deserialize = "E: for <'d> serde::Deserialize<'d>"))
 )]
+#[allow(acronym_style, reason = "preserve established public error type spelling")]
 pub enum RPCError<C: RaftTypeConfig, E: Error = Infallible> {
     /// The RPC request timed out.
     #[error(transparent)]
@@ -568,10 +573,6 @@ pub enum NoForward {}
 pub(crate) enum RejectVoteRequest<C: RaftTypeConfig> {
     #[error("reject vote request by a greater vote: {0}")]
     ByVote(VoteOf<C>),
-
-    #[allow(dead_code)]
-    #[error("reject vote request by a greater last-log-id: {0:?}")]
-    ByLastLogId(Option<LogIdOf<C>>),
 }
 
 impl<C> From<RejectVoteRequest<C>> for AppendEntriesResponse<C>
@@ -580,9 +581,6 @@ where C: RaftTypeConfig
     fn from(r: RejectVoteRequest<C>) -> Self {
         match r {
             RejectVoteRequest::ByVote(v) => AppendEntriesResponse::HigherVote(v),
-            RejectVoteRequest::ByLastLogId(_) => {
-                unreachable!("the leader should always has a greater last log id")
-            }
         }
     }
 }
@@ -605,9 +603,6 @@ where C: RaftTypeConfig
     fn from(r: RejectVoteRequest<C>) -> Self {
         match r {
             RejectVoteRequest::ByVote(v) => RejectAppendEntries::ByVote(v),
-            RejectVoteRequest::ByLastLogId(_) => {
-                unreachable!("the leader should always has a greater last log id")
-            }
         }
     }
 }
