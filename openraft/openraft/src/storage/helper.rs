@@ -33,6 +33,11 @@ use crate::utime::Leased;
 use crate::vote::RaftLeaderId;
 use crate::vote::RaftVote;
 
+const DEFAULT_NODE_ID_TEXT: &str = "xx";
+const REAPPLY_CHUNK_ENTRY_COUNT: u64 = 64;
+const MEMBERSHIP_SEARCH_STEP_COUNT: u64 = 64;
+const MAX_MEMBERSHIP_RESULTS: usize = 2;
+
 /// StorageHelper provides additional methods to access a [`RaftLogStorage`] and
 /// [`RaftStateMachine`] implementation.
 pub struct StorageHelper<'a, C, LS, SM>
@@ -63,8 +68,8 @@ where
             log_store: sto,
             state_machine: sm,
             id: None,
-            id_str: "xx".to_string(),
-            _p: Default::default(),
+            id_str: DEFAULT_NODE_ID_TEXT.to_string(),
+            _p: PhantomData,
         }
     }
 
@@ -88,10 +93,13 @@ where
         let mut log_reader = self.log_store.get_log_reader().await;
         let vote = log_reader.read_vote().await.sto_read_vote()?;
         // When absent, create a default value for this node.
-        let vote = vote.unwrap_or_else(|| {
-            let leader_id = LeaderIdOf::<C>::new(TermOf::<C>::default(), self.id.clone().unwrap());
-            VoteOf::<C>::from_leader_id(leader_id, false)
-        });
+        let vote = match vote {
+            Some(vote) => vote,
+            None => {
+                let leader_id = LeaderIdOf::<C>::new(TermOf::<C>::default(), self.node_id()?);
+                VoteOf::<C>::from_leader_id(leader_id, false)
+            }
+        };
 
         let mut committed = self.log_store.read_committed().await.sto_read_logs()?;
 
@@ -154,9 +162,10 @@ where
                 last_applied.display(),
             );
 
-            self.log_store.purge(last_applied.clone().unwrap()).await.sto_write_logs()?;
-            last_log_id = last_applied.clone();
-            last_purged_log_id = last_applied.clone();
+            let last_applied_log_id = self.required_last_applied(&last_applied)?;
+            self.log_store.purge(last_applied_log_id.clone()).await.sto_write_logs()?;
+            last_log_id = Some(last_applied_log_id.clone());
+            last_purged_log_id = Some(last_applied_log_id);
         }
 
         tracing::info!("load key log ids from ({},{}]", last_purged_log_id.display(), last_log_id.display());
@@ -170,16 +179,19 @@ where
         let snapshot = match snapshot {
             None => {
                 if last_purged_log_id.is_some() {
-                    let mut b = self.state_machine.try_create_snapshot_builder(true).await.unwrap();
-                    let s = b.build_snapshot().await.sto_write_snapshot(None)?;
-                    Some(s)
+                    let mut builder = self.required_snapshot_builder().await?;
+                    let snapshot = builder.build_snapshot().await.sto_write_snapshot(None)?;
+                    Some(snapshot)
                 } else {
                     None
                 }
             }
             s @ Some(_) => s,
         };
-        let snapshot_meta = snapshot.map(|x| x.meta).unwrap_or_default();
+        let snapshot_meta = match snapshot {
+            Some(snapshot) => snapshot.meta,
+            None => Default::default(),
+        };
 
         let io_state = IOState::new(
             &self.id_str,
@@ -250,18 +262,29 @@ where
 
     /// Read log entries from [`RaftLogReader`] in chunks and apply them to the state machine.
     pub(crate) async fn reapply_committed(&mut self, mut start: u64, end: u64) -> Result<(), StorageError<C>> {
-        let chunk_size = 64;
+        let chunk_entry_count = REAPPLY_CHUNK_ENTRY_COUNT;
+        let max_chunk_count = bounded_chunk_count(start, end, chunk_entry_count);
 
-        tracing::info!("re-apply log [{}..{}) in {} item chunks to state machine", start, end, chunk_size,);
+        tracing::info!(
+            "re-apply log [{}..{}) in {} item chunks to state machine",
+            start,
+            end,
+            chunk_entry_count,
+        );
 
         let mut log_reader = self.log_store.get_log_reader().await;
 
-        while start < end {
-            let chunk_end = std::cmp::min(end, start + chunk_size);
+        for _chunk_index in 0..max_chunk_count {
+            if start >= end {
+                break;
+            }
+
+            let chunk_end = std::cmp::min(end, start.saturating_add(chunk_entry_count));
             let entries = log_reader.try_get_log_entries(start..chunk_end).await.sto_read_logs()?;
 
-            let first = entries.first().map(|ent| ent.index());
-            let last = entries.last().map(|ent| ent.index());
+            let first = entries.first().map(|entry| entry.index());
+            let last = entries.last().map(|entry| entry.index());
+            let expected_last_index = chunk_end.saturating_sub(1);
 
             let make_err = || {
                 let err = AnyError::error(format!(
@@ -276,12 +299,16 @@ where
             if first != Some(start) {
                 return Err(StorageError::read_log_at_index(start, make_err()));
             }
-            if last != Some(chunk_end - 1) {
-                return Err(StorageError::read_log_at_index(chunk_end - 1, make_err()));
+            if last != Some(expected_last_index) {
+                return Err(StorageError::read_log_at_index(expected_last_index, make_err()));
             }
 
-            tracing::info!("re-apply {} log entries: [{}, {}),", chunk_end - start, start, chunk_end);
-            let last_applied = entries.last().map(|e| e.log_id()).unwrap();
+            let replayed_entry_count = chunk_end.saturating_sub(start);
+            tracing::info!("re-apply {} log entries: [{}, {}),", replayed_entry_count, start, chunk_end);
+            let last_applied = match entries.last().map(|entry| entry.log_id()) {
+                Some(log_id) => log_id,
+                None => return Err(StorageError::read_log_at_index(start, make_err())),
+            };
             let apply_items = entries.into_iter().map(|entry| Ok((entry, None)));
             let apply_stream = futures::stream::iter(apply_items);
             self.state_machine.apply(apply_stream).await.sto_apply(last_applied)?;
@@ -353,26 +380,31 @@ where
         tracing::info!("load membership from log: [{}..{})", since_index, end);
 
         let start = std::cmp::max(st.last_purged_log_id.next_index(), since_index);
-        let step = 64;
+        let step_count = MEMBERSHIP_SEARCH_STEP_COUNT;
+        let max_step_count = bounded_chunk_count(start, end, step_count);
 
-        let mut res = vec![];
+        let mut res = Vec::with_capacity(MAX_MEMBERSHIP_RESULTS);
         let mut log_reader = self.log_store.get_log_reader().await;
 
-        while start < end {
-            let step_start = std::cmp::max(start, end.saturating_sub(step));
+        for _step_index in 0..max_step_count {
+            if start >= end {
+                break;
+            }
+
+            let step_start = std::cmp::max(start, end.saturating_sub(step_count));
             let entries = log_reader.try_get_log_entries(step_start..end).await.sto_read_logs()?;
 
             for ent in entries.iter().rev() {
                 if let Some(mem) = ent.get_membership() {
                     let em = StoredMembership::new(Some(ent.log_id()), mem);
                     res.insert(0, em);
-                    if res.len() == 2 {
+                    if res.len() == MAX_MEMBERSHIP_RESULTS {
                         return Ok(res);
                     }
                 }
             }
 
-            end = end.saturating_sub(step);
+            end = end.saturating_sub(step_count);
         }
 
         Ok(res)
@@ -417,5 +449,43 @@ where
         }
 
         Ok(LogIdList::new(log_ids))
+    }
+
+    fn node_id(&self) -> Result<C::NodeId, StorageError<C>> {
+        match self.id.clone() {
+            Some(node_id) => Ok(node_id),
+            None => Err(StorageError::read_vote(AnyError::error(
+                "StorageHelper::with_id() must be called before creating a default vote",
+            ))),
+        }
+    }
+
+    fn required_last_applied(&self, last_applied: &Option<LogIdOf<C>>) -> Result<LogIdOf<C>, StorageError<C>> {
+        match last_applied.clone() {
+            Some(log_id) => Ok(log_id),
+            None => Err(StorageError::read(AnyError::error(
+                "last_applied must exist before purging dirty logs",
+            ))),
+        }
+    }
+
+    async fn required_snapshot_builder(&mut self) -> Result<SM::SnapshotBuilder, StorageError<C>> {
+        match self.state_machine.try_create_snapshot_builder(true).await {
+            Some(builder) => Ok(builder),
+            None => Err(StorageError::write_snapshot(
+                None,
+                AnyError::error("snapshot builder unavailable while rebuilding a missing snapshot"),
+            )),
+        }
+    }
+}
+
+fn bounded_chunk_count(start: u64, end: u64, step_count: u64) -> usize {
+    let span = end.saturating_sub(start);
+    let step_count = step_count.max(1);
+    let chunk_count = span.saturating_add(step_count.saturating_sub(1)) / step_count;
+    match usize::try_from(chunk_count) {
+        Ok(chunk_count) => chunk_count,
+        Err(_) => usize::MAX,
     }
 }
