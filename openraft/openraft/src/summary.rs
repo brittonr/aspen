@@ -55,10 +55,13 @@ where T: MessageSummary<T>
 
             res.join(",")
         } else {
-            let first = self.first().unwrap();
-            let last = self.last().unwrap();
-
-            format!("{} ... {}", first.summary(), last.summary())
+            match (self.first(), self.last()) {
+                (Some(first), Some(last)) => format!("{} ... {}", first.summary(), last.summary()),
+                _ => {
+                    debug_assert!(false, "non-empty long slice must have first and last elements");
+                    "{}".to_string()
+                }
+            }
         }
     }
 }
