@@ -43,6 +43,10 @@ where
     C: RaftTypeConfig,
     S: Stream<Item = AppendEntriesRequest<C>> + OptionalSend + 'static,
 {
+    debug_assert!(
+        PIPELINE_BUFFER_SIZE > 0,
+        "stream append pipeline buffer must have positive capacity"
+    );
     let (tx, rx) = C::mpsc::<Pending<C>>(PIPELINE_BUFFER_SIZE);
 
     let inner2 = inner.clone();
@@ -50,13 +54,18 @@ where
         let inner = inner2;
         futures::pin_mut!(input);
 
-        while let Some(req) = input.next().await {
+        let mut should_receive_more_requests = true;
+        while should_receive_more_requests {
+            let Some(req) = input.next().await else {
+                break;
+            };
             let prev = req.prev_log_id.clone();
             let last = req.entries.last().map(|e| e.log_id()).or(prev.clone());
             let (resp_tx, resp_rx) = C::oneshot();
 
             if inner.send_msg(RaftMsg::AppendEntries { rpc: req, tx: resp_tx }).await.is_err() {
-                break;
+                should_receive_more_requests = false;
+                continue;
             }
             let pending = Pending {
                 response_rx: resp_rx,
@@ -64,7 +73,7 @@ where
                 last_log_id: last,
             };
             if MpscSender::send(&tx, pending).await.is_err() {
-                break;
+                should_receive_more_requests = false;
             }
         }
     });
@@ -76,8 +85,8 @@ where
         let resp = inner.recv_msg(p.response_rx).await.ok()?;
 
         let result = resp.into_stream_result(p.prev_log_id, p.last_log_id);
-        let cont = result.is_ok();
+        let should_continue_stream = result.is_ok();
 
-        Some((result, if cont { Some((rx, inner)) } else { None }))
+        Some((result, if should_continue_stream { Some((rx, inner)) } else { None }))
     })
 }
