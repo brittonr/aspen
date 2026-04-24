@@ -59,8 +59,9 @@ where C: RaftTypeConfig
     /// Append entries to follower/learner.
     ///
     /// Also clean conflicting entries and update membership state.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn append_entries(&mut self, prev_log_id: Option<LogIdOf<C>>, mut entries: Vec<C::Entry>) {
+        let _span = tracing::debug_span!("append_entries").entered();
+
         tracing::debug!(
             "{}: local last_log_id: {}, request: prev_log_id: {}, entries: {}",
             func_name!(),
@@ -141,8 +142,9 @@ where C: RaftTypeConfig
     /// - conflicting entries are deleted.
     ///
     /// Membership config changes are also detected and applied here.
-    #[tracing::instrument(level = "debug", skip(self, entries))]
     pub(crate) fn do_append_entries(&mut self, entries: Vec<C::Entry>) {
+        let _span = tracing::debug_span!("do_append_entries").entered();
+
         debug_assert!(!entries.is_empty());
         debug_assert_eq!(entries[0].index(), self.state.log_ids.last().next_index(),);
         debug_assert!(Some(entries[0].ref_log_id()) > self.state.log_ids.last_ref());
@@ -161,8 +163,9 @@ where C: RaftTypeConfig
     /// conflict with the leader.
     ///
     /// And revert effective membership to the last committed if it is from the conflicting logs.
-    #[tracing::instrument(level = "debug", skip(self))]
     fn truncate_logs(&mut self, since: u64) {
+        let _span = tracing::debug_span!("truncate_logs").entered();
+
         tracing::debug!(since = since, "truncate_logs");
 
         debug_assert!(since >= self.state.last_purged_log_id().next_index());
@@ -206,8 +209,9 @@ where C: RaftTypeConfig
     }
 
     /// Update membership state with a committed membership config
-    #[tracing::instrument(level = "debug", skip_all)]
     fn update_committed_membership(&mut self, membership: EffectiveMembership<C>) {
+        let _span = tracing::debug_span!("update_committed_membership").entered();
+
         tracing::debug!("update committed membership: {}", membership);
 
         let m = Arc::new(membership);
@@ -238,8 +242,9 @@ where C: RaftTypeConfig
     ///   command block until the condition is satisfied(`RaftCore` receives a `Notification`).
     /// - Otherwise `None` if the snapshot will not be installed (e.g., if it is not newer than the
     ///   current state).
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn install_full_snapshot(&mut self, snapshot: Snapshot<C>) -> Option<Condition<C>> {
+        let _span = tracing::debug_span!("install_full_snapshot").entered();
+
         let meta = &snapshot.meta;
         tracing::info!("install_full_snapshot: meta:{:?}", meta);
 
@@ -254,16 +259,18 @@ where C: RaftTypeConfig
             return None;
         }
 
-        // snapshot_last_log_id cannot be None
-        let snap_last_log_id = snap_last_log_id.unwrap();
+        let Some(snap_last_log_id) = snap_last_log_id else {
+            debug_assert!(false, "snapshot last log id must exist before install");
+            return None;
+        };
 
         // 1. Truncate all logs if conflict.
         // 2. Install snapshot.
         // 3. Purge logs the snapshot covers.
 
         let mut snap_handler = self.snapshot_handler();
-        let updated = snap_handler.update_snapshot(meta.clone());
-        if !updated {
+        let is_snapshot_updated = snap_handler.update_snapshot(meta.clone());
+        if !is_snapshot_updated {
             return None;
         }
 
@@ -299,13 +306,15 @@ where C: RaftTypeConfig
     /// when conflicting logs are found.
     fn last_two_memberships<'a>(entries: impl DoubleEndedIterator<Item = &'a C::Entry>) -> Vec<StoredMembership<C>>
     where C::Entry: 'a {
-        let mut memberships = vec![];
+        const LAST_MEMBERSHIP_CONFIG_COUNT: usize = 2;
+
+        let mut memberships = Vec::with_capacity(LAST_MEMBERSHIP_CONFIG_COUNT);
 
         // Find the last 2 membership config entries: the committed and the effective.
         for ent in entries.rev() {
             if let Some(m) = ent.get_membership() {
                 memberships.insert(0, StoredMembership::new(Some(ent.log_id()), m));
-                if memberships.len() == 2 {
+                if memberships.len() == LAST_MEMBERSHIP_CONFIG_COUNT {
                     break;
                 }
             }
