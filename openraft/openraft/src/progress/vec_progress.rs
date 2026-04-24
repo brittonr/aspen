@@ -105,11 +105,12 @@ where
     fn move_up(&mut self, index: usize) -> usize
     where Prog: PartialOrd {
         self.stat.move_count += 1;
-        for i in (0..index).rev() {
-            if self.entries[i].val.borrow() < self.entries[i + 1].val.borrow() {
-                self.entries.swap(i, i + 1);
+        for slot_index in (0..index).rev() {
+            let next_slot_index = slot_index.saturating_add(1);
+            if self.entries[slot_index].val.borrow() < self.entries[next_slot_index].val.borrow() {
+                self.entries.swap(slot_index, next_slot_index);
             } else {
-                return i + 1;
+                return next_slot_index;
             }
         }
 
@@ -210,12 +211,12 @@ where
             return Ok(&self.quorum_accepted);
         }
 
-        let prev_le_qa = prev_progress <= self.quorum_accepted;
-        let new_gt_qa = new_progress > &self.quorum_accepted;
+        let is_prev_at_or_below_quorum_accepted = prev_progress <= self.quorum_accepted;
+        let is_new_above_quorum_accepted = new_progress > &self.quorum_accepted;
 
         // Sort and find the greatest value accepted by a quorum set.
 
-        if prev_le_qa && new_gt_qa {
+        if is_prev_at_or_below_quorum_accepted && is_new_above_quorum_accepted {
             let new_index = self.move_up(index);
 
             // From high to low, find the max value that has constituted a quorum.
@@ -253,6 +254,7 @@ where
         Some(&mut self.entries[index].val)
     }
 
+    #[cfg(test)]
     #[allow(dead_code)]
     fn get(&self, id: &ID) -> &Ent {
         let index = self.index(id).unwrap();
@@ -284,7 +286,10 @@ where
         new_prog.stat = self.stat.clone();
 
         for item in self.into_iter() {
-            let _ = new_prog.update(&item.id, item.val);
+            if new_prog.index(&item.id).is_some() {
+                let update_res = new_prog.update(&item.id, item.val);
+                debug_assert!(update_res.is_ok(), "existing progress id should update during quorum-set upgrade");
+            }
         }
         new_prog
     }

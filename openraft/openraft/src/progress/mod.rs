@@ -77,6 +77,7 @@ where
 
     // TODO: merge `get` and `try_get`
     /// Get the value by `id`.
+    #[cfg(test)]
     #[allow(dead_code)]
     fn get(&self, id: &ID) -> &Ent;
 
