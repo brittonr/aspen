@@ -262,7 +262,7 @@ pub const GOSSIP_SUBSCRIBE_TIMEOUT_SECS: u64 = 10;
 /// 5 seconds allows for 100MB snapshots at ~20MB/s transfer rate.
 ///
 /// Used in:
-/// - `bootstrap.rs`: RaftConfig::install_snapshot_timeout
+/// - `bootstrap.rs`: RaftConfig::install_snapshot_timeout_ms
 pub const SNAPSHOT_INSTALL_TIMEOUT_MS: u64 = 5000;
 
 // ============================================================================

@@ -192,21 +192,21 @@ pub struct Config {
     pub heartbeat_interval_ms: u64,
 
     /// The timeout for sending then installing the last snapshot segment,
-    /// in millisecond. It is also used as the timeout for sending a non-last segment if
-    /// `send_snapshot_timeout` is 0.
-    #[clap(long, default_value = "200")]
-    pub install_snapshot_timeout: u64,
+    /// in milliseconds. It is also used as the timeout for sending a non-last segment if
+    /// `send_snapshot_timeout_ms` is 0.
+    #[clap(long = "install-snapshot-timeout", default_value = "200")]
+    pub install_snapshot_timeout_ms: u64,
 
     /// The timeout for sending a **non-last** snapshot segment, in milliseconds.
     ///
     /// It is disabled by default by setting it to `0`.
-    /// The timeout for sending every segment is `install_snapshot_timeout`.
+    /// The timeout for sending every segment is `install_snapshot_timeout_ms`.
     #[deprecated(
         since = "0.9.0",
-        note = "Sending snapshot by chunks is deprecated; Use `install_snapshot_timeout` instead"
+        note = "Sending snapshot by chunks is deprecated; Use `install_snapshot_timeout_ms` instead"
     )]
-    #[clap(long, default_value = "0")]
-    pub send_snapshot_timeout: u64,
+    #[clap(long = "send-snapshot-timeout", default_value = "0")]
+    pub send_snapshot_timeout_ms: u64,
 
     /// The maximum number of entries per payload allowed to be transmitted during replication
     ///
@@ -247,19 +247,19 @@ pub struct Config {
     #[clap(long = "purge-batch-size", default_value = "1")]
     pub purge_batch_log_count: u64,
 
-    /// The size of the bounded API channel for sending messages to RaftCore.
+    /// The maximum API channel entries for sending messages to RaftCore.
     ///
     /// This controls backpressure for client requests. When the channel is full,
     /// new API calls will block until space becomes available.
-    #[clap(long, default_value = "65536")]
-    pub api_channel_size: Option<u64>,
+    #[clap(long = "api-channel-size", default_value = "65536")]
+    pub api_channel_max_entries: Option<u64>,
 
-    /// The size of the bounded notification channel for internal events.
+    /// The maximum notification channel entries for internal events.
     ///
     /// This channel carries internal notifications like IO completion, replication progress,
-    /// and tick events. When full, internal components will block until space is available.
-    #[clap(long, default_value = "65536")]
-    pub notification_channel_size: Option<u64>,
+    /// and tick events. When full, internal components will block until space becomes available.
+    #[clap(long = "notification-channel-size", default_value = "65536")]
+    pub notification_channel_max_entries: Option<u64>,
 
     /// Enable or disable tick.
     ///
@@ -372,7 +372,7 @@ impl Config {
 
     /// Get the timeout for sending and installing the last snapshot segment.
     pub fn install_snapshot_timeout(&self) -> Duration {
-        Duration::from_millis(self.install_snapshot_timeout)
+        Duration::from_millis(self.install_snapshot_timeout_ms)
     }
 
     /// Get the timeout for sending a non-last snapshot segment.
@@ -382,8 +382,8 @@ impl Config {
     )]
     pub fn send_snapshot_timeout(&self) -> Duration {
         #[allow(deprecated)]
-        if self.send_snapshot_timeout > 0 {
-            Duration::from_millis(self.send_snapshot_timeout)
+        if self.send_snapshot_timeout_ms > 0 {
+            Duration::from_millis(self.send_snapshot_timeout_ms)
         } else {
             self.install_snapshot_timeout()
         }
@@ -402,14 +402,14 @@ impl Config {
     ///
     /// Defaults to 65536 if not specified.
     pub(crate) fn api_channel_size(&self) -> usize {
-        channel_capacity_to_usize(self.api_channel_size)
+        channel_capacity_to_usize(self.api_channel_max_entries)
     }
 
     /// Get the notification channel size for bounded MPSC channel.
     ///
     /// Defaults to 65536 if not specified.
     pub(crate) fn notification_channel_size(&self) -> usize {
-        channel_capacity_to_usize(self.notification_channel_size)
+        channel_capacity_to_usize(self.notification_channel_max_entries)
     }
 
     /// Build a `Config` instance from a series of command line arguments.

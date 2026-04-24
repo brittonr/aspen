@@ -86,7 +86,7 @@ pub(super) fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<Raft
         snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(10_000),
         max_in_snapshot_log_to_keep: 1_000,
         is_tick_enabled: true,
-        install_snapshot_timeout: aspen_raft::constants::SNAPSHOT_INSTALL_TIMEOUT_MS,
+        install_snapshot_timeout_ms: aspen_raft::constants::SNAPSHOT_INSTALL_TIMEOUT_MS,
         ..RaftConfig::default()
     });
 

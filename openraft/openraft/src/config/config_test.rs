@@ -17,8 +17,8 @@ fn test_config_defaults() {
 
     assert_eq!(3 * 1024 * 1024, cfg.snapshot_max_chunk_size_bytes);
     assert_eq!(SnapshotPolicy::LogsSinceLast(5000), cfg.snapshot_policy);
-    assert_eq!(Some(65536), cfg.api_channel_size);
-    assert_eq!(Some(65536), cfg.notification_channel_size);
+    assert_eq!(Some(65536), cfg.api_channel_max_entries);
+    assert_eq!(Some(65536), cfg.notification_channel_max_entries);
 }
 
 #[test]
@@ -75,17 +75,17 @@ fn test_build() -> anyhow::Result<()> {
 
     #[allow(deprecated)]
     {
-        assert_eq!(199, config.send_snapshot_timeout);
+        assert_eq!(199, config.send_snapshot_timeout_ms);
     }
-    assert_eq!(200, config.install_snapshot_timeout);
+    assert_eq!(200, config.install_snapshot_timeout_ms);
     assert_eq!(201, config.max_payload_entries);
     assert_eq!(SnapshotPolicy::LogsSinceLast(202), config.snapshot_policy);
     assert_eq!(203, config.replication_lag_threshold);
     assert_eq!(204, config.snapshot_max_chunk_size_bytes);
     assert_eq!(205, config.max_in_snapshot_log_to_keep);
     assert_eq!(207, config.purge_batch_log_count);
-    assert_eq!(Some(208), config.api_channel_size);
-    assert_eq!(Some(209), config.notification_channel_size);
+    assert_eq!(Some(208), config.api_channel_max_entries);
+    assert_eq!(Some(209), config.notification_channel_max_entries);
 
     // Test config methods
     #[allow(deprecated)]
@@ -94,11 +94,11 @@ fn test_build() -> anyhow::Result<()> {
         assert_eq!(Duration::from_millis(199), c.send_snapshot_timeout());
         assert_eq!(Duration::from_millis(200), c.install_snapshot_timeout());
 
-        c.send_snapshot_timeout = 0;
+        c.send_snapshot_timeout_ms = 0;
         assert_eq!(
             Duration::from_millis(200),
             c.send_snapshot_timeout(),
-            "by default send_snapshot_timeout is install_snapshot_timeout"
+            "by default send_snapshot_timeout_ms is install_snapshot_timeout_ms"
         );
     }
     Ok(())
@@ -201,21 +201,21 @@ fn test_config_allow_log_reversion() -> anyhow::Result<()> {
 fn test_config_api_channel_size() -> anyhow::Result<()> {
     // Test default value
     let config = Config::build(&["foo"])?;
-    assert_eq!(Some(65536), config.api_channel_size);
+    assert_eq!(Some(65536), config.api_channel_max_entries);
     assert_eq!(65536, config.api_channel_size());
 
     // Test custom value
     let config = Config::build(&["foo", "--api-channel-size=10000"])?;
-    assert_eq!(Some(10000), config.api_channel_size);
+    assert_eq!(Some(10000), config.api_channel_max_entries);
     assert_eq!(10000, config.api_channel_size());
 
     // Test api_channel_size() method with None
     let mut config = Config::build(&["foo"])?;
-    config.api_channel_size = None;
+    config.api_channel_max_entries = None;
     assert_eq!(65536, config.api_channel_size());
 
     // Test api_channel_size() method with Some
-    config.api_channel_size = Some(50000);
+    config.api_channel_max_entries = Some(50000);
     assert_eq!(50000, config.api_channel_size());
 
     Ok(())
@@ -225,21 +225,21 @@ fn test_config_api_channel_size() -> anyhow::Result<()> {
 fn test_config_notification_channel_size() -> anyhow::Result<()> {
     // Test default value
     let config = Config::build(&["foo"])?;
-    assert_eq!(Some(65536), config.notification_channel_size);
+    assert_eq!(Some(65536), config.notification_channel_max_entries);
     assert_eq!(65536, config.notification_channel_size());
 
     // Test custom value
     let config = Config::build(&["foo", "--notification-channel-size=2048"])?;
-    assert_eq!(Some(2048), config.notification_channel_size);
+    assert_eq!(Some(2048), config.notification_channel_max_entries);
     assert_eq!(2048, config.notification_channel_size());
 
     // Test notification_channel_size() method with None
     let mut config = Config::build(&["foo"])?;
-    config.notification_channel_size = None;
+    config.notification_channel_max_entries = None;
     assert_eq!(65536, config.notification_channel_size());
 
     // Test notification_channel_size() method with Some
-    config.notification_channel_size = Some(512);
+    config.notification_channel_max_entries = Some(512);
     assert_eq!(512, config.notification_channel_size());
 
     Ok(())
