@@ -97,14 +97,13 @@ mod tokio_rt {
                 }
 
                 let read_size_bytes = buf.len();
-                let read_size_bytes_u64 = match u64::try_from(read_size_bytes) {
-                    Ok(size_bytes) => size_bytes,
+                let next_offset_bytes = match u64::try_from(read_size_bytes) {
+                    Ok(size_bytes) => offset_bytes.saturating_add(size_bytes),
                     Err(_) => {
                         debug_assert!(false, "snapshot chunk length must fit in u64");
                         return Err(ReplicationClosed::new("snapshot chunk length overflow").into());
                     }
                 };
-                let next_offset_bytes = offset_bytes.saturating_add(read_size_bytes_u64);
                 let is_done = next_offset_bytes == end;
                 if read_size_bytes == 0 && !is_done {
                     return Err(ReplicationClosed::new("snapshot reader made no progress").into());
