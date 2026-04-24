@@ -44,14 +44,14 @@ where C: RaftTypeConfig
     pub async fn metrics<T>(&self, func: T, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError>
     where T: Fn(&RaftMetrics<C>) -> bool + OptionalSend {
         let msg_text = msg.to_string();
-        let span = wait_trace_span("metrics", &msg_text);
+        let span = WaitTraceContext::new("metrics", &msg_text).span();
 
         async move {
-            let timeout_deadline = C::now() + self.timeout;
+            let wait_until = C::now() + self.timeout;
             let mut rx = self.rx.clone();
             let mut latest = rx.borrow_watched().clone();
 
-            while C::now() < timeout_deadline {
+            while C::now() < wait_until {
                 latest = rx.borrow_watched().clone();
                 tracing::debug!("id={} wait {:} latest: {}", latest.id, msg_text, latest);
 
@@ -61,16 +61,16 @@ where C: RaftTypeConfig
                 }
 
                 let now = C::now();
-                if now >= timeout_deadline {
+                if now >= wait_until {
                     break;
                 }
 
-                let wait_sleep_duration = timeout_deadline - now;
+                let wait_sleep_duration = wait_until - now;
                 tracing::debug!(?wait_sleep_duration, "wait timeout");
-                let delay = C::sleep(wait_sleep_duration);
+                let wait_sleep = C::sleep(wait_sleep_duration);
 
                 futures::select_biased! {
-                    _ = delay.fuse() => {
+                    _ = wait_sleep.fuse() => {
                         tracing::debug!("id={} timeout wait {:} latest: {}", latest.id, msg_text, latest);
                         return Err(WaitError::Timeout(self.timeout, format!("{} latest: {}", msg_text, latest)));
                     }
@@ -242,7 +242,7 @@ where C: RaftTypeConfig
     pub(crate) async fn until(&self, cond: Condition<C>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         let msg_text = msg.to_string();
         let cond_text = cond.to_string();
-        let span = wait_trace_span("until", &msg_text);
+        let span = WaitTraceContext::new("until", &msg_text).span();
 
         async move {
             self.metrics(
@@ -259,6 +259,17 @@ where C: RaftTypeConfig
     }
 }
 
-fn wait_trace_span(operation: &'static str, msg: &str) -> tracing::Span {
-    tracing::span!(tracing::Level::TRACE, "wait", operation = operation, msg = %msg)
+struct WaitTraceContext<'a> {
+    operation: &'static str,
+    message: &'a str,
+}
+
+impl<'a> WaitTraceContext<'a> {
+    fn new(operation: &'static str, message: &'a str) -> Self {
+        Self { operation, message }
+    }
+
+    fn span(&self) -> tracing::Span {
+        tracing::span!(tracing::Level::TRACE, "wait", operation = self.operation, msg = %self.message)
+    }
 }
