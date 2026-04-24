@@ -51,14 +51,18 @@ where C: RaftTypeConfig
         Self {
             id,
             config,
-            workers: Default::default(),
+            workers: BTreeMap::new(),
         }
     }
 
     pub(crate) fn broadcast(&self, events: impl IntoIterator<Item = (C::NodeId, HeartbeatEvent<C>)>) {
         for (target, event) in events {
             tracing::debug!("id={} target={} send_heartbeat {}", self.id, target, event);
-            self.workers.get(&target).unwrap().event_tx.send(Some(event)).ok();
+            let Some(worker_handle) = self.workers.get(&target) else {
+                debug_assert!(false, "heartbeat worker must exist before broadcast");
+                continue;
+            };
+            worker_handle.event_tx.send(Some(event)).ok();
         }
     }
 
