@@ -150,7 +150,7 @@ where
                     self.replication_context.tx_notify.send(Notification::StorageError { error }).await.ok();
                     should_retry = false;
                 }
-                ReplicationError::RPCError(err) => {
+                ReplicationError::RpcError(err) => {
                     match &err {
                         RPCError::Unreachable(_unreachable) => {
                             // If there is an [`Unreachable`] error, we will backoff for a

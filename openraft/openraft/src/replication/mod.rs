@@ -268,7 +268,7 @@ where
                             self.task_state.tx_notify.send(Notification::StorageError { error }).await.ok();
                             should_run = false;
                         }
-                        ReplicationError::RPCError(err) => {
+                        ReplicationError::RpcError(err) => {
                             tracing::error!(err = display(&err), "RPCError");
 
                             match &err {

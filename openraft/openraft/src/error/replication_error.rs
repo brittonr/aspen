@@ -6,7 +6,7 @@ use crate::error::replication_closed::ReplicationClosed;
 
 /// Error variants related to the Replication.
 #[derive(Debug, thiserror::Error)]
-#[allow(clippy::large_enum_variant)]
+#[allow(clippy::large_enum_variant, reason = "storage and RPC errors intentionally keep their full context on this internal error boundary")]
 pub(crate) enum ReplicationError<C>
 where C: RaftTypeConfig
 {
@@ -20,5 +20,5 @@ where C: RaftTypeConfig
     StorageError(#[from] StorageError<C>),
 
     #[error(transparent)]
-    RPCError(#[from] RPCError<C>),
+    RpcError(#[from] RPCError<C>),
 }

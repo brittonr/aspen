@@ -39,9 +39,9 @@ impl<C: RaftTypeConfig> From<StreamingError<C>> for ReplicationError<C> {
         match e {
             StreamingError::Closed(e) => ReplicationError::Closed(e),
             StreamingError::StorageError(e) => ReplicationError::StorageError(e),
-            StreamingError::Timeout(e) => ReplicationError::RPCError(RPCError::Timeout(e)),
-            StreamingError::Unreachable(e) => ReplicationError::RPCError(RPCError::Unreachable(e)),
-            StreamingError::Network(e) => ReplicationError::RPCError(RPCError::Network(e)),
+            StreamingError::Timeout(e) => ReplicationError::RpcError(RPCError::Timeout(e)),
+            StreamingError::Unreachable(e) => ReplicationError::RpcError(RPCError::Unreachable(e)),
+            StreamingError::Network(e) => ReplicationError::RpcError(RPCError::Network(e)),
         }
     }
 }
