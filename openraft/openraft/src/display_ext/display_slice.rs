@@ -12,7 +12,7 @@ pub(crate) struct DisplaySlice<'a, T: fmt::Display> {
 impl<'a, T: fmt::Display> DisplaySlice<'a, T> {
     /// Set the maximum number of elements to display.
     #[allow(unused)]
-    pub fn limit(mut self, max: usize) -> Self {
+    pub(crate) fn limit(mut self, max: usize) -> Self {
         self.max = max;
         self
     }
@@ -25,7 +25,8 @@ impl<T: fmt::Display> fmt::Display for DisplaySlice<'_, T> {
         write!(f, "[")?;
 
         if len > self.max {
-            for (i, t) in self.slice[..(self.max - 1)].iter().enumerate() {
+            let visible_head_item_count = self.max.saturating_sub(1);
+            for (i, t) in self.slice[..visible_head_item_count].iter().enumerate() {
                 if i > 0 {
                     write!(f, ",")?;
                 }
@@ -33,8 +34,17 @@ impl<T: fmt::Display> fmt::Display for DisplaySlice<'_, T> {
                 write!(f, "{}", t)?;
             }
 
-            write!(f, ",..,")?;
-            write!(f, "{}", self.slice.last().unwrap())?;
+            let Some(last_item) = self.slice.last() else {
+                debug_assert!(false, "slice with len > max must contain a last item");
+                return write!(f, "]");
+            };
+
+            if visible_head_item_count > 0 {
+                write!(f, ",..,")?;
+            } else {
+                write!(f, "..,")?;
+            }
+            write!(f, "{}", last_item)?;
         } else {
             for (i, t) in self.slice.iter().enumerate() {
                 if i > 0 {
