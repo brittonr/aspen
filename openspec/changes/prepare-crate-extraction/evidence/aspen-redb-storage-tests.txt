@@ -1,0 +1,15 @@
+running 10 tests
+test crates/aspen-redb-storage/src/lib.rs - (line 34) ... ignored
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::check_cas_condition (line 291) ... ok
+test crates/aspen-redb-storage/src/verified/heuristics.rs - verified::heuristics::calculate_expires_at_ms (line 36) ... ok
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::LeaseExpirationInput (line 413) ... ok
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::compute_key_expiration (line 118) ... ok
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::bounded_u32_len (line 183) ... ok
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::create_lease_entry (line 349) ... ok
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::validate_cas_precondition_str (line 256) ... ok
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::compute_kv_versions (line 53) ... ok
+test crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::compute_lease_refresh (line 387) ... ok
+
+test result: ok. 9 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.30s; merged doctests compilation took 0.30s

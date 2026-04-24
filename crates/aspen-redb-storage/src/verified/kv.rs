@@ -401,8 +401,8 @@ pub fn compute_lease_refresh(ttl_seconds: u32, now_ms: u64) -> u64 {
 ///
 /// # Arguments
 ///
-/// * `expires_at_ms` - Lease expiration timestamp
-/// * `now_ms` - Current timestamp
+/// * `input.expires_at_ms` - Lease expiration timestamp
+/// * `input.now_ms` - Current timestamp
 ///
 /// # Returns
 ///
@@ -411,11 +411,11 @@ pub fn compute_lease_refresh(ttl_seconds: u32, now_ms: u64) -> u64 {
 /// # Example
 ///
 /// ```
-/// use aspen_redb_storage::verified::kv::is_lease_expired;
+/// use aspen_redb_storage::verified::kv::{is_lease_expired, LeaseExpirationInput};
 ///
-/// assert!(is_lease_expired(1000, 2000));   // Past expiration
-/// assert!(!is_lease_expired(2000, 1000));  // Before expiration
-/// assert!(!is_lease_expired(1000, 1000));  // At exact expiration time (not expired yet)
+/// assert!(is_lease_expired(LeaseExpirationInput { expires_at_ms: 1000, now_ms: 2000 }));
+/// assert!(!is_lease_expired(LeaseExpirationInput { expires_at_ms: 2000, now_ms: 1000 }));
+/// assert!(!is_lease_expired(LeaseExpirationInput { expires_at_ms: 1000, now_ms: 1000 }));
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub struct LeaseExpirationInput {

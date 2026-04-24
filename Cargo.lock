@@ -2509,7 +2509,7 @@ dependencies = [
 name = "aspen-redb-storage"
 version = "0.1.0"
 dependencies = [
- "aspen-core",
+ "aspen-constants",
  "blake3",
  "hex",
  "proptest",

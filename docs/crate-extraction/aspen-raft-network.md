@@ -96,4 +96,4 @@ No binaries. Runtime dependency is allowed because this crate is explicitly the 
 
 ## First-slice status
 
-Current status is `workspace-internal`. Baseline evidence shows this crate is already adapter-shaped but currently reaches `aspen-transport`, `aspen-sharding`, `aspen-core`, and transitive app/runtime concerns; those paths require explicit policy ownership or feature gates.
+Current status is `workspace-internal`. I9 evidence keeps this crate as the explicit adapter boundary: storage, reusable app types, and facade defaults compile without `aspen-raft-network`, iroh, IRPC, or transport dependencies, while this crate remains the place where concrete iroh/IRPC adapter dependencies appear. The adapter still reaches `aspen-transport`, `aspen-sharding`, `aspen-core`, and transitive app/runtime concerns; those paths require explicit policy ownership or feature gates before this adapter can be marked ready.

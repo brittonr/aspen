@@ -1,0 +1,15 @@
+419 + assert!(!is_lease_expired(/* LeaseExpirationInput */));
+    |
+
+error: aborting due to 3 previous errors
+
+For more information about this error, try `rustc --explain E0061`.
+Couldn't compile the test.
+
+failures:
+    crates/aspen-redb-storage/src/verified/kv.rs - verified::kv::LeaseExpirationInput (line 413)
+
+test result: FAILED. 8 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+all doctests ran in 0.33s; merged doctests compilation took 0.05s
+error: doctest failed, to rerun pass `-p aspen-redb-storage --doc`

@@ -38,7 +38,7 @@ When `raft-storage` is enabled, OpenRaft storage traits and associated types are
 
 | Dependency | Decision | Reason |
 | --- | --- | --- |
-| current `aspen-core` | move/gate | Current dependency provides constants but also expands the core graph; prefer leaf constants/types. |
+| `aspen-constants` | keep | Provides storage constants without pulling `aspen-core` or app/runtime bundles. |
 | `aspen-kv-types` | keep under `raft-storage` | State-machine commands and responses are reusable contract types. |
 | `aspen-raft-kv-types` | keep under `raft-storage` | Storage traits need app type configuration. |
 | `aspen-time` | review | Time must be injected or isolated; storage helpers should stay deterministic where possible. |
@@ -96,4 +96,4 @@ None allowed. No iroh endpoint construction, node bootstrap, handler registry, d
 
 ## First-slice status
 
-Current status is `workspace-internal`. Baseline evidence shows concrete Redb/OpenRaft storage modules still live in `crates/aspen-raft/src/storage*`; moving those modules and preserving storage safety rails are required before readiness.
+Current status is `workspace-internal`. The default pure-helper crate now uses leaf `aspen-constants` instead of `aspen-core`, and I9 evidence proves the default storage tree no longer reaches `aspen-core`, `aspen-core-shell`, iroh, transport, or the adapter crate. Baseline evidence still shows concrete Redb/OpenRaft storage modules live in `crates/aspen-raft/src/storage*`; moving those modules and preserving storage safety rails are required before readiness.

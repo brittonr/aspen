@@ -4,27 +4,29 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 ## Implementation Evidence
 
-- Changed file: `Cargo.toml`
 - Changed file: `Cargo.lock`
-- Changed file: `crates/aspen-raft-kv-types/Cargo.toml`
-- Changed file: `crates/aspen-raft-kv-types/src/lib.rs`
-- Changed file: `crates/aspen-raft-kv/Cargo.toml`
-- Changed file: `crates/aspen-raft-kv/src/lib.rs`
+- Changed file: `crates/aspen-redb-storage/Cargo.toml`
+- Changed file: `crates/aspen-redb-storage/src/lib.rs`
+- Changed file: `crates/aspen-redb-storage/src/verified/kv.rs`
 - Changed file: `docs/crate-extraction.md`
-- Changed file: `docs/crate-extraction/aspen-raft-kv-types.md`
-- Changed file: `docs/crate-extraction/aspen-raft-kv.md`
-- Changed file: `scripts/check-crate-extraction-readiness.rs`
+- Changed file: `docs/crate-extraction/aspen-redb-storage.md`
+- Changed file: `docs/crate-extraction/aspen-raft-network.md`
 - Changed file: `openspec/changes/prepare-crate-extraction/tasks.md`
 - Changed file: `openspec/changes/prepare-crate-extraction/verification.md`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/baseline-raft-kv-types-check.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-check.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-dependency-tree.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-check.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-dependency-tree.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/readiness-checker-run.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i7-raft-kv-types.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i8-raft-kv-facade.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i7.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-adapter-boundary.md`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/baseline-redb-storage-doctest-failure.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-tests.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-boundary-check.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-compile-matrix-after.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-tree-after.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-types-tree.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-tree.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-network-tree.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-no-iroh-grep.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-forbidden-after.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i9.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix-core-slice.txt`
 
 ## Task Coverage
 
@@ -55,6 +57,11 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 - [x] I6 Before moving Redb storage code or adding compatibility migrations, review the proposed Redb Raft KV layer split and OpenRaft public/internal dependency boundary, then update manifests/design with any deviation; stop before implementation if a deviation lacks owner, rationale, and revised verification rails. [covers=architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layer-map-is-traceable,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.openraft-dependency-boundary-is-explicit]
   - Evidence: `openspec/changes/prepare-crate-extraction/evidence/redb-raft-kv-layer-review.md`, `openspec/changes/prepare-crate-extraction/design.md`, `docs/crate-extraction/aspen-kv-types.md`, `docs/crate-extraction/aspen-raft-kv-types.md`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-kv.md`, `docs/crate-extraction/aspen-raft-network.md`, `docs/crate-extraction/aspen-raft-compat.md`
 
+<!-- Pending task evidence; I9 remains unchecked until V1. -->
+
+- [ ] I9 Keep `aspen-raft-network` as the explicit iroh/IRPC adapter crate or feature for the reusable KV stack, and prove storage plus consensus contracts compile without constructing concrete iroh endpoints. [covers=architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layer-map-is-traceable,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.transport-adapter-is-explicit,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles]
+  - Evidence prepared but task left unchecked until the broader `V1` compile and feature-topology rail is checked: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-adapter-boundary.md`, `openspec/changes/prepare-crate-extraction/evidence/i9-compile-matrix-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-tree-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-types-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-network-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-no-iroh-grep.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-forbidden-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-tests.txt`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-network.md`
+
 - [x] I13 Add one family manifest stub at `docs/crate-extraction/foundational-types.md` for foundational type/helper candidates, explicitly including `crates/aspen-storage-types`, `crates/aspen-cluster-types`, and `crates/aspen-traits`, recording owner, readiness state, default-feature contract, `aspen-storage-types` `SM_KV_TABLE` / `redb::TableDefinition` cleanup status, `aspen-traits` transitive default-feature leak status, and next action without moving code in this task. [covers=architecture.modularity.extraction-inventory-is-maintained.inventory-includes-high-value-candidates-beyond-raft-kv,architecture.modularity.extraction-inventory-is-maintained.required-family-manifest-stubs-exist,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles,architecture.modularity.extraction-inventory-is-maintained.inventory-entries-link-to-manifests-and-owners]
   - Evidence: `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction.md`
 
@@ -78,7 +85,7 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 ## Review Scope Snapshot
 
-Implementation diff artifacts are prepared for the pending I7 reusable `aspen-raft-kv-types` boundary and I8 reusable `aspen-raft-kv` facade work. Checked tasks still cover committed OpenSpec planning artifacts, extraction docs, baseline evidence, binary-shell audit, and the readiness checker.
+Implementation diff artifacts are prepared for the pending I7 reusable `aspen-raft-kv-types` boundary and I8 reusable `aspen-raft-kv` facade work. I9 evidence now proves the default storage/type/facade graphs do not reach concrete iroh or transport dependencies while `aspen-raft-network` remains the explicit adapter; I9 remains unchecked until the broader `V1` compile and feature-topology rail can be checked. A partial V1 feature matrix now records reusable/core compile rails, but V1 remains unchecked until compatibility consumers and future named storage features are covered. Checked tasks still cover committed OpenSpec planning artifacts, extraction docs, baseline evidence, binary-shell audit, and the readiness checker. Verification task text now enumerates deterministic handler/bridge/gateway package rails plus impacted core/core-shell/foundational compile rails for the later V-stage evidence.
 
 ## Verification Commands
 
@@ -137,10 +144,36 @@ Implementation diff artifacts are prepared for the pending I7 reusable `aspen-ra
 - Status: pass
 - Artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-dependency-tree.txt`
 
-### `scripts/openspec-preflight.sh prepare-crate-extraction`
+### `cargo check` partial V1 reusable/core feature matrix
+
+- Status: pass for reusable/default and impacted foundational/core compile slice; V1 remains unchecked pending compatibility consumer rails.
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
+- Transcript: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix-core-slice.txt`
+
+### `cargo test -p aspen-redb-storage`
+
+- Baseline status: failed before this session on stale `LeaseExpirationInput` doctest.
+- Baseline artifact: `openspec/changes/prepare-crate-extraction/evidence/baseline-redb-storage-doctest-failure.txt`
+- Post-change status: pass
+- Post-change artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-tests.txt`
+
+### `cargo check -p aspen-redb-storage --no-default-features && cargo check -p aspen-raft-kv-types --no-default-features && cargo check -p aspen-raft-kv --no-default-features && cargo check -p aspen-raft-network --no-default-features`
 
 - Status: pass
-- Artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i7.txt`
+- Artifact: `openspec/changes/prepare-crate-extraction/evidence/i9-compile-matrix-after.txt`
+
+### `cargo tree` / `rg` I9 dependency-boundary probes
+
+- Status: pass; storage/type/facade default graphs have no concrete iroh/IRPC/transport/adapter matches, and storage default no longer reaches `aspen-core`/`aspen-core-shell`.
+- Summary: `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-adapter-boundary.md`
+- Artifacts: `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-tree-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-types-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-kv-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-raft-network-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-storage-consensus-no-iroh-grep.txt`, `openspec/changes/prepare-crate-extraction/evidence/i9-aspen-redb-storage-forbidden-after.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-redb-storage-boundary-check.txt`
+
+### `scripts/openspec-preflight.sh prepare-crate-extraction`
+
+- Prior status: pass
+- Prior artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i7.txt`
+- Current status after preparing I9 evidence while leaving I9 unchecked: pass
+- Current artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i9.txt`
 
 ## Notes
 

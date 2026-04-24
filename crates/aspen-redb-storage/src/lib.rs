@@ -45,23 +45,23 @@
 // Pure verified functions (always available)
 pub mod verified;
 
-// Re-export constants from aspen-core
-pub use aspen_core::INTEGRITY_VERSION;
-pub use aspen_core::MAX_BATCH_SIZE;
-pub use aspen_core::MAX_SETMULTI_KEYS;
-pub use aspen_core::MAX_SNAPSHOT_ENTRIES;
+// Re-export leaf constants needed by storage callers without pulling `aspen-core`.
+pub use aspen_constants::api::MAX_SETMULTI_KEYS;
+pub use aspen_constants::raft::INTEGRITY_VERSION;
+pub use aspen_constants::raft::MAX_BATCH_SIZE;
+pub use aspen_constants::raft::MAX_SNAPSHOT_ENTRIES;
 // Re-export commonly used verified types and functions at crate root
 pub use verified::CasValidationError;
 pub use verified::ChainCorruption;
 pub use verified::ChainHash;
 pub use verified::ChainTipState;
+pub use verified::EntryHashInput;
+pub use verified::EntryHashVerificationInput;
 pub use verified::GENESIS_HASH;
 pub use verified::KvVersions;
 pub use verified::LeaseEntryData;
-pub use verified::SnapshotIntegrity;
-pub use verified::EntryHashInput;
-pub use verified::EntryHashVerificationInput;
 pub use verified::LeaseExpirationInput;
+pub use verified::SnapshotIntegrity;
 pub use verified::calculate_expires_at_ms;
 pub use verified::check_cas_condition;
 pub use verified::compute_entry_hash;

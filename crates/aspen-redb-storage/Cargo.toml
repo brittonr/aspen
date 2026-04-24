@@ -7,8 +7,8 @@ description = "Redb-based storage backend for Aspen Raft consensus"
 authors = ["Aspen Contributors"]
 
 [dependencies]
-# Core Aspen dependencies (for constants)
-aspen-core = { workspace = true }
+# Leaf constants only; storage defaults must not depend on Aspen app/core bundles.
+aspen-constants = { workspace = true }
 
 # Crypto (for chain hashing)
 blake3 = "1.5"

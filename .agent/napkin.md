@@ -171,3 +171,5 @@ Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 - At minimum, fix `verification.md` `Changed file:` entries; preflight fails immediately if they still point at the old active path.
 - If `verification.md` task coverage lines use archive paths, `tasks.md` must use the same text verbatim or preflight reports missing checked task coverage entries.
 - Stage the archived tree before rerunning preflight, otherwise it fails on untracked archive files.
+- 2026-04-24: `cargo test -p aspen-redb-storage` baseline can fail solely on stale doctest `LeaseExpirationInput` calling old `is_lease_expired(expires, now)` signature; update doctests to construct `LeaseExpirationInput` before treating storage logic as broken.
+- 2026-04-24: Running `rustfmt` on `crates/aspen-redb-storage/src/lib.rs` can format sibling module files through `mod verified`; check diff and restore unrelated churn for focused extraction edits.

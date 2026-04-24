@@ -1,0 +1,15 @@
+    Checking irpc v0.13.0
+    Checking hyper v1.8.1
+    Checking hickory-proto v0.25.2
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.7
+    Checking igd-next v0.16.2
+    Checking reqwest v0.12.28
+    Checking hickory-resolver v0.25.2
+    Checking swarm-discovery v0.5.0
+    Checking portmapper v0.15.0
+    Checking pkarr v5.0.2
+    Checking iroh-relay v0.97.0
+    Checking iroh v0.97.0
+    Checking aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-shell)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.72s

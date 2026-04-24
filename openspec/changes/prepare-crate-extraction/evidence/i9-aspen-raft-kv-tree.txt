@@ -1,0 +1,143 @@
+aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106
+│   │       │   └── unicode-ident v1.0.24
+│   │       ├── quote v1.0.45
+│   │       │   └── proc-macro2 v1.0.106 (*)
+│   │       └── syn v2.0.117
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── unicode-ident v1.0.24
+│   └── thiserror v2.0.18
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   ├── openraft v0.10.0 (/home/brittonr/git/aspen/openraft/openraft)
+│   │   ├── anyerror v0.1.13
+│   │   │   └── serde v1.0.228 (*)
+│   │   ├── byte-unit v5.2.0
+│   │   │   ├── rust_decimal v1.40.0
+│   │   │   │   ├── arrayvec v0.7.6
+│   │   │   │   └── num-traits v0.2.19
+│   │   │   └── utf8-width v0.1.8
+│   │   ├── chrono v0.4.44
+│   │   │   ├── iana-time-zone v0.1.65
+│   │   │   └── num-traits v0.2.19
+│   │   ├── clap v4.6.0
+│   │   │   ├── clap_builder v4.6.0
+│   │   │   │   ├── anstream v1.0.0
+│   │   │   │   │   ├── anstyle v1.0.14
+│   │   │   │   │   ├── anstyle-parse v1.0.0
+│   │   │   │   │   │   └── utf8parse v0.2.2
+│   │   │   │   │   ├── anstyle-query v1.1.5
+│   │   │   │   │   ├── colorchoice v1.0.5
+│   │   │   │   │   ├── is_terminal_polyfill v1.70.2
+│   │   │   │   │   └── utf8parse v0.2.2
+│   │   │   │   ├── anstyle v1.0.14
+│   │   │   │   ├── clap_lex v1.1.0
+│   │   │   │   └── strsim v0.11.1
+│   │   │   └── clap_derive v4.6.0 (proc-macro)
+│   │   │       ├── heck v0.5.0
+│   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       ├── quote v1.0.45 (*)
+│   │   │       └── syn v2.0.117 (*)
+│   │   ├── derive_more v1.0.0
+│   │   │   └── derive_more-impl v1.0.0 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       ├── quote v1.0.45 (*)
+│   │   │       ├── syn v2.0.117 (*)
+│   │   │       └── unicode-xid v0.2.6
+│   │   ├── futures v0.3.32
+│   │   │   ├── futures-channel v0.3.32
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   └── futures-sink v0.3.32
+│   │   │   ├── futures-core v0.3.32
+│   │   │   ├── futures-executor v0.3.32
+│   │   │   │   ├── futures-core v0.3.32
+│   │   │   │   ├── futures-task v0.3.32
+│   │   │   │   └── futures-util v0.3.32
+│   │   │   │       ├── futures-channel v0.3.32 (*)
+│   │   │   │       ├── futures-core v0.3.32
+│   │   │   │       ├── futures-io v0.3.32
+│   │   │   │       ├── futures-macro v0.3.32 (proc-macro)
+│   │   │   │       │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       │   ├── quote v1.0.45 (*)
+│   │   │   │       │   └── syn v2.0.117 (*)
+│   │   │   │       ├── futures-sink v0.3.32
+│   │   │   │       ├── futures-task v0.3.32
+│   │   │   │       ├── memchr v2.8.0
+│   │   │   │       ├── pin-project-lite v0.2.17
+│   │   │   │       └── slab v0.4.12
+│   │   │   ├── futures-io v0.3.32
+│   │   │   ├── futures-sink v0.3.32
+│   │   │   ├── futures-task v0.3.32
+│   │   │   └── futures-util v0.3.32 (*)
+│   │   ├── maplit v1.0.2
+│   │   ├── openraft-macros v0.10.0 (proc-macro) (/home/brittonr/git/aspen/openraft/macros)
+│   │   │   ├── chrono v0.4.44 (*)
+│   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   ├── quote v1.0.45 (*)
+│   │   │   ├── semver v1.0.27
+│   │   │   └── syn v2.0.117 (*)
+│   │   ├── rand v0.9.2
+│   │   │   ├── rand_chacha v0.9.0
+│   │   │   │   ├── ppv-lite86 v0.2.21
+│   │   │   │   │   └── zerocopy v0.8.42
+│   │   │   │   └── rand_core v0.9.5
+│   │   │   │       └── getrandom v0.3.4
+│   │   │   │           ├── cfg-if v1.0.4
+│   │   │   │           └── libc v0.2.183
+│   │   │   └── rand_core v0.9.5 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── libc v0.2.183
+│   │   │   ├── mio v1.1.1
+│   │   │   │   └── libc v0.2.183
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── signal-hook-registry v1.4.8
+│   │   │   │   ├── errno v0.3.14
+│   │   │   │   │   └── libc v0.2.183
+│   │   │   │   └── libc v0.2.183
+│   │   │   └── tokio-macros v2.6.1 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       ├── quote v1.0.45 (*)
+│   │   │       └── syn v2.0.117 (*)
+│   │   ├── tracing v0.1.44
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── tracing-attributes v0.1.31 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   └── tracing-core v0.1.36
+│   │   │       └── once_cell v1.21.4
+│   │   ├── tracing-futures v0.2.5
+│   │   │   ├── pin-project v1.1.11
+│   │   │   │   └── pin-project-internal v1.1.11 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.45 (*)
+│   │   │   │       └── syn v2.0.117 (*)
+│   │   │   └── tracing v0.1.44 (*)
+│   │   └── validit v0.2.5
+│   │       └── anyerror v0.1.13 (*)
+│   ├── serde v1.0.228 (*)
+│   └── thiserror v2.0.18 (*)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   └── async-trait v0.1.89 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── serde v1.0.228 (*)
+└── thiserror v2.0.18 (*)
