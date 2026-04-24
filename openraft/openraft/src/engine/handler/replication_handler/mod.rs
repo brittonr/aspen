@@ -57,8 +57,8 @@ where C: RaftTypeConfig
     /// Append a new membership and update related state such as replication streams.
     ///
     /// It is called by the leader when a new membership log is appended to the log store.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn append_membership(&mut self, log_id: &LogIdOf<C>, m: &Membership<C>) {
+        let _span = replication_debug_span("append_membership").entered();
         tracing::debug!("update effective membership: log_id:{} {}", log_id, m);
 
         debug_assert!(
@@ -89,8 +89,8 @@ where C: RaftTypeConfig
     /// Rebuild leader's replication progress to reflect replication changes.
     ///
     /// E.g., when adding/removing a follower/learner.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn rebuild_progresses(&mut self) {
+        let _span = replication_debug_span("rebuild_progresses").entered();
         let em = self.state.membership_state.effective();
 
         let learner_ids = em.learner_ids().collect::<Vec<_>>();
@@ -115,15 +115,18 @@ where C: RaftTypeConfig
 
     /// Update progress when replicated data(logs or snapshot) matches on follower/learner and is
     /// accepted.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn update_leader_clock(&mut self, node_id: C::NodeId, t: InstantOf<C>) {
+        let _span = replication_debug_span("update_leader_clock").entered();
         tracing::debug!(target = display(&node_id), t = display(t.display()), "{}", func_name!());
 
-        let granted = *self
-            .leader
-            .clock_progress
-            .increase_to(&node_id, Some(t))
-            .expect("it should always update existing progress");
+        let granted = match self.leader.clock_progress.increase_to(&node_id, Some(t)) {
+            Ok(granted) => *granted,
+            Err(_) => {
+                tracing::warn!(target = display(&node_id), "missing clock progress entry");
+                debug_assert!(false, "clock progress must exist for replication targets");
+                return;
+            }
+        };
 
         tracing::debug!(
             granted = display(granted.as_ref().map(|x| x.display()).display()),
@@ -150,27 +153,29 @@ where C: RaftTypeConfig
 
     /// Update progress when replicated data(logs or snapshot) matches on follower/learner and is
     /// accepted.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn update_matching(
         &mut self,
         node_id: C::NodeId,
         log_id: Option<LogIdOf<C>>,
         inflight_id: Option<InflightId>,
     ) {
+        let _span = replication_debug_span("update_matching").entered();
         tracing::debug!(node_id = display(&node_id), log_id = display(log_id.display()), "{}", func_name!());
 
         debug_assert!(log_id.is_some(), "a valid update can never set matching to None");
 
         // The value granted by a quorum may not yet be a committed.
         // A committed is **granted** and also is in the current term.
-        let quorum_accepted = self
-            .leader
-            .progress
-            .update_with(&node_id, |prog_entry| {
-                prog_entry.new_updater(&*self.config).update_matching(log_id, inflight_id)
-            })
-            .expect("it should always update existing progress")
-            .clone();
+        let quorum_accepted = match self.leader.progress.update_with(&node_id, |prog_entry| {
+            prog_entry.new_updater(&*self.config).update_matching(log_id, inflight_id)
+        }) {
+            Ok(quorum_accepted) => quorum_accepted.clone(),
+            Err(_) => {
+                tracing::warn!(target = display(&node_id), "missing progress entry");
+                debug_assert!(false, "progress must exist for replication targets");
+                return;
+            }
+        };
 
         tracing::debug!(quorum_accepted = display(quorum_accepted.display()), "after updating progress");
 
@@ -180,8 +185,8 @@ where C: RaftTypeConfig
     /// Commit the log id that is granted(accepted) by a quorum of voters.
     ///
     /// In raft a log that is granted and in the leader term is committed.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn try_commit_quorum_accepted(&mut self, granted: Option<LogIdOf<C>>) {
+        let _span = replication_debug_span("try_commit_quorum_accepted").entered();
         // Only when the log id is proposed by the current leader, it is committed.
         if let Some(ref c) = granted
             && !self.state.vote_ref().is_same_leader(c.committed_leader_id())
@@ -204,16 +209,20 @@ where C: RaftTypeConfig
     ///
     /// If `has_payload` is true, the `inflight` state is reset because AppendEntries RPC
     /// manages the inflight state.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn update_conflicting(
         &mut self,
         target: C::NodeId,
         conflict: LogIdOf<C>,
         inflight_id: Option<InflightId>,
     ) {
+        let _span = replication_debug_span("update_conflicting").entered();
         // TODO(2): test it?
 
-        let prog_entry = self.leader.progress.get_mut(&target).unwrap();
+        let Some(prog_entry) = self.leader.progress.get_mut(&target) else {
+            tracing::warn!(target = display(&target), "missing progress entry for conflicting update");
+            debug_assert!(false, "progress must exist for replication targets");
+            return;
+        };
 
         let mut updater = progress::entry::update::Updater::new(self.config, prog_entry);
 
@@ -245,13 +254,13 @@ where C: RaftTypeConfig
     }
 
     /// Update replication progress when a response is received.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn update_progress(
         &mut self,
         target: C::NodeId,
         repl_res: Result<ReplicationResult<C>, String>,
         inflight_id: Option<InflightId>,
     ) {
+        let _span = replication_debug_span("update_progress").entered();
         tracing::debug!(
             "{}: target={target}, result={}, inflight_id={}, current progresses={}",
             func_name!(),
@@ -273,8 +282,12 @@ where C: RaftTypeConfig
                 tracing::warn!(result = display(&err_str), "update progress error");
 
                 // Reset inflight state and it will retry.
-                let p = self.leader.progress.get_mut(&target).unwrap();
-                p.inflight = Inflight::None;
+                let Some(progress_entry) = self.leader.progress.get_mut(&target) else {
+                    tracing::warn!(target = display(&target), "missing progress entry after replication error");
+                    debug_assert!(false, "progress must exist for replication targets");
+                    return;
+                };
+                progress_entry.inflight = Inflight::None;
             }
         };
 
@@ -284,9 +297,10 @@ where C: RaftTypeConfig
     }
 
     /// Update replication streams to reflect replication progress change.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn rebuild_replication_streams(&mut self) {
-        let mut targets = vec![];
+        let _span = replication_debug_span("rebuild_replication_streams").entered();
+        let progress_count = self.leader.progress.iter().count();
+        let mut targets = Vec::with_capacity(progress_count);
 
         // TODO: maybe it's better to update leader's matching when update_replication() is called.
         for item in self.leader.progress.iter_mut() {
@@ -303,8 +317,8 @@ where C: RaftTypeConfig
     /// Initiate replication for every target that is not sending data in flight.
     ///
     /// `send_none` specifies whether to force to send a message even when there is no data to send.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn initiate_replication(&mut self) {
+        let _span = replication_debug_span("initiate_replication").entered();
         tracing::debug!(progress = debug(&self.leader.progress), "{}", func_name!());
 
         for item in self.leader.progress.iter_mut() {
@@ -328,10 +342,14 @@ where C: RaftTypeConfig
         }
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn send_to_target(output: &mut EngineOutput<C>, target: &C::NodeId, inflight: &Inflight<C>) {
+        let _span = replication_debug_span("send_to_target").entered();
         match inflight {
-            Inflight::None => unreachable!("no data to send"),
+            Inflight::None => {
+                tracing::warn!(target = display(target), "no data to send");
+                debug_assert!(false, "replication target must have inflight data");
+                return;
+            }
             Inflight::Logs {
                 log_id_range,
                 inflight_id,
@@ -355,8 +373,8 @@ where C: RaftTypeConfig
     ///
     /// Purging logs involves concurrent log accesses by replication tasks and purging tasks.
     /// Therefore, it is a method of ReplicationHandler.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn try_purge_log(&mut self) {
+        let _span = replication_debug_span("try_purge_log").entered();
         // TODO refactor this
         // TODO: test
 
@@ -371,19 +389,25 @@ where C: RaftTypeConfig
             return;
         }
 
-        // Safe unwrap(): it greater than an Option thus it must be a Some()
-        let purge_upto = self.state.purge_upto().unwrap().clone();
+        let purge_upto = match self.state.purge_upto().cloned() {
+            Some(purge_upto) => purge_upto,
+            None => {
+                tracing::warn!("missing purge target despite purge_upto > last_purged_log_id");
+                debug_assert!(false, "purge_upto must exist before purging logs");
+                return;
+            }
+        };
 
         // Check if any replication task is going to use the log that is going to purge.
-        let mut in_use = false;
+        let mut is_in_use = false;
         for item in self.leader.progress.iter() {
             if item.val.is_log_range_inflight(&purge_upto) {
                 tracing::debug!("log {} is in use by {}", purge_upto, item.id);
-                in_use = true;
+                is_in_use = true;
             }
         }
 
-        if in_use {
+        if is_in_use {
             // Logs to purge is in use, postpone purging.
             tracing::debug!("cannot purge: {} is in use", purge_upto);
             return;
@@ -428,4 +452,8 @@ where C: RaftTypeConfig
             output: self.output,
         }
     }
+}
+
+fn replication_debug_span(operation: &'static str) -> tracing::Span {
+    tracing::span!(tracing::Level::DEBUG, "replication_handler", operation = operation)
 }
