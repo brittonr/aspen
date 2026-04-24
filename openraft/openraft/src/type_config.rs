@@ -160,8 +160,6 @@ pub mod alias {
     use crate::type_config::AsyncRuntime;
     use crate::vote::RaftLeaderId;
 
-    pub type DOf<C> = <C as RaftTypeConfig>::D;
-    pub type ROf<C> = <C as RaftTypeConfig>::R;
     pub type AppDataOf<C> = <C as RaftTypeConfig>::D;
     pub type AppResponseOf<C> = <C as RaftTypeConfig>::R;
     pub type NodeIdOf<C> = <C as RaftTypeConfig>::NodeId;
@@ -192,20 +190,20 @@ pub mod alias {
     pub type MpscOf<C> = <Rt<C> as AsyncRuntime>::Mpsc;
 
     // MPSC bounded
-    type MpscB<C> = MpscOf<C>;
+    type MpscBounded<C> = MpscOf<C>;
 
-    pub type MpscSenderOf<C, T> = <MpscB<C> as Mpsc>::Sender<T>;
-    pub type MpscReceiverOf<C, T> = <MpscB<C> as Mpsc>::Receiver<T>;
-    pub type MpscWeakSenderOf<C, T> = <MpscB<C> as Mpsc>::WeakSender<T>;
+    pub type MpscSenderOf<C, T> = <MpscBounded<C> as Mpsc>::Sender<T>;
+    pub type MpscReceiverOf<C, T> = <MpscBounded<C> as Mpsc>::Receiver<T>;
+    pub type MpscWeakSenderOf<C, T> = <MpscBounded<C> as Mpsc>::WeakSender<T>;
 
     pub type MpscUnboundedOf<C> = <Rt<C> as AsyncRuntime>::MpscUnbounded;
 
     // MPSC unbounded
-    type MpscUB<C> = MpscUnboundedOf<C>;
+    type MpscUnboundedAlias<C> = MpscUnboundedOf<C>;
 
-    pub type MpscUnboundedSenderOf<C, T> = <MpscUB<C> as MpscUnbounded>::Sender<T>;
-    pub type MpscUnboundedReceiverOf<C, T> = <MpscUB<C> as MpscUnbounded>::Receiver<T>;
-    pub type MpscUnboundedWeakSenderOf<C, T> = <MpscUB<C> as MpscUnbounded>::WeakSender<T>;
+    pub type MpscUnboundedSenderOf<C, T> = <MpscUnboundedAlias<C> as MpscUnbounded>::Sender<T>;
+    pub type MpscUnboundedReceiverOf<C, T> = <MpscUnboundedAlias<C> as MpscUnbounded>::Receiver<T>;
+    pub type MpscUnboundedWeakSenderOf<C, T> = <MpscUnboundedAlias<C> as MpscUnbounded>::WeakSender<T>;
 
     pub type WatchOf<C> = <Rt<C> as AsyncRuntime>::Watch;
     pub type WatchSenderOf<C, T> = <WatchOf<C> as watch::Watch>::Sender<T>;
