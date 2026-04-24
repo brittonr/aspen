@@ -8,6 +8,9 @@ use crate::RaftTypeConfig;
 use crate::error::ClientWriteError;
 use crate::error::RaftError;
 use crate::error::into_raft_result::IntoRaftResult;
+use tracing::Instrument;
+use tracing::Level;
+use tracing::Span;
 #[cfg(doc)]
 use crate::impls::OneshotResponder;
 use crate::raft::ClientWriteResponse;
@@ -62,13 +65,19 @@ where C: RaftTypeConfig
     /// let new_voters = BTreeSet::from([3, 4, 5]);
     /// raft.change_membership(new_voters, false).await?;
     /// ```
-    #[tracing::instrument(level = "info", skip_all)]
     pub async fn change_membership(
         &self,
         members: impl Into<ChangeMembers<C>>,
-        retain: bool,
+        should_retain: bool,
     ) -> Result<ClientWriteResponse<C>, RaftError<C, ClientWriteError<C>>> {
-        self.management_api().change_membership(members, retain).await.into_raft_result()
+        async move {
+            self.management_api()
+                .change_membership(members, should_retain)
+                .await
+                .into_raft_result()
+        }
+        .instrument(tracing::span!(parent: &Span::current(), Level::INFO, "change_membership"))
+        .await
     }
 
     /// Add a new learner raft node, optionally, blocking until up-to-speed.
@@ -101,13 +110,27 @@ where C: RaftTypeConfig
     /// let node = BasicNode { addr: "127.0.0.1:8084".to_string() };
     /// raft.add_learner(5, node, true).await?;
     /// ```
-    #[tracing::instrument(level = "debug", skip(self, id), fields(target=display(&id)))]
     pub async fn add_learner(
         &self,
         id: C::NodeId,
         node: C::Node,
-        blocking: bool,
+        should_block_until_ready: bool,
     ) -> Result<ClientWriteResponse<C>, RaftError<C, ClientWriteError<C>>> {
-        self.management_api().add_learner(id, node, blocking).await.into_raft_result()
+        let span_target = id.clone();
+        async move {
+            self.management_api()
+                .add_learner(id, node, should_block_until_ready)
+                .await
+                .into_raft_result()
+        }
+        .instrument(
+            tracing::span!(
+                parent: &Span::current(),
+                Level::DEBUG,
+                "add_learner",
+                target = display(&span_target)
+            ),
+        )
+        .await
     }
 }
