@@ -1,4 +1,5 @@
 use openraft_macros::since;
+use tracing::Instrument;
 
 use crate::RaftTypeConfig;
 use crate::ReadPolicy;
@@ -34,39 +35,48 @@ where C: RaftTypeConfig
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) async fn get_read_linearizer(
         &self,
         read_policy: ReadPolicy,
     ) -> Result<Result<Linearizer<C>, LinearizableReadError<C>>, Fatal<C>> {
-        let (tx, rx) = C::oneshot();
-        self.inner.call_core(RaftMsg::EnsureLinearizableRead { read_policy, tx }, rx).await
+        async move {
+            let (tx, rx) = C::oneshot();
+            self.inner.call_core(RaftMsg::EnsureLinearizableRead { read_policy, tx }, rx).await
+        }
+        .instrument(tracing::debug_span!("get_read_linearizer"))
+        .await
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip(self, app_data))]
     pub(crate) async fn client_write(
         &self,
         app_data: C::D,
         // TODO: ClientWriteError can only be ForwardToLeader Error
     ) -> Result<Result<ClientWriteResponse<C>, ClientWriteError<C>>, Fatal<C>> {
-        let (responder, _commit_rx, complete_rx) = ProgressResponder::new();
+        async move {
+            let (responder, _commit_rx, complete_rx) = ProgressResponder::new();
 
-        self.do_client_write_ff(app_data, Some(CoreResponder::Progress(responder))).await?;
+            self.do_client_write_ff(app_data, Some(CoreResponder::Progress(responder))).await?;
 
-        let res: ClientWriteResult<C> = self.inner.recv_msg(complete_rx).await?;
+            let res: ClientWriteResult<C> = self.inner.recv_msg(complete_rx).await?;
 
-        Ok(res)
+            Ok(res)
+        }
+        .instrument(tracing::debug_span!("client_write"))
+        .await
     }
 
     #[since(version = "0.10.0")]
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) async fn client_write_ff(
         &self,
         app_data: C::D,
         responder: Option<WriteResponderOf<C>>,
     ) -> Result<(), Fatal<C>> {
-        self.do_client_write_ff(app_data, responder.map(|r| CoreResponder::UserDefined(r))).await
+        async move {
+            self.do_client_write_ff(app_data, responder.map(|r| CoreResponder::UserDefined(r))).await
+        }
+        .instrument(tracing::debug_span!("client_write_ff"))
+        .await
     }
 
     /// Fire-and-forget version of `client_write`, accept a generic responder.
