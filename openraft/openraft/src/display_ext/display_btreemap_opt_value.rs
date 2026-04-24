@@ -9,14 +9,15 @@ use super::DisplayOption;
 /// concatenates the key-value pairs with comma.
 ///
 /// For how to format the `opt_value`, see [`DisplayOption`].
-pub(crate) struct DisplayBTreeMapOptValue<'a, K: fmt::Display, V: fmt::Display>(pub &'a BTreeMap<K, Option<V>>);
+pub(crate) struct DisplayBtreeMapOptValue<'a, K: fmt::Display, V: fmt::Display>(pub &'a BTreeMap<K, Option<V>>);
 
-impl<K: fmt::Display, V: fmt::Display> fmt::Display for DisplayBTreeMapOptValue<'_, K, V> {
+impl<K: fmt::Display, V: fmt::Display> fmt::Display for DisplayBtreeMapOptValue<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let len = self.0.len();
         for (idx, (key, value)) in self.0.iter().enumerate() {
             write!(f, "{}:{}", key, DisplayOption(value))?;
-            if idx + 1 != len {
+            let next_idx = idx.saturating_add(1);
+            if next_idx != len {
                 write!(f, ",")?;
             }
         }
@@ -27,7 +28,7 @@ impl<K: fmt::Display, V: fmt::Display> fmt::Display for DisplayBTreeMapOptValue<
 
 #[allow(unused)]
 pub(crate) trait DisplayBtreeMapOptValueExt<'a, K: fmt::Display, V: fmt::Display> {
-    fn display(&'a self) -> DisplayBTreeMapOptValue<'a, K, V>;
+    fn display(&'a self) -> DisplayBtreeMapOptValue<'a, K, V>;
 }
 
 impl<K, V> DisplayBtreeMapOptValueExt<'_, K, V> for BTreeMap<K, Option<V>>
@@ -35,8 +36,8 @@ where
     K: fmt::Display,
     V: fmt::Display,
 {
-    fn display(&self) -> DisplayBTreeMapOptValue<'_, K, V> {
-        DisplayBTreeMapOptValue(self)
+    fn display(&self) -> DisplayBtreeMapOptValue<'_, K, V> {
+        DisplayBtreeMapOptValue(self)
     }
 }
 
@@ -47,7 +48,7 @@ mod tests {
     #[test]
     fn test_display_btreemap_opt_value() {
         let map = (1..=3).map(|num| (num, Some(num))).collect::<BTreeMap<_, _>>();
-        let display = DisplayBTreeMapOptValue(&map);
+        let display = DisplayBtreeMapOptValue(&map);
 
         assert_eq!(display.to_string(), "1:1,2:2,3:3");
     }
@@ -55,7 +56,7 @@ mod tests {
     #[test]
     fn test_display_empty_map() {
         let map = BTreeMap::<i32, Option<i32>>::new();
-        let display = DisplayBTreeMapOptValue(&map);
+        let display = DisplayBtreeMapOptValue(&map);
 
         assert_eq!(display.to_string(), "");
     }
@@ -63,7 +64,7 @@ mod tests {
     #[test]
     fn test_display_btreemap_opt_value_with_1_item() {
         let map = (1..=1).map(|num| (num, Some(num))).collect::<BTreeMap<_, _>>();
-        let display = DisplayBTreeMapOptValue(&map);
+        let display = DisplayBtreeMapOptValue(&map);
 
         assert_eq!(display.to_string(), "1:1");
     }
@@ -74,7 +75,7 @@ mod tests {
         map.insert(1, Some(1));
         map.insert(2, None);
         map.insert(3, Some(3));
-        let display = DisplayBTreeMapOptValue(&map);
+        let display = DisplayBtreeMapOptValue(&map);
 
         assert_eq!(display.to_string(), "1:1,2:None,3:3");
     }

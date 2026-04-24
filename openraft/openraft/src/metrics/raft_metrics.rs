@@ -5,7 +5,7 @@ use crate::Instant;
 use crate::RaftTypeConfig;
 use crate::StoredMembership;
 use crate::core::ServerState;
-use crate::display_ext::DisplayBTreeMapOptValue;
+use crate::display_ext::DisplayBtreeMapOptValue;
 use crate::display_ext::DisplayOption;
 use crate::error::Fatal;
 use crate::metrics::HeartbeatMetrics;
@@ -195,8 +195,8 @@ where C: RaftTypeConfig
             self.membership_config,
             DisplayOption(&self.snapshot),
             DisplayOption(&self.purged),
-            DisplayOption(&self.replication.as_ref().map(DisplayBTreeMapOptValue)),
-            DisplayOption(&self.heartbeat.as_ref().map(DisplayBTreeMapOptValue)),
+            DisplayOption(&self.replication.as_ref().map(DisplayBtreeMapOptValue)),
+            DisplayOption(&self.heartbeat.as_ref().map(DisplayBtreeMapOptValue)),
         )?;
 
         write!(f, "}}")?;
@@ -314,8 +314,8 @@ where C: RaftTypeConfig
         write!(
             f,
             ", replication:{{{}}}, heartbeat:{{{}}}",
-            DisplayOption(&self.replication.as_ref().map(DisplayBTreeMapOptValue)),
-            DisplayOption(&self.heartbeat.as_ref().map(DisplayBTreeMapOptValue)),
+            DisplayOption(&self.replication.as_ref().map(DisplayBtreeMapOptValue)),
+            DisplayOption(&self.heartbeat.as_ref().map(DisplayBtreeMapOptValue)),
         )?;
 
         write!(f, "}}")?;
