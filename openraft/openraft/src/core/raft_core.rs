@@ -922,17 +922,17 @@ where
 
         let session_id = ReplicationSessionId::new(leader.committed_vote.clone(), membership_log_id.clone());
 
-        ReplicationCore::<C, NF, LS>::spawn(
-            target.clone(),
+        ReplicationCore::<C, NF, LS>::spawn(crate::replication::ReplicationSpawnInput {
+            target: target.clone(),
             session_id,
-            self.config.clone(),
-            self.engine.state.committed().cloned(),
-            progress_entry.matching.clone(),
+            config: self.config.clone(),
+            committed: self.engine.state.committed().cloned(),
+            matching: progress_entry.matching.clone(),
             network,
-            self.log_store.get_log_reader().await,
-            self.tx_notification.clone(),
-            tracing::span!(parent: &self.span, Level::DEBUG, "replication", id=display(&self.id), target=display(&target)),
-        )
+            log_reader: self.log_store.get_log_reader().await,
+            tx_raft_core: self.tx_notification.clone(),
+            span: tracing::span!(parent: &self.span, Level::DEBUG, "replication", id=display(&self.id), target=display(&target)),
+        })
     }
 
     /// Remove all replication.

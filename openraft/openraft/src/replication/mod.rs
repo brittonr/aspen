@@ -19,7 +19,7 @@ use request::Data;
 use request::Replicate;
 pub(crate) use response::Progress;
 use response::ReplicationResult;
-use tracing_futures::Instrument;
+use tracing::Instrument;
 
 use crate::RaftNetworkFactory;
 use crate::RaftTypeConfig;
@@ -80,6 +80,23 @@ where C: RaftTypeConfig
 /// NOTE: we do not stack replication requests to targets because this could result in
 /// out-of-order delivery. We always buffer until we receive a success response, then send the
 /// next payload from the buffer.
+pub(crate) struct ReplicationSpawnInput<C, N, LS>
+where
+    C: RaftTypeConfig,
+    N: RaftNetworkFactory<C>,
+    LS: RaftLogStorage<C>,
+{
+    pub(crate) target: C::NodeId,
+    pub(crate) session_id: ReplicationSessionId<C>,
+    pub(crate) config: Arc<Config>,
+    pub(crate) committed: Option<LogIdOf<C>>,
+    pub(crate) matching: Option<LogIdOf<C>>,
+    pub(crate) network: N::Network,
+    pub(crate) log_reader: LS::LogReader,
+    pub(crate) tx_raft_core: MpscSenderOf<C, Notification<C>>,
+    pub(crate) span: tracing::Span,
+}
+
 pub(crate) struct ReplicationCore<C, N, LS>
 where
     C: RaftTypeConfig,
@@ -117,20 +134,26 @@ where
     LS: RaftLogStorage<C>,
 {
     /// Spawn a new replication task for the target node.
-    #[tracing::instrument(level = "trace", skip_all,fields(target=display(&target), session_id=display(&session_id)))]
     #[allow(clippy::type_complexity)]
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn spawn(
-        target: C::NodeId,
-        session_id: ReplicationSessionId<C>,
-        config: Arc<Config>,
-        committed: Option<LogIdOf<C>>,
-        matching: Option<LogIdOf<C>>,
-        network: N::Network,
-        log_reader: LS::LogReader,
-        tx_raft_core: MpscSenderOf<C, Notification<C>>,
-        span: tracing::Span,
-    ) -> ReplicationHandle<C> {
+    pub(crate) fn spawn(input: ReplicationSpawnInput<C, N, LS>) -> ReplicationHandle<C> {
+        let ReplicationSpawnInput {
+            target,
+            session_id,
+            config,
+            committed,
+            matching,
+            network,
+            log_reader,
+            tx_raft_core,
+            span,
+        } = input;
+        let _span = tracing::span!(
+            tracing::Level::TRACE,
+            "replication_spawn",
+            target = display(&target),
+            session_id = display(&session_id)
+        )
+        .entered();
         tracing::debug!(
             session_id = display(&session_id),
             target = display(&target),
@@ -180,7 +203,6 @@ where
         }
     }
 
-    #[tracing::instrument(level="debug", skip(self), fields(session=%self.task_state.session_id, target=display(&self.task_state.target), cluster=%self.task_state.config.cluster_name))]
     async fn main(mut self) -> Result<(), ReplicationClosed> {
         loop {
             let action = self.next_action.take();
@@ -193,7 +215,7 @@ where
             tracing::debug!(replication_data = display(&d), "{} send replication RPC", func_name!());
 
             // If an RPC response is expected by RaftCore
-            let need_notify = d.has_payload();
+            let should_notify = d.has_payload();
 
             let log_id_range = match d {
                 Data::Committed => {
@@ -263,7 +285,7 @@ where
                             };
 
                             // If there is no id, it is a heartbeat and do not need to notify RaftCore
-                            if need_notify {
+                            if should_notify {
                                 self.send_progress_error(err).await;
                             } else {
                                 tracing::warn!("heartbeat RPC failed, do not send any response to RaftCore");
@@ -279,12 +301,12 @@ where
 
     async fn drain_events_with_backoff(&mut self) -> Result<(), ReplicationClosed> {
         if let Some(b) = &mut self.backoff {
-            let duration = b.next().unwrap_or_else(|| {
+            let backoff_delay = b.next().unwrap_or_else(|| {
                 tracing::warn!("backoff exhausted, using default");
                 Duration::from_millis(500)
             });
 
-            self.backoff_drain_events(C::now() + duration).await?;
+            self.backoff_drain_events(C::now() + backoff_delay).await?;
         }
 
         self.drain_events().await?;
@@ -300,7 +322,6 @@ where
     ///
     /// `has_payload` indicates if there are any data(AppendEntries) to send, or it is a heartbeat.
     /// `has_payload` decides if it needs to send back notifications to RaftCore.
-    #[tracing::instrument(level = "debug", skip_all)]
     async fn send_log_entries(&mut self, log_ids: LogIdRange<C>) -> Result<(), ReplicationError<C>> {
         tracing::debug!(log_id_range = display(&log_ids), "send_log_entries",);
 
@@ -324,21 +345,35 @@ where
                 // limited_get_log_entries will return logs smaller than the range [start, end).
                 let logs = self.log_reader.limited_get_log_entries(start, end).await.sto_read_logs()?;
 
-                let first = logs.first().map(|ent| ent.ref_log_id()).unwrap();
-                let last = logs.last().map(|ent| ent.log_id()).unwrap();
+                let max_log_count = end.saturating_sub(start);
+                let log_count = u64::try_from(logs.len()).ok();
+                let first_log_id = logs.first().map(|ent| ent.ref_log_id());
+                let last_log_id = logs.last().map(|ent| ent.log_id());
 
                 debug_assert!(
-                    !logs.is_empty() && logs.len() <= (end - start) as usize,
+                    !logs.is_empty()
+                        && log_count.is_some_and(|count| count <= max_log_count)
+                        && first_log_id.is_some()
+                        && last_log_id.is_some(),
                     "expect logs ⊆ [{}..{}) but got {} entries, first: {}, last: {}",
                     start,
                     end,
                     logs.len(),
-                    first,
-                    last
+                    first_log_id.display(),
+                    last_log_id.display()
                 );
 
-                let r = LogIdRange::new(rng.prev.clone(), Some(last));
-                (logs, r)
+                match last_log_id {
+                    Some(last_log_id) => {
+                        let r = LogIdRange::new(rng.prev.clone(), Some(last_log_id));
+                        (logs, r)
+                    }
+                    None => {
+                        tracing::warn!(start, end, "limited_get_log_entries returned no logs for non-empty range");
+                        let empty_range = LogIdRange::new(rng.prev.clone(), rng.prev.clone());
+                        (logs, empty_range)
+                    }
+                }
             }
         };
 
@@ -360,9 +395,9 @@ where
             self.task_state.config.heartbeat_interval
         );
 
-        let the_timeout = Duration::from_millis(self.task_state.config.heartbeat_interval);
-        let option = RPCOption::new(the_timeout);
-        let res = C::timeout(the_timeout, self.network.append_entries(payload, option)).await;
+        let rpc_timeout = Duration::from_millis(self.task_state.config.heartbeat_interval);
+        let option = RPCOption::new(rpc_timeout);
+        let res = C::timeout(rpc_timeout, self.network.append_entries(payload, option)).await;
 
         tracing::debug!("append_entries res: {:?}", res);
 
@@ -371,7 +406,7 @@ where
                 action: RPCTypes::AppendEntries,
                 id: self.task_state.session_id.vote().to_leader_node_id(),
                 target: self.task_state.target.clone(),
-                timeout: the_timeout,
+                timeout: rpc_timeout,
             };
             RPCError::Timeout(to)
         })?; // return Timeout error
@@ -522,18 +557,17 @@ where
     ///
     /// In the backoff period, we should not send out any RPCs, but we should still receive events
     /// in case the channel is closed, it should quit at once.
-    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn backoff_drain_events(&mut self, until: InstantOf<C>) -> Result<(), ReplicationClosed> {
-        let d = until - C::now();
-        tracing::warn!(interval = debug(d), "{} backoff mode: drain events without processing them", func_name!());
+        let backoff_window = until - C::now();
+        tracing::warn!(interval = debug(backoff_window), "{} backoff mode: drain events without processing them", func_name!());
 
-        loop {
-            let sleep_duration = until - C::now();
-            let sleep = C::sleep(sleep_duration);
+        while C::now() < until {
+            let backoff_delay = until - C::now();
+            let sleep = C::sleep(backoff_delay);
 
             let recv = self.rx_event.recv();
 
-            tracing::debug!("backoff timeout: {:?}", sleep_duration);
+            tracing::debug!("backoff timeout: {:?}", backoff_delay);
 
             futures::select! {
                 _ = sleep.fuse() => {
@@ -546,12 +580,12 @@ where
                 }
             }
         }
+        Ok(())
     }
 
     /// Receive and process events from RaftCore until `next_action` is filled.
     ///
     /// It blocks until at least one event is received.
-    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn drain_events(&mut self) -> Result<(), ReplicationClosed> {
         tracing::debug!("drain_events");
 
@@ -570,29 +604,21 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip(self))]
     pub async fn try_drain_events(&mut self) -> Result<(), ReplicationClosed> {
         tracing::debug!("{}", func_name!());
 
         // Just drain all events in the channel.
         // There should NOT be more than one `Replicate::Data` event in the channel.
         // Looping it just collect all commit events and heartbeat events.
-        loop {
-            let maybe_res = self.rx_event.recv().now_or_never();
-
-            let Some(recv_res) = maybe_res else {
-                // No more event found in self.repl_rx
-                return Ok(());
-            };
-
+        while let Some(recv_res) = self.rx_event.recv().now_or_never() {
             let event = recv_res.ok_or(ReplicationClosed::new("rx_repl is closed in try_drain_event"))?;
-
             self.process_event(event);
         }
+        Ok(())
     }
 
-    #[tracing::instrument(level = "trace", skip_all)]
     pub fn process_event(&mut self, event: Replicate<C>) {
+        let _span = replication_debug_span("process_event").entered();
         tracing::debug!(event = display(&event), "process_event");
 
         match event {
@@ -629,11 +655,13 @@ where
     /// If there are more logs to send, it returns a new `Some(Data::Logs)` to send.
     fn update_next_action_to_send(&mut self, matching: Option<LogIdOf<C>>, log_ids: LogIdRange<C>) {
         let next = if matching < log_ids.last {
-            Some(Data::new_logs(
-                LogIdRange::new(matching, log_ids.last),
-                // Safe unwrap: this function is called only when self.inflight_id is Some.
-                self.inflight_id.unwrap(),
-            ))
+            let Some(inflight_id) = self.inflight_id else {
+                debug_assert!(false, "inflight replication id must exist when continuing to send logs");
+                tracing::warn!("missing inflight replication id while updating next send action");
+                self.next_action = None;
+                return;
+            };
+            Some(Data::new_logs(LogIdRange::new(matching, log_ids.last), inflight_id))
         } else {
             None
         };
@@ -667,4 +695,8 @@ where
             to_send.prev.index().display()
         );
     }
+}
+
+fn replication_debug_span(operation: &'static str) -> tracing::Span {
+    tracing::span!(tracing::Level::DEBUG, "replication_core", operation = operation)
 }
