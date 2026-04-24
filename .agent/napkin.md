@@ -151,6 +151,7 @@ Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 - The `bash -lc` wrappers used in autoresearch can still return exit code 1 after a successful cargo run because `/etc/bash_logout` references an unset `__ETC_BASHLOGOUT_SOURCED`. When the parsed metric and cargo output are sane, treat that shell-status artifact separately from the benchmark signal instead of discarding good runs.
 - Slice parsers must match only Tiger Style summary `F...` lines, not every `path:line` mention in the log. Arrow diagnostics and ordinary rustc warnings (for example a `dead_code` warning on the same file) can otherwise contaminate the metric and fake improvements/regressions.
 - In vendored openraft, many sync helper methods tagged with `#[tracing::instrument]` show up as broad `unbounded_loop` false positives on the attribute line. Replacing them with explicit entered spans is an honest broad-rail win without changing behavior.
+- Async wrappers need the async form of that fix: replace `#[tracing::instrument]` with `.instrument(tracing::debug_span!(...)).await`, not an entered span guard, or you risk holding a non-Send guard across await points.
 - Late-stage explicit slice work needs to target the counted line list directly. A refactor that only reshapes helpers or shifts line numbers can keep the slice metric flat even if the code looks cleaner, so inspect the exact remaining `(lint, path, line)` tuples before investing in another micro-pass.
 
 ## OpenSpec archive preflight gotcha (2026-04-21)

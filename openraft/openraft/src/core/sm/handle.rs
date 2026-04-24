@@ -68,7 +68,11 @@ where C: RaftTypeConfig
         };
 
         // If fail to send command, cmd is dropped and tx will be dropped.
-        let _ = cmd_tx.send(cmd);
+        let send_result = cmd_tx.send(cmd);
+        if let Err(send_err) = send_result {
+            tracing::error!(error = display(&send_err), "failed to send GetSnapshot to sm::Worker");
+            return Err("failed to send GetSnapshot to sm::Worker");
+        }
 
         let snapshot = match rx.await {
             Ok(x) => x,
