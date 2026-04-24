@@ -8,6 +8,8 @@ use crate::engine::time_state;
 use crate::type_config::alias::AsyncRuntimeOf;
 use crate::type_config::async_runtime::AsyncRuntime;
 
+const SMALLER_LOG_TIMEOUT_MULTIPLIER: u32 = 2;
+
 /// Config for Engine
 #[derive(Clone, Debug)]
 #[derive(PartialEq, Eq)]
@@ -39,7 +41,9 @@ impl<C> EngineConfig<C>
 where C: RaftTypeConfig
 {
     pub(crate) fn new(id: C::NodeId, config: &Config) -> Self {
-        let election_timeout = Duration::from_millis(config.new_rand_election_timeout::<AsyncRuntimeOf<C>>());
+        let smaller_log_timeout_ms = config
+            .election_timeout_max
+            .saturating_mul(u64::from(SMALLER_LOG_TIMEOUT_MULTIPLIER));
         Self {
             id,
             max_in_snapshot_log_to_keep: config.max_in_snapshot_log_to_keep,
@@ -48,8 +52,10 @@ where C: RaftTypeConfig
             allow_log_reversion: config.get_allow_log_reversion(),
 
             timer_config: time_state::Config {
-                election_timeout,
-                smaller_log_timeout: Duration::from_millis(config.election_timeout_max * 2),
+                election_timeout: Duration::from_millis(
+                    config.new_rand_election_timeout::<AsyncRuntimeOf<C>>(),
+                ),
+                smaller_log_timeout: Duration::from_millis(smaller_log_timeout_ms),
                 leader_lease: Duration::from_millis(config.election_timeout_max),
             },
             election_timeout_min: config.election_timeout_min,
@@ -75,8 +81,8 @@ where C: RaftTypeConfig
     /// Called on each election attempt per Raft §5.2 to prevent persistent
     /// split-votes when nodes have similar initial timeouts.
     pub(crate) fn rerandomize_election_timeout(&mut self) {
-        let new_timeout =
+        let new_election_timeout_ms =
             AsyncRuntimeOf::<C>::thread_rng().random_range(self.election_timeout_min..self.election_timeout_max);
-        self.timer_config.election_timeout = Duration::from_millis(new_timeout);
+        self.timer_config.election_timeout = Duration::from_millis(new_election_timeout_ms);
     }
 }
