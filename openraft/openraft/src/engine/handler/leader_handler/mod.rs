@@ -49,8 +49,8 @@ where C: RaftTypeConfig
     /// committed.
     ///
     /// TODO(xp): if vote indicates this node is not the leader, refuse append
-    #[tracing::instrument(level = "debug", skip(self, entries))]
     pub(crate) fn leader_append_entries(&mut self, mut entries: Vec<C::Entry>) {
+        let _span = tracing::debug_span!("leader_append_entries").entered();
         let l = entries.len();
         if l == 0 {
             return;
@@ -90,8 +90,8 @@ where C: RaftTypeConfig
         rh.initiate_replication();
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn send_heartbeat(&mut self) {
+        let _span = tracing::debug_span!("send_heartbeat").entered();
         let membership_log_id = self.state.membership_state.effective().log_id();
         let session_id = ReplicationSessionId::new(self.leader.committed_vote.clone(), membership_log_id.clone());
 
