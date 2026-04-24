@@ -60,7 +60,6 @@ where C: RaftTypeConfig
     /// Otherwise, it returns `Some(tx)`.
     ///
     /// The `f` is used to create the error response.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn accept_vote<T, F>(
         &mut self,
         vote: &VoteOf<C>,
@@ -72,6 +71,8 @@ where C: RaftTypeConfig
         Respond<C>: From<ValueSender<C, T>>,
         F: Fn(&RaftState<C>, RejectVoteRequest<C>) -> T,
     {
+        let _span = tracing::debug_span!("accept_vote").entered();
+
         let vote_res = self.update_vote(vote);
 
         if let Err(e) = vote_res {
@@ -100,8 +101,8 @@ where C: RaftTypeConfig
     ///
     /// Note: This method does not check last-log-id. handle-vote-request has to deal with
     /// last-log-id itself.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn update_vote(&mut self, vote: &VoteOf<C>) -> Result<(), RejectVoteRequest<C>> {
+        let _span = tracing::debug_span!("update_vote").entered();
         // Partial ord compare:
         // Vote does not have to be total ord.
         // `!(a >= b)` does not imply `a < b`.
@@ -122,7 +123,7 @@ where C: RaftTypeConfig
         let leader_lease = if vote.is_committed() {
             self.config.timer_config.leader_lease
         } else {
-            Duration::default()
+            Duration::ZERO
         };
 
         if vote.as_ref_vote() > self.state.vote_ref().as_ref_vote() {
@@ -193,7 +194,10 @@ where C: RaftTypeConfig
         *self.leader = Some(Box::new(leader));
 
         let (last_log_id, noop_log_id) = {
-            let leader = self.leader.as_ref().unwrap();
+            let Some(leader) = self.leader.as_ref() else {
+                debug_assert!(false, "leader state must exist after new_leader");
+                return;
+            };
             (leader.last_log_id().cloned(), leader.noop_log_id().clone())
         };
 
@@ -206,15 +210,46 @@ where C: RaftTypeConfig
 
         self.server_state_handler().update_server_state_if_changed();
 
-        let mut rh = self.replication_handler();
-        rh.rebuild_replication_streams();
+        {
+            let Some(leader) = self.leader.as_mut() else {
+                debug_assert!(false, "leader state must exist before rebuilding replication streams");
+                return;
+            };
+            let mut replication_handler = ReplicationHandler {
+                config: self.config,
+                leader,
+                state: self.state,
+                output: self.output,
+            };
+            replication_handler.rebuild_replication_streams();
+        }
 
         // If the leader has not yet proposed any log, propose a blank log and initiate replication;
         // Otherwise, just initiate replication.
         if last_log_id.as_ref() < Some(&noop_log_id) {
-            self.leader_handler().leader_append_entries(vec![C::Entry::new_blank(LogIdOf::<C>::default())]);
+            let Some(leader) = self.leader.as_mut() else {
+                debug_assert!(false, "leader state must exist before appending noop entry");
+                return;
+            };
+            LeaderHandler {
+                config: self.config,
+                leader,
+                state: self.state,
+                output: self.output,
+            }
+            .leader_append_entries(vec![C::Entry::new_blank(LogIdOf::<C>::default())]);
         } else {
-            self.replication_handler().initiate_replication();
+            let Some(leader) = self.leader.as_mut() else {
+                debug_assert!(false, "leader state must exist before initiating replication");
+                return;
+            };
+            ReplicationHandler {
+                config: self.config,
+                leader,
+                state: self.state,
+                output: self.output,
+            }
+            .initiate_replication();
         }
     }
 
@@ -241,25 +276,4 @@ where C: RaftTypeConfig
         }
     }
 
-    pub(crate) fn replication_handler(&mut self) -> ReplicationHandler<'_, C> {
-        let leader = self.leader.as_mut().unwrap();
-
-        ReplicationHandler {
-            config: self.config,
-            leader,
-            state: self.state,
-            output: self.output,
-        }
-    }
-
-    pub(crate) fn leader_handler(&mut self) -> LeaderHandler<'_, C> {
-        let leader = self.leader.as_mut().unwrap();
-
-        LeaderHandler {
-            config: self.config,
-            leader,
-            state: self.state,
-            output: self.output,
-        }
-    }
 }
