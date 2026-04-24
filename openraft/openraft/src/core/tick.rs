@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -37,7 +38,9 @@ pub(crate) struct TickHandle<C>
 where C: RaftTypeConfig
 {
     enabled: Arc<AtomicBool>,
+    /// Lock ordering: acquire `shutdown` before `join_handle` when both are needed.
     shutdown: Mutex<Option<OneshotSenderOf<C, ()>>>,
+    /// Lock ordering: acquire after `shutdown`.
     join_handle: Mutex<Option<JoinHandleOf<C, ()>>>,
 }
 
@@ -46,10 +49,24 @@ where C: RaftTypeConfig
 {
     /// Signal the tick loop to stop, without waiting for it to stop.
     fn drop(&mut self) {
-        if self.shutdown.lock().unwrap().is_none() {
+        let has_shutdown_sender = {
+            let shutdown_guard = lock_option_mutex(&self.shutdown, "tick.shutdown");
+            shutdown_guard.is_some()
+        };
+        if !has_shutdown_sender {
             return;
         }
         let _ = self.shutdown();
+    }
+}
+
+fn lock_option_mutex<'a, T>(mutex: &'a Mutex<Option<T>>, lock_name: &'static str) -> MutexGuard<'a, Option<T>> {
+    match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            tracing::warn!(lock_name, "Recovering poisoned mutex");
+            poisoned.into_inner()
+        }
     }
 }
 
@@ -82,37 +99,38 @@ where C: RaftTypeConfig
     }
 
     pub(crate) async fn tick_loop(self, cancel_rx: OneshotReceiverOf<C, ()>) {
-        let mut i = 0;
-
+        let mut tick_index: u64 = 0;
+        let mut should_stop = false;
         let mut cancel = std::pin::pin!(cancel_rx);
 
-        loop {
-            let at = C::now() + self.interval;
-            let sleep_fut = std::pin::pin!(C::sleep_until(at));
+        while !should_stop {
+            let next_tick_at = C::now() + self.interval;
+            let sleep_fut = std::pin::pin!(C::sleep_until(next_tick_at));
             let cancel_fut = cancel.as_mut();
 
-            match futures::future::select(cancel_fut, sleep_fut).await {
+            should_stop = match futures::future::select(cancel_fut, sleep_fut).await {
                 Either::Left((_canceled, _)) => {
                     tracing::info!("TickLoop received cancel signal, quit");
-                    return;
+                    true
                 }
-                Either::Right((_, _)) => {
-                    // sleep done
-                }
+                Either::Right((_, _)) => false,
+            };
+            if should_stop {
+                continue;
             }
 
             if !self.enabled.load(Ordering::Relaxed) {
                 continue;
             }
 
-            i += 1;
+            tick_index = tick_index.saturating_add(1);
 
-            let send_res = self.tx.send(Notification::Tick { i }).await;
+            let send_res = self.tx.send(Notification::Tick { i: tick_index }).await;
             if let Err(_e) = send_res {
                 tracing::info!("Stopping tick_loop(), main loop terminated");
-                break;
+                should_stop = true;
             } else {
-                tracing::debug!("Tick sent: {}", i)
+                tracing::debug!("Tick sent: {}", tick_index)
             }
         }
     }
@@ -131,8 +149,8 @@ where C: RaftTypeConfig
     pub(crate) fn shutdown(&self) -> Option<JoinHandleOf<C, ()>> {
         {
             let shutdown = {
-                let mut x = self.shutdown.lock().unwrap();
-                x.take()
+                let mut shutdown_guard = lock_option_mutex(&self.shutdown, "tick.shutdown");
+                shutdown_guard.take()
             };
 
             if let Some(shutdown) = shutdown {
@@ -144,8 +162,8 @@ where C: RaftTypeConfig
         }
 
         {
-            let mut x = self.join_handle.lock().unwrap();
-            x.take()
+            let mut join_handle_guard = lock_option_mutex(&self.join_handle, "tick.join_handle");
+            join_handle_guard.take()
         }
     }
 }
