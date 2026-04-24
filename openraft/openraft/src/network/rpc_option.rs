@@ -5,13 +5,14 @@ use std::time::Duration;
 ///
 /// [`RaftNetwork`]: `crate::network::RaftNetwork`
 #[derive(Clone, Debug)]
+#[allow(acronym_style, reason = "preserve established public transport option spelling")]
 pub struct RPCOption {
     /// The expected time-to-last for an RPC.
     ///
     /// The caller will cancel an RPC if it takes longer than this duration.
     hard_ttl: Duration,
 
-    /// The size of the snapshot chunk.
+    /// The size of the snapshot chunk in bytes.
     pub(crate) snapshot_chunk_size: Option<usize>,
 }
 
@@ -48,8 +49,8 @@ impl RPCOption {
         self.hard_ttl
     }
 
-    /// Get the recommended size of the snapshot chunk for transport.
-    pub fn snapshot_chunk_size(&self) -> Option<usize> {
-        self.snapshot_chunk_size
+    /// Get the recommended size of the snapshot chunk for transport, in bytes.
+    pub fn snapshot_chunk_size_bytes(&self) -> Option<u64> {
+        self.snapshot_chunk_size.map(|size_bytes| size_bytes as u64)
     }
 }

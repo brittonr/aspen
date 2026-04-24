@@ -77,9 +77,16 @@ mod tokio_rt {
                     .await
                     .sto_res(subject_verb)?;
 
-                let Some(chunk_size_bytes) = option.snapshot_chunk_size() else {
+                let Some(chunk_size_bytes_u64) = option.snapshot_chunk_size_bytes() else {
                     debug_assert!(false, "snapshot chunk size must be set by full_snapshot caller");
                     return Err(ReplicationClosed::new("snapshot chunk size missing").into());
+                };
+                let chunk_size_bytes = match usize::try_from(chunk_size_bytes_u64) {
+                    Ok(size_bytes) => size_bytes,
+                    Err(_) => {
+                        debug_assert!(false, "snapshot chunk size must fit in usize");
+                        return Err(ReplicationClosed::new("snapshot chunk size overflow").into());
+                    }
                 };
                 let mut buf = Vec::with_capacity(chunk_size_bytes);
                 while buf.capacity() > buf.len() {
