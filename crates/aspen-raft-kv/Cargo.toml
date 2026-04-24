@@ -1,0 +1,18 @@
+[package]
+name = "aspen-raft-kv"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Reusable facade configuration and trait surface for Aspen Redb Raft KV"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+aspen-kv-types = { workspace = true }
+aspen-raft-kv-types = { workspace = true }
+aspen-traits = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = "2.0"
+
+[dev-dependencies]
+static_assertions = { workspace = true }
+tempfile = { workspace = true }

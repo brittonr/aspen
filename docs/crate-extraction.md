@@ -78,9 +78,9 @@ The checker must fail on unowned exceptions, missing required exception fields, 
 | Layer | Canonical path | Manifest | Current source | Readiness | Next action |
 | --- | --- | --- | --- | --- | --- |
 | KV operation/response types | `aspen-kv-types` | `docs/crate-extraction/aspen-kv-types.md` | `crates/aspen-kv-types` | `workspace-internal` | Document feature/API contract and prove default boundary. |
-| OpenRaft app types | `aspen-raft-kv-types` | `docs/crate-extraction/aspen-raft-kv-types.md` | split from `crates/aspen-raft-types` | `workspace-internal` | Remove Aspen core/trust coupling and classify OpenRaft exposure. |
+| OpenRaft app types | `aspen-raft-kv-types` | `docs/crate-extraction/aspen-raft-kv-types.md` | `crates/aspen-raft-kv-types` plus legacy `crates/aspen-raft-types` | `workspace-internal` | Migrate compatibility paths and keep OpenRaft exposure documented. |
 | Redb storage backend | `aspen-redb-storage` | `docs/crate-extraction/aspen-redb-storage.md` | `crates/aspen-redb-storage` plus `crates/aspen-raft/src/storage*` | `workspace-internal` | Move concrete Redb/OpenRaft storage modules and preserve atomicity rails. |
-| Consensus KV facade | `aspen-raft-kv` | `docs/crate-extraction/aspen-raft-kv.md` | new facade over reusable storage/types | `workspace-internal` | Expose node config, membership, resource limits, and KV operations without Aspen binary config. |
+| Consensus KV facade | `aspen-raft-kv` | `docs/crate-extraction/aspen-raft-kv.md` | `crates/aspen-raft-kv` facade over reusable types | `workspace-internal` | Attach Redb-backed execution after storage migration while keeping iroh as adapter-only. |
 | Iroh/IRPC adapter | `aspen-raft-network` | `docs/crate-extraction/aspen-raft-network.md` | `crates/aspen-raft-network` | `workspace-internal` | Keep concrete iroh transport as explicit adapter. |
 | Aspen compatibility | `aspen-raft` compatibility paths | `docs/crate-extraction/aspen-raft-compat.md` | `crates/aspen-raft`, `crates/aspen-cluster`, handlers, binaries | `workspace-internal` | Re-export or migrate old paths with tests and removal criteria. |
 

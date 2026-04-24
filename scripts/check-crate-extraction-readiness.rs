@@ -114,10 +114,7 @@ struct Report {
 }
 
 fn run_command_text(program: &str, args: &[&str]) -> Result<String> {
-    let output = Command::new(program)
-        .args(args)
-        .output()
-        .with_context(|| format!("failed to run {program}"))?;
+    let output = Command::new(program).args(args).output().with_context(|| format!("failed to run {program}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("{program} failed: {stderr}");
@@ -126,13 +123,8 @@ fn run_command_text(program: &str, args: &[&str]) -> Result<String> {
 }
 
 fn export_policy(policy_path: &Path) -> Result<Policy> {
-    let path_text = policy_path
-        .to_str()
-        .context("policy path is not valid UTF-8")?;
-    let json = run_command_text(
-        "nix",
-        &["run", "nixpkgs#nickel", "--", "export", "--format", "json", path_text],
-    )?;
+    let path_text = policy_path.to_str().context("policy path is not valid UTF-8")?;
+    let json = run_command_text("nix", &["run", "nixpkgs#nickel", "--", "export", "--format", "json", path_text])?;
     serde_json::from_str(&json).context("failed to parse exported Nickel policy JSON")
 }
 
@@ -144,11 +136,11 @@ fn load_metadata() -> Result<CargoMetadata> {
 fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
     match candidate_key {
         "aspen_kv_types" => Some("aspen-kv-types"),
-        "aspen_raft_kv_types" => Some("aspen-raft-types"),
+        "aspen_raft_kv_types" => Some("aspen-raft-kv-types"),
         "aspen_redb_storage" => Some("aspen-redb-storage"),
         "aspen_raft_network" => Some("aspen-raft-network"),
         "aspen_raft_compat" => Some("aspen-raft"),
-        "aspen_raft_kv" => None,
+        "aspen_raft_kv" => Some("aspen-raft-kv"),
         _ => None,
     }
 }
@@ -177,8 +169,8 @@ fn check_exception(candidate_key: &str, exception: &Exception, failures: &mut Ve
 
 fn check_manifest(candidate_key: &str, candidate: &Candidate, failures: &mut Vec<String>) -> Result<String> {
     let manifest_path = Path::new(&candidate.manifest);
-    let text = fs::read_to_string(manifest_path)
-        .with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
+    let text =
+        fs::read_to_string(manifest_path).with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
     for section in MANIFEST_REQUIRED_SECTIONS {
         if !text.contains(section) {
             failures.push(format!("{candidate_key}: manifest missing `{section}`"));
@@ -244,9 +236,7 @@ fn check_transitive_deps(
     if is_runtime_shell(candidate) {
         return;
     }
-    let output = Command::new("cargo")
-        .args(["tree", "-p", package_name, "-e", "normal"])
-        .output();
+    let output = Command::new("cargo").args(["tree", "-p", package_name, "-e", "normal"]).output();
     let Ok(output) = output else {
         warnings.push(format!("{candidate_key}: could not run cargo tree"));
         return;
@@ -315,7 +305,8 @@ fn build_report(args: &Args) -> Result<Report> {
         check_direct_deps(candidate_key, candidate, &metadata, &forbidden, &mut failures, &mut warnings);
         check_transitive_deps(candidate_key, candidate, &forbidden, &mut failures, &mut warnings);
         if !candidate.forbidden_unless_feature.is_empty() && candidate.named_reusable_feature_sets.is_empty() {
-            failures.push(format!("{candidate_key}: feature-gated forbiddens listed but no named reusable feature sets"));
+            failures
+                .push(format!("{candidate_key}: feature-gated forbiddens listed but no named reusable feature sets"));
         }
     }
 

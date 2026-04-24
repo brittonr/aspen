@@ -1,3 +1,4 @@
+$ scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.json --output-markdown openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.md
 Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.

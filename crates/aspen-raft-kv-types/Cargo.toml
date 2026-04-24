@@ -1,0 +1,18 @@
+[package]
+name = "aspen-raft-kv-types"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Reusable OpenRaft KV app types for Aspen's Redb Raft KV stack"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+aspen-kv-types = { workspace = true }
+openraft = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = "2.0"
+
+[dev-dependencies]
+postcard = { workspace = true }
+serde_json = { workspace = true }
+static_assertions = { workspace = true }

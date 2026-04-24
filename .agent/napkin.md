@@ -34,6 +34,8 @@
 - I overclaimed OpenSpec gate status in a final response for `prepare-crate-extraction`: do not summarize gates as pass/warn unless the exact gate transcript in this turn supports it; if only tasks/preflight evidence is present, say only artifacts exist and note remaining blockers.
 - `.agent/` is ignored even though `.agent/napkin.md` is tracked. `git add .agent/napkin.md` can refuse with an ignored-path warning; use `git add -u .agent/napkin.md` or `git add -f .agent/napkin.md` when updating the tracked napkin.
 - The rust-scripts skill's older Fenix pin (`092bd45...` / Cargo 1.76 nightly) cannot compile Aspen 2024-edition cargo scripts with current crates like `clap_lex`; for repo-owned scripts in Aspen, prefer the repo-pinned `nix develop -c cargo -q -Zscript` shebang unless a newer explicit Fenix pin is chosen.
+- `nix run .#rustfmt` is repo-wide and can reformat dozens of unrelated files. For focused crate-extraction work, either avoid claiming Rust formatting unless using a targeted `rustfmt path/to/file.rs`, or immediately restore unrelated rustfmt churn before staging.
+- OpenSpec tasks gate may reject checked implementation tasks when broad proof tasks (`V1`/`V2`/`V5`) remain todo. For `prepare-crate-extraction`, keep I7/I8 code/evidence staged but leave those tasks unchecked until the full verification rails are complete, or narrow task text before checking.
 
 ## Tigerstyle scope (2026-04-21)
 

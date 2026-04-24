@@ -80,6 +80,8 @@ members = [
 
     # Tier 2: Consensus (+ vendored openraft/)
     "crates/aspen-raft-types",
+    "crates/aspen-raft-kv-types",
+    "crates/aspen-raft-kv",
     "crates/aspen-raft",
     "crates/aspen-raft-network",
     "crates/aspen-redb-storage",
@@ -270,6 +272,8 @@ aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
 aspen-raft-types = { path = "crates/aspen-raft-types" }
+aspen-raft-kv-types = { path = "crates/aspen-raft-kv-types" }
+aspen-raft-kv = { path = "crates/aspen-raft-kv" }
 aspen-raft-network = { path = "crates/aspen-raft-network" }
 aspen-raft = { path = "crates/aspen-raft" }
 aspen-redb-storage = { path = "crates/aspen-redb-storage" }

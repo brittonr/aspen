@@ -18,4 +18,4 @@
 
 ## Warnings
 
-- aspen_raft_kv: package does not exist yet; direct dependency check deferred
+- none

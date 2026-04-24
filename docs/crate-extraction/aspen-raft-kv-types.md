@@ -4,7 +4,7 @@
 
 - **Family**: Redb Raft KV
 - **Canonical class**: `protocol/wire`
-- **Canonical crate/path**: future `crates/aspen-raft-kv-types`, split from current `crates/aspen-raft-types`
+- **Canonical crate/path**: `crates/aspen-raft-kv-types`, split from current `crates/aspen-raft-types`
 - **Intended audience**: Rust projects that need OpenRaft app type configuration, membership metadata, app requests/responses, and storage error types for the reusable KV stack.
 - **Public API owner**: owner needed
 - **Readiness state**: `workspace-internal`
@@ -37,9 +37,10 @@ Vendored `openraft` 0.10 is a required public/trait dependency for this layer wh
 
 | Dependency | Decision | Reason |
 | --- | --- | --- |
-| current `aspen-constants` | keep or move | Shared limits are allowed if they do not pull app runtime. |
-| current `aspen-core` | remove/gate | Current dependency blocks neutral type-crate reuse. |
-| current `aspen-trust` | remove/gate | Trust is app/security integration, not default KV type surface. |
+| `aspen-kv-types` | keep | Provides reusable transaction result payloads without app runtime. |
+| current `aspen-constants` | not used in new default crate | Shared limits can move later if reusable resource policies need them. |
+| current `aspen-core` | removed from new default crate | Current legacy dependency blocks neutral type-crate reuse. |
+| current `aspen-trust` | removed from new default crate | Trust is app/security integration, not default KV type surface. |
 
 ### External dependencies
 
@@ -76,11 +77,11 @@ None allowed in default reusable features.
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
 | `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> openraft` | owner needed | OpenRaft trait/type exposure is the crate purpose and must be semver-documented. |
-| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> aspen-constants` | owner needed | Reusable resource limits may remain if the path does not pull app runtime. |
+| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> aspen-kv-types` | owner needed | KV transaction result payloads are the app-data contract for this reusable layer. |
 
 ## Verification rails
 
-- compile current `aspen-raft-types` baseline and future `aspen-raft-kv-types` default feature set
+- compile current `aspen-raft-types` baseline and `aspen-raft-kv-types` default feature set
 - dependency-boundary check proving no default path to root `aspen`, `aspen-core-shell`, trust, secrets, SQL, coordination, handler registries, binaries, or concrete iroh transport
 - positive downstream example using `aspen_raft_kv_types` directly
 - negative boundary check proving Aspen bootstrap/trust/secrets APIs are unavailable by default
@@ -88,4 +89,4 @@ None allowed in default reusable features.
 
 ## First-slice status
 
-Current status is `workspace-internal`. The baseline shows current `aspen-raft-types` still depends on `aspen-core` and `aspen-trust`; those dependencies must be removed, moved, or feature-gated before readiness.
+Current status is `workspace-internal`. The new `crates/aspen-raft-kv-types` default feature set compiles with OpenRaft and KV type dependencies only. Legacy `crates/aspen-raft-types` still depends on `aspen-core` and `aspen-trust` until compatibility migration completes.

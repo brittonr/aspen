@@ -12,9 +12,7 @@
     "aspen_redb_storage: exception `aspen-redb-storage -> redb` has unassigned owner",
     "aspen_redb_storage: exception `aspen-redb-storage -> openraft` has unassigned owner"
   ],
-  "warnings": [
-    "aspen_raft_kv: package does not exist yet; direct dependency check deferred"
-  ],
+  "warnings": [],
   "checked_candidates": [
     "aspen_kv_types",
     "aspen_raft_compat",

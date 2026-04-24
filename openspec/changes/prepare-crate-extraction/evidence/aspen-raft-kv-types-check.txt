@@ -1,0 +1,115 @@
+$ nix run .#rustfmt
+Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+Formatting Rust files...
+
+$ cargo check -p aspen-raft-kv-types
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+    Checking aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.38s
+
+$ cargo test -p aspen-raft-kv-types
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+   Compiling aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.13s
+     Running unittests src/lib.rs (target/debug/deps/aspen_raft_kv_types-ceae3387a6194842)
+
+running 6 tests
+test tests::member_info_records_transport_without_runtime_types ... ok
+test tests::kv_request_serializes_without_trust_or_sharding_payloads ... ok
+test tests::raft_type_config_is_constructible_at_type_level ... ok
+test tests::response_carries_lease_and_transaction_results ... ok
+test tests::storage_error_display_includes_context ... ok
+test tests::member_info_rejects_empty_endpoint ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_raft_kv_types
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+exit_code=0

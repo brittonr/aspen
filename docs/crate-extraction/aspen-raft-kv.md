@@ -4,7 +4,7 @@
 
 - **Family**: Redb Raft KV
 - **Canonical class**: `service library`
-- **Canonical crate/path**: future `crates/aspen-raft-kv`
+- **Canonical crate/path**: `crates/aspen-raft-kv`
 - **Intended audience**: Rust projects that want a reusable replicated KV node facade backed by OpenRaft and Redb without Aspen binary configuration or app bundles.
 - **Public API owner**: owner needed
 - **Readiness state**: `workspace-internal`
@@ -23,8 +23,8 @@
 
 | Feature set | Status | Purpose |
 | --- | --- | --- |
-| default | reusable default | Storage/facade contracts and in-process node orchestration without concrete iroh endpoint construction. |
-| redb | reusable default or named reusable feature | Use `aspen-redb-storage` backend. |
+| default | reusable default | Facade contracts, node configuration, membership metadata, resource limits, and operation trait re-exports without concrete iroh endpoint construction. |
+| redb | future named reusable feature | Use `aspen-redb-storage` backend after storage migration. |
 | iroh-adapter | adapter feature or external crate | Connect to `aspen-raft-network`; not required for storage/facade compile. |
 | testing/dev | dev-only | In-memory or deterministic fixtures. |
 | trust/secrets/sql/coordination/client-rpc/handler-registry | forbidden by default | Aspen app concerns live in integration crates or explicit opt-in features. |
@@ -41,7 +41,7 @@ OpenRaft consensus types and traits are allowed as documented public API or impl
 | --- | --- | --- |
 | `aspen-kv-types` | keep | Reusable KV command/response contract. |
 | `aspen-raft-kv-types` | keep | OpenRaft app type config and metadata. |
-| `aspen-redb-storage` | keep | Default reusable Redb backend. |
+| `aspen-redb-storage` | future named feature | Redb backend integration follows the storage migration task. |
 | `aspen-traits` or extracted trait subset | review | Operation traits may be reused, but transitive default leaks must be proven absent. |
 | `aspen-constants` / `aspen-time` | keep if leaf-only | Resource limits and explicit time boundaries. |
 | `aspen-cluster`, `aspen-core-shell`, `aspen-auth`, `aspen-client-api`, handlers | remove/gate | Aspen app integration belongs in compatibility shells. |
@@ -50,8 +50,8 @@ OpenRaft consensus types and traits are allowed as documented public API or impl
 
 | Dependency | Decision | Reason |
 | --- | --- | --- |
-| `openraft` | keep | Consensus engine. |
-| `tokio` | keep if facade is async | Runtime shell for consensus tasks; must be explicit. |
+| transitive `openraft` via `aspen-raft-kv-types` | keep documented | Consensus type config is re-exported by the facade. |
+| `tokio` | not required by default facade | Runtime shell for consensus tasks must be explicit when added. |
 | `tracing` / `metrics` | allowed | Observability facade if dependency is documented and optional where reasonable. |
 
 ### Binary/runtime dependencies
@@ -78,8 +78,8 @@ No binaries. Concrete iroh endpoints are not required for default storage/facade
 
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
-| `aspen-raft-kv` | default | `aspen-raft-kv -> openraft` | owner needed | Consensus engine and public trait boundary. |
-| `aspen-raft-kv` | default/redb | `aspen-raft-kv -> aspen-redb-storage` | owner needed | Reusable storage backend. |
+| `aspen-raft-kv` | default | `aspen-raft-kv -> aspen-raft-kv-types -> openraft` | owner needed | Consensus type config is re-exported as part of the facade contract. |
+| `aspen-raft-kv` | future redb | `aspen-raft-kv -> aspen-redb-storage` | owner needed | Reusable storage backend once the storage migration lands. |
 | `aspen-raft-kv` | adapter | `aspen-raft-kv -> aspen-raft-network` | owner needed | Explicit iroh adapter integration only. |
 
 ## Verification rails
@@ -94,4 +94,4 @@ No binaries. Concrete iroh endpoints are not required for default storage/facade
 
 ## First-slice status
 
-Current status is `workspace-internal`. This crate does not exist yet; creation must follow the layer split and OpenRaft boundary review before storage migration proceeds.
+Current status is `workspace-internal`. The new `crates/aspen-raft-kv` default feature set exposes reusable node configuration, membership, resource limits, and operation trait surfaces without Aspen binary config or concrete iroh endpoint construction. Redb-backed execution remains blocked on the storage migration task.
