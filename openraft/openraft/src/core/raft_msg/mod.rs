@@ -6,7 +6,7 @@ use crate::RaftState;
 use crate::RaftTypeConfig;
 use crate::base::BoxOnce;
 use crate::core::raft_msg::external_command::ExternalCommand;
-use crate::display_ext::DisplayBTreeMapDebugValueExt;
+use crate::display_ext::DisplayBtreeMapDebugValueExt;
 use crate::error::Infallible;
 use crate::error::InitializeError;
 use crate::error::LinearizableReadError;

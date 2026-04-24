@@ -8,8 +8,8 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use crate::RaftTypeConfig;
-use crate::display_ext::DisplayBTreeMapDebugValueExt;
-use crate::display_ext::DisplayBTreeSetExt;
+use crate::display_ext::DisplayBtreeMapDebugValueExt;
+use crate::display_ext::DisplayBtreeSetExt;
 use crate::display_ext::DisplaySlice;
 
 /// Defines various actions to change the membership, including adding or removing learners or
