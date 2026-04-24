@@ -33,7 +33,7 @@ impl<T: Default, I: Instant> Default for Leased<T, I> {
         Self {
             data: T::default(),
             last_update: None,
-            lease: Default::default(),
+            lease: Duration::ZERO,
             lease_enabled: true,
         }
     }
@@ -70,7 +70,7 @@ impl<T, I: Instant> Leased<T, I> {
         Self {
             data,
             last_update: None,
-            lease: Duration::default(),
+            lease: Duration::ZERO,
             lease_enabled: true,
         }
     }
@@ -139,7 +139,7 @@ impl<T, I: Instant> Leased<T, I> {
     /// Reset the lease duration so that the object expires at once.
     /// And until the next `update()`, [`Self::touch()`] won't update the lease.
     pub(crate) fn disable_lease(&mut self) {
-        self.lease = Duration::default();
+        self.lease = Duration::ZERO;
         self.lease_enabled = false;
     }
 
@@ -154,12 +154,21 @@ impl<T, I: Instant> Leased<T, I> {
 
     /// Update the last updated time.
     pub(crate) fn touch(&mut self, now: I, lease: Duration) {
+        let Some(last_update) = self.last_update else {
+            debug_assert!(false, "touch() requires a previous last_update timestamp");
+            self.last_update = Some(now);
+            if self.lease_enabled {
+                self.lease = lease;
+            }
+            return;
+        };
+
         debug_assert!(
-            Some(now) >= self.last_update,
+            now >= last_update,
             "expect now: {}, must >= self.utime: {}, {:?}",
             now.display(),
-            self.last_update.unwrap().display(),
-            self.last_update.unwrap() - now,
+            last_update.display(),
+            last_update - now,
         );
         self.last_update = Some(now);
         if self.lease_enabled {
