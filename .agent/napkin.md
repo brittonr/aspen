@@ -150,6 +150,7 @@ Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 - The corrected Aspen-only broad metric should parse the Tiger Style summary index crate column (`aspen_*`) instead of raw path matches; vendored `openraft` still prints bare `src/...` paths. Also remember that this parser excludes `/tests/` and `/examples/` paths only — `#[cfg(test)]` modules that live inside `src/` still count on the broad rail until you move to an explicit local slice.
 - The `bash -lc` wrappers used in autoresearch can still return exit code 1 after a successful cargo run because `/etc/bash_logout` references an unset `__ETC_BASHLOGOUT_SOURCED`. When the parsed metric and cargo output are sane, treat that shell-status artifact separately from the benchmark signal instead of discarding good runs.
 - Slice parsers must match only Tiger Style summary `F...` lines, not every `path:line` mention in the log. Arrow diagnostics and ordinary rustc warnings (for example a `dead_code` warning on the same file) can otherwise contaminate the metric and fake improvements/regressions.
+- In vendored openraft, many sync helper methods tagged with `#[tracing::instrument]` show up as broad `unbounded_loop` false positives on the attribute line. Replacing them with explicit entered spans is an honest broad-rail win without changing behavior.
 
 ## OpenSpec archive preflight gotcha (2026-04-21)
 

@@ -1,5 +1,5 @@
 use futures::TryStreamExt;
-use tracing_futures::Instrument;
+use tracing::Instrument;
 
 use crate::RaftLogReader;
 use crate::RaftSnapshotBuilder;
@@ -83,32 +83,26 @@ where
             if let Err(err) = res {
                 tracing::error!("{} while execute state machine command", err,);
 
-                let _ = self
+                let send_result = self
                     .resp_tx
                     .send(Notification::StateMachine {
                         command_result: CommandResult { result: Err(err) },
                     })
                     .await;
+                if let Err(send_err) = send_result {
+                    tracing::warn!(error = display(&send_err), "failed to report state machine worker error");
+                }
             }
         };
         C::spawn(fu.instrument(span))
     }
 
-    #[tracing::instrument(level = "debug", skip_all)]
     async fn worker_loop(&mut self) -> Result<(), StorageError<C>> {
-        loop {
-            let cmd = self.cmd_rx.recv().await;
-            let cmd = match cmd {
-                None => {
-                    tracing::info!("{}: rx closed, state machine worker quit", func_name!());
-                    return Ok(());
-                }
-                Some(x) => x,
-            };
+        async {
+            while let Some(cmd) = self.cmd_rx.recv().await {
+                tracing::debug!("{}: received command: {:?}", func_name!(), cmd);
 
-            tracing::debug!("{}: received command: {:?}", func_name!(), cmd);
-
-            match cmd {
+                match cmd {
                 Command::BuildSnapshot => {
                     tracing::info!("{}: build snapshot", func_name!());
 
@@ -143,7 +137,9 @@ where
 
                     let snapshot_data = self.state_machine.begin_receiving_snapshot().await.sto_write_snapshot(None)?;
 
-                    let _ = tx.send(snapshot_data);
+                    if tx.send(snapshot_data).is_err() {
+                        tracing::warn!("snapshot receiver dropped before begin_receiving_snapshot response");
+                    }
                     // No response to RaftCore
                 }
                 Command::Apply {
@@ -153,7 +149,10 @@ where
                 } => {
                     let resp = self.apply(first, last, client_resp_channels).await?;
                     let res = CommandResult::new(Ok(Response::Apply(resp)));
-                    self.resp_tx.send(Notification::sm(res)).await.ok();
+                    let send_result = self.resp_tx.send(Notification::sm(res)).await;
+                    if let Err(send_err) = send_result {
+                        tracing::warn!(error = display(&send_err), "failed to send apply response");
+                    }
                 }
                 Command::Func { func, input_sm_type } => {
                     tracing::debug!("{}: run user defined Func", func_name!());
@@ -170,18 +169,25 @@ where
                         }
                     };
                 }
-            };
+                };
+            }
+
+            tracing::info!("{}: rx closed, state machine worker quit", func_name!());
+            Ok(())
         }
+        .instrument(worker_span("worker_loop"))
+        .await
     }
-    #[tracing::instrument(level = "debug", skip_all)]
+
     async fn apply(
         &mut self,
         first: LogIdOf<C>,
         last: LogIdOf<C>,
         client_resp_channels: Vec<(u64, CoreResponder<C>)>,
     ) -> Result<ApplyResult<C>, StorageError<C>> {
-        let since = first.index();
-        let end = last.index() + 1;
+        async {
+            let since = first.index();
+            let end = last.index().saturating_add(1);
 
         #[cfg(debug_assertions)]
         let (got_last_index, last_apply) = {
@@ -221,16 +227,19 @@ where
 
         #[cfg(debug_assertions)]
         {
-            assert_eq!(end - 1, got_last_index.load(std::sync::atomic::Ordering::Relaxed));
+            assert_eq!(end.saturating_sub(1), got_last_index.load(std::sync::atomic::Ordering::Relaxed));
         }
 
-        let resp = ApplyResult {
-            since,
-            end,
-            last_applied: last,
-        };
+            let resp = ApplyResult {
+                since,
+                end,
+                last_applied: last,
+            };
 
-        Ok(resp)
+            Ok(resp)
+        }
+        .instrument(worker_span("apply"))
+        .await
     }
 
     /// Build a snapshot by requesting a builder from the state machine.
@@ -245,9 +254,9 @@ where
     /// - hold a consistent view of the state machine that won't be affected by further writes such
     ///   as applying a log entry,
     /// - or it must be able to acquire a lock that prevents any write operations.
-    #[tracing::instrument(level = "info", skip_all)]
     async fn build_snapshot(&mut self, resp_tx: MpscSenderOf<C, Notification<C>>) {
-        // TODO: need to be abortable?
+        async {
+            // TODO: need to be abortable?
         // use futures::future::abortable;
         // let (fu, abort_handle) = abortable(async move { builder.build_snapshot().await });
 
@@ -256,27 +265,45 @@ where
         let Some(mut builder) = builder else {
             tracing::info!("{}: snapshot building is refused by state machine", func_name!());
             let res = CommandResult::new(Ok(Response::BuildSnapshotDone(None)));
-            resp_tx.send(Notification::sm(res)).await.ok();
+            let send_result = resp_tx.send(Notification::sm(res)).await;
+            if let Err(send_err) = send_result {
+                tracing::warn!(error = display(&send_err), "failed to report deferred snapshot build");
+            }
             return;
         };
 
-        let _handle = C::spawn(async move {
-            let res = builder.build_snapshot().await.sto_write_snapshot(None);
-            let res = res.map(|snap| Response::BuildSnapshotDone(Some(snap.meta)));
-            let cmd_res = CommandResult::new(res);
-            resp_tx.send(Notification::sm(cmd_res)).await.ok();
-        });
-        tracing::info!("{} returning; spawned building snapshot task", func_name!());
+            let _handle = C::spawn(async move {
+                let res = builder.build_snapshot().await.sto_write_snapshot(None);
+                let res = res.map(|snap| Response::BuildSnapshotDone(Some(snap.meta)));
+                let cmd_res = CommandResult::new(res);
+                let send_result = resp_tx.send(Notification::sm(cmd_res)).await;
+                if let Err(send_err) = send_result {
+                    tracing::warn!(error = display(&send_err), "failed to send snapshot build result");
+                }
+            });
+            tracing::info!("{} returning; spawned building snapshot task", func_name!());
+        }
+        .instrument(worker_span("build_snapshot"))
+        .await
     }
 
-    #[tracing::instrument(level = "info", skip_all)]
     async fn get_snapshot(&mut self, tx: OneshotSenderOf<C, Option<Snapshot<C>>>) -> Result<(), StorageError<C>> {
-        tracing::info!("{}", func_name!());
+        async {
+            tracing::info!("{}", func_name!());
 
-        let snapshot = self.state_machine.get_current_snapshot().await.sto_read_snapshot(None)?;
+            let snapshot = self.state_machine.get_current_snapshot().await.sto_read_snapshot(None)?;
 
-        tracing::info!("sending back snapshot: meta: {}", snapshot.as_ref().map(|s| &s.meta).display());
-        let _ = tx.send(snapshot);
-        Ok(())
+            tracing::info!("sending back snapshot: meta: {}", snapshot.as_ref().map(|s| &s.meta).display());
+            if tx.send(snapshot).is_err() {
+                tracing::warn!("snapshot receiver dropped before get_snapshot response");
+            }
+            Ok(())
+        }
+        .instrument(worker_span("get_snapshot"))
+        .await
     }
+}
+
+fn worker_span(operation: &'static str) -> tracing::Span {
+    tracing::span!(tracing::Level::DEBUG, "state_machine_worker", operation = operation)
 }
