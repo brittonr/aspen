@@ -454,6 +454,9 @@ where
     }
 
     pub(crate) fn send(self) {
-        let _ = self.tx.send(self.value);
+        let send_result = self.tx.send(self.value);
+        if let Err(unsent_value) = send_result {
+            tracing::debug!(response = debug(&unsent_value), "response receiver dropped before send");
+        }
     }
 }
