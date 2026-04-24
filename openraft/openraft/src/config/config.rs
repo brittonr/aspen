@@ -461,9 +461,11 @@ impl Config {
 }
 
 fn channel_capacity_to_usize(capacity_count_opt: Option<u64>) -> usize {
-    let requested_capacity_count = capacity_count_opt.unwrap_or(DEFAULT_CHANNEL_CAPACITY);
-    debug_assert!(requested_capacity_count > 0, "channel capacity should be positive");
-    match usize::try_from(requested_capacity_count) {
+    debug_assert!(
+        capacity_count_opt.unwrap_or(DEFAULT_CHANNEL_CAPACITY) > 0,
+        "channel capacity should be positive"
+    );
+    match usize::try_from(capacity_count_opt.unwrap_or(DEFAULT_CHANNEL_CAPACITY)) {
         Ok(channel_capacity_count) => channel_capacity_count,
         Err(_) => usize::MAX,
     }
