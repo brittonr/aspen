@@ -1,0 +1,3 @@
+$ openspec validate prepare-crate-extraction
+Change 'prepare-crate-extraction' is valid
+exit_code=0
