@@ -83,6 +83,8 @@ mod serde_impl {
     impl<I> Serialize for SerdeInstant<I>
     where I: Instant
     {
+        #[allow(unknown_lints)]
+        #[allow(ambient_clock, reason = "SerdeInstant serialization is the wall-clock boundary between Instant and SystemTime")]
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: Serializer {
             // Convert Instant to SystemTime
@@ -110,6 +112,8 @@ mod serde_impl {
     impl<'de, I> Deserialize<'de> for SerdeInstant<I>
     where I: Instant
     {
+        #[allow(unknown_lints)]
+        #[allow(ambient_clock, reason = "SerdeInstant deserialization is the wall-clock boundary between SystemTime and Instant")]
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where D: Deserializer<'de> {
             struct InstantVisitor<II: Instant>(PhantomData<II>);
@@ -131,15 +135,29 @@ mod serde_impl {
                     let sys_now = SystemTime::now();
                     let now = II::now();
                     let instant = if system_time > sys_now {
-                        now + (system_time.duration_since(sys_now).unwrap())
+                        let delta = match system_time.duration_since(sys_now) {
+                            Ok(duration) => duration,
+                            Err(_) => {
+                                debug_assert!(false, "future SystemTime branch must have non-negative delta");
+                                std::time::Duration::ZERO
+                            }
+                        };
+                        now + delta
                     } else {
-                        now - (sys_now.duration_since(system_time).unwrap())
+                        let delta = match sys_now.duration_since(system_time) {
+                            Ok(duration) => duration,
+                            Err(_) => {
+                                debug_assert!(false, "past SystemTime branch must have non-negative delta");
+                                std::time::Duration::ZERO
+                            }
+                        };
+                        now - delta
                     };
                     Ok(SerdeInstant { inner: instant })
                 }
             }
 
-            deserializer.deserialize_u64(InstantVisitor::<I>(Default::default()))
+            deserializer.deserialize_u64(InstantVisitor::<I>(PhantomData))
         }
     }
 
