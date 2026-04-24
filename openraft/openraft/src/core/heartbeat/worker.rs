@@ -90,8 +90,7 @@ where
                 continue;
             };
 
-            let heartbeat_timeout_duration = Duration::from_millis(self.config.heartbeat_interval_ms);
-            let option = RPCOption::new(heartbeat_timeout_duration);
+            let option = RPCOption::new(Duration::from_millis(self.config.heartbeat_interval_ms));
 
             let payload = AppendEntriesRequest {
                 vote: heartbeat.session_id.leader_vote.clone().into_vote(),
@@ -105,7 +104,11 @@ where
                 entries: vec![],
             };
 
-            let res = C::timeout(heartbeat_timeout_duration, self.network.append_entries(payload, option)).await;
+            let res = C::timeout(
+                Duration::from_millis(self.config.heartbeat_interval_ms),
+                self.network.append_entries(payload, option),
+            )
+            .await;
             tracing::debug!("{} sent a heartbeat: {}, result: {:?}", self, heartbeat, res);
 
             match res {
