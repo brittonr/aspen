@@ -2,6 +2,13 @@
 #
 # This file configures build settings for the workspace.
 
+[build]
+# Aspen's dev shell enables incremental compilation. The global Home Manager
+# sccache wrapper rejects incremental rustc invocations, which breaks
+# `cargo clean` and other cargo commands unless every call manually clears the
+# wrapper. Override it locally so repo commands work out of the box.
+rustc-wrapper = ""
+
 # Allow multiple definitions of zstd symbols when linking.
 # This is a workaround for duplicate symbol errors when both zstd-seekable
 # (used by libpijul) and zstd-sys (used by aspen-jobs) statically link
