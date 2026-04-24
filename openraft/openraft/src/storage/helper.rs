@@ -4,6 +4,9 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use openraft_macros::since;
+use tracing::Instrument;
+use tracing::Level;
+use tracing::Span;
 use validit::Valid;
 
 use crate::EffectiveMembership;
@@ -213,7 +216,7 @@ where
             //       the lease based linearizable read consistency will be broken.
             //       When lease based read is added, the restarted node must sleep for a while,
             //       before serving.
-            vote: Leased::new(now, Duration::default(), vote),
+            vote: Leased::new(now, Duration::ZERO, vote),
             purged_next: last_purged_log_id.next_index(),
             log_ids: log_id_list,
             membership_state: mem_state,
@@ -263,7 +266,7 @@ where
     /// Read log entries from [`RaftLogReader`] in chunks and apply them to the state machine.
     pub(crate) async fn reapply_committed(&mut self, mut start: u64, end: u64) -> Result<(), StorageError<C>> {
         let chunk_entry_count = REAPPLY_CHUNK_ENTRY_COUNT;
-        let max_chunk_count = bounded_chunk_count(start, end, chunk_entry_count);
+        let max_chunk_count = ChunkCountBounds::new(start, end, chunk_entry_count).chunk_count();
 
         tracing::info!(
             "re-apply log [{}..{}) in {} item chunks to state machine",
@@ -368,46 +371,49 @@ where
     /// This method returns at most membership logs with the greatest log index which is
     /// `>=since_index`. If no such membership log is found, it returns `None`, e.g., when logs
     /// are cleaned after being applied.
-    #[tracing::instrument(level = "trace", skip_all)]
     pub async fn last_membership_in_log(
         &mut self,
         since_index: u64,
     ) -> Result<Vec<StoredMembership<C>>, StorageError<C>> {
-        let st = self.log_store.get_log_state().await.sto_read_logs()?;
+        async move {
+            let st = self.log_store.get_log_state().await.sto_read_logs()?;
 
-        let mut end = st.last_log_id.next_index();
+            let mut end = st.last_log_id.next_index();
 
-        tracing::info!("load membership from log: [{}..{})", since_index, end);
+            tracing::info!("load membership from log: [{}..{})", since_index, end);
 
-        let start = std::cmp::max(st.last_purged_log_id.next_index(), since_index);
-        let step_count = MEMBERSHIP_SEARCH_STEP_COUNT;
-        let max_step_count = bounded_chunk_count(start, end, step_count);
+            let start = std::cmp::max(st.last_purged_log_id.next_index(), since_index);
+            let step_count = MEMBERSHIP_SEARCH_STEP_COUNT;
+            let max_step_count = ChunkCountBounds::new(start, end, step_count).chunk_count();
 
-        let mut res = Vec::with_capacity(MAX_MEMBERSHIP_RESULTS);
-        let mut log_reader = self.log_store.get_log_reader().await;
+            let mut res = Vec::with_capacity(MAX_MEMBERSHIP_RESULTS);
+            let mut log_reader = self.log_store.get_log_reader().await;
 
-        for _step_index in 0..max_step_count {
-            if start >= end {
-                break;
-            }
+            for _step_index in 0..max_step_count {
+                if start >= end {
+                    break;
+                }
 
-            let step_start = std::cmp::max(start, end.saturating_sub(step_count));
-            let entries = log_reader.try_get_log_entries(step_start..end).await.sto_read_logs()?;
+                let step_start = std::cmp::max(start, end.saturating_sub(step_count));
+                let entries = log_reader.try_get_log_entries(step_start..end).await.sto_read_logs()?;
 
-            for ent in entries.iter().rev() {
-                if let Some(mem) = ent.get_membership() {
-                    let em = StoredMembership::new(Some(ent.log_id()), mem);
-                    res.insert(0, em);
-                    if res.len() == MAX_MEMBERSHIP_RESULTS {
-                        return Ok(res);
+                for ent in entries.iter().rev() {
+                    if let Some(mem) = ent.get_membership() {
+                        let em = StoredMembership::new(Some(ent.log_id()), mem);
+                        res.insert(0, em);
+                        if res.len() == MAX_MEMBERSHIP_RESULTS {
+                            return Ok(res);
+                        }
                     }
                 }
+
+                end = end.saturating_sub(step_count);
             }
 
-            end = end.saturating_sub(step_count);
+            Ok(res)
         }
-
-        Ok(res)
+        .instrument(tracing::span!(parent: &Span::current(), Level::TRACE, "last_membership_in_log"))
+        .await
     }
 
     // TODO: store purged: Option<LogId> separately.
@@ -480,12 +486,34 @@ where
     }
 }
 
-fn bounded_chunk_count(start: u64, end: u64, step_count: u64) -> usize {
-    let span = end.saturating_sub(start);
-    let step_count = step_count.max(1);
-    let chunk_count = span.saturating_add(step_count.saturating_sub(1)) / step_count;
-    match usize::try_from(chunk_count) {
-        Ok(chunk_count) => chunk_count,
-        Err(_) => usize::MAX,
+struct ChunkCountBounds {
+    start_log_index: u64,
+    end_log_index: u64,
+    step_count: u64,
+}
+
+impl ChunkCountBounds {
+    fn new(start_log_index: u64, end_log_index: u64, step_count: u64) -> Self {
+        Self {
+            start_log_index,
+            end_log_index,
+            step_count,
+        }
+    }
+
+    fn chunk_count(self) -> usize {
+        let span = self.end_log_index.saturating_sub(self.start_log_index);
+        if self.step_count == 0 {
+            return match usize::try_from(span) {
+                Ok(chunk_count) => chunk_count,
+                Err(_) => usize::MAX,
+            };
+        }
+
+        let chunk_count = span.saturating_add(self.step_count.saturating_sub(1)) / self.step_count;
+        match usize::try_from(chunk_count) {
+            Ok(chunk_count) => chunk_count,
+            Err(_) => usize::MAX,
+        }
     }
 }
