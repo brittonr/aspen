@@ -14,6 +14,7 @@ use crate::type_config::TypeConfigExt;
 use crate::type_config::alias::LogIdOf;
 use crate::type_config::alias::VoteOf;
 use crate::type_config::alias::WatchReceiverOf;
+use tracing::Instrument;
 
 /// Error variants related to waiting for metrics conditions.
 #[derive(Debug, thiserror::Error)]
@@ -40,66 +41,72 @@ impl<C> Wait<C>
 where C: RaftTypeConfig
 {
     /// Wait for metrics to satisfy some condition or timeout.
-    #[tracing::instrument(level = "trace", skip(self, func), fields(msg=%msg.to_string()))]
     pub async fn metrics<T>(&self, func: T, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError>
     where T: Fn(&RaftMetrics<C>) -> bool + OptionalSend {
-        let timeout_at = C::now() + self.timeout;
+        let msg_text = msg.to_string();
+        let span = wait_trace_span("metrics", &msg_text);
 
-        let mut rx = self.rx.clone();
-        loop {
-            let latest = rx.borrow_watched().clone();
+        async move {
+            let timeout_deadline = C::now() + self.timeout;
+            let mut rx = self.rx.clone();
+            let mut latest = rx.borrow_watched().clone();
 
-            tracing::debug!("id={} wait {:} latest: {}", latest.id, msg.to_string(), latest);
+            while C::now() < timeout_deadline {
+                latest = rx.borrow_watched().clone();
+                tracing::debug!("id={} wait {:} latest: {}", latest.id, msg_text, latest);
 
-            if func(&latest) {
-                tracing::debug!("id={} done wait {:} latest: {}", latest.id, msg.to_string(), latest);
-                return Ok(latest);
-            }
-
-            let now = C::now();
-            if now >= timeout_at {
-                return Err(WaitError::Timeout(self.timeout, format!("{} latest: {}", msg.to_string(), latest)));
-            }
-
-            let sleep_time = timeout_at - now;
-            tracing::debug!(?sleep_time, "wait timeout");
-            let delay = C::sleep(sleep_time);
-
-            futures::select_biased! {
-                _ = delay.fuse() => {
-                    tracing::debug!( "id={} timeout wait {:} latest: {}", latest.id, msg.to_string(), latest );
-                    return Err(WaitError::Timeout(self.timeout, format!("{} latest: {}", msg.to_string(), latest)));
+                if func(&latest) {
+                    tracing::debug!("id={} done wait {:} latest: {}", latest.id, msg_text, latest);
+                    return Ok(latest);
                 }
-                changed = rx.changed().fuse() => {
-                    match changed {
-                        Ok(_) => {
-                            // metrics changed, continue the waiting loop
-                        },
-                        Err(err) => {
-                            tracing::debug!(
-                                "id={} error: {:?}; wait {:} latest: {:?}",
-                                latest.id,
-                                err,
-                                msg.to_string(),
-                                latest
-                            );
 
-                            return Err(WaitError::ShuttingDown);
+                let now = C::now();
+                if now >= timeout_deadline {
+                    break;
+                }
+
+                let wait_sleep_duration = timeout_deadline - now;
+                tracing::debug!(?wait_sleep_duration, "wait timeout");
+                let delay = C::sleep(wait_sleep_duration);
+
+                futures::select_biased! {
+                    _ = delay.fuse() => {
+                        tracing::debug!("id={} timeout wait {:} latest: {}", latest.id, msg_text, latest);
+                        return Err(WaitError::Timeout(self.timeout, format!("{} latest: {}", msg_text, latest)));
+                    }
+                    changed = rx.changed().fuse() => {
+                        match changed {
+                            Ok(_) => {
+                                // metrics changed, continue the waiting loop
+                            },
+                            Err(err) => {
+                                tracing::debug!(
+                                    "id={} error: {:?}; wait {:} latest: {:?}",
+                                    latest.id,
+                                    err,
+                                    msg_text,
+                                    latest
+                                );
+
+                                return Err(WaitError::ShuttingDown);
+                            }
                         }
                     }
                 }
             }
+
+            Err(WaitError::Timeout(self.timeout, format!("{} latest: {}", msg_text, latest)))
         }
+        .instrument(span)
+        .await
     }
 
     /// Wait for `vote` to become `want` or timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn vote(&self, want: VoteOf<C>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.eq(Metric::Vote(want), msg).await
     }
 
     /// Wait for `current_leader` to become `Some(leader_id)` until timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn current_leader(&self, leader_id: C::NodeId, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.metrics(
             |m| m.current_leader.as_ref() == Some(&leader_id),
@@ -110,7 +117,6 @@ where C: RaftTypeConfig
 
     /// Wait until applied exactly `want_log`(inclusive) logs or timeout.
     #[deprecated(since = "0.9.0", note = "use `log_index()` and `applied_index()` instead")]
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn log(&self, want_log_index: Option<u64>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.eq(Metric::LastLogIndex(want_log_index), msg.to_string()).await?;
         self.eq(Metric::AppliedIndex(want_log_index), msg.to_string()).await
@@ -121,20 +127,17 @@ where C: RaftTypeConfig
         since = "0.9.0",
         note = "use `log_index_at_least()` and `applied_index_at_least()` instead"
     )]
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn log_at_least(&self, want_log: Option<u64>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.ge(Metric::LastLogIndex(want_log), msg.to_string()).await?;
         self.ge(Metric::AppliedIndex(want_log), msg.to_string()).await
     }
 
     /// Block until the last log index becomes exactly `index` (inclusive) or timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn log_index(&self, index: Option<u64>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.eq(Metric::LastLogIndex(index), msg).await
     }
 
     /// Block until the last log index becomes at least `index` (inclusive) or timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn log_index_at_least(
         &self,
         index: Option<u64>,
@@ -144,14 +147,12 @@ where C: RaftTypeConfig
     }
 
     /// Block until the applied index becomes exactly `index` (inclusive) or timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn applied_index(&self, index: Option<u64>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.eq(Metric::AppliedIndex(index), msg).await
     }
 
     /// Block until the last applied log index become at least `index` (inclusive) or timeout.
     /// Note that this also implies `last_log_id >= index`.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn applied_index_at_least(
         &self,
         index: Option<u64>,
@@ -161,7 +162,6 @@ where C: RaftTypeConfig
     }
 
     /// Wait for `state` to become `want_state` or timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn state(&self, want_state: ServerState, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.metrics(|m| m.state == want_state, &format!("{} .state == {:?}", msg.to_string(), want_state))
             .await
@@ -169,7 +169,6 @@ where C: RaftTypeConfig
 
     /// Wait for `membership` to become the expected node id set or timeout.
     #[deprecated(since = "0.9.0", note = "use `voter_ids()` instead")]
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn members(
         &self,
         want_members: BTreeSet<C::NodeId>,
@@ -186,7 +185,6 @@ where C: RaftTypeConfig
     }
 
     /// Block until membership contains exact the expected `voter_ids` or timeout.
-    #[tracing::instrument(level = "trace", skip_all, fields(msg=msg.to_string().as_str()))]
     pub async fn voter_ids(
         &self,
         voter_ids: impl IntoIterator<Item = C::NodeId>,
@@ -207,7 +205,6 @@ where C: RaftTypeConfig
     }
 
     /// Wait for `snapshot` to become `snapshot_last_log_id` or timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn snapshot(
         &self,
         snapshot_last_log_id: LogIdOf<C>,
@@ -217,7 +214,6 @@ where C: RaftTypeConfig
     }
 
     /// Wait for `purged` to become `want` or timeout.
-    #[tracing::instrument(level = "trace", skip(self), fields(msg=msg.to_string().as_str()))]
     pub async fn purged(&self, want: Option<LogIdOf<C>>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
         self.eq(Metric::Purged(want), msg).await
     }
@@ -243,15 +239,26 @@ where C: RaftTypeConfig
     }
 
     /// Block until a metric satisfies the specified condition or timeout.
-    #[tracing::instrument(level = "trace", skip_all, fields(cond=cond.to_string(), msg=msg.to_string().as_str()))]
     pub(crate) async fn until(&self, cond: Condition<C>, msg: impl ToString) -> Result<RaftMetrics<C>, WaitError> {
-        self.metrics(
-            |raft_metrics| match &cond {
-                Condition::GE(expect) => raft_metrics >= expect,
-                Condition::EQ(expect) => raft_metrics == expect,
-            },
-            &format!("{} .{}", msg.to_string(), cond),
-        )
+        let msg_text = msg.to_string();
+        let cond_text = cond.to_string();
+        let span = wait_trace_span("until", &msg_text);
+
+        async move {
+            self.metrics(
+                |raft_metrics| match &cond {
+                    Condition::GE(expect) => raft_metrics >= expect,
+                    Condition::EQ(expect) => raft_metrics == expect,
+                },
+                format!("{} .{}", msg_text, cond_text),
+            )
+            .await
+        }
+        .instrument(span)
         .await
     }
+}
+
+fn wait_trace_span(operation: &'static str, msg: &str) -> tracing::Span {
+    tracing::span!(tracing::Level::TRACE, "wait", operation = operation, msg = %msg)
 }
