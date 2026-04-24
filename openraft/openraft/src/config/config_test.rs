@@ -42,7 +42,7 @@ fn test_invalid_election_timeout_config_produces_expected_error() {
 
     let res = config.validate();
     let err = res.unwrap_err();
-    assert_eq!(err, ConfigError::ElectionTimeoutLTHeartBeat {
+    assert_eq!(err, ConfigError::ElectionTimeoutLtHeartbeat {
         election_timeout_min_ms: 1000,
         heartbeat_interval_ms: 1500
     });

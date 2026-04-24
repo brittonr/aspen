@@ -446,7 +446,7 @@ impl Config {
         }
 
         if self.election_timeout_min_ms <= self.heartbeat_interval_ms {
-            return Err(ConfigError::ElectionTimeoutLTHeartBeat {
+            return Err(ConfigError::ElectionTimeoutLtHeartbeat {
                 election_timeout_min_ms: self.election_timeout_min_ms,
                 heartbeat_interval_ms: self.heartbeat_interval_ms,
             });

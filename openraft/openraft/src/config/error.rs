@@ -28,7 +28,7 @@ pub enum ConfigError {
 
     /// Election timeout must be greater than heartbeat interval.
     #[error("election_timeout_min_ms({election_timeout_min_ms}) must be > heartbeat_interval_ms({heartbeat_interval_ms})")]
-    ElectionTimeoutLTHeartBeat {
+    ElectionTimeoutLtHeartbeat {
         /// Minimum election timeout value.
         election_timeout_min_ms: u64,
         /// Heartbeat interval value.
