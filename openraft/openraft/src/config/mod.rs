@@ -35,6 +35,7 @@
 //!
 //! See [`Config`] for all available options and their defaults.
 
+// Keep the inner module named `config` so the public re-export stays `crate::config::Config`.
 #[allow(clippy::module_inception)]
 mod config;
 mod error;

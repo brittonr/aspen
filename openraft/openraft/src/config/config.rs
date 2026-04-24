@@ -17,6 +17,12 @@ use crate::RaftTypeConfig;
 use crate::config::error::ConfigError;
 use crate::raft_state::LogStateReader;
 
+const SNAPSHOT_POLICY_NEVER: &str = "never";
+const SNAPSHOT_POLICY_SINCE_LAST: &str = "since_last";
+const SNAPSHOT_POLICY_SYNTAX: &str = "never|since_last:<num>";
+const SNAPSHOT_POLICY_PART_COUNT: usize = 2;
+const DEFAULT_CHANNEL_CAPACITY: u64 = 65_536;
+
 /// Log compaction and snapshot policy.
 ///
 /// This governs when periodic snapshots will be taken, as well as the conditions which
@@ -52,7 +58,8 @@ impl SnapshotPolicy {
                 let committed_next = state.committed().next_index();
                 let base_log_id = last_tried_at.max(state.snapshot_last_log_id());
 
-                if committed_next >= base_log_id.next_index() + threshold {
+                let required_next_index = base_log_id.next_index().saturating_add(*threshold);
+                if committed_next >= required_next_index {
                     state.committed().cloned()
                 } else {
                     None
@@ -74,30 +81,44 @@ fn parse_bytes_with_unit(src: &str) -> Result<u64, ConfigError> {
 }
 
 fn parse_snapshot_policy(src: &str) -> Result<SnapshotPolicy, ConfigError> {
-    if src == "never" {
+    if src == SNAPSHOT_POLICY_NEVER {
         return Ok(SnapshotPolicy::Never);
     }
 
-    let elts = src.split(':').collect::<Vec<_>>();
-    if elts.len() != 2 {
-        return Err(ConfigError::InvalidSnapshotPolicy {
-            syntax: "never|since_last:<num>".to_string(),
-            invalid: src.to_string(),
-        });
+    let (policy_name, value) = split_snapshot_policy(src)?;
+    if policy_name != SNAPSHOT_POLICY_SINCE_LAST {
+        return Err(invalid_snapshot_policy_error(src));
     }
 
-    if elts[0] != "since_last" {
-        return Err(ConfigError::InvalidSnapshotPolicy {
-            syntax: "never|since_last:<num>".to_string(),
-            invalid: src.to_string(),
-        });
+    parse_logs_since_last(src, value)
+}
+
+fn split_snapshot_policy<'a>(src: &'a str) -> Result<(&'a str, &'a str), ConfigError> {
+    let parts = src.split(':').collect::<Vec<_>>();
+    if parts.len() != SNAPSHOT_POLICY_PART_COUNT {
+        return Err(invalid_snapshot_policy_error(src));
     }
 
-    let n_logs = elts[1].parse::<u64>().map_err(|e| ConfigError::InvalidNumber {
+    let policy_name = parts[0];
+    let value = parts[1];
+    debug_assert!(!policy_name.is_empty(), "snapshot policy name should not be empty");
+    debug_assert!(!value.is_empty(), "snapshot policy value should not be empty");
+    Ok((policy_name, value))
+}
+
+fn parse_logs_since_last(src: &str, value: &str) -> Result<SnapshotPolicy, ConfigError> {
+    let log_count = value.parse::<u64>().map_err(|e| ConfigError::InvalidNumber {
         invalid: src.to_string(),
         reason: e.to_string(),
     })?;
-    Ok(SnapshotPolicy::LogsSinceLast(n_logs))
+    Ok(SnapshotPolicy::LogsSinceLast(log_count))
+}
+
+fn invalid_snapshot_policy_error(src: &str) -> ConfigError {
+    ConfigError::InvalidSnapshotPolicy {
+        syntax: SNAPSHOT_POLICY_SYNTAX.to_string(),
+        invalid: src.to_string(),
+    }
 }
 
 /// Runtime configuration for a Raft node.
@@ -368,14 +389,14 @@ impl Config {
     ///
     /// Defaults to 65536 if not specified.
     pub(crate) fn api_channel_size(&self) -> usize {
-        self.api_channel_size.unwrap_or(65536) as usize
+        channel_capacity_to_usize(self.api_channel_size)
     }
 
     /// Get the notification channel size for bounded MPSC channel.
     ///
     /// Defaults to 65536 if not specified.
     pub(crate) fn notification_channel_size(&self) -> usize {
-        self.notification_channel_size.unwrap_or(65536) as usize
+        channel_capacity_to_usize(self.notification_channel_size)
     }
 
     /// Build a `Config` instance from a series of command line arguments.
@@ -423,5 +444,14 @@ impl Config {
         }
 
         Ok(self)
+    }
+}
+
+fn channel_capacity_to_usize(capacity: Option<u64>) -> usize {
+    let requested_capacity = capacity.unwrap_or(DEFAULT_CHANNEL_CAPACITY);
+    debug_assert!(requested_capacity > 0, "channel capacity should be positive");
+    match usize::try_from(requested_capacity) {
+        Ok(capacity_usize) => capacity_usize,
+        Err(_) => usize::MAX,
     }
 }
