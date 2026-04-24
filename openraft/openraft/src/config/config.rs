@@ -268,7 +268,7 @@ pub struct Config {
     /// and a leader won't send heartbeat.
     ///
     /// **Critical for elections**: When `false`, followers cannot detect leader failures and will
-    /// never trigger elections, even with `enable_elect = true`. The tick mechanism provides the
+    /// never trigger elections, even with `is_election_enabled = true`. The tick mechanism provides the
     /// timing infrastructure that allows followers to detect when `election_timeout_max` has passed
     /// without receiving heartbeats from the leader.
     ///
@@ -280,24 +280,24 @@ pub struct Config {
     /// - `--enable-tick=false`: false
     // clap 4 requires `num_args = 0..=1`, or it complains about missing arg error
     // https://github.com/clap-rs/clap/discussions/4374
-    #[clap(long,
-           default_value_t = true,
+    #[clap(long = "enable-tick",
+           default_value = "true",
            action = clap::ArgAction::Set,
            num_args = 0..=1,
            default_missing_value = "true"
     )]
-    pub enable_tick: bool,
+    pub is_tick_enabled: bool,
 
     /// Whether a leader sends heartbeat logs to following nodes, i.e., followers and learners.
     // clap 4 requires `num_args = 0..=1`, or it complains about missing arg error
     // https://github.com/clap-rs/clap/discussions/4374
-    #[clap(long,
-           default_value_t = true,
+    #[clap(long = "enable-heartbeat",
+           default_value = "true",
            action = clap::ArgAction::Set,
            num_args = 0..=1,
            default_missing_value = "true"
     )]
-    pub enable_heartbeat: bool,
+    pub is_heartbeat_enabled: bool,
 
     /// Whether a follower will enter candidate state if it does not receive any messages from the
     /// leader for a while.
@@ -310,17 +310,17 @@ pub struct Config {
     /// When disabled (`false`), followers will never initiate elections, even if the leader fails.
     /// This setting is primarily for testing or building custom consensus systems.
     ///
-    /// **Important**: This setting only works when `enable_tick` is also `true`. Elections require
+    /// **Important**: This setting only works when `is_tick_enabled` is also `true`. Elections require
     /// time-based events to detect leader absence.
     // clap 4 requires `num_args = 0..=1`, or it complains about missing arg error
     // https://github.com/clap-rs/clap/discussions/4374
-    #[clap(long,
-           default_value_t = true,
+    #[clap(long = "enable-elect",
+           default_value = "true",
            action = clap::ArgAction::Set,
            num_args = 0..=1,
            default_missing_value = "true"
     )]
-    pub enable_elect: bool,
+    pub is_election_enabled: bool,
 
     /// Whether to allow to reset the replication progress to `None`, when the
     /// follower's log is found reverted to an early state. **Do not enable this in production**
@@ -345,15 +345,15 @@ pub struct Config {
 
 /// Updatable config for a raft runtime.
 pub(crate) struct RuntimeConfig {
-    pub(crate) enable_heartbeat: AtomicBool,
-    pub(crate) enable_elect: AtomicBool,
+    pub(crate) is_heartbeat_enabled: AtomicBool,
+    pub(crate) is_election_enabled: AtomicBool,
 }
 
 impl RuntimeConfig {
     pub(crate) fn new(config: &Config) -> Self {
         Self {
-            enable_heartbeat: AtomicBool::from(config.enable_heartbeat),
-            enable_elect: AtomicBool::from(config.enable_elect),
+            is_heartbeat_enabled: AtomicBool::from(config.is_heartbeat_enabled),
+            is_election_enabled: AtomicBool::from(config.is_election_enabled),
         }
     }
 }

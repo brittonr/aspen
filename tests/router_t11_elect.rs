@@ -37,7 +37,7 @@ fn timeout() -> Option<Duration> {
 async fn test_elect_compare_last_log() -> Result<()> {
     let config = Arc::new(
         Config {
-            enable_heartbeat: false,
+            is_heartbeat_enabled: false,
             ..Default::default()
         }
         .validate()?,

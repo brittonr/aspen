@@ -38,7 +38,7 @@ async fn test_snapshot_when_lacking_log() -> Result<()> {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 0, // Purge all logs covered by snapshot
             purge_batch_size: 1,            // Purge aggressively
-            enable_heartbeat: false,
+            is_heartbeat_enabled: false,
             ..Default::default()
         }
         .validate()?,

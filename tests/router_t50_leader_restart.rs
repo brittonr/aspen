@@ -33,7 +33,7 @@ fn timeout() -> Option<Duration> {
 async fn test_leader_restart_with_state_loss() -> Result<()> {
     let config = Arc::new(
         Config {
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,

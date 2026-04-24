@@ -34,8 +34,8 @@ async fn test_append_entries_backoff_rejoin() -> Result<()> {
         Config {
             election_timeout_min: 100,
             election_timeout_max: 200,
-            enable_elect: false, // Manual election control
-            enable_heartbeat: true,
+            is_election_enabled: false, // Manual election control
+            is_heartbeat_enabled: true,
             ..Default::default()
         }
         .validate()?,

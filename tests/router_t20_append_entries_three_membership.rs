@@ -76,8 +76,8 @@ fn timeout() -> Option<Duration> {
 async fn test_append_entries_three_membership() -> Result<()> {
     let config = Arc::new(
         Config {
-            enable_heartbeat: false,
-            enable_elect: false,
+            is_heartbeat_enabled: false,
+            is_election_enabled: false,
             ..Default::default()
         }
         .validate()?,

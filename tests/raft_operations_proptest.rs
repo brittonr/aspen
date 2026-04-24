@@ -25,7 +25,7 @@ use support::bolero_generators::ValidValue;
 async fn init_single_node_cluster() -> anyhow::Result<AspenRouter> {
     let config = Arc::new(
         Config {
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,

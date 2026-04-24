@@ -49,7 +49,7 @@ async fn test_build_snapshot() -> Result<()> {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 2,
             purge_batch_size: 1,
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,
@@ -140,7 +140,7 @@ async fn test_snapshot_during_concurrent_writes() -> Result<()> {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 2,
             purge_batch_size: 1,
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,
@@ -213,7 +213,7 @@ async fn test_snapshot_data_completeness() -> Result<()> {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 0, // Aggressive log compaction
             purge_batch_size: 1,
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,
@@ -296,7 +296,7 @@ async fn test_snapshot_policy_threshold() -> Result<()> {
     let config = Arc::new(
         Config {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,

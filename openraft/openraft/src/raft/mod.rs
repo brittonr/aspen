@@ -419,7 +419,7 @@ where C: RaftTypeConfig
         let tick_handle = Tick::spawn(
             Duration::from_millis(config.heartbeat_interval * 3 / 2),
             tx_notify.clone(),
-            config.enable_tick,
+            config.is_tick_enabled,
         );
 
         let runtime_config = Arc::new(RuntimeConfig::new(&config));

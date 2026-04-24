@@ -1542,7 +1542,7 @@ where
                 if let Some(t) = heartbeat_at
                     && now >= t
                 {
-                    if self.runtime_config.enable_heartbeat.load(Ordering::Relaxed) {
+                    if self.runtime_config.is_heartbeat_enabled.load(Ordering::Relaxed) {
                         self.send_heartbeat("tick");
                     }
 
@@ -1691,7 +1691,7 @@ where
             return;
         }
 
-        if !self.runtime_config.enable_elect.load(Ordering::Relaxed) {
+        if !self.runtime_config.is_election_enabled.load(Ordering::Relaxed) {
             tracing::debug!("election is disabled");
             return;
         }

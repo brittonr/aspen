@@ -46,9 +46,9 @@ async fn test_install_snapshot_conflict() -> Result<()> {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 0,
             purge_batch_size: 1,
-            enable_heartbeat: false,
-            enable_tick: false,
-            enable_elect: false,
+            is_heartbeat_enabled: false,
+            is_tick_enabled: false,
+            is_election_enabled: false,
             ..Default::default()
         }
         .validate()?,
@@ -232,9 +232,9 @@ async fn test_install_snapshot_at_committed_boundary() -> Result<()> {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(snapshot_threshold),
             max_in_snapshot_log_to_keep: 2,
             purge_batch_size: 1,
-            enable_heartbeat: false,
-            enable_tick: false,
-            enable_elect: false,
+            is_heartbeat_enabled: false,
+            is_tick_enabled: false,
+            is_election_enabled: false,
             ..Default::default()
         }
         .validate()?,

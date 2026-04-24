@@ -30,7 +30,7 @@ pub fn default_timeout() -> Option<Duration> {
 pub async fn setup_single_node_cluster() -> Result<(AspenRouter, NodeId)> {
     let config = Arc::new(
         Config {
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,
@@ -59,7 +59,7 @@ pub async fn setup_single_node_cluster() -> Result<(AspenRouter, NodeId)> {
 pub async fn setup_three_node_cluster() -> Result<(AspenRouter, NodeId)> {
     let config = Arc::new(
         Config {
-            enable_tick: true,
+            is_tick_enabled: true,
             heartbeat_interval: 100,
             election_timeout_min: 500,
             election_timeout_max: 1000,

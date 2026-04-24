@@ -29,7 +29,7 @@ async fn init_three_node_cluster() -> anyhow::Result<(AspenRouter, u64)> {
 
     let config = Arc::new(
         Config {
-            enable_tick: false,
+            is_tick_enabled: false,
             ..Default::default()
         }
         .validate()?,

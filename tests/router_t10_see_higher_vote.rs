@@ -31,8 +31,8 @@ async fn test_leader_sees_higher_vote() -> Result<()> {
     // Create config with explicit control over elections
     let config = Arc::new(
         Config {
-            enable_heartbeat: false,
-            enable_elect: false,
+            is_heartbeat_enabled: false,
+            is_election_enabled: false,
             election_timeout_min: 500,
             election_timeout_max: 501,
             ..Default::default()

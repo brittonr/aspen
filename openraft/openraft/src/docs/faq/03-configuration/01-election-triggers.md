@@ -13,9 +13,9 @@
 3. **Entering candidate state**: If a follower does not receive any `AppendEntries` messages for longer than [`Config::election_timeout_max`][], it transitions to the `Candidate` state and begins a new election by requesting votes from other nodes.
 
 4. **Required configuration**: For elections to trigger automatically, ensure:
-   - [`Config::enable_tick`][] = `true` (enables time-based events)
-   - [`Config::enable_elect`][] = `true` (allows followers to become candidates)
-   - The leader's [`Config::enable_heartbeat`][] = `true` (enables heartbeat sending)
+   - [`Config::is_tick_enabled`][] = `true` (enables time-based events)
+   - [`Config::is_election_enabled`][] = `true` (allows followers to become candidates)
+   - The leader's [`Config::is_heartbeat_enabled`][] = `true` (enables heartbeat sending)
 
 **Common issues**:
 
@@ -41,15 +41,15 @@ Config {
     heartbeat_interval: 100,           // milliseconds
     election_timeout_min: 300,         // 3× heartbeat_interval
     election_timeout_max: 600,         // 2× election_timeout_min
-    enable_tick: true,
-    enable_heartbeat: true,
-    enable_elect: true,
+    is_tick_enabled: true,
+    is_heartbeat_enabled: true,
+    is_election_enabled: true,
     ..Default::default()
 }
 ```
 
 [`Config::heartbeat_interval`]: `crate::config::Config::heartbeat_interval`
 [`Config::election_timeout_max`]: `crate::config::Config::election_timeout_max`
-[`Config::enable_tick`]: `crate::config::Config::enable_tick`
-[`Config::enable_elect`]: `crate::config::Config::enable_elect`
-[`Config::enable_heartbeat`]: `crate::config::Config::enable_heartbeat`
+[`Config::is_tick_enabled`]: `crate::config::Config::is_tick_enabled`
+[`Config::is_election_enabled`]: `crate::config::Config::is_election_enabled`
+[`Config::is_heartbeat_enabled`]: `crate::config::Config::is_heartbeat_enabled`

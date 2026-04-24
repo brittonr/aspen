@@ -32,7 +32,7 @@ async fn create_raft_node(
     injector: Arc<FailureInjector>,
 ) -> Raft<AppTypeConfig> {
     let config = Config {
-        enable_heartbeat: false,
+        is_heartbeat_enabled: false,
         ..Default::default()
     };
     let config = Arc::new(config.validate().expect("invalid raft config"));

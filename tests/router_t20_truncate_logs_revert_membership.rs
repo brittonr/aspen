@@ -57,9 +57,9 @@ async fn test_truncate_logs_revert_effective_membership() -> Result<()> {
 
     let config = Arc::new(
         Config {
-            enable_tick: false,
-            enable_heartbeat: false,
-            enable_elect: false, // Manual election control
+            is_tick_enabled: false,
+            is_heartbeat_enabled: false,
+            is_election_enabled: false, // Manual election control
             ..Default::default()
         }
         .validate()?,
@@ -171,9 +171,9 @@ async fn test_simple_log_truncation() -> Result<()> {
 
     let config = Arc::new(
         Config {
-            enable_tick: false,
-            enable_heartbeat: false,
-            enable_elect: false, // Manual election control
+            is_tick_enabled: false,
+            is_heartbeat_enabled: false,
+            is_election_enabled: false, // Manual election control
             ..Default::default()
         }
         .validate()?,

@@ -37,7 +37,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // 200ms latency = 400ms RTT, so timeouts must be significantly higher
     let config = Arc::new(
         Config {
-            enable_tick: false,         // Disable automatic ticking for manual control
+            is_tick_enabled: false,         // Disable automatic ticking for manual control
             heartbeat_interval: 1000,   // 1 second heartbeat (was ~100ms)
             election_timeout_min: 3000, // 3 seconds min election timeout
             election_timeout_max: 6000, // 6 seconds max election timeout
@@ -90,7 +90,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     router.set_global_network_delay(200);
     events.push("network-degraded: 200ms latency added".into());
 
-    // With enable_tick: false, we need to manually trigger heartbeats
+    // With is_tick_enabled: false, we need to manually trigger heartbeats
     // to keep the cluster alive during high latency
     for _ in 0..3 {
         // Trigger heartbeats on leader

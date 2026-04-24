@@ -53,8 +53,8 @@ async fn test_follower_clear_restart_recover_seed_2001() {
 
     let config = Arc::new(
         Config {
-            enable_heartbeat: false,         // Manual heartbeat triggering for determinism
-            enable_elect: false,             // Manual election control
+            is_heartbeat_enabled: false,         // Manual heartbeat triggering for determinism
+            is_election_enabled: false,             // Manual election control
             allow_log_reversion: Some(true), // Allow follower to revert log after state loss
             ..Default::default()
         }

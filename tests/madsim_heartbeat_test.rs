@@ -54,7 +54,7 @@ async fn test_enable_heartbeat_seed_3001() {
     // Start with heartbeat disabled for manual control
     let config = Arc::new(
         Config {
-            enable_heartbeat: false,
+            is_heartbeat_enabled: false,
             heartbeat_interval: 100,   // 100ms heartbeat interval when enabled
             election_timeout_min: 500, // Must be > heartbeat_interval
             election_timeout_max: 1000,

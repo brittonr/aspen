@@ -121,16 +121,16 @@ fn test_config_snapshot_policy() -> anyhow::Result<()> {
 #[test]
 fn test_config_enable_tick() -> anyhow::Result<()> {
     let config = Config::build(&["foo", "--enable-tick=false"])?;
-    assert_eq!(false, config.enable_tick);
+    assert_eq!(false, config.is_tick_enabled);
 
     let config = Config::build(&["foo", "--enable-tick=true"])?;
-    assert_eq!(true, config.enable_tick);
+    assert_eq!(true, config.is_tick_enabled);
 
     let config = Config::build(&["foo", "--enable-tick"])?;
-    assert_eq!(true, config.enable_tick);
+    assert_eq!(true, config.is_tick_enabled);
 
     let config = Config::build(&["foo"])?;
-    assert_eq!(true, config.enable_tick);
+    assert_eq!(true, config.is_tick_enabled);
 
     Ok(())
 }
@@ -138,16 +138,16 @@ fn test_config_enable_tick() -> anyhow::Result<()> {
 #[test]
 fn test_config_enable_heartbeat() -> anyhow::Result<()> {
     let config = Config::build(&["foo", "--enable-heartbeat=false"])?;
-    assert_eq!(false, config.enable_heartbeat);
+    assert_eq!(false, config.is_heartbeat_enabled);
 
     let config = Config::build(&["foo", "--enable-heartbeat=true"])?;
-    assert_eq!(true, config.enable_heartbeat);
+    assert_eq!(true, config.is_heartbeat_enabled);
 
     let config = Config::build(&["foo", "--enable-heartbeat"])?;
-    assert_eq!(true, config.enable_heartbeat);
+    assert_eq!(true, config.is_heartbeat_enabled);
 
     let config = Config::build(&["foo"])?;
-    assert_eq!(true, config.enable_heartbeat);
+    assert_eq!(true, config.is_heartbeat_enabled);
 
     Ok(())
 }
@@ -155,16 +155,16 @@ fn test_config_enable_heartbeat() -> anyhow::Result<()> {
 #[test]
 fn test_config_enable_elect() -> anyhow::Result<()> {
     let config = Config::build(&["foo", "--enable-elect=false"])?;
-    assert_eq!(false, config.enable_elect);
+    assert_eq!(false, config.is_election_enabled);
 
     let config = Config::build(&["foo", "--enable-elect=true"])?;
-    assert_eq!(true, config.enable_elect);
+    assert_eq!(true, config.is_election_enabled);
 
     let config = Config::build(&["foo", "--enable-elect"])?;
-    assert_eq!(true, config.enable_elect);
+    assert_eq!(true, config.is_election_enabled);
 
     let config = Config::build(&["foo"])?;
-    assert_eq!(true, config.enable_elect);
+    assert_eq!(true, config.is_election_enabled);
 
     Ok(())
 }
