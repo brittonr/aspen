@@ -26,8 +26,8 @@ impl<C> SnapshotHandler<'_, '_, C>
 where C: RaftTypeConfig
 {
     /// Trigger building a snapshot if there is no pending building job.
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn trigger_snapshot(&mut self) -> bool {
+        let _span = tracing::debug_span!("trigger_snapshot").entered();
         tracing::debug!("{}", func_name!());
 
         if self.state.io_state_mut().building_snapshot() {
@@ -49,8 +49,8 @@ where C: RaftTypeConfig
     /// [`RaftStateMachine`] implementation.
     ///
     /// [`RaftStateMachine`]: crate::storage::RaftStateMachine
-    #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn update_snapshot(&mut self, meta: SnapshotMeta<C>) -> bool {
+        let _span = tracing::debug_span!("update_snapshot").entered();
         tracing::info!("update_snapshot: {:?}", meta);
 
         if meta.last_log_id.as_ref() <= self.state.snapshot_last_log_id() {
