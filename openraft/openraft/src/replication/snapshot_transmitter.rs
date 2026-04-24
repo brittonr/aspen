@@ -2,6 +2,9 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use futures::FutureExt;
+use tracing::Instrument;
+use tracing::Level;
+use tracing::Span;
 
 use crate::RaftNetworkFactory;
 use crate::RaftTypeConfig;
@@ -34,6 +37,8 @@ use crate::vote::raft_vote::RaftVoteExt;
 /// Spawned by `RaftCore` when log replication falls too far behind and a snapshot
 /// is needed. Runs independently, retrying on transient failures with backoff,
 /// and notifies `RaftCore` of progress or errors via the notification channel.
+const DEFAULT_BACKOFF_DURATION_MS: u64 = 500;
+
 pub(crate) struct SnapshotTransmitter<C, N>
 where
     C: RaftTypeConfig,
@@ -59,6 +64,16 @@ where
     snapshot_reader: SnapshotReader<C>,
 }
 
+fn snapshot_chunk_size_limit(snapshot_chunk_size_bytes: u64) -> usize {
+    match usize::try_from(snapshot_chunk_size_bytes) {
+        Ok(snapshot_chunk_size) => snapshot_chunk_size,
+        Err(_) => {
+            tracing::warn!(snapshot_chunk_size_bytes, "snapshot chunk size exceeds platform usize; saturating");
+            usize::MAX
+        }
+    }
+}
+
 impl<C, N> SnapshotTransmitter<C, N>
 where
     C: RaftTypeConfig,
@@ -80,7 +95,11 @@ where
             snapshot_reader,
         };
 
-        let join_handle = C::spawn(snapshot_transmit.stream_snapshot());
+        let join_handle = C::spawn(
+            snapshot_transmit
+                .stream_snapshot()
+                .instrument(tracing::span!(parent: &Span::current(), Level::INFO, "stream_snapshot")),
+        );
 
         SnapshotTransmitterHandle {
             _join_handle: join_handle,
@@ -88,15 +107,15 @@ where
         }
     }
 
-    #[tracing::instrument(level = "info", skip_all)]
     async fn stream_snapshot(mut self) {
         tracing::info!("{}", func_name!());
 
-        let mut ith: i32 = -1;
-        loop {
-            ith += 1;
+        let mut attempt_index: i32 = -1;
+        let mut should_retry = true;
+        while should_retry {
+            attempt_index = attempt_index.saturating_add(1);
 
-            let res = self.read_and_send_snapshot(ith).await;
+            let res = self.read_and_send_snapshot(attempt_index).await;
 
             let error = match res {
                 Err(error) => error,
@@ -110,26 +129,26 @@ where
             match error {
                 ReplicationError::Closed(closed) => {
                     tracing::info!("Snapshot transmitting is canceled: {}", closed);
-                    return;
+                    should_retry = false;
                 }
                 ReplicationError::HigherVote(h) => {
                     tracing::info!("Snapshot transmitting has seen a higher vote: {}, notify and quit", h);
                     self.replication_context
                         .tx_notify
                         .send(Notification::HigherVote {
-                            target: self.replication_context.target,
+                            target: self.replication_context.target.clone(),
                             higher: h.higher,
                             leader_vote: self.replication_context.session_id.committed_vote(),
                         })
                         .await
                         .ok();
 
-                    return;
+                    should_retry = false;
                 }
                 ReplicationError::StorageError(error) => {
                     tracing::error!(error=%error, "error replication to target={}", self.replication_context.target);
                     self.replication_context.tx_notify.send(Notification::StorageError { error }).await.ok();
-                    return;
+                    should_retry = false;
                 }
                 ReplicationError::RPCError(err) => {
                     match &err {
@@ -147,12 +166,12 @@ where
                     };
 
                     if let Some(b) = &mut self.backoff {
-                        let duration = b.next().unwrap_or_else(|| {
+                        let backoff_timer = b.next().unwrap_or_else(|| {
                             tracing::warn!("backoff exhausted, using default");
-                            Duration::from_millis(500)
+                            Duration::from_millis(DEFAULT_BACKOFF_DURATION_MS)
                         });
 
-                        let sleep = C::sleep(duration);
+                        let sleep = C::sleep(backoff_timer);
                         let recv = self.rx_cancel.changed();
 
                         futures::select! {
@@ -161,7 +180,7 @@ where
                             }
                             _ = recv.fuse() => {
                                 tracing::info!("Snapshot transmitting is canceled by RaftCore");
-                                return;
+                                should_retry = false;
                             }
                         }
                     }
@@ -191,7 +210,9 @@ where
         };
 
         let mut option = RPCOption::new(self.replication_context.config.install_snapshot_timeout());
-        option.snapshot_chunk_size = Some(self.replication_context.config.snapshot_max_chunk_size as usize);
+        option.snapshot_chunk_size = Some(snapshot_chunk_size_limit(
+            self.replication_context.config.snapshot_max_chunk_size,
+        ));
 
         self.send_snapshot(snapshot, option).await
     }
