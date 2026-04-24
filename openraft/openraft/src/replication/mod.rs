@@ -204,7 +204,8 @@ where
     }
 
     async fn main(mut self) -> Result<(), ReplicationClosed> {
-        loop {
+        let mut should_run = true;
+        while should_run {
             let action = self.next_action.take();
 
             let Some(d) = action else {
@@ -253,19 +254,19 @@ where
                             self.task_state
                                 .tx_notify
                                 .send(Notification::HigherVote {
-                                    target: self.task_state.target,
+                                    target: self.task_state.target.clone(),
                                     higher: h.higher,
                                     leader_vote: self.task_state.session_id.committed_vote(),
                                 })
                                 .await
                                 .ok();
-                            return Ok(());
+                            should_run = false;
                         }
                         ReplicationError::StorageError(error) => {
                             tracing::error!(error=%error, "error replication to target={}", self.task_state.target);
 
                             self.task_state.tx_notify.send(Notification::StorageError { error }).await.ok();
-                            return Ok(());
+                            should_run = false;
                         }
                         ReplicationError::RPCError(err) => {
                             tracing::error!(err = display(&err), "RPCError");
@@ -295,18 +296,23 @@ where
                 }
             };
 
+            if !should_run {
+                return Ok(());
+            }
+
             self.drain_events_with_backoff().await?;
         }
+        Ok(())
     }
 
     async fn drain_events_with_backoff(&mut self) -> Result<(), ReplicationClosed> {
         if let Some(b) = &mut self.backoff {
-            let backoff_delay = b.next().unwrap_or_else(|| {
+            let backoff_timer = b.next().unwrap_or_else(|| {
                 tracing::warn!("backoff exhausted, using default");
                 Duration::from_millis(500)
             });
 
-            self.backoff_drain_events(C::now() + backoff_delay).await?;
+            self.backoff_drain_events(C::now() + backoff_timer).await?;
         }
 
         self.drain_events().await?;
@@ -395,9 +401,9 @@ where
             self.task_state.config.heartbeat_interval
         );
 
-        let rpc_timeout = Duration::from_millis(self.task_state.config.heartbeat_interval);
-        let option = RPCOption::new(rpc_timeout);
-        let res = C::timeout(rpc_timeout, self.network.append_entries(payload, option)).await;
+        let rpc_timeout_duration = Duration::from_millis(self.task_state.config.heartbeat_interval);
+        let option = RPCOption::new(rpc_timeout_duration);
+        let res = C::timeout(rpc_timeout_duration, self.network.append_entries(payload, option)).await;
 
         tracing::debug!("append_entries res: {:?}", res);
 
@@ -406,7 +412,7 @@ where
                 action: RPCTypes::AppendEntries,
                 id: self.task_state.session_id.vote().to_leader_node_id(),
                 target: self.task_state.target.clone(),
-                timeout: rpc_timeout,
+                timeout: rpc_timeout_duration,
             };
             RPCError::Timeout(to)
         })?; // return Timeout error
@@ -562,12 +568,12 @@ where
         tracing::warn!(interval = debug(backoff_window), "{} backoff mode: drain events without processing them", func_name!());
 
         while C::now() < until {
-            let backoff_delay = until - C::now();
-            let sleep = C::sleep(backoff_delay);
+            let backoff_timer = until - C::now();
+            let sleep = C::sleep(backoff_timer);
 
             let recv = self.rx_event.recv();
 
-            tracing::debug!("backoff timeout: {:?}", backoff_delay);
+            tracing::debug!("backoff timeout: {:?}", backoff_timer);
 
             futures::select! {
                 _ = sleep.fuse() => {
