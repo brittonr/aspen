@@ -21,11 +21,12 @@ where C: RaftTypeConfig
 impl<C> EngineOutput<C>
 where C: RaftTypeConfig
 {
+    const PENDING_RESPOND_MAX_COMMANDS: usize = 1024;
+
     pub(crate) fn new(command_buffer_size: usize) -> Self {
-        let pending_capacity = 1024;
         Self {
             commands: VecDeque::with_capacity(command_buffer_size),
-            pending_responds: PendingResponds::new(pending_capacity),
+            pending_responds: PendingResponds::new(Self::PENDING_RESPOND_MAX_COMMANDS),
         }
     }
 
@@ -52,25 +53,28 @@ where C: RaftTypeConfig
         // For other commands, put them back to the front of the command queue.
         match cmd {
             Command::Respond { when, resp } => {
-                let pending_responds = &mut self.pending_responds;
                 match when {
                     None => {
-                        unreachable!("Respond command to postpone must have a condition");
+                        self.commands.push_front(Command::Respond { when, resp });
+                        Err("Respond command to postpone must have a condition")
                     }
                     Some(Condition::IOFlushed { io_id }) => {
-                        pending_responds.on_log_io.push_back(PendingRespond::new(io_id, resp));
+                        self.pending_responds.on_log_io.push_back(PendingRespond::new(io_id, resp));
+                        Ok(())
                     }
                     Some(Condition::LogFlushed { log_id }) => {
-                        pending_responds.on_log_flush.push_back(PendingRespond::new(log_id, resp));
+                        self.pending_responds.on_log_flush.push_back(PendingRespond::new(log_id, resp));
+                        Ok(())
                     }
                     Some(Condition::Applied { log_id }) => {
-                        pending_responds.on_apply.push_back(PendingRespond::new(log_id, resp));
+                        self.pending_responds.on_apply.push_back(PendingRespond::new(log_id, resp));
+                        Ok(())
                     }
                     Some(Condition::Snapshot { log_id }) => {
-                        pending_responds.on_snapshot.push_back(PendingRespond::new(log_id, resp));
+                        self.pending_responds.on_snapshot.push_back(PendingRespond::new(log_id, resp));
+                        Ok(())
                     }
                 }
-                Ok(())
             }
 
             _ => {
