@@ -59,7 +59,7 @@ where C: RaftTypeConfig
 
     #[allow(dead_code)]
     pub(crate) fn len(&self) -> u64 {
-        self.last.next_index() - self.prev.next_index()
+        self.last.next_index().saturating_sub(self.prev.next_index())
     }
 }
 
