@@ -1,0 +1,29 @@
+$ git branch --show-current
+main
+
+$ git rev-parse --short HEAD
+b6912fff6
+
+$ git status --short
+?? openspec/changes/archive/2026-04-25-jj-native-forge-wasm-plugin/evidence/post-archive-main-validation.txt
+
+$ test ! -d openspec/changes/jj-native-forge-wasm-plugin
+active change directory absent
+
+$ test -d openspec/changes/archive/2026-04-25-jj-native-forge-wasm-plugin
+archive directory present
+
+$ openspec list --json
+{"changes":[]}
+
+$ openspec validate jj-native-forge --strict
+Specification 'jj-native-forge' is valid
+
+$ openspec validate jj-remote-aspen --strict
+Specification 'jj-remote-aspen' is valid
+
+$ openspec validate plugins --strict
+Specification 'plugins' is valid
+
+$ openspec validate forge --strict
+Specification 'forge' is valid
