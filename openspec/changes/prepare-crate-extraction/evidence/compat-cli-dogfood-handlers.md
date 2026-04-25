@@ -48,4 +48,3 @@ warning: `aspen-client-api` (lib) generated 28 warnings
 ## cargo check -p aspen-nix-handler
     Checking aspen-nix-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-nix-handler)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
-

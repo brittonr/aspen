@@ -15,4 +15,3 @@ Generated: 2026-04-25T02:20:11Z
     Checking aspen-cluster-handler v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-handler)
     Checking aspen-rpc-handlers v0.1.0 (/home/brittonr/git/aspen/crates/aspen-rpc-handlers)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.65s
-

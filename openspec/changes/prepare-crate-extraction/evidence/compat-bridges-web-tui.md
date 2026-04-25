@@ -24,4 +24,3 @@ warning: `aspen-client-api` (lib) generated 28 warnings
 ## cargo check -p aspen-tui
 warning: `aspen-client-api` (lib) generated 28 warnings
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
-
