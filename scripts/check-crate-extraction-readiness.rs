@@ -44,6 +44,7 @@ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
 const BLOB_CASTORE_CACHE_FAMILY: &str = "blob-castore-cache";
 const KV_BRANCH_COMMIT_DAG_FAMILY: &str = "kv-branch-commit-dag";
 const PROTOCOL_WIRE_FAMILY: &str = "protocol-wire";
+const TRANSPORT_RPC_FAMILY: &str = "transport-rpc";
 const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i6-downstream-blob-metadata.json",
     "i6-downstream-cache-castore-metadata.json",
@@ -58,6 +59,13 @@ const PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i5-downstream-protocol-wire-metadata.json",
     "i5-downstream-protocol-wire-forbidden-grep.txt",
     "i3-client-api-compatibility-tests.txt",
+];
+const TRANSPORT_RPC_DOWNSTREAM_EVIDENCE: &[&str] = &[
+    "i7-downstream-transport-metadata.json",
+    "i7-downstream-transport-forbidden-grep.txt",
+    "i7-downstream-rpc-metadata.json",
+    "i7-downstream-rpc-forbidden-grep.txt",
+    "v4-compatibility-summary.txt",
 ];
 
 #[derive(Debug, Parser)]
@@ -124,6 +132,7 @@ struct CargoPackage {
 struct CargoDependency {
     name: String,
     kind: Option<String>,
+    optional: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -168,6 +177,8 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_client_api" => Some("aspen-client-api"),
         "aspen_forge_protocol" => Some("aspen-forge-protocol"),
         "aspen_jobs_protocol" => Some("aspen-jobs-protocol"),
+        "aspen_transport" => Some("aspen-transport"),
+        "aspen_rpc_core" => Some("aspen-rpc-core"),
         "aspen_blob" => Some("aspen-blob"),
         "aspen_castore" => Some("aspen-castore"),
         "aspen_cache" => Some("aspen-cache"),
@@ -201,7 +212,7 @@ fn collect_default_forbidden(policy: &Policy, candidate: &Candidate) -> BTreeSet
 }
 
 fn is_normal_dependency(dependency: &CargoDependency) -> bool {
-    dependency.kind.is_none()
+    dependency.kind.is_none() && !dependency.optional
 }
 
 fn check_exception(candidate_key: &str, exception: &Exception, failures: &mut Vec<String>) {
@@ -351,6 +362,7 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
         BLOB_CASTORE_CACHE_FAMILY => BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE,
         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
         PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
+        TRANSPORT_RPC_FAMILY => TRANSPORT_RPC_DOWNSTREAM_EVIDENCE,
         _ => return,
     };
 

@@ -41,16 +41,21 @@
 mod context;
 mod handler;
 pub mod proxy;
+pub mod registry;
 pub mod service;
 
 pub use context::ClientProtocolContext;
+#[cfg(feature = "runtime-context")]
 pub use context::NetworkMetricsProvider;
+#[cfg(feature = "runtime-context")]
 pub use context::PoolMetricsAdapter;
+#[cfg(feature = "runtime-context")]
 pub use context::SpanForwarder;
 #[cfg(feature = "testing")]
 pub use context::test_support;
 pub use handler::HandlerFactory;
 pub use handler::RequestHandler;
 pub use proxy::ProxyConfig;
+pub use registry::DispatchRegistry;
 pub use service::ServiceExecutor;
 pub use service::ServiceHandler;

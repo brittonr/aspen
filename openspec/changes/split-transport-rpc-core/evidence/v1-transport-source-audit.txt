@@ -1,0 +1,58 @@
+$ rg aspen_core\|aspen_auth\|aspen_sharding\|aspen_trust\|openraft\|irpc\|aspen_raft crates/aspen-transport/src
+crates/aspen-transport/src/raft_authenticated.rs:use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
+crates/aspen-transport/src/raft_authenticated.rs:use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
+crates/aspen-transport/src/raft_authenticated.rs:use aspen_raft_types::MAX_STREAMS_PER_CONNECTION;
+crates/aspen-transport/src/raft_authenticated.rs:use openraft::Raft;
+crates/aspen-transport/src/raft_authenticated.rs:            let snapshot = openraft::Snapshot {
+crates/aspen-transport/src/raft_authenticated.rs:                .map_err(openraft::error::RaftError::Fatal);
+crates/aspen-transport/src/trust.rs:use aspen_trust::protocol::TrustRequest;
+crates/aspen-transport/src/trust.rs:use aspen_trust::protocol::TrustResponse;
+crates/aspen-transport/src/rpc.rs:pub use aspen_raft_types::AppTypeConfig;
+crates/aspen-transport/src/rpc.rs:use irpc::channel::oneshot;
+crates/aspen-transport/src/rpc.rs:use irpc::rpc_requests;
+crates/aspen-transport/src/rpc.rs:use openraft::error::RaftError;
+crates/aspen-transport/src/rpc.rs:use openraft::raft::AppendEntriesRequest;
+crates/aspen-transport/src/rpc.rs:use openraft::raft::AppendEntriesResponse;
+crates/aspen-transport/src/rpc.rs:use openraft::raft::SnapshotResponse;
+crates/aspen-transport/src/rpc.rs:use openraft::raft::VoteRequest;
+crates/aspen-transport/src/rpc.rs:use openraft::raft::VoteResponse;
+crates/aspen-transport/src/rpc.rs:use openraft::type_config::alias::VoteOf;
+crates/aspen-transport/src/rpc.rs:    pub snapshot_meta: openraft::SnapshotMeta<AppTypeConfig>,
+crates/aspen-transport/src/rpc.rs:    pub fn from_fatal<C: openraft::RaftTypeConfig>(fatal: &openraft::error::Fatal<C>) -> Self {
+crates/aspen-transport/src/rpc.rs:            openraft::error::Fatal::Panicked => Self::Panicked,
+crates/aspen-transport/src/rpc.rs:            openraft::error::Fatal::Stopped => Self::Stopped,
+crates/aspen-transport/src/log_subscriber/state.rs:    aspen_core::utils::current_time_ms()
+crates/aspen-transport/src/log_subscriber/kv_operation.rs:impl From<aspen_raft_types::AppRequest> for KvOperation {
+crates/aspen-transport/src/log_subscriber/kv_operation.rs:    fn from(req: aspen_raft_types::AppRequest) -> Self {
+crates/aspen-transport/src/log_subscriber/kv_operation.rs:        use aspen_raft_types::AppRequest;
+crates/aspen-transport/src/log_subscriber/types.rs:use aspen_core::hlc::SerializableTimestamp;
+crates/aspen-transport/src/log_subscriber/connection.rs:use aspen_auth::hmac_auth::AuthContext;
+crates/aspen-transport/src/log_subscriber/connection.rs:use aspen_auth::hmac_auth::AuthResponse;
+crates/aspen-transport/src/log_subscriber/connection.rs:use aspen_auth::hmac_auth::AuthResult;
+crates/aspen-transport/src/log_subscriber/connection.rs:use aspen_core::hlc::SerializableTimestamp;
+crates/aspen-transport/src/log_subscriber/connection.rs:    hlc: &'a aspen_core::hlc::HLC,
+crates/aspen-transport/src/log_subscriber/connection.rs:    pub hlc: &'a aspen_core::hlc::HLC,
+crates/aspen-transport/src/log_subscriber/connection.rs:    pub watch_registry: Option<Arc<dyn aspen_core::WatchRegistry>>,
+crates/aspen-transport/src/raft_sharded.rs:use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
+crates/aspen-transport/src/raft_sharded.rs:use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
+crates/aspen-transport/src/raft_sharded.rs:use aspen_raft_types::MAX_STREAMS_PER_CONNECTION;
+crates/aspen-transport/src/raft_sharded.rs:use aspen_sharding::router::ShardId;
+crates/aspen-transport/src/raft_sharded.rs:use openraft::Raft;
+crates/aspen-transport/src/raft_sharded.rs:            let snapshot = openraft::Snapshot {
+crates/aspen-transport/src/raft_sharded.rs:                .map_err(openraft::error::RaftError::Fatal);
+crates/aspen-transport/src/log_subscriber/handler.rs:use aspen_auth::hmac_auth::AuthContext;
+crates/aspen-transport/src/log_subscriber/handler.rs:    hlc: aspen_core::hlc::HLC,
+crates/aspen-transport/src/log_subscriber/handler.rs:    watch_registry: Option<Arc<dyn aspen_core::WatchRegistry>>,
+crates/aspen-transport/src/log_subscriber/handler.rs:        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
+crates/aspen-transport/src/log_subscriber/handler.rs:        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
+crates/aspen-transport/src/log_subscriber/handler.rs:        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
+crates/aspen-transport/src/log_subscriber/handler.rs:    pub fn with_watch_registry(mut self, registry: Arc<dyn aspen_core::WatchRegistry>) -> Self {
+crates/aspen-transport/src/log_subscriber/handler.rs:        let registry = Arc::new(aspen_core::InMemoryWatchRegistry::new());
+crates/aspen-transport/src/raft.rs:use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
+crates/aspen-transport/src/raft.rs:use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
+crates/aspen-transport/src/raft.rs:use aspen_raft_types::MAX_STREAMS_PER_CONNECTION;
+crates/aspen-transport/src/raft.rs:use openraft::Raft;
+crates/aspen-transport/src/raft.rs:            let snapshot = openraft::Snapshot {
+crates/aspen-transport/src/raft.rs:                .map_err(openraft::error::RaftError::Fatal);
+
+Exit: 0

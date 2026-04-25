@@ -1,0 +1,19 @@
+$ env CARGO_TARGET_DIR=target cargo test --manifest-path openspec/changes/split-transport-rpc-core/fixtures/downstream-transport/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/downstream_transport-8d53c062eeab391f)
+
+running 3 tests
+test tests::connection_manager_reports_configured_bounds ... ok
+test tests::protocol_ids_are_non_empty ... ok
+test tests::stream_manager_rejects_after_bound ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests downstream_transport
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+Exit: 0

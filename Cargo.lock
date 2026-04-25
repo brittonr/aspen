@@ -3026,7 +3026,6 @@ dependencies = [
  "aspen-sharding",
  "aspen-trust",
  "async-trait",
- "bytes",
  "iroh",
  "irpc",
  "metrics",
@@ -3036,7 +3035,6 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
  "tokio",
- "tokio-stream",
  "tokio-util",
  "tracing",
 ]

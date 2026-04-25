@@ -469,6 +469,62 @@ let Candidate = {
       exceptions = [],
     },
 
+    aspen_transport = {
+      class = "runtime adapter",
+      readiness_state = "workspace-internal",
+      manifest = "docs/crate-extraction/transport-rpc.md",
+      owner = "Aspen transport/RPC maintainers",
+      default_feature_sets = ["default"],
+      named_reusable_feature_sets = ["raft-rpc", "raft-handler", "auth-raft-handler", "sharded-raft-handler", "trust-handler", "log-subscriber", "runtime"],
+      representative_consumers = ["aspen-raft-network", "aspen-raft", "aspen-cluster", "aspen-client", "downstream-transport"],
+      reexporters = [],
+      forbidden_unless_feature = ["aspen-core-shell", "aspen-auth", "aspen-sharding", "aspen-trust", "aspen-raft-types", "openraft", "irpc", "postcard", "metrics", "parking_lot", "aspen-raft", "aspen-cluster", "aspen-rpc-handlers", "aspen"],
+      exceptions = [
+        {
+          candidate = "aspen-transport",
+          feature_set = "default",
+          dependency_path = "aspen-transport -> iroh",
+          owner = "Aspen transport/RPC maintainers",
+          reason = "Iroh endpoint, connection, and stream types are the explicit reusable transport API.",
+        },
+        {
+          candidate = "aspen-transport",
+          feature_set = "raft-rpc",
+          dependency_path = "aspen-transport[raft-rpc] -> irpc",
+          owner = "Aspen transport/RPC maintainers",
+          reason = "IRPC declarations are owned by the named Raft RPC adapter feature.",
+        },
+      ],
+    },
+
+    aspen_rpc_core = {
+      class = "service library",
+      readiness_state = "workspace-internal",
+      manifest = "docs/crate-extraction/transport-rpc.md",
+      owner = "Aspen transport/RPC maintainers",
+      default_feature_sets = ["default"],
+      named_reusable_feature_sets = ["runtime-context", "blob", "forge", "ci", "jobs", "hooks", "worker", "deploy", "sql", "testing"],
+      representative_consumers = ["aspen-rpc-handlers", "aspen-core-essentials-handler", "aspen-blob-handler", "aspen-cluster-handler", "downstream-rpc-core"],
+      reexporters = ["aspen-rpc-handlers"],
+      forbidden_unless_feature = ["aspen-core-shell", "aspen-auth", "aspen-raft", "aspen-transport", "aspen-sharding", "aspen-coordination", "aspen-cluster", "aspen-jobs", "aspen-hooks", "aspen-blob", "aspen-sql", "aspen-forge", "aspen-ci", "aspen-testing", "iroh", "iroh-base", "metrics-exporter-prometheus", "tokio", "aspen-rpc-handlers", "aspen"],
+      exceptions = [
+        {
+          candidate = "aspen-rpc-core",
+          feature_set = "default",
+          dependency_path = "aspen-rpc-core -> aspen-client-api",
+          owner = "Aspen transport/RPC maintainers",
+          reason = "Client request and response enums are the reusable dispatch contract.",
+        },
+        {
+          candidate = "aspen-rpc-core",
+          feature_set = "default",
+          dependency_path = "aspen-rpc-core -> aspen-client-api -> aspen-auth-core -> iroh-base",
+          owner = "Aspen transport/RPC maintainers",
+          reason = "Key-only public-key type path inherited from protocol schema; not concrete Iroh endpoint runtime.",
+        },
+      ],
+    },
+
     aspen_blob = {
       class = "service library",
       readiness_state = "workspace-internal",

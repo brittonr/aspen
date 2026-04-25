@@ -15,7 +15,7 @@ aspen-auth = { path = "../aspen-auth" }
 aspen-traits = { path = "../aspen-traits" }
 aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-client = { path = "../aspen-client" }
-aspen-rpc-core = { path = "../aspen-rpc-core" }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["runtime-context"] }
 aspen-transport = { path = "../aspen-transport" }
 aspen-dns = { path = "../../../aspen-dns/crates/aspen-dns", optional = true }
 clap = { version = "4.5", features = ["derive"] }

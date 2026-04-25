@@ -40,8 +40,8 @@ pub const RAFT_SHARDED_ALPN: &[u8] = b"raft-shard";
 /// Canonical source: aspen-constants::network::CLIENT_ALPN
 pub use aspen_constants::network::CLIENT_ALPN;
 
-/// Re-export LOG_SUBSCRIBER_ALPN for convenience.
-pub use crate::log_subscriber::LOG_SUBSCRIBER_ALPN;
+/// ALPN identifier for log subscription protocol.
+pub const LOG_SUBSCRIBER_ALPN: &[u8] = b"aspen-logs";
 
 /// ALPN protocol identifier for net service mesh tunnels.
 ///

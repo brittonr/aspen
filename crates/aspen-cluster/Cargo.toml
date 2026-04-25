@@ -16,7 +16,7 @@ aspen-auth = { path = "../aspen-auth" }
 aspen-raft = { path = "../aspen-raft" }
 aspen-raft-types = { path = "../aspen-raft-types" }
 aspen-proxy = { path = "../aspen-proxy", optional = true }
-aspen-transport = { path = "../aspen-transport" }
+aspen-transport = { path = "../aspen-transport", features = ["runtime"] }
 aspen-dag = { path = "../aspen-dag" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-coordination = { path = "../aspen-coordination" }

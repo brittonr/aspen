@@ -12,7 +12,7 @@ aspen-client-api = { path = "../aspen-client-api" }
 aspen-constants = { path = "../aspen-constants" }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { path = "../aspen-ticket", default-features = false, features = ["iroh"] }
-aspen-transport = { path = "../aspen-transport" }
+aspen-transport = { path = "../aspen-transport", features = ["log-subscriber"] }
 
 # P2P networking for Iroh connections
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }

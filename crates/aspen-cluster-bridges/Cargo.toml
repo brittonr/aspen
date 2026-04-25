@@ -12,7 +12,7 @@ aspen-constants = { path = "../aspen-constants" }
 aspen-core = { path = "../aspen-core" }
 aspen-hooks = { path = "../aspen-hooks" }
 aspen-raft = { path = "../aspen-raft" }
-aspen-transport = { path = "../aspen-transport" }
+aspen-transport = { path = "../aspen-transport", features = ["log-subscriber"] }
 
 # Optional feature-gated Aspen dependencies
 aspen-blob = { path = "../aspen-blob", optional = true }

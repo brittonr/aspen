@@ -10,7 +10,7 @@ license = "AGPL-3.0-or-later"
 aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
 
 # RPC types (ServiceExecutor trait, HandlerFactory, etc.)
-aspen-rpc-core = { path = "../aspen-rpc-core" }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["runtime-context"] }
 
 # Client API types (ClientRpcRequest, ClientRpcResponse)
 aspen-client-api = { workspace = true }

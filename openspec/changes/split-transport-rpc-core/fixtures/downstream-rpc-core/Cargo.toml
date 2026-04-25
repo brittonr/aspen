@@ -1,0 +1,16 @@
+[package]
+name = "downstream-rpc-core"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+aspen-client-api = { path = "../../../../../crates/aspen-client-api", default-features = false }
+aspen-rpc-core = { path = "../../../../../crates/aspen-rpc-core", default-features = false }
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["macros", "rt"] }

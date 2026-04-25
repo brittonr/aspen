@@ -22,7 +22,7 @@ aspen-redb-storage = { workspace = true, features = ["raft-storage"] }
 aspen-raft-kv-types = { workspace = true }
 aspen-raft-kv = { workspace = true }
 aspen-auth = { workspace = true }
-aspen-transport = { workspace = true }
+aspen-transport = { workspace = true, features = ["runtime"] }
 aspen-sharding = { workspace = true }
 aspen-time = { workspace = true }
 aspen-storage-types = { workspace = true }

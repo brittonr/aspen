@@ -1,0 +1,4 @@
+OK: openspec/changes/split-transport-rpc-core
+  tasks: 13 total / 13 checked
+  changed files listed: 33
+  verification artifacts: 11

@@ -6,47 +6,51 @@ license = "AGPL-3.0-or-later"
 description = "Network transport layer for Aspen distributed systems - protocol handlers and connection management"
 
 [dependencies]
-# Core workspace dependencies (explicit paths to sibling repos)
+# Generic constants and Iroh stream helpers are reusable defaults.
 aspen-constants = { path = "../aspen-constants" }
-aspen-raft-types = { path = "../aspen-raft-types" }
-aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
-aspen-auth = { path = "../aspen-auth" }
-aspen-sharding = { path = "../aspen-sharding" }
-aspen-trust = { workspace = true }
 
-# P2P networking for Iroh connections
+# Aspen runtime integrations are feature-gated so reusable defaults do not pull
+# in auth, trust, sharding, OpenRaft compatibility, or node service shells.
+aspen-raft-types = { path = "../aspen-raft-types", optional = true }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell", optional = true }
+aspen-auth = { path = "../aspen-auth", optional = true }
+aspen-sharding = { path = "../aspen-sharding", optional = true }
+aspen-trust = { workspace = true, optional = true }
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"], optional = true }
+
+# P2P networking for Iroh connections.
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 
-# Consensus layer
-openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
-
-# Async runtime
-tokio = { version = "1.48.0", features = ["rt", "sync", "time", "macros"] }
+# Async runtime.
+tokio = { version = "1.48.0", features = ["rt", "sync", "time", "macros", "io-util"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-tokio-stream = "0.1"
-async-trait = "0.1"
+async-trait = { version = "0.1", optional = true }
 
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-postcard = { version = "1.0", features = ["alloc"] }
+# Serialization.
+serde = { version = "1.0", features = ["derive"], optional = true }
+postcard = { version = "1.0", features = ["alloc"], optional = true }
 
-# Error handling
+# Error handling.
 anyhow = "1.0"
 thiserror = "2.0"
 
-# Logging
+# Logging and runtime metrics.
 tracing = "0.1"
-metrics = { workspace = true }
+metrics = { workspace = true, optional = true }
 
-# Utilities
-bytes = "1.7"
-parking_lot = "0.12"
-
-# RPC protocol
-irpc = { version = "0.13.0", features = ["derive"] }
+# Runtime adapter utilities.
+parking_lot = { version = "0.12", optional = true }
+irpc = { version = "0.13.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
 
 [features]
 default = []
+raft-rpc = ["dep:aspen-raft-types", "dep:openraft", "dep:serde", "dep:irpc"]
+raft-handler = ["raft-rpc", "dep:postcard", "dep:metrics"]
+auth-raft-handler = ["raft-handler", "dep:aspen-auth"]
+sharded-raft-handler = ["raft-handler", "dep:aspen-sharding", "dep:parking_lot"]
+trust-handler = ["dep:aspen-trust", "dep:postcard", "dep:async-trait", "dep:serde"]
+log-subscriber = ["dep:aspen-core", "dep:aspen-auth", "dep:aspen-raft-types", "dep:postcard", "dep:serde", "dep:async-trait"]
+runtime = ["auth-raft-handler", "sharded-raft-handler", "trust-handler", "log-subscriber"]
