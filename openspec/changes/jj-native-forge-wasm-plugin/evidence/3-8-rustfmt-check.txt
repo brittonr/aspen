@@ -1,0 +1,1 @@
+rustfmt --check crates/aspen-client-api/src/messages/to_operation/forge_ops.rs passed.

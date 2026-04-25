@@ -5,13 +5,10 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `Cargo.toml`
-- Changed file: `crates/aspen-cli/src/bin/aspen-cli/commands/git.rs`
-- Changed file: `docs/jj-native-forge.md`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-2-cli-backend-config-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-2-feature-docs-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-2-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-2-openspec-preflight.txt`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-jj-authz-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -67,6 +64,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 3.7 Return `capability-unavailable` for JJ-enabled repos when the selected target node does not currently have the JJ plugin active, and omit JJ routing identifiers for that node from discovery.
   - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-jj-plugin-inactive-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-rustfmt-check.txt`
+
+- [x] 3.8 Enforce existing Forge authentication and repo read/write authorization rules on JJ-native clone, fetch, push, bookmark sync, and change-id resolution.
+  - Evidence: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-jj-authz-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-rustfmt-check.txt`
 
 - [x] 4.3 Document operator and developer workflows for creating JJ-enabled repos and connecting JJ clients.
   - Evidence: `docs/jj-native-forge.md`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
@@ -311,6 +311,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-openspec-preflight.txt`
+
+### `cargo test -p aspen-client-api jj_native_*_operations_require_forge_*_auth`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-jj-authz-tests.txt`
+
+### `rustfmt --check crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-openspec-preflight.txt`
 
 ### `test -s docs/jj-native-forge.md`
 
