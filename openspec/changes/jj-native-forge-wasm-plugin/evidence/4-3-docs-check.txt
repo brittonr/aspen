@@ -1,0 +1,2 @@
+$ test -s docs/jj-native-forge.md
+Exit: 0

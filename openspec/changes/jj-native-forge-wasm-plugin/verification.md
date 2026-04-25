@@ -5,11 +5,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-forge-handler/src/executor.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-jj-native-admission-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-jj-native-no-fallback-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-3-6-openspec-preflight.txt`
+- Changed file: `docs/jj-native-forge.md`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -59,6 +57,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 3.6 Reject unsupported JJ access explicitly for Git-only repos and reject silent fallback to Git transport.
   - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-jj-native-no-fallback-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-rustfmt-check.txt`
+
+- [x] 4.3 Document operator and developer workflows for creating JJ-enabled repos and connecting JJ clients.
+  - Evidence: `docs/jj-native-forge.md`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
 
 ## Review Scope Snapshot
 
@@ -250,6 +251,16 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-3-6-openspec-preflight.txt`
+
+### `test -s docs/jj-native-forge.md`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-openspec-preflight.txt`
 
 ## Notes
 
