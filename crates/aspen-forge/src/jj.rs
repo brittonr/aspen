@@ -4,6 +4,7 @@
 //! deterministic BLAKE3-addressed blob bytes. Persistence and consensus indexes
 //! live in the Forge shell.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
@@ -22,6 +23,8 @@ pub const MAX_JJ_OBJECT_PARENTS: usize = 64;
 pub const MAX_JJ_OBJECT_CHANGE_IDS: usize = 32;
 /// Maximum payload bytes in a single JJ object envelope.
 pub const MAX_JJ_OBJECT_PAYLOAD_BYTES: usize = 128 * 1024 * 1024;
+/// Maximum JJ objects validated in one publish graph.
+pub const MAX_JJ_OBJECT_GRAPH_OBJECTS: usize = 10_000;
 /// KV prefix for repo-scoped JJ object reachability indexes.
 pub const JJ_REACHABILITY_KEY_PREFIX: &str = "forge:jj:reach:";
 /// KV prefix for repo-scoped JJ bookmarks.
@@ -158,6 +161,29 @@ pub enum JjObjectEncodingError {
     /// Postcard deserialization failed.
     #[error("JJ object deserialization failed: {message}")]
     Deserialize { message: String },
+}
+
+/// JJ object graph validation failure.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum JjObjectGraphError {
+    /// Publish graph is too large.
+    #[error("JJ object graph has {actual} objects, max {max}")]
+    TooManyObjects { actual: usize, max: usize },
+    /// Object envelope itself is invalid.
+    #[error("JJ object '{object_id}' is invalid: {source}")]
+    InvalidObject {
+        object_id: String,
+        source: JjObjectEncodingError,
+    },
+    /// Duplicate object ID in the same publish graph.
+    #[error("duplicate JJ object ID '{object_id}'")]
+    DuplicateObject { object_id: String },
+    /// Parent reference is not in the graph or known existing set.
+    #[error("JJ object '{object_id}' references missing parent '{parent_id}'")]
+    MissingParent { object_id: String, parent_id: String },
+    /// Change ID is empty.
+    #[error("JJ object '{object_id}' has an empty change ID")]
+    EmptyChangeId { object_id: String },
 }
 
 /// JJ object persistence or reachability failure.
@@ -408,6 +434,52 @@ pub fn jj_change_head_key(repo_id: &str, change_id: &str) -> String {
     format!("{JJ_CHANGE_HEAD_KEY_PREFIX}{repo_id}:{change_id}")
 }
 
+/// Validate one JJ publish graph against already-known object IDs.
+pub fn validate_jj_object_graph(
+    objects: &[JjObjectEnvelope],
+    known_object_ids: &[String],
+) -> Result<(), JjObjectGraphError> {
+    if objects.len() > MAX_JJ_OBJECT_GRAPH_OBJECTS {
+        return Err(JjObjectGraphError::TooManyObjects {
+            actual: objects.len(),
+            max: MAX_JJ_OBJECT_GRAPH_OBJECTS,
+        });
+    }
+
+    let mut object_ids = BTreeSet::new();
+    for object in objects {
+        validate_jj_object(object).map_err(|source| JjObjectGraphError::InvalidObject {
+            object_id: object.object_id.clone(),
+            source,
+        })?;
+        if !object_ids.insert(object.object_id.as_str()) {
+            return Err(JjObjectGraphError::DuplicateObject {
+                object_id: object.object_id.clone(),
+            });
+        }
+        if object.change_ids.iter().any(|change_id| change_id.is_empty()) {
+            return Err(JjObjectGraphError::EmptyChangeId {
+                object_id: object.object_id.clone(),
+            });
+        }
+    }
+
+    let known_ids: BTreeSet<&str> = known_object_ids.iter().map(String::as_str).collect();
+    for object in objects {
+        for parent in &object.parents {
+            if object_ids.contains(parent.as_str()) || known_ids.contains(parent.as_str()) {
+                continue;
+            }
+            return Err(JjObjectGraphError::MissingParent {
+                object_id: object.object_id.clone(),
+                parent_id: parent.clone(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
 /// Return a conflict when caller expectation differs from authoritative head.
 #[must_use]
 pub fn conflict_if_head_mismatch(
@@ -532,6 +604,53 @@ mod tests {
 
         assert_eq!(bookmark_key, "forge:jj:bookmark:repo-1:main");
         assert_eq!(change_key, "forge:jj:change:repo-1:change-1");
+    }
+
+    #[test]
+    fn jj_object_graph_accepts_known_parent() {
+        let mut envelope = object();
+        envelope.parents = vec![TEST_PARENT_ID.to_string()];
+        let known = vec![TEST_PARENT_ID.to_string()];
+
+        let result = validate_jj_object_graph(&[envelope], &known);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn jj_object_graph_rejects_missing_parent() {
+        let envelope = object();
+
+        let err = validate_jj_object_graph(&[envelope], &[]).expect_err("missing parent rejected");
+
+        assert_eq!(err, JjObjectGraphError::MissingParent {
+            object_id: TEST_OBJECT_ID.to_string(),
+            parent_id: TEST_PARENT_ID.to_string(),
+        });
+    }
+
+    #[test]
+    fn jj_object_graph_rejects_duplicate_object_id() {
+        let envelope = object();
+
+        let err = validate_jj_object_graph(&[envelope.clone(), envelope], &[]).expect_err("duplicate object rejected");
+
+        assert_eq!(err, JjObjectGraphError::DuplicateObject {
+            object_id: TEST_OBJECT_ID.to_string(),
+        });
+    }
+
+    #[test]
+    fn jj_object_graph_rejects_empty_change_id() {
+        let mut envelope = object();
+        envelope.change_ids = vec![String::new()];
+        envelope.parents.clear();
+
+        let err = validate_jj_object_graph(&[envelope], &[]).expect_err("empty change ID rejected");
+
+        assert_eq!(err, JjObjectGraphError::EmptyChangeId {
+            object_id: TEST_OBJECT_ID.to_string(),
+        });
     }
 
     #[test]

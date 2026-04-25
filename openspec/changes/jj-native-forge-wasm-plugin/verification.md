@@ -7,9 +7,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - Changed file: `crates/aspen-forge/src/jj.rs`
 - Changed file: `crates/aspen-forge/src/lib.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-7-aspen-forge-jj-conflict-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-7-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-7-openspec-preflight.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-aspen-forge-jj-graph-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -35,6 +35,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 2.7 Add optimistic final-publish conflict checks for stale bookmark heads and stale change-id heads.
   - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-7-aspen-forge-jj-conflict-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-7-rustfmt-check.txt`
+
+- [x] 2.6 Validate incoming JJ payloads and reject malformed or inconsistent object graphs before final publish.
+  - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-aspen-forge-jj-graph-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-rustfmt-check.txt`
 
 ## Review Scope Snapshot
 
@@ -121,6 +124,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-7-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge jj::`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-aspen-forge-jj-graph-tests.txt`
+
+### `rustfmt --check crates/aspen-forge/src/jj.rs crates/aspen-forge/src/lib.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-6-openspec-preflight.txt`
 
 ## Notes
 
