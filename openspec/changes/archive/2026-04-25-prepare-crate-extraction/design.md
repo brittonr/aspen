@@ -61,7 +61,7 @@ Each manifest records:
 
 Until license and publication policy are resolved, no candidate may be marked `publishable from monorepo` or `future repository split candidate`; those labels are invalid for this change. Any task attempting to mark a candidate publishable or repo-split-ready must stop for human decision on licensing and publication policy.
 
-All evidence generated for a manifest or readiness claim must be saved under `openspec/changes/prepare-crate-extraction/evidence/` and linked from `openspec/changes/prepare-crate-extraction/verification.md` before the related task can be checked complete.
+All evidence generated for a manifest or readiness claim must be saved under `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/` and linked from `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md` before the related task can be checked complete.
 
 **Rationale:** A table alone is not enough once code starts moving. The manifest is the durable place where API ownership, release metadata, and dependency decisions are reviewed.
 

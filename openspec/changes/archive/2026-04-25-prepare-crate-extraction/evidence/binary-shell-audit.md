@@ -28,7 +28,7 @@ Changed documentation/policy/evidence paths:
 - `docs/crate-extraction.md`
 - `docs/crate-extraction/*.md`
 - `docs/crate-extraction/policy.ncl`
-- `openspec/changes/prepare-crate-extraction/**`
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/**`
 
 ## Result
 

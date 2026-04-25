@@ -12,7 +12,7 @@ VERDICT: FAIL
 
 ## Findings
 - [high] [class=omission] [scope=tasks] [route=human] [promoted=no] Current checked-task checkpoint is not reviewable.
-  - Evidence: `tasks summary` claims `16 done`; `tasks.md` leaves `V11` unchecked even though `V11` requires `verification.md`, implementation diff artifacts, readiness-checker output, `scripts/openspec-preflight.sh prepare-crate-extraction` transcript, and actual `openspec_gate tasks` transcript to be synchronized “for all checked tasks”; `proposal.md` says “No implementation or verification item can be accepted until `verification.md` links the related evidence artifact.” The supplied artifacts do not include `openspec/changes/prepare-crate-extraction/verification.md` or the referenced evidence contents.
+  - Evidence: `tasks summary` claims `16 done`; `tasks.md` leaves `V11` unchecked even though `V11` requires `verification.md`, implementation diff artifacts, readiness-checker output, `scripts/openspec-preflight.sh prepare-crate-extraction` transcript, and actual `openspec_gate tasks` transcript to be synchronized “for all checked tasks”; `proposal.md` says “No implementation or verification item can be accepted until `verification.md` links the related evidence artifact.” The supplied artifacts do not include `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md` or the referenced evidence contents.
 
 - [medium] [class=env] [scope=tasks] [route=deterministic-check] [promoted=yes] Downstream clone/worktree proof lacks the sibling-repo-layout guard from prior failures.
   - Evidence: `tasks.md` `V3` permits “a baseline clone/worktree with sibling path dependencies explicitly wired” and checks that no dependency path resolves through a sibling live Aspen checkout. Napkin entry says baseline-capture clones for Aspen must preserve sibling-repo layout and that a `/tmp` git worktree or clone without adjacent `aspen-dns` / `aspen-wasm-plugin` siblings can break. `V3`/`V10` do not require recording or validating that sibling layout when the clone/worktree option is used.
@@ -35,7 +35,7 @@ VERDICT: FAIL
 
 ## Next Actions
 - Complete `V11` before checking more tasks or continuing implementation.
-- Supply or update `openspec/changes/prepare-crate-extraction/verification.md` with links to evidence for every checked task.
+- Supply or update `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md` with links to evidence for every checked task.
 - Save the preflight and `openspec_gate tasks` transcripts required by `V11`.
 - If the checked-task evidence cannot be produced, uncheck the affected tasks.
 - Amend `V3`/`V10` or the readiness checker to validate sibling-repo layout when using a baseline clone/worktree, or require the checked-in repo-local consumer fixture path.

@@ -29,7 +29,7 @@ First Redb Raft KV layer map:
 
 ## Completion state
 
-This change should end with extraction contracts, a checked-in inventory, typed dependency policy, six canonical Redb Raft KV manifests (`docs/crate-extraction/aspen-kv-types.md`, `docs/crate-extraction/aspen-raft-kv-types.md`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-kv.md`, `docs/crate-extraction/aspen-raft-network.md`, and `docs/crate-extraction/aspen-raft-compat.md`), three broader family manifest stubs (`docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, and `docs/crate-extraction/protocol-wire.md`), service/runtime inventory follow-up entries that may explicitly say `manifest not yet created`, `openspec/changes/prepare-crate-extraction/verification.md`, and workspace-internal extraction readiness evidence for the first Redb Raft KV slice. It does not mark any crate publishable or repository-split-ready until license and publication policy are decided.
+This change should end with extraction contracts, a checked-in inventory, typed dependency policy, six canonical Redb Raft KV manifests (`docs/crate-extraction/aspen-kv-types.md`, `docs/crate-extraction/aspen-raft-kv-types.md`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-kv.md`, `docs/crate-extraction/aspen-raft-network.md`, and `docs/crate-extraction/aspen-raft-compat.md`), three broader family manifest stubs (`docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, and `docs/crate-extraction/protocol-wire.md`), service/runtime inventory follow-up entries that may explicitly say `manifest not yet created`, `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md`, and workspace-internal extraction readiness evidence for the first Redb Raft KV slice. It does not mark any crate publishable or repository-split-ready until license and publication policy are decided.
 
 ## Capabilities
 
@@ -56,15 +56,15 @@ This change should end with extraction contracts, a checked-in inventory, typed 
 
 ## Verification Rails
 
-Initial evidence paths and commands are part of the implementation checklist, but durable traceability lives in `openspec/changes/prepare-crate-extraction/verification.md`. No implementation or verification item can be accepted until `verification.md` links the related evidence artifact.
+Initial evidence paths and commands are part of the implementation checklist, but durable traceability lives in `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md`. No implementation or verification item can be accepted until `verification.md` links the related evidence artifact.
 
-- `openspec/changes/prepare-crate-extraction/evidence/extraction-inventory-baseline.md`: `cargo metadata --format-version 1`-derived crate inventory and classification baseline.
-- `openspec/changes/prepare-crate-extraction/evidence/redb-raft-kv-coupling-baseline.md`: source/module map plus `cargo tree` evidence for `aspen-redb-storage`, `aspen-raft-types`, `aspen-raft`, and `aspen-raft-network`.
-- `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`: standalone `cargo check` matrix for `aspen-kv-types`, `aspen-redb-storage`, `aspen-raft-kv-types`, `aspen-raft-kv`, `aspen-raft-network`, and Aspen compatibility consumers across default and named reusable features.
-- `openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.json` and `openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.md`: readiness-checker output proving reusable defaults do not pull app bundles, handlers, dogfood, UI, trust, secrets, SQL, coordination, or forbidden defaults except through documented opt-in features.
-- `openspec/changes/prepare-crate-extraction/evidence/downstream-consumer-metadata.json`: `cargo metadata --manifest-path <consumer>/Cargo.toml --format-version 1` for a checked-in repo-local consumer or explicitly wired baseline clone/worktree that does not depend on root package `aspen` or compatibility re-exports as its primary API.
-- `openspec/changes/prepare-crate-extraction/evidence/redb-atomicity.md`: post-move Redb single-transaction log/state proof plus crash-recovery, failure-injection, or madsim evidence.
-- `openspec/changes/prepare-crate-extraction/evidence/compat-*.md`: Aspen node, cluster, CLI, dogfood, handler, bridge, gateway, web, and TUI compatibility compile/test transcripts.
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/extraction-inventory-baseline.md`: `cargo metadata --format-version 1`-derived crate inventory and classification baseline.
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/redb-raft-kv-coupling-baseline.md`: source/module map plus `cargo tree` evidence for `aspen-redb-storage`, `aspen-raft-types`, `aspen-raft`, and `aspen-raft-network`.
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/feature-matrix.md`: standalone `cargo check` matrix for `aspen-kv-types`, `aspen-redb-storage`, `aspen-raft-kv-types`, `aspen-raft-kv`, `aspen-raft-network`, and Aspen compatibility consumers across default and named reusable features.
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/dependency-boundary.json` and `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/dependency-boundary.md`: readiness-checker output proving reusable defaults do not pull app bundles, handlers, dogfood, UI, trust, secrets, SQL, coordination, or forbidden defaults except through documented opt-in features.
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/downstream-consumer-metadata.json`: `cargo metadata --manifest-path <consumer>/Cargo.toml --format-version 1` for a checked-in repo-local consumer or explicitly wired baseline clone/worktree that does not depend on root package `aspen` or compatibility re-exports as its primary API.
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/redb-atomicity.md`: post-move Redb single-transaction log/state proof plus crash-recovery, failure-injection, or madsim evidence.
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/compat-*.md`: Aspen node, cluster, CLI, dogfood, handler, bridge, gateway, web, and TUI compatibility compile/test transcripts.
 
 Readiness checker invocation:
 
@@ -74,8 +74,8 @@ scripts/check-crate-extraction-readiness.rs \
   --inventory docs/crate-extraction.md \
   --manifest-dir docs/crate-extraction \
   --candidate-family redb-raft-kv \
-  --output-json openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.json \
-  --output-markdown openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.md
+  --output-json openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/dependency-boundary.json \
+  --output-markdown openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/dependency-boundary.md
 ```
 
 The checker reads `docs/crate-extraction/policy.ncl`, the inventory, and candidate manifests; evaluates direct, transitive, representative-consumer, and re-export dependency paths; rejects incomplete exception metadata and forbidden readiness states; exits non-zero on boundary failure; and writes deterministic JSON plus markdown summaries for review.

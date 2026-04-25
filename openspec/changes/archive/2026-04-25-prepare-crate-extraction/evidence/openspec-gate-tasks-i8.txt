@@ -16,10 +16,10 @@ VERDICT: FAIL
   - Evidence: `tasks summary` says `16 done, 0 in progress, 18 todo`; `tasks.md` leaves `I7`-`I12` and `V1`-`V12` unchecked; `tasks.md` `V12` is explicitly gated “After `V1`-`V11`”.
 
 - [blocker] [class=omission] [scope=review] [route=prompt] [promoted=no] Checked task evidence is not reviewable from supplied artifacts.
-  - Evidence: `tasks.md` `R0` is checked and requires `openspec/changes/prepare-crate-extraction/verification.md` to be updated with each evidence artifact before related tasks are checked; `proposal.md` “Verification Rails” says no implementation or verification item can be accepted until `verification.md` links the related evidence artifact; the supplied artifacts do not include the contents of `openspec/changes/prepare-crate-extraction/verification.md` or evidence artifacts for checked `R1`, `R2`, `I1`-`I6`, or `I13`-`I19`.
+  - Evidence: `tasks.md` `R0` is checked and requires `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md` to be updated with each evidence artifact before related tasks are checked; `proposal.md` “Verification Rails” says no implementation or verification item can be accepted until `verification.md` links the related evidence artifact; the supplied artifacts do not include the contents of `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md` or evidence artifacts for checked `R1`, `R2`, `I1`-`I6`, or `I13`-`I19`.
 
 - [major] [class=omission] [scope=tasks] [route=deterministic-check] [promoted=no] Negative dependency-boundary evidence is planned but not complete.
-  - Evidence: `tasks.md` `V2` is unchecked and requires `openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.json`, `dependency-boundary.md`, `aspen-raft-kv-types-dependency-tree.txt`, and `aspen-raft-kv-facade-dependency-tree.txt`, including exact commands, forbidden-dependency grep commands, `forbidden_dependency_matches=none`, and `exit_code=0`.
+  - Evidence: `tasks.md` `V2` is unchecked and requires `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/dependency-boundary.json`, `dependency-boundary.md`, `aspen-raft-kv-types-dependency-tree.txt`, and `aspen-raft-kv-facade-dependency-tree.txt`, including exact commands, forbidden-dependency grep commands, `forbidden_dependency_matches=none`, and `exit_code=0`.
 
 - [major] [class=omission] [scope=tasks] [route=human] [promoted=no] `aspen-raft-types` transition decisions remain incomplete.
   - Evidence: `tasks.md` `I7` is unchecked and requires a per-direct-consumer transition table with `transition decision`, `dependency-key alias decision`, `temporary compatibility crate/re-export decision`, `concrete owner status`, tests or verification rail, and removal criteria; `design.md` Decision 7 requires compatibility re-exports and dependency-key/package aliasing to be recorded with owner and removal criteria.
@@ -40,7 +40,7 @@ VERDICT: FAIL
 ## Next Actions
 
 - Keep `I7`, `I8`, `I9`-`I12`, and `V1`-`V12` unchecked until their required evidence exists.
-- Supply `openspec/changes/prepare-crate-extraction/verification.md` and linked evidence for already checked tasks, or uncheck unsupported tasks.
+- Supply `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md` and linked evidence for already checked tasks, or uncheck unsupported tasks.
 - Complete `V2` with the exact dependency-boundary artifacts and `forbidden_dependency_matches=none` / `exit_code=0` records.
 - Complete `V11` before making another intermediate or final task-status claim.
 - Do not archive or sync this change yet.

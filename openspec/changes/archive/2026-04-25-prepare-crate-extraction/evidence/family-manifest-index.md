@@ -11,4 +11,4 @@ This artifact anchors checked tasks `I13`, `I14`, `I15`, and `I18` after the ini
 ## Inventory synchronization
 
 - `docs/crate-extraction.md` remains the canonical inventory index.
-- Rows affected by `I13` through `I17` carry owner, manifest link or explicit `manifest not yet created` status, readiness state, and next-action fields synchronized with these family manifests and `openspec/changes/prepare-crate-extraction/evidence/service-follow-up-selection.md`.
+- Rows affected by `I13` through `I17` carry owner, manifest link or explicit `manifest not yet created` status, readiness state, and next-action fields synchronized with these family manifests and `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/service-follow-up-selection.md`.

@@ -2,14 +2,14 @@
 
 V2 requires negative checker mutations proving non-zero exits for invalid readiness labels, incomplete exception metadata, forbidden transitive paths, and re-export leaks.
 
-The checker output paths stay directly under `openspec/changes/prepare-crate-extraction/evidence/` while each mutation runs so the checker reads the real `verification.md` index instead of a temp-tree placeholder.
+The checker output paths stay directly under `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/` while each mutation runs so the checker reads the real `verification.md` index instead of a temp-tree placeholder.
 
 ## blocked-readiness
 
 Mutation: mark one candidate `publishable from monorepo`, which is blocked until license/publication policy exists.
 
 ```text
-$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/blocked-readiness/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/prepare-crate-extraction/evidence/negative-blocked-readiness.json --output-markdown openspec/changes/prepare-crate-extraction/evidence/negative-blocked-readiness.md
+$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/blocked-readiness/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-blocked-readiness.json --output-markdown openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-blocked-readiness.md
 Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
@@ -69,7 +69,7 @@ exit_code=1
 Mutation: blank the owner on `aspen-kv-types -> aspen-constants` exception metadata.
 
 ```text
-$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/empty-exception-owner/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/prepare-crate-extraction/evidence/negative-empty-exception-owner.json --output-markdown openspec/changes/prepare-crate-extraction/evidence/negative-empty-exception-owner.md
+$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/empty-exception-owner/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-empty-exception-owner.json --output-markdown openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-empty-exception-owner.md
 Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
@@ -129,7 +129,7 @@ exit_code=1
 Mutation: add transitive crate `serde_core` to `forbidden_by_default`, proving cargo-tree transitive scans fail non-zero when a forbidden transitive path is reachable.
 
 ```text
-$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/forbidden-transitive/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/prepare-crate-extraction/evidence/negative-forbidden-transitive.json --output-markdown openspec/changes/prepare-crate-extraction/evidence/negative-forbidden-transitive.md
+$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/forbidden-transitive/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-forbidden-transitive.json --output-markdown openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-forbidden-transitive.md
 Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
@@ -192,7 +192,7 @@ exit_code=1
 Mutation: erase `aspen-kv-types` re-exporters, proving re-export path metadata omissions fail non-zero.
 
 ```text
-$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/empty-reexporters/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/prepare-crate-extraction/evidence/negative-empty-reexporters.json --output-markdown openspec/changes/prepare-crate-extraction/evidence/negative-empty-reexporters.md
+$ scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.z7SH5b4wcD/empty-reexporters/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family redb-raft-kv --output-json openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-empty-reexporters.json --output-markdown openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/negative-empty-reexporters.md
 Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
 Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.

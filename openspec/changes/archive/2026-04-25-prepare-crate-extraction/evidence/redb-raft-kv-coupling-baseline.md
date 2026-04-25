@@ -4,10 +4,10 @@ This baseline captures the current Redb + OpenRaft KV layout before any storage 
 
 ## Command evidence
 
-- `openspec/changes/prepare-crate-extraction/evidence/cargo-tree/aspen-redb-storage.txt`
-- `openspec/changes/prepare-crate-extraction/evidence/cargo-tree/aspen-raft-types.txt`
-- `openspec/changes/prepare-crate-extraction/evidence/cargo-tree/aspen-raft.txt`
-- `openspec/changes/prepare-crate-extraction/evidence/cargo-tree/aspen-raft-network.txt`
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/cargo-tree/aspen-redb-storage.txt`
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/cargo-tree/aspen-raft-types.txt`
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/cargo-tree/aspen-raft.txt`
+- `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/cargo-tree/aspen-raft-network.txt`
 
 Each file was generated with `cargo tree -p <package> -e features`.
 

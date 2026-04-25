@@ -1,4 +1,4 @@
-OK: openspec/changes/prepare-crate-extraction
+OK: openspec/changes/archive/2026-04-25-prepare-crate-extraction
   tasks: 34 total / 16 checked
   changed files listed: 23
   verification artifacts: 23

@@ -12,7 +12,7 @@ VERDICT: WARN
 
 ## Findings
 - [medium] [class=omission] [scope=tasks] [route=auto-fix] [promoted=no] V10 has no completion path when compatibility rails pass.
-  - Evidence: `openspec/changes/prepare-crate-extraction/tasks.md` task `V10` only says, “If any compatibility rail fails from known unrelated parser or workspace breakage, save a triage artifact…”. `V12` depends on “After `V1`-`V11`”, so `V10` needs an explicit no-failure completion condition or N/A evidence path.
+  - Evidence: `openspec/changes/archive/2026-04-25-prepare-crate-extraction/tasks.md` task `V10` only says, “If any compatibility rail fails from known unrelated parser or workspace breakage, save a triage artifact…”. `V12` depends on “After `V1`-`V11`”, so `V10` needs an explicit no-failure completion condition or N/A evidence path.
 
 ## Stage Check
 - The task plan traces to the proposal/design/spec through explicit `[covers=...]` references.
@@ -25,7 +25,7 @@ VERDICT: WARN
 ## Next Actions
 - Amend `V10` to say what evidence or `verification.md` entry closes it when no unrelated compatibility failure occurs.
 - Continue in order with `I7`, `I8`, `I9`, then `I10`-`I12`.
-- Do not check verification tasks until their evidence artifacts are linked from `openspec/changes/prepare-crate-extraction/verification.md`.
+- Do not check verification tasks until their evidence artifacts are linked from `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md`.
 
 ## Promotion Hints
 - repeated 911x [class=omission] [scope=tasks] [route=auto-fix]

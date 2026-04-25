@@ -5,7 +5,7 @@ Generated from `cargo metadata --format-version 1 --no-deps` for the workspace.
 - Packages inventoried: 103
 - Owner baseline: `owner needed` for every candidate until a human owner is assigned.
 - Readiness baseline: `workspace-internal` for every candidate; this evidence does not mark anything publishable or repository-split-ready.
-- Metadata source: `openspec/changes/prepare-crate-extraction/evidence/cargo-metadata-no-deps.json`
+- Metadata source: `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/cargo-metadata-no-deps.json`
 
 ## Inventory
 

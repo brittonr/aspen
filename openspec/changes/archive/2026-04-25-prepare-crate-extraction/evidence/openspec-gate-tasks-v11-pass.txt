@@ -26,11 +26,11 @@ None.
   - `aspen-client-api` protocol/wire follow-up is tracked by `I15`.
   - Representative no-std/core compatibility rails are included in `V1`.
   - Compatibility rails for cluster, CLI, handlers, bridges, gateway, web, and TUI are covered by `V7`-`V9`.
-- Verification evidence requirements are explicit and tied to canonical paths under `openspec/changes/prepare-crate-extraction/evidence/`.
+- Verification evidence requirements are explicit and tied to canonical paths under `openspec/changes/archive/2026-04-25-prepare-crate-extraction/evidence/`.
 - Current status is not final: task summary shows `17 done, 0 in progress, 17 todo`, including implementation tasks `I7`-`I12` and verification tasks `V1`-`V10`, `V12`.
 
 ## Next Actions
 - Continue with the next unchecked implementation task, `I7`.
 - Do not archive or sync as complete while unchecked tasks remain.
-- Before checking additional tasks complete, keep `openspec/changes/prepare-crate-extraction/verification.md` synchronized with the related evidence artifacts as required by `R0` and `V11`.
+- Before checking additional tasks complete, keep `openspec/changes/archive/2026-04-25-prepare-crate-extraction/verification.md` synchronized with the related evidence artifacts as required by `R0` and `V11`.
 ```
