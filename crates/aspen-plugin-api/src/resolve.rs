@@ -361,6 +361,7 @@ mod tests {
             version: version.to_string(),
             wasm_hash: "hash".to_string(),
             handles: vec![],
+            protocols: vec![],
             priority: 900,
             fuel_limit: None,
             memory_limit: None,

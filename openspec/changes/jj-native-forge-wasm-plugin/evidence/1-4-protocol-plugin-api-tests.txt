@@ -1,0 +1,81 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.72s
+     Running unittests src/lib.rs (/tmp/aspen-jj-foundation-check/debug/deps/aspen_forge_protocol-e53ca277525cb656)
+
+running 20 tests
+test tests::jj_native_request_roundtrip ... ok
+test tests::jj_transport_rejects_future_version ... ok
+test tests::test_chunked_push_complete_response_roundtrip ... ok
+test tests::test_forge_repo_result_success ... ok
+test tests::test_git_bridge_list_refs_response_roundtrip ... ok
+test tests::test_chunked_push_start_response_roundtrip ... ok
+test tests::test_chunked_push_chunk_response_roundtrip ... ok
+test tests::test_git_bridge_fetch_response_roundtrip ... ok
+test tests::jj_native_response_reports_incompatible_version ... ok
+test tests::test_forge_repo_info_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_response_empty ... ok
+test tests::test_git_bridge_probe_objects_response_error ... ok
+test tests::jj_transport_accepts_current_version ... ok
+test tests::test_git_bridge_object_roundtrip ... ok
+test tests::test_forge_patch_info_roundtrip ... ok
+test tests::test_forge_repo_result_error ... ok
+test tests::test_forge_issue_info_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_response_roundtrip ... ok
+test tests::test_git_bridge_push_response_roundtrip ... ok
+test tests::test_git_bridge_ref_update_roundtrip ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/tmp/aspen-jj-foundation-check/debug/deps/aspen_plugin_api-568e206c9e02e279)
+
+running 29 tests
+test manifest::tests::ignores_disabled_protocol_collision ... ok
+test manifest::tests::protocol_manifest_roundtrips ... ok
+test manifest::tests::detects_enabled_protocol_collision ... ok
+test resolve::tests::test_api_version_ok ... ok
+test resolve::tests::test_api_version_too_new ... ok
+test resolve::tests::test_disabled_plugins_excluded ... ok
+test resolve::tests::test_cycle_detection ... ok
+test resolve::tests::test_diamond ... ok
+test resolve::tests::test_empty_manifest_list ... ok
+test resolve::tests::test_validate_install_missing_dep ... ok
+test resolve::tests::test_optional_dependency_version_mismatch ... ok
+test resolve::tests::test_linear_chain ... ok
+test resolve::tests::test_validate_install_ok ... ok
+test resolve::tests::test_missing_hard_dependency ... ok
+test resolve::tests::test_reverse_dependents ... ok
+test resolve::tests::test_version_mismatch ... ok
+test resolve::tests::test_reverse_dependents_excludes_optional ... ok
+test tests::metrics_active_requests_manual ... ok
+test resolve::tests::test_version_satisfied ... ok
+test tests::api_version_is_semver ... ok
+test tests::metrics_avg_zero_requests ... ok
+test resolve::tests::test_non_semver_version_strings ... ok
+test resolve::tests::test_missing_optional_dependency ... ok
+test resolve::tests::test_no_dependencies ... ok
+test tests::metrics_max_duration_tracks_peak ... ok
+test tests::metrics_new_is_zeroed ... ok
+test tests::metrics_record_error ... ok
+test tests::metrics_record_success ... ok
+test tests::metrics_snapshot_serializes_to_json ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests aspen_forge_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_plugin_api
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Exit: 0

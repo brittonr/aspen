@@ -27,6 +27,36 @@ fn default_dependencies() -> Vec<PluginDependency> {
     Vec::new()
 }
 
+fn default_protocols() -> Vec<PluginProtocol> {
+    Vec::new()
+}
+
+/// Protocol session advertised by a plugin.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PluginProtocol {
+    /// Stable transport identifier advertised to clients.
+    pub identifier: String,
+    /// Transport protocol version.
+    pub version: u16,
+    /// Maximum concurrent sessions this plugin accepts.
+    pub max_concurrent_sessions: u32,
+    /// Maximum chunk size accepted by one protocol session.
+    pub max_chunk_size_bytes: u64,
+    /// Maximum in-flight bytes across sessions.
+    pub max_in_flight_bytes: u64,
+    /// Session timeout in milliseconds.
+    pub session_timeout_ms: u64,
+}
+
+/// Protocol identifier collision detected across manifests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginProtocolCollision {
+    /// Colliding transport identifier.
+    pub identifier: String,
+    /// Plugin names that declared the same identifier.
+    pub plugins: Vec<String>,
+}
+
 /// A dependency on another plugin.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PluginDependency {
@@ -53,6 +83,9 @@ pub struct PluginManifest {
     pub wasm_hash: String,
     /// Request type names this plugin handles.
     pub handles: Vec<String>,
+    /// Protocol sessions this plugin can serve.
+    #[serde(default = "default_protocols")]
+    pub protocols: Vec<PluginProtocol>,
     /// Dispatch priority (higher = later). Must be in `MIN_PLUGIN_PRIORITY..=MAX_PLUGIN_PRIORITY`.
     pub priority: u32,
     /// Fuel limit override. Uses `PLUGIN_DEFAULT_FUEL` if `None`.
@@ -195,6 +228,33 @@ impl Default for PluginPermissions {
     }
 }
 
+/// Return protocol identifier collisions across enabled plugin manifests.
+#[must_use]
+pub fn protocol_identifier_collisions(manifests: &[PluginManifest]) -> Vec<PluginProtocolCollision> {
+    use std::collections::BTreeMap;
+
+    let mut owners: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for manifest in manifests.iter().filter(|manifest| manifest.enabled) {
+        for protocol in &manifest.protocols {
+            owners.entry(protocol.identifier.as_str()).or_default().push(manifest.name.clone());
+        }
+    }
+
+    owners
+        .into_iter()
+        .filter_map(|(identifier, plugins)| {
+            if plugins.len() > 1 {
+                Some(PluginProtocolCollision {
+                    identifier: identifier.to_string(),
+                    plugins,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 impl PluginPermissions {
     /// Create permissions with all capabilities granted.
     ///
@@ -225,6 +285,9 @@ pub struct PluginInfo {
     pub version: String,
     /// Request type names this plugin handles.
     pub handles: Vec<String>,
+    /// Protocol sessions this plugin can serve.
+    #[serde(default = "default_protocols")]
+    pub protocols: Vec<PluginProtocol>,
     /// Dispatch priority.
     pub priority: u32,
     /// Optional application ID for federation discovery.
@@ -244,4 +307,86 @@ pub struct PluginInfo {
     /// Human-readable description.
     #[serde(default = "default_optional_string")]
     pub description: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_PROTOCOL_ID: &str = "/aspen/test/1";
+    const TEST_VERSION: u16 = 1;
+    const TEST_MAX_SESSIONS: u32 = 2;
+    const TEST_MAX_CHUNK_BYTES: u64 = 64 * 1024;
+    const TEST_MAX_IN_FLIGHT_BYTES: u64 = 256 * 1024;
+    const TEST_TIMEOUT_MS: u64 = 30_000;
+
+    fn protocol(identifier: &str) -> PluginProtocol {
+        PluginProtocol {
+            identifier: identifier.to_string(),
+            version: TEST_VERSION,
+            max_concurrent_sessions: TEST_MAX_SESSIONS,
+            max_chunk_size_bytes: TEST_MAX_CHUNK_BYTES,
+            max_in_flight_bytes: TEST_MAX_IN_FLIGHT_BYTES,
+            session_timeout_ms: TEST_TIMEOUT_MS,
+        }
+    }
+
+    fn manifest(name: &str, identifier: &str, enabled: bool) -> PluginManifest {
+        PluginManifest {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            wasm_hash: "hash".to_string(),
+            handles: vec![],
+            protocols: vec![protocol(identifier)],
+            priority: 900,
+            fuel_limit: None,
+            memory_limit: None,
+            enabled,
+            app_id: None,
+            execution_timeout_secs: None,
+            kv_prefixes: vec![],
+            permissions: PluginPermissions::default(),
+            signature: None,
+            description: None,
+            author: None,
+            tags: vec![],
+            min_api_version: None,
+            dependencies: vec![],
+        }
+    }
+
+    #[test]
+    fn protocol_manifest_roundtrips() {
+        let protocol = protocol(TEST_PROTOCOL_ID);
+        let json = serde_json::to_string(&protocol).expect("serialize protocol");
+        let decoded: PluginProtocol = serde_json::from_str(&json).expect("deserialize protocol");
+
+        assert_eq!(decoded, protocol);
+    }
+
+    #[test]
+    fn detects_enabled_protocol_collision() {
+        let manifests = vec![
+            manifest("left", TEST_PROTOCOL_ID, true),
+            manifest("right", TEST_PROTOCOL_ID, true),
+        ];
+
+        let collisions = protocol_identifier_collisions(&manifests);
+
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].identifier, TEST_PROTOCOL_ID);
+        assert_eq!(collisions[0].plugins.len(), 2);
+    }
+
+    #[test]
+    fn ignores_disabled_protocol_collision() {
+        let manifests = vec![
+            manifest("left", TEST_PROTOCOL_ID, true),
+            manifest("right", TEST_PROTOCOL_ID, false),
+        ];
+
+        let collisions = protocol_identifier_collisions(&manifests);
+
+        assert!(collisions.is_empty());
+    }
 }

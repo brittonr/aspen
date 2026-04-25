@@ -14,6 +14,116 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// ALPN identifier for the JJ-native Forge protocol.
+pub const JJ_NATIVE_FORGE_ALPN: &[u8] = b"/aspen/forge/jj/1";
+
+/// Current JJ-native transport version.
+pub const JJ_TRANSPORT_VERSION_CURRENT: u16 = 1;
+
+/// Lowest JJ-native transport version accepted by this crate.
+pub const JJ_TRANSPORT_VERSION_MIN_SUPPORTED: u16 = 1;
+
+/// Inclusive JJ-native transport version range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjTransportVersionRange {
+    /// Lowest accepted version.
+    pub min_supported: u16,
+    /// Highest accepted version.
+    pub max_supported: u16,
+}
+
+impl JjTransportVersionRange {
+    /// Current Aspen JJ-native compatibility range.
+    #[must_use]
+    pub const fn current() -> Self {
+        Self {
+            min_supported: JJ_TRANSPORT_VERSION_MIN_SUPPORTED,
+            max_supported: JJ_TRANSPORT_VERSION_CURRENT,
+        }
+    }
+
+    /// Return true when `client_version` can speak to this range.
+    #[must_use]
+    pub const fn accepts(&self, client_version: u16) -> bool {
+        client_version >= self.min_supported && client_version <= self.max_supported
+    }
+}
+
+/// JJ-native operation families carried by the Forge JJ protocol.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JjNativeOperation {
+    /// Clone all currently reachable JJ objects and heads.
+    Clone,
+    /// Fetch objects and bookmark/change-id updates missing from the client.
+    Fetch,
+    /// Push staged objects and publish bookmark/change-id updates atomically.
+    Push,
+    /// Synchronize bookmark create/move/delete operations only.
+    BookmarkSync,
+    /// Resolve JJ change IDs to current object heads.
+    ResolveChangeId,
+}
+
+/// Bookmark mutation in a JJ-native request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjBookmarkMutation {
+    /// Bookmark name in the JJ namespace.
+    pub name: String,
+    /// Expected old head, if the client is doing optimistic conflict checking.
+    pub expected_head: Option<String>,
+    /// New head. `None` deletes the bookmark.
+    pub new_head: Option<String>,
+}
+
+/// Probe-first JJ-native request envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjNativeRequest {
+    /// Repository ID (hex-encoded BLAKE3 hash).
+    pub repo_id: String,
+    /// Operation family.
+    pub operation: JjNativeOperation,
+    /// Client transport version.
+    pub transport_version: u16,
+    /// JJ object hashes the client wants.
+    pub want_objects: Vec<String>,
+    /// JJ object hashes already present on the client.
+    pub have_objects: Vec<String>,
+    /// Change IDs to resolve or update.
+    pub change_ids: Vec<String>,
+    /// Bookmark mutations requested by the client.
+    pub bookmark_mutations: Vec<JjBookmarkMutation>,
+}
+
+/// JJ-native response status.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JjNativeStatus {
+    /// Request can continue.
+    Accepted,
+    /// Transport version is not compatible.
+    IncompatibleTransportVersion,
+    /// Repository/backend capability is unavailable.
+    CapabilityUnavailable,
+    /// Request conflicts with current bookmark or change-id heads.
+    Conflict,
+    /// Payload was malformed or inconsistent.
+    Rejected,
+}
+
+/// Probe-first JJ-native response envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjNativeResponse {
+    /// Response status.
+    pub status: JjNativeStatus,
+    /// Server transport compatibility range.
+    pub transport_range: JjTransportVersionRange,
+    /// JJ objects the server still needs from the client.
+    pub missing_objects: Vec<String>,
+    /// Current bookmark heads known to the server.
+    pub bookmark_heads: Vec<JjBookmarkMutation>,
+    /// Human-readable error or conflict detail.
+    pub message: Option<String>,
+}
+
 /// Repository information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoInfo {
@@ -870,5 +980,63 @@ mod tests {
         assert_eq!(decoded.objects_imported, 42);
         assert_eq!(decoded.objects_skipped, 8);
         assert!(decoded.ref_results.is_empty());
+    }
+
+    #[test]
+    fn jj_transport_accepts_current_version() {
+        let range = JjTransportVersionRange::current();
+
+        assert!(range.accepts(JJ_TRANSPORT_VERSION_CURRENT));
+    }
+
+    #[test]
+    fn jj_transport_rejects_future_version() {
+        const FUTURE_VERSION: u16 = JJ_TRANSPORT_VERSION_CURRENT + 1;
+        let range = JjTransportVersionRange::current();
+
+        assert!(!range.accepts(FUTURE_VERSION));
+    }
+
+    #[test]
+    fn jj_native_request_roundtrip() {
+        const CLIENT_VERSION: u16 = JJ_TRANSPORT_VERSION_CURRENT;
+        let request = JjNativeRequest {
+            repo_id: "repo".into(),
+            operation: JjNativeOperation::BookmarkSync,
+            transport_version: CLIENT_VERSION,
+            want_objects: vec!["want".into()],
+            have_objects: vec!["have".into()],
+            change_ids: vec!["change".into()],
+            bookmark_mutations: vec![JjBookmarkMutation {
+                name: "main".into(),
+                expected_head: Some("old".into()),
+                new_head: Some("new".into()),
+            }],
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        let decoded: JjNativeRequest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(decoded.operation, JjNativeOperation::BookmarkSync);
+        assert_eq!(decoded.bookmark_mutations.len(), 1);
+        assert_eq!(decoded.transport_version, CLIENT_VERSION);
+    }
+
+    #[test]
+    fn jj_native_response_reports_incompatible_version() {
+        let response = JjNativeResponse {
+            status: JjNativeStatus::IncompatibleTransportVersion,
+            transport_range: JjTransportVersionRange::current(),
+            missing_objects: Vec::new(),
+            bookmark_heads: Vec::new(),
+            message: Some("unsupported version".into()),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        let decoded: JjNativeResponse = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(decoded.status, JjNativeStatus::IncompatibleTransportVersion);
+        assert_eq!(decoded.transport_range, JjTransportVersionRange::current());
+        assert!(decoded.message.is_some());
     }
 }
