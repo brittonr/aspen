@@ -89,4 +89,13 @@ Dependency-key/package aliasing is allowed only when it preserves import paths d
 
 ## First-slice status
 
-Current status is `workspace-internal`. This crate remains the app/runtime shell and compatibility bridge while reusable layers are extracted inside the workspace.
+Current status is `workspace-internal`. This crate is the Aspen app/runtime shell and compatibility bridge by design — it is not a reusable extraction candidate and is not expected to reach `extraction-ready-in-workspace`. Its purpose is to preserve existing import paths while reusable layers move to canonical crates.
+
+Verified compatibility evidence:
+
+- All compatibility re-exports compile (I11/I12: `aspen_raft::storage_shared::*`, `aspen_raft::types::*`, `aspen_raft::raft_kv`, `aspen_raft::raft_kv_types`)
+- Node/cluster consumers compile (V7: `evidence/compat-node-cluster.md`)
+- CLI/dogfood/handler consumers compile (V8: `evidence/compat-cli-dogfood-handlers.md`)
+- Bridge/gateway/web/TUI consumers compile (V9: `evidence/compat-bridges-web-tui.md`)
+
+Removal of compatibility re-exports tracked per entry in the compatibility table above.

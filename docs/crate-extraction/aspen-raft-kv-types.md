@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-raft-kv-types`, split from current `crates/aspen-raft-types`
 - **Intended audience**: Rust projects that need OpenRaft app type configuration, membership metadata, app requests/responses, and storage error types for the reusable KV stack.
 - **Public API owner**: Aspen Raft/KV extraction maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: reusable library candidate with public OpenRaft trait/type exposure
 
 ## Package and release metadata
@@ -103,4 +103,12 @@ No dependency-key alias or temporary compatibility crate/re-export may be remove
 
 ## First-slice status
 
-Current status is `workspace-internal`. The new `crates/aspen-raft-kv-types` default feature set compiles with OpenRaft and KV type dependencies only. Legacy `crates/aspen-raft-types` still depends on `aspen-core` and `aspen-trust` until compatibility migration completes.
+Current status is `extraction-ready-in-workspace`. The reusable `crates/aspen-raft-kv-types` default feature set compiles with OpenRaft and KV type dependencies only. All extraction-readiness criteria are met:
+
+- Default features compile without root `aspen` or app bundles (V1: `evidence/feature-matrix.md`)
+- No forbidden dependencies in default graph (V2: `evidence/aspen-raft-kv-types-dependency-tree.txt`, `evidence/dependency-boundary.md`)
+- Downstream consumer fixture uses canonical `aspen_raft_kv_types` API (V3: `evidence/downstream-consumer-metadata.json`)
+- Compatibility re-exports in `aspen_raft::types::*` compile (I12, V7: `evidence/compat-node-cluster.md`)
+- Release metadata documented (V6: `evidence/release-readiness-v6.md`)
+
+Legacy `crates/aspen-raft-types` still depends on `aspen-core` and `aspen-trust` for Aspen app compatibility, tracked in the transition table above. Publishable/repo-split labels remain blocked until license/publication policy is decided.

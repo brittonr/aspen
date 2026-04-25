@@ -2386,6 +2386,8 @@ dependencies = [
  "aspen-core-shell",
  "aspen-hlc",
  "aspen-kv-types",
+ "aspen-raft-kv",
+ "aspen-raft-kv-types",
  "aspen-raft-network",
  "aspen-raft-types",
  "aspen-redb-storage",
@@ -2512,11 +2514,25 @@ name = "aspen-redb-storage"
 version = "0.1.0"
 dependencies = [
  "aspen-constants",
+ "aspen-kv-types",
+ "aspen-layer",
+ "aspen-raft-kv-types",
+ "aspen-storage-types",
+ "aspen-time",
+ "bincode",
  "blake3",
+ "futures",
  "hex",
+ "n0-future",
+ "openraft",
+ "postcard",
  "proptest",
+ "redb 2.6.3",
  "serde",
+ "snafu",
  "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

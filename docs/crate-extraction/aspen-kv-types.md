@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-kv-types`
 - **Intended audience**: Rust projects that need Aspen-compatible KV command, response, transaction, lease, and validation types without Aspen node runtime.
 - **Public API owner**: Aspen KV types maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: reusable library candidate
 
 ## Package and release metadata
@@ -76,4 +76,12 @@ None allowed in default reusable features.
 
 ## First-slice status
 
-Current status is `workspace-internal`. Before this layer can be marked ready, the feature matrix, downstream consumer metadata, and dependency-boundary evidence must be linked from `openspec/changes/prepare-crate-extraction/verification.md`.
+Current status is `extraction-ready-in-workspace`. All extraction-readiness criteria are met:
+
+- Default features compile without root `aspen` or app bundles (V1: `evidence/feature-matrix.md`)
+- No forbidden dependencies through direct, transitive, or re-export paths (V2: `evidence/dependency-boundary.md`)
+- Downstream consumer fixture uses canonical `aspen_kv_types` API without `aspen` package (V3: `evidence/downstream-consumer-metadata.json`)
+- Aspen compatibility consumers compile (V7-V9: `evidence/compat-node-cluster.md`, `evidence/compat-cli-dogfood-handlers.md`, `evidence/compat-bridges-web-tui.md`)
+- Release metadata documented (V6: `evidence/release-readiness-v6.md`)
+
+Publishable/repo-split labels remain blocked until license/publication policy is decided.

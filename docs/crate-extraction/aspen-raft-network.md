@@ -96,4 +96,12 @@ No binaries. Runtime dependency is allowed because this crate is explicitly the 
 
 ## First-slice status
 
-Current status is `workspace-internal`. I9 evidence keeps this crate as the explicit adapter boundary: storage, reusable app types, and facade defaults compile without `aspen-raft-network`, iroh, IRPC, or transport dependencies, while this crate remains the place where concrete iroh/IRPC adapter dependencies appear. The adapter still reaches `aspen-transport`, `aspen-sharding`, `aspen-core`, and transitive app/runtime concerns; those paths require explicit policy ownership or feature gates before this adapter can be marked ready.
+Current status is `workspace-internal`. I9 evidence keeps this crate as the explicit adapter boundary: storage, reusable app types, and facade defaults compile without `aspen-raft-network`, iroh, IRPC, or transport dependencies (V1: `evidence/feature-matrix.md`; I9: `evidence/i9-storage-consensus-adapter-boundary.md`). Aspen runtime adapters remain iroh-only (V2: `evidence/runtime-networking-policy.md`).
+
+Remaining gaps blocking `extraction-ready-in-workspace`:
+
+- Transitive path through `aspen-transport` → `aspen-core` pulls app/runtime concerns
+- `aspen-sharding` dependency needs feature-gating or removal from default adapter
+- These paths require explicit policy ownership or feature gates in a follow-up change
+
+Publishable/repo-split labels remain blocked until license/publication policy is decided.

@@ -1,0 +1,13 @@
+[package]
+name = "downstream-redb-raft-kv"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-kv-types = { path = "../../../crates/aspen-kv-types" }
+aspen-raft-kv-types = { path = "../../../crates/aspen-raft-kv-types" }
+aspen-redb-storage = { path = "../../../crates/aspen-redb-storage", features = ["raft-storage"] }
+aspen-raft-kv = { path = "../../../crates/aspen-raft-kv" }

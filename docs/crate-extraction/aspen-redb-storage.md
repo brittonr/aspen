@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-redb-storage`
 - **Intended audience**: Rust projects that need Redb-backed OpenRaft log/state-machine storage, snapshots, chain integrity, CAS, leases, and single-transaction durability for the reusable KV stack.
 - **Public API owner**: Aspen Redb storage maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: reusable storage backend candidate with optional OpenRaft public trait exposure
 
 ## Package and release metadata
@@ -103,4 +103,14 @@ None allowed. No iroh endpoint construction, node bootstrap, handler registry, d
 
 ## First-slice status
 
-Current status is `workspace-internal`. The `raft-storage` feature now provides a complete `RedbKvStorage` implementing `RaftLogStorage` and `RaftStateMachine` for `RaftKvTypeConfig`, with typed enums (BatchWriteOp, TxnCompareSpec, TxnOpSpec) instead of raw tuples. Trust/shard dispatch remains in `aspen-raft`. `aspen-raft` depends on `aspen-redb-storage` with `raft-storage` enabled and re-exports `RedbKvStorage`/`RedbKvSnapshotBuilder` for compatibility. The Aspen-specific `SharedRedbStorage` (with trust tables, HLC, log_broadcast) remains in `aspen-raft`.
+Current status is `extraction-ready-in-workspace`. The `raft-storage` feature provides a complete `RedbKvStorage` implementing `RaftLogStorage` and `RaftStateMachine` for `RaftKvTypeConfig`, with typed enums (BatchWriteOp, TxnCompareSpec, TxnOpSpec) instead of raw tuples. All extraction-readiness criteria are met:
+
+- Default (pure helpers) and `raft-storage` features compile without root `aspen` or app bundles (V1: `evidence/feature-matrix.md`)
+- No forbidden dependencies in either feature set (V2: `evidence/dependency-boundary.md`)
+- Redb single-fsync atomicity preserved for log+state commits (V4: `evidence/redb-atomicity.md`)
+- 84+ storage tests pass including CAS, leases, chain integrity, snapshots (V5: `evidence/test-evidence-v5.md`)
+- Downstream consumer fixture uses canonical `aspen_redb_storage` API (V3: `evidence/downstream-consumer-metadata.json`)
+- Compatibility re-exports in `aspen_raft::storage_shared` compile (I11, V7: `evidence/compat-node-cluster.md`)
+- Release metadata documented (V6: `evidence/release-readiness-v6.md`)
+
+Trust/shard dispatch remains in `aspen-raft`. The Aspen-specific `SharedRedbStorage` (with trust tables, HLC, log_broadcast) remains in `aspen-raft`. Publishable/repo-split labels remain blocked until license/publication policy is decided.

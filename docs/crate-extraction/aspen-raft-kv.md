@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-raft-kv`
 - **Intended audience**: Rust projects that want a reusable replicated KV node facade backed by OpenRaft and Redb without Aspen binary configuration or app bundles.
 - **Public API owner**: Aspen Raft/KV facade maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: reusable service library candidate
 
 ## Package and release metadata
@@ -94,4 +94,12 @@ No binaries. Concrete iroh endpoints are not required for default storage/facade
 
 ## First-slice status
 
-Current status is `workspace-internal`. The new `crates/aspen-raft-kv` default feature set exposes reusable node configuration, membership, resource limits, and operation trait surfaces without Aspen binary config or concrete iroh endpoint construction. Redb-backed execution remains blocked on the storage migration task.
+Current status is `extraction-ready-in-workspace`. The `crates/aspen-raft-kv` default feature set exposes reusable node configuration, membership, resource limits, and operation trait surfaces without Aspen binary config or concrete iroh endpoint construction. All extraction-readiness criteria are met:
+
+- Default features compile without root `aspen` or app bundles (V1: `evidence/feature-matrix.md`)
+- No forbidden dependencies in default graph (V2: `evidence/aspen-raft-kv-facade-dependency-tree.txt`, `evidence/dependency-boundary.md`)
+- Downstream consumer fixture uses canonical `aspen_raft_kv` API (V3: `evidence/downstream-consumer-metadata.json`)
+- Compatibility re-export via `aspen_raft::raft_kv` module (I12, V7: `evidence/compat-node-cluster.md`)
+- Release metadata documented (V6: `evidence/release-readiness-v6.md`)
+
+Redb-backed execution is available through `aspen-redb-storage` with `raft-storage` feature. Publishable/repo-split labels remain blocked until license/publication policy is decided.
