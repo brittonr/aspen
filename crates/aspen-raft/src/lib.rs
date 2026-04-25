@@ -106,6 +106,11 @@ pub mod verified;
 pub mod write_batcher;
 pub mod write_forwarder;
 
+// Compatibility re-exports from reusable Redb Raft KV crates.
+// New consumers should depend on these crates directly.
+pub use aspen_raft_kv as raft_kv;
+pub use aspen_raft_kv_types as raft_kv_types;
+
 // Re-export key types for convenience
 use std::sync::Arc;
 

@@ -19,6 +19,8 @@ aspen-kv-types = { workspace = true }
 aspen-cluster-types = { workspace = true, features = ["iroh"] }
 aspen-traits = { workspace = true }
 aspen-redb-storage = { workspace = true, features = ["raft-storage"] }
+aspen-raft-kv-types = { workspace = true }
+aspen-raft-kv = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-sharding = { workspace = true }

@@ -62,7 +62,7 @@ No binaries. Concrete iroh endpoints are not required for default storage/facade
 
 - **Old paths**: reusable portions of `aspen_raft::node::*` and `aspen_raft::RaftNode` construction paths.
 - **New path**: `aspen_raft_kv::*`.
-- **Compatibility re-exports**: `aspen_raft` re-exports old reusable node paths or migrates all in-repo callers.
+- **Compatibility re-exports**: `aspen_raft::raft_kv` module-level re-export provides `aspen_raft_kv::*` through compatibility path.
 - **Owner**: Aspen Raft/KV facade maintainers.
 - **Tests**: compile both canonical facade example and Aspen compatibility callers.
 - **Removal criteria**: downstream fixture uses `aspen_raft_kv` directly and in-repo consumers no longer need legacy path.

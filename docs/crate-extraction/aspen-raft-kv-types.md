@@ -59,7 +59,7 @@ None allowed in default reusable features.
 
 - **Old API paths**: `aspen_raft::types::*` and `aspen_raft_types::*`.
 - **New API path**: `aspen_raft_kv_types::*`.
-- **Compatibility re-exports**: `aspen_raft::types::* -> aspen_raft_kv_types::*` during migration.
+- **Compatibility re-exports**: `aspen_raft::types::*` re-exports `RaftKvTypeConfig`, `RaftKvRequest`, `RaftKvResponse`, `RaftKvStorageError`, `RaftKvMemberInfo`, `BatchWriteOp`, `BatchCondition`, `TxnCompareSpec`, `TxnCompareOp`, `TxnCompareTarget`, and `TxnOpSpec` from `aspen_raft_kv_types`. Module-level alias `aspen_raft::raft_kv_types` also available.
 - **Owner**: Aspen Raft/KV extraction maintainers.
 - **Tests**: compile both old and new paths until removal.
 - **Removal criteria**: all in-repo consumers and downstream fixture import `aspen_raft_kv_types` directly.
