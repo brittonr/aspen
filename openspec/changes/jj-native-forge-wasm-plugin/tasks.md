@@ -30,7 +30,7 @@
 - [ ] 3.4 Implement standalone `jj-remote-aspen` push and bookmark mutation flows, including explicit object/bookmark/change-head probes and conflict reporting.
 - [ ] 3.5 Implement standalone `jj-remote-aspen` change-id resolution over the JJ-native path.
 - [x] 3.6 Reject unsupported JJ access explicitly for Git-only repos and reject silent fallback to Git transport.
-- [ ] 3.7 Return `capability-unavailable` for JJ-enabled repos when the selected target node does not currently have the JJ plugin active, and omit JJ routing identifiers for that node from discovery.
+- [x] 3.7 Return `capability-unavailable` for JJ-enabled repos when the selected target node does not currently have the JJ plugin active, and omit JJ routing identifiers for that node from discovery.
 - [ ] 3.8 Enforce existing Forge authentication and repo read/write authorization rules on JJ-native clone, fetch, push, bookmark sync, and change-id resolution.
 
 ## 4. Dual-backend behavior and rollout

@@ -5,21 +5,10 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-client-api/src/messages/forge.rs`
-- Changed file: `crates/aspen-client-api/src/messages/mod.rs`
-- Changed file: `crates/aspen-client-api/src/messages/request_metadata.rs`
-- Changed file: `crates/aspen-client-api/src/messages/request_metadata_apps/forge.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
-- Changed file: `crates/aspen-client-api/tests/golden/request_discriminants.txt`
-- Changed file: `crates/aspen-client-api/tests/golden/response_discriminants.txt`
-- Changed file: `crates/aspen-client-api/tests/wire_format_golden.rs`
 - Changed file: `crates/aspen-forge-handler/src/executor.rs`
-- Changed file: `crates/aspen-rpc-handlers/src/client.rs`
-- Changed file: `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-client-api-wire-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-forge-repo-lifecycle-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-openspec-preflight.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-jj-plugin-inactive-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -72,6 +61,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 3.6 Reject unsupported JJ access explicitly for Git-only repos and reject silent fallback to Git transport.
   - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-jj-native-no-fallback-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-rustfmt-check.txt`
+
+- [x] 3.7 Return `capability-unavailable` for JJ-enabled repos when the selected target node does not currently have the JJ plugin active, and omit JJ routing identifiers for that node from discovery.
+  - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-jj-plugin-inactive-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-rustfmt-check.txt`
 
 - [x] 4.3 Document operator and developer workflows for creating JJ-enabled repos and connecting JJ clients.
   - Evidence: `docs/jj-native-forge.md`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
@@ -298,6 +290,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-3-6-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge-handler plugin -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-jj-plugin-inactive-tests.txt`
+
+### `rustfmt --check crates/aspen-forge-handler/src/executor.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-openspec-preflight.txt`
 
 ### `test -s docs/jj-native-forge.md`
 

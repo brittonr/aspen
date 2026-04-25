@@ -2625,6 +2625,12 @@ impl ForgeServiceExecutor {
                 Some("JJ backend is not enabled for this repository; Git fallback is not allowed".to_string()),
             )));
         }
+        if !info.backend_routes.iter().any(|route| route.backend == ForgeRepoBackend::Jj) {
+            return Ok(Some(aspen_client_api::forge::jj_native_response(
+                aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable,
+                Some("JJ backend is enabled but no active JJ plugin route is available on this node".to_string()),
+            )));
+        }
         Ok(None)
     }
 
@@ -3061,6 +3067,55 @@ mod tests {
         assert_eq!(response.transport_range, aspen_client_api::forge::JjTransportVersionRange::current());
         assert_eq!(response.status, aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable);
         assert!(response.message.expect("message explains rejection").contains("Git fallback is not allowed"));
+    }
+
+    #[tokio::test]
+    async fn test_jj_native_admission_rejects_jj_repo_without_active_plugin_route() {
+        let executor = make_test_executor().await;
+        let create_result = executor
+            .execute(ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name: "jj-without-plugin".into(),
+                description: None,
+                default_branch: None,
+                backends: vec![ForgeRepoBackend::Jj],
+            })
+            .await
+            .expect("JJ repo create executes");
+        let ClientRpcResponse::ForgeRepoResult(create_response) = create_result else {
+            panic!("expected ForgeRepoResult");
+        };
+        let repo = create_response.repo.expect("repo exists");
+        assert_eq!(repo.backends, vec![ForgeRepoBackend::Jj]);
+        assert!(repo.backend_routes.is_empty());
+
+        let get_result = executor
+            .execute(ClientRpcRequest::ForgeGetRepo {
+                repo_id: repo.id.clone(),
+            })
+            .await
+            .expect("repo get executes");
+        let ClientRpcResponse::ForgeRepoResult(get_response) = get_result else {
+            panic!("expected ForgeRepoResult");
+        };
+        let repo_info = get_response.repo.expect("repo info exists");
+        assert!(repo_info.backend_routes.iter().all(|route| route.backend != ForgeRepoBackend::Jj));
+
+        let response = executor
+            .execute(ClientRpcRequest::ForgeJjNative {
+                request: jj_native_request_for_repo(&repo.id, aspen_client_api::forge::JJ_TRANSPORT_VERSION_CURRENT),
+            })
+            .await
+            .expect("JJ-native request executes");
+        let ClientRpcResponse::ForgeJjNative(response) = response else {
+            panic!("expected JJ-native response");
+        };
+        assert_eq!(response.status, aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable);
+        assert!(
+            response
+                .message
+                .expect("message explains plugin unavailability")
+                .contains("no active JJ plugin route")
+        );
     }
 
     #[test]
