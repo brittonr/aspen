@@ -1,0 +1,36 @@
+# openspec_gate tasks transcript
+
+Timestamp: 2026-04-24T21:27:54-04:00
+Command: openspec_gate(stage="tasks", change="prepare-crate-extraction")
+
+```text
+OpenSpec tasks gate (prepare-crate-extraction)
+
+Strategy: same-family
+
+VERDICT: PASS
+
+## Findings
+None.
+
+## Stage Check
+- The task plan traces back to the proposal/design/spec through explicit `[covers=...]` links on each task.
+- Ordering is coherent:
+  - Baseline/inventory and contract/checker work precede code movement.
+  - Redb Raft KV type/facade/network prerequisites precede storage migration.
+  - Compatibility re-export migration follows target surface creation.
+  - Verification tasks are grouped after implementation work and include compile, dependency-boundary, downstream-consumer, atomicity, compatibility, and readiness-state evidence.
+- Relevant napkin risks are represented:
+  - `aspen-traits` transitive default-feature leak checks are covered by `I13`, `V1`, and `V2`.
+  - `aspen-storage-types` / `SM_KV_TABLE` cleanup is tracked by `I13`.
+  - `aspen-client-api` protocol/wire follow-up is tracked by `I15`.
+  - Representative no-std/core compatibility rails are included in `V1`.
+  - Compatibility rails for cluster, CLI, handlers, bridges, gateway, web, and TUI are covered by `V7`-`V9`.
+- Verification evidence requirements are explicit and tied to canonical paths under `openspec/changes/prepare-crate-extraction/evidence/`.
+- Current status is not final: task summary shows `17 done, 0 in progress, 17 todo`, including implementation tasks `I7`-`I12` and verification tasks `V1`-`V10`, `V12`.
+
+## Next Actions
+- Continue with the next unchecked implementation task, `I7`.
+- Do not archive or sync as complete while unchecked tasks remain.
+- Before checking additional tasks complete, keep `openspec/changes/prepare-crate-extraction/verification.md` synchronized with the related evidence artifacts as required by `R0` and `V11`.
+```

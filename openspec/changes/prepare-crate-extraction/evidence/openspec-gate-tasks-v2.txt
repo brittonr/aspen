@@ -1,0 +1,46 @@
+# openspec_gate tasks transcript
+
+Timestamp: 2026-04-24T21:20:15-04:00
+Command: openspec_gate(stage="tasks", change="prepare-crate-extraction")
+
+```text
+OpenSpec tasks gate (prepare-crate-extraction)
+
+Strategy: same-family
+
+VERDICT: FAIL
+
+## Findings
+
+- [blocker] [class=incoherent] [scope=tasks] [route=deterministic-check] [promoted=yes] V2 is checked complete before the layers it verifies are created or migrated.
+  - Evidence: `tasks.md` marks `V2` as `[x]`, but `I7`, `I8`, `I9`, `I10`, `I11`, and `I12` are still `[ ]`. `V2` claims dependency-boundary evidence for `aspen-raft-kv-types`, `aspen-raft-kv`, runtime networking policy, transitive/re-export leak checks, and negative checker fixtures. Those depend on the target type/facade/network/storage surfaces described by `I7`-`I12` and design Decisions 3, 4, and 6.
+
+- [blocker] [class=omission] [scope=tasks] [route=prompt] [promoted=no] Current task-status checkpoint evidence is not marked complete.
+  - Evidence: `tasks.md` has 17 completed tasks, but `V11` is still `[ ]`. `V11` explicitly says: “For the current intermediate task-status checkpoint, keep `openspec/changes/prepare-crate-extraction/verification.md`, implementation diff artifacts, readiness-checker output, `scripts/openspec-preflight.sh prepare-crate-extraction` transcript, and actual `openspec_gate tasks` transcript synchronized for all checked tasks…”
+
+- [major] [class=omission] [scope=tasks] [route=deterministic-check] [promoted=yes] The “exactly one manifest per target layer” rule is not explicitly checked.
+  - Evidence: Delta spec `architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layers-have-manifests` requires “each target layer SHALL have exactly one manifest file” and lists the six required files. `I2` creates the six files, but `I4` only says the checker “verifies candidate manifests”; it does not explicitly require rejecting extra, missing, or consolidated first-slice manifests.
+
+- [major] [class=systematic] [scope=tasks] [route=auto-fix] [promoted=no] Several verification tasks are too broad to be reliable atomic checkboxes.
+  - Evidence: `V1` combines feature-topology evidence for `aspen-kv-types`, `aspen-redb-storage`, `aspen-raft-kv-types`, `aspen-raft-kv`, `aspen-raft-network`, `aspen-core`, `aspen-core-no-std-smoke`, `aspen-core-shell`, `aspen-traits`, and Aspen compatibility consumers. `V5` combines positive facade tests, compatibility re-export tests, negative app-only API tests, CAS, leases/TTL, snapshot integrity, chain integrity, and library-surface tests for node, CLI, dogfood, handlers, bridges, gateways, web, and TUI paths. `V8` and `V9` each aggregate many package rails under one checkbox.
+
+## Stage Check
+
+- The task plan broadly traces to the proposal/design/spec: baseline capture, extraction contracts, manifests, policy/checker work, Redb Raft KV layering, broader inventory, binary-shell audit, downstream proof, compatibility rails, and release-readiness evidence are represented.
+- Relevant prior guardrails are present in the task text: transitive/re-export leak checks are covered by `R2`, `I3`, `I4`, and `V2`; `aspen-storage-types` `SM_KV_TABLE` and `aspen-traits` leak status are called out in `I13`; no-std/core rails are included in `V1`; downstream sibling/path resolution constraints are included in `V3`.
+- The current task status is not internally consistent. `V2` is complete despite prerequisite implementation tasks being incomplete, and `V11` is incomplete despite being the stated checkpoint synchronization task.
+- The stage is not ready to proceed with more task completion claims until the status inconsistency is corrected.
+
+## Next Actions
+
+- Uncheck or re-scope `V2` unless supplied evidence proves it was intentionally limited to already-created surfaces.
+- Complete `V11` for the current checkpoint before checking additional tasks.
+- Add an explicit readiness-checker assertion for exactly one manifest per required Redb Raft KV target layer.
+- Split `V1` and `V5` into smaller package/family-specific verification tasks or add sub-checkboxes with required artifact paths.
+
+## Promotion Hints
+- repeated 74x [class=omission] [scope=tasks] [route=prompt]
+  suggestion: Promote into OpenSpec rule/template/stage-gate check.
+  task: Strengthen OpenSpec tasks gate/template to block repeated omission findings. Example trigger: Missing verification tasks for the modified Forge repository-management requirements. `openspec/changes/jj-native-forge-wasm-plugin/specs/forge/spec.md` adds scenarios for create/list/delete behavior, backend manifests, and repository capability discovery, and `design.md` explicitly says `specs/forge/spec.md` needs integration tests for “repo create/list/delete with backend manifests, plus capability-discovery responses for Git-only, JJ-only, and dual-backend repos.” `tasks.md` has implementation work in 1.1/1.2 but no corresponding verification task in section 5 for those Forge scenarios.
+  sources: openspec-gate=71, done-review=3
+```

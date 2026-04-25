@@ -6,7 +6,7 @@
 - **Canonical class**: `runtime adapter`
 - **Canonical crate/path**: `crates/aspen-raft-network`
 - **Intended audience**: Rust projects that want the reusable Redb Raft KV stack over Aspen's iroh/IRPC transport adapter.
-- **Public API owner**: owner needed
+- **Public API owner**: Aspen Raft network adapter maintainers
 - **Readiness state**: `workspace-internal`
 - **Dependency policy class**: explicit runtime adapter candidate
 
@@ -64,7 +64,7 @@ No binaries. Runtime dependency is allowed because this crate is explicitly the 
 - **Old paths**: reusable portions of `aspen_raft::network::*`.
 - **New path**: `aspen_raft_network::*`.
 - **Compatibility re-exports**: `aspen_raft` re-exports old network paths during migration or migrates all in-repo callers.
-- **Owner**: owner needed.
+- **Owner**: Aspen Raft network adapter maintainers.
 - **Tests**: compile old and new paths; keep encoding/property tests.
 - **Removal criteria**: in-repo consumers and downstream adapter example import `aspen_raft_network` directly.
 
@@ -79,10 +79,10 @@ No binaries. Runtime dependency is allowed because this crate is explicitly the 
 
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
-| `aspen-raft-network` | default | `aspen-raft-network -> iroh` | owner needed | Adapter purpose. |
-| `aspen-raft-network` | default | `aspen-raft-network -> irpc` | owner needed | Adapter message framing. |
-| `aspen-raft-network` | default | `aspen-raft-network -> openraft` | owner needed | OpenRaft network trait integration. |
-| `aspen-raft-network` | sharding | `aspen-raft-network -> aspen-sharding` | owner needed | Optional sharding-aware route metadata. |
+| `aspen-raft-network` | default | `aspen-raft-network -> iroh` | Aspen Raft network adapter maintainers | Adapter purpose. |
+| `aspen-raft-network` | default | `aspen-raft-network -> irpc` | Aspen Raft network adapter maintainers | Adapter message framing. |
+| `aspen-raft-network` | default | `aspen-raft-network -> openraft` | Aspen Raft network adapter maintainers | OpenRaft network trait integration. |
+| `aspen-raft-network` | sharding | `aspen-raft-network -> aspen-sharding` | Aspen Raft network adapter maintainers | Optional sharding-aware route metadata. |
 
 ## Verification rails
 

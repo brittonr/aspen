@@ -1,0 +1,19 @@
+$ rg storage/type/facade transport tokens
+crates/aspen-raft-kv-types/src/lib.rs:6://! coordination runtime, dogfood defaults, binaries, or concrete iroh endpoint
+crates/aspen-raft-kv/src/lib.rs:6://! concrete iroh endpoint adapter.
+
+$ rg adapter transport deps in Cargo.toml
+crates/aspen-raft/Cargo.toml:23:aspen-transport = { workspace = true }
+crates/aspen-raft/Cargo.toml:34:openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+crates/aspen-raft/Cargo.toml:40:iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+crates/aspen-raft/Cargo.toml:41:iroh-base = "0.97.0"
+crates/aspen-raft/Cargo.toml:42:irpc = { workspace = true }
+crates/aspen-raft/Cargo.toml:51:tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "net"] }
+crates/aspen-raft/Cargo.toml:52:tokio-util = { version = "0.7", features = ["compat", "rt"] }
+crates/aspen-raft-network/Cargo.toml:15:aspen-transport = { workspace = true }
+crates/aspen-raft-network/Cargo.toml:20:iroh = { version = "0.97.0" }
+crates/aspen-raft-network/Cargo.toml:21:irpc = { workspace = true }
+crates/aspen-raft-network/Cargo.toml:24:openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+crates/aspen-raft-network/Cargo.toml:27:tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time"] }
+
+$ rg non-iroh runtime transports in Raft KV extraction slice

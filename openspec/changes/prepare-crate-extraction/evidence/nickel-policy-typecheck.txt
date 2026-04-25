@@ -1,1 +1,2 @@
+$ nix run nixpkgs#nickel -- typecheck docs/crate-extraction/policy.ncl
 exit_code=0

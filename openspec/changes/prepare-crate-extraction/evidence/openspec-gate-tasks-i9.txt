@@ -1,0 +1,28 @@
+# openspec_gate tasks transcript
+
+Timestamp: 2026-04-24T21:34:42-04:00
+Command: openspec_gate(stage="tasks", change="prepare-crate-extraction")
+
+```text
+OpenSpec tasks gate (prepare-crate-extraction)
+
+Strategy: cross-family
+
+Looking at the task list: 20 done, 14 todo. Not all tasks are done, so sync/archive is not yet required.
+
+Task review against the 5 checks:
+
+1. Traceability: Every task has `[covers=...]` linking to spec scenarios. All spec scenarios are covered by at least one task. No orphan tasks.
+
+2. Size, verifiability, ordering: Tasks are well-scoped and ordered correctly. I10-I12 are sequential (storage move, then compat re-exports, then non-storage migrations). V1-V12 verification tasks each target a specific evidence artifact. I9 (now done) was correctly sequenced before I10.
+
+3. Verification coverage: The 12 verification tasks (V1-V12) thoroughly cover compile evidence, dependency boundaries, downstream consumers, Redb atomicity, positive/negative tests, release readiness, compatibility across all consumer categories, failure triage, checkpoint sync, and final manifest updates.
+
+4. Napkin entries: The napkin entries about `aspen-storage-types` SM_KV_TABLE leak, `aspen-cluster-types` default-feature leak, and `aspen-traits` transitive re-export are already addressed by I13 (foundational-types manifest stub explicitly tracks those). The `aspen-client-api` alloc-safe note is covered by I15 (protocol-wire stub). No missing tasks implied.
+
+5. Next work: The remaining 14 tasks break into two groups:
+   - Implementation (I10-I12): The actual storage code migration and compatibility re-exports — these are the core remaining work.
+   - Verification (V1-V10, V12): Evidence capture that largely depends on I10-I12 completing first, though some (V1, V2, V7-V9) could partially run now against current state.
+
+The task plan is sound. Next step is I10 — moving concrete Redb storage code from `aspen-raft` into `aspen-redb-storage`.
+```

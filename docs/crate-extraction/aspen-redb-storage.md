@@ -6,7 +6,7 @@
 - **Canonical class**: `storage/backend`
 - **Canonical crate/path**: `crates/aspen-redb-storage`
 - **Intended audience**: Rust projects that need Redb-backed OpenRaft log/state-machine storage, snapshots, chain integrity, CAS, leases, and single-transaction durability for the reusable KV stack.
-- **Public API owner**: owner needed
+- **Public API owner**: Aspen Redb storage maintainers
 - **Readiness state**: `workspace-internal`
 - **Dependency policy class**: reusable storage backend candidate with optional OpenRaft public trait exposure
 
@@ -62,7 +62,7 @@ None allowed. No iroh endpoint construction, node bootstrap, handler registry, d
 - **Old paths**: `aspen_raft::storage_shared::*`, `aspen_raft::storage::redb_store::*`, selected storage validation/integrity paths.
 - **New path**: `aspen_redb_storage::*`.
 - **Compatibility re-exports**: `aspen_raft` re-exports old storage paths during migration.
-- **Owner**: owner needed.
+- **Owner**: Aspen Redb storage maintainers.
 - **Tests**: compile and run storage tests through new path and old compatibility path.
 - **Removal criteria**: in-repo consumers and downstream fixture use `aspen_redb_storage` directly; old path has no remaining direct imports.
 
@@ -77,9 +77,9 @@ None allowed. No iroh endpoint construction, node bootstrap, handler registry, d
 
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
-| `aspen-redb-storage` | `raft-storage` | `aspen-redb-storage -> redb` | owner needed | Backend purpose. |
-| `aspen-redb-storage` | `raft-storage` | `aspen-redb-storage -> openraft` | owner needed | OpenRaft storage trait implementation. |
-| `aspen-redb-storage` | `raft-storage` | `aspen-redb-storage -> aspen-raft-kv-types` | owner needed | App type config for reusable KV stack. |
+| `aspen-redb-storage` | `raft-storage` | `aspen-redb-storage -> redb` | Aspen Redb storage maintainers | Backend purpose. |
+| `aspen-redb-storage` | `raft-storage` | `aspen-redb-storage -> openraft` | Aspen Redb storage maintainers | OpenRaft storage trait implementation. |
+| `aspen-redb-storage` | `raft-storage` | `aspen-redb-storage -> aspen-raft-kv-types` | Aspen Redb storage maintainers | App type config for reusable KV stack. |
 
 ## Verification rails
 

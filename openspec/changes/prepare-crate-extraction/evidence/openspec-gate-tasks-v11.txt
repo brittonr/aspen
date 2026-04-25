@@ -1,0 +1,35 @@
+# openspec_gate tasks transcript
+
+Timestamp: 2026-04-24T21:25:00-04:00
+Command: openspec_gate(stage="tasks", change="prepare-crate-extraction")
+
+```text
+OpenSpec tasks gate (prepare-crate-extraction)
+
+Strategy: same-family
+
+VERDICT: WARN
+
+## Findings
+- [medium] [class=omission] [scope=tasks] [route=auto-fix] [promoted=no] V10 has no completion path when compatibility rails pass.
+  - Evidence: `openspec/changes/prepare-crate-extraction/tasks.md` task `V10` only says, “If any compatibility rail fails from known unrelated parser or workspace breakage, save a triage artifact…”. `V12` depends on “After `V1`-`V11`”, so `V10` needs an explicit no-failure completion condition or N/A evidence path.
+
+## Stage Check
+- The task plan traces to the proposal/design/spec through explicit `[covers=...]` references.
+- Ordering is mostly consistent: baseline and contract tasks precede reusable facade/storage migration tasks, and verification tasks are grouped after implementation work.
+- Verification coverage is present for compile/feature topology, dependency-boundary checks, downstream consumer proof, Redb atomicity, compatibility consumers, release-readiness, and final readiness state.
+- Relevant napkin concerns are represented: `aspen-traits` transitive leak checks, `aspen-storage-types` `SM_KV_TABLE` cleanup status, `aspen-client-api`, `aspen-cluster-types`, no-std/core rails, and avoiding stale verification claims.
+- Not all tasks are done: summary says `17 todo`, including core implementation tasks `I7`-`I12` and verification tasks `V1`-`V10`, `V12`. Sync/archive is not applicable yet.
+- Supplied evidence is sufficient for task-plan review, but not sufficient to validate the checked implementation/evidence artifacts themselves.
+
+## Next Actions
+- Amend `V10` to say what evidence or `verification.md` entry closes it when no unrelated compatibility failure occurs.
+- Continue in order with `I7`, `I8`, `I9`, then `I10`-`I12`.
+- Do not check verification tasks until their evidence artifacts are linked from `openspec/changes/prepare-crate-extraction/verification.md`.
+
+## Promotion Hints
+- repeated 911x [class=omission] [scope=tasks] [route=auto-fix]
+  suggestion: Promote into OpenSpec rule/template/stage-gate check.
+  task: Strengthen OpenSpec tasks gate/template to block repeated omission findings. Example trigger: `surface-inventory.md` is not fully wired into the deterministic surface-audit and verification traceability tasks
+  sources: openspec-gate=910, done-review=1
+```

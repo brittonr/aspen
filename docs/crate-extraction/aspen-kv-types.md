@@ -6,7 +6,7 @@
 - **Canonical class**: `leaf type/helper`
 - **Canonical crate/path**: `crates/aspen-kv-types`
 - **Intended audience**: Rust projects that need Aspen-compatible KV command, response, transaction, lease, and validation types without Aspen node runtime.
-- **Public API owner**: owner needed
+- **Public API owner**: Aspen KV types maintainers
 - **Readiness state**: `workspace-internal`
 - **Dependency policy class**: reusable library candidate
 
@@ -63,7 +63,7 @@ None allowed in default reusable features.
 
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
-| `aspen-kv-types` | default | `aspen-kv-types -> aspen-constants` | owner needed | KV validation limits are reusable contract data, not app runtime. |
+| `aspen-kv-types` | default | `aspen-kv-types -> aspen-constants` | Aspen KV types maintainers | KV validation limits are reusable contract data, not app runtime. |
 
 ## Verification rails
 

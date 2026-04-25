@@ -62,6 +62,9 @@ struct Args {
 struct Policy {
     blocked_until_license_publication_decision: Vec<String>,
     forbidden_by_default: Vec<String>,
+    feature_gated_by_default: Vec<String>,
+    concrete_transport_crates: Vec<String>,
+    allowed_reusable_dependencies: Vec<String>,
     candidates: BTreeMap<String, Candidate>,
 }
 
@@ -149,6 +152,25 @@ fn is_runtime_shell(candidate: &Candidate) -> bool {
     candidate.class == "runtime adapter" || candidate.manifest.contains("compat")
 }
 
+fn is_aspen_crate(crate_name: &str) -> bool {
+    crate_name == "aspen" || crate_name.starts_with("aspen-")
+}
+
+fn exception_allows_dependency(candidate: &Candidate, dependency_name: &str) -> bool {
+    candidate.exceptions.iter().any(|exception| exception.dependency_path.contains(dependency_name))
+}
+
+fn collect_default_forbidden(policy: &Policy, candidate: &Candidate) -> BTreeSet<String> {
+    policy
+        .forbidden_by_default
+        .iter()
+        .chain(policy.feature_gated_by_default.iter())
+        .chain(policy.concrete_transport_crates.iter())
+        .chain(candidate.forbidden_unless_feature.iter())
+        .cloned()
+        .collect()
+}
+
 fn check_exception(candidate_key: &str, exception: &Exception, failures: &mut Vec<String>) {
     if exception.candidate.trim().is_empty() {
         failures.push(format!("{candidate_key}: exception has empty candidate"));
@@ -202,6 +224,7 @@ fn check_direct_deps(
     candidate: &Candidate,
     metadata: &CargoMetadata,
     forbidden: &BTreeSet<String>,
+    allowed_reusable: &BTreeSet<String>,
     failures: &mut Vec<String>,
     warnings: &mut Vec<String>,
 ) {
@@ -217,8 +240,15 @@ fn check_direct_deps(
         return;
     }
     for dep in &package.dependencies {
-        if forbidden.contains(&dep.name) {
+        let has_exception = exception_allows_dependency(candidate, &dep.name);
+        if forbidden.contains(&dep.name) && !has_exception {
             failures.push(format!("{candidate_key}: direct forbidden dependency `{}`", dep.name));
+        }
+        if is_aspen_crate(&dep.name) && !allowed_reusable.contains(&dep.name) && !has_exception {
+            failures.push(format!(
+                "{candidate_key}: direct dependency `{}` is not in allowed reusable dependencies",
+                dep.name
+            ));
         }
     }
 }
@@ -248,7 +278,7 @@ fn check_transitive_deps(
     let tree = String::from_utf8_lossy(&output.stdout);
     for forbidden_name in forbidden {
         let needle = format!("{forbidden_name} v");
-        if tree.contains(&needle) {
+        if tree.contains(&needle) && !exception_allows_dependency(candidate, forbidden_name) {
             failures.push(format!("{candidate_key}: transitive forbidden dependency `{forbidden_name}`"));
         }
     }
@@ -276,8 +306,8 @@ fn check_evidence_index(args: &Args, failures: &mut Vec<String>) {
 fn build_report(args: &Args) -> Result<Report> {
     let policy = export_policy(&args.policy)?;
     let metadata = load_metadata()?;
-    let blocked: BTreeSet<String> = policy.blocked_until_license_publication_decision.into_iter().collect();
-    let forbidden: BTreeSet<String> = policy.forbidden_by_default.into_iter().collect();
+    let blocked: BTreeSet<String> = policy.blocked_until_license_publication_decision.iter().cloned().collect();
+    let allowed_reusable: BTreeSet<String> = policy.allowed_reusable_dependencies.iter().cloned().collect();
     let mut failures = Vec::new();
     let mut warnings = Vec::new();
     let mut checked_candidates = Vec::new();
@@ -302,7 +332,16 @@ fn build_report(args: &Args) -> Result<Report> {
         for exception in &candidate.exceptions {
             check_exception(candidate_key, exception, &mut failures);
         }
-        check_direct_deps(candidate_key, candidate, &metadata, &forbidden, &mut failures, &mut warnings);
+        let forbidden = collect_default_forbidden(&policy, candidate);
+        check_direct_deps(
+            candidate_key,
+            candidate,
+            &metadata,
+            &forbidden,
+            &allowed_reusable,
+            &mut failures,
+            &mut warnings,
+        );
         check_transitive_deps(candidate_key, candidate, &forbidden, &mut failures, &mut warnings);
         if !candidate.forbidden_unless_feature.is_empty() && candidate.named_reusable_feature_sets.is_empty() {
             failures

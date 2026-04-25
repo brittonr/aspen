@@ -1,0 +1,48 @@
+# openspec_gate tasks transcript
+
+Timestamp: 2026-04-24T21:22:45-04:00
+Command: openspec_gate(stage="tasks", change="prepare-crate-extraction")
+
+```text
+OpenSpec tasks gate (prepare-crate-extraction)
+
+Strategy: same-family
+
+VERDICT: FAIL
+
+## Findings
+- [high] [class=omission] [scope=tasks] [route=human] [promoted=no] Current checked-task checkpoint is not reviewable.
+  - Evidence: `tasks summary` claims `16 done`; `tasks.md` leaves `V11` unchecked even though `V11` requires `verification.md`, implementation diff artifacts, readiness-checker output, `scripts/openspec-preflight.sh prepare-crate-extraction` transcript, and actual `openspec_gate tasks` transcript to be synchronized “for all checked tasks”; `proposal.md` says “No implementation or verification item can be accepted until `verification.md` links the related evidence artifact.” The supplied artifacts do not include `openspec/changes/prepare-crate-extraction/verification.md` or the referenced evidence contents.
+
+- [medium] [class=env] [scope=tasks] [route=deterministic-check] [promoted=yes] Downstream clone/worktree proof lacks the sibling-repo-layout guard from prior failures.
+  - Evidence: `tasks.md` `V3` permits “a baseline clone/worktree with sibling path dependencies explicitly wired” and checks that no dependency path resolves through a sibling live Aspen checkout. Napkin entry says baseline-capture clones for Aspen must preserve sibling-repo layout and that a `/tmp` git worktree or clone without adjacent `aspen-dns` / `aspen-wasm-plugin` siblings can break. `V3`/`V10` do not require recording or validating that sibling layout when the clone/worktree option is used.
+
+## Stage Check
+- The task set broadly traces to the proposal/design/spec:
+  - Baseline and inventory are covered by `R0`-`R2`.
+  - Extraction contract, six Redb Raft KV manifests, typed policy, and deterministic checker are covered by `I1`-`I5`.
+  - Redb Raft KV layering work is ordered through `I6`-`I12`.
+  - Broader candidate stubs and service/runtime inventory follow-ups are covered by `I13`-`I18`.
+  - Binary shell audit is covered by `I19`.
+  - Compile, dependency-boundary, downstream-consumer, Redb atomicity, positive/negative tests, release readiness, and Aspen compatibility rails are covered by `V1`-`V12`.
+- Relevant napkin guidance is mostly represented:
+  - `aspen-traits` / `aspen-cluster-types` transitive default-feature leaks are called out in `I13`, `V1`, and `V2`.
+  - `aspen-storage-types` `SM_KV_TABLE` / `redb::TableDefinition` cleanup is called out in `I13`.
+  - `aspen-client-api` protocol/wire follow-up is called out in `I15`.
+  - No-std/core rails are included in `V1`.
+- Blocking gap: the current task-status checkpoint cannot proceed with 16 tasks marked done while `V11` remains todo and no `verification.md`/evidence contents are supplied.
+- Not ready to archive or sync: 18 tasks remain todo, including `I7`-`I12` and all verification tasks.
+
+## Next Actions
+- Complete `V11` before checking more tasks or continuing implementation.
+- Supply or update `openspec/changes/prepare-crate-extraction/verification.md` with links to evidence for every checked task.
+- Save the preflight and `openspec_gate tasks` transcripts required by `V11`.
+- If the checked-task evidence cannot be produced, uncheck the affected tasks.
+- Amend `V3`/`V10` or the readiness checker to validate sibling-repo layout when using a baseline clone/worktree, or require the checked-in repo-local consumer fixture path.
+
+## Promotion Hints
+- repeated 26x [class=omission] [scope=tasks] [route=human]
+  suggestion: Promote into explicit human/oracle escalation checkpoint or decision note.
+  task: Add explicit oracle/human checkpoint for repeated omission findings in tasks. Example trigger: Task-traceability concerns from the prior gate cannot be rechecked from the supplied design evidence
+  sources: openspec-gate=23, done-review=3
+```

@@ -6,7 +6,7 @@
 - **Canonical class**: `service library`
 - **Canonical crate/path**: `crates/aspen-raft-kv`
 - **Intended audience**: Rust projects that want a reusable replicated KV node facade backed by OpenRaft and Redb without Aspen binary configuration or app bundles.
-- **Public API owner**: owner needed
+- **Public API owner**: Aspen Raft/KV facade maintainers
 - **Readiness state**: `workspace-internal`
 - **Dependency policy class**: reusable service library candidate
 
@@ -63,7 +63,7 @@ No binaries. Concrete iroh endpoints are not required for default storage/facade
 - **Old paths**: reusable portions of `aspen_raft::node::*` and `aspen_raft::RaftNode` construction paths.
 - **New path**: `aspen_raft_kv::*`.
 - **Compatibility re-exports**: `aspen_raft` re-exports old reusable node paths or migrates all in-repo callers.
-- **Owner**: owner needed.
+- **Owner**: Aspen Raft/KV facade maintainers.
 - **Tests**: compile both canonical facade example and Aspen compatibility callers.
 - **Removal criteria**: downstream fixture uses `aspen_raft_kv` directly and in-repo consumers no longer need legacy path.
 
@@ -78,9 +78,9 @@ No binaries. Concrete iroh endpoints are not required for default storage/facade
 
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
-| `aspen-raft-kv` | default | `aspen-raft-kv -> aspen-raft-kv-types -> openraft` | owner needed | Consensus type config is re-exported as part of the facade contract. |
-| `aspen-raft-kv` | future redb | `aspen-raft-kv -> aspen-redb-storage` | owner needed | Reusable storage backend once the storage migration lands. |
-| `aspen-raft-kv` | adapter | `aspen-raft-kv -> aspen-raft-network` | owner needed | Explicit iroh adapter integration only. |
+| `aspen-raft-kv` | default | `aspen-raft-kv -> aspen-raft-kv-types -> openraft` | Aspen Raft/KV facade maintainers | Consensus type config is re-exported as part of the facade contract. |
+| `aspen-raft-kv` | future redb | `aspen-raft-kv -> aspen-redb-storage` | Aspen Raft/KV facade maintainers | Reusable storage backend once the storage migration lands. |
+| `aspen-raft-kv` | adapter | `aspen-raft-kv -> aspen-raft-network` | Aspen Raft/KV facade maintainers | Explicit iroh adapter integration only. |
 
 ## Verification rails
 

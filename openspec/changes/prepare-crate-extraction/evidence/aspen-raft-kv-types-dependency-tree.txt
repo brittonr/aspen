@@ -1,3 +1,6 @@
+feature_set=default-no-features
+artifact_path=openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-dependency-tree.txt
+
 $ cargo tree -q -p aspen-raft-kv-types --no-default-features
 aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
 ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)

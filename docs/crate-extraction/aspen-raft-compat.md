@@ -6,7 +6,7 @@
 - **Canonical class**: `service library`
 - **Canonical crate/path**: `crates/aspen-raft` as Aspen compatibility and integration crate
 - **Intended audience**: Aspen in-repo consumers that need existing import paths while reusable Redb Raft KV layers move to canonical crates.
-- **Public API owner**: owner needed
+- **Public API owner**: Aspen Raft compatibility maintainers
 - **Readiness state**: `workspace-internal`
 - **Dependency policy class**: Aspen compatibility/integration shell, not reusable default library candidate
 
@@ -51,11 +51,11 @@ No binary target is owned here, but this crate supports node/bootstrap consumers
 
 | Old path | New canonical path | Tests | Owner | Removal criterion |
 | --- | --- | --- | --- | --- |
-| `aspen_raft::types::*` | `aspen_raft_kv_types::*` | compile old and new imports | owner needed | all in-repo consumers and downstream fixture use new path |
-| `aspen_raft::storage_shared::*` | `aspen_redb_storage::*` | storage tests through both paths | owner needed | no direct old imports remain |
-| `aspen_raft::storage::redb_store::*` | `aspen_redb_storage::*` | Redb log/store tests through both paths | owner needed | no direct old imports remain |
-| reusable `aspen_raft::node::*` | `aspen_raft_kv::*` | facade/compat compile tests | owner needed | callers use `aspen_raft_kv` directly |
-| reusable `aspen_raft::network::*` | `aspen_raft_network::*` | adapter/compat compile tests | owner needed | callers use `aspen_raft_network` directly |
+| `aspen_raft::types::*` | `aspen_raft_kv_types::*` | compile old and new imports | Aspen Raft/KV extraction maintainers | all in-repo consumers and downstream fixture use new path |
+| `aspen_raft::storage_shared::*` | `aspen_redb_storage::*` | storage tests through both paths | Aspen Redb storage maintainers | no direct old imports remain |
+| `aspen_raft::storage::redb_store::*` | `aspen_redb_storage::*` | Redb log/store tests through both paths | Aspen Redb storage maintainers | no direct old imports remain |
+| reusable `aspen_raft::node::*` | `aspen_raft_kv::*` | facade/compat compile tests | Aspen Raft/KV facade maintainers | callers use `aspen_raft_kv` directly |
+| reusable `aspen_raft::network::*` | `aspen_raft_network::*` | adapter/compat compile tests | Aspen Raft network adapter maintainers | callers use `aspen_raft_network` directly |
 
 Dependency-key/package aliasing is allowed only when it preserves import paths during migration and is recorded in the relevant manifest with tests and removal criteria.
 
@@ -72,9 +72,9 @@ Dependency-key/package aliasing is allowed only when it preserves import paths d
 
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
-| `aspen-raft-compat` | default | `aspen-raft -> aspen-core-shell` | owner needed | Compatibility shell for existing Aspen integration. |
-| `aspen-raft-compat` | default | `aspen-raft -> iroh` | owner needed | Existing Aspen runtime networking until adapter split completes. |
-| `aspen-raft-compat` | trust/secrets/sql/coordination | app feature dependencies | owner needed | Explicit Aspen runtime features; not reusable defaults. |
+| `aspen-raft-compat` | default | `aspen-raft -> aspen-core-shell` | Aspen Raft compatibility maintainers | Compatibility shell for existing Aspen integration. |
+| `aspen-raft-compat` | default | `aspen-raft -> iroh` | Aspen Raft compatibility maintainers | Existing Aspen runtime networking until adapter split completes. |
+| `aspen-raft-compat` | trust/secrets/sql/coordination | app feature dependencies | Aspen Raft compatibility maintainers | Explicit Aspen runtime features; not reusable defaults. |
 
 ## Verification rails
 
