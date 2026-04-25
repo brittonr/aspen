@@ -1,6 +1,6 @@
 ## 0. Baseline and traceability
 
-- [ ] R1 Capture baseline trait, dependency, and consumer evidence for `aspen-traits`, `aspen-cache`, `aspen-blob`, `aspen-redb-storage`, `aspen-kv-branch`, `aspen-commit-dag`, `aspen-time`, and `aspen-hlc`, including current broad trait bounds, root/runtime imports, feature-gated adapter imports, and representative consumers. [covers=architecture.modularity.low-level-trait-migrations-remain-traceable,low-level-trait-seams.low-level-seam-verification-is-durable-and-negative]
+- [x] R1 Capture baseline trait, dependency, and consumer evidence for `aspen-traits`, `aspen-cache`, `aspen-blob`, `aspen-redb-storage`, `aspen-kv-branch`, `aspen-commit-dag`, `aspen-time`, and `aspen-hlc`, including current broad trait bounds, root/runtime imports, feature-gated adapter imports, and representative consumers. [covers=architecture.modularity.low-level-trait-migrations-remain-traceable,low-level-trait-seams.low-level-seam-verification-is-durable-and-negative]
 - [ ] R2 Add or update extraction manifests for affected low-level families to identify reusable trait seams, composite compatibility traits, adapter owners, feature gates, and first implementation blockers. [covers=architecture.modularity.extraction-candidates-expose-narrow-reusable-seams.candidate-manifest-identifies-trait-seams]
 
 ## 1. Foundational KV trait split
