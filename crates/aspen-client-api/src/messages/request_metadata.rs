@@ -89,6 +89,7 @@ define_request_variant_name! {
     ClientRpcRequest::ChangeMembership { .. } => "ChangeMembership",
     ClientRpcRequest::CheckpointWal => "CheckpointWal",
     ClientRpcRequest::ExpungeNode { .. } => "ExpungeNode",
+    ClientRpcRequest::ForgeJjNative { .. } => "ForgeJjNative",
     ClientRpcRequest::CiCancelRun { .. } => "CiCancelRun",
     ClientRpcRequest::CiGetArtifact { .. } => "CiGetArtifact",
     ClientRpcRequest::CiGetJobLogs { .. } => "CiGetJobLogs",

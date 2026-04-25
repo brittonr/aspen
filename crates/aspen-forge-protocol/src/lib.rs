@@ -9,6 +9,7 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -52,6 +53,32 @@ impl JjTransportVersionRange {
     pub const fn accepts(&self, client_version: u16) -> bool {
         client_version >= self.min_supported && client_version <= self.max_supported
     }
+}
+
+/// Build a JJ-native response that advertises the server transport range.
+#[must_use]
+pub fn jj_native_response(status: JjNativeStatus, message: Option<String>) -> JjNativeResponse {
+    JjNativeResponse {
+        status,
+        transport_range: JjTransportVersionRange::current(),
+        missing_objects: Vec::new(),
+        bookmark_heads: Vec::new(),
+        message,
+    }
+}
+
+/// Admit a JJ-native request before any object exchange.
+#[must_use]
+pub fn admit_jj_native_request(request: &JjNativeRequest) -> JjNativeResponse {
+    let transport_range = JjTransportVersionRange::current();
+    if !transport_range.accepts(request.transport_version) {
+        return jj_native_response(
+            JjNativeStatus::IncompatibleTransportVersion,
+            Some("incompatible JJ-native transport version".to_string()),
+        );
+    }
+
+    jj_native_response(JjNativeStatus::Accepted, None)
 }
 
 /// JJ-native operation families carried by the Forge JJ protocol.
@@ -1097,6 +1124,52 @@ mod tests {
         let range = JjTransportVersionRange::current();
 
         assert!(!range.accepts(FUTURE_VERSION));
+    }
+
+    #[test]
+    fn jj_native_admission_accepts_all_current_operations() {
+        for operation in [
+            JjNativeOperation::Clone,
+            JjNativeOperation::Fetch,
+            JjNativeOperation::Push,
+            JjNativeOperation::BookmarkSync,
+            JjNativeOperation::ResolveChangeId,
+        ] {
+            let request = JjNativeRequest {
+                repo_id: "repo".into(),
+                operation,
+                transport_version: JJ_TRANSPORT_VERSION_CURRENT,
+                want_objects: Vec::new(),
+                have_objects: Vec::new(),
+                change_ids: Vec::new(),
+                bookmark_mutations: Vec::new(),
+            };
+
+            let response = admit_jj_native_request(&request);
+
+            assert_eq!(response.status, JjNativeStatus::Accepted);
+            assert_eq!(response.transport_range, JjTransportVersionRange::current());
+        }
+    }
+
+    #[test]
+    fn jj_native_admission_rejects_incompatible_transport_before_exchange() {
+        const FUTURE_VERSION: u16 = JJ_TRANSPORT_VERSION_CURRENT + 1;
+        let request = JjNativeRequest {
+            repo_id: "repo".into(),
+            operation: JjNativeOperation::Fetch,
+            transport_version: FUTURE_VERSION,
+            want_objects: Vec::new(),
+            have_objects: Vec::new(),
+            change_ids: Vec::new(),
+            bookmark_mutations: Vec::new(),
+        };
+
+        let response = admit_jj_native_request(&request);
+
+        assert_eq!(response.status, JjNativeStatus::IncompatibleTransportVersion);
+        assert_eq!(response.transport_range, JjTransportVersionRange::current());
+        assert!(response.missing_objects.is_empty());
     }
 
     #[test]

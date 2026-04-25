@@ -238,6 +238,7 @@ enum ForgeRequestGroup {
     Mirror,
     Federation,
     GitBridge,
+    JjNative,
     Nostr,
     Diff,
 }
@@ -313,6 +314,7 @@ impl ForgeServiceExecutor {
         "GitBridgePushChunk",
         "GitBridgePushComplete",
         "GitBridgeProbeObjects",
+        "ForgeJjNative",
         "NostrAuthChallenge",
         "NostrAuthVerify",
         "NostrGetProfile",
@@ -457,6 +459,7 @@ impl ForgeServiceExecutor {
             | ClientRpcRequest::GitBridgePushChunk { .. }
             | ClientRpcRequest::GitBridgePushComplete { .. }
             | ClientRpcRequest::GitBridgeProbeObjects { .. } => Ok(ForgeRequestGroup::GitBridge),
+            ClientRpcRequest::ForgeJjNative { .. } => Ok(ForgeRequestGroup::JjNative),
             ClientRpcRequest::NostrAuthChallenge { .. }
             | ClientRpcRequest::NostrAuthVerify { .. }
             | ClientRpcRequest::NostrGetProfile { .. } => Ok(ForgeRequestGroup::Nostr),
@@ -1765,6 +1768,7 @@ impl ServiceExecutor for ForgeServiceExecutor {
             ForgeRequestGroup::Mirror => self.execute_mirror_request(request).await,
             ForgeRequestGroup::Federation => self.execute_federation_request(request).await,
             ForgeRequestGroup::GitBridge => self.execute_git_bridge_request(request).await,
+            ForgeRequestGroup::JjNative => self.execute_jj_native_request(request).await,
             ForgeRequestGroup::Nostr => self.execute_nostr_request(request).await,
             ForgeRequestGroup::Diff => self.execute_diff_request(request).await,
         }
@@ -2368,6 +2372,22 @@ impl ForgeServiceExecutor {
         }
     }
 
+    async fn execute_jj_native_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        match request {
+            ClientRpcRequest::ForgeJjNative { request } => {
+                let admission = aspen_client_api::forge::admit_jj_native_request(&request);
+                if admission.status != aspen_client_api::forge::JjNativeStatus::Accepted {
+                    return Ok(ClientRpcResponse::ForgeJjNative(admission));
+                }
+                Ok(ClientRpcResponse::ForgeJjNative(aspen_client_api::forge::jj_native_response(
+                    aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable,
+                    Some("JJ-native protocol session handler is not active on this node".to_string()),
+                )))
+            }
+            _ => unexpected_request_kind("jj native"),
+        }
+    }
+
     async fn execute_nostr_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         match request {
             ClientRpcRequest::NostrAuthChallenge { npub_hex } => {
@@ -2542,6 +2562,18 @@ mod tests {
             tags: vec![],
             min_api_version: None,
             dependencies: vec![],
+        }
+    }
+
+    fn jj_native_request(transport_version: u16) -> aspen_client_api::forge::JjNativeRequest {
+        aspen_client_api::forge::JjNativeRequest {
+            repo_id: "repo".to_string(),
+            operation: aspen_client_api::forge::JjNativeOperation::Fetch,
+            transport_version,
+            want_objects: vec![],
+            have_objects: vec![],
+            change_ids: vec![],
+            bookmark_mutations: vec![],
         }
     }
 
@@ -2725,6 +2757,41 @@ mod tests {
         assert_eq!(first_route.transport_version, second_route.transport_version);
     }
 
+    #[tokio::test]
+    async fn test_jj_native_admission_rejects_incompatible_version_before_unavailable() {
+        let executor = make_test_executor().await;
+        let response = executor
+            .execute(ClientRpcRequest::ForgeJjNative {
+                request: jj_native_request(aspen_client_api::forge::JJ_TRANSPORT_VERSION_CURRENT + 1),
+            })
+            .await
+            .expect("JJ-native request executes");
+
+        let ClientRpcResponse::ForgeJjNative(response) = response else {
+            panic!("expected JJ-native response");
+        };
+
+        assert_eq!(response.status, aspen_client_api::forge::JjNativeStatus::IncompatibleTransportVersion);
+    }
+
+    #[tokio::test]
+    async fn test_jj_native_admission_accepts_version_before_session_availability() {
+        let executor = make_test_executor().await;
+        let response = executor
+            .execute(ClientRpcRequest::ForgeJjNative {
+                request: jj_native_request(aspen_client_api::forge::JJ_TRANSPORT_VERSION_CURRENT),
+            })
+            .await
+            .expect("JJ-native request executes");
+
+        let ClientRpcResponse::ForgeJjNative(response) = response else {
+            panic!("expected JJ-native response");
+        };
+
+        assert_eq!(response.transport_range, aspen_client_api::forge::JjTransportVersionRange::current());
+        assert_eq!(response.status, aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable);
+    }
+
     #[test]
     fn test_request_group_routes_repo_and_git_bridge_requests() {
         assert_eq!(
@@ -2752,6 +2819,13 @@ mod tests {
             })
             .expect("git bridge request should route"),
             ForgeRequestGroup::GitBridge
+        );
+        assert_eq!(
+            ForgeServiceExecutor::request_group(&ClientRpcRequest::ForgeJjNative {
+                request: jj_native_request(aspen_client_api::forge::JJ_TRANSPORT_VERSION_CURRENT),
+            })
+            .expect("JJ-native request should route"),
+            ForgeRequestGroup::JjNative
         );
     }
 
@@ -2868,6 +2942,7 @@ mod tests {
         assert_eq!(ForgeServiceExecutor::APP_ID, Some("forge"));
         assert!(ForgeServiceExecutor::HANDLES.contains(&"ForgeCreateRepo"));
         assert!(ForgeServiceExecutor::HANDLES.contains(&"GitBridgePush"));
+        assert!(ForgeServiceExecutor::HANDLES.contains(&"ForgeJjNative"));
         assert!(ForgeServiceExecutor::HANDLES.contains(&"NostrAuthVerify"));
     }
 }

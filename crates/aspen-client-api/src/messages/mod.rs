@@ -15,10 +15,9 @@
 //! - Bounded message sizes
 //! - Fail-fast on invalid requests
 
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-
-use alloc::collections::BTreeMap;
 
 fn default_optional_string() -> Option<String> {
     None
@@ -3954,6 +3953,14 @@ pub enum ClientRpcRequest {
         /// ID of the node to expunge.
         node_id: u64,
     },
+
+    /// Admit or reject a JJ-native Forge request before object exchange.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    ForgeJjNative {
+        /// JJ-native request envelope.
+        request: forge::JjNativeRequest,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -4915,6 +4922,11 @@ pub enum ClientRpcResponse {
     ///
     /// Appended to preserve postcard discriminants for older clients.
     ExpungeNodeResult(cluster::ExpungeNodeResultResponse),
+
+    /// JJ-native Forge admission response.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    ForgeJjNative(forge::JjNativeResponse),
 }
 
 /// Result of a plugin reload operation.

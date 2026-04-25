@@ -38,6 +38,7 @@ pub(super) const REQUIRED_APP_VARIANTS: &[&str] = &[
     "ForgeGetRef",
     "ForgeGetRepo",
     "ForgeGetTree",
+    "ForgeJjNative",
     "ForgeListBranches",
     "ForgeListDiscussions",
     "ForgeListIssues",

@@ -1,0 +1,1168 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.07s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_forge_protocol-ef05f2af1a1dae9d)
+
+running 5 tests
+test tests::jj_native_admission_accepts_all_current_operations ... ok
+test tests::jj_native_alpn_text_matches_wire_bytes ... ok
+test tests::jj_native_admission_rejects_incompatible_transport_before_exchange ... ok
+test tests::jj_native_response_reports_incompatible_version ... ok
+test tests::jj_native_request_roundtrip ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4326:9
+     |
+4326 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4373:9
+     |
+4373 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+   Compiling aspen-raft v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft)
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+warning: `aspen-client-api` (lib) generated 28 warnings
+   Compiling aspen-cluster v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster)
+   Compiling aspen-forge v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge)
+   Compiling aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-rpc-core)
+   Compiling aspen-forge-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-handler)
+warning: function `test_executor_does_not_handle_migrated_ops` is never used
+  --> crates/aspen-forge-handler/src/handler/mod.rs:64:8
+   |
+64 |     fn test_executor_does_not_handle_migrated_ops() {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `aspen-forge-handler` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.43s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_forge_handler-079e26b52cfade4b)
+
+running 2 tests
+test executor::tests::test_jj_native_admission_accepts_version_before_session_availability ... ok
+test executor::tests::test_jj_native_admission_rejects_incompatible_version_before_unavailable ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.12s
+
+Exit: 0
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling unicode-ident v1.0.24
+   Compiling smallvec v1.15.1
+   Compiling percent-encoding v2.3.2
+   Compiling signature v3.0.0-rc.10
+   Compiling subtle v2.6.1
+   Compiling rand_core v0.9.5
+   Compiling ucd-trie v0.1.7
+   Compiling cc v1.2.57
+   Compiling arrayvec v0.7.6
+   Compiling constant_time_eq v0.4.2
+   Compiling regex-syntax v0.8.10
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling base64 v0.22.1
+   Compiling once_cell v1.21.4
+   Compiling serde_json v1.0.149
+   Compiling form_urlencoded v1.2.2
+   Compiling pest v2.8.6
+   Compiling tempfile v3.27.0
+   Compiling syn v2.0.117
+   Compiling blake3 v1.8.3
+   Compiling pest_meta v2.8.6
+   Compiling regex-automata v0.4.14
+   Compiling regex v1.12.3
+   Compiling synstructure v0.13.2
+   Compiling pest_generator v2.8.6
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling zerovec-derive v0.11.2
+   Compiling serde_derive v1.0.228
+   Compiling displaydoc v0.2.5
+   Compiling zeroize_derive v1.4.3
+   Compiling thiserror-impl v2.0.18
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling n0-error-macros v0.1.3
+   Compiling derive_more-impl v2.1.1
+   Compiling spez v0.1.2
+   Compiling tokio-macros v2.6.1
+   Compiling pest_derive v2.8.6
+   Compiling zeroize v1.8.2
+   Compiling tokio v1.50.0
+   Compiling zerofrom v0.1.6
+   Compiling yoke v0.8.1
+   Compiling n0-error v0.1.3
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling thiserror v2.0.18
+   Compiling cobs v0.3.0
+   Compiling derive_more v2.1.1
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling icu_collections v2.1.1
+   Compiling icu_locale_core v2.1.1
+   Compiling icu_provider v2.1.1
+   Compiling icu_normalizer v2.1.1
+   Compiling icu_properties v2.1.2
+   Compiling serde v1.0.228
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling heapless v0.7.17
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs-protocol)
+   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+   Compiling insta v1.47.2
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling postcard v1.1.3
+   Compiling url v2.5.8
+   Compiling ed25519-dalek v3.0.0-pre.1
+   Compiling iroh-base v0.97.0
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4326:9
+     |
+4326 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4373:9
+     |
+4373 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.91s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_client_api-1eda636bef9716e7)
+
+running 1 test
+test tests::test_request_metadata_lookup_matches_sample_requests ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.00s
+
+     Running tests/client_rpc_postcard_baseline.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/client_rpc_postcard_baseline-2d01adcf2646f448)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/serialization_snapshots.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/serialization_snapshots-0e6816299516ade1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/snapshot_redaction.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/snapshot_redaction-1d3caf42c7de506a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/wire_format_golden.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/wire_format_golden-054e03bfaacdba04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+client_api_request_metadata_exit=0
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4326:9
+     |
+4326 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4373:9
+     |
+4373 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_client_api-1eda636bef9716e7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+
+     Running tests/client_rpc_postcard_baseline.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/client_rpc_postcard_baseline-2d01adcf2646f448)
+
+running 1 test
+test client_rpc_postcard_baseline ... FAILED
+
+failures:
+
+---- client_rpc_postcard_baseline stdout ----
+
+thread 'client_rpc_postcard_baseline' (2356925) panicked at crates/aspen-client-api/tests/client_rpc_postcard_baseline.rs:126:5:
+assertion `left == right` failed: saved request baseline keys no longer match live ClientRpcRequest variants
+  left: ["AddBlob", "AddLearner", "AddPeer", "AddPeerCluster", "AlertCreate", "AlertDelete", "AlertEvaluate", "AlertGet", "AlertList", "AutomergeApplyChanges", "AutomergeCreate", "AutomergeDelete", "AutomergeExists", "AutomergeGenerateSyncMessage", "AutomergeGet", "AutomergeGetMetadata", "AutomergeList", "AutomergeMerge", "AutomergeReceiveSyncMessage", "AutomergeSave", "BarrierEnter", "BarrierLeave", "BarrierStatus", "BatchRead", "BatchWrite", "BlobReplicatePull", "CacheDownload", "CacheMigrationCancel", "CacheMigrationStart", "CacheMigrationStatus", "CacheMigrationValidate", "CacheQuery", "CacheStats", "CalendarCreate", "CalendarCreateEvent", "CalendarDelete", "CalendarDeleteEvent", "CalendarExpandRecurrence", "CalendarExportIcal", "CalendarFreeBusy", "CalendarGetEvent", "CalendarImportIcal", "CalendarList", "CalendarListEvents", "CalendarSearchEvents", "CalendarUpdateEvent", "ChangeMembership", "CheckpointWal", "CiCancelRun", "CiGetArtifact", "CiGetJobLogs", "CiGetJobOutput", "CiGetRefStatus", "CiGetStatus", "CiListArtifacts", "CiListRuns", "CiSubscribeLogs", "CiTriggerPipeline", "CiUnwatchRepo", "CiWatchRepo", "ClusterDeploy", "ClusterDeployStatus", "ClusterRollback", "CompareAndDeleteKey", "CompareAndSwapKey", "ConditionalBatchWrite", "ContactsAddToGroup", "ContactsCreateBook", "ContactsCreateContact", "ContactsCreateGroup", "ContactsDeleteBook", "ContactsDeleteContact", "ContactsDeleteGroup", "ContactsExportVcard", "ContactsGetContact", "ContactsImportVcard", "ContactsListBooks", "ContactsListContacts", "ContactsListGroups", "ContactsRemoveFromGroup", "ContactsSearchContacts", "ContactsUpdateContact", "CounterAdd", "CounterCompareAndSet", "CounterDecrement", "CounterGet", "CounterIncrement", "CounterSet", "CounterSubtract", "DeleteBlob", "DeleteKey", "DocsDelete", "DocsGet", "DocsList", "DocsSet", "DocsStatus", "DownloadBlob", "DownloadBlobByHash", "DownloadBlobByProvider", "ExecuteSql", "ExpungeNode", "FederateRepository", "FederationBidiSync", "FederationFetchRefs", "FederationGitFetch", "FederationGitListRefs", "FederationGrant", "FederationListTokens", "FederationPull", "FederationPush", "FederationSyncPeer", "ForgeApprovePatch", "ForgeCasRef", "ForgeCheckMerge", "ForgeCloseDiscussion", "ForgeCloseIssue", "ForgeClosePatch", "ForgeCommentIssue", "ForgeCommit", "ForgeCreateDiscussion", "ForgeCreateIssue", "ForgeCreatePatch", "ForgeCreateRepo", "ForgeCreateTree", "ForgeDeleteRef", "ForgeDiffCommits", "ForgeDiffRefs", "ForgeDisableMirror", "ForgeFetchFederated", "ForgeForkRepo", "ForgeGetBlob", "ForgeGetCommit", "ForgeGetDelegateKey", "ForgeGetDiscussion", "ForgeGetIssue", "ForgeGetMirrorStatus", "ForgeGetPatch", "ForgeGetRef", "ForgeGetRepo", "ForgeGetTree", "ForgeListBranches", "ForgeListDiscussions", "ForgeListIssues", "ForgeListPatches", "ForgeListRepos", "ForgeListTags", "ForgeLockDiscussion", "ForgeLog", "ForgeMergePatch", "ForgeReopenDiscussion", "ForgeReopenIssue", "ForgeReplyDiscussion", "ForgeSetMirror", "ForgeSetRef", "ForgeStoreBlob", "ForgeUnlockDiscussion", "ForgeUpdatePatch", "GetBlob", "GetBlobReplicationStatus", "GetBlobStatus", "GetBlobTicket", "GetClientTicket", "GetClusterState", "GetClusterTicket", "GetClusterTicketCombined", "GetDiscoveredCluster", "GetDocsTicket", "GetFederationStatus", "GetHealth", "GetKeyOrigin", "GetLeader", "GetMetrics", "GetNetworkMetrics", "GetNodeInfo", "GetPeerClusterStatus", "GetRaftMetrics", "GetTopology", "GetVaultKeys", "GitBridgeFetch", "GitBridgeFetchChunk", "GitBridgeFetchComplete", "GitBridgeFetchStart", "GitBridgeListRefs", "GitBridgeProbeObjects", "GitBridgePush", "GitBridgePushChunk", "GitBridgePushComplete", "GitBridgePushStart", "HasBlob", "HashCheck", "HookGetMetrics", "HookList", "HookTrigger", "IndexCreate", "IndexDrop", "IndexList", "IndexScan", "InitCluster", "InitClusterWithTrust", "JobCancel", "JobGet", "JobList", "JobQueueStats", "JobSubmit", "JobUpdateProgress", "LeaseGrant", "LeaseKeepalive", "LeaseList", "LeaseRevoke", "LeaseTimeToLive", "ListBlobs", "ListDiscoveredClusters", "ListFederatedRepositories", "ListPeerClusters", "ListVaults", "LockAcquire", "LockRelease", "LockRenew", "LockSetAcquire", "LockSetRelease", "LockSetRenew", "LockSetTryAcquire", "LockTryAcquire", "MetricIngest", "MetricList", "MetricQuery", "NetList", "NetLookup", "NetPublish", "NetUnpublish", "NixCacheGetPublicKey", "NodeRollback", "NodeUpgrade", "NostrAuthChallenge", "NostrAuthVerify", "NostrGetProfile", "Ping", "PluginReload", "PromoteLearner", "ProtectBlob", "QueueAck", "QueueCreate", "QueueDelete", "QueueDequeue", "QueueDequeueWait", "QueueEnqueue", "QueueEnqueueBatch", "QueueExtendVisibility", "QueueGetDLQ", "QueueNack", "QueuePeek", "QueueRedriveDLQ", "QueueStatus", "RWLockAcquireRead", "RWLockAcquireWrite", "RWLockDowngrade", "RWLockReleaseRead", "RWLockReleaseWrite", "RWLockStatus", "RWLockTryAcquireRead", "RWLockTryAcquireWrite", "RateLimiterAcquire", "RateLimiterAvailable", "RateLimiterReset", "RateLimiterTryAcquire", "ReadKey", "RemovePeerCluster", "RunBlobRepairCycle", "ScanKeys", "SecretsKvDelete", "SecretsKvDeleteMetadata", "SecretsKvDestroy", "SecretsKvList", "SecretsKvMetadata", "SecretsKvRead", "SecretsKvUndelete", "SecretsKvUpdateMetadata", "SecretsKvWrite", "SecretsNixCacheCreateKey", "SecretsNixCacheDeleteKey", "SecretsNixCacheGetPublicKey", "SecretsNixCacheListKeys", "SecretsNixCacheRotateKey", "SecretsPkiCreateRole", "SecretsPkiGenerateIntermediate", "SecretsPkiGenerateRoot", "SecretsPkiGetCrl", "SecretsPkiGetRole", "SecretsPkiIssue", "SecretsPkiListCerts", "SecretsPkiListRoles", "SecretsPkiRevoke", "SecretsPkiSetSignedIntermediate", "SecretsTransitCreateKey", "SecretsTransitDatakey", "SecretsTransitDecrypt", "SecretsTransitEncrypt", "SecretsTransitListKeys", "SecretsTransitRewrap", "SecretsTransitRotateKey", "SecretsTransitSign", "SecretsTransitVerify", "SemaphoreAcquire", "SemaphoreRelease", "SemaphoreStatus", "SemaphoreTryAcquire", "SequenceCurrent", "SequenceNext", "SequenceReserve", "ServiceDeregister", "ServiceDiscover", "ServiceGetInstance", "ServiceHeartbeat", "ServiceList", "ServiceRegister", "ServiceUpdateHealth", "ServiceUpdateMetadata", "SetPeerClusterEnabled", "SignedCounterAdd", "SignedCounterGet", "SnixDirectoryGet", "SnixDirectoryPut", "SnixPathInfoGet", "SnixPathInfoPut", "TraceGet", "TraceIngest", "TraceList", "TraceSearch", "TriggerBlobReplication", "TriggerSnapshot", "TrustCluster", "UnprotectBlob", "UntrustCluster", "UpdatePeerClusterFilter", "UpdatePeerClusterPriority", "WatchCancel", "WatchCreate", "WatchStatus", "WorkerCompleteJob", "WorkerDeregister", "WorkerHeartbeat", "WorkerPollJobs", "WorkerRegister", "WorkerStatus", "WriteKey", "WriteKeyWithLease"]
+ right: ["AddBlob", "AddLearner", "AddPeer", "AddPeerCluster", "AlertCreate", "AlertDelete", "AlertEvaluate", "AlertGet", "AlertList", "AutomergeApplyChanges", "AutomergeCreate", "AutomergeDelete", "AutomergeExists", "AutomergeGenerateSyncMessage", "AutomergeGet", "AutomergeGetMetadata", "AutomergeList", "AutomergeMerge", "AutomergeReceiveSyncMessage", "AutomergeSave", "BarrierEnter", "BarrierLeave", "BarrierStatus", "BatchRead", "BatchWrite", "BlobReplicatePull", "CacheDownload", "CacheMigrationCancel", "CacheMigrationStart", "CacheMigrationStatus", "CacheMigrationValidate", "CacheQuery", "CacheStats", "CalendarCreate", "CalendarCreateEvent", "CalendarDelete", "CalendarDeleteEvent", "CalendarExpandRecurrence", "CalendarExportIcal", "CalendarFreeBusy", "CalendarGetEvent", "CalendarImportIcal", "CalendarList", "CalendarListEvents", "CalendarSearchEvents", "CalendarUpdateEvent", "ChangeMembership", "CheckpointWal", "CiCancelRun", "CiGetArtifact", "CiGetJobLogs", "CiGetJobOutput", "CiGetRefStatus", "CiGetStatus", "CiListArtifacts", "CiListRuns", "CiSubscribeLogs", "CiTriggerPipeline", "CiUnwatchRepo", "CiWatchRepo", "ClusterDeploy", "ClusterDeployStatus", "ClusterRollback", "CompareAndDeleteKey", "CompareAndSwapKey", "ConditionalBatchWrite", "ContactsAddToGroup", "ContactsCreateBook", "ContactsCreateContact", "ContactsCreateGroup", "ContactsDeleteBook", "ContactsDeleteContact", "ContactsDeleteGroup", "ContactsExportVcard", "ContactsGetContact", "ContactsImportVcard", "ContactsListBooks", "ContactsListContacts", "ContactsListGroups", "ContactsRemoveFromGroup", "ContactsSearchContacts", "ContactsUpdateContact", "CounterAdd", "CounterCompareAndSet", "CounterDecrement", "CounterGet", "CounterIncrement", "CounterSet", "CounterSubtract", "DeleteBlob", "DeleteKey", "DocsDelete", "DocsGet", "DocsList", "DocsSet", "DocsStatus", "DownloadBlob", "DownloadBlobByHash", "DownloadBlobByProvider", "ExecuteSql", "ExpungeNode", "FederateRepository", "FederationBidiSync", "FederationFetchRefs", "FederationGitFetch", "FederationGitListRefs", "FederationGrant", "FederationListTokens", "FederationPull", "FederationPush", "FederationSyncPeer", "ForgeApprovePatch", "ForgeCasRef", "ForgeCheckMerge", "ForgeCloseDiscussion", "ForgeCloseIssue", "ForgeClosePatch", "ForgeCommentIssue", "ForgeCommit", "ForgeCreateDiscussion", "ForgeCreateIssue", "ForgeCreatePatch", "ForgeCreateRepo", "ForgeCreateTree", "ForgeDeleteRef", "ForgeDiffCommits", "ForgeDiffRefs", "ForgeDisableMirror", "ForgeFetchFederated", "ForgeForkRepo", "ForgeGetBlob", "ForgeGetCommit", "ForgeGetDelegateKey", "ForgeGetDiscussion", "ForgeGetIssue", "ForgeGetMirrorStatus", "ForgeGetPatch", "ForgeGetRef", "ForgeGetRepo", "ForgeGetTree", "ForgeJjNative", "ForgeListBranches", "ForgeListDiscussions", "ForgeListIssues", "ForgeListPatches", "ForgeListRepos", "ForgeListTags", "ForgeLockDiscussion", "ForgeLog", "ForgeMergePatch", "ForgeReopenDiscussion", "ForgeReopenIssue", "ForgeReplyDiscussion", "ForgeSetMirror", "ForgeSetRef", "ForgeStoreBlob", "ForgeUnlockDiscussion", "ForgeUpdatePatch", "GetBlob", "GetBlobReplicationStatus", "GetBlobStatus", "GetBlobTicket", "GetClientTicket", "GetClusterState", "GetClusterTicket", "GetClusterTicketCombined", "GetDiscoveredCluster", "GetDocsTicket", "GetFederationStatus", "GetHealth", "GetKeyOrigin", "GetLeader", "GetMetrics", "GetNetworkMetrics", "GetNodeInfo", "GetPeerClusterStatus", "GetRaftMetrics", "GetTopology", "GetVaultKeys", "GitBridgeFetch", "GitBridgeFetchChunk", "GitBridgeFetchComplete", "GitBridgeFetchStart", "GitBridgeListRefs", "GitBridgeProbeObjects", "GitBridgePush", "GitBridgePushChunk", "GitBridgePushComplete", "GitBridgePushStart", "HasBlob", "HashCheck", "HookGetMetrics", "HookList", "HookTrigger", "IndexCreate", "IndexDrop", "IndexList", "IndexScan", "InitCluster", "InitClusterWithTrust", "JobCancel", "JobGet", "JobList", "JobQueueStats", "JobSubmit", "JobUpdateProgress", "LeaseGrant", "LeaseKeepalive", "LeaseList", "LeaseRevoke", "LeaseTimeToLive", "ListBlobs", "ListDiscoveredClusters", "ListFederatedRepositories", "ListPeerClusters", "ListVaults", "LockAcquire", "LockRelease", "LockRenew", "LockSetAcquire", "LockSetRelease", "LockSetRenew", "LockSetTryAcquire", "LockTryAcquire", "MetricIngest", "MetricList", "MetricQuery", "NetList", "NetLookup", "NetPublish", "NetUnpublish", "NixCacheGetPublicKey", "NodeRollback", "NodeUpgrade", "NostrAuthChallenge", "NostrAuthVerify", "NostrGetProfile", "Ping", "PluginReload", "PromoteLearner", "ProtectBlob", "QueueAck", "QueueCreate", "QueueDelete", "QueueDequeue", "QueueDequeueWait", "QueueEnqueue", "QueueEnqueueBatch", "QueueExtendVisibility", "QueueGetDLQ", "QueueNack", "QueuePeek", "QueueRedriveDLQ", "QueueStatus", "RWLockAcquireRead", "RWLockAcquireWrite", "RWLockDowngrade", "RWLockReleaseRead", "RWLockReleaseWrite", "RWLockStatus", "RWLockTryAcquireRead", "RWLockTryAcquireWrite", "RateLimiterAcquire", "RateLimiterAvailable", "RateLimiterReset", "RateLimiterTryAcquire", "ReadKey", "RemovePeerCluster", "RunBlobRepairCycle", "ScanKeys", "SecretsKvDelete", "SecretsKvDeleteMetadata", "SecretsKvDestroy", "SecretsKvList", "SecretsKvMetadata", "SecretsKvRead", "SecretsKvUndelete", "SecretsKvUpdateMetadata", "SecretsKvWrite", "SecretsNixCacheCreateKey", "SecretsNixCacheDeleteKey", "SecretsNixCacheGetPublicKey", "SecretsNixCacheListKeys", "SecretsNixCacheRotateKey", "SecretsPkiCreateRole", "SecretsPkiGenerateIntermediate", "SecretsPkiGenerateRoot", "SecretsPkiGetCrl", "SecretsPkiGetRole", "SecretsPkiIssue", "SecretsPkiListCerts", "SecretsPkiListRoles", "SecretsPkiRevoke", "SecretsPkiSetSignedIntermediate", "SecretsTransitCreateKey", "SecretsTransitDatakey", "SecretsTransitDecrypt", "SecretsTransitEncrypt", "SecretsTransitListKeys", "SecretsTransitRewrap", "SecretsTransitRotateKey", "SecretsTransitSign", "SecretsTransitVerify", "SemaphoreAcquire", "SemaphoreRelease", "SemaphoreStatus", "SemaphoreTryAcquire", "SequenceCurrent", "SequenceNext", "SequenceReserve", "ServiceDeregister", "ServiceDiscover", "ServiceGetInstance", "ServiceHeartbeat", "ServiceList", "ServiceRegister", "ServiceUpdateHealth", "ServiceUpdateMetadata", "SetPeerClusterEnabled", "SignedCounterAdd", "SignedCounterGet", "SnixDirectoryGet", "SnixDirectoryPut", "SnixPathInfoGet", "SnixPathInfoPut", "TraceGet", "TraceIngest", "TraceList", "TraceSearch", "TriggerBlobReplication", "TriggerSnapshot", "TrustCluster", "UnprotectBlob", "UntrustCluster", "UpdatePeerClusterFilter", "UpdatePeerClusterPriority", "WatchCancel", "WatchCreate", "WatchStatus", "WorkerCompleteJob", "WorkerDeregister", "WorkerHeartbeat", "WorkerPollJobs", "WorkerRegister", "WorkerStatus", "WriteKey", "WriteKeyWithLease"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    client_rpc_postcard_baseline
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+error: test failed, to rerun pass `-p aspen-client-api --test client_rpc_postcard_baseline`
+client_api_postcard_baseline_exit=101
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4326:9
+     |
+4326 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4373:9
+     |
+4373 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_client_api-1eda636bef9716e7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+
+     Running tests/client_rpc_postcard_baseline.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/client_rpc_postcard_baseline-2d01adcf2646f448)
+
+running 1 test
+test client_rpc_postcard_baseline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/serialization_snapshots.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/serialization_snapshots-0e6816299516ade1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/snapshot_redaction.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/snapshot_redaction-1d3caf42c7de506a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/wire_format_golden.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/wire_format_golden-054e03bfaacdba04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+client_api_postcard_baseline_update_exit=0
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4326:9
+     |
+4326 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4373:9
+     |
+4373 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_client_api-1eda636bef9716e7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+
+     Running tests/client_rpc_postcard_baseline.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/client_rpc_postcard_baseline-2d01adcf2646f448)
+
+running 1 test
+test client_rpc_postcard_baseline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/serialization_snapshots.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/serialization_snapshots-0e6816299516ade1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/snapshot_redaction.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/snapshot_redaction-1d3caf42c7de506a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/wire_format_golden.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/wire_format_golden-054e03bfaacdba04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+client_api_postcard_baseline_exit_after_update=0
