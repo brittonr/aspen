@@ -485,6 +485,37 @@ impl ForgeServiceExecutor {
         }
     }
 
+    async fn reject_repo_backend_unavailable(
+        &self,
+        repo_id_hex: &str,
+        backend: ForgeRepoBackend,
+    ) -> Result<Option<ClientRpcResponse>> {
+        let Ok(hash) = blake3::Hash::from_hex(repo_id_hex) else {
+            return Ok(None);
+        };
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        if self.forge_node.get_repo(&repo_id).await.is_err() {
+            return Ok(None);
+        }
+        let backends = self.read_repo_backends(repo_id_hex).await;
+        if backends.contains(&backend) {
+            return Ok(None);
+        }
+        let backend_name = match backend {
+            ForgeRepoBackend::Git => "Git",
+            ForgeRepoBackend::Jj => "JJ",
+        };
+        Ok(Some(ClientRpcResponse::CapabilityUnavailable(aspen_client_api::CapabilityUnavailableResponse {
+            required_app: "forge".to_string(),
+            message: format!("{backend_name} backend is not enabled for this repository"),
+            hints: vec![],
+        })))
+    }
+
+    async fn reject_non_git_repo(&self, repo_id_hex: &str) -> Result<Option<ClientRpcResponse>> {
+        self.reject_repo_backend_unavailable(repo_id_hex, ForgeRepoBackend::Git).await
+    }
+
     async fn active_backend_routes(&self) -> Vec<ForgeRepoBackendRoute> {
         let mut routes = vec![git_backend_route(self.node_id)];
         let request = aspen_core::ScanRequest {
@@ -1031,6 +1062,9 @@ impl ForgeServiceExecutor {
         should_include_content: bool,
         context_lines: Option<u32>,
     ) -> Result<ClientRpcResponse> {
+        if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+            return Ok(rejection);
+        }
         let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {e}"))?;
         let rid = aspen_forge::identity::RepoId::from_hash(hash);
 
@@ -2047,7 +2081,12 @@ impl ForgeServiceExecutor {
 
     async fn execute_blob_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         match request {
-            ClientRpcRequest::ForgeStoreBlob { repo_id, content } => self.handle_store_blob(repo_id, content).await,
+            ClientRpcRequest::ForgeStoreBlob { repo_id, content } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_store_blob(repo_id, content).await
+            }
             ClientRpcRequest::ForgeGetBlob { hash } => self.handle_get_blob(hash).await,
             _ => unexpected_request_kind("blob"),
         }
@@ -2055,10 +2094,12 @@ impl ForgeServiceExecutor {
 
     async fn execute_tree_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         match request {
-            ClientRpcRequest::ForgeCreateTree {
-                repo_id: _,
-                entries_json,
-            } => self.handle_create_tree(entries_json).await,
+            ClientRpcRequest::ForgeCreateTree { repo_id, entries_json } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_create_tree(entries_json).await
+            }
             ClientRpcRequest::ForgeGetTree { hash } => self.handle_get_tree(hash).await,
             _ => unexpected_request_kind("tree"),
         }
@@ -2071,20 +2112,35 @@ impl ForgeServiceExecutor {
                 tree,
                 parents,
                 message,
-            } => self.handle_commit(repo_id, tree, parents, message).await,
+            } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_commit(repo_id, tree, parents, message).await
+            }
             ClientRpcRequest::ForgeGetCommit { hash } => self.handle_get_commit(hash).await,
             ClientRpcRequest::ForgeLog {
                 repo_id,
                 ref_name,
                 limit: max_entries_hint,
-            } => self.handle_log(repo_id, ref_name, max_entries_hint).await,
+            } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_log(repo_id, ref_name, max_entries_hint).await
+            }
             _ => unexpected_request_kind("commit"),
         }
     }
 
     async fn execute_ref_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         match request {
-            ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => self.handle_get_ref(repo_id, ref_name).await,
+            ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_get_ref(repo_id, ref_name).await
+            }
             ClientRpcRequest::ForgeSetRef {
                 repo_id,
                 ref_name,
@@ -2092,8 +2148,18 @@ impl ForgeServiceExecutor {
                 signer: _,
                 signature: _,
                 timestamp_ms: _,
-            } => self.handle_set_ref(repo_id, ref_name, hash).await,
-            ClientRpcRequest::ForgeDeleteRef { repo_id, ref_name } => self.handle_delete_ref(repo_id, ref_name).await,
+            } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_set_ref(repo_id, ref_name, hash).await
+            }
+            ClientRpcRequest::ForgeDeleteRef { repo_id, ref_name } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_delete_ref(repo_id, ref_name).await
+            }
             ClientRpcRequest::ForgeCasRef {
                 repo_id,
                 ref_name,
@@ -2102,9 +2168,24 @@ impl ForgeServiceExecutor {
                 signer: _,
                 signature: _,
                 timestamp_ms: _,
-            } => self.handle_cas_ref(repo_id, ref_name, expected, new_hash).await,
-            ClientRpcRequest::ForgeListBranches { repo_id } => self.handle_list_branches(repo_id).await,
-            ClientRpcRequest::ForgeListTags { repo_id } => self.handle_list_tags(repo_id).await,
+            } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_cas_ref(repo_id, ref_name, expected, new_hash).await
+            }
+            ClientRpcRequest::ForgeListBranches { repo_id } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_list_branches(repo_id).await
+            }
+            ClientRpcRequest::ForgeListTags { repo_id } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
+                self.handle_list_tags(repo_id).await
+            }
             _ => unexpected_request_kind("ref"),
         }
     }
@@ -2451,15 +2532,24 @@ impl ForgeServiceExecutor {
         match request {
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgeListRefs { repo_id } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
                 crate::handler::handlers::git_bridge::handle_git_bridge_list_refs(&self.forge_node, repo_id).await
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgeFetch { repo_id, want, have } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
                 crate::handler::handlers::git_bridge::handle_git_bridge_fetch(&self.forge_node, repo_id, want, have)
                     .await
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgePush { repo_id, objects, refs } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
                 let response = crate::handler::handlers::git_bridge::handle_git_bridge_push(
                     &self.forge_node,
                     repo_id.clone(),
@@ -2483,6 +2573,9 @@ impl ForgeServiceExecutor {
                 refs,
                 metadata,
             } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
                 crate::handler::handlers::git_bridge::handle_git_bridge_push_start(
                     &self.forge_node,
                     repo_id,
@@ -2532,11 +2625,17 @@ impl ForgeServiceExecutor {
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgeProbeObjects { repo_id, sha1s } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
                 crate::handler::handlers::git_bridge::handle_git_bridge_probe_objects(&self.forge_node, repo_id, sha1s)
                     .await
             }
             #[cfg(feature = "git-bridge")]
             ClientRpcRequest::GitBridgeFetchStart { repo_id, want, have } => {
+                if let Some(rejection) = self.reject_non_git_repo(&repo_id).await? {
+                    return Ok(rejection);
+                }
                 crate::handler::handlers::git_bridge::handle_git_bridge_fetch_start(
                     &self.forge_node,
                     repo_id,
@@ -3116,6 +3215,66 @@ mod tests {
                 .expect("message explains plugin unavailability")
                 .contains("no active JJ plugin route")
         );
+    }
+
+    #[tokio::test]
+    async fn test_git_forge_access_rejects_jj_only_repo() {
+        let executor = make_test_executor().await;
+        let create_result = executor
+            .execute(ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name: "jj-only-git-reject".into(),
+                description: None,
+                default_branch: None,
+                backends: vec![ForgeRepoBackend::Jj],
+            })
+            .await
+            .expect("JJ repo create executes");
+        let ClientRpcResponse::ForgeRepoResult(create_response) = create_result else {
+            panic!("expected ForgeRepoResult");
+        };
+        let repo = create_response.repo.expect("repo exists");
+
+        let response = executor
+            .execute(ClientRpcRequest::ForgeStoreBlob {
+                repo_id: repo.id,
+                content: b"blob".to_vec(),
+            })
+            .await
+            .expect("git blob request executes");
+        let ClientRpcResponse::CapabilityUnavailable(response) = response else {
+            panic!("expected capability-unavailable response");
+        };
+        assert_eq!(response.required_app, "forge");
+        assert!(response.message.contains("Git backend is not enabled"));
+    }
+
+    #[cfg(feature = "git-bridge")]
+    #[tokio::test]
+    async fn test_git_bridge_access_rejects_jj_only_repo() {
+        let executor = make_test_executor().await;
+        let create_result = executor
+            .execute(ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name: "jj-only-bridge-reject".into(),
+                description: None,
+                default_branch: None,
+                backends: vec![ForgeRepoBackend::Jj],
+            })
+            .await
+            .expect("JJ repo create executes");
+        let ClientRpcResponse::ForgeRepoResult(create_response) = create_result else {
+            panic!("expected ForgeRepoResult");
+        };
+        let repo = create_response.repo.expect("repo exists");
+
+        let response = executor
+            .execute(ClientRpcRequest::GitBridgeListRefs { repo_id: repo.id })
+            .await
+            .expect("git bridge request executes");
+        let ClientRpcResponse::CapabilityUnavailable(response) = response else {
+            panic!("expected capability-unavailable response");
+        };
+        assert_eq!(response.required_app, "forge");
+        assert!(response.message.contains("Git backend is not enabled"));
     }
 
     #[test]

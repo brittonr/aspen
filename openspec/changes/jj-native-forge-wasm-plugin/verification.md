@@ -5,10 +5,10 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-jj-authz-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-openspec-preflight.txt`
+- Changed file: `crates/aspen-forge-handler/src/executor.rs`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-git-jj-negative-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -82,6 +82,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 5.3 Add regression tests for change-id preservation, rewrite/update behavior, malformed-payload rejection, staged-publish no-partial-visibility, concurrent final-publish conflict rejection, repo-delete session abort/final-publish blocking, and dual-backend namespace isolation.
   - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-jj-regression-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-dual-backend-namespace-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-rustfmt-check.txt`
+
+- [x] 5.4 Add negative tests proving JJ-to-Git-only and Git-to-JJ-only access fail with capability errors, JJ-enabled repos on plugin-inactive target nodes return `capability-unavailable`, discovery omits JJ routing identifiers for those nodes, unauthorized JJ writes are rejected, and no path falls back silently.
+  - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-git-jj-negative-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-7-jj-plugin-inactive-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-jj-authz-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-rustfmt-check.txt`
 
 - [x] 2.3 Implement cross-node JJ blob fetch through Aspen's blob distribution path so peers can satisfy missing-object reads.
   - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-blob/src/traits/read.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-3-jj-blob-fetch-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-3-rustfmt-check.txt`
@@ -396,6 +399,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge-handler git_ --features git-bridge -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-git-jj-negative-tests.txt`
+
+### `rustfmt --check crates/aspen-forge-handler/src/executor.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-openspec-preflight.txt`
 
 ### `cargo test -p aspen-forge jj_object_store_fetches_object_blob_by_hash`
 
