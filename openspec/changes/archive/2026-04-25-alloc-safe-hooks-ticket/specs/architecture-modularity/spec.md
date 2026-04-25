@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Alloc-safe hook tickets default to transport-neutral bootstrap metadata
-ID: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata
 
 The `aspen-hooks-ticket` crate SHALL compile as an alloc-safe leaf crate by default. For this seam, the alloc-safe contract is the bare/default `default = []` feature surface and the explicit `--no-default-features` build surface; those two surfaces SHALL remain equivalent. Its shared `AspenHookTicket` payload SHALL store bootstrap peers as transport-neutral `NodeAddress` values and SHALL expose deterministic expiry helpers that accept explicit time inputs instead of requiring ambient wall-clock reads.
 
+ID: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata
 #### Scenario: Bare hook ticket dependency stays alloc-safe
 ID: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe
 
@@ -36,7 +36,7 @@ ID: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral
 - **GIVEN** the bare/default `default = []` feature surface and the explicit `--no-default-features` surface
 - **WHEN** they are prepared for review
 - **THEN** saved dependency and feature-tree artifacts SHALL show equivalent resolution for those two alloc-safe surfaces
-- **AND** a dedicated equivalence artifact under `openspec/changes/alloc-safe-hooks-ticket/evidence/` SHALL record that comparison
+- **AND** a dedicated equivalence artifact under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/` SHALL record that comparison
 
 #### Scenario: NodeAddress dependency edge stays alloc-safe
 ID: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe
@@ -47,10 +47,10 @@ ID: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral
 - **AND** that edge SHALL NOT opt into iroh conversion helpers
 
 ### Requirement: Hook ticket runtime helpers require explicit shell opt-in
-ID: architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in
 
 Runtime-only helpers for `AspenHookTicket` SHALL remain outside the alloc-safe default surface. Wall-clock convenience wrappers and iroh-native connection setup SHALL require explicit shell-side opt-in by runtime consumers.
 
+ID: architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in
 #### Scenario: Runtime conversion happens at the shell boundary
 ID: architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.runtime-conversion-happens-at-the-shell-boundary
 
@@ -72,15 +72,15 @@ ID: architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-o
 
 - **GIVEN** the hook ticket boundary change is complete
 - **WHEN** it is prepared for review
-- **THEN** saved dependency, compile, and targeted test transcripts under `openspec/changes/alloc-safe-hooks-ticket/evidence/` SHALL include full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, and targeted positive/negative regression tests for expiry plus runtime bootstrap-peer conversion in both `aspen-hooks` and `aspen-cli`
+- **THEN** saved dependency, compile, and targeted test transcripts under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/` SHALL include full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, and targeted positive/negative regression tests for expiry plus runtime bootstrap-peer conversion in both `aspen-hooks` and `aspen-cli`
 - **AND** those saved full-graph dependency artifacts SHALL prove both the bare/default graph and the explicit `--no-default-features` graph exclude `iroh`
-- **AND** `openspec/changes/alloc-safe-hooks-ticket/verification.md` SHALL map each checked task to those saved artifacts
+- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md` SHALL map each checked task to those saved artifacts
 
 ### Requirement: Hook ticket parse and validation errors stay alloc-safe and explicit
-ID: architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit
 
 The shared `aspen-hooks-ticket` crate SHALL use a crate-local error surface for ticket parsing and validation. Malformed payloads, invalid `default_payload` JSON, and expired-ticket checks SHALL remain attributable through explicit ticket errors instead of `anyhow`-style runtime-only error wrapping.
 
+ID: architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit
 #### Scenario: Parse and validation failures use hook ticket errors
 ID: architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-hook-ticket-errors
 
@@ -110,6 +110,6 @@ ID: architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-s
 
 - **GIVEN** the parse, validation, expiry, and legacy-ticket rejection contract
 - **WHEN** the seam is prepared for review
-- **THEN** saved artifacts SHALL include targeted tests for invalid `default_payload` JSON, expired-ticket rejection, legacy-ticket rejection, and runtime legacy-decode surfacing under `openspec/changes/alloc-safe-hooks-ticket/evidence/`
+- **THEN** saved artifacts SHALL include targeted tests for invalid `default_payload` JSON, expired-ticket rejection, legacy-ticket rejection, and runtime legacy-decode surfacing under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/`
 - **AND** the saved full-graph dependency artifacts for `aspen-hooks-ticket` SHALL show the default and explicit alloc-safe surfaces exclude `anyhow`
-- **AND** `openspec/changes/alloc-safe-hooks-ticket/verification.md` SHALL map those error-surface proofs to the checked tasks
+- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md` SHALL map those error-surface proofs to the checked tasks

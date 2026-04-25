@@ -29,7 +29,7 @@
 
 ## Impact
 
-- **Files**: `crates/aspen-hooks-ticket/`, `crates/aspen-hooks/`, `crates/aspen-cli/`, and OpenSpec artifacts under `openspec/changes/alloc-safe-hooks-ticket/`.
+- **Files**: `crates/aspen-hooks-ticket/`, `crates/aspen-hooks/`, `crates/aspen-cli/`, and OpenSpec artifacts under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/`.
 - **APIs**: `AspenHookTicket` stores alloc-safe bootstrap addresses and exposes pure expiry helpers; runtime wall-clock and iroh conversion paths become explicit opt-ins.
 - **Dependencies**: default `aspen-hooks-ticket` resolution stops pulling `iroh`; runtime crates add explicit direct opt-ins for any needed address conversion.
 - **Testing**: targeted `cargo test`/`cargo check`/`cargo tree` rails plus explicit positive and negative regression coverage for expiry and bootstrap-peer conversion.

@@ -1518,19 +1518,19 @@ index 217b0684d..bc5e9e275 100644
 +        assert!(matches!(result, Err(HookClientError::InvalidUrl(_))));
 +    }
  }
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/.openspec.yaml b/openspec/changes/alloc-safe-hooks-ticket/.openspec.yaml
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/.openspec.yaml b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/.openspec.yaml
 new file mode 100644
 index 000000000..25345f420
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/.openspec.yaml
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/.openspec.yaml
 @@ -0,0 +1,2 @@
 +schema: spec-driven
 +created: 2026-04-22
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/design.md b/openspec/changes/alloc-safe-hooks-ticket/design.md
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/design.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/design.md
 new file mode 100644
 index 000000000..70c2c35e9
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/design.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/design.md
 @@ -0,0 +1,134 @@
 +## Context
 +
@@ -1618,7 +1618,7 @@ index 000000000..70c2c35e9
 +
 +### 8. Save exact verification rails
 +
-+**Choice:** save the following exact rails under `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`, plus `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt`:
++**Choice:** save the following exact rails under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`, plus `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt`:
 +
 +- `cargo test -p aspen-hooks-ticket`
 +- `cargo test -p aspen-hooks-ticket --test ui`
@@ -1666,11 +1666,11 @@ index 000000000..70c2c35e9
 +- **Runtime consumer churn** → `aspen-hooks` and `aspen-cli` must convert `NodeAddress` explicitly. Mitigation: keep the runtime conversion localized to the existing connection paths.
 +- **API break for direct ticket constructors** → callers that build `AspenHookTicket::new(..., Vec<EndpointAddr>)` must convert to `NodeAddress` first. Mitigation: only two direct runtime consumers currently do this, and both already own iroh setup code.
 +- **Feature split complexity** → `std` wrappers and pure helpers can drift. Mitigation: add positive and negative regression tests around explicit-time helpers and std convenience paths.
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md b/openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md
 new file mode 100644
 index 000000000..54fb1c391
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md
 @@ -0,0 +1,1768 @@
 +Evidence-ID: alloc-safe-hooks-ticket.r1-baseline
 +Task-ID: R1
@@ -3440,11 +3440,11 @@ index 000000000..54fb1c391
 +    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.13s
 +```
 +
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md b/openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
 new file mode 100644
 index 000000000..356e8bddc
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
 @@ -0,0 +1,16 @@
 +Evidence-ID: alloc-safe-hooks-ticket.v1-equivalence
 +Task-ID: V1
@@ -3462,11 +3462,11 @@ index 000000000..356e8bddc
 +
 +- Status: identical
 +- Compared: `cargo tree -p aspen-hooks-ticket -e features` vs `cargo tree -p aspen-hooks-ticket --no-default-features -e features`
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md b/openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md
 new file mode 100644
 index 000000000..42da6399d
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md
 @@ -0,0 +1,6010 @@
 +Evidence-ID: alloc-safe-hooks-ticket.v1-final
 +Task-ID: V1
@@ -9478,11 +9478,11 @@ index 000000000..42da6399d
 +bash: line 1: PY: command not found
 +```
 +
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt b/openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt
 new file mode 100644
 index 000000000..3a5e0349f
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt
 @@ -0,0 +1,9462 @@
 +Evidence-ID: alloc-safe-hooks-ticket.v1-diff
 +Task-ID: V1
@@ -11004,19 +11004,19 @@ index 000000000..3a5e0349f
 ++        assert!(matches!(result, Err(HookClientError::InvalidUrl(_))));
 ++    }
 + }
-+diff --git a/openspec/changes/alloc-safe-hooks-ticket/.openspec.yaml b/openspec/changes/alloc-safe-hooks-ticket/.openspec.yaml
++diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/.openspec.yaml b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/.openspec.yaml
 +new file mode 100644
 +index 000000000..25345f420
 +--- /dev/null
-++++ b/openspec/changes/alloc-safe-hooks-ticket/.openspec.yaml
+++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/.openspec.yaml
 +@@ -0,0 +1,2 @@
 ++schema: spec-driven
 ++created: 2026-04-22
-+diff --git a/openspec/changes/alloc-safe-hooks-ticket/design.md b/openspec/changes/alloc-safe-hooks-ticket/design.md
++diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/design.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/design.md
 +new file mode 100644
 +index 000000000..70c2c35e9
 +--- /dev/null
-++++ b/openspec/changes/alloc-safe-hooks-ticket/design.md
+++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/design.md
 +@@ -0,0 +1,134 @@
 ++## Context
 ++
@@ -11104,7 +11104,7 @@ index 000000000..3a5e0349f
 ++
 ++### 8. Save exact verification rails
 ++
-++**Choice:** save the following exact rails under `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`, plus `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt`:
+++**Choice:** save the following exact rails under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`, plus `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt`:
 ++
 ++- `cargo test -p aspen-hooks-ticket`
 ++- `cargo test -p aspen-hooks-ticket --test ui`
@@ -11152,11 +11152,11 @@ index 000000000..3a5e0349f
 ++- **Runtime consumer churn** → `aspen-hooks` and `aspen-cli` must convert `NodeAddress` explicitly. Mitigation: keep the runtime conversion localized to the existing connection paths.
 ++- **API break for direct ticket constructors** → callers that build `AspenHookTicket::new(..., Vec<EndpointAddr>)` must convert to `NodeAddress` first. Mitigation: only two direct runtime consumers currently do this, and both already own iroh setup code.
 ++- **Feature split complexity** → `std` wrappers and pure helpers can drift. Mitigation: add positive and negative regression tests around explicit-time helpers and std convenience paths.
-+diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md b/openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md
++diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md
 +new file mode 100644
 +index 000000000..54fb1c391
 +--- /dev/null
-++++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md
+++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md
 +@@ -0,0 +1,1768 @@
 ++Evidence-ID: alloc-safe-hooks-ticket.r1-baseline
 ++Task-ID: R1
@@ -12926,11 +12926,11 @@ index 000000000..3a5e0349f
 ++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.13s
 ++```
 ++
-+diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md b/openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
++diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
 +new file mode 100644
 +index 000000000..356e8bddc
 +--- /dev/null
-++++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
+++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md
 +@@ -0,0 +1,16 @@
 ++Evidence-ID: alloc-safe-hooks-ticket.v1-equivalence
 ++Task-ID: V1
@@ -12948,11 +12948,11 @@ index 000000000..3a5e0349f
 ++
 ++- Status: identical
 ++- Compared: `cargo tree -p aspen-hooks-ticket -e features` vs `cargo tree -p aspen-hooks-ticket --no-default-features -e features`
-+diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md b/openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md
++diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md
 +new file mode 100644
 +index 000000000..42da6399d
 +--- /dev/null
-++++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md
+++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md
 +@@ -0,0 +1,6010 @@
 ++Evidence-ID: alloc-safe-hooks-ticket.v1-final
 ++Task-ID: V1
@@ -18947,26 +18947,26 @@ index 000000000..3a5e0349f
 ++
 ++## `assert 'Vec::new()' not in
 \ No newline at end of file
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/evidence/openspec-preflight.txt b/openspec/changes/alloc-safe-hooks-ticket/evidence/openspec-preflight.txt
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/openspec-preflight.txt b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/openspec-preflight.txt
 new file mode 100644
 index 000000000..14c2e1bce
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/evidence/openspec-preflight.txt
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/openspec-preflight.txt
 @@ -0,0 +1,9 @@
 +Evidence-ID: alloc-safe-hooks-ticket.v1-preflight
 +Task-ID: V1
 +Artifact-Type: command-transcript
 +Covers: architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable, architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable, ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable
 +
-+OK: openspec/changes/alloc-safe-hooks-ticket
++OK: openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket
 +  tasks: 5 total / 5 checked
 +  changed files listed: 24
 +  verification artifacts: 5
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/proposal.md b/openspec/changes/alloc-safe-hooks-ticket/proposal.md
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/proposal.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/proposal.md
 new file mode 100644
 index 000000000..8038dcbdf
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/proposal.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/proposal.md
 @@ -0,0 +1,35 @@
 +## Why
 +
@@ -18999,15 +18999,15 @@ index 000000000..8038dcbdf
 +
 +## Impact
 +
-+- **Files**: `crates/aspen-hooks-ticket/`, `crates/aspen-hooks/`, `crates/aspen-cli/`, and OpenSpec artifacts under `openspec/changes/alloc-safe-hooks-ticket/`.
++- **Files**: `crates/aspen-hooks-ticket/`, `crates/aspen-hooks/`, `crates/aspen-cli/`, and OpenSpec artifacts under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/`.
 +- **APIs**: `AspenHookTicket` stores alloc-safe bootstrap addresses and exposes pure expiry helpers; runtime wall-clock and iroh conversion paths become explicit opt-ins.
 +- **Dependencies**: default `aspen-hooks-ticket` resolution stops pulling `iroh`; runtime crates add explicit direct opt-ins for any needed address conversion.
 +- **Testing**: targeted `cargo test`/`cargo check`/`cargo tree` rails plus explicit positive and negative regression coverage for expiry and bootstrap-peer conversion.
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md b/openspec/changes/alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md
 new file mode 100644
 index 000000000..4e1891b3a
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md
 @@ -0,0 +1,115 @@
 +## ADDED Requirements
 +
@@ -19047,7 +19047,7 @@ index 000000000..4e1891b3a
 +- **GIVEN** the bare/default `default = []` feature surface and the explicit `--no-default-features` surface
 +- **WHEN** they are prepared for review
 +- **THEN** saved dependency and feature-tree artifacts SHALL show equivalent resolution for those two alloc-safe surfaces
-+- **AND** a dedicated equivalence artifact under `openspec/changes/alloc-safe-hooks-ticket/evidence/` SHALL record that comparison
++- **AND** a dedicated equivalence artifact under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/` SHALL record that comparison
 +
 +#### Scenario: NodeAddress dependency edge stays alloc-safe
 +ID: architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe
@@ -19083,9 +19083,9 @@ index 000000000..4e1891b3a
 +
 +- **GIVEN** the hook ticket boundary change is complete
 +- **WHEN** it is prepared for review
-+- **THEN** saved dependency, compile, and targeted test transcripts under `openspec/changes/alloc-safe-hooks-ticket/evidence/` SHALL include full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, and targeted positive/negative regression tests for expiry plus runtime bootstrap-peer conversion in both `aspen-hooks` and `aspen-cli`
++- **THEN** saved dependency, compile, and targeted test transcripts under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/` SHALL include full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, and targeted positive/negative regression tests for expiry plus runtime bootstrap-peer conversion in both `aspen-hooks` and `aspen-cli`
 +- **AND** those saved full-graph dependency artifacts SHALL prove both the bare/default graph and the explicit `--no-default-features` graph exclude `iroh`
-+- **AND** `openspec/changes/alloc-safe-hooks-ticket/verification.md` SHALL map each checked task to those saved artifacts
++- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md` SHALL map each checked task to those saved artifacts
 +
 +### Requirement: Hook ticket parse and validation errors stay alloc-safe and explicit
 +ID: architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit
@@ -19121,14 +19121,14 @@ index 000000000..4e1891b3a
 +
 +- **GIVEN** the parse, validation, expiry, and legacy-ticket rejection contract
 +- **WHEN** the seam is prepared for review
-+- **THEN** saved artifacts SHALL include targeted tests for invalid `default_payload` JSON, expired-ticket rejection, legacy-ticket rejection, and runtime legacy-decode surfacing under `openspec/changes/alloc-safe-hooks-ticket/evidence/`
++- **THEN** saved artifacts SHALL include targeted tests for invalid `default_payload` JSON, expired-ticket rejection, legacy-ticket rejection, and runtime legacy-decode surfacing under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/`
 +- **AND** the saved full-graph dependency artifacts for `aspen-hooks-ticket` SHALL show the default and explicit alloc-safe surfaces exclude `anyhow`
-+- **AND** `openspec/changes/alloc-safe-hooks-ticket/verification.md` SHALL map those error-surface proofs to the checked tasks
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md b/openspec/changes/alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md
++- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md` SHALL map those error-surface proofs to the checked tasks
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md
 new file mode 100644
 index 000000000..1132a994a
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md
 @@ -0,0 +1,23 @@
 +## ADDED Requirements
 +
@@ -19150,30 +19150,30 @@ index 000000000..1132a994a
 +
 +- **GIVEN** the hook ticket encoder fallback removal is complete
 +- **WHEN** the change is prepared for review
-+- **THEN** `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md` SHALL include a deterministic source-audit command proving `impl Ticket for AspenHookTicket` uses an `expect` fail-loud path and no `Vec::new()` fallback
-+- **AND** `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt` SHALL show the fallback removal in the reviewed diff
-+- **AND** `openspec/changes/alloc-safe-hooks-ticket/verification.md` SHALL map the encoder requirement to those artifacts
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/tasks.md b/openspec/changes/alloc-safe-hooks-ticket/tasks.md
++- **THEN** `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md` SHALL include a deterministic source-audit command proving `impl Ticket for AspenHookTicket` uses an `expect` fail-loud path and no `Vec::new()` fallback
++- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt` SHALL show the fallback removal in the reviewed diff
++- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md` SHALL map the encoder requirement to those artifacts
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/tasks.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/tasks.md
 new file mode 100644
 index 000000000..93e2998a0
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/tasks.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/tasks.md
 @@ -0,0 +1,10 @@
 +## 1. Baseline and implementation
 +
-+- [x] R1 Capture the current `aspen-hooks-ticket` dependency/compile baseline before seam edits, including full-graph `cargo tree -p aspen-hooks-ticket -e normal`, `cargo test -p aspen-hooks-ticket`, `cargo check -p aspen-hooks`, and `cargo check -p aspen-cli`, and save the reviewable output under `openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md`.
++- [x] R1 Capture the current `aspen-hooks-ticket` dependency/compile baseline before seam edits, including full-graph `cargo tree -p aspen-hooks-ticket -e normal`, `cargo test -p aspen-hooks-ticket`, `cargo check -p aspen-hooks`, and `cargo check -p aspen-cli`, and save the reviewable output under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md`.
 +- [x] I1 Refactor `crates/aspen-hooks-ticket` into an alloc-safe leaf crate: add `no_std`/`alloc` scaffolding, replace public bootstrap peers with `NodeAddress`, replace `anyhow` with a crate-local error type, move expiry logic to explicit-time helpers, keep runtime wall-clock wrappers behind an explicit `std` feature, reject legacy serialized ticket payloads through the crate-local error surface using the checked-in test fixture `crates/aspen-hooks-ticket/tests/legacy.rs`, and remove silent empty-payload serialization fallback. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.expiry-math-stays-testable-without-wall-clock,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-hook-tickets-roundtrip-successfully,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.std-convenience-wrappers-require-explicit-opt-in,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-hook-ticket-errors,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-serialized-hook-tickets-are-rejected-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fails-loudly-on-serializer-invariant-break]
 +- [x] I2 Update runtime consumers (`crates/aspen-hooks`, `crates/aspen-cli`) to opt into conversion explicitly, convert `NodeAddress` bootstrap peers at the shell boundary, add positive/negative regression coverage for valid and invalid bootstrap-peer conversion paths plus legacy decode-failure surfacing, and keep the direct `aspen-cluster-types = { default-features = false, features = ["iroh"] }` manifest edge explicit in both runtime consumer `Cargo.toml` files. [covers=architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.runtime-conversion-happens-at-the-shell-boundary,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.runtime-consumers-surface-legacy-decode-failures-explicitly]
 +- [x] I3 Add durable verification plumbing for this seam: capture alloc-safe default-vs-`--no-default-features` equivalence, keep the reviewable artifact index/current diff/preflight artifacts synchronized, record the deterministic encoder/source audit command for `AspenHookTicket::to_bytes()`, add the deterministic dependency-audit assertions that both alloc-safe surfaces exclude `iroh`, `anyhow`, `aspen-core-shell`, `aspen-hooks`, `aspen-cli`, and `tokio`, and record the deterministic manifest audit for `crates/aspen-hooks-ticket/Cargo.toml` proving the `aspen-cluster-types` edge keeps `default-features = false` with no `iroh` opt-in. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable]
 +
 +## 2. Verification
 +
-+- [x] V1 Save final reviewable proof under `openspec/changes/alloc-safe-hooks-ticket/evidence/` for `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo test -p aspen-hooks-ticket --features std --test std`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, the deterministic dependency-audit command asserting both alloc-safe surfaces exclude `iroh`, `anyhow`, `aspen-core-shell`, `aspen-hooks`, `aspen-cli`, and `tokio`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, the deterministic manifest-audit command asserting `crates/aspen-hooks-ticket/Cargo.toml` keeps `aspen-cluster-types = { default-features = false }` with no `iroh` opt-in plus direct `aspen-cluster-types = { default-features = false, features = ["iroh"] }` entries in both runtime consumer manifests, and targeted positive/negative regression tests for current-schema `NodeAddress` roundtrip preservation, invalid `default_payload` JSON, expiry, legacy-ticket rejection, runtime bootstrap-peer conversion, and runtime legacy decode-failure surfacing in both consumers. Keep `verification.md`, `evidence/default-vs-no-default-equivalence.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt` synchronized with those saved artifacts. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.expiry-math-stays-testable-without-wall-clock,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-hook-tickets-roundtrip-successfully,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.runtime-conversion-happens-at-the-shell-boundary,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.std-convenience-wrappers-require-explicit-opt-in,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-hook-ticket-errors,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-serialized-hook-tickets-are-rejected-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.runtime-consumers-surface-legacy-decode-failures-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fails-loudly-on-serializer-invariant-break,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md]
-diff --git a/openspec/changes/alloc-safe-hooks-ticket/verification.md b/openspec/changes/alloc-safe-hooks-ticket/verification.md
++- [x] V1 Save final reviewable proof under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/` for `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo test -p aspen-hooks-ticket --features std --test std`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, the deterministic dependency-audit command asserting both alloc-safe surfaces exclude `iroh`, `anyhow`, `aspen-core-shell`, `aspen-hooks`, `aspen-cli`, and `tokio`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, the deterministic manifest-audit command asserting `crates/aspen-hooks-ticket/Cargo.toml` keeps `aspen-cluster-types = { default-features = false }` with no `iroh` opt-in plus direct `aspen-cluster-types = { default-features = false, features = ["iroh"] }` entries in both runtime consumer manifests, and targeted positive/negative regression tests for current-schema `NodeAddress` roundtrip preservation, invalid `default_payload` JSON, expiry, legacy-ticket rejection, runtime bootstrap-peer conversion, and runtime legacy decode-failure surfacing in both consumers. Keep `verification.md`, `evidence/default-vs-no-default-equivalence.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt` synchronized with those saved artifacts. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.expiry-math-stays-testable-without-wall-clock,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-hook-tickets-roundtrip-successfully,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.runtime-conversion-happens-at-the-shell-boundary,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.std-convenience-wrappers-require-explicit-opt-in,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-hook-ticket-errors,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-serialized-hook-tickets-are-rejected-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.runtime-consumers-surface-legacy-decode-failures-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fails-loudly-on-serializer-invariant-break,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable] [evidence=openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md]
+diff --git a/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md
 new file mode 100644
 index 000000000..9278e1dca
 --- /dev/null
-+++ b/openspec/changes/alloc-safe-hooks-ticket/verification.md
++++ b/openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md
 @@ -0,0 +1,89 @@
 +Evidence-ID: alloc-safe-hooks-ticket.root-verification
 +Task-ID: V1
@@ -19196,69 +19196,69 @@ index 000000000..9278e1dca
 +- Changed file: `crates/aspen-hooks-ticket/tests/ui.rs`
 +- Changed file: `crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.rs`
 +- Changed file: `crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.stderr`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/.openspec.yaml`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/design.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/proposal.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/tasks.md`
-+- Changed file: `openspec/changes/alloc-safe-hooks-ticket/verification.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/.openspec.yaml`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/design.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/proposal.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/architecture-modularity/spec.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/specs/ticket-encoding/spec.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/tasks.md`
++- Changed file: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/verification.md`
 +
 +## Task Coverage
 +
-+- [x] R1 Capture the current `aspen-hooks-ticket` dependency/compile baseline before seam edits, including full-graph `cargo tree -p aspen-hooks-ticket -e normal`, `cargo test -p aspen-hooks-ticket`, `cargo check -p aspen-hooks`, and `cargo check -p aspen-cli`, and save the reviewable output under `openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md`.
-+  - Evidence: `openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md`
++- [x] R1 Capture the current `aspen-hooks-ticket` dependency/compile baseline before seam edits, including full-graph `cargo tree -p aspen-hooks-ticket -e normal`, `cargo test -p aspen-hooks-ticket`, `cargo check -p aspen-hooks`, and `cargo check -p aspen-cli`, and save the reviewable output under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md`.
++  - Evidence: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md`
 +
 +- [x] I1 Refactor `crates/aspen-hooks-ticket` into an alloc-safe leaf crate: add `no_std`/`alloc` scaffolding, replace public bootstrap peers with `NodeAddress`, replace `anyhow` with a crate-local error type, move expiry logic to explicit-time helpers, keep runtime wall-clock wrappers behind an explicit `std` feature, reject legacy serialized ticket payloads through the crate-local error surface using the checked-in test fixture `crates/aspen-hooks-ticket/tests/legacy.rs`, and remove silent empty-payload serialization fallback. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.expiry-math-stays-testable-without-wall-clock,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-hook-tickets-roundtrip-successfully,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.std-convenience-wrappers-require-explicit-opt-in,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-hook-ticket-errors,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-serialized-hook-tickets-are-rejected-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fails-loudly-on-serializer-invariant-break]
-+  - Evidence: `crates/aspen-hooks-ticket/Cargo.toml`, `crates/aspen-hooks-ticket/src/lib.rs`, `crates/aspen-hooks-ticket/tests/legacy.rs`, `crates/aspen-hooks-ticket/tests/std.rs`, `crates/aspen-hooks-ticket/tests/ui.rs`, `crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.rs`, `crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.stderr`, `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
++  - Evidence: `crates/aspen-hooks-ticket/Cargo.toml`, `crates/aspen-hooks-ticket/src/lib.rs`, `crates/aspen-hooks-ticket/tests/legacy.rs`, `crates/aspen-hooks-ticket/tests/std.rs`, `crates/aspen-hooks-ticket/tests/ui.rs`, `crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.rs`, `crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.stderr`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
 +
 +- [x] I2 Update runtime consumers (`crates/aspen-hooks`, `crates/aspen-cli`) to opt into conversion explicitly, convert `NodeAddress` bootstrap peers at the shell boundary, add positive/negative regression coverage for valid and invalid bootstrap-peer conversion paths plus legacy decode-failure surfacing, and keep the direct `aspen-cluster-types = { default-features = false, features = ["iroh"] }` manifest edge explicit in both runtime consumer `Cargo.toml` files. [covers=architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.runtime-conversion-happens-at-the-shell-boundary,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.runtime-consumers-surface-legacy-decode-failures-explicitly]
-+  - Evidence: `crates/aspen-hooks/Cargo.toml`, `crates/aspen-hooks/src/client.rs`, `crates/aspen-cli/Cargo.toml`, `crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs`, `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
++  - Evidence: `crates/aspen-hooks/Cargo.toml`, `crates/aspen-hooks/src/client.rs`, `crates/aspen-cli/Cargo.toml`, `crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
 +
 +- [x] I3 Add durable verification plumbing for this seam: capture alloc-safe default-vs-`--no-default-features` equivalence, keep the reviewable artifact index/current diff/preflight artifacts synchronized, record the deterministic encoder/source audit command for `AspenHookTicket::to_bytes()`, add the deterministic dependency-audit assertions that both alloc-safe surfaces exclude `iroh`, `anyhow`, `aspen-core-shell`, `aspen-hooks`, `aspen-cli`, and `tokio`, and record the deterministic manifest audit for `crates/aspen-hooks-ticket/Cargo.toml` proving the `aspen-cluster-types` edge keeps `default-features = false` with no `iroh` opt-in. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable]
-+  - Evidence: `openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`, `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt`, `openspec/changes/alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
++  - Evidence: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
 +
-+- [x] V1 Save final reviewable proof under `openspec/changes/alloc-safe-hooks-ticket/evidence/` for `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo test -p aspen-hooks-ticket --features std --test std`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, the deterministic dependency-audit command asserting both alloc-safe surfaces exclude `iroh`, `anyhow`, `aspen-core-shell`, `aspen-hooks`, `aspen-cli`, and `tokio`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, the deterministic manifest-audit command asserting `crates/aspen-hooks-ticket/Cargo.toml` keeps `aspen-cluster-types = { default-features = false }` with no `iroh` opt-in plus direct `aspen-cluster-types = { default-features = false, features = ["iroh"] }` entries in both runtime consumer manifests, and targeted positive/negative regression tests for current-schema `NodeAddress` roundtrip preservation, invalid `default_payload` JSON, expiry, legacy-ticket rejection, runtime bootstrap-peer conversion, and runtime legacy decode-failure surfacing in both consumers. Keep `verification.md`, `evidence/default-vs-no-default-equivalence.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt` synchronized with those saved artifacts. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.expiry-math-stays-testable-without-wall-clock,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-hook-tickets-roundtrip-successfully,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.runtime-conversion-happens-at-the-shell-boundary,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.std-convenience-wrappers-require-explicit-opt-in,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-hook-ticket-errors,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-serialized-hook-tickets-are-rejected-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.runtime-consumers-surface-legacy-decode-failures-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fails-loudly-on-serializer-invariant-break,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable] [evidence=openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md]
-+  - Evidence: `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`, `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt`, `openspec/changes/alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
++- [x] V1 Save final reviewable proof under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/` for `cargo test -p aspen-hooks-ticket`, `cargo test -p aspen-hooks-ticket --test ui`, `cargo test -p aspen-hooks-ticket --features std --test std`, `cargo check -p aspen-hooks-ticket`, `cargo check -p aspen-hooks-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --no-default-features`, `cargo check -p aspen-hooks-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-hooks-ticket --features std`, full-graph `cargo tree -p aspen-hooks-ticket -e normal`, full-graph `cargo tree -p aspen-hooks-ticket -e features`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-hooks-ticket --no-default-features -e features`, the deterministic dependency-audit command asserting both alloc-safe surfaces exclude `iroh`, `anyhow`, `aspen-core-shell`, `aspen-hooks`, `aspen-cli`, and `tokio`, `cargo check -p aspen-hooks`, `cargo check -p aspen-cli`, `cargo tree -p aspen-hooks -e features -i aspen-cluster-types`, `cargo tree -p aspen-cli -e features -i aspen-cluster-types`, the deterministic manifest-audit command asserting `crates/aspen-hooks-ticket/Cargo.toml` keeps `aspen-cluster-types = { default-features = false }` with no `iroh` opt-in plus direct `aspen-cluster-types = { default-features = false, features = ["iroh"] }` entries in both runtime consumer manifests, and targeted positive/negative regression tests for current-schema `NodeAddress` roundtrip preservation, invalid `default_payload` JSON, expiry, legacy-ticket rejection, runtime bootstrap-peer conversion, and runtime legacy decode-failure surfacing in both consumers. Keep `verification.md`, `evidence/default-vs-no-default-equivalence.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt` synchronized with those saved artifacts. [covers=architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.bare-hook-ticket-dependency-stays-alloc-safe,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.expiry-math-stays-testable-without-wall-clock,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-hook-tickets-roundtrip-successfully,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.default-and-explicit-alloc-safe-surfaces-remain-equivalent,architecture.modularity.alloc-safe-hook-tickets-default-to-transport-neutral-bootstrap-metadata.nodeaddress-dependency-edge-stays-alloc-safe,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.runtime-conversion-happens-at-the-shell-boundary,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.std-convenience-wrappers-require-explicit-opt-in,architecture.modularity.hook-ticket-runtime-helpers-require-explicit-shell-opt-in.hook-ticket-seam-proof-is-reviewable,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-hook-ticket-errors,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.legacy-serialized-hook-tickets-are-rejected-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.runtime-consumers-surface-legacy-decode-failures-explicitly,architecture.modularity.hook-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.hook-ticket-error-surface-proof-is-reviewable,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fails-loudly-on-serializer-invariant-break,ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-ticket-encoder-fail-loud-proof-is-reviewable] [evidence=openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md]
++  - Evidence: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt`, `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
 +
 +## Review Scope Snapshot
 +
-+### `git diff HEAD -- Cargo.lock crates/aspen-cli/Cargo.toml crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs crates/aspen-hooks/Cargo.toml crates/aspen-hooks/src/client.rs crates/aspen-hooks-ticket/Cargo.toml crates/aspen-hooks-ticket/src/lib.rs crates/aspen-hooks-ticket/tests/legacy.rs crates/aspen-hooks-ticket/tests/std.rs crates/aspen-hooks-ticket/tests/ui.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.stderr openspec/changes/alloc-safe-hooks-ticket`
++### `git diff HEAD -- Cargo.lock crates/aspen-cli/Cargo.toml crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs crates/aspen-hooks/Cargo.toml crates/aspen-hooks/src/client.rs crates/aspen-hooks-ticket/Cargo.toml crates/aspen-hooks-ticket/src/lib.rs crates/aspen-hooks-ticket/tests/legacy.rs crates/aspen-hooks-ticket/tests/std.rs crates/aspen-hooks-ticket/tests/ui.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.stderr openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket`
 +
 +- Status: captured
-+- Artifact: `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
++- Artifact: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
 +
 +## Verification Commands
 +
 +### `cargo tree -p aspen-hooks-ticket -e normal` baseline bundle plus pre-change compile rails
 +
 +- Status: pass
-+- Artifact: `openspec/changes/alloc-safe-hooks-ticket/evidence/baseline-validation.md`
++- Artifact: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/baseline-validation.md`
 +
 +### `cargo test/check/tree` validation bundle for alloc-safe, std, wasm, runtime-consumer, and source-audit rails
 +
 +- Status: pass
-+- Artifact: `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`
++- Artifact: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`
 +
 +### `cargo tree` default-vs-`--no-default-features` comparison
 +
 +- Status: pass
-+- Artifact: `openspec/changes/alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`
++- Artifact: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/default-vs-no-default-equivalence.md`
 +
-+### `git diff HEAD -- Cargo.lock crates/aspen-cli/Cargo.toml crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs crates/aspen-hooks/Cargo.toml crates/aspen-hooks/src/client.rs crates/aspen-hooks-ticket/Cargo.toml crates/aspen-hooks-ticket/src/lib.rs crates/aspen-hooks-ticket/tests/legacy.rs crates/aspen-hooks-ticket/tests/std.rs crates/aspen-hooks-ticket/tests/ui.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.stderr openspec/changes/alloc-safe-hooks-ticket`
++### `git diff HEAD -- Cargo.lock crates/aspen-cli/Cargo.toml crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs crates/aspen-hooks/Cargo.toml crates/aspen-hooks/src/client.rs crates/aspen-hooks-ticket/Cargo.toml crates/aspen-hooks-ticket/src/lib.rs crates/aspen-hooks-ticket/tests/legacy.rs crates/aspen-hooks-ticket/tests/std.rs crates/aspen-hooks-ticket/tests/ui.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.rs crates/aspen-hooks-ticket/tests/ui/std_wrappers_require_feature.stderr openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket`
 +
 +- Status: captured
-+- Artifact: `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
++- Artifact: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/implementation-diff.txt`
 +
 +### `scripts/openspec-preflight.sh alloc-safe-hooks-ticket`
 +
 +- Status: pass
-+- Artifact: `openspec/changes/alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
++- Artifact: `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/openspec-preflight.txt`
 +
 +## Notes
 +

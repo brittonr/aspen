@@ -84,7 +84,7 @@ Only two direct consumers currently need the ticket at runtime: `crates/aspen-ho
 
 ### 8. Save exact verification rails
 
-**Choice:** save the following exact rails under `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md`, plus `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt`:
+**Choice:** save the following exact rails under `openspec/changes/archive/2026-04-25-alloc-safe-hooks-ticket/evidence/final-validation.md`, plus `verification.md`, `evidence/implementation-diff.txt`, and `evidence/openspec-preflight.txt`:
 
 - `cargo test -p aspen-hooks-ticket`
 - `cargo test -p aspen-hooks-ticket --test ui`
