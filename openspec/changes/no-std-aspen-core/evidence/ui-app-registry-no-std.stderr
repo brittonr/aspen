@@ -1,8 +1,0 @@
-error[E0432]: unresolved import `aspen_core::AppRegistry`
- --> src/main.rs:1:5
-  |
-1 | use aspen_core::AppRegistry;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^ no `AppRegistry` in the root
-
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `ui-app-registry-no-std` (bin "ui-app-registry-no-std") due to 1 previous error

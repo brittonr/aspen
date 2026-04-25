@@ -1,8 +1,0 @@
-error[E0432]: unresolved import `aspen_core::SimulationArtifact`
- --> src/main.rs:1:5
-  |
-1 | use aspen_core::SimulationArtifact;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `SimulationArtifact` in the root
-
-For more information about this error, try `rustc --explain E0432`.
-error: could not compile `ui-simulation-artifact-no-std` (bin "ui-simulation-artifact-no-std") due to 1 previous error
