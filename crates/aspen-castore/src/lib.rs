@@ -22,6 +22,7 @@
 //! so upstream snix tooling can use an Aspen cluster as a castore backend
 //! transparently.
 
+mod circuit_breaker;
 pub mod client;
 pub mod protocol;
 pub mod server;

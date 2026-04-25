@@ -1,0 +1,2 @@
+Command: rg -n 'aspen-core|aspen-core-shell|aspen-kv-types|aspen-blob|aspen-rpc-core|aspen-rpc-handlers|aspen-testing' /tmp/i5-cache-tree-default.txt
+Status: pass (no matches)

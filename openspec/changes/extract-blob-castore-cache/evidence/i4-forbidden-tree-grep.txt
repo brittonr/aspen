@@ -1,0 +1,2 @@
+Command: rg -n 'aspen-core-shell|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler' /tmp/i4-castore-tree.txt
+Status: pass (no matches)

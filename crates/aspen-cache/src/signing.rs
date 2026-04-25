@@ -15,15 +15,20 @@
 //! narinfo signatures use: `{name}:{base64(ed25519_signature)}` (64 bytes)
 //! The signed message is the fingerprint: `1;{store_path};{nar_hash};{nar_size};{refs}`
 
+#[cfg(feature = "kv-index")]
 use std::sync::Arc;
 
+#[cfg(feature = "kv-index")]
 use aspen_core::KeyValueStore;
+#[cfg(feature = "kv-index")]
 use aspen_kv_types::ReadRequest;
+#[cfg(feature = "kv-index")]
 use aspen_kv_types::WriteRequest;
 use data_encoding::BASE64;
 use ed25519_dalek::Signer;
 use nix_compat::narinfo;
 use snafu::Snafu;
+#[cfg(feature = "kv-index")]
 use tracing::info;
 
 // Tiger Style: explicit bounds
@@ -202,6 +207,7 @@ impl CacheVerifyingKey {
 ///
 /// Returns the signing key and the public key in Nix format.
 /// This is idempotent — if a key already exists, it's returned as-is.
+#[cfg(feature = "kv-index")]
 pub async fn ensure_signing_key(
     kv_store: &Arc<dyn KeyValueStore>,
     cache_name: &str,

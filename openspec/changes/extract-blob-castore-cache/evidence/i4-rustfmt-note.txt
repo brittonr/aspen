@@ -1,0 +1,3 @@
+Command: nix run .#rustfmt
+Status: blocked twice by Nix auto-GC waiting on the big garbage collector lock; task 40 was interrupted after GC deletion, task 50 was interrupted while waiting for the GC lock.
+Fallback: rustfmt was run directly on the changed Rust files using the repo toolchain rustfmt binary.

@@ -3,23 +3,36 @@
 //! This module provides the `CacheIndex` trait and implementation for
 //! storing and retrieving cache entries from the Raft KV store.
 
+#[cfg(feature = "kv-index")]
 use std::sync::Arc;
+#[cfg(feature = "kv-index")]
 use std::time::SystemTime;
+#[cfg(feature = "kv-index")]
 use std::time::UNIX_EPOCH;
 
+#[cfg(feature = "kv-index")]
 use aspen_core::KeyValueStore;
+#[cfg(feature = "kv-index")]
 use aspen_core::kv::ReadConsistency;
+#[cfg(feature = "kv-index")]
 use aspen_core::kv::ReadRequest;
+#[cfg(feature = "kv-index")]
 use aspen_core::kv::WriteCommand;
+#[cfg(feature = "kv-index")]
 use aspen_core::kv::WriteRequest;
 use async_trait::async_trait;
+#[cfg(feature = "kv-index")]
 use tracing::debug;
+#[cfg(feature = "kv-index")]
 use tracing::info;
+#[cfg(feature = "kv-index")]
 use tracing::warn;
 
 use crate::error::CacheError;
 use crate::error::Result;
+#[cfg(feature = "kv-index")]
 use crate::narinfo::CACHE_KEY_PREFIX;
+#[cfg(feature = "kv-index")]
 use crate::narinfo::CACHE_STATS_KEY;
 use crate::narinfo::CacheEntry;
 use crate::narinfo::CacheStats;
@@ -29,6 +42,35 @@ use crate::narinfo::CacheStats;
 const MAX_STORE_HASH_LENGTH: usize = 64;
 /// Minimum store hash length in characters.
 const MIN_STORE_HASH_LENGTH: usize = 32;
+
+/// Validate a store hash.
+///
+/// Uses `nix_compat::nixbase32` validation: the hash must be within the
+/// configured length bounds and use the Nix base32 alphabet.
+pub fn validate_store_hash(store_hash: &str) -> Result<()> {
+    if store_hash.len() < MIN_STORE_HASH_LENGTH {
+        return Err(CacheError::InvalidStoreHash {
+            hash: store_hash.to_string(),
+            reason: format!("too short: {} chars (min: {})", store_hash.len(), MIN_STORE_HASH_LENGTH),
+        });
+    }
+
+    if store_hash.len() > MAX_STORE_HASH_LENGTH {
+        return Err(CacheError::InvalidStoreHash {
+            hash: store_hash.to_string(),
+            reason: format!("too long: {} chars (max: {})", store_hash.len(), MAX_STORE_HASH_LENGTH),
+        });
+    }
+
+    if nix_compat::nixbase32::decode(store_hash.as_bytes()).is_err() {
+        return Err(CacheError::InvalidStoreHash {
+            hash: store_hash.to_string(),
+            reason: "must contain only valid nixbase32 characters (0-9, a-z minus e,o,t,u)".to_string(),
+        });
+    }
+
+    Ok(())
+}
 
 /// Trait for Nix binary cache index operations.
 #[async_trait]
@@ -47,46 +89,16 @@ pub trait CacheIndex: Send + Sync {
 }
 
 /// Implementation of cache index backed by a KeyValueStore.
+#[cfg(feature = "kv-index")]
 pub struct KvCacheIndex<KV: KeyValueStore + ?Sized> {
     kv: Arc<KV>,
 }
 
+#[cfg(feature = "kv-index")]
 impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
     /// Create a new cache index backed by the given KV store.
     pub fn new(kv: Arc<KV>) -> Self {
         Self { kv }
-    }
-
-    /// Validate a store hash.
-    ///
-    /// Uses `nix_compat::store_path::StorePath` validation: the hash must be
-    /// exactly 32 nixbase32 characters from the nix alphabet
-    /// (`0123456789abcdfghijklmnpqrsvwxyz`).
-    fn validate_store_hash(store_hash: &str) -> Result<()> {
-        if store_hash.len() < MIN_STORE_HASH_LENGTH {
-            return Err(CacheError::InvalidStoreHash {
-                hash: store_hash.to_string(),
-                reason: format!("too short: {} chars (min: {})", store_hash.len(), MIN_STORE_HASH_LENGTH),
-            });
-        }
-
-        if store_hash.len() > MAX_STORE_HASH_LENGTH {
-            return Err(CacheError::InvalidStoreHash {
-                hash: store_hash.to_string(),
-                reason: format!("too long: {} chars (max: {})", store_hash.len(), MAX_STORE_HASH_LENGTH),
-            });
-        }
-
-        // Validate using nix-compat's nixbase32 decode — this rejects
-        // characters outside the nix alphabet (e, o, t, u, uppercase)
-        if nix_compat::nixbase32::decode(store_hash.as_bytes()).is_err() {
-            return Err(CacheError::InvalidStoreHash {
-                hash: store_hash.to_string(),
-                reason: "must contain only valid nixbase32 characters (0-9, a-z minus e,o,t,u)".to_string(),
-            });
-        }
-
-        Ok(())
     }
 
     /// Update cache statistics.
@@ -134,10 +146,11 @@ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
     }
 }
 
+#[cfg(feature = "kv-index")]
 #[async_trait]
 impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
     async fn get(&self, store_hash: &str) -> Result<Option<CacheEntry>> {
-        Self::validate_store_hash(store_hash)?;
+        validate_store_hash(store_hash)?;
 
         let key = format!("{}{}", CACHE_KEY_PREFIX, store_hash);
         debug!(key = %key, "Looking up cache entry");
@@ -185,7 +198,7 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
     }
 
     async fn put(&self, entry: CacheEntry) -> Result<()> {
-        Self::validate_store_hash(&entry.store_hash)?;
+        validate_store_hash(&entry.store_hash)?;
 
         let key = entry.kv_key();
         let nar_size = entry.nar_size;
@@ -215,7 +228,7 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
     }
 
     async fn exists(&self, store_hash: &str) -> Result<bool> {
-        Self::validate_store_hash(store_hash)?;
+        validate_store_hash(store_hash)?;
 
         let key = format!("{}{}", CACHE_KEY_PREFIX, store_hash);
 
@@ -315,30 +328,15 @@ mod tests {
     #[test]
     fn test_validate_store_hash() {
         // Valid nixbase32 hash (32 chars from nix alphabet: 0-9, a-z minus e,o,t,u)
-        assert!(
-            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
-                "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb"
-            )
-            .is_ok()
-        );
+        assert!(validate_store_hash("w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb").is_ok());
 
         // Too short
-        assert!(KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash("abc").is_err());
+        assert!(validate_store_hash("abc").is_err());
 
         // Contains uppercase
-        assert!(
-            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
-                "ABCDEF12345678901234567890123456"
-            )
-            .is_err()
-        );
+        assert!(validate_store_hash("ABCDEF12345678901234567890123456").is_err());
 
         // Contains invalid nixbase32 char 'e'
-        assert!(
-            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
-                "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-            )
-            .is_err()
-        );
+        assert!(validate_store_hash("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee").is_err());
     }
 }

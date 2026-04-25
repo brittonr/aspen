@@ -813,7 +813,6 @@ dependencies = [
 name = "aspen-cache"
 version = "0.1.0"
 dependencies = [
- "aspen-blob",
  "aspen-core",
  "aspen-kv-types",
  "aspen-testing",
@@ -852,7 +851,6 @@ name = "aspen-castore"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
- "aspen-core",
  "async-stream",
  "async-trait",
  "futures",

@@ -5,13 +5,14 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Distributed Nix binary cache for Aspen using iroh-blobs storage"
 
-[dependencies]
-# Core types and traits
-aspen-core = { workspace = true }
-aspen-kv-types = { workspace = true }
+[features]
+default = []
+kv-index = ["dep:aspen-core", "dep:aspen-kv-types"]
 
-# Blob storage
-aspen-blob = { workspace = true }
+[dependencies]
+# Cluster KV integration (feature-gated)
+aspen-core = { workspace = true, optional = true }
+aspen-kv-types = { workspace = true, optional = true }
 
 # Serialization
 serde = { workspace = true }

@@ -12,9 +12,6 @@ snix-castore = { workspace = true }
 # Aspen blob backend
 aspen-blob = { workspace = true }
 
-# Aspen core (circuit breaker)
-aspen-core = { workspace = true }
-
 # irpc for RPC over QUIC
 irpc = { workspace = true }
 

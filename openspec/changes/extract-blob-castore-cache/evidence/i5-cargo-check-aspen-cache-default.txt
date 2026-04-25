@@ -1,0 +1,40 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Checking futures-core v0.3.32
+    Checking smallvec v1.15.1
+    Checking futures-sink v0.3.32
+    Checking slab v0.4.12
+    Checking futures-io v0.3.32
+   Compiling typenum v1.19.0
+    Checking once_cell v1.21.4
+    Checking percent-encoding v2.3.2
+    Checking zeroize v1.8.2
+    Checking subtle v2.6.1
+    Checking bytes v1.11.1
+    Checking bitflags v2.11.0
+    Checking futures-channel v0.3.32
+    Checking form_urlencoded v1.2.2
+    Checking tracing-core v0.1.36
+    Checking icu_normalizer v2.1.1
+    Checking futures-util v0.3.32
+    Checking tokio v1.50.0
+    Checking tracing v0.1.44
+    Checking generic-array v0.14.7
+    Checking idna_adapter v1.2.1
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+    Checking digest v0.10.7
+    Checking idna v1.1.0
+    Checking curve25519-dalek v4.1.3
+    Checking sha2 v0.10.9
+    Checking url v2.5.8
+    Checking ed25519-dalek v2.2.0
+    Checking futures-executor v0.3.32
+    Checking futures v0.3.32
+    Checking nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    Checking aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cache)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.40s

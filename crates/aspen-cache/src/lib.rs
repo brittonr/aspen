@@ -65,8 +65,10 @@ pub mod signing;
 pub use error::CacheError;
 pub use error::Result;
 pub use index::CacheIndex;
+#[cfg(feature = "kv-index")]
 pub use index::KvCacheIndex;
 pub use index::parse_store_path;
+pub use index::validate_store_hash;
 pub use narinfo::CACHE_KEY_PREFIX;
 pub use narinfo::CACHE_STATS_KEY;
 pub use narinfo::CacheEntry;

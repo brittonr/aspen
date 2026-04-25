@@ -65,6 +65,7 @@ rand = { version = "0.9", features = ["std_rng"] }
 # Madsim for deterministic simulation testing
 madsim = { version = "0.2.34", features = ["macros"] }
 aspen-testing = { workspace = true }
+aspen-cache = { workspace = true, features = ["kv-index"] }
 
 [features]
 default = []

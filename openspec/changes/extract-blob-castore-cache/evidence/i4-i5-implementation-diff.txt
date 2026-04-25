@@ -1,0 +1,719 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 35c5f4798..e89b8847e 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -813,7 +813,6 @@ dependencies = [
+ name = "aspen-cache"
+ version = "0.1.0"
+ dependencies = [
+- "aspen-blob",
+  "aspen-core",
+  "aspen-kv-types",
+  "aspen-testing",
+@@ -852,7 +851,6 @@ name = "aspen-castore"
+ version = "0.1.0"
+ dependencies = [
+  "aspen-blob",
+- "aspen-core",
+  "async-stream",
+  "async-trait",
+  "futures",
+diff --git a/Cargo.toml b/Cargo.toml
+index 25a8ce695..e29d5496c 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -530,7 +530,7 @@ bolero = []
+ global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
+ secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets", "aspen-raft/secrets"]
+ automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
+-ci-core = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci-core", "aspen-client/cache-index", "nix-executor"]
++ci-core = ["dep:aspen-ci", "dep:aspen-cache", "aspen-cache/kv-index", "aspen-rpc-handlers/ci-core", "aspen-client/cache-index", "nix-executor"]
+ ci-runtime = ["ci-core", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "aspen-ci/nix-executor", "aspen-ci/nix-cache", "jobs", "blob", "forge"]
+ ci-basic = ["ci-runtime"]
+ nix-executor = []  # Marker feature: enables NixBuildWorker registration in aspen-node binary
+diff --git a/crates/aspen-cache/Cargo.toml b/crates/aspen-cache/Cargo.toml
+index 4470cce8a..7cbc71f4d 100644
+--- a/crates/aspen-cache/Cargo.toml
++++ b/crates/aspen-cache/Cargo.toml
+@@ -5,13 +5,14 @@ edition = "2024"
+ license = "AGPL-3.0-or-later"
+ description = "Distributed Nix binary cache for Aspen using iroh-blobs storage"
+ 
+-[dependencies]
+-# Core types and traits
+-aspen-core = { workspace = true }
+-aspen-kv-types = { workspace = true }
++[features]
++default = []
++kv-index = ["dep:aspen-core", "dep:aspen-kv-types"]
+ 
+-# Blob storage
+-aspen-blob = { workspace = true }
++[dependencies]
++# Cluster KV integration (feature-gated)
++aspen-core = { workspace = true, optional = true }
++aspen-kv-types = { workspace = true, optional = true }
+ 
+ # Serialization
+ serde = { workspace = true }
+diff --git a/crates/aspen-cache/src/index.rs b/crates/aspen-cache/src/index.rs
+index cb8f2a99f..c51a8af83 100644
+--- a/crates/aspen-cache/src/index.rs
++++ b/crates/aspen-cache/src/index.rs
+@@ -3,23 +3,36 @@
+ //! This module provides the `CacheIndex` trait and implementation for
+ //! storing and retrieving cache entries from the Raft KV store.
+ 
++#[cfg(feature = "kv-index")]
+ use std::sync::Arc;
++#[cfg(feature = "kv-index")]
+ use std::time::SystemTime;
++#[cfg(feature = "kv-index")]
+ use std::time::UNIX_EPOCH;
+ 
++#[cfg(feature = "kv-index")]
+ use aspen_core::KeyValueStore;
++#[cfg(feature = "kv-index")]
+ use aspen_core::kv::ReadConsistency;
++#[cfg(feature = "kv-index")]
+ use aspen_core::kv::ReadRequest;
++#[cfg(feature = "kv-index")]
+ use aspen_core::kv::WriteCommand;
++#[cfg(feature = "kv-index")]
+ use aspen_core::kv::WriteRequest;
+ use async_trait::async_trait;
++#[cfg(feature = "kv-index")]
+ use tracing::debug;
++#[cfg(feature = "kv-index")]
+ use tracing::info;
++#[cfg(feature = "kv-index")]
+ use tracing::warn;
+ 
+ use crate::error::CacheError;
+ use crate::error::Result;
++#[cfg(feature = "kv-index")]
+ use crate::narinfo::CACHE_KEY_PREFIX;
++#[cfg(feature = "kv-index")]
+ use crate::narinfo::CACHE_STATS_KEY;
+ use crate::narinfo::CacheEntry;
+ use crate::narinfo::CacheStats;
+@@ -30,6 +43,35 @@ const MAX_STORE_HASH_LENGTH: usize = 64;
+ /// Minimum store hash length in characters.
+ const MIN_STORE_HASH_LENGTH: usize = 32;
+ 
++/// Validate a store hash.
++///
++/// Uses `nix_compat::nixbase32` validation: the hash must be within the
++/// configured length bounds and use the Nix base32 alphabet.
++pub fn validate_store_hash(store_hash: &str) -> Result<()> {
++    if store_hash.len() < MIN_STORE_HASH_LENGTH {
++        return Err(CacheError::InvalidStoreHash {
++            hash: store_hash.to_string(),
++            reason: format!("too short: {} chars (min: {})", store_hash.len(), MIN_STORE_HASH_LENGTH),
++        });
++    }
++
++    if store_hash.len() > MAX_STORE_HASH_LENGTH {
++        return Err(CacheError::InvalidStoreHash {
++            hash: store_hash.to_string(),
++            reason: format!("too long: {} chars (max: {})", store_hash.len(), MAX_STORE_HASH_LENGTH),
++        });
++    }
++
++    if nix_compat::nixbase32::decode(store_hash.as_bytes()).is_err() {
++        return Err(CacheError::InvalidStoreHash {
++            hash: store_hash.to_string(),
++            reason: "must contain only valid nixbase32 characters (0-9, a-z minus e,o,t,u)".to_string(),
++        });
++    }
++
++    Ok(())
++}
++
+ /// Trait for Nix binary cache index operations.
+ #[async_trait]
+ pub trait CacheIndex: Send + Sync {
+@@ -47,48 +89,18 @@ pub trait CacheIndex: Send + Sync {
+ }
+ 
+ /// Implementation of cache index backed by a KeyValueStore.
++#[cfg(feature = "kv-index")]
+ pub struct KvCacheIndex<KV: KeyValueStore + ?Sized> {
+     kv: Arc<KV>,
+ }
+ 
++#[cfg(feature = "kv-index")]
+ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
+     /// Create a new cache index backed by the given KV store.
+     pub fn new(kv: Arc<KV>) -> Self {
+         Self { kv }
+     }
+ 
+-    /// Validate a store hash.
+-    ///
+-    /// Uses `nix_compat::store_path::StorePath` validation: the hash must be
+-    /// exactly 32 nixbase32 characters from the nix alphabet
+-    /// (`0123456789abcdfghijklmnpqrsvwxyz`).
+-    fn validate_store_hash(store_hash: &str) -> Result<()> {
+-        if store_hash.len() < MIN_STORE_HASH_LENGTH {
+-            return Err(CacheError::InvalidStoreHash {
+-                hash: store_hash.to_string(),
+-                reason: format!("too short: {} chars (min: {})", store_hash.len(), MIN_STORE_HASH_LENGTH),
+-            });
+-        }
+-
+-        if store_hash.len() > MAX_STORE_HASH_LENGTH {
+-            return Err(CacheError::InvalidStoreHash {
+-                hash: store_hash.to_string(),
+-                reason: format!("too long: {} chars (max: {})", store_hash.len(), MAX_STORE_HASH_LENGTH),
+-            });
+-        }
+-
+-        // Validate using nix-compat's nixbase32 decode — this rejects
+-        // characters outside the nix alphabet (e, o, t, u, uppercase)
+-        if nix_compat::nixbase32::decode(store_hash.as_bytes()).is_err() {
+-            return Err(CacheError::InvalidStoreHash {
+-                hash: store_hash.to_string(),
+-                reason: "must contain only valid nixbase32 characters (0-9, a-z minus e,o,t,u)".to_string(),
+-            });
+-        }
+-
+-        Ok(())
+-    }
+-
+     /// Update cache statistics.
+     async fn update_stats<F>(&self, updater: F) -> Result<()>
+     where F: FnOnce(&mut CacheStats) {
+@@ -134,10 +146,11 @@ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
+     }
+ }
+ 
++#[cfg(feature = "kv-index")]
+ #[async_trait]
+ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
+     async fn get(&self, store_hash: &str) -> Result<Option<CacheEntry>> {
+-        Self::validate_store_hash(store_hash)?;
++        validate_store_hash(store_hash)?;
+ 
+         let key = format!("{}{}", CACHE_KEY_PREFIX, store_hash);
+         debug!(key = %key, "Looking up cache entry");
+@@ -185,7 +198,7 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
+     }
+ 
+     async fn put(&self, entry: CacheEntry) -> Result<()> {
+-        Self::validate_store_hash(&entry.store_hash)?;
++        validate_store_hash(&entry.store_hash)?;
+ 
+         let key = entry.kv_key();
+         let nar_size = entry.nar_size;
+@@ -215,7 +228,7 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
+     }
+ 
+     async fn exists(&self, store_hash: &str) -> Result<bool> {
+-        Self::validate_store_hash(store_hash)?;
++        validate_store_hash(store_hash)?;
+ 
+         let key = format!("{}{}", CACHE_KEY_PREFIX, store_hash);
+ 
+@@ -315,30 +328,15 @@ mod tests {
+     #[test]
+     fn test_validate_store_hash() {
+         // Valid nixbase32 hash (32 chars from nix alphabet: 0-9, a-z minus e,o,t,u)
+-        assert!(
+-            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
+-                "w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb"
+-            )
+-            .is_ok()
+-        );
++        assert!(validate_store_hash("w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb").is_ok());
+ 
+         // Too short
+-        assert!(KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash("abc").is_err());
++        assert!(validate_store_hash("abc").is_err());
+ 
+         // Contains uppercase
+-        assert!(
+-            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
+-                "ABCDEF12345678901234567890123456"
+-            )
+-            .is_err()
+-        );
++        assert!(validate_store_hash("ABCDEF12345678901234567890123456").is_err());
+ 
+         // Contains invalid nixbase32 char 'e'
+-        assert!(
+-            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
+-                "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+-            )
+-            .is_err()
+-        );
++        assert!(validate_store_hash("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee").is_err());
+     }
+ }
+diff --git a/crates/aspen-cache/src/lib.rs b/crates/aspen-cache/src/lib.rs
+index 6a9a4b391..c0219b35d 100644
+--- a/crates/aspen-cache/src/lib.rs
++++ b/crates/aspen-cache/src/lib.rs
+@@ -65,8 +65,10 @@ pub mod signing;
+ pub use error::CacheError;
+ pub use error::Result;
+ pub use index::CacheIndex;
++#[cfg(feature = "kv-index")]
+ pub use index::KvCacheIndex;
+ pub use index::parse_store_path;
++pub use index::validate_store_hash;
+ pub use narinfo::CACHE_KEY_PREFIX;
+ pub use narinfo::CACHE_STATS_KEY;
+ pub use narinfo::CacheEntry;
+diff --git a/crates/aspen-cache/src/signing.rs b/crates/aspen-cache/src/signing.rs
+index c6af2d5e3..b841faebd 100644
+--- a/crates/aspen-cache/src/signing.rs
++++ b/crates/aspen-cache/src/signing.rs
+@@ -15,15 +15,20 @@
+ //! narinfo signatures use: `{name}:{base64(ed25519_signature)}` (64 bytes)
+ //! The signed message is the fingerprint: `1;{store_path};{nar_hash};{nar_size};{refs}`
+ 
++#[cfg(feature = "kv-index")]
+ use std::sync::Arc;
+ 
++#[cfg(feature = "kv-index")]
+ use aspen_core::KeyValueStore;
++#[cfg(feature = "kv-index")]
+ use aspen_kv_types::ReadRequest;
++#[cfg(feature = "kv-index")]
+ use aspen_kv_types::WriteRequest;
+ use data_encoding::BASE64;
+ use ed25519_dalek::Signer;
+ use nix_compat::narinfo;
+ use snafu::Snafu;
++#[cfg(feature = "kv-index")]
+ use tracing::info;
+ 
+ // Tiger Style: explicit bounds
+@@ -202,6 +207,7 @@ impl CacheVerifyingKey {
+ ///
+ /// Returns the signing key and the public key in Nix format.
+ /// This is idempotent — if a key already exists, it's returned as-is.
++#[cfg(feature = "kv-index")]
+ pub async fn ensure_signing_key(
+     kv_store: &Arc<dyn KeyValueStore>,
+     cache_name: &str,
+diff --git a/crates/aspen-castore/Cargo.toml b/crates/aspen-castore/Cargo.toml
+index 6b31b4383..13b0df9e4 100644
+--- a/crates/aspen-castore/Cargo.toml
++++ b/crates/aspen-castore/Cargo.toml
+@@ -12,9 +12,6 @@ snix-castore = { workspace = true }
+ # Aspen blob backend
+ aspen-blob = { workspace = true }
+ 
+-# Aspen core (circuit breaker)
+-aspen-core = { workspace = true }
+-
+ # irpc for RPC over QUIC
+ irpc = { workspace = true }
+ 
+diff --git a/crates/aspen-castore/src/circuit_breaker.rs b/crates/aspen-castore/src/circuit_breaker.rs
+new file mode 100644
+index 000000000..53f662857
+--- /dev/null
++++ b/crates/aspen-castore/src/circuit_breaker.rs
+@@ -0,0 +1,152 @@
++//! Local irpc client circuit breaker.
++//!
++//! The reusable castore crate must not depend on Aspen's core shell just to
++//! protect outbound irpc clients. This module keeps the state machine private
++//! to castore and takes time as an explicit shell-provided `Instant`.
++
++use std::time::Duration;
++use std::time::Instant;
++
++const MIN_FAILURE_THRESHOLD: u32 = 1;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++enum CircuitState {
++    Closed,
++    Open,
++    HalfOpen,
++}
++
++#[derive(Debug)]
++pub(crate) struct CircuitBreaker {
++    consecutive_failures: u32,
++    opened_at: Option<Instant>,
++    threshold: u32,
++    open_duration: Duration,
++}
++
++impl CircuitBreaker {
++    pub(crate) fn new(threshold: u32, open_duration: Duration) -> Self {
++        Self {
++            consecutive_failures: 0,
++            opened_at: None,
++            threshold: threshold.max(MIN_FAILURE_THRESHOLD),
++            open_duration,
++        }
++    }
++
++    pub(crate) fn record_failure(&mut self, now: Instant) -> bool {
++        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
++        if self.consecutive_failures >= self.threshold {
++            self.opened_at = Some(now);
++        }
++        self.opened_at.is_some()
++    }
++
++    pub(crate) fn record_success(&mut self) -> bool {
++        let was_open = self.opened_at.is_some();
++        self.consecutive_failures = 0;
++        self.opened_at = None;
++        was_open
++    }
++
++    pub(crate) fn should_reject(&self, now: Instant) -> bool {
++        self.state(now) == CircuitState::Open
++    }
++
++    pub(crate) fn consecutive_failures(&self) -> u32 {
++        self.consecutive_failures
++    }
++
++    fn state(&self, now: Instant) -> CircuitState {
++        match self.opened_at {
++            None => CircuitState::Closed,
++            Some(opened_at) if has_open_duration_elapsed(opened_at, now, self.open_duration) => CircuitState::HalfOpen,
++            Some(_) => CircuitState::Open,
++        }
++    }
++}
++
++fn has_open_duration_elapsed(opened_at: Instant, now: Instant, open_duration: Duration) -> bool {
++    match now.checked_duration_since(opened_at) {
++        Some(elapsed) => elapsed >= open_duration,
++        None => false,
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    const FAILURE_THRESHOLD: u32 = 3;
++    const ZERO_THRESHOLD: u32 = 0;
++    const OPEN_DURATION_MS: u64 = 100;
++    const BEFORE_OPEN_DURATION_MS: u64 = OPEN_DURATION_MS - 1;
++    const AFTER_OPEN_DURATION_MS: u64 = OPEN_DURATION_MS;
++
++    fn breaker() -> CircuitBreaker {
++        CircuitBreaker::new(FAILURE_THRESHOLD, Duration::from_millis(OPEN_DURATION_MS))
++    }
++
++    #[test]
++    fn opens_after_threshold_failures() {
++        let now = Instant::now();
++        let mut breaker = breaker();
++
++        assert!(!breaker.record_failure(now));
++        assert!(!breaker.should_reject(now));
++        assert!(!breaker.record_failure(now));
++        assert!(!breaker.should_reject(now));
++        assert!(breaker.record_failure(now));
++        assert!(breaker.should_reject(now));
++        assert_eq!(breaker.consecutive_failures(), FAILURE_THRESHOLD);
++    }
++
++    #[test]
++    fn half_open_after_duration_elapses() {
++        let now = Instant::now();
++        let mut breaker = breaker();
++
++        for _ in 0..FAILURE_THRESHOLD {
++            breaker.record_failure(now);
++        }
++
++        assert!(breaker.should_reject(now + Duration::from_millis(BEFORE_OPEN_DURATION_MS)));
++        assert!(!breaker.should_reject(now + Duration::from_millis(AFTER_OPEN_DURATION_MS)));
++    }
++
++    #[test]
++    fn success_resets_open_breaker() {
++        let now = Instant::now();
++        let mut breaker = breaker();
++
++        for _ in 0..FAILURE_THRESHOLD {
++            breaker.record_failure(now);
++        }
++
++        assert!(breaker.record_success());
++        assert!(!breaker.should_reject(now));
++        assert_eq!(breaker.consecutive_failures(), 0);
++    }
++
++    #[test]
++    fn zero_threshold_is_normalized() {
++        let now = Instant::now();
++        let mut breaker = CircuitBreaker::new(ZERO_THRESHOLD, Duration::from_millis(OPEN_DURATION_MS));
++
++        assert!(breaker.record_failure(now));
++        assert!(breaker.should_reject(now));
++    }
++
++    #[test]
++    fn clock_regression_keeps_breaker_open() {
++        let now = Instant::now();
++        let earlier = now.checked_sub(Duration::from_millis(AFTER_OPEN_DURATION_MS)).unwrap_or(now);
++        let mut breaker = breaker();
++
++        for _ in 0..FAILURE_THRESHOLD {
++            breaker.record_failure(now);
++        }
++
++        assert!(breaker.should_reject(earlier));
++    }
++}
+diff --git a/crates/aspen-castore/src/client.rs b/crates/aspen-castore/src/client.rs
+index f16ad5776..0537c3f2a 100644
+--- a/crates/aspen-castore/src/client.rs
++++ b/crates/aspen-castore/src/client.rs
+@@ -11,7 +11,6 @@ use std::task::Poll;
+ use std::time::Duration;
+ use std::time::Instant;
+ 
+-use aspen_core::circuit_breaker::CircuitBreaker;
+ use async_trait::async_trait;
+ use prost::Message;
+ use snix_castore::B3Digest;
+@@ -26,6 +25,7 @@ use tracing::debug;
+ use tracing::instrument;
+ use tracing::warn;
+ 
++use crate::circuit_breaker::CircuitBreaker;
+ use crate::protocol::*;
+ 
+ /// Default consecutive failure threshold for irpc client circuit breakers.
+diff --git a/crates/aspen-castore/src/lib.rs b/crates/aspen-castore/src/lib.rs
+index 1d7db9d6e..8715f04d8 100644
+--- a/crates/aspen-castore/src/lib.rs
++++ b/crates/aspen-castore/src/lib.rs
+@@ -22,6 +22,7 @@
+ //! so upstream snix tooling can use an Aspen cluster as a castore backend
+ //! transparently.
+ 
++mod circuit_breaker;
+ pub mod client;
+ pub mod protocol;
+ pub mod server;
+diff --git a/crates/aspen-nix-handler/Cargo.toml b/crates/aspen-nix-handler/Cargo.toml
+index 5c9fba003..82a8538c9 100644
+--- a/crates/aspen-nix-handler/Cargo.toml
++++ b/crates/aspen-nix-handler/Cargo.toml
+@@ -36,7 +36,7 @@ serde_json = { version = "1.0", optional = true }
+ [features]
+ default = []
+ snix = ["dep:base64", "dep:hex", "dep:prost", "dep:snix-castore", "dep:snix-store"]
+-cache = ["dep:aspen-cache", "dep:aspen-blob", "dep:aspen-kv-types", "dep:iroh-blobs", "dep:serde", "dep:serde_json", "aspen-rpc-core/blob", "aspen-client-api/ci"]
++cache = ["dep:aspen-cache", "aspen-cache/kv-index", "dep:aspen-blob", "dep:aspen-kv-types", "dep:iroh-blobs", "dep:serde", "dep:serde_json", "aspen-rpc-core/blob", "aspen-client-api/ci"]
+ 
+ [dev-dependencies]
+ tokio = { version = "1.0", features = ["full", "test-util"] }
+diff --git a/crates/aspen-snix/Cargo.toml b/crates/aspen-snix/Cargo.toml
+index 2e777162c..64213f936 100644
+--- a/crates/aspen-snix/Cargo.toml
++++ b/crates/aspen-snix/Cargo.toml
+@@ -65,6 +65,7 @@ rand = { version = "0.9", features = ["std_rng"] }
+ # Madsim for deterministic simulation testing
+ madsim = { version = "0.2.34", features = ["macros"] }
+ aspen-testing = { workspace = true }
++aspen-cache = { workspace = true, features = ["kv-index"] }
+ 
+ [features]
+ default = []
+diff --git a/openspec/changes/extract-blob-castore-cache/tasks.md b/openspec/changes/extract-blob-castore-cache/tasks.md
+index 869ae1225..6dcbc6ea4 100644
+--- a/openspec/changes/extract-blob-castore-cache/tasks.md
++++ b/openspec/changes/extract-blob-castore-cache/tasks.md
+@@ -7,8 +7,8 @@
+ ## Phase 2: Dependency cleanup and adapters
+ 
+ - [x] I3 Move or gate `aspen-blob` replication/client-RPC dependencies so default reusable blob APIs do not depend on `aspen-client-api`, handlers, root Aspen, or node bootstrap crates. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only] ✅ completed: 2026-04-25T18:51:25Z
+-- [ ] I4 Replace, localize, or feature-gate `aspen-castore`'s `aspen-core-shell` circuit-breaker dependency so reusable castore APIs avoid core-shell/runtime app crates by default. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated]
+-- [ ] I5 Separate `aspen-cache` reusable Nix cache metadata/signing helpers from cluster/testing/runtime integration, keeping publication paths behind named features or adapter crates. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable]
++- [x] I4 Replace, localize, or feature-gate `aspen-castore`'s `aspen-core-shell` circuit-breaker dependency so reusable castore APIs avoid core-shell/runtime app crates by default. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated] ✅ completed: 2026-04-25T18:55:00Z
++- [x] I5 Separate `aspen-cache` reusable Nix cache metadata/signing helpers from cluster/testing/runtime integration, keeping publication paths behind named features or adapter crates. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable] ✅ completed: 2026-04-25T19:03:50Z
+ - [ ] I6 Add downstream fixtures for canonical blob APIs and cache/castore domain APIs, with cargo metadata proving app-shell and handler crates are absent. [covers=blob-castore-cache-extraction.downstream-fixtures,blob-castore-cache-extraction.downstream-fixtures.blob-fixture-uses-canonical-api,blob-castore-cache-extraction.downstream-fixtures.cache-castore-fixture-uses-domain-apis]
+ 
+ ## Phase 3: Verification
+diff --git a/openspec/changes/extract-blob-castore-cache/verification.md b/openspec/changes/extract-blob-castore-cache/verification.md
+index 13cf76ebb..0a1b89e6f 100644
+--- a/openspec/changes/extract-blob-castore-cache/verification.md
++++ b/openspec/changes/extract-blob-castore-cache/verification.md
+@@ -2,21 +2,40 @@
+ 
+ ## Implementation Evidence
+ 
++- Changed file: `Cargo.lock`
+ - Changed file: `Cargo.toml`
+-- Changed file: `crates/aspen-blob/Cargo.toml`
+-- Changed file: `crates/aspen-blob/src/lib.rs`
+-- Changed file: `crates/aspen-cluster/Cargo.toml`
+-- Changed file: `crates/aspen-rpc-core/Cargo.toml`
+-- Changed file: `crates/aspen-rpc-handlers/Cargo.toml`
++- Changed file: `crates/aspen-cache/Cargo.toml`
++- Changed file: `crates/aspen-cache/src/index.rs`
++- Changed file: `crates/aspen-cache/src/lib.rs`
++- Changed file: `crates/aspen-cache/src/signing.rs`
++- Changed file: `crates/aspen-castore/Cargo.toml`
++- Changed file: `crates/aspen-castore/src/circuit_breaker.rs`
++- Changed file: `crates/aspen-castore/src/client.rs`
++- Changed file: `crates/aspen-castore/src/lib.rs`
++- Changed file: `crates/aspen-nix-handler/Cargo.toml`
++- Changed file: `crates/aspen-snix/Cargo.toml`
+ - Changed file: `openspec/changes/extract-blob-castore-cache/tasks.md`
+ - Changed file: `openspec/changes/extract-blob-castore-cache/verification.md`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-default.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-tree-aspen-blob-default.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-forbidden-tree-grep.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-replication.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-rpc-core-blob.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-implementation-diff.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-openspec-preflight.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-test-aspen-castore-circuit-breaker.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-check-aspen-castore-default.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-check-aspen-castore-default-afterfmt.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-tree-aspen-castore-default.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-forbidden-tree-grep.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-rustfmt-note.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-test-aspen-cache-reusable.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-default.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-default-afterfmt.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-tree-aspen-cache-default.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-forbidden-tree-grep.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-kv-index.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-kv-index-afterfmt.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-nix-handler-cache.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-ci-executor-nix.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-nix-cache-gateway.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-snix.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-i5-rustfmt-check.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-i5-implementation-diff.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i4-i5-openspec-preflight.txt`
+ 
+ ## Task Coverage
+ 
+@@ -26,55 +45,97 @@
+ - [x] I3 Move or gate `aspen-blob` replication/client-RPC dependencies so default reusable blob APIs do not depend on `aspen-client-api`, handlers, root Aspen, or node bootstrap crates. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only] ✅ completed: 2026-04-25T18:51:25Z
+   - Evidence: `crates/aspen-blob/Cargo.toml`, `crates/aspen-blob/src/lib.rs`, `crates/aspen-rpc-core/Cargo.toml`, `crates/aspen-cluster/Cargo.toml`, `crates/aspen-rpc-handlers/Cargo.toml`, `Cargo.toml`, `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-tree-aspen-blob-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i3-forbidden-tree-grep.txt`
+ 
++- [x] I4 Replace, localize, or feature-gate `aspen-castore`'s `aspen-core-shell` circuit-breaker dependency so reusable castore APIs avoid core-shell/runtime app crates by default. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated] ✅ completed: 2026-04-25T18:55:00Z
++  - Evidence: `crates/aspen-castore/Cargo.toml`, `crates/aspen-castore/src/circuit_breaker.rs`, `crates/aspen-castore/src/client.rs`, `crates/aspen-castore/src/lib.rs`, `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-check-aspen-castore-default-afterfmt.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i4-forbidden-tree-grep.txt`
++
++- [x] I5 Separate `aspen-cache` reusable Nix cache metadata/signing helpers from cluster/testing/runtime integration, keeping publication paths behind named features or adapter crates. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable] ✅ completed: 2026-04-25T19:03:50Z
++  - Evidence: `crates/aspen-cache/Cargo.toml`, `crates/aspen-cache/src/index.rs`, `crates/aspen-cache/src/lib.rs`, `crates/aspen-cache/src/signing.rs`, `crates/aspen-nix-handler/Cargo.toml`, `crates/aspen-snix/Cargo.toml`, `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-tree-aspen-cache-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i5-forbidden-tree-grep.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-kv-index-afterfmt.txt`
++
+ ## Review Scope Snapshot
+ 
+-### `git diff HEAD -- Cargo.toml crates/aspen-blob/Cargo.toml crates/aspen-blob/src/lib.rs crates/aspen-cluster/Cargo.toml crates/aspen-rpc-core/Cargo.toml crates/aspen-rpc-handlers/Cargo.toml openspec/changes/extract-blob-castore-cache/tasks.md openspec/changes/extract-blob-castore-cache/verification.md`
++### `git diff HEAD -- Cargo.lock Cargo.toml crates/aspen-cache/Cargo.toml crates/aspen-cache/src/index.rs crates/aspen-cache/src/lib.rs crates/aspen-cache/src/signing.rs crates/aspen-castore/Cargo.toml crates/aspen-castore/src/circuit_breaker.rs crates/aspen-castore/src/client.rs crates/aspen-castore/src/lib.rs crates/aspen-nix-handler/Cargo.toml crates/aspen-snix/Cargo.toml openspec/changes/extract-blob-castore-cache/tasks.md openspec/changes/extract-blob-castore-cache/verification.md`
+ 
+-- Status: captured after I3 implementation
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-implementation-diff.txt`
++- Status: captured after I4/I5 implementation
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i4-i5-implementation-diff.txt`
+ 
+ ## Verification Commands
+ 
+-### `bash -n openspec/changes/extract-blob-castore-cache/evidence/r1-capture-baseline.sh`
++### `cargo test -p aspen-castore circuit_breaker`
+ 
+ - Status: pass
+-- Artifact: command completed without output before running the capture script.
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-test-aspen-castore-circuit-breaker.txt`
++
++### `cargo check -p aspen-castore --no-default-features`
+ 
+-### `./openspec/changes/extract-blob-castore-cache/evidence/r1-capture-baseline.sh`
++- Status: pass after formatting fallback
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-check-aspen-castore-default-afterfmt.txt`
++
++### `cargo tree -p aspen-castore --no-default-features -e normal`
+ 
+ - Status: pass
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline.md`
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i4-cargo-tree-aspen-castore-default.txt`
++
++### `rg -n 'aspen-core-shell|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler' /tmp/i4-castore-tree.txt`
+ 
+-### `cargo check -p aspen-blob --no-default-features --locked`
++- Status: pass, no matches
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i4-forbidden-tree-grep.txt`
++
++### `cargo test -p aspen-cache --no-default-features`
+ 
+ - Status: pass
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-default.txt`
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-test-aspen-cache-reusable.txt`
++
++### `cargo check -p aspen-cache --no-default-features`
+ 
+-### `cargo tree -p aspen-blob --no-default-features -e normal --locked`
++- Status: pass after formatting fallback
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-default-afterfmt.txt`
++
++### `cargo tree -p aspen-cache --no-default-features -e normal`
+ 
+ - Status: pass
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-tree-aspen-blob-default.txt`
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-tree-aspen-cache-default.txt`
+ 
+-### `rg -n 'aspen-client-api|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler' /tmp/i3-blob-tree.txt`
++### `rg -n 'aspen-core|aspen-core-shell|aspen-kv-types|aspen-blob|aspen-rpc-core|aspen-rpc-handlers|aspen-testing' /tmp/i5-cache-tree-default.txt`
+ 
+ - Status: pass, no matches
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-forbidden-tree-grep.txt`
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-forbidden-tree-grep.txt`
++
++### `cargo check -p aspen-cache --features kv-index`
++
++- Status: pass after formatting fallback
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-kv-index-afterfmt.txt`
++
++### `cargo check -p aspen-nix-handler --features cache`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-nix-handler-cache.txt`
++
++### `cargo check -p aspen-ci-executor-nix`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-ci-executor-nix.txt`
++
++### `cargo check -p aspen-nix-cache-gateway`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-nix-cache-gateway.txt`
+ 
+-### `cargo check -p aspen-blob --features replication --locked`
++### `cargo check -p aspen-snix`
+ 
+ - Status: pass
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-replication.txt`
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-snix.txt`
+ 
+-### `cargo check -p aspen-rpc-core --features blob --locked`
++### `rustfmt --check crates/aspen-castore/src/circuit_breaker.rs crates/aspen-castore/src/client.rs crates/aspen-castore/src/lib.rs crates/aspen-cache/src/index.rs crates/aspen-cache/src/signing.rs crates/aspen-cache/src/lib.rs`
+ 
+ - Status: pass
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-rpc-core-blob.txt`
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i4-i5-rustfmt-check.txt`
+ 
+ ### `scripts/openspec-preflight.sh extract-blob-castore-cache`
+ 
+-- Status: pass after I3
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-openspec-preflight.txt`
++- Status: pass after I4/I5
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i4-i5-openspec-preflight.txt`
+ 
+ ## Notes
+ 
+-- `aspen-castore` baseline compile fails before I4 because the existing client passes `Instant` into the `aspen-core` circuit breaker API that now expects `u64` milliseconds. See `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-castore.txt`.
++- `nix run .#rustfmt` was attempted twice but blocked on Nix auto-GC / big garbage collector lock. The changed Rust files were formatted with the repo toolchain `rustfmt` binary and verified with `rustfmt --check`; see `openspec/changes/extract-blob-castore-cache/evidence/i4-rustfmt-note.txt` and `openspec/changes/extract-blob-castore-cache/evidence/i4-i5-rustfmt-check.txt`.
++- The castore tree can still include foundational `aspen-core` through `aspen-blob`; I4 specifically removes the castore circuit-breaker dependency on core-shell/runtime app code.

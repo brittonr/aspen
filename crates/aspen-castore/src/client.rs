@@ -11,7 +11,6 @@ use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
-use aspen_core::circuit_breaker::CircuitBreaker;
 use async_trait::async_trait;
 use prost::Message;
 use snix_castore::B3Digest;
@@ -26,6 +25,7 @@ use tracing::debug;
 use tracing::instrument;
 use tracing::warn;
 
+use crate::circuit_breaker::CircuitBreaker;
 use crate::protocol::*;
 
 /// Default consecutive failure threshold for irpc client circuit breakers.
