@@ -13,5 +13,5 @@ Covers: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-
 
 ## Verification cross-check
 
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/implementation-diff.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/implementation-diff.txt`

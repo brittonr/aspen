@@ -14,5 +14,5 @@ Covers: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-
 
 ## Verification cross-check
 
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/signed-validation.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/implementation-diff.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/signed-validation.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/implementation-diff.txt`

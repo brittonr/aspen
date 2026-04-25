@@ -5,13 +5,13 @@ Covers: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-
 
 ## Review packet members
 
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/implementation-diff.txt`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/openspec-preflight.txt`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/final-validation.md`
-- `openspec/changes/alloc-safe-cluster-ticket/verification.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/implementation-diff.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/openspec-preflight.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/final-validation.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/verification.md`
 
 ## Purpose
 

@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Alloc-safe cluster tickets default to transport-neutral bootstrap metadata
-ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata
 
 The unsigned `aspen-ticket` surface SHALL compile as an alloc-safe leaf crate by default. For this seam, the alloc-safe contract is the bare/default `default = []` feature surface and the explicit `--no-default-features` surface; those two surfaces SHALL remain equivalent. The unsigned cluster ticket payload SHALL store transport-neutral bootstrap metadata and a crate-local alloc-safe topic identifier instead of concrete iroh runtime types.
 
+ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata
 #### Scenario: Bare cluster ticket dependency stays alloc-safe
 ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.bare-cluster-ticket-dependency-stays-alloc-safe
 
@@ -29,7 +29,7 @@ ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neut
 - **GIVEN** the bare/default `default = []` feature surface and the explicit `--no-default-features` surface
 - **WHEN** they are prepared for review
 - **THEN** saved dependency and feature-tree artifacts SHALL show equivalent resolution for those two alloc-safe surfaces
-- **AND** a dedicated equivalence artifact under `openspec/changes/alloc-safe-cluster-ticket/evidence/` SHALL record that comparison
+- **AND** a dedicated equivalence artifact under `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/` SHALL record that comparison
 
 #### Scenario: Alloc-safe topic identifier stays fixed-width and lossless at the iroh boundary
 ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neutral-bootstrap-metadata.alloc-safe-topic-identifier-stays-fixed-width-and-lossless-at-the-iroh-boundary
@@ -50,10 +50,10 @@ ID: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-neut
 - **AND** the bare/default and explicit `--no-default-features` `aspen-ticket` surfaces SHALL not receive iroh runtime helpers through that edge unless `iroh` is explicitly selected
 
 ### Requirement: Cluster ticket runtime helpers require explicit shell opt-in
-ID: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in
 
 Runtime-only helpers for cluster tickets SHALL remain outside the alloc-safe default surface. Iroh conversion helpers and signed-ticket conveniences SHALL require explicit shell-side opt-in by runtime consumers.
 
+ID: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in
 #### Scenario: Iroh conversion happens at the shell boundary
 ID: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shell-opt-in.iroh-conversion-happens-at-the-shell-boundary
 
@@ -88,19 +88,19 @@ ID: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-shel
 
 - **GIVEN** the cluster ticket boundary change is complete
 - **WHEN** it is prepared for review
-- **THEN** saved dependency, compile, and targeted test transcripts under `openspec/changes/alloc-safe-cluster-ticket/evidence/` SHALL include exact command/results for full-graph `cargo tree -p aspen-ticket -e normal`, full-graph `cargo tree -p aspen-ticket -e features`, full-graph `cargo tree -p aspen-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features -e features`, full-graph `cargo tree -p aspen-ticket --features iroh -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features --features signed -e normal`, full-graph `cargo tree -p aspen-ticket --features std -e normal`, `cargo check -p aspen-ticket`, `cargo check -p aspen-ticket --no-default-features`, `cargo check -p aspen-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features iroh`, `cargo check -p aspen-ticket --no-default-features --features signed`, `cargo check -p aspen-ticket --no-default-features --features signed --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features std`, and exact compile rails for every direct `aspen-ticket` consumer named in the audit scope
+- **THEN** saved dependency, compile, and targeted test transcripts under `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/` SHALL include exact command/results for full-graph `cargo tree -p aspen-ticket -e normal`, full-graph `cargo tree -p aspen-ticket -e features`, full-graph `cargo tree -p aspen-ticket --no-default-features -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features -e features`, full-graph `cargo tree -p aspen-ticket --features iroh -e normal`, full-graph `cargo tree -p aspen-ticket --no-default-features --features signed -e normal`, full-graph `cargo tree -p aspen-ticket --features std -e normal`, `cargo check -p aspen-ticket`, `cargo check -p aspen-ticket --no-default-features`, `cargo check -p aspen-ticket --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --no-default-features --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features iroh`, `cargo check -p aspen-ticket --no-default-features --features signed`, `cargo check -p aspen-ticket --no-default-features --features signed --target wasm32-unknown-unknown`, `cargo check -p aspen-ticket --features std`, and exact compile rails for every direct `aspen-ticket` consumer named in the audit scope
 - **AND** those saved artifacts SHALL prove the bare/default and explicit `--no-default-features` unsigned surfaces exclude `iroh`, `iroh-gossip`, `rand`, and `anyhow`
-- **AND** a dedicated artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md` SHALL record the bare/default vs `--no-default-features` comparison
-- **AND** a dedicated artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt` SHALL prove the root `Cargo.toml` `aspen-ticket` workspace stanza explicitly sets `default-features = false`
+- **AND** a dedicated artifact at `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md` SHALL record the bare/default vs `--no-default-features` comparison
+- **AND** a dedicated artifact at `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt` SHALL prove the root `Cargo.toml` `aspen-ticket` workspace stanza explicitly sets `default-features = false`
 - **AND** the saved direct-consumer audit SHALL preserve a repo-wide discovery proof derived from the workspace dependency graph (for example a `cargo metadata --format-version 1 --no-deps` query) so every direct `aspen-ticket` consumer is discovered regardless of manifest syntax, then classify each direct consumer, map each consumer to its exact compile evidence, and cite the shell-boundary conversion site for each consumer that opts into `iroh`
 - **AND** saved artifacts SHALL also include representative transitive re-export leak proofs for downstream consumers reached through the `aspen-client` and `aspen-cluster` re-export paths so feature propagation stays reviewable beyond direct manifests
-- **AND** `openspec/changes/alloc-safe-cluster-ticket/verification.md` SHALL map each checked task to those saved artifacts
+- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/verification.md` SHALL map each checked task to those saved artifacts
 
 ### Requirement: Cluster ticket parse and validation errors stay alloc-safe and explicit
-ID: architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit
 
 The unsigned `aspen-ticket` surface SHALL use crate-local error types for ticket parsing and validation. Malformed payloads and legacy unsigned payload layouts SHALL remain attributable through explicit ticket errors instead of `anyhow`-style runtime-only error wrapping.
 
+ID: architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit
 #### Scenario: Parse and validation failures use cluster ticket errors
 ID: architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-alloc-safe-and-explicit.parse-and-validation-failures-use-cluster-ticket-errors
 
@@ -122,6 +122,6 @@ ID: architecture.modularity.cluster-ticket-parse-and-validation-errors-stay-allo
 
 - **GIVEN** the unsigned ticket payload changed from the pre-change runtime layout to the alloc-safe layout
 - **WHEN** that wire break is prepared for review
-- **THEN** a dedicated artifact at `openspec/changes/alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md` SHALL show both current alloc-safe roundtrip success and explicit legacy unsigned payload rejection
+- **THEN** a dedicated artifact at `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md` SHALL show both current alloc-safe roundtrip success and explicit legacy unsigned payload rejection
 - **AND** that proof SHALL be driven by a checked-in legacy unsigned fixture source at `crates/aspen-ticket/tests/legacy.rs`
-- **AND** `openspec/changes/alloc-safe-cluster-ticket/verification.md` SHALL map those two proofs to the checked tasks
+- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/verification.md` SHALL map those two proofs to the checked tasks

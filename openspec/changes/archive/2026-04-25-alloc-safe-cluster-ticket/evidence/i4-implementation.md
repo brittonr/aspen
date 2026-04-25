@@ -13,6 +13,6 @@ Covers: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-
 
 ## Verification cross-check
 
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/implementation-diff.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/implementation-diff.txt`

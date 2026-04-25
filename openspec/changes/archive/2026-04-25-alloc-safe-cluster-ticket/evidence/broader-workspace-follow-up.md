@@ -16,4 +16,4 @@ Covers: architecture.modularity.cluster-ticket-runtime-helpers-require-explicit-
 
 ## Durable transcript
 
-See `openspec/changes/alloc-safe-cluster-ticket/evidence/final-validation.md` for the full command output and fallout note.
+See `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/final-validation.md` for the full command output and fallout note.

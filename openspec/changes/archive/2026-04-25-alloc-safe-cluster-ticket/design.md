@@ -99,17 +99,17 @@ Direct `aspen-ticket` consumers today are:
 | `crates/aspen-ci` | direct dependency only; no ticket helper hits in the helper-usage audit | bare/default (workspace-inherited) | no local stanza change expected | `cargo check -p aspen-ci` |
 
 **Deterministic audit commands and artifact paths:**
-- Save a repo-wide direct-consumer discovery proof under `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md` using a `cargo metadata --format-version 1 --no-deps` query so every direct `aspen-ticket` dependency is found regardless of manifest syntax.
+- Save a repo-wide direct-consumer discovery proof under `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md` using a `cargo metadata --format-version 1 --no-deps` query so every direct `aspen-ticket` dependency is found regardless of manifest syntax.
 - Save `rg -n 'SignedAspenClusterTicket|parse_ticket_to_addrs|with_bootstrap_addr|with_bootstrap\(|endpoint_addrs\(|endpoint_ids\(|AspenClusterTicket::deserialize|AspenClusterTicket::new|iroh::EndpointAddr|iroh::EndpointId|iroh_gossip::proto::TopicId|ClusterTopicId|try_into_iroh|to_topic_id|from_topic_id' crates/aspen-ci-executor-vm crates/aspen-cluster-handler crates/aspen-cluster crates/aspen-rpc-handlers crates/aspen-client crates/aspen-ci -g '*.rs'` alongside the same audit artifact to justify the feature classification.
 - In that same audit artifact, record one exact source citation for each `iroh` consumer (`crates/aspen-cluster-handler`, `crates/aspen-cluster`, `crates/aspen-client`) showing the shell-boundary conversion site, then map each citation to its compile rail.
-- Save a deterministic negative assertion for the root workspace stanza under `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt` that fails review if the `Cargo.toml` `aspen-ticket` workspace stanza reintroduces `iroh`, `signed`, or `std` defaults.
+- Save a deterministic negative assertion for the root workspace stanza under `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt` that fails review if the `Cargo.toml` `aspen-ticket` workspace stanza reintroduces `iroh`, `signed`, or `std` defaults.
 - Treat `crates/aspen-rpc-handlers` and `crates/aspen-ci` as bare/default only if that saved audit artifact remains empty for their source trees; otherwise reopen this decision before implementation tasks are checked.
 
 **Rationale:** the earlier `aspen-cluster-types` seam showed that workspace inheritance can silently re-enable runtime helpers unless every direct consumer is audited explicitly.
 
 ### 8. Save exact verification rails
 
-**Choice:** save exact review artifacts under `openspec/changes/alloc-safe-cluster-ticket/evidence/` for:
+**Choice:** save exact review artifacts under `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/` for:
 
 - full-graph `cargo tree -p aspen-ticket -e normal`
 - full-graph `cargo tree -p aspen-ticket -e features`

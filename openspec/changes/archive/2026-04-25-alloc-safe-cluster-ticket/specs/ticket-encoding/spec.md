@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Signed cluster ticket encoders never use silent default fallbacks
-ID: ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks
 
 Signed cluster ticket encoders SHALL either serialize successfully or fail loudly. They SHALL NOT emit empty or default payload bytes on serialization failure.
 
+ID: ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks
 #### Scenario: Signed cluster ticket encoder fails loudly on impossible serializer bug
 ID: ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fallbacks.signed-cluster-ticket-encoder-fails-loudly-on-impossible-serializer-bug
 
@@ -13,10 +13,10 @@ ID: ticket.encoding.signed-cluster-ticket-encoders-never-use-silent-default-fall
 - **AND** it SHALL NOT continue with an empty payload that changes the meaning of the signed ticket
 
 ### Requirement: Signed cluster ticket decode failures remain attributable to malformed input
-ID: ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input
 
 Receivers SHALL only see signed-ticket decode failures for genuinely malformed, expired, or tampered payloads, not because the sender silently replaced a failed serialization with empty bytes.
 
+ID: ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input
 #### Scenario: Invalid signed cluster ticket string is still rejected
 ID: ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to-malformed-input.invalid-signed-cluster-ticket-string-is-still-rejected
 
@@ -29,5 +29,5 @@ ID: ticket.encoding.signed-cluster-ticket-decode-failures-remain-attributable-to
 
 - **GIVEN** the signed encoder fallback removal and malformed-input rejection contract
 - **WHEN** the seam is prepared for review
-- **THEN** saved artifacts under `openspec/changes/alloc-safe-cluster-ticket/evidence/` SHALL include targeted signed malformed-input rejection tests plus a deterministic source audit proving `SignedAspenClusterTicket::to_bytes()` no longer uses empty-payload fallback
-- **AND** `openspec/changes/alloc-safe-cluster-ticket/verification.md` SHALL map those ticket-encoding proofs to the checked tasks
+- **THEN** saved artifacts under `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/` SHALL include targeted signed malformed-input rejection tests plus a deterministic source audit proving `SignedAspenClusterTicket::to_bytes()` no longer uses empty-payload fallback
+- **AND** `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/verification.md` SHALL map those ticket-encoding proofs to the checked tasks

@@ -8,9 +8,9 @@ Covers: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-
 - `crates/aspen-ticket/Cargo.toml` keeps the `aspen-cluster-types` edge alloc-safe with `default-features = false` and moves runtime opt-ins behind explicit features.
 - `crates/aspen-ticket/src/lib.rs` makes the crate alloc-safe by default with `no_std`/`alloc` scaffolding and feature-gated runtime exports.
 - `crates/aspen-ticket/src/v2.rs` stores unsigned ticket data as `ClusterTopicId` plus `NodeAddress`-backed bootstrap peers.
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/implementation-diff.txt` captures the full seam diff from `83c6480f2` to the current working tree.
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/implementation-diff.txt` captures the full seam diff from `83c6480f2` to the current working tree.
 
 ## Verification cross-check
 
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`

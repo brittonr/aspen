@@ -28,7 +28,7 @@ That makes `aspen-ticket` the next same-family seam after `aspen-cluster-types` 
 
 ## Impact
 
-- **Files**: `crates/aspen-ticket/`, direct runtime consumers of `aspen-ticket`, and OpenSpec artifacts under `openspec/changes/alloc-safe-cluster-ticket/`.
+- **Files**: `crates/aspen-ticket/`, direct runtime consumers of `aspen-ticket`, and OpenSpec artifacts under `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/`.
 - **Direct consumers to audit**: exhaustive set discovered from a workspace-graph query over `cargo metadata --format-version 1 --no-deps` (not a single manifest regex): root `Cargo.toml`, `crates/aspen-ci-executor-vm`, `crates/aspen-cluster-handler`, `crates/aspen-cluster`, `crates/aspen-rpc-handlers`, `crates/aspen-client`, and `crates/aspen-ci`.
 
 | Consumer | Planned feature surface | Manifest changes? | Planned compile / audit rail |

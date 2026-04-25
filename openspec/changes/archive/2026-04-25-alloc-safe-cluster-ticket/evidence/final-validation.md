@@ -5,16 +5,16 @@ Covers: architecture.modularity.alloc-safe-cluster-tickets-default-to-transport-
 
 ## Review packet checklist
 
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/baseline-validation.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/broader-workspace-follow-up.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/signed-validation.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`
-- `openspec/changes/alloc-safe-cluster-ticket/evidence/implementation-diff.txt`
-- `openspec/changes/alloc-safe-cluster-ticket/verification.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/baseline-validation.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/alloc-safe-validation.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/broader-workspace-follow-up.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/default-vs-no-default-equivalence.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/unsigned-wire-break.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/signed-validation.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/direct-consumer-audit.md`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/workspace-dependency-proof.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/evidence/implementation-diff.txt`
+- `openspec/changes/archive/2026-04-25-alloc-safe-cluster-ticket/verification.md`
 
 ## Broader workspace fallout rails
 
