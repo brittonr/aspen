@@ -58,6 +58,26 @@ No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets,
 - **Feature compatibility**: `aspen-kv-branch/commit-dag` keeps existing branch commit-DAG behavior and public `CommitResult::commit_id` behavior.
 - **Removal criteria**: No temporary compatibility alias is introduced because removed imports were crate-internal.
 
+## Trait seam plan
+
+### aspen-commit-dag: Domain store traits
+
+| Domain trait | Operations | Current broad usage |
+| --- | --- | --- |
+| `CommitStore` | store_commit, load_commit, scan_all_commits | store.rs: &dyn KeyValueStore |
+| `BranchTipStore` | get_branch_tip, set_branch_tip (compare/update) | store.rs: &dyn KeyValueStore |
+
+- GC uses scan + delete; should narrow to `CommitStore` + delete capability
+- fork.rs uses read only; should narrow to `CommitStore` read
+- KV-backed adapters become compatibility layers over domain traits
+
+### aspen-kv-branch: Narrower trait bounds
+
+- `BranchOverlay<S: KeyValueStore>` currently requires full store
+- Actual usage: read (fallthrough), write (commit batch), scan (merge), delete (tombstone)
+- Could narrow to `KvRead + KvWrite + KvScan + KvDelete` once KV split lands
+- scan_local only used when feature allows stale reads
+
 ## Representative consumers
 
 - `aspen-jobs --features kv-branch`

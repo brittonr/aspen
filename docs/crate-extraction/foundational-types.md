@@ -42,6 +42,32 @@ Foundational defaults should be alloc/no-std friendly where already designed tha
 
 No compatibility re-exports are planned by this stub. If a future task moves storage table definitions or trait blanket impls, it must add old path, new path, owner, tests, and removal criteria.
 
+## Trait seam plan
+
+### aspen-traits: KV capability split
+
+| Trait | Methods | First consumer |
+| --- | --- | --- |
+| `KvRead` | `read` | aspen-cache (lookup), aspen-commit-dag (load_commit) |
+| `KvWrite` | `write` | aspen-cache (publish), aspen-commit-dag (store_commit) |
+| `KvDelete` | `delete` | aspen-commit-dag (gc) |
+| `KvScan` | `scan` | aspen-commit-dag (scan_all_commits), aspen-kv-branch (scan fallthrough) |
+| `KvLocalScan` | `scan_local` | aspen-kv-branch (BranchOverlay local reads) |
+| `KeyValueStore` | composite of all above | Compatibility trait for existing consumers |
+
+### aspen-time: TimeProvider
+
+- Already has `TimeProvider` trait with `now_unix_ms()` and `now_unix_secs()`
+- `SystemTimeProvider` (production) and `SimulatedTimeProvider` (simulation feature)
+- Low-level crates should accept `TimeProvider` parameter instead of calling `current_time_ms()` directly
+
+### aspen-hlc: Logical clock trait
+
+- Currently re-exports raw `uhlc` types: `HLC`, `ID`, `NTP64`, `HlcTimestamp`
+- Need `LogicalClock` trait with `now()` and `observe()` methods
+- `SerializableTimestamp` already exists as the stable leaf timestamp type
+- Consumers (aspen-jobs) should depend on trait, not concrete `uhlc::HLC`
+
 ## Verification rails
 
 - compile selected crates with `--no-default-features` where supported;

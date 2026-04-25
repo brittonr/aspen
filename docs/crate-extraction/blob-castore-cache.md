@@ -48,6 +48,26 @@
 | Dependency | Decision | Reason |
 | --- | --- | --- |
 | `iroh`, `iroh-blobs` | allowed backend exception for `aspen-blob` | They are the explicit blob storage backend purpose. |
+
+## Trait seam plan
+
+### aspen-blob: BlobAwareKeyValueStore generics
+
+- `BlobAwareKeyValueStore` currently hardcoded to `IrohBlobStore` (kv_integration.rs:61)
+- Should be generic over `BlobRead + BlobWrite` capabilities instead
+- Transfer traits (`BlobTransfer`) stay in iroh adapter features
+- KV bound should narrow to `KvRead + KvWrite + KvScan` once KV split lands
+
+### aspen-cache: Storage port traits
+
+| Port trait | Operations | Current impl |
+| --- | --- | --- |
+| `CacheLookup` | lookup by store path | KvCacheIndex::lookup |
+| `CachePublish` | publish narinfo | KvCacheIndex::publish |
+| `SigningKeyStore` | load/save signing keys | ensure_signing_key (signing.rs) |
+
+- Pure narinfo/NAR/signing logic stays independent
+- KV-backed adapters use `KvRead + KvWrite` from aspen-traits instead of aspen-core
 | `irpc`, `iroh`, `snix-castore` | allowed backend/adapter exception for `aspen-castore` | Castore's purpose is a concrete irpc/iroh adapter for snix traits. |
 | `nix-compat`, `ed25519-dalek`, `sha2`, `data-encoding`, `rand_core_06` | allowed domain dependencies for `aspen-cache` | They implement Nix narinfo, NAR hashing, and cache key signing semantics. |
 | `tokio`, `async-trait`, `futures`, `serde`, `serde_json`, `snafu`, `tracing` | keep | Runtime, trait, serialization, error, and observability support for the reusable APIs. |
