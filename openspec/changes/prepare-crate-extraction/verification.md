@@ -4,23 +4,14 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 ## Implementation Evidence
 
-- Changed file: `Cargo.lock`
-- Changed file: `crates/aspen-raft-kv/Cargo.toml`
-- Changed file: `crates/aspen-raft-kv/src/lib.rs`
 - Changed file: `docs/crate-extraction/aspen-raft-kv-types.md`
-- Changed file: `docs/crate-extraction/aspen-raft-kv.md`
 - Changed file: `openspec/changes/prepare-crate-extraction/tasks.md`
 - Changed file: `openspec/changes/prepare-crate-extraction/verification.md`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-check.txt`
 - Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-dependency-tree.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-check.txt`
 - Changed file: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-dependency-tree.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i7-raft-kv-types.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i8-raft-kv-facade.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i8.txt`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/i7-i8-review-remediation.md`
 - Changed file: `openspec/changes/prepare-crate-extraction/evidence/openspec-gate-tasks-i8.txt`
-- Changed file: `openspec/changes/prepare-crate-extraction/evidence/human-oracle-escalation-checkpoint.md`
+- Changed file: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i8.txt`
 
 ## Task Coverage
 
@@ -51,11 +42,11 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 - [x] I6 Before moving Redb storage code or adding compatibility migrations, review the proposed Redb Raft KV layer split and OpenRaft public/internal dependency boundary, then update manifests/design with any deviation; stop before implementation if a deviation lacks owner, rationale, and revised verification rails. [covers=architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layer-map-is-traceable,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.openraft-dependency-boundary-is-explicit]
   - Evidence: `openspec/changes/prepare-crate-extraction/evidence/redb-raft-kv-layer-review.md`, `openspec/changes/prepare-crate-extraction/design.md`, `docs/crate-extraction/aspen-kv-types.md`, `docs/crate-extraction/aspen-raft-kv-types.md`, `docs/crate-extraction/aspen-redb-storage.md`, `docs/crate-extraction/aspen-raft-kv.md`, `docs/crate-extraction/aspen-raft-network.md`, `docs/crate-extraction/aspen-raft-compat.md`
 
-- [x] I7 Keep reusable KV command and response types in `aspen-kv-types`, create `aspen-raft-kv-types` only for reusable OpenRaft app types, membership metadata, Raft app data, and storage errors, and explicitly document the `aspen-raft-types` package/API transition plan for direct consumers (migrate, dependency-key alias, temporary compatibility crate/re-export, owner, tests, and removal criteria) while keeping Aspen bootstrap, cluster orchestration, trust, secrets, SQL, coordination, client API, handler registries, dogfood defaults, binaries, and root app bundles out of default reusable features. [covers=architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layer-map-is-traceable,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layers-have-manifests,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-node-layer-has-reusable-boundary,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-kv-facade-hides-aspen-app-identity,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.extracted-libraries-keep-compatibility-reexports-during-migration]
-  - Evidence: `crates/aspen-raft-kv-types/src/lib.rs`, `docs/crate-extraction/aspen-raft-kv-types.md`, `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i7-raft-kv-types.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-check.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-dependency-tree.txt`
+- [ ] I7 Keep reusable KV command and response types in `aspen-kv-types`, create `aspen-raft-kv-types` only for reusable OpenRaft app types, membership metadata, Raft app data, and storage errors, and explicitly document the `aspen-raft-types` package/API transition plan as a per-direct-consumer table with columns for direct consumer, current dependency, transition decision, dependency-key alias decision, temporary compatibility crate/re-export decision, concrete owner status, tests or verification rail, and removal criteria, while keeping Aspen bootstrap, cluster orchestration, trust, secrets, SQL, coordination, client API, handler registries, dogfood defaults, binaries, and root app bundles out of default reusable features. [covers=architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layer-map-is-traceable,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layers-have-manifests,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-node-layer-has-reusable-boundary,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-kv-facade-hides-aspen-app-identity,architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defaults-avoid-app-bundles,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.extracted-libraries-keep-compatibility-reexports-during-migration]
+  - Evidence prepared, but task left unchecked until the task gate accepts the status: `crates/aspen-raft-kv-types/src/lib.rs`, `docs/crate-extraction/aspen-raft-kv-types.md`, `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i7-raft-kv-types.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-check.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-dependency-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i7-i8-review-remediation.md`
 
-- [x] I8 Create a pre-storage `aspen-raft-kv` facade skeleton that exposes node configuration, membership setup, storage path configuration, bounded resource settings, and `KeyValueStore` / `ClusterController` style operations without requiring Aspen binary configuration or binding to the old `aspen-raft` storage surface; final Redb-backed execution must wait for the `I10` storage migration. [covers=architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layer-map-is-traceable,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-node-layer-has-reusable-boundary,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-kv-facade-hides-aspen-app-identity,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.binary-only-code-does-not-own-reusable-behavior]
-  - Evidence: `crates/aspen-raft-kv/src/lib.rs`, `docs/crate-extraction/aspen-raft-kv.md`, `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i8-raft-kv-facade.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-check.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-dependency-tree.txt`
+- [ ] I8 Create a pre-storage `aspen-raft-kv` facade skeleton that exposes node configuration, membership setup, storage path configuration, bounded resource settings, and `KeyValueStore` / `ClusterController` style operations without requiring Aspen binary configuration or binding to the old `aspen-raft` storage surface; final Redb-backed execution must wait for the `I10` storage migration. [covers=architecture.modularity.reusable-redb-raft-kv-stack-is-layered.first-redb-raft-kv-layer-map-is-traceable,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-node-layer-has-reusable-boundary,architecture.modularity.reusable-redb-raft-kv-stack-is-layered.consensus-kv-facade-hides-aspen-app-identity,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.binary-only-code-does-not-own-reusable-behavior]
+  - Evidence prepared, but task left unchecked until the task gate accepts the status: `crates/aspen-raft-kv/src/lib.rs`, `docs/crate-extraction/aspen-raft-kv.md`, `openspec/changes/prepare-crate-extraction/evidence/implementation-diff-i8-raft-kv-facade.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-check.txt`, `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-dependency-tree.txt`, `openspec/changes/prepare-crate-extraction/evidence/i7-i8-review-remediation.md`
 
 <!-- Pending task evidence; I9 remains unchecked until V1. -->
 
@@ -94,9 +85,12 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 - [ ] V9 Save bridge, gateway, web, and TUI compatibility evidence for the exact bridge/gateway package list `aspen-cluster-bridges`, `aspen-snix-bridge`, `aspen-nix-cache-gateway`, and `aspen-h3-proxy`, plus `cargo check -p aspen-forge-web` and `cargo check -p aspen-tui`, with artifacts under `openspec/changes/prepare-crate-extraction/evidence/compat-bridges-web-tui.md`. [covers=architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.binary-only-code-does-not-own-reusable-behavior,architecture.modularity.binaries-are-thin-imperative-shells-over-libraries.aspen-compatibility-consumers-stay-verified-during-migration]
   - Evidence prepared but task left unchecked until post-migration verification is valid: `openspec/changes/prepare-crate-extraction/evidence/compat-bridges-web-tui.md`, `openspec/changes/prepare-crate-extraction/evidence/aspen-snix-circuit-breaker-time-check.txt`, `openspec/changes/prepare-crate-extraction/evidence/feature-matrix.md`
 
+- [ ] V11 For the current intermediate task-status checkpoint, keep `openspec/changes/prepare-crate-extraction/verification.md`, implementation diff artifacts, readiness-checker output, `scripts/openspec-preflight.sh prepare-crate-extraction` transcript, and actual `openspec_gate tasks` transcript synchronized for all checked tasks; if a repeated omission finding survives one attempted fix, stop checking additional tasks until `openspec/changes/prepare-crate-extraction/evidence/human-oracle-escalation-checkpoint.md` records the human/oracle escalation trigger, action, and required confirmation; refresh this task's evidence before any later intermediate or final task-status claim. [covers=architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-has-standalone-verification-rails,architecture.modularity.extractable-crate-boundaries-are-explicit.extraction-artifacts-have-canonical-locations]
+  - Evidence prepared, but task left unchecked while the task gate remains failed: `openspec/changes/prepare-crate-extraction/verification.md`, `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i8.txt`, `openspec/changes/prepare-crate-extraction/evidence/openspec-gate-tasks-i8.txt`, `openspec/changes/prepare-crate-extraction/evidence/human-oracle-escalation-checkpoint.md`, `openspec/changes/prepare-crate-extraction/evidence/i7-i8-review-remediation.md`
+
 ## Review Scope Snapshot
 
-I7 now records the reusable `aspen-raft-kv-types` boundary and the explicit legacy `aspen-raft-types` package/API transition plan. I8 now exposes and tests pre-storage `aspen-raft-kv` facade operations for KV and cluster-control trait surfaces without concrete Redb or iroh endpoint construction. I9 evidence proves the default storage/type/facade graphs do not reach concrete iroh or transport dependencies while `aspen-raft-network` remains the explicit adapter; I9 remains unchecked until the broader `V1` compile and feature-topology rail can be checked. The partial V1 feature matrix records reusable/core compile rails plus prepared V7/V8/V9 compatibility consumer rails, but those compatibility tasks remain unchecked because they are post-migration verification rails for I10-I12. V1 remains unchecked until the newly required core UI rail, future named storage/facade features from I10-I12, and dependency-boundary owners are covered or explicitly triaged.
+I7 evidence now records the reusable `aspen-raft-kv-types` boundary and the explicit legacy `aspen-raft-types` package/API transition plan, including concrete subsystem owner status and per-consumer alias/re-export decisions. I8 evidence now exposes and tests pre-storage `aspen-raft-kv` facade operations for KV and cluster-control trait surfaces without concrete Redb or iroh endpoint construction. I7 and I8 are intentionally unchecked again because the task gate has not accepted those implementation tasks; the prepared evidence must not be treated as verified task status until the gate blockers close. V11 evidence is prepared, but V11 stays unchecked while the task gate remains failed. I9 evidence proves the default storage/type/facade graphs do not reach concrete iroh or transport dependencies while `aspen-raft-network` remains the explicit adapter; I9 remains unchecked until the broader `V1` compile and feature-topology rail can be checked. The partial V1 feature matrix records reusable/core compile rails plus prepared V7/V8/V9 compatibility consumer rails, but those compatibility tasks remain unchecked because they are post-migration verification rails for I10-I12. V1 remains unchecked until the newly required core UI rail, future named storage/facade features from I10-I12, and dependency-boundary owners are covered or explicitly triaged.
 
 ## Verification Commands
 
@@ -140,7 +134,7 @@ I7 now records the reusable `aspen-raft-kv-types` boundary and the explicit lega
 - Status: pass
 - Artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-check.txt`
 
-### `cargo tree -p aspen-raft-kv-types --no-default-features`
+### `cargo tree -q -p aspen-raft-kv-types --no-default-features` plus forbidden-dependency grep audit
 
 - Status: pass
 - Artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-types-dependency-tree.txt`
@@ -150,7 +144,7 @@ I7 now records the reusable `aspen-raft-kv-types` boundary and the explicit lega
 - Status: pass
 - Artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-check.txt`
 
-### `cargo tree -p aspen-raft-kv --no-default-features`
+### `cargo tree -q -p aspen-raft-kv --no-default-features` plus forbidden-dependency grep audit
 
 - Status: pass
 - Artifact: `openspec/changes/prepare-crate-extraction/evidence/aspen-raft-kv-facade-dependency-tree.txt`
@@ -215,7 +209,7 @@ I7 now records the reusable `aspen-raft-kv-types` boundary and the explicit lega
 - I9-prep artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i9.txt`
 - Compatibility-prep status after preparing V7/V8/V9 evidence while leaving those post-migration rails unchecked: pass
 - Compatibility-prep artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-v7-v9.txt`
-- Current status after checking I7/I8: pass
+- Current status after unchecking I7/I8 pending task-gate acceptance: pass
 - Artifact: `openspec/changes/prepare-crate-extraction/evidence/openspec-preflight-i8.txt`
 
 ### `openspec_gate(stage="tasks", change="prepare-crate-extraction")`

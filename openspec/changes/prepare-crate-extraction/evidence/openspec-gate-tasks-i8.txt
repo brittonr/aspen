@@ -1,6 +1,6 @@
 # openspec_gate tasks transcript
 
-Timestamp: 2026-04-24T23:22:27.069Z
+Timestamp: 2026-04-25T00:55:49.249Z
 Command: openspec_gate(stage="tasks", change="prepare-crate-extraction")
 
 ```text
@@ -12,34 +12,51 @@ VERDICT: FAIL
 
 ## Findings
 
-- [blocker] [class=omission] [scope=review] [route=human] [promoted=yes] Task-status claim lacks the required task-gate transcript.
-  - Evidence: `tasks summary` claims “18 done, 0 in progress, 16 todo”; `tasks.md` task `V11` says “Before any intermediate or final task-status claim, keep ... actual `openspec_gate tasks` transcript synchronized for all checked tasks”; Last User Prompt says “Re-run and capture the actual openspec_gate tasks transcript before claiming its status.” No actual `openspec_gate tasks` transcript is supplied in the gate evidence.
+- [blocker] [class=omission] [scope=tasks] [route=human] [promoted=no] Task completion/archive is blocked.
+  - Evidence: `tasks summary` says `16 done, 0 in progress, 18 todo`; `tasks.md` leaves `I7`-`I12` and `V1`-`V12` unchecked; `tasks.md` `V12` is explicitly gated “After `V1`-`V11`”.
 
-- [blocker] [class=omission] [scope=review] [route=deterministic-check] [promoted=yes] Checked evidence-producing tasks cannot be accepted from supplied artifacts.
-  - Evidence: `tasks.md` task `R0` requires `openspec/changes/prepare-crate-extraction/verification.md` to be created and updated with each evidence artifact “before the related task is checked”; `R1` requires `openspec/changes/prepare-crate-extraction/evidence/extraction-inventory-baseline.md`; `R2` requires `openspec/changes/prepare-crate-extraction/evidence/redb-raft-kv-coupling-baseline.md`; `I17` requires `openspec/changes/prepare-crate-extraction/evidence/service-follow-up-selection.md`; the delta spec scenario `architecture.modularity.extractable-crate-boundaries-are-explicit.extraction-artifacts-have-canonical-locations` requires each evidence artifact to be referenced from `verification.md` before the related task is checked complete. The supplied artifacts do not include `verification.md` contents or the evidence files.
+- [blocker] [class=omission] [scope=review] [route=prompt] [promoted=no] Checked task evidence is not reviewable from supplied artifacts.
+  - Evidence: `tasks.md` `R0` is checked and requires `openspec/changes/prepare-crate-extraction/verification.md` to be updated with each evidence artifact before related tasks are checked; `proposal.md` “Verification Rails” says no implementation or verification item can be accepted until `verification.md` links the related evidence artifact; the supplied artifacts do not include the contents of `openspec/changes/prepare-crate-extraction/verification.md` or evidence artifacts for checked `R1`, `R2`, `I1`-`I6`, or `I13`-`I19`.
 
-- [warning] [class=omission] [scope=tasks] [route=guidance] [promoted=no] Conditional `.agent/napkin.md` review-path handling is not represented.
-  - Evidence: Last User Prompt says “Include `.agent/napkin.md` in review paths when it is committed, or avoid committing it with implementation changes.” No task in `tasks.md` `R0`-`V12` names `.agent/napkin.md` or a review-path check. Supplied evidence does not show whether `.agent/napkin.md` is committed, so this is conditional.
+- [major] [class=omission] [scope=tasks] [route=deterministic-check] [promoted=no] Negative dependency-boundary evidence is planned but not complete.
+  - Evidence: `tasks.md` `V2` is unchecked and requires `openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.json`, `dependency-boundary.md`, `aspen-raft-kv-types-dependency-tree.txt`, and `aspen-raft-kv-facade-dependency-tree.txt`, including exact commands, forbidden-dependency grep commands, `forbidden_dependency_matches=none`, and `exit_code=0`.
+
+- [major] [class=omission] [scope=tasks] [route=human] [promoted=no] `aspen-raft-types` transition decisions remain incomplete.
+  - Evidence: `tasks.md` `I7` is unchecked and requires a per-direct-consumer transition table with `transition decision`, `dependency-key alias decision`, `temporary compatibility crate/re-export decision`, `concrete owner status`, tests or verification rail, and removal criteria; `design.md` Decision 7 requires compatibility re-exports and dependency-key/package aliasing to be recorded with owner and removal criteria.
+
+- [major] [class=omission] [scope=tasks] [route=human] [promoted=no] Intermediate task-status synchronization remains undone.
+  - Evidence: `tasks.md` `V11` is unchecked and requires `verification.md`, implementation diff artifacts, readiness-checker output, `scripts/openspec-preflight.sh prepare-crate-extraction` transcript, and actual `openspec_gate tasks` transcript to be synchronized before later intermediate or final task-status claims.
 
 ## Stage Check
 
-- The task plan broadly traces to the proposal/design/spec through explicit `[covers=...]` references.
-- The plan includes the requested repeated-omission escalation guard in `V11`, including `openspec/changes/prepare-crate-extraction/evidence/human-oracle-escalation-checkpoint.md`.
-- The plan includes relevant verification rails for napkin-identified failure modes: `V1` covers `aspen-core`, `aspen-core-no-std-smoke`, `aspen-core-shell`, and `aspen-traits`; `V2` covers transitive/re-export dependency leaks; `V3` covers downstream-style consumer path isolation.
-- The stage is not ready to proceed with additional task checkoffs because the current completed-task status is not backed by the required `openspec_gate tasks` transcript or supplied `verification.md` evidence links.
-- Archive/sync is not applicable yet: `tasks summary` shows 16 todo tasks, including all `V1`-`V12` verification tasks.
+- The task plan now contains explicit work for the previously named gaps:
+  - `V2` covers reviewable negative dependency-boundary evidence for `aspen-raft-kv-types` and `aspen-raft-kv`.
+  - `I7` covers the concrete per-consumer `aspen-raft-types` transition table, alias decisions, compatibility decisions, owners, tests, and removal criteria.
+  - `V11` covers task-gate transcript synchronization and escalation checkpoint behavior.
+- Current `tasks.md` shows `I7` and `I8` unchecked. Any earlier statement that they were checked conflicts with the supplied current task artifact and should not be carried forward as a current-status claim.
+- The task plan is broadly traceable to proposal/design/spec through `[covers=...]` links and includes verification tasks for compile, dependency-boundary, downstream consumer, Redb atomicity, positive/negative tests, release readiness, and compatibility consumers.
+- The change is not ready for final task acceptance, sync, or archive because implementation tasks and all verification tasks remain unchecked, and reviewable evidence for checked tasks was not supplied.
 
 ## Next Actions
 
-- Re-run and attach the actual `openspec_gate tasks` transcript for `prepare-crate-extraction`.
-- Supply or update `openspec/changes/prepare-crate-extraction/verification.md` with links to evidence for every checked task.
-- Do not check more tasks complete until `V11`’s status-synchronization rule is satisfied.
-- If `.agent/napkin.md` is committed in the implementation diff, add it to review paths or remove it from the implementation commit.
+- Keep `I7`, `I8`, `I9`-`I12`, and `V1`-`V12` unchecked until their required evidence exists.
+- Supply `openspec/changes/prepare-crate-extraction/verification.md` and linked evidence for already checked tasks, or uncheck unsupported tasks.
+- Complete `V2` with the exact dependency-boundary artifacts and `forbidden_dependency_matches=none` / `exit_code=0` records.
+- Complete `V11` before making another intermediate or final task-status claim.
+- Do not archive or sync this change yet.
 
 ## Promotion Hints
-- repeated 4x [class=omission] [scope=tasks] [route=guidance]
+- repeated 73x [class=omission] [scope=tasks] [route=deterministic-check]
   suggestion: Promote into OpenSpec rule/template/stage-gate check.
-  task: Strengthen OpenSpec tasks gate/template to block repeated omission findings. Example trigger: Implementation traceability for protocol-identifier collision handling is implicit but not explicit in the build tasks. Evidence: `specs/plugins/spec.md` adds scenario **“Protocol identifier collision”** requiring conflicting registration/activation rejection. `tasks.md` has `5.5` for tests proving collisions are rejected, but implementation is only indirectly implied by `1.4` (“manifest and routing path”) rather than called out as a deliverable. This is probably implementable under `1.4`, but the task text does not state it.
-  sources: openspec-gate=4
-[19:21:24]
+  task: Strengthen OpenSpec tasks gate/template to block repeated omission findings. Example trigger: Verification references were added, but no evidence files were created
+  sources: openspec-gate=72, done-review=1
+- repeated 24x [class=omission] [scope=tasks] [route=human]
+  suggestion: Promote into explicit human/oracle escalation checkpoint or decision note.
+  task: Add explicit oracle/human checkpoint for repeated omission findings in tasks. Example trigger: Task-traceability concerns from the prior gate cannot be rechecked from the supplied design evidence
+  sources: openspec-gate=22, done-review=2
+- repeated 8x [class=omission] [scope=review] [route=prompt]
+  suggestion: Repeated soft finding: tighten prompt guidance now, then promote into a spec rule or deterministic check if repeats continue.
+  task: Tighten reviewer/prompt guidance for repeated omission findings, then promote to a spec rule or deterministic check if it persists. Example trigger: Verification traceability is incomplete for required negative paths. `proposal.md` calls for “Negative tests proving Git access to JJ-only repos and JJ access to Git-only repos fail with capability errors and do not fall back silently.” `specs/jj-native-forge/spec.md` adds another negative path: JJ-enabled repo on a node without the active JJ plugin must fail with capability-unavailable. `design.md` Verification Strategy mentions unsupported-repo rejection generically under `specs/jj-remote-aspen/spec.md`, but it does not explicitly map tests for Git remote-helper access to JJ-only repos or for JJ access to a target node lacking the active plugin.
+  sources: openspec-gate=8
+[20:54:44]
 ```

@@ -1,3 +1,4 @@
+$ cargo tree -q -p aspen-raft-kv --no-default-features
 aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
 ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
 │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
@@ -26,10 +27,12 @@ aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
 │   │   │   ├── rust_decimal v1.40.0
 │   │   │   │   ├── arrayvec v0.7.6
 │   │   │   │   └── num-traits v0.2.19
+│   │   │   │       [build-dependencies]
+│   │   │   │       └── autocfg v1.5.0
 │   │   │   └── utf8-width v0.1.8
 │   │   ├── chrono v0.4.44
 │   │   │   ├── iana-time-zone v0.1.65
-│   │   │   └── num-traits v0.2.19
+│   │   │   └── num-traits v0.2.19 (*)
 │   │   ├── clap v4.6.0
 │   │   │   ├── clap_builder v4.6.0
 │   │   │   │   ├── anstream v1.0.0
@@ -141,3 +144,20 @@ aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
 │       └── syn v2.0.117 (*)
 ├── serde v1.0.228 (*)
 └── thiserror v2.0.18 (*)
+[dev-dependencies]
+├── async-trait v0.1.89 (proc-macro) (*)
+├── static_assertions v1.1.0
+├── tempfile v3.27.0
+│   ├── fastrand v2.3.0
+│   ├── getrandom v0.4.2
+│   │   ├── cfg-if v1.0.4
+│   │   └── libc v0.2.183
+│   ├── once_cell v1.21.4
+│   └── rustix v1.1.4
+│       ├── bitflags v2.11.0
+│       └── linux-raw-sys v0.12.1
+└── tokio v1.50.0 (*)
+
+$ sed -E 's/ \([^)]*\)//g' < cargo-tree-output | rg -n \(\^\|\[\^A-Za-z0-9_-\]\)\(aspen\|aspen-core\|aspen-core-shell\|aspen-raft\|aspen-raft-types\|aspen-redb-storage\|aspen-trust\|aspen-secrets\|aspen-sql\|aspen-coordination\|aspen-client-api\|aspen-rpc-handlers\|aspen-dogfood\|aspen-cli\|aspen-tui\|aspen-forge\|aspen-forge-web\|aspen-cluster\|aspen-cluster-bridges\|aspen-transport\|iroh\|irpc\|axum\)\(\[\^A-Za-z0-9_-\]\|\$\)
+forbidden_dependency_matches=none
+exit_code=0

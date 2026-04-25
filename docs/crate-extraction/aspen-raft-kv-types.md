@@ -6,7 +6,7 @@
 - **Canonical class**: `protocol/wire`
 - **Canonical crate/path**: `crates/aspen-raft-kv-types`, split from current `crates/aspen-raft-types`
 - **Intended audience**: Rust projects that need OpenRaft app type configuration, membership metadata, app requests/responses, and storage error types for the reusable KV stack.
-- **Public API owner**: owner needed
+- **Public API owner**: Aspen Raft/KV extraction maintainers
 - **Readiness state**: `workspace-internal`
 - **Dependency policy class**: reusable library candidate with public OpenRaft trait/type exposure
 
@@ -60,7 +60,7 @@ None allowed in default reusable features.
 - **Old API paths**: `aspen_raft::types::*` and `aspen_raft_types::*`.
 - **New API path**: `aspen_raft_kv_types::*`.
 - **Compatibility re-exports**: `aspen_raft::types::* -> aspen_raft_kv_types::*` during migration.
-- **Owner**: owner needed.
+- **Owner**: Aspen Raft/KV extraction maintainers.
 - **Tests**: compile both old and new paths until removal.
 - **Removal criteria**: all in-repo consumers and downstream fixture import `aspen_raft_kv_types` directly.
 
@@ -68,15 +68,15 @@ None allowed in default reusable features.
 
 The legacy `aspen-raft-types` package is an Aspen app-compatibility package until `I12` migrates or aliases direct consumers. The reusable package/API transition is tracked separately from the `aspen_raft::types::*` re-export path.
 
-| Direct consumer | Current dependency | Transition decision | Owner | Verification rail | Removal criteria |
-| --- | --- | --- | --- | --- | --- |
-| `crates/aspen-raft` | `aspen-raft-types` | Keep as compatibility shell until storage migration and non-storage app payloads are split; migrate reusable `AppTypeConfig` use to `aspen-raft-kv-types` in `I12`. | owner needed | `cargo check -p aspen-raft` plus storage migration rails. | No reusable consumer imports `aspen_raft_types::*`; app-only trust payloads stay outside reusable default features. |
-| `crates/aspen-raft-network` | `aspen-raft-types` | Keep as explicit adapter dependency during `I9`; migrate reusable adapter type aliases to `aspen-raft-kv-types` or document app-only network types in `I12`. | owner needed | `cargo check -p aspen-raft-network --no-default-features`. | Adapter defaults compile against `aspen-raft-kv-types` without pulling trust/secrets/app bundles, or legacy dependency is manifest-tracked as app-only. |
-| `crates/aspen-transport` | `aspen-raft-types` | Leave on app-compatibility package until transport/RPC extraction change; do not make it part of reusable KV defaults. | owner needed | `cargo check -p aspen-transport`. | Transport/RPC manifest owns any remaining app-type dependency. |
-| `crates/aspen-cluster` | `aspen-raft-types` | Migrate reusable membership/type references through `aspen-raft-kv-types` or `aspen-raft` compatibility re-exports after `I10`; cluster bootstrap remains app shell. | owner needed | `cargo check -p aspen-cluster`. | Cluster imports reusable KV types only through canonical crate or tracked compatibility re-export. |
-| `crates/aspen-testing-patchbay` | `aspen-raft-types` | Keep as test harness dependency until legacy compatibility imports are migrated in `I12`. | owner needed | `cargo check -p aspen-testing-patchbay`. | Patchbay harness imports canonical reusable types or documented app-compatibility aliases only. |
+| Direct consumer | Current dependency | Transition decision | Dependency-key alias decision | Temporary compatibility / re-export decision | Owner | Verification rail | Removal criteria |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `crates/aspen-raft` | `aspen-raft-types` | Keep as app-compatibility shell until storage migration and non-storage app payloads are split; migrate reusable `AppTypeConfig` use to `aspen-raft-kv-types` in `I12`. | No dependency-key alias in production; add a direct `aspen-raft-kv-types` dependency for reusable app types, keep `aspen-raft-types` only for app-compat payloads during migration. | Keep `aspen_raft::types::*` and `aspen_raft_types::*` compatibility re-exports until `I12` proves old and new import paths compile. | Aspen Raft storage/API owner | `cargo check -p aspen-raft` plus storage migration rails. | No reusable consumer imports `aspen_raft_types::*`; app-only trust payloads stay outside reusable default features. |
+| `crates/aspen-raft-network` | `aspen-raft-types` | Keep as explicit adapter dependency during `I9`; migrate reusable adapter type aliases to `aspen-raft-kv-types` or document app-only network types in `I12`. | No dependency-key alias; add a direct `aspen-raft-kv-types` dependency for reusable adapter aliases while keeping `aspen-raft-types` only for tracked app-only network data. | No new compatibility crate; adapter may temporarily re-export canonical aliases behind the `aspen-raft-network` surface until direct consumers migrate. | Aspen Raft network adapter owner | `cargo check -p aspen-raft-network --no-default-features`. | Adapter defaults compile against `aspen-raft-kv-types` without pulling trust/secrets/app bundles, or legacy dependency is manifest-tracked as app-only. |
+| `crates/aspen-transport` | `aspen-raft-types` | Leave on app-compatibility package until a transport/RPC extraction change; do not make it part of reusable KV defaults. | No alias in this change; any future dependency-key alias belongs to the transport/RPC extraction plan, not the Redb Raft KV reusable default. | No temporary Redb Raft KV compatibility crate; transport keeps legacy app package until its own manifest owns the migration. | Aspen transport/RPC owner | `cargo check -p aspen-transport`. | Transport/RPC manifest owns any remaining app-type dependency. |
+| `crates/aspen-cluster` | `aspen-raft-types` | Migrate reusable membership/type references through `aspen-raft-kv-types` or `aspen-raft` compatibility re-exports after `I10`; cluster bootstrap remains app shell. | No dependency-key alias; migrate reusable imports to direct `aspen-raft-kv-types` where possible and keep app bootstrap imports on compatibility surfaces. | Use `aspen_raft::types::*` only as a temporary re-export during `I12`; do not introduce a standalone compatibility package for cluster. | Aspen cluster bootstrap owner | `cargo check -p aspen-cluster`. | Cluster imports reusable KV types only through canonical crate or tracked compatibility re-export. |
+| `crates/aspen-testing-patchbay` | `aspen-raft-types` | Keep as test harness dependency until legacy compatibility imports are migrated in `I12`. | No dependency-key alias; add direct dev/test dependency on `aspen-raft-kv-types` when tests switch to canonical imports. | Temporary compatibility imports are allowed only in migration tests that prove old/new paths; no new compatibility crate. | Aspen testing/patchbay owner | `cargo check -p aspen-testing-patchbay`. | Patchbay harness imports canonical reusable types or documented app-compatibility aliases only. |
 
-No dependency-key alias or temporary compatibility crate may be removed until every row has passing verification evidence and the downstream reusable fixture imports `aspen_raft_kv_types` directly.
+No dependency-key alias or temporary compatibility crate/re-export may be removed until every row has passing verification evidence and the downstream reusable fixture imports `aspen_raft_kv_types` directly.
 
 ## Representative consumers and re-exporters
 
@@ -90,8 +90,8 @@ No dependency-key alias or temporary compatibility crate may be removed until ev
 
 | candidate | feature_set | dependency_path | owner | reason |
 | --- | --- | --- | --- | --- |
-| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> openraft` | owner needed | OpenRaft trait/type exposure is the crate purpose and must be semver-documented. |
-| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> aspen-kv-types` | owner needed | KV transaction result payloads are the app-data contract for this reusable layer. |
+| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> openraft` | Aspen Raft/KV extraction maintainers | OpenRaft trait/type exposure is the crate purpose and must be semver-documented. |
+| `aspen-raft-kv-types` | default | `aspen-raft-kv-types -> aspen-kv-types` | Aspen Raft/KV extraction maintainers | KV transaction result payloads are the app-data contract for this reusable layer. |
 
 ## Verification rails
 

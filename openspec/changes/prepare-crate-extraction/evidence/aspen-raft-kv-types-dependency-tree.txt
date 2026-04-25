@@ -1,3 +1,4 @@
+$ cargo tree -q -p aspen-raft-kv-types --no-default-features
 aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
 ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
 │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
@@ -24,10 +25,12 @@ aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
 │   │   ├── rust_decimal v1.40.0
 │   │   │   ├── arrayvec v0.7.6
 │   │   │   └── num-traits v0.2.19
+│   │   │       [build-dependencies]
+│   │   │       └── autocfg v1.5.0
 │   │   └── utf8-width v0.1.8
 │   ├── chrono v0.4.44
 │   │   ├── iana-time-zone v0.1.65
-│   │   └── num-traits v0.2.19
+│   │   └── num-traits v0.2.19 (*)
 │   ├── clap v4.6.0
 │   │   ├── clap_builder v4.6.0
 │   │   │   ├── anstream v1.0.0
@@ -128,3 +131,29 @@ aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
 │       └── anyerror v0.1.13 (*)
 ├── serde v1.0.228 (*)
 └── thiserror v2.0.18 (*)
+[dev-dependencies]
+├── postcard v1.1.3
+│   ├── cobs v0.3.0
+│   │   └── thiserror v2.0.18 (*)
+│   ├── heapless v0.7.17
+│   │   ├── hash32 v0.2.1
+│   │   │   └── byteorder v1.5.0
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── spin v0.9.8
+│   │   │   └── lock_api v0.4.14
+│   │   │       └── scopeguard v1.2.0
+│   │   └── stable_deref_trait v1.2.1
+│   │   [build-dependencies]
+│   │   └── rustc_version v0.4.1
+│   │       └── semver v1.0.27
+│   └── serde v1.0.228 (*)
+├── serde_json v1.0.149
+│   ├── itoa v1.0.17
+│   ├── memchr v2.8.0
+│   ├── serde_core v1.0.228
+│   └── zmij v1.0.21
+└── static_assertions v1.1.0
+
+$ sed -E 's/ \([^)]*\)//g' < cargo-tree-output | rg -n \(\^\|\[\^A-Za-z0-9_-\]\)\(aspen\|aspen-core\|aspen-core-shell\|aspen-raft\|aspen-raft-types\|aspen-redb-storage\|aspen-trust\|aspen-secrets\|aspen-sql\|aspen-coordination\|aspen-client-api\|aspen-rpc-handlers\|aspen-dogfood\|aspen-cli\|aspen-tui\|aspen-forge\|aspen-forge-web\|aspen-cluster\|aspen-cluster-bridges\|aspen-transport\|iroh\|irpc\|axum\)\(\[\^A-Za-z0-9_-\]\|\$\)
+forbidden_dependency_matches=none
+exit_code=0
