@@ -2687,6 +2687,44 @@ mod tests {
         assert!(!routes.iter().any(|route| route.backend == ForgeRepoBackend::Jj));
     }
 
+    #[tokio::test]
+    async fn test_active_backend_routes_keep_stable_jj_identifier_after_manifest_rewrite() {
+        let executor = make_test_executor().await;
+        let mut manifest = test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true);
+        let key = format!("{}{}", aspen_plugin_api::PLUGIN_KV_PREFIX, manifest.name);
+        let first_json = serde_json::to_string(&manifest).expect("manifest serializes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(key.clone(), first_json))
+            .await
+            .expect("plugin manifest writes to KV");
+        let first_route = executor
+            .active_backend_routes()
+            .await
+            .into_iter()
+            .find(|route| route.backend == ForgeRepoBackend::Jj)
+            .expect("JJ route is active");
+
+        manifest.wasm_hash = "replacement-hash".to_string();
+        let second_json = serde_json::to_string(&manifest).expect("manifest serializes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(key, second_json))
+            .await
+            .expect("plugin manifest rewrites to KV");
+        let second_route = executor
+            .active_backend_routes()
+            .await
+            .into_iter()
+            .find(|route| route.backend == ForgeRepoBackend::Jj)
+            .expect("JJ route remains active");
+
+        assert_eq!(first_route.transport_id, second_route.transport_id);
+        assert_eq!(first_route.transport_version, second_route.transport_version);
+    }
+
     #[test]
     fn test_request_group_routes_repo_and_git_bridge_requests() {
         assert_eq!(
