@@ -1,8 +1,9 @@
 //! Core types for the commit DAG.
 
-use aspen_raft::verified::ChainHash;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::verified::hash::ChainHash;
 
 /// Unique identifier for a commit, computed as a BLAKE3 chain hash.
 ///

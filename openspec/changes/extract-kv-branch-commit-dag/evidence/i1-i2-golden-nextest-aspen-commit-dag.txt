@@ -1,0 +1,25 @@
+┌────────────────────────────────────┐
+│ Task 41:    completed successfully │
+└────────────────────────────────────┘
+Command: cargo check -p aspen-commit-dag && cargo nextest run -p aspen-commit-dag 
+   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2        
+  Label: kv commit-dag golden tests                                               
+  Start: Sat, 25 Apr 2026 15:31:56 -0400                                          
+    End: Sat, 25 Apr 2026 15:31:59 -0400                                          
+
+output: (last 15 lines)
+        PASS [   0.003s] (29/41) aspen-commit-dag verified::commit_hash::tests::verify_commit_integrity_valid
+        PASS [   0.003s] (30/41) aspen-commit-dag verified::diff::tests::added_keys
+        PASS [   0.003s] (31/41) aspen-commit-dag verified::diff::tests::both_empty
+        PASS [   0.002s] (32/41) aspen-commit-dag verified::diff::tests::changed_values
+        PASS [   0.002s] (33/41) aspen-commit-dag verified::diff::tests::identical_commits_empty_diff
+        PASS [   0.002s] (34/41) aspen-commit-dag verified::diff::tests::mixed_changes
+        PASS [   0.003s] (35/41) aspen-commit-dag verified::diff::tests::removed_keys
+        PASS [   0.002s] (36/41) aspen-commit-dag verified::diff::tests::tombstone_transitions
+        PASS [   0.002s] (37/41) aspen-commit-dag verified::hash::tests::constant_time_compare_accepts_equal_hashes
+        PASS [   0.002s] (38/41) aspen-commit-dag verified::hash::tests::constant_time_compare_rejects_different_hashes
+        PASS [   0.002s] (39/41) aspen-commit-dag verified::hash::tests::hash_from_hex_rejects_malformed_input
+        PASS [   0.003s] (40/41) aspen-commit-dag verified::hash::tests::hash_from_hex_rejects_wrong_length_input
+        PASS [   0.002s] (41/41) aspen-commit-dag verified::hash::tests::hash_hex_roundtrip_accepts_valid_hash
+────────────
+     Summary [   0.158s] 41 tests run: 41 passed, 0 skipped

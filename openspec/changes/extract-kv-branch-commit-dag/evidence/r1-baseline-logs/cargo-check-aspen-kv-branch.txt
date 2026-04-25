@@ -1,0 +1,28 @@
+Command: cargo check -p aspen-kv-branch
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Blocking waiting for file lock on build directory
+    Checking smallvec v1.15.1
+    Checking hashbrown v0.14.5
+   Compiling syn v2.0.117
+    Checking parking_lot_core v0.9.12
+    Checking dashmap v6.1.0
+   Compiling thiserror-impl v2.0.18
+   Compiling serde_derive v1.0.228
+   Compiling async-trait v0.1.89
+   Compiling tokio-macros v2.6.1
+   Compiling tracing-attributes v0.1.31
+    Checking tokio v1.50.0
+    Checking thiserror v2.0.18
+    Checking tracing v0.1.44
+    Checking serde v1.0.228
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+    Checking aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-branch)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 33.56s
+Exit: 0

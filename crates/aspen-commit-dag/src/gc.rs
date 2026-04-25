@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use aspen_kv_types::DeleteRequest;
 use aspen_kv_types::ScanRequest;
-use aspen_raft::verified::hash_to_hex;
 use aspen_traits::KeyValueStore;
 use tokio::task::JoinHandle;
 use tracing::debug;
@@ -22,6 +21,8 @@ use crate::constants::COMMIT_KV_PREFIX;
 use crate::constants::COMMIT_TIP_PREFIX;
 use crate::error::CommitDagError;
 use crate::types::Commit;
+use crate::verified::hash::hash_from_hex;
+use crate::verified::hash::hash_to_hex;
 
 /// Garbage collector for expired commit DAG entries.
 pub struct CommitGc;
@@ -46,7 +47,7 @@ impl CommitGc {
 
         // Branch tips are always protected
         for tip_hex in &tips {
-            if let Some(id) = aspen_raft::verified::hash_from_hex(tip_hex) {
+            if let Some(id) = hash_from_hex(tip_hex) {
                 protected.insert(id);
             }
         }

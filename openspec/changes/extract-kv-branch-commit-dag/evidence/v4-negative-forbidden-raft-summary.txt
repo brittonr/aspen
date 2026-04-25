@@ -1,0 +1,4 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family kv-branch-commit-dag --output-json openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-forbidden-raft.json --output-markdown openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-forbidden-raft.md
+Exit: 1
+Expected substring: aspen_commit_dag: direct forbidden dependency `aspen-raft`
+openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-forbidden-raft.md:9:- aspen_commit_dag: direct forbidden dependency `aspen-raft`

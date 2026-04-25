@@ -1,0 +1,35 @@
+{
+  "candidate_family": "kv-branch-commit-dag",
+  "passed": false,
+  "failures": [
+    "aspen_commit_dag: direct forbidden dependency `aspen-raft`",
+    "aspen_commit_dag: direct dependency `aspen-raft` is not in allowed reusable dependencies",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-auth`",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-client-api`",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-core-shell`",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-raft`",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-raft-network`",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-sharding`",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-transport`",
+    "aspen_commit_dag: transitive forbidden dependency `aspen-trust`",
+    "aspen_commit_dag: transitive forbidden dependency `iroh`",
+    "aspen_commit_dag: transitive forbidden dependency `iroh-base`",
+    "aspen_commit_dag: transitive forbidden dependency `irpc`"
+  ],
+  "warnings": [],
+  "checked_candidates": [
+    "aspen_blob",
+    "aspen_cache",
+    "aspen_castore",
+    "aspen_commit_dag",
+    "aspen_coordination",
+    "aspen_coordination_protocol",
+    "aspen_kv_branch",
+    "aspen_kv_types",
+    "aspen_raft_compat",
+    "aspen_raft_kv",
+    "aspen_raft_kv_types",
+    "aspen_raft_network",
+    "aspen_redb_storage"
+  ]
+}

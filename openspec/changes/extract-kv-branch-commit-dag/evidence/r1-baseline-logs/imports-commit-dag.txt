@@ -1,0 +1,15 @@
+Command: rg -n aspen_raft::verified|aspen-raft crates/aspen-commit-dag
+crates/aspen-commit-dag/src/types.rs:3:use aspen_raft::verified::ChainHash;
+crates/aspen-commit-dag/Cargo.toml:9:aspen-raft = { workspace = true }
+crates/aspen-commit-dag/src/store.rs:6:use aspen_raft::verified::hash_from_hex;
+crates/aspen-commit-dag/src/store.rs:7:use aspen_raft::verified::hash_to_hex;
+crates/aspen-commit-dag/src/gc.rs:12:use aspen_raft::verified::hash_to_hex;
+crates/aspen-commit-dag/src/gc.rs:49:            if let Some(id) = aspen_raft::verified::hash_from_hex(tip_hex) {
+crates/aspen-commit-dag/src/verified/commit_hash.rs:5:use aspen_raft::verified::ChainHash;
+crates/aspen-commit-dag/src/verified/commit_hash.rs:6:use aspen_raft::verified::GENESIS_HASH;
+crates/aspen-commit-dag/src/verified/commit_hash.rs:7:use aspen_raft::verified::constant_time_compare;
+crates/aspen-commit-dag/verus/commit_hash_spec.rs:8://! Reuses blake3_spec and u64_to_le_bytes axioms from aspen-raft/verus/chain_hash_spec.rs.
+crates/aspen-commit-dag/verus/commit_hash_spec.rs:14:    // Axioms (shared with aspen-raft chain_hash_spec)
+crates/aspen-commit-dag/verus/commit_hash_spec.rs:168:    /// aspen-raft/verus/chain_verify_spec.rs.
+crates/aspen-commit-dag/verus/commit_hash_spec.rs:200:    /// aspen-raft/verus/chain_verify_spec.rs.
+Exit: 0

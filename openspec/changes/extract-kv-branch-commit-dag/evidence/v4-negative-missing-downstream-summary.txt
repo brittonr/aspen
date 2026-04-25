@@ -1,0 +1,17 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family kv-branch-commit-dag --output-json /tmp/tmp.H5RmiGWh2c/evidence/report.json --output-markdown /tmp/tmp.H5RmiGWh2c/evidence/report.md
+Exit: 1
+Expected substring: missing downstream fixture evidence
+# Crate Extraction Readiness Report
+
+- Candidate family: `kv-branch-commit-dag`
+- Passed: `false`
+- Checked candidates: 13
+
+## Failures
+
+- kv-branch-commit-dag: missing downstream fixture evidence `/tmp/tmp.H5RmiGWh2c/evidence/i5-downstream-branch-dag-metadata.json`
+- kv-branch-commit-dag: missing downstream fixture evidence `/tmp/tmp.H5RmiGWh2c/evidence/i5-downstream-branch-dag-forbidden-grep.txt`
+
+## Warnings
+
+- none

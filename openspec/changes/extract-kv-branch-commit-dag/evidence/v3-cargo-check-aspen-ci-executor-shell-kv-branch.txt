@@ -1,0 +1,20 @@
+Command: cargo check -p aspen-ci-executor-shell --features kv-branch
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Checking noq-proto v0.16.0
+    Checking dashmap v6.1.0
+    Checking aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-branch)
+    Checking noq v0.17.0
+    Checking iroh-relay v0.97.0
+    Checking irpc v0.13.0
+    Checking iroh v0.97.0
+    Checking iroh-blobs v0.99.0
+    Checking aspen-jobs v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs)
+    Checking aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+    Checking aspen-ci-executor-shell v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-ci-executor-shell)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.00s
+Exit: 0

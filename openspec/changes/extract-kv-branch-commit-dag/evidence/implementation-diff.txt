@@ -1,0 +1,1510 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index e89b8847e..dd8c7d6e8 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1339,7 +1339,6 @@ version = "0.1.0"
+ dependencies = [
+  "aspen-constants",
+  "aspen-kv-types",
+- "aspen-raft",
+  "aspen-testing-core",
+  "aspen-traits",
+  "async-trait",
+diff --git a/crates/aspen-commit-dag/Cargo.toml b/crates/aspen-commit-dag/Cargo.toml
+index 8710ad1a9..009454755 100644
+--- a/crates/aspen-commit-dag/Cargo.toml
++++ b/crates/aspen-commit-dag/Cargo.toml
+@@ -6,7 +6,6 @@ license = "AGPL-3.0-or-later"
+ description = "Chain-hashed commit DAG for Aspen KV branch history and federation integrity"
+ 
+ [dependencies]
+-aspen-raft = { workspace = true }
+ aspen-kv-types = { workspace = true }
+ aspen-traits = { workspace = true }
+ aspen-constants = { workspace = true }
+diff --git a/crates/aspen-commit-dag/src/gc.rs b/crates/aspen-commit-dag/src/gc.rs
+index f10c47a5d..b224e7fb6 100644
+--- a/crates/aspen-commit-dag/src/gc.rs
++++ b/crates/aspen-commit-dag/src/gc.rs
+@@ -9,7 +9,6 @@ use std::time::Duration;
+ 
+ use aspen_kv_types::DeleteRequest;
+ use aspen_kv_types::ScanRequest;
+-use aspen_raft::verified::hash_to_hex;
+ use aspen_traits::KeyValueStore;
+ use tokio::task::JoinHandle;
+ use tracing::debug;
+@@ -22,6 +21,8 @@ use crate::constants::COMMIT_KV_PREFIX;
+ use crate::constants::COMMIT_TIP_PREFIX;
+ use crate::error::CommitDagError;
+ use crate::types::Commit;
++use crate::verified::hash::hash_from_hex;
++use crate::verified::hash::hash_to_hex;
+ 
+ /// Garbage collector for expired commit DAG entries.
+ pub struct CommitGc;
+@@ -46,7 +47,7 @@ impl CommitGc {
+ 
+         // Branch tips are always protected
+         for tip_hex in &tips {
+-            if let Some(id) = aspen_raft::verified::hash_from_hex(tip_hex) {
++            if let Some(id) = hash_from_hex(tip_hex) {
+                 protected.insert(id);
+             }
+         }
+diff --git a/crates/aspen-commit-dag/src/store.rs b/crates/aspen-commit-dag/src/store.rs
+index e5336606a..ca0b564b9 100644
+--- a/crates/aspen-commit-dag/src/store.rs
++++ b/crates/aspen-commit-dag/src/store.rs
+@@ -3,8 +3,6 @@
+ use aspen_kv_types::ReadRequest;
+ use aspen_kv_types::WriteCommand;
+ use aspen_kv_types::WriteRequest;
+-use aspen_raft::verified::hash_from_hex;
+-use aspen_raft::verified::hash_to_hex;
+ use aspen_traits::KeyValueStore;
+ use tracing::debug;
+ 
+@@ -13,6 +11,8 @@ use crate::constants::COMMIT_TIP_PREFIX;
+ use crate::error::CommitDagError;
+ use crate::types::Commit;
+ use crate::types::CommitId;
++use crate::verified::hash::hash_from_hex;
++use crate::verified::hash::hash_to_hex;
+ 
+ /// Provides read/write access to commit objects and branch tips in a `KeyValueStore`.
+ pub struct CommitStore;
+diff --git a/crates/aspen-commit-dag/src/types.rs b/crates/aspen-commit-dag/src/types.rs
+index c6a92512c..1c1b83377 100644
+--- a/crates/aspen-commit-dag/src/types.rs
++++ b/crates/aspen-commit-dag/src/types.rs
+@@ -1,9 +1,10 @@
+ //! Core types for the commit DAG.
+ 
+-use aspen_raft::verified::ChainHash;
+ use serde::Deserialize;
+ use serde::Serialize;
+ 
++use crate::verified::hash::ChainHash;
++
+ /// Unique identifier for a commit, computed as a BLAKE3 chain hash.
+ ///
+ /// `CommitId = blake3(parent_hash || branch_id || mutations_hash || raft_revision || timestamp_ms)`
+diff --git a/crates/aspen-commit-dag/src/verified/commit_hash.rs b/crates/aspen-commit-dag/src/verified/commit_hash.rs
+index 8a3eeeaf9..7eedfb992 100644
+--- a/crates/aspen-commit-dag/src/verified/commit_hash.rs
++++ b/crates/aspen-commit-dag/src/verified/commit_hash.rs
+@@ -2,13 +2,12 @@
+ //!
+ //! Formally verified — see `verus/commit_hash_spec.rs` for proofs.
+ 
+-use aspen_raft::verified::ChainHash;
+-use aspen_raft::verified::GENESIS_HASH;
+-use aspen_raft::verified::constant_time_compare;
+-
+ use crate::types::Commit;
+ use crate::types::CommitId;
+ use crate::types::MutationType;
++use crate::verified::hash::ChainHash;
++use crate::verified::hash::GENESIS_HASH;
++use crate::verified::hash::constant_time_compare;
+ 
+ /// Tag byte for `MutationType::Set` in the mutations hash.
+ const TAG_SET: u8 = 0x01;
+@@ -103,6 +102,16 @@ pub fn verify_commit_integrity(commit: &Commit) -> bool {
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use crate::verified::hash::hash_from_hex;
++    use crate::verified::hash::hash_to_hex;
++
++    const GOLDEN_MUTATIONS_HASH_HEX: &str = "dbd53f33679f0e296670008cd0df8020e3eb514c2ca8a84098e4860f15b4a489";
++    const GOLDEN_GENESIS_COMMIT_ID_HEX: &str = "66bd5d2fbe90bd12c9ae86194472f5c2673859250f18178f7e99fd02c651d3c4";
++    const GOLDEN_PARENT_COMMIT_ID_HEX: &str = "f55650d469fcfcde65cf57bb6e87f937915228fae61392e4940940fb8fdbdbe4";
++    const GOLDEN_BRANCH_ID: &str = "branch-1";
++    const GOLDEN_RAFT_REVISION: u64 = 42;
++    const GOLDEN_TIMESTAMP_MS: u64 = 1000;
++    const GOLDEN_PARENT_BYTE: u8 = 0x11;
+ 
+     #[test]
+     fn determinism_same_inputs_same_output() {
+@@ -168,6 +177,36 @@ mod tests {
+         assert_ne!(compute_mutations_hash(&sorted), compute_mutations_hash(&reversed),);
+     }
+ 
++    #[test]
++    fn golden_mutations_hash_preserves_pre_move_behavior() {
++        let mutations = vec![("k".to_string(), MutationType::Set("v".to_string()))];
++
++        let hash = compute_mutations_hash(&mutations);
++
++        assert_eq!(hash_to_hex(&hash), GOLDEN_MUTATIONS_HASH_HEX);
++        assert_eq!(hash_from_hex(GOLDEN_MUTATIONS_HASH_HEX), Some(hash));
++    }
++
++    #[test]
++    fn golden_commit_id_preserves_genesis_parent_behavior() {
++        let mutations_hash = compute_mutations_hash(&[("k".to_string(), MutationType::Set("v".to_string()))]);
++
++        let id = compute_commit_id(&None, GOLDEN_BRANCH_ID, &mutations_hash, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
++
++        assert_eq!(hash_to_hex(&id), GOLDEN_GENESIS_COMMIT_ID_HEX);
++    }
++
++    #[test]
++    fn golden_commit_id_preserves_non_genesis_parent_behavior() {
++        let mutations_hash = compute_mutations_hash(&[("k".to_string(), MutationType::Set("v".to_string()))]);
++        let parent = Some([GOLDEN_PARENT_BYTE; crate::verified::hash::CHAIN_HASH_BYTES]);
++
++        let id =
++            compute_commit_id(&parent, GOLDEN_BRANCH_ID, &mutations_hash, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
++
++        assert_eq!(hash_to_hex(&id), GOLDEN_PARENT_COMMIT_ID_HEX);
++    }
++
+     #[test]
+     fn commit_id_deterministic() {
+         let parent = None;
+diff --git a/crates/aspen-commit-dag/src/verified/hash.rs b/crates/aspen-commit-dag/src/verified/hash.rs
+new file mode 100644
+index 000000000..d4f97125f
+--- /dev/null
++++ b/crates/aspen-commit-dag/src/verified/hash.rs
+@@ -0,0 +1,85 @@
++//! Pure chain-hash helpers owned by the branch/DAG family.
++//!
++//! These helpers intentionally mirror the BLAKE3/hex helper surface that the
++//! commit DAG needs without depending on Aspen's Raft compatibility shell.
++
++/// Number of bytes in a BLAKE3 chain hash.
++pub const CHAIN_HASH_BYTES: usize = 32;
++
++/// BLAKE3 chain hash used for commit IDs and mutation hashes.
++pub type ChainHash = [u8; CHAIN_HASH_BYTES];
++
++/// Genesis hash used when a commit has no parent.
++pub const GENESIS_HASH: ChainHash = [0u8; CHAIN_HASH_BYTES];
++
++/// Compare two chain hashes without early-exit on the first differing byte.
++#[inline]
++pub fn constant_time_compare(left: &ChainHash, right: &ChainHash) -> bool {
++    let mut difference = 0u8;
++    for (&left_byte, &right_byte) in left.iter().zip(right.iter()) {
++        difference |= left_byte ^ right_byte;
++    }
++    difference == 0
++}
++
++/// Convert a chain hash to lowercase hexadecimal.
++#[inline]
++pub fn hash_to_hex(hash: &ChainHash) -> String {
++    hex::encode(hash)
++}
++
++/// Parse a hexadecimal chain hash.
++#[inline]
++pub fn hash_from_hex(hex_str: &str) -> Option<ChainHash> {
++    let bytes = hex::decode(hex_str).ok()?;
++    if bytes.len() != CHAIN_HASH_BYTES {
++        return None;
++    }
++
++    let mut hash = [0u8; CHAIN_HASH_BYTES];
++    hash.copy_from_slice(&bytes);
++    Some(hash)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn constant_time_compare_accepts_equal_hashes() {
++        let left = [0xAB; CHAIN_HASH_BYTES];
++        let right = [0xAB; CHAIN_HASH_BYTES];
++
++        assert!(constant_time_compare(&left, &right));
++    }
++
++    #[test]
++    fn constant_time_compare_rejects_different_hashes() {
++        let left = [0xAB; CHAIN_HASH_BYTES];
++        let right = [0xAC; CHAIN_HASH_BYTES];
++
++        assert!(!constant_time_compare(&left, &right));
++    }
++
++    #[test]
++    fn hash_hex_roundtrip_accepts_valid_hash() {
++        let hash = [0xCD; CHAIN_HASH_BYTES];
++        let encoded = hash_to_hex(&hash);
++
++        assert_eq!(hash_from_hex(&encoded), Some(hash));
++    }
++
++    #[test]
++    fn hash_from_hex_rejects_malformed_input() {
++        assert_eq!(hash_from_hex("not hex"), None);
++    }
++
++    #[test]
++    fn hash_from_hex_rejects_wrong_length_input() {
++        let too_short = "ab";
++        let too_long = "ab".repeat(CHAIN_HASH_BYTES + 1);
++
++        assert_eq!(hash_from_hex(too_short), None);
++        assert_eq!(hash_from_hex(&too_long), None);
++    }
++}
+diff --git a/crates/aspen-commit-dag/src/verified/mod.rs b/crates/aspen-commit-dag/src/verified/mod.rs
+index 2bf31e206..8c69d36df 100644
+--- a/crates/aspen-commit-dag/src/verified/mod.rs
++++ b/crates/aspen-commit-dag/src/verified/mod.rs
+@@ -7,3 +7,11 @@
+ 
+ pub mod commit_hash;
+ pub mod diff;
++pub mod hash;
++
++pub use hash::CHAIN_HASH_BYTES;
++pub use hash::ChainHash;
++pub use hash::GENESIS_HASH;
++pub use hash::constant_time_compare;
++pub use hash::hash_from_hex;
++pub use hash::hash_to_hex;
+diff --git a/docs/crate-extraction.md b/docs/crate-extraction.md
+index 17e65eaee..0a2ce1508 100644
+--- a/docs/crate-extraction.md
++++ b/docs/crate-extraction.md
+@@ -110,7 +110,7 @@ Mandatory first-slice rails:
+ | Iroh transport/RPC | `runtime adapter` | `aspen-transport`, `aspen-rpc-core`, `aspen-client` | owner needed | manifest not yet created | `workspace-internal` | Separate generic iroh RPC helpers from Aspen handler registry. |
+ | Coordination | `service library` | `aspen-coordination`, `aspen-coordination-protocol` | Aspen coordination maintainers | [`docs/crate-extraction/coordination.md`](crate-extraction/coordination.md) | `extraction-ready-in-workspace` | `aspen-core` removed; depends only on `aspen-kv-types`, `aspen-traits`, `aspen-constants`, `aspen-time`; protocol crate standalone; publishable/repo-split blocked on license policy. |
+ | Blob/castore/cache | `service library` + `runtime adapter` | `aspen-blob`, `aspen-castore`, `aspen-cache`, `aspen-exec-cache` | Aspen storage/cache maintainers | [`docs/crate-extraction/blob-castore-cache.md`](crate-extraction/blob-castore-cache.md) | `workspace-internal` | Add downstream fixtures and checker mutation evidence before marking extraction-ready. |
+-| Commit DAG / branches | `service library` | `aspen-commit-dag`, `aspen-kv-branch`, `aspen-dag` | owner needed | manifest not yet created | `workspace-internal` | Remove direct `aspen-raft` dependency where trait-based KV is enough. |
++| Commit DAG / branches | `service library` | `aspen-commit-dag`, `aspen-kv-branch`, `aspen-dag` | Aspen branch/DAG maintainers | [`crate-extraction/kv-branch-commit-dag.md`](crate-extraction/kv-branch-commit-dag.md) | `workspace-internal` | Verify downstream fixture and compatibility consumers before raising readiness. |
+ | Jobs and CI core | `service library` | `aspen-jobs-protocol`, `aspen-jobs`, `aspen-ci-core`, executors | owner needed | manifest not yet created | `workspace-internal` | Split schema/scheduler from cluster worker runtime. |
+ | Trust/crypto/secrets | `leaf type/helper` + `service library` | `aspen-trust`, `aspen-crypto`, parts of `aspen-secrets` | owner needed | manifest not yet created | `workspace-internal` | Keep pure crypto separate from transport/client secrets shell. |
+ | Config/plugin | `protocol/wire` | `aspen-nickel`, `aspen-plugin-api` | owner needed | manifest not yet created | `workspace-internal` | Document standalone examples and feature minima. |
+diff --git a/docs/crate-extraction/kv-branch-commit-dag.md b/docs/crate-extraction/kv-branch-commit-dag.md
+new file mode 100644
+index 000000000..755bbac82
+--- /dev/null
++++ b/docs/crate-extraction/kv-branch-commit-dag.md
+@@ -0,0 +1,104 @@
++# Extraction Manifest: KV Branch / Commit DAG
++
++## Candidate
++
++- **Family**: KV branch / commit DAG
++- **Canonical class**: `service library`
++- **Canonical crate/path**: `crates/aspen-kv-branch`, `crates/aspen-commit-dag`
++- **Intended audience**: Rust projects that need copy-on-write KV overlays, speculative branch commits, branch fork/diff helpers, and chain-hashed commit history over `aspen-traits::KeyValueStore` without Aspen's Raft runtime, node app, handlers, or concrete transport.
++- **Public API owner**: Aspen branch/DAG maintainers
++- **Readiness state**: `workspace-internal`
++- **Dependency policy class**: reusable branch/history service library family
++
++## Package and release metadata
++
++- **Package description**: Branch overlay and commit-DAG history libraries for Aspen-compatible KV stores.
++- **Documentation entrypoint**: Crate-level Rustdoc plus downstream fixture evidence under the active OpenSpec change.
++- **License policy**: AGPL-3.0-or-later until human license strategy changes.
++- **Repository/homepage policy**: Monorepo path until publication policy is decided.
++- **Semver/compatibility policy**: Commit ID/hash behavior is compatibility-sensitive; golden tests must change only with explicit review.
++- **Publish readiness**: Blocked; do not mark publishable during this change.
++
++## Feature contract
++
++| Crate | Feature set | Status | Purpose |
++| --- | --- | --- | --- |
++| `aspen-commit-dag` | default | reusable default | Commit types, BLAKE3 chain/hash helpers, KV-backed commit storage, fork source loading, diff, and bounded GC. |
++| `aspen-kv-branch` | default / no-default | reusable default | Copy-on-write branch overlay over `KeyValueStore` with local dirty map, read-set conflict tracking, scan merge, commit/abort behavior, and resource limits. |
++| `aspen-kv-branch` | `commit-dag` | reusable opt-in | Adds atomic commit-DAG metadata writes and branch-tip tracking through `aspen-commit-dag`. |
++| Aspen consumers | explicit feature paths only | compatibility | Jobs, CI shell executor, deploy, FUSE, docs, and CLI remain final consumers and must not force app/runtime shells into reusable defaults. |
++
++## Dependencies
++
++### Internal Aspen dependencies
++
++| Crate | Dependency | Decision | Reason |
++| --- | --- | --- | --- |
++| `aspen-commit-dag` | `aspen-raft` | removed | Commit hash helpers are now owned by `aspen-commit-dag::verified::hash`. |
++| `aspen-commit-dag` | `aspen-traits`, `aspen-kv-types`, `aspen-constants` | keep | Reusable KV trait/type contracts and bounded GC constants. |
++| `aspen-kv-branch` | `aspen-traits`, `aspen-kv-types`, `aspen-constants` | keep | Branch overlay API and request/response types are trait-based and reusable. |
++| `aspen-kv-branch` | `aspen-commit-dag` | gated behind `commit-dag` | Commit history is an explicit opt-in feature; default branch overlay avoids it. |
++
++### External dependencies
++
++| Dependency | Decision | Reason |
++| --- | --- | --- |
++| `blake3`, `hex`, `postcard`, `serde` | keep | Commit IDs, hash hex, commit serialization, and public wire-safe data types. |
++| `async-trait`, `tokio`, `dashmap`, `snafu`, `tracing` | keep | Async trait integration, bounded commit timeout, concurrent dirty maps, error context, and observability. |
++
++### Binary/runtime dependencies
++
++No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets, SQL, cluster bootstrap, or Raft runtime crate is allowed in the reusable default graphs. `aspen-raft` is specifically forbidden from `aspen-commit-dag` and from `aspen-kv-branch --features commit-dag`.
++
++## Compatibility and aliases
++
++- **Old internal helper path**: `aspen_raft::verified::{ChainHash, GENESIS_HASH, hash_to_hex, hash_from_hex, constant_time_compare}` was used inside `aspen-commit-dag` only.
++- **New helper path**: `aspen_commit_dag::verified::hash::{ChainHash, GENESIS_HASH, hash_to_hex, hash_from_hex, constant_time_compare}` and re-exports from `aspen_commit_dag::verified`.
++- **Compatibility re-exports**: none. Downstream users should import `aspen-commit-dag` and `aspen-kv-branch` directly.
++- **Feature compatibility**: `aspen-kv-branch/commit-dag` keeps existing branch commit-DAG behavior and public `CommitResult::commit_id` behavior.
++- **Removal criteria**: No temporary compatibility alias is introduced because removed imports were crate-internal.
++
++## Representative consumers
++
++- `aspen-jobs --features kv-branch`
++- `aspen-ci-executor-shell --features kv-branch`
++- `aspen-deploy --features kv-branch`
++- `aspen-fuse --features kv-branch`
++- `aspen-docs --features commit-dag-federation`
++- `aspen-cli --features commit-dag`
++- Downstream fixture under `openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag`
++
++## Representative consumers and re-exporters
++
++- **Representative consumers**: `aspen-jobs`, `aspen-ci-executor-shell`, `aspen-deploy`, `aspen-fuse`, `aspen-docs`, `aspen-cli`, and the downstream branch/DAG fixture.
++- **Re-exporters**: compatibility re-exports: none. Existing consumers use direct crate paths or feature-enabled dependency paths.
++
++## Dependency exceptions
++
++| candidate | feature_set | dependency_path | owner | reason |
++| --- | --- | --- | --- | --- |
++| `aspen-commit-dag` | default | `aspen-commit-dag -> aspen-traits` | Aspen branch/DAG maintainers | Reusable KV trait boundary. |
++| `aspen-commit-dag` | default | `aspen-commit-dag -> aspen-kv-types` | Aspen branch/DAG maintainers | Reusable KV request/response types. |
++| `aspen-commit-dag` | default | `aspen-commit-dag -> aspen-constants` | Aspen branch/DAG maintainers | Shared bounded limits. |
++| `aspen-kv-branch` | default | `aspen-kv-branch -> aspen-traits` | Aspen branch/DAG maintainers | Reusable KV trait boundary. |
++| `aspen-kv-branch` | default | `aspen-kv-branch -> aspen-kv-types` | Aspen branch/DAG maintainers | Reusable KV request/response types. |
++| `aspen-kv-branch` | default | `aspen-kv-branch -> aspen-constants` | Aspen branch/DAG maintainers | Shared branch resource limits. |
++| `aspen-kv-branch` | `commit-dag` | `aspen-kv-branch -> aspen-commit-dag` | Aspen branch/DAG maintainers | Explicit commit history integration feature. |
++
++## Verification rails
++
++- `cargo check -p aspen-commit-dag`
++- `cargo check -p aspen-kv-branch`
++- `cargo check -p aspen-kv-branch --no-default-features`
++- `cargo check -p aspen-kv-branch --features commit-dag`
++- `cargo tree -p aspen-commit-dag --edges normal` plus negative boundary grep for `aspen-raft`, root app/runtime shells, handler crates, concrete transport, trust, secrets, and SQL crates
++- `cargo tree -p aspen-kv-branch --edges normal`, `--no-default-features`, and `--features commit-dag` plus negative boundary greps proving default avoids `aspen-commit-dag` and all reusable graphs avoid forbidden app/runtime shells
++- `rg -n 'aspen_raft::verified|aspen-raft' crates/aspen-commit-dag` proving source imports from the Raft helper surface are absent except historical Verus comments if retained
++- positive downstream fixture for canonical branch overlay and commit DAG APIs
++- negative boundary metadata checks proving the downstream fixture has no root Aspen, `aspen-raft`, handlers, binaries, or concrete transport crates
++- compatibility checks for jobs, CI shell executor, deploy, FUSE, docs, and CLI feature paths
++- dependency-boundary checker with `--candidate-family kv-branch-commit-dag`, including mutation checks for forbidden dependency, missing owner, invalid readiness state, and missing downstream fixture evidence
++
++## First-slice status
++
++Current status is `workspace-internal`. The first implementation slice localizes the hash helper surface in `aspen-commit-dag`, removes the normal `aspen-raft` dependency, and proves branch/DAG feature boundaries with compile, tree, fixture, and consumer evidence before any publication readiness state is raised.
+diff --git a/docs/crate-extraction/policy.ncl b/docs/crate-extraction/policy.ncl
+index 652448be8..2274fb977 100644
+--- a/docs/crate-extraction/policy.ncl
++++ b/docs/crate-extraction/policy.ncl
+@@ -123,6 +123,8 @@ let Candidate = {
+     "aspen-raft-kv-types",
+     "aspen-redb-storage",
+     "aspen-raft-kv",
++    "aspen-commit-dag",
++    "aspen-kv-branch",
+     "aspen-layer",
+     "openraft",
+     "redb",
+@@ -545,6 +547,83 @@ let Candidate = {
+       ],
+     },
+ 
++    aspen_commit_dag = {
++      class = "service library",
++      readiness_state = "workspace-internal",
++      manifest = "docs/crate-extraction/kv-branch-commit-dag.md",
++      owner = "Aspen branch/DAG maintainers",
++      default_feature_sets = ["default"],
++      named_reusable_feature_sets = ["default"],
++      representative_consumers = ["aspen-kv-branch", "aspen-docs", "aspen-cli"],
++      reexporters = [],
++      forbidden_unless_feature = ["aspen-raft", "aspen", "aspen-core-shell", "aspen-cluster", "aspen-rpc-core", "aspen-rpc-handlers", "aspen-transport", "aspen-raft-network", "iroh", "iroh-base", "irpc", "aspen-trust", "aspen-secrets", "aspen-sql"],
++      exceptions = [
++        {
++          candidate = "aspen-commit-dag",
++          feature_set = "default",
++          dependency_path = "aspen-commit-dag -> aspen-traits",
++          owner = "Aspen branch/DAG maintainers",
++          reason = "Reusable KV trait boundary.",
++        },
++        {
++          candidate = "aspen-commit-dag",
++          feature_set = "default",
++          dependency_path = "aspen-commit-dag -> aspen-kv-types",
++          owner = "Aspen branch/DAG maintainers",
++          reason = "Reusable KV request and response types.",
++        },
++        {
++          candidate = "aspen-commit-dag",
++          feature_set = "default",
++          dependency_path = "aspen-commit-dag -> aspen-constants",
++          owner = "Aspen branch/DAG maintainers",
++          reason = "Shared bounded GC limits.",
++        },
++      ],
++    },
++
++    aspen_kv_branch = {
++      class = "service library",
++      readiness_state = "workspace-internal",
++      manifest = "docs/crate-extraction/kv-branch-commit-dag.md",
++      owner = "Aspen branch/DAG maintainers",
++      default_feature_sets = ["default", "no-default-features"],
++      named_reusable_feature_sets = ["commit-dag"],
++      representative_consumers = ["aspen-jobs", "aspen-ci-executor-shell", "aspen-deploy", "aspen-fuse", "aspen-docs", "aspen-cli"],
++      reexporters = [],
++      forbidden_unless_feature = ["aspen-commit-dag", "aspen-raft", "aspen", "aspen-core-shell", "aspen-cluster", "aspen-rpc-core", "aspen-rpc-handlers", "aspen-transport", "aspen-raft-network", "iroh", "iroh-base", "irpc", "aspen-trust", "aspen-secrets", "aspen-sql"],
++      exceptions = [
++        {
++          candidate = "aspen-kv-branch",
++          feature_set = "default",
++          dependency_path = "aspen-kv-branch -> aspen-traits",
++          owner = "Aspen branch/DAG maintainers",
++          reason = "Reusable KV trait boundary.",
++        },
++        {
++          candidate = "aspen-kv-branch",
++          feature_set = "default",
++          dependency_path = "aspen-kv-branch -> aspen-kv-types",
++          owner = "Aspen branch/DAG maintainers",
++          reason = "Reusable KV request and response types.",
++        },
++        {
++          candidate = "aspen-kv-branch",
++          feature_set = "default",
++          dependency_path = "aspen-kv-branch -> aspen-constants",
++          owner = "Aspen branch/DAG maintainers",
++          reason = "Shared branch resource limits.",
++        },
++        {
++          candidate = "aspen-kv-branch",
++          feature_set = "commit-dag",
++          dependency_path = "aspen-kv-branch -> aspen-commit-dag",
++          owner = "Aspen branch/DAG maintainers",
++          reason = "Explicit commit history integration feature.",
++        },
++      ],
++    },
++
+     aspen_raft_compat = {
+       class = "service library",
+       readiness_state = "workspace-internal",
+diff --git a/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.lock b/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.lock
+new file mode 100644
+index 000000000..62ba43d89
+--- /dev/null
++++ b/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.lock
+@@ -0,0 +1,592 @@
++# This file is automatically @generated by Cargo.
++# It is not intended for manual editing.
++version = 4
++
++[[package]]
++name = "arrayref"
++version = "0.3.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
++
++[[package]]
++name = "arrayvec"
++version = "0.7.6"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
++
++[[package]]
++name = "aspen-cluster-types"
++version = "0.1.0"
++dependencies = [
++ "serde",
++ "thiserror",
++]
++
++[[package]]
++name = "aspen-commit-dag"
++version = "0.1.0"
++dependencies = [
++ "aspen-constants",
++ "aspen-kv-types",
++ "aspen-traits",
++ "async-trait",
++ "blake3",
++ "hex",
++ "postcard",
++ "serde",
++ "snafu",
++ "tokio",
++ "tracing",
++]
++
++[[package]]
++name = "aspen-constants"
++version = "0.1.0"
++
++[[package]]
++name = "aspen-kv-branch"
++version = "0.1.0"
++dependencies = [
++ "aspen-commit-dag",
++ "aspen-constants",
++ "aspen-kv-types",
++ "aspen-traits",
++ "async-trait",
++ "dashmap",
++ "hex",
++ "serde",
++ "tokio",
++ "tracing",
++]
++
++[[package]]
++name = "aspen-kv-types"
++version = "0.1.0"
++dependencies = [
++ "aspen-constants",
++ "serde",
++ "thiserror",
++]
++
++[[package]]
++name = "aspen-traits"
++version = "0.1.0"
++dependencies = [
++ "aspen-cluster-types",
++ "aspen-kv-types",
++ "async-trait",
++]
++
++[[package]]
++name = "async-trait"
++version = "0.1.89"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "atomic-polyfill"
++version = "1.0.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
++dependencies = [
++ "critical-section",
++]
++
++[[package]]
++name = "bitflags"
++version = "2.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
++
++[[package]]
++name = "blake3"
++version = "1.8.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0aa83c34e62843d924f905e0f5c866eb1dd6545fc4d719e803d9ba6030371fce"
++dependencies = [
++ "arrayref",
++ "arrayvec",
++ "cc",
++ "cfg-if",
++ "constant_time_eq",
++ "cpufeatures",
++]
++
++[[package]]
++name = "byteorder"
++version = "1.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
++
++[[package]]
++name = "bytes"
++version = "1.11.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
++
++[[package]]
++name = "cc"
++version = "1.2.61"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d16d90359e986641506914ba71350897565610e87ce0ad9e6f28569db3dd5c6d"
++dependencies = [
++ "find-msvc-tools",
++ "shlex",
++]
++
++[[package]]
++name = "cfg-if"
++version = "1.0.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
++
++[[package]]
++name = "cobs"
++version = "0.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
++dependencies = [
++ "thiserror",
++]
++
++[[package]]
++name = "constant_time_eq"
++version = "0.4.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
++
++[[package]]
++name = "cpufeatures"
++version = "0.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
++dependencies = [
++ "libc",
++]
++
++[[package]]
++name = "critical-section"
++version = "1.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
++
++[[package]]
++name = "crossbeam-utils"
++version = "0.8.21"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
++
++[[package]]
++name = "dashmap"
++version = "6.1.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
++dependencies = [
++ "cfg-if",
++ "crossbeam-utils",
++ "hashbrown",
++ "lock_api",
++ "once_cell",
++ "parking_lot_core",
++]
++
++[[package]]
++name = "downstream-branch-dag"
++version = "0.1.0"
++dependencies = [
++ "aspen-commit-dag",
++ "aspen-kv-branch",
++ "aspen-kv-types",
++ "aspen-traits",
++ "async-trait",
++ "tokio",
++]
++
++[[package]]
++name = "embedded-io"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
++
++[[package]]
++name = "embedded-io"
++version = "0.6.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
++
++[[package]]
++name = "errno"
++version = "0.3.14"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
++dependencies = [
++ "libc",
++ "windows-sys",
++]
++
++[[package]]
++name = "find-msvc-tools"
++version = "0.1.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
++
++[[package]]
++name = "hash32"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
++dependencies = [
++ "byteorder",
++]
++
++[[package]]
++name = "hashbrown"
++version = "0.14.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
++
++[[package]]
++name = "heapless"
++version = "0.7.17"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cdc6457c0eb62c71aac4bc17216026d8410337c4126773b9c5daba343f17964f"
++dependencies = [
++ "atomic-polyfill",
++ "hash32",
++ "rustc_version",
++ "serde",
++ "spin",
++ "stable_deref_trait",
++]
++
++[[package]]
++name = "heck"
++version = "0.5.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
++
++[[package]]
++name = "hex"
++version = "0.4.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
++
++[[package]]
++name = "libc"
++version = "0.2.186"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
++
++[[package]]
++name = "lock_api"
++version = "0.4.14"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
++dependencies = [
++ "scopeguard",
++]
++
++[[package]]
++name = "mio"
++version = "1.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "50b7e5b27aa02a74bac8c3f23f448f8d87ff11f92d3aac1a6ed369ee08cc56c1"
++dependencies = [
++ "libc",
++ "wasi",
++ "windows-sys",
++]
++
++[[package]]
++name = "once_cell"
++version = "1.21.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
++
++[[package]]
++name = "parking_lot_core"
++version = "0.9.12"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1"
++dependencies = [
++ "cfg-if",
++ "libc",
++ "redox_syscall",
++ "smallvec",
++ "windows-link",
++]
++
++[[package]]
++name = "pin-project-lite"
++version = "0.2.17"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
++
++[[package]]
++name = "postcard"
++version = "1.1.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"
++dependencies = [
++ "cobs",
++ "embedded-io 0.4.0",
++ "embedded-io 0.6.1",
++ "heapless",
++ "serde",
++]
++
++[[package]]
++name = "proc-macro2"
++version = "1.0.106"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
++dependencies = [
++ "unicode-ident",
++]
++
++[[package]]
++name = "quote"
++version = "1.0.45"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
++dependencies = [
++ "proc-macro2",
++]
++
++[[package]]
++name = "redox_syscall"
++version = "0.5.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
++dependencies = [
++ "bitflags",
++]
++
++[[package]]
++name = "rustc_version"
++version = "0.4.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
++dependencies = [
++ "semver",
++]
++
++[[package]]
++name = "scopeguard"
++version = "1.2.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
++
++[[package]]
++name = "semver"
++version = "1.0.28"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
++
++[[package]]
++name = "serde"
++version = "1.0.228"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
++dependencies = [
++ "serde_core",
++ "serde_derive",
++]
++
++[[package]]
++name = "serde_core"
++version = "1.0.228"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
++dependencies = [
++ "serde_derive",
++]
++
++[[package]]
++name = "serde_derive"
++version = "1.0.228"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "shlex"
++version = "1.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
++
++[[package]]
++name = "signal-hook-registry"
++version = "1.4.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
++dependencies = [
++ "errno",
++ "libc",
++]
++
++[[package]]
++name = "smallvec"
++version = "1.15.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
++
++[[package]]
++name = "snafu"
++version = "0.8.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6e84b3f4eacbf3a1ce05eac6763b4d629d60cbc94d632e4092c54ade71f1e1a2"
++dependencies = [
++ "snafu-derive",
++]
++
++[[package]]
++name = "snafu-derive"
++version = "0.8.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
++dependencies = [
++ "heck",
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "spin"
++version = "0.9.8"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
++dependencies = [
++ "lock_api",
++]
++
++[[package]]
++name = "stable_deref_trait"
++version = "1.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
++
++[[package]]
++name = "syn"
++version = "2.0.117"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "unicode-ident",
++]
++
++[[package]]
++name = "thiserror"
++version = "2.0.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
++dependencies = [
++ "thiserror-impl",
++]
++
++[[package]]
++name = "thiserror-impl"
++version = "2.0.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "tokio"
++version = "1.52.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
++dependencies = [
++ "bytes",
++ "libc",
++ "mio",
++ "pin-project-lite",
++ "signal-hook-registry",
++ "tokio-macros",
++ "windows-sys",
++]
++
++[[package]]
++name = "tokio-macros"
++version = "2.7.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "tracing"
++version = "0.1.44"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
++dependencies = [
++ "pin-project-lite",
++ "tracing-attributes",
++ "tracing-core",
++]
++
++[[package]]
++name = "tracing-attributes"
++version = "0.1.31"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "tracing-core"
++version = "0.1.36"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
++dependencies = [
++ "once_cell",
++]
++
++[[package]]
++name = "unicode-ident"
++version = "1.0.24"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
++
++[[package]]
++name = "wasi"
++version = "0.11.1+wasi-snapshot-preview1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
++
++[[package]]
++name = "windows-link"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
++
++[[package]]
++name = "windows-sys"
++version = "0.61.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
++dependencies = [
++ "windows-link",
++]
+diff --git a/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.toml b/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.toml
+new file mode 100644
+index 000000000..c20a91ffb
+--- /dev/null
++++ b/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.toml
+@@ -0,0 +1,15 @@
++[workspace]
++
++[package]
++name = "downstream-branch-dag"
++version = "0.1.0"
++edition = "2024"
++license = "AGPL-3.0-or-later"
++
++[dependencies]
++aspen-commit-dag = { path = "../../../../../crates/aspen-commit-dag" }
++aspen-kv-branch = { path = "../../../../../crates/aspen-kv-branch", features = ["commit-dag"] }
++aspen-kv-types = { path = "../../../../../crates/aspen-kv-types" }
++aspen-traits = { path = "../../../../../crates/aspen-traits" }
++async-trait = "0.1"
++tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+diff --git a/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/src/lib.rs b/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/src/lib.rs
+new file mode 100644
+index 000000000..d375699ff
+--- /dev/null
++++ b/openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/src/lib.rs
+@@ -0,0 +1,208 @@
++use std::collections::BTreeMap;
++use std::sync::Arc;
++use std::sync::Mutex;
++
++use aspen_commit_dag::CommitStore;
++use aspen_commit_dag::MutationType;
++use aspen_commit_dag::verified::hash::GENESIS_HASH;
++use aspen_kv_branch::BranchOverlay;
++use aspen_kv_types::BatchOperation;
++use aspen_kv_types::DeleteRequest;
++use aspen_kv_types::DeleteResult;
++use aspen_kv_types::KeyValueStoreError;
++use aspen_kv_types::KeyValueWithRevision;
++use aspen_kv_types::ReadRequest;
++use aspen_kv_types::ReadResult;
++use aspen_kv_types::ScanRequest;
++use aspen_kv_types::ScanResult;
++use aspen_kv_types::WriteCommand;
++use aspen_kv_types::WriteOp;
++use aspen_kv_types::WriteRequest;
++use aspen_kv_types::WriteResult;
++use aspen_traits::KeyValueStore;
++use async_trait::async_trait;
++
++const INITIAL_REVISION: u64 = 1;
++const NEXT_REVISION_INCREMENT: u64 = 1;
++const TEST_RAFT_REVISION: u64 = 7;
++const TEST_TIMESTAMP_MS: u64 = 1_234;
++const SCAN_LIMIT_DEFAULT: usize = 64;
++
++#[derive(Default)]
++struct MemoryStore {
++    state: Mutex<MemoryState>,
++}
++
++#[derive(Default)]
++struct MemoryState {
++    values: BTreeMap<String, KeyValueWithRevision>,
++    next_revision: u64,
++}
++
++impl MemoryStore {
++    fn apply_set(state: &mut MemoryState, key: String, value: String) {
++        let revision = state.next_revision.max(INITIAL_REVISION);
++        state.next_revision = revision.saturating_add(NEXT_REVISION_INCREMENT);
++        let create_revision = state.values.get(&key).map(|entry| entry.create_revision).unwrap_or(revision);
++        let version = state
++            .values
++            .get(&key)
++            .map(|entry| entry.version.saturating_add(NEXT_REVISION_INCREMENT))
++            .unwrap_or(INITIAL_REVISION);
++        state.values.insert(key.clone(), KeyValueWithRevision {
++            key,
++            value,
++            version,
++            create_revision,
++            mod_revision: revision,
++        });
++    }
++
++    fn apply_delete(state: &mut MemoryState, key: &str) {
++        state.values.remove(key);
++    }
++
++    fn apply_batch_operation(state: &mut MemoryState, operation: BatchOperation) {
++        match operation {
++            BatchOperation::Set { key, value } => Self::apply_set(state, key, value),
++            BatchOperation::Delete { key } => Self::apply_delete(state, &key),
++        }
++    }
++
++    fn apply_write_op(state: &mut MemoryState, operation: WriteOp) {
++        match operation {
++            WriteOp::Set { key, value } => Self::apply_set(state, key, value),
++            WriteOp::Delete { key } => Self::apply_delete(state, &key),
++        }
++    }
++
++    fn success_result(command: WriteCommand, batch_applied: Option<u32>) -> WriteResult {
++        WriteResult {
++            command: Some(command),
++            batch_applied,
++            conditions_met: None,
++            failed_condition_index: None,
++            lease_id: None,
++            ttl_seconds: None,
++            keys_deleted: None,
++            succeeded: Some(true),
++            txn_results: None,
++            header_revision: None,
++            occ_conflict: None,
++            conflict_key: None,
++            conflict_expected_version: None,
++            conflict_actual_version: None,
++        }
++    }
++}
++
++#[async_trait]
++impl KeyValueStore for MemoryStore {
++    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
++        let mut state = self.state.lock().map_err(|_| KeyValueStoreError::Failed {
++            reason: "poisoned fixture lock".into(),
++        })?;
++        match request.command {
++            WriteCommand::Set { key, value } => {
++                let command = WriteCommand::Set {
++                    key: key.clone(),
++                    value: value.clone(),
++                };
++                Self::apply_set(&mut state, key, value);
++                Ok(Self::success_result(command, None))
++            }
++            WriteCommand::Batch { operations } => {
++                let applied = operations.len() as u32;
++                for operation in operations.clone() {
++                    Self::apply_batch_operation(&mut state, operation);
++                }
++                Ok(Self::success_result(WriteCommand::Batch { operations }, Some(applied)))
++            }
++            WriteCommand::OptimisticTransaction { read_set, write_set } => {
++                for operation in write_set.clone() {
++                    Self::apply_write_op(&mut state, operation);
++                }
++                Ok(Self::success_result(WriteCommand::OptimisticTransaction { read_set, write_set }, None))
++            }
++            other => Err(KeyValueStoreError::Failed {
++                reason: format!("unsupported fixture write command: {other:?}"),
++            }),
++        }
++    }
++
++    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
++        let state = self.state.lock().map_err(|_| KeyValueStoreError::Failed {
++            reason: "poisoned fixture lock".into(),
++        })?;
++        Ok(ReadResult {
++            kv: state.values.get(&request.key).cloned(),
++        })
++    }
++
++    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
++        let mut state = self.state.lock().map_err(|_| KeyValueStoreError::Failed {
++            reason: "poisoned fixture lock".into(),
++        })?;
++        Self::apply_delete(&mut state, &request.key);
++        Ok(DeleteResult {
++            key: request.key,
++            is_deleted: true,
++        })
++    }
++
++    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
++        let state = self.state.lock().map_err(|_| KeyValueStoreError::Failed {
++            reason: "poisoned fixture lock".into(),
++        })?;
++        let limit = request.limit_results.map(|value| value as usize).unwrap_or(SCAN_LIMIT_DEFAULT);
++        let entries: Vec<_> = state
++            .values
++            .iter()
++            .filter(|(key, _)| key.starts_with(&request.prefix))
++            .take(limit)
++            .map(|(_, value)| value.clone())
++            .collect();
++        let result_count = entries.len() as u32;
++        Ok(ScanResult {
++            entries,
++            result_count,
++            is_truncated: false,
++            continuation_token: None,
++        })
++    }
++}
++
++#[tokio::test]
++async fn downstream_uses_branch_overlay_and_commit_dag() -> Result<(), Box<dyn std::error::Error>> {
++    let store = Arc::new(MemoryStore::default());
++    let branch = BranchOverlay::new("fixture", store.clone());
++
++    branch.write(WriteRequest::set("key", "value")).await?;
++    let read = branch.read(ReadRequest::new("key")).await?;
++    assert_eq!(read.kv.as_ref().map(|entry| entry.value.as_str()), Some("value"));
++
++    let result = branch.commit().await?;
++    let commit_id = result.commit_id.ok_or("commit-dag feature did not produce commit id")?;
++    let loaded = CommitStore::load_commit(&commit_id, store.as_ref()).await?;
++
++    assert_eq!(loaded.branch_id, "fixture");
++    assert_eq!(loaded.parent, None);
++    assert_eq!(loaded.mutations, vec![("key".to_string(), MutationType::Set("value".to_string()))]);
++    assert_ne!(loaded.id, GENESIS_HASH);
++    Ok(())
++}
++
++#[test]
++fn downstream_uses_direct_commit_hash_api() {
++    let mutations = vec![("direct".to_string(), MutationType::Set("value".to_string()))];
++    let mutations_hash = aspen_commit_dag::compute_mutations_hash(&mutations);
++    let commit_id = aspen_commit_dag::compute_commit_id(
++        &None,
++        "direct-fixture",
++        &mutations_hash,
++        TEST_RAFT_REVISION,
++        TEST_TIMESTAMP_MS,
++    );
++
++    assert_ne!(commit_id, GENESIS_HASH);
++}
+diff --git a/openspec/changes/extract-kv-branch-commit-dag/tasks.md b/openspec/changes/extract-kv-branch-commit-dag/tasks.md
+index f2ec07400..b451cc0ed 100644
+--- a/openspec/changes/extract-kv-branch-commit-dag/tasks.md
++++ b/openspec/changes/extract-kv-branch-commit-dag/tasks.md
+@@ -1,18 +1,18 @@
+ ## Phase 1: Baseline and dependency cleanup
+ 
+-- [ ] R1 Capture baseline compile, dependency, and source-import evidence for `aspen-commit-dag`, `aspen-kv-branch`, and `aspen-kv-branch --features commit-dag`, including current `aspen_raft::verified` import locations and representative consumer feature paths. [covers=kv-branch-commit-dag-extraction.kv-branch-feature-topology,kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.commit-dag-graph-excludes-app-shells,kv-branch-commit-dag-extraction.kv-branch-feature-topology.default-avoids-commit-dag,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable]
+-- [ ] I1 Move the minimal chain hash helper surface used by `aspen-commit-dag` into the branch/DAG family, update imports away from `aspen_raft::verified`, preserve BLAKE3 commit ID behavior, and remove the normal `aspen-raft` dependency from `crates/aspen-commit-dag/Cargo.toml`. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat,kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family]
+-- [ ] I2 Add or update tests that compare pre-move and post-move hash behavior for deterministic commit ID inputs, malformed hex input, genesis-parent commits, non-genesis-parent commits, and corrupted mutation hashes. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family]
++- [x] R1 Capture baseline compile, dependency, and source-import evidence for `aspen-commit-dag`, `aspen-kv-branch`, and `aspen-kv-branch --features commit-dag`, including current `aspen_raft::verified` import locations and representative consumer feature paths. [covers=kv-branch-commit-dag-extraction.kv-branch-feature-topology,kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.commit-dag-graph-excludes-app-shells,kv-branch-commit-dag-extraction.kv-branch-feature-topology.default-avoids-commit-dag,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable] ✅ completed: 2026-04-25T19:37:10Z
++- [x] I1 Move the minimal chain hash helper surface used by `aspen-commit-dag` into the branch/DAG family, update imports away from `aspen_raft::verified`, preserve BLAKE3 commit ID behavior, and remove the normal `aspen-raft` dependency from `crates/aspen-commit-dag/Cargo.toml`. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat,kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family] ✅ completed: 2026-04-25T19:37:10Z
++- [x] I2 Add or update tests that compare pre-move and post-move hash behavior for deterministic commit ID inputs, malformed hex input, genesis-parent commits, non-genesis-parent commits, and corrupted mutation hashes. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family] ✅ completed: 2026-04-25T19:37:10Z
+ 
+ ## Phase 2: Extraction manifests and fixture
+ 
+-- [ ] I3 Add `docs/crate-extraction/kv-branch-commit-dag.md` with candidate metadata, feature contracts, dependency decisions, compatibility plan, representative consumers, and verification rails for both crates. [covers=kv-branch-commit-dag-extraction.inventory-and-policy,kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family]
+-- [ ] I4 Add `kv-branch-commit-dag` entries to `docs/crate-extraction/policy.ncl` and update `docs/crate-extraction.md` with the family readiness row and next action. [covers=kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family]
+-- [ ] I5 Add a downstream-style consumer fixture that imports `aspen-kv-branch` and `aspen-commit-dag` directly, exercises branch overlay and commit DAG APIs, and records metadata proving root Aspen and compatibility shells are absent. [covers=kv-branch-commit-dag-extraction.downstream-consumer-proof,kv-branch-commit-dag-extraction.downstream-consumer-proof.fixture-uses-canonical-crates]
++- [x] I3 Add `docs/crate-extraction/kv-branch-commit-dag.md` with candidate metadata, feature contracts, dependency decisions, compatibility plan, representative consumers, and verification rails for both crates. [covers=kv-branch-commit-dag-extraction.inventory-and-policy,kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family] ✅ completed: 2026-04-25T19:37:10Z
++- [x] I4 Add `kv-branch-commit-dag` entries to `docs/crate-extraction/policy.ncl` and update `docs/crate-extraction.md` with the family readiness row and next action. [covers=kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family] ✅ completed: 2026-04-25T19:37:10Z
++- [x] I5 Add a downstream-style consumer fixture that imports `aspen-kv-branch` and `aspen-commit-dag` directly, exercises branch overlay and commit DAG APIs, and records metadata proving root Aspen and compatibility shells are absent. [covers=kv-branch-commit-dag-extraction.downstream-consumer-proof,kv-branch-commit-dag-extraction.downstream-consumer-proof.fixture-uses-canonical-crates] ✅ completed: 2026-04-25T19:37:10Z
+ 
+ ## Phase 3: Verification
+ 
+-- [ ] V1 Save compile and dependency-boundary evidence for `cargo check -p aspen-commit-dag`, `cargo check -p aspen-kv-branch`, `cargo check -p aspen-kv-branch --no-default-features`, `cargo check -p aspen-kv-branch --features commit-dag`, and matching `cargo tree --edges normal` commands proving forbidden crates are absent. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.commit-dag-graph-excludes-app-shells,kv-branch-commit-dag-extraction.kv-branch-feature-topology.default-avoids-commit-dag,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable]
+-- [ ] V2 Run and save `cargo nextest run -p aspen-commit-dag` and `cargo nextest run -p aspen-kv-branch --features commit-dag`, including positive and negative tests for hash parsing, corruption detection, conflict detection, empty branch commits, and over-limit branch commits. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable]
+-- [ ] V3 Save compatibility evidence for representative Aspen consumers: `aspen-jobs --features kv-branch`, `aspen-ci-executor-shell --features kv-branch`, `aspen-deploy --features kv-branch`, `aspen-fuse --features kv-branch`, `aspen-docs --features commit-dag-federation`, and `aspen-cli --features commit-dag`. [covers=kv-branch-commit-dag-extraction.downstream-consumer-proof.fixture-uses-canonical-crates]
+-- [ ] V4 Run `scripts/check-crate-extraction-readiness.rs --candidate-family kv-branch-commit-dag` and save checker output plus any negative mutation checks proving forbidden dependency, missing owner, and invalid readiness state failures are caught. [covers=kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family]
++- [x] V1 Save compile and dependency-boundary evidence for `cargo check -p aspen-commit-dag`, `cargo check -p aspen-kv-branch`, `cargo check -p aspen-kv-branch --no-default-features`, `cargo check -p aspen-kv-branch --features commit-dag`, and matching `cargo tree --edges normal` commands proving forbidden crates are absent. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.commit-dag-graph-excludes-app-shells,kv-branch-commit-dag-extraction.kv-branch-feature-topology.default-avoids-commit-dag,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable] ✅ completed: 2026-04-25T19:37:10Z
++- [x] V2 Run and save `cargo nextest run -p aspen-commit-dag` and `cargo nextest run -p aspen-kv-branch --features commit-dag`, including positive and negative tests for hash parsing, corruption detection, conflict detection, empty branch commits, and over-limit branch commits. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable] ✅ completed: 2026-04-25T19:37:10Z
++- [x] V3 Save compatibility evidence for representative Aspen consumers: `aspen-jobs --features kv-branch`, `aspen-ci-executor-shell --features kv-branch`, `aspen-deploy --features kv-branch`, `aspen-fuse --features kv-branch`, `aspen-docs --features commit-dag-federation`, and `aspen-cli --features commit-dag`. [covers=kv-branch-commit-dag-extraction.downstream-consumer-proof.fixture-uses-canonical-crates] ✅ completed: 2026-04-25T19:37:10Z
++- [x] V4 Run `scripts/check-crate-extraction-readiness.rs --candidate-family kv-branch-commit-dag` and save checker output plus any negative mutation checks proving forbidden dependency, missing owner, and invalid readiness state failures are caught. [covers=kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family] ✅ completed: 2026-04-25T19:37:10Z
+diff --git a/openspec/changes/extract-kv-branch-commit-dag/verification.md b/openspec/changes/extract-kv-branch-commit-dag/verification.md
+new file mode 100644
+index 000000000..a08fe9817
+--- /dev/null
++++ b/openspec/changes/extract-kv-branch-commit-dag/verification.md
+@@ -0,0 +1,95 @@
++# Verification Evidence
++
++## Implementation Evidence
++
++- Changed file: `Cargo.lock`
++- Changed file: `crates/aspen-commit-dag/Cargo.toml`
++- Changed file: `crates/aspen-commit-dag/src/verified/hash.rs`
++- Changed file: `crates/aspen-commit-dag/src/verified/commit_hash.rs`
++- Changed file: `crates/aspen-commit-dag/src/verified/mod.rs`
++- Changed file: `crates/aspen-commit-dag/src/types.rs`
++- Changed file: `crates/aspen-commit-dag/src/store.rs`
++- Changed file: `crates/aspen-commit-dag/src/gc.rs`
++- Changed file: `docs/crate-extraction.md`
++- Changed file: `docs/crate-extraction/kv-branch-commit-dag.md`
++- Changed file: `docs/crate-extraction/policy.ncl`
++- Changed file: `scripts/check-crate-extraction-readiness.rs`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/tasks.md`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/verification.md`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.toml`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.lock`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/src/lib.rs`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/implementation-diff.txt`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/summary.txt`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.md`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.json`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-mutations-summary.txt`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/run-verification.sh`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-run-negative-mutations.sh`
++- Changed file: `openspec/changes/extract-kv-branch-commit-dag/evidence/openspec-preflight.txt`
++
++## Task Coverage
++
++- [x] R1 Capture baseline compile, dependency, and source-import evidence for `aspen-commit-dag`, `aspen-kv-branch`, and `aspen-kv-branch --features commit-dag`, including current `aspen_raft::verified` import locations and representative consumer feature paths. [covers=kv-branch-commit-dag-extraction.kv-branch-feature-topology,kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.commit-dag-graph-excludes-app-shells,kv-branch-commit-dag-extraction.kv-branch-feature-topology.default-avoids-commit-dag,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `openspec/changes/extract-kv-branch-commit-dag/evidence/r1-baseline.md`, `openspec/changes/extract-kv-branch-commit-dag/evidence/r1-baseline-logs/`, `openspec/changes/extract-kv-branch-commit-dag/evidence/r1-prechange-nextest-aspen-commit-dag.txt`
++
++- [x] I1 Move the minimal chain hash helper surface used by `aspen-commit-dag` into the branch/DAG family, update imports away from `aspen_raft::verified`, preserve BLAKE3 commit ID behavior, and remove the normal `aspen-raft` dependency from `crates/aspen-commit-dag/Cargo.toml`. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat,kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `crates/aspen-commit-dag/Cargo.toml`, `crates/aspen-commit-dag/src/verified/hash.rs`, `crates/aspen-commit-dag/src/verified/commit_hash.rs`, `crates/aspen-commit-dag/src/verified/mod.rs`, `crates/aspen-commit-dag/src/types.rs`, `crates/aspen-commit-dag/src/store.rs`, `crates/aspen-commit-dag/src/gc.rs`, `openspec/changes/extract-kv-branch-commit-dag/evidence/i1-i2-golden-nextest-aspen-commit-dag.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-source-raft-import-grep.txt`
++
++- [x] I2 Add or update tests that compare pre-move and post-move hash behavior for deterministic commit ID inputs, malformed hex input, genesis-parent commits, non-genesis-parent commits, and corrupted mutation hashes. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `crates/aspen-commit-dag/src/verified/hash.rs`, `crates/aspen-commit-dag/src/verified/commit_hash.rs`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v2-nextest-aspen-commit-dag.txt`
++
++- [x] I3 Add `docs/crate-extraction/kv-branch-commit-dag.md` with candidate metadata, feature contracts, dependency decisions, compatibility plan, representative consumers, and verification rails for both crates. [covers=kv-branch-commit-dag-extraction.inventory-and-policy,kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `docs/crate-extraction/kv-branch-commit-dag.md`, `openspec/changes/extract-kv-branch-commit-dag/evidence/implementation-diff.txt`
++
++- [x] I4 Add `kv-branch-commit-dag` entries to `docs/crate-extraction/policy.ncl` and update `docs/crate-extraction.md` with the family readiness row and next action. [covers=kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `docs/crate-extraction/policy.ncl`, `docs/crate-extraction.md`, `scripts/check-crate-extraction-readiness.rs`, `openspec/changes/extract-kv-branch-commit-dag/evidence/implementation-diff.txt`
++
++- [x] I5 Add a downstream-style consumer fixture that imports `aspen-kv-branch` and `aspen-commit-dag` directly, exercises branch overlay and commit DAG APIs, and records metadata proving root Aspen and compatibility shells are absent. [covers=kv-branch-commit-dag-extraction.downstream-consumer-proof,kv-branch-commit-dag-extraction.downstream-consumer-proof.fixture-uses-canonical-crates] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/`, `openspec/changes/extract-kv-branch-commit-dag/evidence/i5-downstream-branch-dag-test.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/i5-downstream-branch-dag-metadata.json`, `openspec/changes/extract-kv-branch-commit-dag/evidence/i5-downstream-branch-dag-forbidden-grep.txt`
++
++- [x] V1 Save compile and dependency-boundary evidence for `cargo check -p aspen-commit-dag`, `cargo check -p aspen-kv-branch`, `cargo check -p aspen-kv-branch --no-default-features`, `cargo check -p aspen-kv-branch --features commit-dag`, and matching `cargo tree --edges normal` commands proving forbidden crates are absent. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.commit-dag-graph-excludes-app-shells,kv-branch-commit-dag-extraction.kv-branch-feature-topology.default-avoids-commit-dag,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-check-aspen-commit-dag.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-check-aspen-kv-branch-default.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-check-aspen-kv-branch-no-default.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-check-aspen-kv-branch-commit-dag.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-tree-aspen-commit-dag.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-tree-aspen-kv-branch-default.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-tree-aspen-kv-branch-no-default.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-tree-aspen-kv-branch-commit-dag.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-commit-dag-forbidden-grep.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-kv-branch-default-forbidden-grep.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-kv-branch-commit-dag-forbidden-grep.txt`
++
++- [x] V2 Run and save `cargo nextest run -p aspen-commit-dag` and `cargo nextest run -p aspen-kv-branch --features commit-dag`, including positive and negative tests for hash parsing, corruption detection, conflict detection, empty branch commits, and over-limit branch commits. [covers=kv-branch-commit-dag-extraction.commit-dag-avoids-raft-compat.hash-helpers-owned-by-family,kv-branch-commit-dag-extraction.kv-branch-feature-topology.commit-dag-feature-is-reusable] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `openspec/changes/extract-kv-branch-commit-dag/evidence/v2-nextest-aspen-commit-dag.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v2-nextest-aspen-kv-branch-commit-dag.txt`
++
++- [x] V3 Save compatibility evidence for representative Aspen consumers: `aspen-jobs --features kv-branch`, `aspen-ci-executor-shell --features kv-branch`, `aspen-deploy --features kv-branch`, `aspen-fuse --features kv-branch`, `aspen-docs --features commit-dag-federation`, and `aspen-cli --features commit-dag`. [covers=kv-branch-commit-dag-extraction.downstream-consumer-proof.fixture-uses-canonical-crates] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `openspec/changes/extract-kv-branch-commit-dag/evidence/v3-cargo-check-aspen-jobs-kv-branch.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v3-cargo-check-aspen-ci-executor-shell-kv-branch.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v3-cargo-check-aspen-deploy-kv-branch.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v3-cargo-check-aspen-fuse-kv-branch.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v3-cargo-check-aspen-docs-commit-dag-federation.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v3-cargo-check-aspen-cli-commit-dag.txt`
++
++- [x] V4 Run `scripts/check-crate-extraction-readiness.rs --candidate-family kv-branch-commit-dag` and save checker output plus any negative mutation checks proving forbidden dependency, missing owner, and invalid readiness state failures are caught. [covers=kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cover-family] ✅ completed: 2026-04-25T19:37:10Z
++  - Evidence: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.md`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.json`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-mutations-summary.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-forbidden-raft-summary.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-missing-owner-summary.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-invalid-readiness-summary.txt`, `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-missing-downstream-summary.txt`
++
++## Verification Commands
++
++### `openspec/changes/extract-kv-branch-commit-dag/evidence/run-verification.sh`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v1-cargo-check-aspen-commit-dag.txt`
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v2-nextest-aspen-commit-dag.txt`
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v3-cargo-check-aspen-cli-commit-dag.txt`
++
++### `CARGO_TARGET_DIR=/tmp/aspen-kv-branch-fixture cargo test --manifest-path openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag/Cargo.toml`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/i5-downstream-branch-dag-test.txt`
++
++### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family kv-branch-commit-dag --output-json openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.json --output-markdown openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.md`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.md`
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-readiness.json`
++
++### `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-run-negative-mutations.sh`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-mutations-summary.txt`
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-forbidden-raft-summary.txt`
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-missing-owner-summary.txt`
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-invalid-readiness-summary.txt`
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/v4-negative-missing-downstream-summary.txt`
++
++### `scripts/openspec-preflight.sh extract-kv-branch-commit-dag`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-kv-branch-commit-dag/evidence/openspec-preflight.txt`
+diff --git a/scripts/check-crate-extraction-readiness.rs b/scripts/check-crate-extraction-readiness.rs
+index e9cf1484b..322c24daa 100755
+--- a/scripts/check-crate-extraction-readiness.rs
++++ b/scripts/check-crate-extraction-readiness.rs
+@@ -42,12 +42,17 @@ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
+     "dependency-boundary",
+ ];
+ const BLOB_CASTORE_CACHE_FAMILY: &str = "blob-castore-cache";
++const KV_BRANCH_COMMIT_DAG_FAMILY: &str = "kv-branch-commit-dag";
+ const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
+     "i6-downstream-blob-metadata.json",
+     "i6-downstream-cache-castore-metadata.json",
+     "i6-downstream-blob-forbidden-grep.txt",
+     "i6-downstream-cache-castore-forbidden-grep.txt",
+ ];
++const KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE: &[&str] = &[
++    "i5-downstream-branch-dag-metadata.json",
++    "i5-downstream-branch-dag-forbidden-grep.txt",
++];
+ 
+ #[derive(Debug, Parser)]
+ struct Args {
+@@ -157,6 +162,8 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
+         "aspen_blob" => Some("aspen-blob"),
+         "aspen_castore" => Some("aspen-castore"),
+         "aspen_cache" => Some("aspen-cache"),
++        "aspen_commit_dag" => Some("aspen-commit-dag"),
++        "aspen_kv_branch" => Some("aspen-kv-branch"),
+         _ => None,
+     }
+ }
+@@ -331,10 +338,13 @@ fn check_evidence_index(args: &Args, failures: &mut Vec<String>) {
+ }
+ 
+ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<String>) {
+-    if args.candidate_family != BLOB_CASTORE_CACHE_FAMILY {
+-        return;
+-    }
+-    for file_name in BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE {
++    let required_files = match args.candidate_family.as_str() {
++        BLOB_CASTORE_CACHE_FAMILY => BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE,
++        KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
++        _ => return,
++    };
++
++    for file_name in required_files {
+         let artifact = evidence_dir.join(file_name);
+         if !artifact.exists() {
+             failures.push(format!(

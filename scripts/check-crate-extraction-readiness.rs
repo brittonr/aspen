@@ -42,11 +42,16 @@ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
     "dependency-boundary",
 ];
 const BLOB_CASTORE_CACHE_FAMILY: &str = "blob-castore-cache";
+const KV_BRANCH_COMMIT_DAG_FAMILY: &str = "kv-branch-commit-dag";
 const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i6-downstream-blob-metadata.json",
     "i6-downstream-cache-castore-metadata.json",
     "i6-downstream-blob-forbidden-grep.txt",
     "i6-downstream-cache-castore-forbidden-grep.txt",
+];
+const KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE: &[&str] = &[
+    "i5-downstream-branch-dag-metadata.json",
+    "i5-downstream-branch-dag-forbidden-grep.txt",
 ];
 
 #[derive(Debug, Parser)]
@@ -157,6 +162,8 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_blob" => Some("aspen-blob"),
         "aspen_castore" => Some("aspen-castore"),
         "aspen_cache" => Some("aspen-cache"),
+        "aspen_commit_dag" => Some("aspen-commit-dag"),
+        "aspen_kv_branch" => Some("aspen-kv-branch"),
         _ => None,
     }
 }
@@ -331,10 +338,13 @@ fn check_evidence_index(args: &Args, failures: &mut Vec<String>) {
 }
 
 fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<String>) {
-    if args.candidate_family != BLOB_CASTORE_CACHE_FAMILY {
-        return;
-    }
-    for file_name in BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE {
+    let required_files = match args.candidate_family.as_str() {
+        BLOB_CASTORE_CACHE_FAMILY => BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE,
+        KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
+        _ => return,
+    };
+
+    for file_name in required_files {
         let artifact = evidence_dir.join(file_name);
         if !artifact.exists() {
             failures.push(format!(

@@ -1339,7 +1339,6 @@ version = "0.1.0"
 dependencies = [
  "aspen-constants",
  "aspen-kv-types",
- "aspen-raft",
  "aspen-testing-core",
  "aspen-traits",
  "async-trait",

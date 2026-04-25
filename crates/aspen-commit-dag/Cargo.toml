@@ -6,7 +6,6 @@ license = "AGPL-3.0-or-later"
 description = "Chain-hashed commit DAG for Aspen KV branch history and federation integrity"
 
 [dependencies]
-aspen-raft = { workspace = true }
 aspen-kv-types = { workspace = true }
 aspen-traits = { workspace = true }
 aspen-constants = { workspace = true }

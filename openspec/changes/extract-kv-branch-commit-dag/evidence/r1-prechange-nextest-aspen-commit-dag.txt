@@ -1,0 +1,25 @@
+┌────────────────────────────────────┐
+│ Task 34:    completed successfully │
+└────────────────────────────────────┘
+Command: cargo nextest run -p aspen-commit-dag                             
+   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2 
+  Label: kv-branch prechange commit-dag tests                              
+  Start: Sat, 25 Apr 2026 15:27:57 -0400                                   
+    End: Sat, 25 Apr 2026 15:28:29 -0400                                   
+
+output: (last 15 lines)
+        PASS [   0.002s] (21/33) aspen-commit-dag verified::commit_hash::tests::first_commit_uses_genesis
+        PASS [   0.002s] (22/33) aspen-commit-dag verified::commit_hash::tests::sort_order_matters
+        PASS [   0.002s] (23/33) aspen-commit-dag verified::commit_hash::tests::tombstone_differs_from_set
+        PASS [   0.002s] (24/33) aspen-commit-dag verified::commit_hash::tests::tombstone_only_mutations
+        PASS [   0.002s] (25/33) aspen-commit-dag verified::commit_hash::tests::verify_commit_integrity_tampered
+        PASS [   0.002s] (26/33) aspen-commit-dag verified::commit_hash::tests::verify_commit_integrity_valid
+        PASS [   0.002s] (27/33) aspen-commit-dag verified::diff::tests::added_keys
+        PASS [   0.002s] (28/33) aspen-commit-dag verified::diff::tests::both_empty
+        PASS [   0.003s] (29/33) aspen-commit-dag verified::diff::tests::changed_values
+        PASS [   0.002s] (30/33) aspen-commit-dag verified::diff::tests::identical_commits_empty_diff
+        PASS [   0.003s] (31/33) aspen-commit-dag verified::diff::tests::mixed_changes
+        PASS [   0.003s] (32/33) aspen-commit-dag verified::diff::tests::removed_keys
+        PASS [   0.002s] (33/33) aspen-commit-dag verified::diff::tests::tombstone_transitions
+────────────
+     Summary [   0.090s] 33 tests run: 33 passed, 0 skipped

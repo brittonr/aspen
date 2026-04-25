@@ -1,0 +1,3 @@
+Command: bash -c if rg -n 'aspen_raft::verified|aspen-raft =|aspen_raft::' crates/aspen-commit-dag/Cargo.toml crates/aspen-commit-dag/src; then exit 1; else echo 'No aspen-raft source/Cargo imports found.'; fi
+No aspen-raft source/Cargo imports found.
+Exit: 0

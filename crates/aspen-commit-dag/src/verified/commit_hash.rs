@@ -2,13 +2,12 @@
 //!
 //! Formally verified — see `verus/commit_hash_spec.rs` for proofs.
 
-use aspen_raft::verified::ChainHash;
-use aspen_raft::verified::GENESIS_HASH;
-use aspen_raft::verified::constant_time_compare;
-
 use crate::types::Commit;
 use crate::types::CommitId;
 use crate::types::MutationType;
+use crate::verified::hash::ChainHash;
+use crate::verified::hash::GENESIS_HASH;
+use crate::verified::hash::constant_time_compare;
 
 /// Tag byte for `MutationType::Set` in the mutations hash.
 const TAG_SET: u8 = 0x01;
@@ -103,6 +102,16 @@ pub fn verify_commit_integrity(commit: &Commit) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::verified::hash::hash_from_hex;
+    use crate::verified::hash::hash_to_hex;
+
+    const GOLDEN_MUTATIONS_HASH_HEX: &str = "dbd53f33679f0e296670008cd0df8020e3eb514c2ca8a84098e4860f15b4a489";
+    const GOLDEN_GENESIS_COMMIT_ID_HEX: &str = "66bd5d2fbe90bd12c9ae86194472f5c2673859250f18178f7e99fd02c651d3c4";
+    const GOLDEN_PARENT_COMMIT_ID_HEX: &str = "f55650d469fcfcde65cf57bb6e87f937915228fae61392e4940940fb8fdbdbe4";
+    const GOLDEN_BRANCH_ID: &str = "branch-1";
+    const GOLDEN_RAFT_REVISION: u64 = 42;
+    const GOLDEN_TIMESTAMP_MS: u64 = 1000;
+    const GOLDEN_PARENT_BYTE: u8 = 0x11;
 
     #[test]
     fn determinism_same_inputs_same_output() {
@@ -166,6 +175,36 @@ mod tests {
 
         // Different order → different hash (caller must sort)
         assert_ne!(compute_mutations_hash(&sorted), compute_mutations_hash(&reversed),);
+    }
+
+    #[test]
+    fn golden_mutations_hash_preserves_pre_move_behavior() {
+        let mutations = vec![("k".to_string(), MutationType::Set("v".to_string()))];
+
+        let hash = compute_mutations_hash(&mutations);
+
+        assert_eq!(hash_to_hex(&hash), GOLDEN_MUTATIONS_HASH_HEX);
+        assert_eq!(hash_from_hex(GOLDEN_MUTATIONS_HASH_HEX), Some(hash));
+    }
+
+    #[test]
+    fn golden_commit_id_preserves_genesis_parent_behavior() {
+        let mutations_hash = compute_mutations_hash(&[("k".to_string(), MutationType::Set("v".to_string()))]);
+
+        let id = compute_commit_id(&None, GOLDEN_BRANCH_ID, &mutations_hash, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
+
+        assert_eq!(hash_to_hex(&id), GOLDEN_GENESIS_COMMIT_ID_HEX);
+    }
+
+    #[test]
+    fn golden_commit_id_preserves_non_genesis_parent_behavior() {
+        let mutations_hash = compute_mutations_hash(&[("k".to_string(), MutationType::Set("v".to_string()))]);
+        let parent = Some([GOLDEN_PARENT_BYTE; crate::verified::hash::CHAIN_HASH_BYTES]);
+
+        let id =
+            compute_commit_id(&parent, GOLDEN_BRANCH_ID, &mutations_hash, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
+
+        assert_eq!(hash_to_hex(&id), GOLDEN_PARENT_COMMIT_ID_HEX);
     }
 
     #[test]

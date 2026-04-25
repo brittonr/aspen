@@ -1,0 +1,17 @@
+Command: rg -n aspen_raft::verified|aspen-raft|aspen_commit_dag|aspen-commit-dag crates/aspen-kv-branch
+crates/aspen-kv-branch/src/overlay.rs:57:    parent_commit: std::sync::Mutex<Option<aspen_commit_dag::CommitId>>,
+crates/aspen-kv-branch/src/overlay.rs:450:    ) -> Result<(Vec<aspen_kv_types::batch::BatchOperation>, aspen_commit_dag::CommitId), BranchError> {
+crates/aspen-kv-branch/src/overlay.rs:451:        use aspen_commit_dag::CommitStore;
+crates/aspen-kv-branch/src/overlay.rs:452:        use aspen_commit_dag::MutationType;
+crates/aspen-kv-branch/src/overlay.rs:453:        use aspen_commit_dag::verified::commit_hash::compute_commit_id;
+crates/aspen-kv-branch/src/overlay.rs:454:        use aspen_commit_dag::verified::commit_hash::compute_mutations_hash;
+crates/aspen-kv-branch/src/overlay.rs:485:        let commit = aspen_commit_dag::Commit {
+crates/aspen-kv-branch/src/overlay.rs:520:    pub fn parent_commit(&self) -> Option<aspen_commit_dag::CommitId> {
+crates/aspen-kv-branch/src/overlay.rs:527:    pub fn set_parent_commit(&self, commit_id: aspen_commit_dag::CommitId) {
+crates/aspen-kv-branch/src/commit_result.rs:16:    pub commit_id: Option<aspen_commit_dag::CommitId>,
+crates/aspen-kv-branch/Cargo.toml:10:commit-dag = ["dep:aspen-commit-dag"]
+crates/aspen-kv-branch/Cargo.toml:16:aspen-commit-dag = { workspace = true, optional = true }
+crates/aspen-kv-branch/Cargo.toml:26:aspen-commit-dag = { workspace = true }
+crates/aspen-kv-branch/tests/commit_dag_tests.rs:9:use aspen_commit_dag::CommitStore;
+crates/aspen-kv-branch/tests/commit_dag_tests.rs:10:use aspen_commit_dag::verified::commit_hash::verify_commit_integrity;
+Exit: 0

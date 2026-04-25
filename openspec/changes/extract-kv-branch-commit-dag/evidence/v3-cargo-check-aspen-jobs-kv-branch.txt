@@ -1,0 +1,54 @@
+Command: cargo check -p aspen-jobs --features kv-branch
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Checking smallvec v1.15.1
+    Checking tokio-util v0.7.18
+   Compiling rustls v0.23.37
+    Checking rustls-webpki v0.103.9
+    Checking uuid v1.22.0
+    Checking blake3 v1.8.3
+   Compiling pkarr v5.0.2
+    Checking tower-http v0.6.8
+    Checking netdev v0.40.1
+   Compiling iroh v0.97.0
+    Checking backon v1.6.0
+    Checking aspen-coordination v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination)
+    Checking tempfile v3.27.0
+    Checking icu_normalizer v2.1.1
+    Checking parking_lot_core v0.9.12
+    Checking parking_lot v0.12.5
+    Checking dashmap v6.1.0
+    Checking aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+    Checking moka v0.12.14
+    Checking aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-branch)
+    Checking idna_adapter v1.2.1
+    Checking idna v1.1.0
+    Checking h2 v0.4.13
+    Checking n0-future v0.3.2
+    Checking tokio-stream v0.1.18
+    Checking n0-watcher v0.6.1
+    Checking url v2.5.8
+    Checking netwatch v0.15.0
+    Checking attohttpc v0.30.1
+    Checking iroh-base v0.97.0
+    Checking tokio-rustls v0.26.4
+    Checking noq-proto v0.16.0
+    Checking tokio-websockets v0.12.3
+    Checking hyper v1.8.1
+    Checking hickory-proto v0.25.2
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.7
+    Checking igd-next v0.16.2
+    Checking hickory-resolver v0.25.2
+    Checking reqwest v0.12.28
+    Checking noq v0.17.0
+    Checking portmapper v0.15.0
+    Checking iroh-relay v0.97.0
+    Checking aspen-jobs v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.93s
+Exit: 0

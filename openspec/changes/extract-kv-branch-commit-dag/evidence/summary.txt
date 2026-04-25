@@ -1,0 +1,6 @@
+KV branch / commit DAG extraction summary:
+- moved chain hash helpers into aspen-commit-dag::verified::hash
+- removed normal aspen-raft dependency from aspen-commit-dag
+- preserved BLAKE3 commit ID behavior with golden hash tests for mutations, genesis parent, and non-genesis parent cases
+- added downstream branch/DAG fixture using canonical aspen-kv-branch and aspen-commit-dag crates directly
+- added extraction manifest, policy entries, package mappings, and family-specific downstream evidence checks

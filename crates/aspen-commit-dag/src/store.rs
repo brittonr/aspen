@@ -3,8 +3,6 @@
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
-use aspen_raft::verified::hash_from_hex;
-use aspen_raft::verified::hash_to_hex;
 use aspen_traits::KeyValueStore;
 use tracing::debug;
 
@@ -13,6 +11,8 @@ use crate::constants::COMMIT_TIP_PREFIX;
 use crate::error::CommitDagError;
 use crate::types::Commit;
 use crate::types::CommitId;
+use crate::verified::hash::hash_from_hex;
+use crate::verified::hash::hash_to_hex;
 
 /// Provides read/write access to commit objects and branch tips in a `KeyValueStore`.
 pub struct CommitStore;

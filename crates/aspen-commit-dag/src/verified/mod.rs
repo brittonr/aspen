@@ -7,3 +7,11 @@
 
 pub mod commit_hash;
 pub mod diff;
+pub mod hash;
+
+pub use hash::CHAIN_HASH_BYTES;
+pub use hash::ChainHash;
+pub use hash::GENESIS_HASH;
+pub use hash::constant_time_compare;
+pub use hash::hash_from_hex;
+pub use hash::hash_to_hex;

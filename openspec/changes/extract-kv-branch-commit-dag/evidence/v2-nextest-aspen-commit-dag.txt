@@ -1,0 +1,61 @@
+Command: cargo nextest run -p aspen-commit-dag
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s
+────────────
+ Nextest run ID d880b830-607b-4a85-ba9e-d46772a1e705 with nextest profile: default
+    Starting 41 tests across 1 binary
+        PASS [   0.022s] ( 1/41) aspen-commit-dag fork::tests::fork_from_corrupted_commit
+        PASS [   0.002s] ( 2/41) aspen-commit-dag fork::tests::fork_from_nonexistent_commit
+        PASS [   0.002s] ( 3/41) aspen-commit-dag fork::tests::fork_from_valid_commit
+        PASS [   0.002s] ( 4/41) aspen-commit-dag gc::tests::branch_tip_commit_is_never_collected
+        PASS [   0.002s] ( 5/41) aspen-commit-dag gc::tests::expired_commit_no_refs_is_collected
+        PASS [   0.002s] ( 6/41) aspen-commit-dag gc::tests::expired_commit_with_live_child_is_protected
+        PASS [   0.002s] ( 7/41) aspen-commit-dag gc::tests::gc_batch_size_respected
+        PASS [   0.002s] ( 8/41) aspen-commit-dag store::tests::branch_tip_update_and_read
+        PASS [   0.002s] ( 9/41) aspen-commit-dag store::tests::load_nonexistent_commit_returns_not_found
+        PASS [   0.002s] (10/41) aspen-commit-dag store::tests::store_load_roundtrip
+        PASS [   0.002s] (11/41) aspen-commit-dag store::tests::walk_chain_follows_parents
+        PASS [   0.002s] (12/41) aspen-commit-dag store::tests::walk_chain_respects_max_depth
+        PASS [   0.001s] (13/41) aspen-commit-dag verified::commit_hash::tests::commit_id_depends_on_branch
+        PASS [   0.001s] (14/41) aspen-commit-dag verified::commit_hash::tests::commit_id_depends_on_parent
+        PASS [   0.002s] (15/41) aspen-commit-dag verified::commit_hash::tests::commit_id_depends_on_revision
+        PASS [   0.002s] (16/41) aspen-commit-dag verified::commit_hash::tests::commit_id_depends_on_timestamp
+        PASS [   0.002s] (17/41) aspen-commit-dag verified::commit_hash::tests::commit_id_deterministic
+        PASS [   0.002s] (18/41) aspen-commit-dag verified::commit_hash::tests::determinism_same_inputs_same_output
+        PASS [   0.002s] (19/41) aspen-commit-dag verified::commit_hash::tests::different_inputs_different_hashes
+        PASS [   0.002s] (20/41) aspen-commit-dag verified::commit_hash::tests::empty_mutations_produce_known_hash
+        PASS [   0.002s] (21/41) aspen-commit-dag verified::commit_hash::tests::first_commit_uses_genesis
+        PASS [   0.002s] (22/41) aspen-commit-dag verified::commit_hash::tests::golden_commit_id_preserves_genesis_parent_behavior
+        PASS [   0.002s] (23/41) aspen-commit-dag verified::commit_hash::tests::golden_commit_id_preserves_non_genesis_parent_behavior
+        PASS [   0.001s] (24/41) aspen-commit-dag verified::commit_hash::tests::golden_mutations_hash_preserves_pre_move_behavior
+        PASS [   0.001s] (25/41) aspen-commit-dag verified::commit_hash::tests::sort_order_matters
+        PASS [   0.002s] (26/41) aspen-commit-dag verified::commit_hash::tests::tombstone_differs_from_set
+        PASS [   0.001s] (27/41) aspen-commit-dag verified::commit_hash::tests::tombstone_only_mutations
+        PASS [   0.001s] (28/41) aspen-commit-dag verified::commit_hash::tests::verify_commit_integrity_tampered
+        PASS [   0.002s] (29/41) aspen-commit-dag verified::commit_hash::tests::verify_commit_integrity_valid
+        PASS [   0.002s] (30/41) aspen-commit-dag verified::diff::tests::added_keys
+        PASS [   0.001s] (31/41) aspen-commit-dag verified::diff::tests::both_empty
+        PASS [   0.001s] (32/41) aspen-commit-dag verified::diff::tests::changed_values
+        PASS [   0.002s] (33/41) aspen-commit-dag verified::diff::tests::identical_commits_empty_diff
+        PASS [   0.002s] (34/41) aspen-commit-dag verified::diff::tests::mixed_changes
+        PASS [   0.001s] (35/41) aspen-commit-dag verified::diff::tests::removed_keys
+        PASS [   0.001s] (36/41) aspen-commit-dag verified::diff::tests::tombstone_transitions
+        PASS [   0.002s] (37/41) aspen-commit-dag verified::hash::tests::constant_time_compare_accepts_equal_hashes
+        PASS [   0.001s] (38/41) aspen-commit-dag verified::hash::tests::constant_time_compare_rejects_different_hashes
+        PASS [   0.002s] (39/41) aspen-commit-dag verified::hash::tests::hash_from_hex_rejects_malformed_input
+        PASS [   0.002s] (40/41) aspen-commit-dag verified::hash::tests::hash_from_hex_rejects_wrong_length_input
+        PASS [   0.002s] (41/41) aspen-commit-dag verified::hash::tests::hash_hex_roundtrip_accepts_valid_hash
+────────────
+     Summary [   0.092s] 41 tests run: 41 passed, 0 skipped
+Exit: 0

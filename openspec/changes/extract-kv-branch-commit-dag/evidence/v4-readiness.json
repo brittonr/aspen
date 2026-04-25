@@ -1,0 +1,21 @@
+{
+  "candidate_family": "kv-branch-commit-dag",
+  "passed": true,
+  "failures": [],
+  "warnings": [],
+  "checked_candidates": [
+    "aspen_blob",
+    "aspen_cache",
+    "aspen_castore",
+    "aspen_commit_dag",
+    "aspen_coordination",
+    "aspen_coordination_protocol",
+    "aspen_kv_branch",
+    "aspen_kv_types",
+    "aspen_raft_compat",
+    "aspen_raft_kv",
+    "aspen_raft_kv_types",
+    "aspen_raft_network",
+    "aspen_redb_storage"
+  ]
+}
