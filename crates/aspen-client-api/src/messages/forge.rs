@@ -97,6 +97,15 @@ pub enum ForgeRequest {
         description: Option<String>,
         default_branch: Option<String>,
     },
+    /// Create a repository with explicit backends.
+    ForgeCreateRepoWithBackends {
+        name: String,
+        description: Option<String>,
+        default_branch: Option<String>,
+        backends: Vec<ForgeRepoBackend>,
+    },
+    /// Delete repository by ID.
+    ForgeDeleteRepo { repo_id: String },
     /// Get repository information by ID.
     ForgeGetRepo { repo_id: String },
     /// List repositories.
@@ -381,6 +390,8 @@ impl ForgeRequest {
         match self {
             // Write operations
             Self::ForgeCreateRepo { .. }
+            | Self::ForgeCreateRepoWithBackends { .. }
+            | Self::ForgeDeleteRepo { .. }
             | Self::ForgeStoreBlob { .. }
             | Self::ForgeCreateTree { .. }
             | Self::ForgeCommit { .. }

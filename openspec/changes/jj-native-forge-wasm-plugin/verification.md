@@ -5,10 +5,21 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-forge/src/jj.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-3-jj-blob-fetch-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-3-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-3-openspec-preflight.txt`
+- Changed file: `crates/aspen-client-api/src/messages/forge.rs`
+- Changed file: `crates/aspen-client-api/src/messages/mod.rs`
+- Changed file: `crates/aspen-client-api/src/messages/request_metadata.rs`
+- Changed file: `crates/aspen-client-api/src/messages/request_metadata_apps/forge.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
+- Changed file: `crates/aspen-client-api/tests/golden/request_discriminants.txt`
+- Changed file: `crates/aspen-client-api/tests/golden/response_discriminants.txt`
+- Changed file: `crates/aspen-client-api/tests/wire_format_golden.rs`
+- Changed file: `crates/aspen-forge-handler/src/executor.rs`
+- Changed file: `crates/aspen-rpc-handlers/src/client.rs`
+- Changed file: `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-client-api-wire-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-forge-repo-lifecycle-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -16,6 +27,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 1.1 Extend Forge repo metadata, repository list responses, and client-facing capability discovery so a repo can declare `git`, `jj`, or both backends and return node-specific routing identifiers for active backends.
   - Evidence: `crates/aspen-forge-protocol/src/lib.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-6-forge-plugin-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-6-rustfmt-check.txt`
+
+- [x] 1.2 Update repository create/delete flows so JJ-enabled repos allocate JJ namespaces on create and remove/tombstone JJ namespaces, change-id indexes, and discovery metadata on delete while leaving shared blobs on the normal retention/GC path.
+  - Evidence: `crates/aspen-client-api/src/messages/mod.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-forge-repo-lifecycle-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-client-api-wire-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-rustfmt-check.txt`
 
 - [x] 1.3 Default or backfill pre-existing repositories with no backend manifest to `git`-only behavior.
   - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `crates/aspen-forge-protocol/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-6-forge-plugin-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-6-rustfmt-check.txt`
@@ -99,6 +113,26 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-6-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge-handler test_execute_ -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-forge-repo-lifecycle-tests.txt`
+
+### `cargo test -p aspen-client-api --test wire_format_golden -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-client-api-wire-tests.txt`
+
+### `rustfmt --check <task 1.2 changed Rust files>`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-2-openspec-preflight.txt`
 
 ### `cargo test -p aspen-forge jj::`
 
@@ -332,7 +366,5 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 ## Notes
 
-- Task 1.4 remains unchecked: protocol structs exist, but a JJ session admission path still needs to enforce version compatibility before object exchange.
-- Task 1.5 remains unchecked: manifests can claim protocols, but bounded protocol-session routing/admission still needs runtime implementation.
-- Task 1.7 remains unchecked until JJ routing identifiers are preserved through reload/upgrade evidence.
+- Remaining unchecked tasks are the plugin/runtime session path, standalone `jj-remote-aspen`, authz, feature/config wiring, and broader integration/negative transport coverage.
 - Same-family review correction is tracked in `openspec/changes/jj-native-forge-wasm-plugin/evidence/review-remediation-task-scope.md`.

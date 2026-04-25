@@ -31,9 +31,44 @@ fn usize_from_u32(value: u32) -> usize {
 }
 
 const PLUGIN_ROUTE_SCAN_LIMIT: u32 = 1_000;
+const REPO_JJ_NAMESPACE_SCAN_LIMIT: u32 = 1_000;
+const REPO_JJ_NAMESPACE_SCAN_PAGE_LIMIT: u32 = 64;
+const REPO_BACKEND_MANIFEST_SUFFIX: &str = ":backends";
+const REPO_IDENTITY_SUFFIX: &str = ":identity";
 
 fn git_only_backends() -> Vec<ForgeRepoBackend> {
     ForgeRepoBackendManifest::git_only().backends
+}
+
+fn normalize_repo_backends(backends: Option<Vec<ForgeRepoBackend>>) -> Vec<ForgeRepoBackend> {
+    let Some(backends) = backends else {
+        return git_only_backends();
+    };
+    if backends.is_empty() {
+        return git_only_backends();
+    }
+
+    let mut unique = std::collections::BTreeSet::new();
+    for backend in backends {
+        unique.insert(backend);
+    }
+    unique.into_iter().collect()
+}
+
+fn repo_backend_manifest_key(repo_id_hex: &str) -> String {
+    format!("{}{}{}", aspen_forge::constants::KV_PREFIX_REPOS, repo_id_hex, REPO_BACKEND_MANIFEST_SUFFIX)
+}
+
+fn repo_backend_manifest(backends: Vec<ForgeRepoBackend>) -> ForgeRepoBackendManifest {
+    ForgeRepoBackendManifest { backends }
+}
+
+fn jj_namespace_cleanup_prefixes(repo_id_hex: &str) -> Vec<String> {
+    vec![
+        format!("{}{repo_id_hex}:", aspen_forge::jj::JJ_BOOKMARK_KEY_PREFIX),
+        format!("{}{repo_id_hex}:", aspen_forge::jj::JJ_CHANGE_HEAD_KEY_PREFIX),
+        format!("{}{repo_id_hex}:", aspen_forge::jj::JJ_STAGED_SESSION_KEY_PREFIX),
+    ]
 }
 
 fn git_backend_route(node_id: u64) -> ForgeRepoBackendRoute {
@@ -355,6 +390,101 @@ impl ForgeServiceExecutor {
         }
     }
 
+    async fn read_repo_backends(&self, repo_id_hex: &str) -> Vec<ForgeRepoBackend> {
+        match self
+            .forge_node
+            .kv()
+            .read(aspen_core::ReadRequest::new(repo_backend_manifest_key(repo_id_hex)))
+            .await
+        {
+            Ok(result) => result
+                .kv
+                .and_then(|kv| serde_json::from_str::<ForgeRepoBackendManifest>(&kv.value).ok())
+                .map(|manifest| normalize_repo_backends(Some(manifest.backends)))
+                .unwrap_or_else(git_only_backends),
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => git_only_backends(),
+            Err(error) => {
+                tracing::warn!(error = %error, repo_id = %repo_id_hex, "failed to read repo backend manifest");
+                git_only_backends()
+            }
+        }
+    }
+
+    async fn write_repo_backends(&self, repo_id_hex: &str, backends: &[ForgeRepoBackend]) -> Result<()> {
+        let manifest = repo_backend_manifest(backends.to_vec());
+        let value = serde_json::to_string(&manifest)?;
+        self.forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(repo_backend_manifest_key(repo_id_hex), value))
+            .await?;
+        Ok(())
+    }
+
+    async fn initialize_jj_namespaces(&self, repo_id_hex: &str, backends: &[ForgeRepoBackend]) -> Result<()> {
+        if !backends.contains(&ForgeRepoBackend::Jj) {
+            return Ok(());
+        }
+        let state = aspen_forge::JjRepoSessionState {
+            repo_id: repo_id_hex.to_string(),
+            is_deleted: false,
+            is_jj_enabled: true,
+        };
+        let value = serde_json::to_string(&state)?;
+        self.forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(aspen_forge::jj_repo_session_state_key(repo_id_hex), value))
+            .await?;
+        Ok(())
+    }
+
+    async fn tombstone_jj_namespaces(&self, repo_id_hex: &str) -> Result<()> {
+        let state = aspen_forge::JjRepoSessionState {
+            repo_id: repo_id_hex.to_string(),
+            is_deleted: true,
+            is_jj_enabled: false,
+        };
+        let value = serde_json::to_string(&state)?;
+        self.forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(aspen_forge::jj_repo_session_state_key(repo_id_hex), value))
+            .await?;
+        for prefix in jj_namespace_cleanup_prefixes(repo_id_hex) {
+            self.delete_scan_prefix(&prefix).await?;
+        }
+        self.delete_key_if_exists(repo_backend_manifest_key(repo_id_hex)).await?;
+        Ok(())
+    }
+
+    async fn delete_scan_prefix(&self, prefix: &str) -> Result<()> {
+        let mut continuation_token = None;
+        for _scan_page in 0..REPO_JJ_NAMESPACE_SCAN_PAGE_LIMIT {
+            let result = self
+                .forge_node
+                .kv()
+                .scan(aspen_core::ScanRequest {
+                    prefix: prefix.to_string(),
+                    limit_results: Some(REPO_JJ_NAMESPACE_SCAN_LIMIT),
+                    continuation_token,
+                })
+                .await?;
+            for entry in result.entries {
+                self.delete_key_if_exists(entry.key).await?;
+            }
+            if !result.is_truncated {
+                return Ok(());
+            }
+            continuation_token = result.continuation_token;
+        }
+        Err(anyhow!("JJ namespace cleanup exceeded scan page limit for prefix {prefix}"))
+    }
+
+    async fn delete_key_if_exists(&self, key: String) -> Result<()> {
+        match self.forge_node.kv().delete(aspen_core::DeleteRequest::new(key)).await {
+            Ok(_) | Err(aspen_core::KeyValueStoreError::NotFound { .. }) => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     async fn active_backend_routes(&self) -> Vec<ForgeRepoBackendRoute> {
         let mut routes = vec![git_backend_route(self.node_id)];
         let request = aspen_core::ScanRequest {
@@ -390,6 +520,8 @@ impl ForgeServiceExecutor {
     fn request_group(request: &ClientRpcRequest) -> Result<ForgeRequestGroup> {
         match request {
             ClientRpcRequest::ForgeCreateRepo { .. }
+            | ClientRpcRequest::ForgeCreateRepoWithBackends { .. }
+            | ClientRpcRequest::ForgeDeleteRepo { .. }
             | ClientRpcRequest::ForgeListRepos { .. }
             | ClientRpcRequest::ForgeGetRepo { .. } => Ok(ForgeRequestGroup::Repo),
             ClientRpcRequest::ForgeStoreBlob { .. } | ClientRpcRequest::ForgeGetBlob { .. } => {
@@ -474,6 +606,49 @@ impl ForgeServiceExecutor {
     // Helper Methods for Git Operations
     // ========================================================================
 
+    async fn handle_create_repo(
+        &self,
+        name: String,
+        description: Option<String>,
+        backends: Option<Vec<ForgeRepoBackend>>,
+    ) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeRepoResultResponse;
+
+        let delegates = vec![self.forge_node.public_key()];
+        let backends = normalize_repo_backends(backends);
+        match self.forge_node.create_repo(&name, delegates, 1).await {
+            Ok(identity) => {
+                let repo_id_hex = identity.repo_id().to_hex();
+                if let Err(error) = self.write_repo_backends(&repo_id_hex, &backends).await {
+                    return Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        is_success: false,
+                        repo: None,
+                        error: Some(error.to_string()),
+                    }));
+                }
+                if let Err(error) = self.initialize_jj_namespaces(&repo_id_hex, &backends).await {
+                    return Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                        is_success: false,
+                        repo: None,
+                        error: Some(error.to_string()),
+                    }));
+                }
+                let active_routes = self.active_backend_routes().await;
+                let repo_info = repo_info_from_identity_with_backends(&identity, description, backends, &active_routes);
+                Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                    is_success: true,
+                    repo: Some(repo_info),
+                    error: None,
+                }))
+            }
+            Err(error) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
+                is_success: false,
+                repo: None,
+                error: Some(error.to_string()),
+            })),
+        }
+    }
+
     async fn handle_get_repo(&self, repo_id: String) -> Result<ClientRpcResponse> {
         use aspen_client_api::ForgeRepoResultResponse;
 
@@ -483,7 +658,9 @@ impl ForgeServiceExecutor {
         match self.forge_node.get_repo(&repo_id).await {
             Ok(identity) => {
                 let active_routes = self.active_backend_routes().await;
-                let repo_info = repo_info_from_identity(&identity, None, &active_routes);
+                let repo_id_hex = identity.repo_id().to_hex();
+                let backends = self.read_repo_backends(&repo_id_hex).await;
+                let repo_info = repo_info_from_identity_with_backends(&identity, None, backends, &active_routes);
                 Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                     is_success: true,
                     repo: Some(repo_info),
@@ -496,6 +673,40 @@ impl ForgeServiceExecutor {
                 error: Some(format!("{}", e)),
             })),
         }
+    }
+
+    async fn handle_delete_repo(&self, repo_id: String) -> Result<ClientRpcResponse> {
+        use aspen_client_api::ForgeOperationResultResponse;
+
+        let result = self.delete_repo(repo_id).await;
+        match result {
+            Ok(()) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: true,
+                error: None,
+            })),
+            Err(error) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                is_success: false,
+                error: Some(error.to_string()),
+            })),
+        }
+    }
+
+    async fn delete_repo(&self, repo_id: String) -> Result<()> {
+        let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {}", e))?;
+        let repo_id_value = aspen_forge::identity::RepoId::from_hash(hash);
+        let identity = self.forge_node.get_repo(&repo_id_value).await?;
+        let repo_id_hex = repo_id_value.to_hex();
+        self.tombstone_jj_namespaces(&repo_id_hex).await?;
+        self.delete_key_if_exists(format!(
+            "{}{}{}",
+            aspen_forge::constants::KV_PREFIX_REPOS,
+            repo_id_hex,
+            REPO_IDENTITY_SUFFIX
+        ))
+        .await?;
+        self.delete_key_if_exists(format!("{}{}", aspen_forge::constants::KV_PREFIX_REPO_NAMES, identity.name))
+            .await?;
+        Ok(())
     }
 
     async fn handle_store_blob(&self, _repo_id: String, content: Vec<u8>) -> Result<ClientRpcResponse> {
@@ -1782,27 +1993,13 @@ impl ForgeServiceExecutor {
                 name,
                 description,
                 default_branch: _,
-            } => {
-                use aspen_client_api::ForgeRepoResultResponse;
-
-                let delegates = vec![self.forge_node.public_key()];
-                match self.forge_node.create_repo(&name, delegates, 1).await {
-                    Ok(identity) => {
-                        let active_routes = self.active_backend_routes().await;
-                        let repo_info = repo_info_from_identity(&identity, description, &active_routes);
-                        Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
-                            is_success: true,
-                            repo: Some(repo_info),
-                            error: None,
-                        }))
-                    }
-                    Err(error) => Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
-                        is_success: false,
-                        repo: None,
-                        error: Some(error.to_string()),
-                    })),
-                }
-            }
+            } => self.handle_create_repo(name, description, None).await,
+            ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name,
+                description,
+                default_branch: _,
+                backends,
+            } => self.handle_create_repo(name, description, Some(backends)).await,
             ClientRpcRequest::ForgeListRepos {
                 limit: max_results_hint,
                 offset: start_offset_hint,
@@ -1815,12 +2012,18 @@ impl ForgeServiceExecutor {
                     Ok(repos) => {
                         let active_routes = self.active_backend_routes().await;
                         let count = u32::try_from(repos.len()).unwrap_or(u32::MAX);
-                        let repos = repos
-                            .into_iter()
-                            .skip(start_index)
-                            .take(max_results)
-                            .map(|identity| repo_info_from_identity(&identity, None, &active_routes))
-                            .collect();
+                        let selected_repos: Vec<_> = repos.into_iter().skip(start_index).take(max_results).collect();
+                        let mut repos = Vec::with_capacity(selected_repos.len());
+                        for identity in selected_repos {
+                            let repo_id_hex = identity.repo_id().to_hex();
+                            let backends = self.read_repo_backends(&repo_id_hex).await;
+                            repos.push(repo_info_from_identity_with_backends(
+                                &identity,
+                                None,
+                                backends,
+                                &active_routes,
+                            ));
+                        }
                         Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
                             is_success: true,
                             repos,
@@ -1837,6 +2040,7 @@ impl ForgeServiceExecutor {
                 }
             }
             ClientRpcRequest::ForgeGetRepo { repo_id } => self.handle_get_repo(repo_id).await,
+            ClientRpcRequest::ForgeDeleteRepo { repo_id } => self.handle_delete_repo(repo_id).await,
             _ => unexpected_request_kind("repo"),
         }
     }
@@ -2412,7 +2616,9 @@ impl ForgeServiceExecutor {
             }
         };
         let active_routes = self.active_backend_routes().await;
-        let info = repo_info_from_identity(&identity, None, &active_routes);
+        let repo_id_hex = identity.repo_id().to_hex();
+        let backends = self.read_repo_backends(&repo_id_hex).await;
+        let info = repo_info_from_identity_with_backends(&identity, None, backends, &active_routes);
         if !info.backends.contains(&ForgeRepoBackend::Jj) {
             return Ok(Some(aspen_client_api::forge::jj_native_response(
                 aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable,
@@ -2967,6 +3173,138 @@ mod tests {
             }
             other => panic!("expected ForgeRepoListResult, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_execute_create_jj_repo_allocates_backend_namespace() {
+        let executor = make_test_executor().await;
+        let manifest = test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true);
+        let manifest_json = serde_json::to_string(&manifest).expect("manifest serializes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(
+                format!("{}{}", aspen_plugin_api::PLUGIN_KV_PREFIX, manifest.name),
+                manifest_json,
+            ))
+            .await
+            .expect("plugin manifest writes to KV");
+
+        let create_result = executor
+            .execute(ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name: "jj-repo".into(),
+                description: None,
+                default_branch: None,
+                backends: vec![ForgeRepoBackend::Jj, ForgeRepoBackend::Git],
+            })
+            .await
+            .expect("create repo should succeed");
+
+        let ClientRpcResponse::ForgeRepoResult(response) = create_result else {
+            panic!("expected ForgeRepoResult");
+        };
+        assert!(response.is_success);
+        let repo = response.repo.expect("created repo info is present");
+        assert_eq!(repo.backends, vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj]);
+        assert!(repo.backend_routes.iter().any(|route| route.backend == ForgeRepoBackend::Git));
+        assert!(repo.backend_routes.iter().any(|route| route.backend == ForgeRepoBackend::Jj));
+
+        let state = executor
+            .forge_node
+            .kv()
+            .read(aspen_core::ReadRequest::new(aspen_forge::jj_repo_session_state_key(&repo.id)))
+            .await
+            .expect("JJ repo state key reads")
+            .kv
+            .expect("JJ repo state key exists");
+        let state: aspen_forge::JjRepoSessionState = serde_json::from_str(&state.value).expect("state decodes");
+        assert_eq!(state.repo_id, repo.id);
+        assert!(!state.is_deleted);
+        assert!(state.is_jj_enabled);
+    }
+
+    #[tokio::test]
+    async fn test_execute_delete_repo_tombstones_jj_namespaces() {
+        let executor = make_test_executor().await;
+        let create_result = executor
+            .execute(ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name: "jj-delete".into(),
+                description: None,
+                default_branch: None,
+                backends: vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj],
+            })
+            .await
+            .expect("create repo should succeed");
+        let ClientRpcResponse::ForgeRepoResult(response) = create_result else {
+            panic!("expected ForgeRepoResult");
+        };
+        let repo = response.repo.expect("repo is present");
+
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(aspen_forge::jj_bookmark_key(&repo.id, "main"), "head"))
+            .await
+            .expect("bookmark writes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(aspen_forge::jj_change_head_key(&repo.id, "change"), "commit"))
+            .await
+            .expect("change head writes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(aspen_forge::jj_staged_session_key(&repo.id, "session"), "staged"))
+            .await
+            .expect("staged session writes");
+
+        let delete_result = executor
+            .execute(ClientRpcRequest::ForgeDeleteRepo {
+                repo_id: repo.id.clone(),
+            })
+            .await
+            .expect("delete repo should execute");
+        let ClientRpcResponse::ForgeOperationResult(delete_response) = delete_result else {
+            panic!("expected ForgeOperationResult");
+        };
+        assert!(delete_response.is_success);
+
+        let get_result = executor
+            .execute(ClientRpcRequest::ForgeGetRepo {
+                repo_id: repo.id.clone(),
+            })
+            .await
+            .expect("get deleted repo should execute");
+        let ClientRpcResponse::ForgeRepoResult(get_response) = get_result else {
+            panic!("expected ForgeRepoResult");
+        };
+        assert!(!get_response.is_success);
+
+        for prefix in jj_namespace_cleanup_prefixes(&repo.id) {
+            let scan = executor
+                .forge_node
+                .kv()
+                .scan(aspen_core::ScanRequest {
+                    prefix,
+                    limit_results: Some(REPO_JJ_NAMESPACE_SCAN_LIMIT),
+                    continuation_token: None,
+                })
+                .await
+                .expect("namespace prefix scans");
+            assert!(scan.entries.is_empty());
+        }
+        let state = executor
+            .forge_node
+            .kv()
+            .read(aspen_core::ReadRequest::new(aspen_forge::jj_repo_session_state_key(&repo.id)))
+            .await
+            .expect("JJ tombstone key reads")
+            .kv
+            .expect("JJ tombstone key exists");
+        let state: aspen_forge::JjRepoSessionState = serde_json::from_str(&state.value).expect("state decodes");
+        assert!(state.is_deleted);
+        assert!(!state.is_jj_enabled);
     }
 
     #[tokio::test]

@@ -349,3 +349,6 @@
 343 GitBridgeFetchChunk
 344 GitBridgeFetchComplete
 345 ExpungeNode
+346 ForgeJjNative
+347 ForgeCreateRepoWithBackends
+348 ForgeDeleteRepo

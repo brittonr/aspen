@@ -1,0 +1,1 @@
+rustfmt --check passed for task 1.2 changed Rust files (request_metadata.rs and messages/mod.rs checked with skip_children=true).

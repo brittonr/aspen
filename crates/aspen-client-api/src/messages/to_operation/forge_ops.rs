@@ -8,6 +8,8 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
     match request {
         // Forge write operations
         ClientRpcRequest::ForgeCreateRepo { .. }
+        | ClientRpcRequest::ForgeCreateRepoWithBackends { .. }
+        | ClientRpcRequest::ForgeDeleteRepo { .. }
         | ClientRpcRequest::ForgeStoreBlob { .. }
         | ClientRpcRequest::ForgeCreateTree { .. }
         | ClientRpcRequest::ForgeCommit { .. }

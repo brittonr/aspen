@@ -287,6 +287,7 @@ fn handle_client_request_is_rate_limit_exempt(request: &ClientRpcRequest) -> boo
                 | ClientRpcRequest::CiWatchRepo { .. }
                 | ClientRpcRequest::CiUnwatchRepo { .. }
                 | ClientRpcRequest::ForgeCreateRepo { .. }
+                | ClientRpcRequest::ForgeCreateRepoWithBackends { .. }
                 | ClientRpcRequest::ForgeListRepos { .. }
                 | ClientRpcRequest::ForgeGetRepo { .. }
         )

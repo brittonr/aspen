@@ -70,9 +70,9 @@ fn test_request_variant_count() {
     let golden = load_golden("request_discriminants.txt");
     assert_eq!(
         golden.len(),
-        346,
+        349,
         "ClientRpcRequest variant count changed! \
-         Expected 346, golden file has {}. \
+         Expected 349, golden file has {}. \
          Update the golden file AND this count.",
         golden.len()
     );
@@ -83,9 +83,9 @@ fn test_response_variant_count() {
     let golden = load_golden("response_discriminants.txt");
     assert_eq!(
         golden.len(),
-        274,
+        275,
         "ClientRpcResponse variant count changed! \
-         Expected 274, golden file has {}. \
+         Expected 275, golden file has {}. \
          Update the golden file AND this count.",
         golden.len()
     );
@@ -175,6 +175,7 @@ fn response_variant_name(resp: &ClientRpcResponse) -> &'static str {
         ClientRpcResponse::GitBridgeFetchStart(_) => "GitBridgeFetchStart",
         ClientRpcResponse::GitBridgeFetchChunk(_) => "GitBridgeFetchChunk",
         ClientRpcResponse::GitBridgeFetchComplete(_) => "GitBridgeFetchComplete",
+        ClientRpcResponse::ForgeJjNative(_) => "ForgeJjNative",
         ClientRpcResponse::JobSubmitResult(_) => "JobSubmitResult",
         ClientRpcResponse::HookListResult(_) => "HookListResult",
         ClientRpcResponse::CiTriggerPipelineResult(_) => "CiTriggerPipelineResult",
@@ -546,11 +547,29 @@ fn test_request_discriminants_golden() {
     // Section: nostr (330-332)
     assert_request_disc(&map, &ClientRpcRequest::NostrAuthChallenge { npub_hex: s() });
 
-    // Section: hash check (333) — LAST variant
+    // Section: hash check + appended compatibility variants (341-348)
     assert_request_disc(&map, &ClientRpcRequest::HashCheck {
         key: s(),
         expected_hash: [0u8; 32],
     });
+    assert_request_disc(&map, &ClientRpcRequest::ForgeJjNative {
+        request: forge::JjNativeRequest {
+            repo_id: s(),
+            operation: forge::JjNativeOperation::Fetch,
+            transport_version: forge::JJ_TRANSPORT_VERSION_CURRENT,
+            want_objects: Vec::new(),
+            have_objects: Vec::new(),
+            change_ids: Vec::new(),
+            bookmark_mutations: Vec::new(),
+        },
+    });
+    assert_request_disc(&map, &ClientRpcRequest::ForgeCreateRepoWithBackends {
+        name: s(),
+        description: None,
+        default_branch: None,
+        backends: vec![forge::ForgeRepoBackend::Git, forge::ForgeRepoBackend::Jj],
+    });
+    assert_request_disc(&map, &ClientRpcRequest::ForgeDeleteRepo { repo_id: s() });
 }
 
 // ---------------------------------------------------------------------------
@@ -1053,7 +1072,7 @@ fn test_response_discriminants_golden() {
         }),
     );
 
-    // Section: hash check (266) — LAST variant
+    // Section: hash check + appended forge compatibility variant (269-274)
     assert_response_disc(
         &map,
         &ClientRpcResponse::HashCheckResult(HashCheckResultResponse {
@@ -1061,6 +1080,10 @@ fn test_response_discriminants_golden() {
             new_hash: None,
             error: None,
         }),
+    );
+    assert_response_disc(
+        &map,
+        &ClientRpcResponse::ForgeJjNative(forge::jj_native_response(forge::JjNativeStatus::Accepted, None)),
     );
 }
 

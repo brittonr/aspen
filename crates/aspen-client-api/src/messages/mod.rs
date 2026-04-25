@@ -3961,6 +3961,28 @@ pub enum ClientRpcRequest {
         /// JJ-native request envelope.
         request: forge::JjNativeRequest,
     },
+
+    /// Create a repository with explicit backend namespaces.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    ForgeCreateRepoWithBackends {
+        /// Repository name (1-256 bytes).
+        name: String,
+        /// Optional description (max 4096 bytes).
+        description: Option<String>,
+        /// Default branch name (default: "main").
+        default_branch: Option<String>,
+        /// Enabled repository backends. Empty defaults to Git-only.
+        backends: Vec<forge::ForgeRepoBackend>,
+    },
+
+    /// Delete a repository and tombstone repo-scoped backend metadata.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    ForgeDeleteRepo {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+    },
 }
 
 #[cfg(feature = "auth")]

@@ -1,0 +1,232 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
+     |
+4299 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
+     |
+4306 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
+     |
+4313 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
+     |
+4320 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
+     |
+4327 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
+     |
+4334 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
+     |
+4341 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
+     |
+4348 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
+     |
+4388 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
+     |
+4395 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+   Compiling aspen-forge-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-handler)
+warning: function `test_executor_does_not_handle_migrated_ops` is never used
+  --> crates/aspen-forge-handler/src/handler/mod.rs:64:8
+   |
+64 |     fn test_executor_does_not_handle_migrated_ops() {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `aspen-forge-handler` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.59s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_forge_handler-079e26b52cfade4b)
+
+running 6 tests
+test executor::tests::test_execute_dispatch_metadata_is_stable ... ok
+test executor::tests::test_execute_delete_repo_tombstones_jj_namespaces ... ok
+test executor::tests::test_execute_create_jj_repo_allocates_backend_namespace ... ok
+test executor::tests::test_execute_rejects_unhandled_requests_with_error ... ok
+test executor::tests::test_execute_routes_nostr_requests ... ok
+test executor::tests::test_execute_create_repo_then_list_repos ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 37 filtered out; finished in 0.18s
+
