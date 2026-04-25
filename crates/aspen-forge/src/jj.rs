@@ -31,6 +31,8 @@ pub const JJ_REACHABILITY_KEY_PREFIX: &str = "forge:jj:reach:";
 pub const JJ_BOOKMARK_KEY_PREFIX: &str = "forge:jj:bookmark:";
 /// KV prefix for repo-scoped JJ change-id heads.
 pub const JJ_CHANGE_HEAD_KEY_PREFIX: &str = "forge:jj:change:";
+/// KV prefix for repo-scoped JJ staged session records.
+pub const JJ_STAGED_SESSION_KEY_PREFIX: &str = "forge:jj:stage:";
 
 /// Native JJ object kind stored by Forge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -156,9 +158,31 @@ pub struct JjChangeHeadUpdate {
     pub new_head: String,
 }
 
+/// Staged JJ session record used for quota and cleanup decisions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjStagedSessionRecord {
+    /// Repo identifier.
+    pub repo_id: String,
+    /// Session identifier.
+    pub session_id: String,
+    /// Total staged bytes reserved by this session.
+    pub staged_size_bytes: u64,
+    /// Absolute expiry time in milliseconds.
+    pub expires_at_ms: u64,
+}
+
+/// Staged-data quota for a JJ protocol session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjStagedQuota {
+    /// Maximum staged bytes permitted for a session.
+    pub max_staged_size_bytes: u64,
+}
+
 /// Staged JJ publish payload applied atomically at repo-visible heads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JjStagedPublish {
+    /// Optional staged session ID to clean up after publish/rejection.
+    pub session_id: Option<String>,
     /// Repo identifier.
     pub repo_id: String,
     /// Object envelopes to store before head publication.
@@ -252,6 +276,9 @@ pub enum JjObjectStoreError {
     /// Final publish detected a stale head.
     #[error("JJ publish conflict on {conflict:?}")]
     Conflict { conflict: JjPublishConflict },
+    /// Staged data exceeds quota.
+    #[error("JJ staged data uses {used_bytes} bytes, max {max_bytes}")]
+    QuotaExceeded { used_bytes: u64, max_bytes: u64 },
     /// Stored blob size does not fit in u64.
     #[error("JJ object encoded size overflow")]
     SizeOverflow,
@@ -409,9 +436,14 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
 
     /// Publish a fully staged JJ payload after validation and conflict checks.
     pub async fn publish_staged(&self, staged: &JjStagedPublish) -> Result<JjPublishReceipt, JjObjectStoreError> {
-        validate_jj_object_graph(&staged.objects, &staged.known_object_ids)
-            .map_err(|source| JjObjectStoreError::Graph { source })?;
-        self.check_staged_conflicts(staged).await?;
+        if let Err(source) = validate_jj_object_graph(&staged.objects, &staged.known_object_ids) {
+            self.cleanup_staged_publish_session(staged).await?;
+            return Err(JjObjectStoreError::Graph { source });
+        }
+        if let Err(error) = self.check_staged_conflicts(staged).await {
+            self.cleanup_staged_publish_session(staged).await?;
+            return Err(error);
+        }
 
         let mut stored_objects = Vec::with_capacity(staged.objects.len());
         for object in &staged.objects {
@@ -423,12 +455,60 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
         for update in &staged.change_head_updates {
             self.put_change_head(&staged.repo_id, &update.change_id, &update.new_head).await?;
         }
+        self.cleanup_staged_publish_session(staged).await?;
 
         Ok(JjPublishReceipt {
             stored_objects,
             bookmark_updates: staged.bookmark_updates.len(),
             change_head_updates: staged.change_head_updates.len(),
         })
+    }
+
+    /// Record a staged session if it is within quota.
+    pub async fn put_staged_session(
+        &self,
+        record: &JjStagedSessionRecord,
+        quota: JjStagedQuota,
+    ) -> Result<(), JjObjectStoreError> {
+        enforce_staged_quota(record.staged_size_bytes, quota)?;
+        self.write_json(jj_staged_session_key(&record.repo_id, &record.session_id), record).await
+    }
+
+    /// Read a staged session record.
+    pub async fn get_staged_session(
+        &self,
+        repo_id: &str,
+        session_id: &str,
+    ) -> Result<Option<JjStagedSessionRecord>, JjObjectStoreError> {
+        self.read_json(jj_staged_session_key(repo_id, session_id)).await
+    }
+
+    /// Delete a staged session record and return whether it existed.
+    pub async fn delete_staged_session(&self, repo_id: &str, session_id: &str) -> Result<bool, JjObjectStoreError> {
+        self.delete_key(jj_staged_session_key(repo_id, session_id)).await
+    }
+
+    /// Delete an expired staged session record.
+    pub async fn cleanup_expired_staged_session(
+        &self,
+        repo_id: &str,
+        session_id: &str,
+        now_ms: u64,
+    ) -> Result<bool, JjObjectStoreError> {
+        let Some(record) = self.get_staged_session(repo_id, session_id).await? else {
+            return Ok(false);
+        };
+        if !is_staged_session_expired(&record, now_ms) {
+            return Ok(false);
+        }
+        self.delete_staged_session(repo_id, session_id).await
+    }
+
+    async fn cleanup_staged_publish_session(&self, staged: &JjStagedPublish) -> Result<(), JjObjectStoreError> {
+        if let Some(session_id) = &staged.session_id {
+            self.delete_staged_session(&staged.repo_id, session_id).await?;
+        }
+        Ok(())
     }
 
     async fn check_staged_conflicts(&self, staged: &JjStagedPublish) -> Result<(), JjObjectStoreError> {
@@ -541,6 +621,29 @@ pub fn jj_bookmark_key(repo_id: &str, bookmark_name: &str) -> String {
 #[must_use]
 pub fn jj_change_head_key(repo_id: &str, change_id: &str) -> String {
     format!("{JJ_CHANGE_HEAD_KEY_PREFIX}{repo_id}:{change_id}")
+}
+
+/// Build the repo-scoped key for a staged JJ session.
+#[must_use]
+pub fn jj_staged_session_key(repo_id: &str, session_id: &str) -> String {
+    format!("{JJ_STAGED_SESSION_KEY_PREFIX}{repo_id}:{session_id}")
+}
+
+/// Return true when a staged session is expired at `now_ms`.
+#[must_use]
+pub fn is_staged_session_expired(record: &JjStagedSessionRecord, now_ms: u64) -> bool {
+    now_ms >= record.expires_at_ms
+}
+
+/// Enforce staged-data quota for a session.
+pub fn enforce_staged_quota(staged_size_bytes: u64, quota: JjStagedQuota) -> Result<(), JjObjectStoreError> {
+    if staged_size_bytes <= quota.max_staged_size_bytes {
+        return Ok(());
+    }
+    Err(JjObjectStoreError::QuotaExceeded {
+        used_bytes: staged_size_bytes,
+        max_bytes: quota.max_staged_size_bytes,
+    })
 }
 
 /// Validate one JJ publish graph against already-known object IDs.
@@ -682,6 +785,10 @@ mod tests {
     const TEST_CHANGE_ID: &str = "change-1";
     const TEST_BOOKMARK: &str = "main";
     const TEST_PARENT_ID: &str = "parent-1";
+    const TEST_SESSION_ID: &str = "session-1";
+    const TEST_STAGED_BYTES: u64 = 512;
+    const TEST_MAX_STAGED_BYTES: u64 = 1_024;
+    const TEST_SESSION_TIMEOUT_MS: u64 = 30_000;
     const TEST_PAYLOAD: &[u8] = b"native-jj-payload";
     const UNSUPPORTED_VERSION: u16 = JJ_OBJECT_ENCODING_VERSION + 1;
 
@@ -697,6 +804,21 @@ mod tests {
         let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(aspen_testing_core::DeterministicKeyValueStore::new());
         let blobs = Arc::new(aspen_blob::InMemoryBlobStore::new());
         JjObjectStore::new(kv, blobs)
+    }
+
+    fn staged_session() -> JjStagedSessionRecord {
+        JjStagedSessionRecord {
+            repo_id: TEST_REPO_ID.to_string(),
+            session_id: TEST_SESSION_ID.to_string(),
+            staged_size_bytes: TEST_STAGED_BYTES,
+            expires_at_ms: TEST_SESSION_TIMEOUT_MS,
+        }
+    }
+
+    fn staged_quota() -> JjStagedQuota {
+        JjStagedQuota {
+            max_staged_size_bytes: TEST_MAX_STAGED_BYTES,
+        }
     }
 
     #[test]
@@ -858,9 +980,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn jj_object_store_records_and_expires_staged_sessions() {
+        let store = object_store();
+        let session = staged_session();
+
+        store.put_staged_session(&session, staged_quota()).await.expect("staged session stores");
+        let before_expiry = store
+            .cleanup_expired_staged_session(TEST_REPO_ID, TEST_SESSION_ID, TEST_SESSION_TIMEOUT_MS - 1)
+            .await
+            .expect("cleanup checks expiry");
+        let after_expiry = store
+            .cleanup_expired_staged_session(TEST_REPO_ID, TEST_SESSION_ID, TEST_SESSION_TIMEOUT_MS)
+            .await
+            .expect("expired session cleans up");
+        let missing = store
+            .get_staged_session(TEST_REPO_ID, TEST_SESSION_ID)
+            .await
+            .expect("staged session lookup succeeds");
+
+        assert!(!before_expiry);
+        assert!(after_expiry);
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_rejects_staged_session_over_quota() {
+        let store = object_store();
+        let mut session = staged_session();
+        session.staged_size_bytes = TEST_MAX_STAGED_BYTES + 1;
+
+        let err = store
+            .put_staged_session(&session, staged_quota())
+            .await
+            .expect_err("oversized staged session rejected");
+
+        assert!(matches!(err, JjObjectStoreError::QuotaExceeded { .. }));
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_publish_staged_cleans_session_after_success() {
+        let store = object_store();
+        store.put_staged_session(&staged_session(), staged_quota()).await.expect("staged session stores");
+        let staged = JjStagedPublish {
+            session_id: Some(TEST_SESSION_ID.to_string()),
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: vec![object()],
+            known_object_ids: vec![TEST_PARENT_ID.to_string()],
+            bookmark_updates: Vec::new(),
+            change_head_updates: Vec::new(),
+        };
+
+        store.publish_staged(&staged).await.expect("staged publish succeeds");
+        let missing = store
+            .get_staged_session(TEST_REPO_ID, TEST_SESSION_ID)
+            .await
+            .expect("staged session lookup succeeds");
+
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_publish_staged_cleans_session_after_rejection() {
+        let store = object_store();
+        store.put_staged_session(&staged_session(), staged_quota()).await.expect("staged session stores");
+        let staged = JjStagedPublish {
+            session_id: Some(TEST_SESSION_ID.to_string()),
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: vec![object()],
+            known_object_ids: Vec::new(),
+            bookmark_updates: Vec::new(),
+            change_head_updates: Vec::new(),
+        };
+
+        let err = store.publish_staged(&staged).await.expect_err("bad graph rejected");
+        let missing = store
+            .get_staged_session(TEST_REPO_ID, TEST_SESSION_ID)
+            .await
+            .expect("staged session lookup succeeds");
+
+        assert!(matches!(err, JjObjectStoreError::Graph { .. }));
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
     async fn jj_object_store_publish_staged_updates_heads_after_validation() {
         let store = object_store();
         let staged = JjStagedPublish {
+            session_id: None,
             repo_id: TEST_REPO_ID.to_string(),
             objects: vec![object()],
             known_object_ids: vec![TEST_PARENT_ID.to_string()],
@@ -900,6 +1106,7 @@ mod tests {
         let store = object_store();
         store.put_bookmark(TEST_REPO_ID, TEST_BOOKMARK, TEST_PARENT_ID).await.expect("seed bookmark writes");
         let staged = JjStagedPublish {
+            session_id: None,
             repo_id: TEST_REPO_ID.to_string(),
             objects: vec![object()],
             known_object_ids: vec![TEST_PARENT_ID.to_string()],
