@@ -17,12 +17,41 @@ hex = "0.4"
 # Serialization (for SnapshotIntegrity)
 serde = { version = "1.0", features = ["derive"] }
 
+# --- raft-storage optional dependencies ---
+openraft = { workspace = true, optional = true }
+redb = { version = "2.0.0", optional = true }
+tokio = { version = "1.48.0", default-features = false, features = ["sync", "rt"], optional = true }
+futures = { version = "0.3", optional = true }
+snafu = { version = "0.8.9", optional = true }
+tracing = { version = "0.1", optional = true }
+postcard = { version = "1.0", features = ["alloc"], optional = true }
+bincode = { version = "1.3", optional = true }
+aspen-raft-kv-types = { workspace = true, optional = true }
+aspen-kv-types = { workspace = true, optional = true }
+aspen-storage-types = { workspace = true, optional = true }
+aspen-layer = { workspace = true, optional = true }
+aspen-time = { workspace = true, optional = true }
+n0-future = { workspace = true, optional = true }
+
 [features]
 default = []
-# Testing feature for test utilities
 testing = []
-# Raft storage feature (to be added when storage modules are integrated)
-# raft = ["dep:openraft", "dep:redb", "dep:tokio", "dep:futures"]
+raft-storage = [
+    "dep:openraft",
+    "dep:redb",
+    "dep:tokio",
+    "dep:futures",
+    "dep:snafu",
+    "dep:tracing",
+    "dep:postcard",
+    "dep:bincode",
+    "dep:aspen-raft-kv-types",
+    "dep:aspen-kv-types",
+    "dep:aspen-storage-types",
+    "dep:aspen-layer",
+    "dep:aspen-time",
+    "dep:n0-future",
+]
 
 [dev-dependencies]
 tempfile = "3.4.0"
