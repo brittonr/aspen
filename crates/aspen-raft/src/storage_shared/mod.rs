@@ -109,6 +109,11 @@ use openraft::alias::LogIdOf;
 pub use snapshot::SharedRedbSnapshotBuilder;
 pub use types::*;
 
+// Compatibility re-exports from aspen-redb-storage.
+// New consumers should depend on aspen-redb-storage directly.
+pub use aspen_redb_storage::raft_storage::RedbKvStorage;
+pub use aspen_redb_storage::raft_storage::RedbKvSnapshotBuilder;
+
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
 use crate::constants::MAX_SNAPSHOT_ENTRIES;

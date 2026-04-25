@@ -60,11 +60,18 @@ None allowed. No iroh endpoint construction, node bootstrap, handler registry, d
 ## Compatibility and aliases
 
 - **Old paths**: `aspen_raft::storage_shared::*`, `aspen_raft::storage::redb_store::*`, selected storage validation/integrity paths.
-- **New path**: `aspen_redb_storage::*`.
-- **Compatibility re-exports**: `aspen_raft` re-exports old storage paths during migration.
+- **New path**: `aspen_redb_storage::raft_storage::*`.
+- **Compatibility re-exports**: `aspen_raft::storage_shared` re-exports `RedbKvStorage` and `RedbKvSnapshotBuilder` from `aspen_redb_storage::raft_storage`.
 - **Owner**: Aspen Redb storage maintainers.
 - **Tests**: compile and run storage tests through new path and old compatibility path.
 - **Removal criteria**: in-repo consumers and downstream fixture use `aspen_redb_storage` directly; old path has no remaining direct imports.
+
+| Old path | New path | Status |
+| --- | --- | --- |
+| `aspen_raft::storage_shared::RedbKvStorage` | `aspen_redb_storage::raft_storage::RedbKvStorage` | re-exported |
+| `aspen_raft::storage_shared::RedbKvSnapshotBuilder` | `aspen_redb_storage::raft_storage::RedbKvSnapshotBuilder` | re-exported |
+| `aspen_raft::storage_shared::SharedRedbStorage` | (Aspen-specific, stays in aspen-raft) | not migrated |
+| `aspen_raft::storage_shared::SharedRedbSnapshotBuilder` | (Aspen-specific, stays in aspen-raft) | not migrated |
 
 ## Representative consumers and re-exporters
 
@@ -96,4 +103,4 @@ None allowed. No iroh endpoint construction, node bootstrap, handler registry, d
 
 ## First-slice status
 
-Current status is `workspace-internal`. The default pure-helper crate now uses leaf `aspen-constants` instead of `aspen-core`, and I9 evidence proves the default storage tree no longer reaches `aspen-core`, `aspen-core-shell`, iroh, transport, or the adapter crate. Baseline evidence still shows concrete Redb/OpenRaft storage modules live in `crates/aspen-raft/src/storage*`; moving those modules and preserving storage safety rails are required before readiness.
+Current status is `workspace-internal`. The `raft-storage` feature now provides a complete `RedbKvStorage` implementing `RaftLogStorage` and `RaftStateMachine` for `RaftKvTypeConfig`, with typed enums (BatchWriteOp, TxnCompareSpec, TxnOpSpec) instead of raw tuples. Trust/shard dispatch remains in `aspen-raft`. `aspen-raft` depends on `aspen-redb-storage` with `raft-storage` enabled and re-exports `RedbKvStorage`/`RedbKvSnapshotBuilder` for compatibility. The Aspen-specific `SharedRedbStorage` (with trust tables, HLC, log_broadcast) remains in `aspen-raft`.
