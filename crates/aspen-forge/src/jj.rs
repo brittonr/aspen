@@ -4,6 +4,10 @@
 //! deterministic BLAKE3-addressed blob bytes. Persistence and consensus indexes
 //! live in the Forge shell.
 
+use std::sync::Arc;
+
+use aspen_blob::BlobStore;
+use aspen_core::KeyValueStore;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -18,6 +22,8 @@ pub const MAX_JJ_OBJECT_PARENTS: usize = 64;
 pub const MAX_JJ_OBJECT_CHANGE_IDS: usize = 32;
 /// Maximum payload bytes in a single JJ object envelope.
 pub const MAX_JJ_OBJECT_PAYLOAD_BYTES: usize = 128 * 1024 * 1024;
+/// KV prefix for repo-scoped JJ object reachability indexes.
+pub const JJ_REACHABILITY_KEY_PREFIX: &str = "forge:jj:reach:";
 
 /// Native JJ object kind stored by Forge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,6 +68,21 @@ pub struct EncodedJjObject {
     pub digest: [u8; blake3::OUT_LEN],
 }
 
+/// Stored JJ object reference recorded in the reachability index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjStoredObjectRef {
+    /// Repo identifier this object belongs to.
+    pub repo_id: String,
+    /// JJ object identifier.
+    pub object_id: String,
+    /// BLAKE3 blob hash in text form.
+    pub blob_hash: String,
+    /// Encoded blob size in bytes.
+    pub encoded_size_bytes: u64,
+    /// Whether the blob was newly added to the blob store.
+    pub was_new: bool,
+}
+
 /// JJ object envelope validation or encoding failure.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum JjObjectEncodingError {
@@ -91,6 +112,97 @@ pub enum JjObjectEncodingError {
     Deserialize { message: String },
 }
 
+/// JJ object persistence or reachability failure.
+#[derive(Debug, Error)]
+pub enum JjObjectStoreError {
+    /// Envelope validation or blob encoding failed.
+    #[error("JJ object encoding failed: {source}")]
+    Encoding { source: JjObjectEncodingError },
+    /// Blob storage failed.
+    #[error("JJ object blob storage failed: {message}")]
+    Blob { message: String },
+    /// KV index operation failed.
+    #[error("JJ object reachability index failed: {message}")]
+    Kv { message: String },
+    /// Stored blob size does not fit in u64.
+    #[error("JJ object encoded size overflow")]
+    SizeOverflow,
+}
+
+impl From<JjObjectEncodingError> for JjObjectStoreError {
+    fn from(source: JjObjectEncodingError) -> Self {
+        Self::Encoding { source }
+    }
+}
+
+/// Repo-scoped JJ object persistence over Aspen blobs and KV reachability.
+pub struct JjObjectStore<K: ?Sized, B: BlobStore> {
+    kv: Arc<K>,
+    blobs: Arc<B>,
+}
+
+impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
+    /// Create a JJ object store from existing Forge storage handles.
+    #[must_use]
+    pub fn new(kv: Arc<K>, blobs: Arc<B>) -> Self {
+        Self { kv, blobs }
+    }
+
+    /// Store a native JJ object blob and record repo-scoped reachability.
+    pub async fn store_object(&self, envelope: &JjObjectEnvelope) -> Result<JjStoredObjectRef, JjObjectStoreError> {
+        let encoded = encode_jj_object(envelope)?;
+        let add_result = self.blobs.add_bytes(&encoded.bytes).await.map_err(|source| JjObjectStoreError::Blob {
+            message: source.to_string(),
+        })?;
+        let encoded_size_bytes = u64::try_from(encoded.bytes.len()).map_err(|_| JjObjectStoreError::SizeOverflow)?;
+        let stored_ref = JjStoredObjectRef {
+            repo_id: envelope.repo_id.clone(),
+            object_id: envelope.object_id.clone(),
+            blob_hash: add_result.blob_ref.hash.to_string(),
+            encoded_size_bytes,
+            was_new: add_result.was_new,
+        };
+        let index_value = serde_json::to_string(&stored_ref).map_err(|source| JjObjectStoreError::Kv {
+            message: source.to_string(),
+        })?;
+        self.kv
+            .write(aspen_core::WriteRequest::set(
+                jj_reachability_key(&stored_ref.repo_id, &stored_ref.object_id),
+                index_value,
+            ))
+            .await
+            .map_err(|source| JjObjectStoreError::Kv {
+                message: source.to_string(),
+            })?;
+
+        Ok(stored_ref)
+    }
+
+    /// Look up the stored blob reference for a repo-scoped JJ object.
+    pub async fn lookup_object(
+        &self,
+        repo_id: &str,
+        object_id: &str,
+    ) -> Result<Option<JjStoredObjectRef>, JjObjectStoreError> {
+        let result = match self.kv.read(aspen_core::ReadRequest::new(jj_reachability_key(repo_id, object_id))).await {
+            Ok(result) => result,
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => return Ok(None),
+            Err(source) => {
+                return Err(JjObjectStoreError::Kv {
+                    message: source.to_string(),
+                });
+            }
+        };
+        let Some(kv) = result.kv else {
+            return Ok(None);
+        };
+        let stored_ref = serde_json::from_str(&kv.value).map_err(|source| JjObjectStoreError::Kv {
+            message: source.to_string(),
+        })?;
+        Ok(Some(stored_ref))
+    }
+}
+
 impl JjObjectEnvelope {
     /// Construct an envelope using the current encoding version.
     #[must_use]
@@ -110,6 +222,12 @@ impl JjObjectEnvelope {
             payload,
         }
     }
+}
+
+/// Build the repo-scoped reachability key for a JJ object.
+#[must_use]
+pub fn jj_reachability_key(repo_id: &str, object_id: &str) -> String {
+    format!("{JJ_REACHABILITY_KEY_PREFIX}{repo_id}:{object_id}")
 }
 
 /// Validate a JJ object envelope without encoding it.
@@ -195,6 +313,19 @@ mod tests {
         envelope
     }
 
+    fn object_store() -> JjObjectStore<dyn aspen_core::KeyValueStore, aspen_blob::InMemoryBlobStore> {
+        let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(aspen_testing_core::DeterministicKeyValueStore::new());
+        let blobs = Arc::new(aspen_blob::InMemoryBlobStore::new());
+        JjObjectStore::new(kv, blobs)
+    }
+
+    #[test]
+    fn jj_reachability_key_is_repo_scoped() {
+        let key = jj_reachability_key(TEST_REPO_ID, TEST_OBJECT_ID);
+
+        assert_eq!(key, "forge:jj:reach:repo-1:object-1");
+    }
+
     #[test]
     fn jj_object_encode_decode_roundtrip_preserves_native_payload() {
         let envelope = object();
@@ -221,6 +352,33 @@ mod tests {
         let err = validate_jj_object(&envelope).expect_err("empty object ID rejected");
 
         assert_eq!(err, JjObjectEncodingError::EmptyField { field: "object_id" });
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_persists_blob_and_reachability_index() {
+        let store = object_store();
+        let envelope = object();
+
+        let stored = store.store_object(&envelope).await.expect("object stores");
+        let found = store
+            .lookup_object(TEST_REPO_ID, TEST_OBJECT_ID)
+            .await
+            .expect("reachability lookup succeeds")
+            .expect("object is indexed");
+
+        assert_eq!(found.repo_id, TEST_REPO_ID);
+        assert_eq!(found.object_id, TEST_OBJECT_ID);
+        assert_eq!(found.blob_hash, stored.blob_hash);
+        assert!(found.encoded_size_bytes > 0);
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_returns_none_for_missing_reachability() {
+        let store = object_store();
+
+        let found = store.lookup_object(TEST_REPO_ID, "missing-object").await.expect("lookup succeeds");
+
+        assert!(found.is_none());
     }
 
     #[test]
