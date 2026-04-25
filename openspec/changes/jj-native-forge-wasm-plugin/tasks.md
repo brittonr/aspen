@@ -16,7 +16,7 @@
 - [x] 2.2 Implement repo-scoped JJ object persistence and reachability lookup on top of BLAKE3-addressed blobs.
 - [ ] 2.3 Implement cross-node JJ blob fetch through Aspen's blob distribution path so peers can satisfy missing-object reads.
 - [x] 2.4 Implement Raft-backed JJ change-id indexes and JJ bookmark namespaces, including create/move/delete semantics.
-- [ ] 2.5 Implement staged JJ push publication so partial or failed streams do not make repo-visible state inconsistent.
+- [x] 2.5 Implement staged JJ push publication so partial or failed streams do not make repo-visible state inconsistent.
 - [x] 2.6 Validate incoming JJ payloads and reject malformed or inconsistent object graphs before final publish.
 - [x] 2.7 Add optimistic final-publish conflict checks for stale bookmark heads and stale change-id heads.
 - [ ] 2.8 Add staged-data quota, expiry, and cleanup behavior for successful publish, timeout, rejection, and abandoned-session paths.

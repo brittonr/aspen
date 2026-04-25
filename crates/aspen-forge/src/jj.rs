@@ -134,6 +134,54 @@ pub struct JjPublishConflict {
     pub actual: Option<String>,
 }
 
+/// Bookmark update staged for final publish.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjBookmarkUpdate {
+    /// Bookmark name.
+    pub name: String,
+    /// Expected current head.
+    pub expected_head: Option<String>,
+    /// New head, or None to delete the bookmark.
+    pub new_head: Option<String>,
+}
+
+/// Change-id head update staged for final publish.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjChangeHeadUpdate {
+    /// JJ change ID.
+    pub change_id: String,
+    /// Expected current head.
+    pub expected_head: Option<String>,
+    /// New head.
+    pub new_head: String,
+}
+
+/// Staged JJ publish payload applied atomically at repo-visible heads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjStagedPublish {
+    /// Repo identifier.
+    pub repo_id: String,
+    /// Object envelopes to store before head publication.
+    pub objects: Vec<JjObjectEnvelope>,
+    /// Already-reachable object IDs accepted as graph parents.
+    pub known_object_ids: Vec<String>,
+    /// Bookmark moves/deletes.
+    pub bookmark_updates: Vec<JjBookmarkUpdate>,
+    /// Change-id head updates.
+    pub change_head_updates: Vec<JjChangeHeadUpdate>,
+}
+
+/// Result of a successful staged JJ publish.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjPublishReceipt {
+    /// Stored object references.
+    pub stored_objects: Vec<JjStoredObjectRef>,
+    /// Published bookmark count.
+    pub bookmark_updates: usize,
+    /// Published change-head count.
+    pub change_head_updates: usize,
+}
+
 /// JJ object envelope validation or encoding failure.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum JjObjectEncodingError {
@@ -198,6 +246,12 @@ pub enum JjObjectStoreError {
     /// KV index operation failed.
     #[error("JJ object reachability index failed: {message}")]
     Kv { message: String },
+    /// Publish graph validation failed.
+    #[error("JJ publish graph validation failed: {source}")]
+    Graph { source: JjObjectGraphError },
+    /// Final publish detected a stale head.
+    #[error("JJ publish conflict on {conflict:?}")]
+    Conflict { conflict: JjPublishConflict },
     /// Stored blob size does not fit in u64.
     #[error("JJ object encoded size overflow")]
     SizeOverflow,
@@ -351,6 +405,61 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
     ) -> Result<Option<JjPublishConflict>, JjObjectStoreError> {
         let actual = self.get_change_head(repo_id, change_id).await?.map(|record| record.head_object_id);
         Ok(conflict_if_head_mismatch(JjHeadKind::ChangeId, change_id, expected, actual.as_deref()))
+    }
+
+    /// Publish a fully staged JJ payload after validation and conflict checks.
+    pub async fn publish_staged(&self, staged: &JjStagedPublish) -> Result<JjPublishReceipt, JjObjectStoreError> {
+        validate_jj_object_graph(&staged.objects, &staged.known_object_ids)
+            .map_err(|source| JjObjectStoreError::Graph { source })?;
+        self.check_staged_conflicts(staged).await?;
+
+        let mut stored_objects = Vec::with_capacity(staged.objects.len());
+        for object in &staged.objects {
+            stored_objects.push(self.store_object(object).await?);
+        }
+        for update in &staged.bookmark_updates {
+            self.apply_bookmark_update(&staged.repo_id, update).await?;
+        }
+        for update in &staged.change_head_updates {
+            self.put_change_head(&staged.repo_id, &update.change_id, &update.new_head).await?;
+        }
+
+        Ok(JjPublishReceipt {
+            stored_objects,
+            bookmark_updates: staged.bookmark_updates.len(),
+            change_head_updates: staged.change_head_updates.len(),
+        })
+    }
+
+    async fn check_staged_conflicts(&self, staged: &JjStagedPublish) -> Result<(), JjObjectStoreError> {
+        for update in &staged.bookmark_updates {
+            if let Some(conflict) =
+                self.check_bookmark_conflict(&staged.repo_id, &update.name, update.expected_head.as_deref()).await?
+            {
+                return Err(JjObjectStoreError::Conflict { conflict });
+            }
+        }
+        for update in &staged.change_head_updates {
+            if let Some(conflict) = self
+                .check_change_head_conflict(&staged.repo_id, &update.change_id, update.expected_head.as_deref())
+                .await?
+            {
+                return Err(JjObjectStoreError::Conflict { conflict });
+            }
+        }
+        Ok(())
+    }
+
+    async fn apply_bookmark_update(&self, repo_id: &str, update: &JjBookmarkUpdate) -> Result<(), JjObjectStoreError> {
+        match update.new_head.as_deref() {
+            Some(head) => {
+                self.put_bookmark(repo_id, &update.name, head).await?;
+            }
+            None => {
+                self.delete_bookmark(repo_id, &update.name).await?;
+            }
+        }
+        Ok(())
     }
 
     async fn write_json<T: Serialize>(&self, key: String, value: &T) -> Result<(), JjObjectStoreError> {
@@ -746,6 +855,71 @@ mod tests {
         assert_eq!(record.head_object_id, TEST_OBJECT_ID);
         assert_eq!(found.change_id, TEST_CHANGE_ID);
         assert_eq!(found.head_object_id, TEST_OBJECT_ID);
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_publish_staged_updates_heads_after_validation() {
+        let store = object_store();
+        let staged = JjStagedPublish {
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: vec![object()],
+            known_object_ids: vec![TEST_PARENT_ID.to_string()],
+            bookmark_updates: vec![JjBookmarkUpdate {
+                name: TEST_BOOKMARK.to_string(),
+                expected_head: None,
+                new_head: Some(TEST_OBJECT_ID.to_string()),
+            }],
+            change_head_updates: vec![JjChangeHeadUpdate {
+                change_id: TEST_CHANGE_ID.to_string(),
+                expected_head: None,
+                new_head: TEST_OBJECT_ID.to_string(),
+            }],
+        };
+
+        let receipt = store.publish_staged(&staged).await.expect("staged publish succeeds");
+        let bookmark = store
+            .get_bookmark(TEST_REPO_ID, TEST_BOOKMARK)
+            .await
+            .expect("bookmark lookup succeeds")
+            .expect("bookmark exists");
+        let change = store
+            .get_change_head(TEST_REPO_ID, TEST_CHANGE_ID)
+            .await
+            .expect("change lookup succeeds")
+            .expect("change exists");
+
+        assert_eq!(receipt.stored_objects.len(), 1);
+        assert_eq!(receipt.bookmark_updates, 1);
+        assert_eq!(receipt.change_head_updates, 1);
+        assert_eq!(bookmark.head_object_id.as_deref(), Some(TEST_OBJECT_ID));
+        assert_eq!(change.head_object_id, TEST_OBJECT_ID);
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_publish_staged_rejects_conflict_without_changing_heads() {
+        let store = object_store();
+        store.put_bookmark(TEST_REPO_ID, TEST_BOOKMARK, TEST_PARENT_ID).await.expect("seed bookmark writes");
+        let staged = JjStagedPublish {
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: vec![object()],
+            known_object_ids: vec![TEST_PARENT_ID.to_string()],
+            bookmark_updates: vec![JjBookmarkUpdate {
+                name: TEST_BOOKMARK.to_string(),
+                expected_head: Some(TEST_OBJECT_ID.to_string()),
+                new_head: Some(TEST_OBJECT_ID.to_string()),
+            }],
+            change_head_updates: Vec::new(),
+        };
+
+        let err = store.publish_staged(&staged).await.expect_err("conflict rejected");
+        let bookmark = store
+            .get_bookmark(TEST_REPO_ID, TEST_BOOKMARK)
+            .await
+            .expect("bookmark lookup succeeds")
+            .expect("bookmark remains");
+
+        assert!(matches!(err, JjObjectStoreError::Conflict { .. }));
+        assert_eq!(bookmark.head_object_id.as_deref(), Some(TEST_PARENT_ID));
     }
 
     #[tokio::test]
