@@ -274,7 +274,7 @@ warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
     failed to read saved postcard baseline /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api/../../openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json: No such file or directory (os error 2). Generate it with ASPEN_UPDATE_CLIENT_RPC_POSTCARD_BASELINE=1 cargo test -p aspen-client-api client_rpc_postcard_baseline -- --nocapture
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
-  Cancelling due to test failure: 
+  Cancelling due to test failure:
 ────────────
      Summary [   0.463s] 49/74 tests run: 48 passed, 1 failed, 0 skipped
   TRY 2 FAIL [   0.195s] (49/74) aspen-client-api::client_rpc_postcard_baseline client_rpc_postcard_baseline

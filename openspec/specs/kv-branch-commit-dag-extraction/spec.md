@@ -67,4 +67,3 @@ ID: kv-branch-commit-dag-extraction.inventory-and-policy.manifest-and-policy-cov
 - **THEN** both `aspen-kv-branch` and `aspen-commit-dag` SHALL be present
 - **AND** their readiness state SHALL not exceed `extraction-ready-in-workspace` until human license/publication policy is resolved
 - **AND** `scripts/check-crate-extraction-readiness.rs --candidate-family kv-branch-commit-dag` SHALL verify the documented boundary
-

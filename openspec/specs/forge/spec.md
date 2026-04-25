@@ -221,4 +221,3 @@ The system SHALL store Git objects (commits, trees, blobs, tags) as content-addr
 - **THEN** the system SHALL enforce branch protection, perform three-way tree merge, create a merge commit, advance the target ref, and transition the patch to `Merged` state
 
 <!-- Synced from forge-merge-and-diff change (2026-03-20) -->
-

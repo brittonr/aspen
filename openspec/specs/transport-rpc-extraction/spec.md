@@ -86,4 +86,3 @@ ID: transport-rpc-extraction.inventory-and-policy.checker-verifies-staged-split
 - **WHEN** `scripts/check-crate-extraction-readiness.rs --candidate-family transport-rpc` runs
 - **THEN** it SHALL verify manifest fields, dependency exceptions, feature sets, representative consumers, downstream fixtures, and readiness labels
 - **AND** it SHALL fail on unowned runtime dependencies, missing owners, invalid readiness states, or missing compatibility evidence
-

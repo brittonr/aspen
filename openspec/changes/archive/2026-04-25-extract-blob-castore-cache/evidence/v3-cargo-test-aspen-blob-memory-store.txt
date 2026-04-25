@@ -141,4 +141,3 @@ test store::memory_store::tests::test_wait_available_all_none_missing ... ok
 test store::memory_store::tests::test_wait_available_missing ... ok
 
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
-

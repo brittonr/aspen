@@ -626,4 +626,3 @@ ID: architecture.modularity.extraction-inventory-is-maintained.inventory-include
 - **THEN** it SHALL assess at least the foundational type crates, auth/ticket crates, transport/RPC crates, coordination primitives, blob/castore/cache crates, commit DAG/KV branch crates, CI core/executor crates, jobs protocol/executor crates, trust/crypto crates, plugin API, Nickel config support, testing harness crates, and binaries
 - **AND** the foundational and wire assessments SHALL explicitly include `crates/aspen-storage-types`, `crates/aspen-client-api`, `crates/aspen-cluster-types`, and `crates/aspen-traits`
 - **AND** each assessment SHALL name the next preparation step for reuse
-

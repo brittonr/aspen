@@ -257,4 +257,3 @@ test executor::tests::test_git_bridge_access_rejects_jj_only_repo ... ok
 test executor::tests::test_git_forge_access_rejects_jj_only_repo ... ok
 
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 0.11s
-

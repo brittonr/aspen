@@ -101,4 +101,3 @@ ID: ticket.encoding.hook-ticket-encoder-never-substitutes-an-empty-payload.hook-
 - **THEN** `openspec/changes/alloc-safe-hooks-ticket/evidence/final-validation.md` SHALL include a deterministic source-audit command proving `impl Ticket for AspenHookTicket` uses an `expect` fail-loud path and no `Vec::new()` fallback
 - **AND** `openspec/changes/alloc-safe-hooks-ticket/evidence/implementation-diff.txt` SHALL show the fallback removal in the reviewed diff
 - **AND** `openspec/changes/alloc-safe-hooks-ticket/verification.md` SHALL map the encoder requirement to those artifacts
-

@@ -85,4 +85,3 @@ ID: blob-castore-cache-extraction.inventory-and-policy.checker-verifies-backend-
 - **WHEN** `scripts/check-crate-extraction-readiness.rs --candidate-family blob-castore-cache` runs
 - **THEN** it SHALL allow documented backend-purpose dependencies
 - **AND** it SHALL fail on unowned app-shell dependencies, missing owners, invalid readiness labels, or missing downstream fixture evidence
-

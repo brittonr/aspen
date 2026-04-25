@@ -84,4 +84,3 @@ ID: protocol-wire-extraction.inventory-and-policy.policy-checker-verifies-family
 
 - **WHEN** `scripts/check-crate-extraction-readiness.rs --candidate-family protocol-wire` is run
 - **THEN** it SHALL validate manifest presence, owner fields, readiness labels, dependency exceptions, representative consumers, and forbidden dependency boundaries for all protocol/wire candidates
-

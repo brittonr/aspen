@@ -1,11 +1,11 @@
 ┌────────────────────────────────────┐
 │ Task 34:    completed successfully │
 └────────────────────────────────────┘
-Command: cargo nextest run -p aspen-commit-dag                             
-   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2 
-  Label: kv-branch prechange commit-dag tests                              
-  Start: Sat, 25 Apr 2026 15:27:57 -0400                                   
-    End: Sat, 25 Apr 2026 15:28:29 -0400                                   
+Command: cargo nextest run -p aspen-commit-dag
+   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2
+  Label: kv-branch prechange commit-dag tests
+  Start: Sat, 25 Apr 2026 15:27:57 -0400
+    End: Sat, 25 Apr 2026 15:28:29 -0400
 
 output: (last 15 lines)
         PASS [   0.002s] (21/33) aspen-commit-dag verified::commit_hash::tests::first_commit_uses_genesis

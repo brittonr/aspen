@@ -226,4 +226,3 @@ test executor::tests::test_active_backend_routes_reads_enabled_jj_plugin ... ok
 test executor::tests::test_jj_native_admission_rejects_jj_repo_without_active_plugin_route ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.10s
-

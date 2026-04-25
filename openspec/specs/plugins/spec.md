@@ -214,4 +214,3 @@ The host SHALL deny any protocol-session access to KV prefixes, blob operations,
 - **WHEN** a plugin attempts to open or reuse a protocol-session capability that is not declared for it
 - **THEN** the host rejects that access with a permission error
 - **AND** the plugin remains confined to its declared capabilities
-

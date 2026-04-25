@@ -289,4 +289,3 @@ test client::tests::test_deadline_helper_reports_stream_open_timeout ... ok
 test client::tests::test_timed_stage_reports_request_write_timeout ... ok
 
 test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 308 filtered out; finished in 0.01s
-

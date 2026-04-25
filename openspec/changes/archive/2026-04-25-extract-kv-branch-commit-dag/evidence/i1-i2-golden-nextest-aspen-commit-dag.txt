@@ -1,11 +1,11 @@
 ┌────────────────────────────────────┐
 │ Task 41:    completed successfully │
 └────────────────────────────────────┘
-Command: cargo check -p aspen-commit-dag && cargo nextest run -p aspen-commit-dag 
-   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2        
-  Label: kv commit-dag golden tests                                               
-  Start: Sat, 25 Apr 2026 15:31:56 -0400                                          
-    End: Sat, 25 Apr 2026 15:31:59 -0400                                          
+Command: cargo check -p aspen-commit-dag && cargo nextest run -p aspen-commit-dag
+   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2
+  Label: kv commit-dag golden tests
+  Start: Sat, 25 Apr 2026 15:31:56 -0400
+    End: Sat, 25 Apr 2026 15:31:59 -0400
 
 output: (last 15 lines)
         PASS [   0.003s] (29/41) aspen-commit-dag verified::commit_hash::tests::verify_commit_integrity_valid

@@ -167,4 +167,3 @@ JJ-native clone, fetch, and push flows SHALL use bounded streaming behavior so l
 - **WHEN** a JJ-native fetch or push stream fails before completion
 - **THEN** the client receives a transport error instead of ambiguous success
 - **AND** the next sync attempt can retry from consistent server state
-

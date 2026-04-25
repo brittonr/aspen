@@ -25,4 +25,3 @@ test manifest::tests::protocol_manifest_roundtrips ... ok
 test manifest::tests::validates_declared_protocol_and_permissions ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
-

@@ -1,11 +1,11 @@
 ┌────────────────────────────────────┐
 │ Task 37:    completed successfully │
 └────────────────────────────────────┘
-Command: cargo check -p aspen-commit-dag && cargo nextest run -p aspen-commit-dag 
-   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2        
-  Label: kv commit-dag after hash move                                            
-  Start: Sat, 25 Apr 2026 15:29:29 -0400                                          
-    End: Sat, 25 Apr 2026 15:29:34 -0400                                          
+Command: cargo check -p aspen-commit-dag && cargo nextest run -p aspen-commit-dag
+   Path: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2
+  Label: kv commit-dag after hash move
+  Start: Sat, 25 Apr 2026 15:29:29 -0400
+    End: Sat, 25 Apr 2026 15:29:34 -0400
 
 output: (last 15 lines)
         PASS [   0.003s] (26/38) aspen-commit-dag verified::commit_hash::tests::verify_commit_integrity_valid

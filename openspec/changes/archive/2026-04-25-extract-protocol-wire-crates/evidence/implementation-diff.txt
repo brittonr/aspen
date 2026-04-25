@@ -9,7 +9,7 @@ index 53f6dc41a..2d29b84ea 100644
 -use std::path::{Path, PathBuf};
 +use std::path::Path;
 +use std::path::PathBuf;
- 
+
 -use aspen_client_api::{ClientRpcRequest, ClientRpcResponse};
 +use aspen_client_api::ClientRpcRequest;
 +use aspen_client_api::ClientRpcResponse;
@@ -41,7 +41,7 @@ index 53f6dc41a..2d29b84ea 100644
 -    Attribute, Expr, ExprLit, Field, Fields, File, GenericArgument, Item, ItemEnum, ItemStruct, Lit, LitStr,
 -    PathArguments, Token, Type,
 -};
- 
+
 -const BASELINE_RELATIVE_PATH: &str =
 -    "../../openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json";
 +const BASELINE_RELATIVE_PATH: &str = "../../openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json";
@@ -50,7 +50,7 @@ index 53f6dc41a..2d29b84ea 100644
  const CANONICAL_SEQUENCE_LEN: usize = 1;
 @@ -173,9 +188,7 @@ fn load_saved_artifact(baseline_path: &Path) -> PostcardBaselineArtifact {
  }
- 
+
  fn generate_enum_samples<T>(enum_name: &str) -> BTreeMap<String, String>
 -where
 -    T: DeserializeOwned + Serialize,
@@ -61,7 +61,7 @@ index 53f6dc41a..2d29b84ea 100644
      let mut samples = BTreeMap::new();
 @@ -190,25 +203,20 @@ where
  }
- 
+
  fn materialize_variant<T>(registry: &TypeRegistry, variant: &EnumVariantDefinition, variant_path: &str) -> T
 -where
 -    T: DeserializeOwned,
@@ -76,7 +76,7 @@ index 53f6dc41a..2d29b84ea 100644
 +        panic!("failed to materialize {variant_path} from canonical JSON {}: {error}", json_value,)
      })
  }
- 
+
  fn encode_postcard_hex<T>(value: &T, variant_path: &str) -> String
 -where
 -    T: DeserializeOwned + Serialize,
@@ -108,7 +108,7 @@ index 53f6dc41a..2d29b84ea 100644
 @@ -273,12 +279,7 @@ fn json_for_field_shape(registry: &TypeRegistry, shape: &FieldShape, path: &str,
      }
  }
- 
+
 -fn json_for_named_fields(
 -    registry: &TypeRegistry,
 -    fields: &[FieldDefinition],
@@ -122,7 +122,7 @@ index 53f6dc41a..2d29b84ea 100644
 @@ -351,12 +352,7 @@ fn json_for_path_type(registry: &TypeRegistry, path_type: &syn::TypePath, path:
      }
  }
- 
+
 -fn json_for_map_type(
 -    registry: &TypeRegistry,
 -    segment: &syn::PathSegment,
@@ -136,7 +136,7 @@ index 53f6dc41a..2d29b84ea 100644
 @@ -366,12 +362,7 @@ fn json_for_map_type(
      Value::Object(Map::from_iter([(key_string, value)]))
  }
- 
+
 -fn json_for_option_type(
 -    registry: &TypeRegistry,
 -    segment: &syn::PathSegment,
@@ -148,7 +148,7 @@ index 53f6dc41a..2d29b84ea 100644
          return Value::Null;
      }
 @@ -416,12 +407,7 @@ fn collect_type_arguments(arguments: &Punctuated<GenericArgument, syn::token::Co
- 
+
  fn is_u8_type(ty: &Type) -> bool {
      match ty {
 -        Type::Path(path_type) => path_type
@@ -162,7 +162,7 @@ index 53f6dc41a..2d29b84ea 100644
      }
  }
 @@ -452,9 +438,9 @@ fn canonical_string(path: &str) -> String {
- 
+
  fn parse_array_length(length: &Expr, path: &str) -> usize {
      match length {
 -        Expr::Lit(ExprLit { lit: Lit::Int(value), .. }) => {
@@ -241,7 +241,7 @@ index 2274fb977..8d6ee281a 100644
 @@ -393,6 +394,81 @@ let Candidate = {
        exceptions = [],
      },
- 
+
 +    aspen_client_api = {
 +      class = "protocol/wire",
 +      readiness_state = "workspace-internal",
@@ -327,9 +327,9 @@ index 35e502637..a77d1feac 100644
 @@ -1,50 +1,106 @@
 -# Extraction Manifest Stub: Protocol and Wire Crates
 +# Extraction Manifest: Protocol and Wire Crates
- 
+
  ## Candidate
- 
+
  - **Family**: Protocol/wire
  - **Canonical class**: `protocol/wire`
 -- **Crates**: `aspen-client-api`, `aspen-forge-protocol`, `aspen-jobs-protocol`, `aspen-coordination-protocol`
@@ -341,9 +341,9 @@ index 35e502637..a77d1feac 100644
  - **Readiness state**: `workspace-internal`
 -- **Dependency policy class**: reusable protocol/wire candidates
 +- **Dependency policy class**: reusable protocol/wire family
- 
+
  ## Package and release metadata
- 
+
 -- **Documentation entrypoint**: crate-level Rustdoc plus serialization compatibility docs.
 +- **Package description**: Aspen client RPC schemas plus Forge, jobs, and coordination protocol structs.
 +- **Documentation entrypoint**: Crate-level Rustdoc plus wire-contract tests and downstream fixture evidence.
@@ -354,9 +354,9 @@ index 35e502637..a77d1feac 100644
 +- **Repository/homepage policy**: Monorepo path until publication policy is decided.
 +- **Semver/wire-contract policy**: Postcard discriminants and encoded public wire shapes are append-only contracts; new enum variants must be appended and wire-contract evidence updated.
 +- **Publish readiness**: Blocked; do not mark publishable during this change.
- 
+
  ## Feature contract
- 
+
 -| Crate | Default-feature contract | Current status | Next action |
 +| Crate | Feature set | Status | Purpose |
  | --- | --- | --- | --- |
@@ -370,10 +370,10 @@ index 35e502637..a77d1feac 100644
 +| `aspen-forge-protocol` | default / no-default-features | reusable domain protocol | Forge response and metadata structs over serde alloc. |
 +| `aspen-jobs-protocol` | default / no-default-features | reusable domain protocol | Jobs response, worker, queue, and execution metadata structs over serde alloc. |
 +| `aspen-coordination-protocol` | default / no-default-features | reusable domain protocol | Coordination primitive wire responses over serde alloc. |
- 
+
 -## Dependency decisions
 +## Dependencies
- 
+
 -- Protocol crates must not depend on handler registries, node bootstrap, dogfood, UI/TUI/web, or concrete iroh endpoints by default.
 -- `aspen-client-api` may depend on portable protocol crates and `aspen-auth-core`, but not runtime `aspen-auth` for portable auth types.
 -- Serialization features must be explicit and tested with postcard baselines.
@@ -399,9 +399,9 @@ index 35e502637..a77d1feac 100644
 +### Binary/runtime dependencies
 +
 +No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets runtime service, SQL engine, node bootstrap, or runtime `aspen-auth` crate is allowed in default reusable protocol graphs. Auth, hook, capability, and ticket wire references must stay in leaf/protocol crates such as `aspen-auth-core` and `aspen-hooks-ticket`.
- 
+
  ## Compatibility and aliases
- 
+
 -No aliases are introduced by this stub. Any future enum variant additions must preserve append-only postcard discriminants and update wire compatibility evidence.
 +- **Old paths**: Existing public import paths stay direct crate imports (`aspen_client_api::*`, `aspen_forge_protocol::*`, `aspen_jobs_protocol::*`, `aspen_coordination_protocol::*`).
 +- **Compatibility re-exports**: none. Consumers import canonical protocol crates directly.
@@ -433,9 +433,9 @@ index 35e502637..a77d1feac 100644
 +| `aspen-client-api` | default | `aspen-client-api -> aspen-coordination-protocol` | Aspen protocol maintainers | Coordination wire responses are part of client RPC schema. |
 +| `aspen-client-api` | default | `aspen-client-api -> aspen-forge-protocol` | Aspen protocol maintainers | Forge wire responses are part of client RPC schema. |
 +| `aspen-client-api` | default | `aspen-client-api -> aspen-jobs-protocol` | Aspen protocol maintainers | Jobs wire responses are part of client RPC schema. |
- 
+
  ## Verification rails
- 
+
 -- compile protocol crates with default/minimal features;
 -- postcard/golden compatibility tests for public wire types;
 -- dependency-boundary checker proving no handler/runtime/binary leaks;
@@ -451,10 +451,10 @@ index 35e502637..a77d1feac 100644
 +- `cargo test -p aspen-client-api` and protocol crate serialization tests for positive encode/decode and negative discriminant/baseline-change rails
 +- positive downstream serialization fixture using canonical protocol crates directly
 +- dependency-boundary checker with `--candidate-family protocol-wire`, including negative mutations for forbidden dependency, missing owner, missing wire-contract rail, invalid readiness state, and missing downstream fixture evidence
- 
+
 -## First blocker
 +## First-slice status
- 
+
 -`aspen-client-api` is the highest priority because it is the main cross-domain wire surface. Keep it pointed at `aspen-auth-core`, preserve postcard baselines, and audit optional domain features for transitive runtime leaks.
 +Current status is `workspace-internal`. This change records the family manifest, policy entries, existing postcard wire-contract rails, downstream serialization fixture, and deterministic boundary evidence. Do not raise any protocol crate above `extraction-ready-in-workspace` until human license/publication policy is resolved.
 diff --git a/openspec/changes/extract-protocol-wire-crates/fixtures/downstream-protocol-wire/Cargo.lock b/openspec/changes/extract-protocol-wire-crates/fixtures/downstream-protocol-wire/Cargo.lock
@@ -755,25 +755,25 @@ index 92cb993ed..3c5ccf362 100644
 +++ b/openspec/changes/extract-protocol-wire-crates/tasks.md
 @@ -1,19 +1,19 @@
  ## Phase 1: Baseline and manifest
- 
+
 -- [ ] R1 Capture baseline compile, `cargo tree`, feature, and existing compatibility-test evidence for `aspen-client-api`, `aspen-forge-protocol`, `aspen-jobs-protocol`, and `aspen-coordination-protocol`, including any test-only `std` serializer usage. [covers=protocol-wire-extraction.defaults-avoid-runtime-shells,protocol-wire-extraction.defaults-avoid-runtime-shells.client-api-default-graph-is-reusable,protocol-wire-extraction.defaults-avoid-runtime-shells.domain-protocols-have-no-runtime-deps]
 -- [ ] I1 Expand `docs/crate-extraction/protocol-wire.md` into a complete manifest with per-crate metadata, feature contracts, dependencies, compatibility policy, representative consumers, and verification rails. [covers=protocol-wire-extraction.inventory-and-policy,protocol-wire-extraction.inventory-and-policy.policy-checker-verifies-family]
 -- [ ] I2 Add protocol/wire candidates to `docs/crate-extraction/policy.ncl` and update `docs/crate-extraction.md` readiness rows and next actions. [covers=protocol-wire-extraction.inventory-and-policy.policy-checker-verifies-family]
 +- [x] R1 Capture baseline compile, `cargo tree`, feature, and existing compatibility-test evidence for `aspen-client-api`, `aspen-forge-protocol`, `aspen-jobs-protocol`, and `aspen-coordination-protocol`, including any test-only `std` serializer usage. [covers=protocol-wire-extraction.defaults-avoid-runtime-shells,protocol-wire-extraction.defaults-avoid-runtime-shells.client-api-default-graph-is-reusable,protocol-wire-extraction.defaults-avoid-runtime-shells.domain-protocols-have-no-runtime-deps] ✅ completed: 2026-04-25T19:47:10Z
 +- [x] I1 Expand `docs/crate-extraction/protocol-wire.md` into a complete manifest with per-crate metadata, feature contracts, dependencies, compatibility policy, representative consumers, and verification rails. [covers=protocol-wire-extraction.inventory-and-policy,protocol-wire-extraction.inventory-and-policy.policy-checker-verifies-family] ✅ completed: 2026-04-25T19:47:10Z
 +- [x] I2 Add protocol/wire candidates to `docs/crate-extraction/policy.ncl` and update `docs/crate-extraction.md` readiness rows and next actions. [covers=protocol-wire-extraction.inventory-and-policy.policy-checker-verifies-family] ✅ completed: 2026-04-25T19:47:10Z
- 
+
  ## Phase 2: Dependency and compatibility rails
- 
+
 -- [ ] I3 Add or refresh golden/postcard compatibility tests for `ClientRpcRequest`, `ClientRpcResponse`, and schema-critical Forge/jobs/coordination protocol types, including negative tests that catch inserted enum variants or changed encoded baselines. [covers=protocol-wire-extraction.wire-compatibility-reviewable,protocol-wire-extraction.wire-compatibility-reviewable.enum-discriminants-stay-stable,protocol-wire-extraction.wire-compatibility-reviewable.golden-artifacts-are-saved]
 -- [ ] I4 Ensure auth and hook/ticket wire surfaces use portable leaf crates (`aspen-auth-core`, `aspen-hooks-ticket`, protocol crates) by default and do not depend on runtime `aspen-auth` or `aspen-hooks` handlers. [covers=protocol-wire-extraction.portable-auth-ticket-types,protocol-wire-extraction.portable-auth-ticket-types.auth-feature-uses-auth-core,protocol-wire-extraction.portable-auth-ticket-types.hook-tickets-use-ticket-crate]
 -- [ ] I5 Add a downstream serialization fixture that imports canonical protocol crates, encodes/decodes representative client and domain protocol values, and records metadata proving runtime/app crates are absent. [covers=protocol-wire-extraction.downstream-serialization-proof,protocol-wire-extraction.downstream-serialization-proof.fixture-serializes-canonical-types]
 +- [x] I3 Add or refresh golden/postcard compatibility tests for `ClientRpcRequest`, `ClientRpcResponse`, and schema-critical Forge/jobs/coordination protocol types, including negative tests that catch inserted enum variants or changed encoded baselines. [covers=protocol-wire-extraction.wire-compatibility-reviewable,protocol-wire-extraction.wire-compatibility-reviewable.enum-discriminants-stay-stable,protocol-wire-extraction.wire-compatibility-reviewable.golden-artifacts-are-saved] ✅ completed: 2026-04-25T19:47:10Z
 +- [x] I4 Ensure auth and hook/ticket wire surfaces use portable leaf crates (`aspen-auth-core`, `aspen-hooks-ticket`, protocol crates) by default and do not depend on runtime `aspen-auth` or `aspen-hooks` handlers. [covers=protocol-wire-extraction.portable-auth-ticket-types,protocol-wire-extraction.portable-auth-ticket-types.auth-feature-uses-auth-core,protocol-wire-extraction.portable-auth-ticket-types.hook-tickets-use-ticket-crate] ✅ completed: 2026-04-25T19:47:10Z
 +- [x] I5 Add a downstream serialization fixture that imports canonical protocol crates, encodes/decodes representative client and domain protocol values, and records metadata proving runtime/app crates are absent. [covers=protocol-wire-extraction.downstream-serialization-proof,protocol-wire-extraction.downstream-serialization-proof.fixture-serializes-canonical-types] ✅ completed: 2026-04-25T19:47:10Z
- 
+
  ## Phase 3: Verification
- 
+
 -- [ ] V1 Save compile evidence for `cargo check -p aspen-client-api`, `cargo check -p aspen-client-api --no-default-features`, supported wasm target checks, and equivalent checks for Forge/jobs/coordination protocol crates. [covers=protocol-wire-extraction.defaults-avoid-runtime-shells.client-api-default-graph-is-reusable,protocol-wire-extraction.defaults-avoid-runtime-shells.domain-protocols-have-no-runtime-deps]
 -- [ ] V2 Save dependency-boundary evidence from `cargo tree` and deterministic checker output proving forbidden runtime/app crates are absent from default reusable protocol graphs. [covers=protocol-wire-extraction.defaults-avoid-runtime-shells.client-api-default-graph-is-reusable,protocol-wire-extraction.defaults-avoid-runtime-shells.domain-protocols-have-no-runtime-deps]
 -- [ ] V3 Run and save protocol compatibility tests with positive encode/decode cases and negative baseline-change cases. [covers=protocol-wire-extraction.wire-compatibility-reviewable.enum-discriminants-stay-stable,protocol-wire-extraction.wire-compatibility-reviewable.golden-artifacts-are-saved]
@@ -902,7 +902,7 @@ index 322c24daa..4b52d42c5 100755
 +    "i5-downstream-protocol-wire-forbidden-grep.txt",
 +    "i3-client-api-compatibility-tests.txt",
 +];
- 
+
  #[derive(Debug, Parser)]
  struct Args {
 @@ -159,6 +165,9 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
@@ -922,4 +922,3 @@ index 322c24daa..4b52d42c5 100755
 +        PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
          _ => return,
      };
- 

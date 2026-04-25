@@ -153,4 +153,3 @@ A Forge repository SHALL be able to advertise Git support, JJ support, or both. 
 - **WHEN** JJ support is enabled for a repository that still advertises Git support
 - **THEN** existing Git operations on that repo continue to use the Git backend behavior and namespaces unchanged
 - **AND** the presence of the JJ plugin does not redirect Git operations through JJ-native paths
-
