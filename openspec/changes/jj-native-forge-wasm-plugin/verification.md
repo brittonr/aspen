@@ -5,11 +5,11 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-forge-protocol/src/lib.rs`
-- Changed file: `crates/aspen-plugin-api/src/manifest.rs`
+- Changed file: `crates/aspen-plugin-api/src/lib.rs`
 - Changed file: `crates/aspen-plugin-api/src/resolve.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-protocol-plugin-api-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-protocol-plugin-api-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-6-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -17,6 +17,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 1.4 Add JJ-native request/response families, transport identifiers, and explicit transport-version advertisement/compatibility checks for clone, fetch, push, bookmark sync, and change-id lookup.
   - Evidence: `crates/aspen-forge-protocol/src/lib.rs`, `crates/aspen-plugin-api/src/manifest.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-protocol-plugin-api-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-rustfmt-check.txt`
+
+- [x] 1.6 Reject protocol-identifier collisions during plugin registration/activation and surface a deterministic error.
+  - Evidence: `crates/aspen-plugin-api/src/manifest.rs`, `crates/aspen-plugin-api/src/resolve.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-protocol-plugin-api-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-rustfmt-check.txt`
 
 ## Review Scope Snapshot
 
@@ -38,6 +41,11 @@ Pending broader implementation diff for later tasks.
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-openspec-preflight.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-6-openspec-preflight.txt`
 
 ## Notes
 

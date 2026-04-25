@@ -17,7 +17,10 @@ pub use manifest::PluginDependency;
 pub use manifest::PluginInfo;
 pub use manifest::PluginManifest;
 pub use manifest::PluginPermissions;
+pub use manifest::PluginProtocol;
+pub use manifest::PluginProtocolCollision;
 pub use manifest::PluginSignatureInfo;
+pub use manifest::protocol_identifier_collisions;
 
 /// Maximum priority value for WASM plugins.
 pub const MAX_PLUGIN_PRIORITY: u32 = 999;

@@ -12,6 +12,7 @@ use std::fmt;
 
 use crate::PLUGIN_API_VERSION;
 use crate::PluginManifest;
+use crate::protocol_identifier_collisions;
 
 /// Errors from dependency resolution.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +37,12 @@ pub enum DependencyError {
         plugin: String,
         requires: String,
         current: String,
+    },
+    /// Two enabled plugins declared the same protocol identifier.
+    ProtocolIdentifierCollision {
+        plugin: String,
+        identifier: String,
+        conflicts: Vec<String>,
     },
 }
 
@@ -77,6 +84,19 @@ impl fmt::Display for DependencyError {
                     f,
                     "Plugin '{}' requires API version >= {}, but current API version is {}",
                     plugin, requires, current
+                )
+            }
+            DependencyError::ProtocolIdentifierCollision {
+                plugin,
+                identifier,
+                conflicts,
+            } => {
+                write!(
+                    f,
+                    "Plugin '{}' protocol identifier '{}' collides with {}",
+                    plugin,
+                    identifier,
+                    conflicts.join(", ")
                 )
             }
         }
@@ -139,6 +159,9 @@ fn build_dependency_graph<'a>(
     debug_assert_eq!(in_degree.len(), enabled.len());
     debug_assert_eq!(edges.len(), enabled.len());
 
+    let enabled_clones: Vec<PluginManifest> = enabled.iter().map(|manifest| (*manifest).clone()).collect();
+    push_protocol_collision_errors(&enabled_clones, &mut errors);
+
     for (idx, manifest) in enabled.iter().enumerate() {
         for dep in &manifest.dependencies {
             let maybe_dep_idx = name_to_idx.get(dep.name.as_str()).copied();
@@ -171,6 +194,18 @@ fn build_dependency_graph<'a>(
     }
 
     (in_degree, edges, errors)
+}
+
+fn push_protocol_collision_errors(manifests: &[PluginManifest], errors: &mut Vec<DependencyError>) {
+    for collision in protocol_identifier_collisions(manifests) {
+        for plugin in &collision.plugins {
+            errors.push(DependencyError::ProtocolIdentifierCollision {
+                plugin: plugin.clone(),
+                identifier: collision.identifier.clone(),
+                conflicts: collision.plugins.clone(),
+            });
+        }
+    }
 }
 
 fn build_edge_lists<'a>(enabled: &[&'a PluginManifest], name_to_idx: &HashMap<&'a str, usize>) -> Vec<Vec<usize>> {
@@ -251,6 +286,19 @@ pub fn validate_install(manifest: &PluginManifest, installed: &[PluginManifest])
         installed_map.insert(&installed_manifest.name, installed_manifest);
     }
     debug_assert!(installed_map.len() <= installed.len());
+
+    let mut collision_candidates = Vec::with_capacity(installed.len().saturating_add(1));
+    collision_candidates.extend(installed.iter().cloned());
+    collision_candidates.push(manifest.clone());
+    for collision in protocol_identifier_collisions(&collision_candidates) {
+        if collision.plugins.iter().any(|plugin| plugin == &manifest.name) {
+            errors.push(DependencyError::ProtocolIdentifierCollision {
+                plugin: manifest.name.clone(),
+                identifier: collision.identifier,
+                conflicts: collision.plugins,
+            });
+        }
+    }
 
     for dep in &manifest.dependencies {
         match installed_map.get(dep.name.as_str()).copied() {
@@ -354,6 +402,7 @@ mod tests {
     use super::*;
     use crate::PluginDependency;
     use crate::PluginPermissions;
+    use crate::PluginProtocol;
 
     fn manifest(name: &str, version: &str, deps: Vec<PluginDependency>) -> PluginManifest {
         PluginManifest {
@@ -376,6 +425,23 @@ mod tests {
             tags: vec![],
             min_api_version: None,
             dependencies: deps,
+        }
+    }
+
+    fn protocol(identifier: &str) -> PluginProtocol {
+        const VERSION: u16 = 1;
+        const MAX_SESSIONS: u32 = 2;
+        const MAX_CHUNK_BYTES: u64 = 64 * 1024;
+        const MAX_IN_FLIGHT_BYTES: u64 = 256 * 1024;
+        const SESSION_TIMEOUT_MS: u64 = 30_000;
+
+        PluginProtocol {
+            identifier: identifier.to_string(),
+            version: VERSION,
+            max_concurrent_sessions: MAX_SESSIONS,
+            max_chunk_size_bytes: MAX_CHUNK_BYTES,
+            max_in_flight_bytes: MAX_IN_FLIGHT_BYTES,
+            session_timeout_ms: SESSION_TIMEOUT_MS,
         }
     }
 
@@ -601,6 +667,19 @@ mod tests {
         let m = manifest("a", "1.0.0", vec![dep("b", Some("1.0.0"), false)]);
         let installed = vec![manifest("b", "1.5.0", vec![])];
         assert!(validate_install(&m, &installed).is_ok());
+    }
+
+    #[test]
+    fn test_validate_install_rejects_protocol_collision() {
+        const PROTOCOL_ID: &str = "/aspen/test/1";
+        let mut installed = manifest("installed", "1.0.0", vec![]);
+        installed.protocols.push(protocol(PROTOCOL_ID));
+        let mut candidate = manifest("candidate", "1.0.0", vec![]);
+        candidate.protocols.push(protocol(PROTOCOL_ID));
+
+        let err = validate_install(&candidate, &[installed]).unwrap_err();
+
+        assert!(matches!(err[0], DependencyError::ProtocolIdentifierCollision { .. }));
     }
 
     #[test]

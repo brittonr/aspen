@@ -5,7 +5,7 @@
 - [ ] 1.3 Default or backfill pre-existing repositories with no backend manifest to `git`-only behavior.
 - [x] 1.4 Add JJ-native request/response families, transport identifiers, and explicit transport-version advertisement/compatibility checks for clone, fetch, push, bookmark sync, and change-id lookup.
 - [ ] 1.5 Extend the plugin/runtime manifest and routing path so a WASM plugin can claim a bounded repo protocol session, not only unary requests.
-- [ ] 1.6 Reject protocol-identifier collisions during plugin registration/activation and surface a deterministic error.
+- [x] 1.6 Reject protocol-identifier collisions during plugin registration/activation and surface a deterministic error.
 - [ ] 1.7 Persist the manifest-declared JJ routing identifier in plugin registration metadata, surface it in capability discovery, and keep it stable across reload/upgrade when unchanged.
 - [ ] 1.8 Publish and withdraw node-local JJ activation state so discovery only advertises nodes with an active JJ plugin.
 - [ ] 1.9 Implement host/runtime enforcement of declared KV/blob/protocol permissions, session limits, and cleanup on denied or terminated protocol sessions.
