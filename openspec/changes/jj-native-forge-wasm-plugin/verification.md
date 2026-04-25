@@ -6,9 +6,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 ## Implementation Evidence
 
 - Changed file: `crates/aspen-forge-handler/src/executor.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-git-jj-negative-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-4-openspec-preflight.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-repo-lifecycle-integration-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -70,6 +70,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 4.3 Document operator and developer workflows for creating JJ-enabled repos and connecting JJ clients.
   - Evidence: `docs/jj-native-forge.md`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
+
+- [x] 5.1 Add integration tests for Forge repo create/list/delete flows with backend manifests, repository list responses that report enabled backends, pre-existing repos that default to `git` when the manifest is absent, node-specific capability-discovery responses for Git-only, JJ-only, and dual-backend repos, positive routing-identifier presence on active JJ nodes, explicit post-delete rejection of both Git and JJ operations, post-delete unreachability of JJ discovery metadata, and shared-blob retention on the normal GC path.
+  - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-repo-lifecycle-integration-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-rustfmt-check.txt`
 
 - [x] 1.5 Extend the plugin/runtime manifest and routing path so a WASM plugin can claim a bounded repo protocol session, not only unary requests.
   - Evidence: `crates/aspen-plugin-api/src/manifest.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-plugin-session-route-tests.txt`
@@ -339,6 +342,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge-handler test_repo_backend_lifecycle_integration_covers_delete_and_blob_retention -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-repo-lifecycle-integration-tests.txt`
+
+### `rustfmt --check crates/aspen-forge-handler/src/executor.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-openspec-preflight.txt`
 
 ### `cargo test -p aspen-plugin-api protocol_manifest_roundtrips && cargo test -p aspen-forge-handler test_backend_route_helpers_advertise_git_and_active_jj`
 

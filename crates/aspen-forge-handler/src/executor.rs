@@ -491,11 +491,23 @@ impl ForgeServiceExecutor {
         backend: ForgeRepoBackend,
     ) -> Result<Option<ClientRpcResponse>> {
         let Ok(hash) = blake3::Hash::from_hex(repo_id_hex) else {
-            return Ok(None);
+            return Ok(Some(ClientRpcResponse::CapabilityUnavailable(
+                aspen_client_api::CapabilityUnavailableResponse {
+                    required_app: "forge".to_string(),
+                    message: "repository identifier is invalid".to_string(),
+                    hints: vec![],
+                },
+            )));
         };
         let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
         if self.forge_node.get_repo(&repo_id).await.is_err() {
-            return Ok(None);
+            return Ok(Some(ClientRpcResponse::CapabilityUnavailable(
+                aspen_client_api::CapabilityUnavailableResponse {
+                    required_app: "forge".to_string(),
+                    message: "repository is unavailable".to_string(),
+                    hints: vec![],
+                },
+            )));
         }
         let backends = self.read_repo_backends(repo_id_hex).await;
         if backends.contains(&backend) {
@@ -3275,6 +3287,188 @@ mod tests {
         };
         assert_eq!(response.required_app, "forge");
         assert!(response.message.contains("Git backend is not enabled"));
+    }
+
+    #[tokio::test]
+    async fn test_repo_backend_lifecycle_integration_covers_delete_and_blob_retention() {
+        let executor = make_test_executor().await;
+        let manifest = test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true);
+        let manifest_json = serde_json::to_string(&manifest).expect("manifest serializes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(
+                format!("{}{}", aspen_plugin_api::PLUGIN_KV_PREFIX, manifest.name),
+                manifest_json,
+            ))
+            .await
+            .expect("plugin manifest writes");
+        executor
+            .forge_node
+            .create_repo("legacy", vec![executor.forge_node.public_key()], TEST_THRESHOLD)
+            .await
+            .expect("legacy repo creates without backend manifest");
+
+        let jj_only = executor
+            .execute(ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name: "jj-only-life".into(),
+                description: None,
+                default_branch: None,
+                backends: vec![ForgeRepoBackend::Jj],
+            })
+            .await
+            .expect("JJ-only repo creates");
+        let dual = executor
+            .execute(ClientRpcRequest::ForgeCreateRepoWithBackends {
+                name: "dual-life".into(),
+                description: None,
+                default_branch: None,
+                backends: vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj],
+            })
+            .await
+            .expect("dual repo creates");
+        let ClientRpcResponse::ForgeRepoResult(jj_only_response) = jj_only else {
+            panic!("expected JJ-only repo response");
+        };
+        let ClientRpcResponse::ForgeRepoResult(dual_response) = dual else {
+            panic!("expected dual repo response");
+        };
+        let jj_only_repo = jj_only_response.repo.expect("JJ-only repo info");
+        let dual_repo = dual_response.repo.expect("dual repo info");
+
+        let list_response = executor
+            .execute(ClientRpcRequest::ForgeListRepos {
+                limit: Some(10),
+                offset: Some(0),
+            })
+            .await
+            .expect("list repos executes");
+        let ClientRpcResponse::ForgeRepoListResult(list_response) = list_response else {
+            panic!("expected list response");
+        };
+        let legacy_info = list_response.repos.iter().find(|repo| repo.name == "legacy").expect("legacy repo listed");
+        let jj_only_info =
+            list_response.repos.iter().find(|repo| repo.id == jj_only_repo.id).expect("JJ-only repo listed");
+        let dual_info = list_response.repos.iter().find(|repo| repo.id == dual_repo.id).expect("dual repo listed");
+        assert_eq!(legacy_info.backends, vec![ForgeRepoBackend::Git]);
+        assert_eq!(jj_only_info.backends, vec![ForgeRepoBackend::Jj]);
+        assert!(jj_only_info.backend_routes.iter().all(|route| route.backend != ForgeRepoBackend::Git));
+        assert!(jj_only_info.backend_routes.iter().any(|route| route.backend == ForgeRepoBackend::Jj));
+        assert_eq!(dual_info.backends, vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj]);
+        assert!(dual_info.backend_routes.iter().any(|route| route.backend == ForgeRepoBackend::Git));
+        assert!(dual_info.backend_routes.iter().any(|route| route.backend == ForgeRepoBackend::Jj));
+
+        let blob_content = b"retained blob".to_vec();
+        let blob_response = executor
+            .execute(ClientRpcRequest::ForgeStoreBlob {
+                repo_id: dual_repo.id.clone(),
+                content: blob_content.clone(),
+            })
+            .await
+            .expect("blob store executes");
+        let ClientRpcResponse::ForgeBlobResult(blob_response) = blob_response else {
+            panic!("expected blob response");
+        };
+        let blob_hash = blob_response.hash.expect("blob hash exists");
+
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(aspen_forge::jj_bookmark_key(&dual_repo.id, "main"), "head"))
+            .await
+            .expect("bookmark writes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(aspen_forge::jj_change_head_key(&dual_repo.id, "change"), "commit"))
+            .await
+            .expect("change head writes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(
+                aspen_forge::jj_staged_session_key(&dual_repo.id, "session"),
+                "staged",
+            ))
+            .await
+            .expect("staged session writes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(
+                aspen_forge::jj_reachability_key(&dual_repo.id, "object"),
+                "reachable",
+            ))
+            .await
+            .expect("reachability writes");
+
+        let delete_response = executor
+            .execute(ClientRpcRequest::ForgeDeleteRepo {
+                repo_id: dual_repo.id.clone(),
+            })
+            .await
+            .expect("delete executes");
+        let ClientRpcResponse::ForgeOperationResult(delete_response) = delete_response else {
+            panic!("expected delete response");
+        };
+        assert!(delete_response.is_success);
+
+        let git_response = executor
+            .execute(ClientRpcRequest::ForgeStoreBlob {
+                repo_id: dual_repo.id.clone(),
+                content: b"after-delete".to_vec(),
+            })
+            .await
+            .expect("post-delete git request executes");
+        assert!(matches!(git_response, ClientRpcResponse::CapabilityUnavailable(_)));
+
+        let jj_response = executor
+            .execute(ClientRpcRequest::ForgeJjNative {
+                request: jj_native_request_for_repo(
+                    &dual_repo.id,
+                    aspen_client_api::forge::JJ_TRANSPORT_VERSION_CURRENT,
+                ),
+            })
+            .await
+            .expect("post-delete JJ request executes");
+        let ClientRpcResponse::ForgeJjNative(jj_response) = jj_response else {
+            panic!("expected JJ response");
+        };
+        assert_eq!(jj_response.status, aspen_client_api::forge::JjNativeStatus::Rejected);
+
+        for prefix in jj_namespace_cleanup_prefixes(&dual_repo.id) {
+            let scan = executor
+                .forge_node
+                .kv()
+                .scan(aspen_core::ScanRequest {
+                    prefix,
+                    limit_results: Some(REPO_JJ_NAMESPACE_SCAN_LIMIT),
+                    continuation_token: None,
+                })
+                .await
+                .expect("namespace cleanup prefix scans");
+            assert!(scan.entries.is_empty());
+        }
+        let reachability = executor
+            .forge_node
+            .kv()
+            .scan(aspen_core::ScanRequest {
+                prefix: format!("{}{}:", aspen_forge::jj::JJ_REACHABILITY_KEY_PREFIX, dual_repo.id),
+                limit_results: Some(REPO_JJ_NAMESPACE_SCAN_LIMIT),
+                continuation_token: None,
+            })
+            .await
+            .expect("reachability prefix scans");
+        assert_eq!(reachability.entries.len(), 1);
+
+        let get_blob_response = executor
+            .execute(ClientRpcRequest::ForgeGetBlob { hash: blob_hash })
+            .await
+            .expect("blob get executes after repo delete");
+        let ClientRpcResponse::ForgeBlobResult(get_blob_response) = get_blob_response else {
+            panic!("expected blob get response");
+        };
+        assert_eq!(get_blob_response.content, Some(blob_content));
     }
 
     #[test]
