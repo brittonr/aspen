@@ -1,0 +1,4 @@
+OK: openspec/changes/jj-native-forge-wasm-plugin
+  tasks: 36 total / 1 checked
+  changed files listed: 4
+  verification artifacts: 9
