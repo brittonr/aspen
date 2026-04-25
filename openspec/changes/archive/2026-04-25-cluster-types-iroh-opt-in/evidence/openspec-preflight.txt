@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-04-25-cluster-types-iroh-opt-in
+  tasks: 3 total / 3 checked
+  changed files listed: 3
+  verification artifacts: 18
