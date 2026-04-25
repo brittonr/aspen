@@ -5,9 +5,8 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `docs/jj-native-forge.md`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-openspec-preflight.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-plugin-session-route-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -60,6 +59,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 4.3 Document operator and developer workflows for creating JJ-enabled repos and connecting JJ clients.
   - Evidence: `docs/jj-native-forge.md`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-docs-check.txt`
+
+- [x] 1.5 Extend the plugin/runtime manifest and routing path so a WASM plugin can claim a bounded repo protocol session, not only unary requests.
+  - Evidence: `crates/aspen-plugin-api/src/manifest.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-plugin-session-route-tests.txt`
 
 ## Review Scope Snapshot
 
@@ -261,6 +263,16 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-3-openspec-preflight.txt`
+
+### `cargo test -p aspen-plugin-api protocol_manifest_roundtrips && cargo test -p aspen-forge-handler test_backend_route_helpers_advertise_git_and_active_jj`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-plugin-session-route-tests.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-openspec-preflight.txt`
 
 ## Notes
 
