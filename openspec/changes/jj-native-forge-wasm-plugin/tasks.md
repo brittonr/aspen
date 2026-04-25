@@ -25,10 +25,10 @@
 ## 3. JJ Forge plugin and client path
 
 - [x] 3.1 Implement the JJ-native Forge WASM plugin with declared permissions, storage prefixes, request handlers, and protocol-session handlers.
-- [ ] 3.2 After the 1.x discovery/routing foundation, 2.x storage/publish foundations, and 3.1 plugin session support land, implement standalone `jj-remote-aspen` session setup, capability discovery, version checks, and QUIC admission.
-- [ ] 3.3 Implement standalone `jj-remote-aspen` clone/fetch and the probe-first incremental sync path for missing JJ objects.
-- [ ] 3.4 Implement standalone `jj-remote-aspen` push and bookmark mutation flows, including explicit object/bookmark/change-head probes and conflict reporting.
-- [ ] 3.5 Implement standalone `jj-remote-aspen` change-id resolution over the JJ-native path.
+- [x] 3.2 After the 1.x discovery/routing foundation, 2.x storage/publish foundations, and 3.1 plugin session support land, implement standalone `jj-remote-aspen` session setup, capability discovery, version checks, and QUIC admission.
+- [x] 3.3 Implement standalone `jj-remote-aspen` clone/fetch and the probe-first incremental sync path for missing JJ objects.
+- [x] 3.4 Implement standalone `jj-remote-aspen` push and bookmark mutation flows, including explicit object/bookmark/change-head probes and conflict reporting.
+- [x] 3.5 Implement standalone `jj-remote-aspen` change-id resolution over the JJ-native path.
 - [x] 3.6 Reject unsupported JJ access explicitly for Git-only repos and reject silent fallback to Git transport.
 - [x] 3.7 Return `capability-unavailable` for JJ-enabled repos when the selected target node does not currently have the JJ plugin active, and omit JJ routing identifiers for that node from discovery.
 - [x] 3.8 Enforce existing Forge authentication and repo read/write authorization rules on JJ-native clone, fetch, push, bookmark sync, and change-id resolution.

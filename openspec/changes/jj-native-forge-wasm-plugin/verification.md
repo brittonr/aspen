@@ -5,12 +5,12 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml`
-- Changed file: `aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.lock`
-- Changed file: `aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-openspec-preflight.txt`
+- Changed file: `Cargo.toml`
+- Changed file: `crates/aspen-cli/Cargo.toml`
+- Changed file: `crates/aspen-cli/src/bin/jj-remote-aspen/main.rs`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -54,6 +54,18 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 3.1 Implement the JJ-native Forge WASM plugin with declared permissions, storage prefixes, request handlers, and protocol-session handlers.
   - Evidence: `aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs`, `aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-rustfmt-check.txt`
+
+- [x] 3.2 After the 1.x discovery/routing foundation, 2.x storage/publish foundations, and 3.1 plugin session support land, implement standalone `jj-remote-aspen` session setup, capability discovery, version checks, and QUIC admission.
+  - Evidence: `crates/aspen-cli/src/bin/jj-remote-aspen/main.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-rustfmt-check.txt`
+
+- [x] 3.3 Implement standalone `jj-remote-aspen` clone/fetch and the probe-first incremental sync path for missing JJ objects.
+  - Evidence: `crates/aspen-cli/src/bin/jj-remote-aspen/main.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-rustfmt-check.txt`
+
+- [x] 3.4 Implement standalone `jj-remote-aspen` push and bookmark mutation flows, including explicit object/bookmark/change-head probes and conflict reporting.
+  - Evidence: `crates/aspen-cli/src/bin/jj-remote-aspen/main.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-rustfmt-check.txt`
+
+- [x] 3.5 Implement standalone `jj-remote-aspen` change-id resolution over the JJ-native path.
+  - Evidence: `crates/aspen-cli/src/bin/jj-remote-aspen/main.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-rustfmt-check.txt`
 
 - [x] 2.8 Add staged-data quota, expiry, and cleanup behavior for successful publish, timeout, rejection, and abandoned-session paths.
   - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-8-aspen-forge-jj-staged-cleanup-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-8-rustfmt-check.txt`
@@ -262,6 +274,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-openspec-preflight.txt`
+
+### `cargo test -p aspen-cli --bin jj-remote-aspen --features jj-native-forge -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`
+
+### `rustfmt --check crates/aspen-cli/src/bin/jj-remote-aspen/main.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-openspec-preflight.txt`
 
 ### `cargo test -p aspen-forge jj::`
 

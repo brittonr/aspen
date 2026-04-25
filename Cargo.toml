@@ -510,7 +510,7 @@ default = []
 
 full = ["sql", "blob", "forge", "git-bridge", "jj-native-forge", "plugins", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "jobs", "docs", "federation", "node-runtime-apps", "proxy", "net", "relay-server", "snix", "snix-http", "snix-daemon", "snix-eval", "snix-build", "deploy", "kv-branch", "commit-dag", "nostr-relay", "otlp", "trust"]
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
-jj-native-forge = ["forge", "plugins"]
+jj-native-forge = ["forge", "plugins-rpc"]
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 testing = ["dep:aspen-testing", "aspen-testing/router"]

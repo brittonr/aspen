@@ -1,0 +1,782 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling libc v0.2.183
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.19.0
+   Compiling memchr v2.8.0
+   Compiling pin-project-lite v0.2.17
+   Compiling version_check v0.9.5
+   Compiling futures-core v0.3.32
+   Compiling subtle v2.6.1
+   Compiling portable-atomic v1.13.1
+   Compiling critical-section v1.2.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling log v0.4.29
+   Compiling cpufeatures v0.2.17
+   Compiling stable_deref_trait v1.2.1
+   Compiling thiserror v2.0.18
+   Compiling futures-io v0.3.32
+   Compiling getrandom v0.3.4
+   Compiling semver v1.0.27
+   Compiling itoa v1.0.17
+   Compiling futures-sink v0.3.32
+   Compiling slab v0.4.12
+   Compiling futures-task v0.3.32
+   Compiling scopeguard v1.2.0
+   Compiling zerocopy v0.8.42
+   Compiling bitflags v2.11.0
+   Compiling equivalent v1.0.2
+   Compiling litemap v0.8.1
+   Compiling writeable v0.6.2
+   Compiling percent-encoding v2.3.2
+   Compiling icu_normalizer_data v2.1.1
+   Compiling icu_properties_data v2.1.2
+   Compiling anyhow v1.0.102
+   Compiling futures-channel v0.3.32
+   Compiling lock_api v0.4.14
+   Compiling unicode-xid v0.2.6
+   Compiling cfg_aliases v0.2.1
+   Compiling heck v0.5.0
+   Compiling unicode-segmentation v1.12.0
+   Compiling fnv v1.0.7
+   Compiling base64ct v1.8.3
+   Compiling utf8_iter v1.0.4
+   Compiling fs_extra v1.3.0
+   Compiling dunce v1.0.5
+   Compiling const-oid v0.10.2
+   Compiling arrayvec v0.7.6
+   Compiling foldhash v0.2.0
+   Compiling fastrand v2.3.0
+   Compiling allocator-api2 v0.2.21
+   Compiling strsim v0.11.1
+   Compiling generic-array v0.14.7
+   Compiling aws-lc-rs v1.16.1
+   Compiling parking_lot_core v0.9.12
+   Compiling untrusted v0.9.0
+   Compiling rustversion v1.0.22
+   Compiling form_urlencoded v1.2.2
+   Compiling byteorder v1.5.0
+   Compiling base64 v0.22.1
+   Compiling rustc_version v0.4.1
+   Compiling data-encoding v2.10.0
+   Compiling signature v3.0.0-rc.10
+   Compiling rustls v0.23.37
+   Compiling parking v2.2.1
+   Compiling spin v0.10.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling atomic-waker v1.1.2
+   Compiling httparse v1.10.1
+   Compiling futures-lite v2.6.1
+   Compiling spin v0.9.8
+   Compiling ipnet v2.12.0
+   Compiling autocfg v1.5.0
+   Compiling ident_case v1.0.1
+   Compiling powerfmt v0.2.0
+   Compiling tinyvec_macros v0.1.1
+   Compiling hash32 v0.2.1
+   Compiling time-core v0.1.8
+   Compiling num-conv v0.2.0
+   Compiling constant_time_eq v0.4.2
+   Compiling getrandom v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling tinyvec v1.11.0
+   Compiling opaque-debug v0.3.1
+   Compiling pem-rfc7468 v1.0.0
+   Compiling openssl-probe v0.2.1
+   Compiling try-lock v0.2.5
+   Compiling rustix v1.1.4
+   Compiling httpdate v1.0.3
+   Compiling cordyceps v0.3.4
+   Compiling tower-service v0.3.3
+   Compiling deranged v0.5.8
+   Compiling diatomic-waker v0.2.3
+   Compiling want v0.3.1
+   Compiling n0-future v0.3.2
+   Compiling pin-utils v0.1.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling hashbrown v0.16.1
+   Compiling noq-udp v0.9.0
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling heapless v0.7.17
+   Compiling winnow v1.0.0
+   Compiling convert_case v0.10.0
+   Compiling paste v1.0.15
+   Compiling libm v0.2.16
+   Compiling sync_wrapper v1.0.2
+   Compiling litrs v1.0.0
+   Compiling toml_datetime v1.0.1+spec-1.1.0
+   Compiling zmij v1.0.21
+   Compiling dyn-clone v1.0.20
+   Compiling num-traits v0.2.19
+   Compiling futures-buffered v0.2.13
+   Compiling siphasher v1.0.2
+   Compiling tower-layer v0.3.3
+   Compiling ryu v1.0.23
+   Compiling noq v0.17.0
+   Compiling iana-time-zone v0.1.65
+   Compiling num_threads v0.1.7
+   Compiling lru-slab v0.1.2
+   Compiling serde_json v1.0.149
+   Compiling identity-hash v0.1.0
+   Compiling rustc-hash v2.1.1
+   Compiling sorted-index-buffer v0.2.1
+   Compiling iri-string v0.7.10
+   Compiling hex v0.4.3
+   Compiling crc-catalog v2.4.0
+   Compiling syn v2.0.117
+   Compiling vergen-lib v9.1.0
+   Compiling vergen-lib v0.1.6
+   Compiling vergen v9.1.0
+   Compiling vergen-gitcl v1.0.8
+   Compiling crc v3.4.0
+   Compiling acto v0.8.0
+   Compiling flume v0.11.1
+   Compiling pkarr v5.0.2
+   Compiling netwatch v0.15.0
+   Compiling mac-addr v0.3.0
+   Compiling base32 v0.5.1
+   Compiling tagptr v0.2.0
+   Compiling self_cell v1.2.2
+   Compiling crossbeam-epoch v0.9.18
+   Compiling crossbeam-channel v0.5.15
+   Compiling xml-rs v0.8.28
+   Compiling sha1_smol v1.0.1
+   Compiling simple-dns v0.9.3
+   Compiling simdutf8 v0.1.5
+   Compiling resolv-conf v0.7.6
+   Compiling aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+   Compiling smol_str v0.1.24
+   Compiling iroh v0.97.0
+   Compiling lazy_static v1.5.0
+   Compiling z32 v1.3.0
+   Compiling utf8parse v0.2.2
+   Compiling redb v2.6.3
+   Compiling humantime v2.3.0
+   Compiling document-features v0.2.12
+   Compiling pem v3.0.6
+   Compiling colorchoice v1.0.5
+   Compiling anstyle-query v1.1.5
+   Compiling anstyle v1.0.14
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle-parse v1.0.0
+   Compiling syn v1.0.109
+   Compiling netlink-packet-core v0.8.1
+   Compiling rust_decimal v1.40.0
+   Compiling ahash v0.8.12
+   Compiling indexmap v2.13.0
+   Compiling lru v0.16.3
+   Compiling clap_lex v1.1.0
+   Compiling proc-macro-error-attr v0.4.12
+   Compiling aspen-time v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-time)
+   Compiling hybrid-array v0.4.8
+   Compiling anstream v1.0.0
+   Compiling utf8-width v0.1.8
+   Compiling proc-macro-error v0.4.12
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling maplit v1.0.2
+   Compiling ref-cast v1.0.25
+   Compiling regex-syntax v0.8.10
+   Compiling schemars v0.8.22
+   Compiling keccak v0.1.6
+   Compiling binary-merge v0.1.2
+   Compiling genawaiter-macro v0.99.1
+   Compiling gix-trace v0.1.18
+   Compiling pkg-config v0.3.32
+   Compiling iroh-blobs v0.99.0
+   Compiling heapless v0.8.0
+   Compiling getrandom v0.2.17
+   Compiling jobserver v0.1.34
+   Compiling socket2 v0.6.3
+   Compiling errno v0.3.14
+   Compiling mio v1.1.1
+   Compiling netlink-packet-route v0.29.0
+   Compiling seize v0.5.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling rand_core v0.6.4
+   Compiling rand_core v0.9.5
+   Compiling aspen-disk v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-disk)
+   Compiling cc v1.2.57
+   Compiling positioned-io v0.3.5
+   Compiling xmltree v0.10.3
+   Compiling papaya v0.2.3
+   Compiling block-buffer v0.11.0
+   Compiling crypto-common v0.2.1
+   Compiling fixedbitset v0.5.7
+   Compiling concurrent-queue v2.5.0
+   Compiling hash32 v0.3.1
+   Compiling adler2 v2.0.1
+   Compiling thiserror v1.0.69
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling bitcoin-io v0.1.4
+   Compiling simd-adler32 v0.3.8
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling time v0.3.47
+   Compiling digest v0.10.7
+   Compiling event-listener v5.4.1
+   Compiling winnow v0.7.15
+   Compiling polyval v0.6.2
+   Compiling toml_parser v1.0.10+spec-1.1.0
+   Compiling byte-unit v5.2.0
+   Compiling poly1305 v0.8.0
+   Compiling miniz_oxide v0.8.9
+   Compiling curve25519-dalek v4.1.3
+   Compiling chrono v0.4.44
+   Compiling raw-cpuid v11.6.0
+   Compiling zstd-safe v7.2.4
+   Compiling ghash v0.5.1
+   Compiling sha2 v0.10.9
+   Compiling hmac v0.12.1
+   Compiling sha1 v0.10.6
+   Compiling sha3 v0.10.8
+   Compiling foldhash v0.1.5
+   Compiling crc32fast v1.5.0
+   Compiling hkdf v0.12.4
+   Compiling event-listener-strategy v0.5.4
+   Compiling sha1-checked v0.10.0
+   Compiling hashbrown v0.15.5
+   Compiling rand_xoshiro v0.7.0
+   Compiling unicode-normalization v0.1.25
+   Compiling pem-rfc7468 v0.7.0
+   Compiling hex-conservative v0.2.2
+   Compiling unicode-width v0.2.2
+   Compiling static_assertions v1.1.0
+   Compiling faster-hex v0.10.0
+   Compiling toml_edit v0.25.5+spec-1.1.0
+   Compiling digest v0.11.0-rc.10
+   Compiling minimal-lexical v0.2.1
+   Compiling utf-8 v0.7.6
+   Compiling jiff v0.2.23
+   Compiling signature v2.2.0
+   Compiling sha2 v0.11.0-rc.2
+   Compiling yasna v0.5.2
+   Compiling sketches-ddsketch v0.3.1
+   Compiling cmake v0.1.57
+   Compiling object v0.37.3
+   Compiling ssh-encoding v0.2.0
+   Compiling ed25519 v2.2.3
+   Compiling nom v7.1.3
+   Compiling async-channel v2.5.0
+   Compiling gimli v0.32.3
+   Compiling regex-automata v0.4.14
+   Compiling bech32 v0.11.1
+   Compiling base16ct v0.2.0
+   Compiling gix-utils v0.3.1
+   Compiling hashbrown v0.14.5
+   Compiling sec1 v0.7.3
+   Compiling flate2 v1.1.9
+   Compiling num_cpus v1.17.0
+   Compiling anstyle-parse v0.2.7
+   Compiling hex-conservative v0.3.2
+   Compiling toml_writer v1.0.7+spec-1.1.0
+   Compiling rustc-demangle v0.1.27
+   Compiling glob v0.3.3
+   Compiling uuid v1.22.0
+   Compiling serde_bytes v0.11.19
+   Compiling aws-lc-sys v0.38.0
+   Compiling ring v0.17.14
+   Compiling blake3 v1.8.3
+   Compiling proc-macro-crate v3.5.0
+   Compiling terminal_size v0.4.3
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling reflink-copy v0.1.29
+   Compiling clap_builder v4.6.0
+   Compiling secp256k1-sys v0.10.1
+   Compiling serde_spanned v1.0.4
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling toml_write v0.1.2
+   Compiling similar v2.7.0
+   Compiling option-ext v0.2.0
+   Compiling xattr v1.6.1
+   Compiling bitcoin_hashes v0.15.0
+   Compiling anstream v0.6.21
+   Compiling dirs-sys v0.4.1
+   Compiling sysinfo v0.37.2
+   Compiling console v0.16.3
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling filetime v0.2.27
+   Compiling sharded-slab v0.1.7
+   Compiling thread_local v1.1.9
+   Compiling aspen-cli v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cli)
+   Compiling nu-ansi-term v0.50.3
+   Compiling number_prefix v0.4.0
+   Compiling shell-words v1.1.1
+   Compiling tar v0.4.44
+   Compiling dirs v5.0.1
+   Compiling colored v2.2.0
+   Compiling syn-mid v0.5.4
+   Compiling ppv-lite86 v0.2.21
+   Compiling bstr v1.12.1
+   Compiling matchers v0.2.0
+   Compiling rand_chacha v0.9.0
+   Compiling rand_chacha v0.3.1
+   Compiling addr2line v0.25.1
+   Compiling synstructure v0.13.2
+   Compiling darling_core v0.20.11
+   Compiling serde_derive_internals v0.29.1
+   Compiling rand v0.9.2
+   Compiling genawaiter-proc-macro v0.99.1
+   Compiling rand v0.8.5
+   Compiling genawaiter v0.99.1
+   Compiling serde_derive v1.0.228
+   Compiling zeroize_derive v1.4.3
+   Compiling tokio-macros v2.6.1
+   Compiling thiserror-impl v2.0.18
+   Compiling zerofrom-derive v0.1.6
+   Compiling futures-macro v0.3.32
+   Compiling yoke-derive v0.8.1
+   Compiling zerovec-derive v0.11.2
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling pin-project-internal v1.1.11
+   Compiling derive_more-impl v2.1.1
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling n0-error-macros v0.1.3
+   Compiling spez v0.1.2
+   Compiling async-trait v0.1.89
+   Compiling postcard-derive v0.2.2
+   Compiling fastbloom v0.14.1
+   Compiling enum-assoc v1.3.0
+   Compiling enum-as-inner v0.6.1
+   Compiling snafu-derive v0.8.9
+   Compiling num_enum_derive v0.7.6
+   Compiling iroh-metrics-derive v0.4.1
+   Compiling strum_macros v0.28.0
+   Compiling zeroize v1.8.2
+   Compiling irpc-derive v0.10.0
+   Compiling derive_more-impl v1.0.0
+   Compiling clap_derive v4.6.0
+   Compiling openraft-macros v0.10.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/openraft/macros)
+   Compiling rustls-pki-types v1.14.0
+   Compiling der v0.8.0
+   Compiling cipher v0.4.4
+   Compiling ref-cast-impl v1.0.25
+   Compiling schemars_derive v0.8.22
+   Compiling nested_enum_utils v0.2.3
+   Compiling futures-util v0.3.32
+   Compiling zerofrom v0.1.6
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling yoke v0.8.1
+   Compiling chacha20 v0.9.1
+   Compiling thiserror-impl v1.0.69
+   Compiling rustls-native-certs v0.8.3
+   Compiling n0-error v0.1.3
+   Compiling webpki-roots v1.0.6
+   Compiling pin-project v1.1.11
+   Compiling zerotrie v0.2.3
+   Compiling chacha20poly1305 v0.10.1
+   Compiling ssh-cipher v0.2.0
+   Compiling backtrace v0.3.76
+   Compiling num_enum v0.7.6
+   Compiling cobs v0.3.0
+   Compiling gix-validate v0.10.1
+   Compiling rcgen v0.14.7
+   Compiling zstd v0.13.3
+   Compiling zerovec v0.11.5
+   Compiling gix-path v0.10.22
+   Compiling aes-gcm v0.10.3
+   Compiling darling_macro v0.20.11
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling ed25519-dalek v2.2.0
+   Compiling spki v0.8.0-rc.4
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling icu_collections v2.1.1
+   Compiling snafu v0.8.9
+   Compiling ssh-key v0.6.7
+   Compiling icu_locale_core v2.1.1
+   Compiling pkcs8 v0.11.0-rc.11
+   Compiling strum v0.28.0
+   Compiling clap v4.6.0
+   Compiling derive_more v1.0.0
+   Compiling derive_builder_macro v0.20.2
+   Compiling derive_builder v0.20.2
+   Compiling icu_provider v2.1.1
+   Compiling icu_properties v2.1.2
+   Compiling derive_more v2.1.1
+   Compiling iroh-relay v0.97.0
+   Compiling smallvec v1.15.1
+   Compiling bytes v1.11.1
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling serde_urlencoded v0.7.1
+   Compiling serde_bencode v0.2.4
+   Compiling aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+   Compiling uhlc v0.8.2 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/uhlc)
+   Compiling bincode v1.3.3
+   Compiling anyerror v0.1.13
+   Compiling aspen-layer v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-layer)
+   Compiling secrecy v0.10.3
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs-protocol)
+   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+   Compiling secp256k1 v0.29.1
+   Compiling bitcoin_hashes v0.14.1
+   Compiling toml_datetime v0.6.11
+   Compiling faster-hex v0.9.0
+   Compiling serde_spanned v0.6.9
+   Compiling aspen-plugin-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-plugin-api)
+   Compiling icu_normalizer v2.1.1
+   Compiling validit v0.2.5
+   Compiling inplace-vec-builder v0.1.1
+   Compiling range-collections v0.4.6
+   Compiling futures-concurrency v7.7.1
+   Compiling gix-date v0.12.1
+   Compiling toml_edit v0.22.27
+   Compiling aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+   Compiling human-panic v2.0.6
+   Compiling parking_lot v0.12.5
+   Compiling aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-storage-types)
+   Compiling tokio v1.50.0
+   Compiling http v1.4.0
+   Compiling once_cell v1.21.4
+   Compiling idna_adapter v1.2.1
+   Compiling moka v0.12.14
+   Compiling postcard v1.1.3
+   Compiling prodash v30.0.1
+   Compiling prodash v29.0.2
+   Compiling gix-actor v0.37.1
+   Compiling idna v1.1.0
+   Compiling crossterm v0.29.0
+   Compiling tracing-core v0.1.36
+   Compiling ntimestamp v1.0.0
+   Compiling tempfile v3.27.0
+   Compiling quanta v0.12.6
+   Compiling console v0.15.11
+   Compiling dashmap v6.1.0
+   Compiling metrics v0.24.3
+   Compiling futures-executor v0.3.32
+   Compiling gix-features v0.45.2
+   Compiling gix-features v0.41.1
+   Compiling insta v1.47.2
+   Compiling url v2.5.8
+   Compiling tracing v0.1.44
+   Compiling futures v0.3.32
+   Compiling gix-hash v0.21.2
+   Compiling ed25519-dalek v3.0.0-pre.1
+   Compiling aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hooks-types)
+   Compiling gix-hash v0.17.0
+   Compiling tracing-log v0.2.0
+   Compiling indicatif v0.17.11
+   Compiling metrics-util v0.19.1
+   Compiling dialoguer v0.11.0
+   Compiling comfy-table v7.2.2
+   Compiling iroh-metrics v0.38.3
+   Compiling tracing-futures v0.2.5
+   Compiling http-body v1.0.1
+   Compiling mainline v6.0.1
+   Compiling http-body-util v0.1.3
+   Compiling tungstenite v0.28.0
+   Compiling cron v0.13.0
+   Compiling gix-hashtable v0.11.0
+   Compiling aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-ci-core)
+   Compiling tracing-subscriber v0.3.23
+   Compiling gix-object v0.54.1
+   Compiling iroh-base v0.97.0
+   Compiling attohttpc v0.30.1
+   Compiling nostr v0.44.2
+   Compiling aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+   Compiling iroh-tickets v0.4.0
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+   Compiling toml v0.8.23
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+   Compiling aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hooks-ticket)
+   Compiling aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+warning: constant `MINUTES_PER_HOUR` is never used
+   --> crates/aspen-hooks-ticket/src/lib.rs:101:7
+    |
+101 | const MINUTES_PER_HOUR: u64 = 60;
+    |       ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `HOURS_PER_DAY` is never used
+   --> crates/aspen-hooks-ticket/src/lib.rs:104:7
+    |
+104 | const HOURS_PER_DAY: u64 = 24;
+    |       ^^^^^^^^^^^^^
+
+warning: `aspen-hooks-ticket` (lib) generated 2 warnings
+   Compiling rustls-webpki v0.103.9
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+   Compiling tokio-util v0.7.18
+   Compiling netlink-sys v0.8.8
+   Compiling tower v0.5.3
+   Compiling async-compat v0.2.5
+   Compiling backon v1.6.0
+   Compiling openraft v0.10.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/openraft/openraft)
+   Compiling aspen-trust v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-trust)
+   Compiling iroh-io v0.6.2
+   Compiling aspen-coordination v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination)
+   Compiling tokio-tungstenite v0.28.0
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
+     |
+4299 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
+     |
+4306 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
+     |
+4313 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
+     |
+4320 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
+     |
+4327 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
+     |
+4334 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
+     |
+4341 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
+     |
+4348 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
+     |
+4388 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
+     |
+4395 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+   Compiling netlink-proto v0.12.0
+   Compiling netdev v0.40.1
+   Compiling bao-tree v0.16.0
+   Compiling tower-http v0.6.8
+   Compiling h2 v0.4.13
+   Compiling tokio-stream v0.1.18
+   Compiling aspen-sharding v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-sharding)
+   Compiling n0-watcher v0.6.1
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling noq-proto v0.16.0
+   Compiling tokio-websockets v0.12.3
+   Compiling hyper v1.8.1
+   Compiling hickory-proto v0.25.2
+   Compiling hyper-util v0.1.20
+   Compiling hyper-rustls v0.27.7
+   Compiling igd-next v0.16.2
+   Compiling reqwest v0.12.28
+   Compiling metrics-exporter-prometheus v0.16.2
+   Compiling hickory-resolver v0.25.2
+   Compiling swarm-discovery v0.5.0
+   Compiling portmapper v0.15.0
+   Compiling irpc v0.13.0
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft-types)
+   Compiling aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft-kv-types)
+   Compiling aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft-kv)
+   Compiling aspen-redb-storage v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-redb-storage)
+warning: `openraft` (lib) generated 4 warnings
+warning: `aspen-client-api` (lib) generated 28 warnings
+   Compiling aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core-shell)
+   Compiling iroh-gossip v0.97.0
+   Compiling aspen-crypto v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-crypto)
+   Compiling aspen-nostr-relay v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-nostr-relay)
+   Compiling aspen-jobs v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs)
+   Compiling aspen-auth v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth)
+   Compiling aspen-transport v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-transport)
+   Compiling aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft-network)
+   Compiling aspen-ticket v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-ticket)
+   Compiling aspen-federation v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-federation)
+   Compiling aspen-raft v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft)
+   Compiling aspen-client v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client)
+   Compiling aspen-dag v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-dag)
+   Compiling aspen-dht-discovery v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-dht-discovery)
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+   Compiling aspen-cluster v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster)
+   Compiling aspen-forge v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 53.94s
+     Running unittests src/bin/jj-remote-aspen/main.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/jj_remote_aspen-7d8cb6eb3fc5ba16)
+
+running 4 tests
+test tests::capability_session_uses_current_transport_version ... ok
+test tests::push_request_carries_bookmark_and_change_updates ... ok
+test tests::fetch_request_preserves_probe_first_sets ... ok
+test tests::change_id_request_carries_requested_change_ids ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

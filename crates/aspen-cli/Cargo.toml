@@ -11,6 +11,11 @@ build = "build.rs"
 name = "aspen-cli"
 path = "src/bin/aspen-cli/main.rs"
 
+[[bin]]
+name = "jj-remote-aspen"
+path = "src/bin/jj-remote-aspen/main.rs"
+required-features = ["jj-native-forge"]
+
 [dependencies]
 # Core Aspen dependencies
 aspen-client = { path = "../aspen-client" }
@@ -101,5 +106,6 @@ sql = []
 secrets = ["aspen-client-api/secrets"]
 automerge = ["aspen-client-api/automerge"]
 plugins-rpc = ["dep:aspen-plugin-api"]
+jj-native-forge = ["forge", "plugins-rpc"]
 proxy = ["dep:aspen-proxy"]
 commit-dag = ["dep:aspen-commit-dag"]
