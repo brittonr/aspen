@@ -1,0 +1,58 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cache)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.32s
+     Running unittests src/lib.rs (target/debug/deps/aspen_cache-c4f7e37c15827730)
+
+running 33 tests
+test index::tests::test_parse_store_path ... ok
+test index::tests::test_parse_store_path_invalid ... ok
+test index::tests::test_parse_store_path_rejects_invalid_hash_chars ... ok
+test index::tests::test_validate_store_hash ... ok
+test nar::tests::test_dump_executable_file ... ok
+test nar::tests::test_deterministic_output ... ok
+test nar::tests::test_dump_directory ... ok
+test nar::tests::test_dump_single_file ... ok
+test nar::tests::test_dump_symlink ... ok
+test nar::tests::test_hashing_writer ... ok
+test narinfo::tests::test_cache_entry_kv_key ... ok
+test narinfo::tests::test_cache_stats ... ok
+test narinfo::tests::test_cache_entry_roundtrip ... ok
+test narinfo::tests::test_fingerprint_basic ... ok
+test narinfo::tests::test_cache_entry_too_many_references ... ok
+test narinfo::tests::test_fingerprint_with_sorted_refs ... ok
+test narinfo::tests::test_narinfo_complete_entry ... ok
+test nar::tests::test_dump_path_nar_async ... ok
+test narinfo::tests::test_narinfo_minimal_entry ... ok
+test nar::tests::test_roundtrip_nar_reader ... ok
+test narinfo::tests::test_narinfo_with_signature ... ok
+test narinfo::tests::test_narinfo_roundtrip_parseable ... ok
+test signing::tests::test_invalid_cache_name_colon ... ok
+test signing::tests::test_invalid_cache_name_too_long ... ok
+test signing::tests::test_invalid_key_format ... ok
+test signing::tests::test_nix_key_public_length ... ok
+test signing::tests::test_nix_key_secret_length ... ok
+test signing::tests::test_generate_and_roundtrip ... ok
+test narinfo::tests::test_narinfo_nix_compat_parseable ... ok
+test signing::tests::test_verify_wrong_name ... ok
+test signing::tests::test_sign_and_verify ... ok
+test signing::tests::test_verify_wrong_fingerprint ... ok
+test nar::tests::test_golden_nix_store_dump ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests aspen_cache
+
+running 4 tests
+test crates/aspen-cache/src/lib.rs - (line 25) ... ignored
+test crates/aspen-cache/src/lib.rs - (line 45) ... ignored
+test crates/aspen-cache/src/nar.rs - nar (line 8) ... ignored
+test crates/aspen-cache/src/index.rs - index::parse_store_path (line 274) ... ok
+
+test result: ok. 1 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.63s; merged doctests compilation took 0.62s

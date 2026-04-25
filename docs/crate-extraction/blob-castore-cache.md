@@ -88,6 +88,8 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
 | --- | --- | --- | --- | --- |
 | `aspen-blob` | default | `aspen-blob -> iroh` | Aspen storage/cache maintainers | Iroh endpoint/address types are the backend transport purpose for blob storage. |
 | `aspen-blob` | default | `aspen-blob -> iroh-blobs` | Aspen storage/cache maintainers | iroh-blobs is the content-addressed storage backend purpose. |
+| `aspen-blob` | default | `aspen-blob -> iroh-base` | Aspen storage/cache maintainers | Transitive iroh backend type dependency. |
+| `aspen-blob` | default | `aspen-blob -> irpc` | Aspen storage/cache maintainers | Current Aspen KV/core trait path brings irpc transitively until the KV-aware seam is split. |
 | `aspen-blob` | default | `aspen-blob -> aspen-core` | Aspen storage/cache maintainers | Current `BlobAwareKeyValueStore` uses Aspen KV traits/types; app-shell split is tracked as a later seam. |
 | `aspen-blob` | `replication` | `aspen-blob -> aspen-client-api` | Aspen storage/cache maintainers | Replication pull RPCs are adapter-only compatibility. |
 | `aspen-castore` | default | `aspen-castore -> aspen-blob` | Aspen storage/cache maintainers | Castore server wraps the reusable blob store trait/implementation. |

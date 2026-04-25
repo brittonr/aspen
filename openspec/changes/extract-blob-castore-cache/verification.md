@@ -2,24 +2,14 @@
 
 ## Implementation Evidence
 
-- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/Cargo.toml`
-- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/src/lib.rs`
-- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/Cargo.toml`
-- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/src/lib.rs`
+- Changed file: `docs/crate-extraction/blob-castore-cache.md`
+- Changed file: `docs/crate-extraction/policy.ncl`
+- Changed file: `scripts/check-crate-extraction-readiness.rs`
 - Changed file: `openspec/changes/extract-blob-castore-cache/tasks.md`
 - Changed file: `openspec/changes/extract-blob-castore-cache/verification.md`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-test.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-metadata.json`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-packages.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-forbidden-grep.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-test.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-metadata.json`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-packages.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-rustfmt-check.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-summary.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-implementation-diff.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-openspec-preflight.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/v1-v5-summary.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/v1-v5-implementation-diff.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/v1-v5-openspec-preflight.txt`
 
 ## Task Coverage
 
@@ -44,55 +34,66 @@
 - [x] I6 Add downstream fixtures for canonical blob APIs and cache/castore domain APIs, with cargo metadata proving app-shell and handler crates are absent. [covers=blob-castore-cache-extraction.downstream-fixtures,blob-castore-cache-extraction.downstream-fixtures.blob-fixture-uses-canonical-api,blob-castore-cache-extraction.downstream-fixtures.cache-castore-fixture-uses-domain-apis] ✅ completed: 2026-04-25T19:15:10Z
   - Evidence: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/`, `openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-test.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-test.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-forbidden-grep.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
 
+- [x] V1 Save compile and `cargo tree` evidence for reusable feature sets of `aspen-blob`, `aspen-castore`, and `aspen-cache`, proving only documented backend-purpose dependencies are present and forbidden app/runtime shells are absent. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.iroh-backend-is-documented-exception,blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only,blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated,blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable] ✅ completed: 2026-04-25T19:21:55Z
+  - Evidence: `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-check-aspen-blob-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-tree-aspen-blob-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-aspen-blob-forbidden-grep.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-check-aspen-castore-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-tree-aspen-castore-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-aspen-castore-forbidden-grep.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-check-aspen-cache-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-tree-aspen-cache-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-aspen-cache-forbidden-grep.txt`
+
+- [x] V2 Save downstream fixture compile/metadata evidence for blob and cache/castore fixtures. [covers=blob-castore-cache-extraction.downstream-fixtures.blob-fixture-uses-canonical-api,blob-castore-cache-extraction.downstream-fixtures.cache-castore-fixture-uses-domain-apis] ✅ completed: 2026-04-25T19:21:55Z
+  - Evidence: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-test.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-metadata.json`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-test.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-metadata.json`
+
+- [x] V3 Save focused tests for blob storage operations, castore adapter behavior, cache metadata/signing positive cases, and negative cases for malformed narinfo/signature data or unavailable adapter features. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable] ✅ completed: 2026-04-25T19:21:55Z
+  - Evidence: `openspec/changes/extract-blob-castore-cache/evidence/v3-cargo-test-aspen-blob-memory-store.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v3-cargo-test-aspen-castore-circuit-breaker.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v3-cargo-test-aspen-cache-reusable.txt`
+
+- [x] V4 Save compatibility compile/test evidence for the full runtime consumer set named in the proposal: `aspen-rpc-core`, blob RPC handlers, `aspen-snix`, `aspen-snix-bridge`, `aspen-nix-cache-gateway`, and CI/cache executors with explicit integration features. [covers=blob-castore-cache-extraction.compatibility-adapters-verified,blob-castore-cache-extraction.compatibility-adapters-verified.runtime-consumers-compile] ✅ completed: 2026-04-25T19:21:55Z
+  - Evidence: `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-rpc-core-blob.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-blob-handler.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-snix.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-snix-bridge.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-nix-cache-gateway.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-ci-executor-nix.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-nix-handler-cache.txt`
+
+- [x] V5 Run `scripts/check-crate-extraction-readiness.rs --candidate-family blob-castore-cache` and save output plus negative mutations for forbidden app-shell dependency, undocumented backend exception, missing owner, invalid readiness state, and missing downstream fixture evidence. [covers=blob-castore-cache-extraction.inventory-and-policy.checker-verifies-backend-exceptions] ✅ completed: 2026-04-25T19:21:55Z
+  - Evidence: `openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.md`, `openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.json`, `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-mutations-summary.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-forbidden-app-summary.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-undocumented-backend-summary.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-missing-owner-summary.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-invalid-readiness-summary.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-missing-downstream.txt`
+
 ## Review Scope Snapshot
 
-### `git diff HEAD -- openspec/changes/extract-blob-castore-cache/fixtures openspec/changes/extract-blob-castore-cache/tasks.md openspec/changes/extract-blob-castore-cache/verification.md`
+### `git diff HEAD -- docs/crate-extraction/blob-castore-cache.md docs/crate-extraction/policy.ncl scripts/check-crate-extraction-readiness.rs openspec/changes/extract-blob-castore-cache/tasks.md openspec/changes/extract-blob-castore-cache/verification.md`
 
-- Status: captured after I6 downstream fixtures
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-implementation-diff.txt`
+- Status: captured after V1-V5 verification
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v1-v5-implementation-diff.txt`
 
 ## Verification Commands
 
-### `cargo test --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/Cargo.toml`
+### Reusable feature compile/tree checks
 
 - Status: pass
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-test.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-check-aspen-blob-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-check-aspen-castore-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-check-aspen-cache-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-tree-aspen-blob-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-tree-aspen-castore-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v1-cargo-tree-aspen-cache-default.txt`
 
-### `cargo metadata --format-version 1 --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/Cargo.toml`
-
-- Status: pass
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-metadata.json`
-
-### `rg -n '^(aspen|aspen-client-api|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler|aspen-cluster|aspen-cli|aspen-tui|aspen-dogfood)$' openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-packages.txt`
-
-- Status: pass, no matches
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-forbidden-grep.txt`
-
-### `cargo test --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/Cargo.toml`
+### Focused test checks
 
 - Status: pass
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-test.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v3-cargo-test-aspen-blob-memory-store.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v3-cargo-test-aspen-castore-circuit-breaker.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v3-cargo-test-aspen-cache-reusable.txt`
 
-### `cargo metadata --format-version 1 --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/Cargo.toml`
-
-- Status: pass
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-metadata.json`
-
-### `rg -n '^(aspen|aspen-client-api|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler|aspen-cluster|aspen-cli|aspen-tui|aspen-dogfood)$' openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-packages.txt`
-
-- Status: pass, no matches
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
-
-### `rustfmt --check openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/src/lib.rs openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/src/lib.rs`
+### Runtime compatibility checks
 
 - Status: pass
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-rustfmt-check.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-rpc-core-blob.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-blob-handler.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-snix.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-snix-bridge.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-nix-cache-gateway.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-ci-executor-nix.txt`, `openspec/changes/extract-blob-castore-cache/evidence/v4-cargo-check-aspen-nix-handler-cache.txt`
+
+### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family blob-castore-cache --output-json openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.json --output-markdown openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.md`
+
+- Status: pass
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.md`, `openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.json`, `openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.stdout`, `openspec/changes/extract-blob-castore-cache/evidence/v5-readiness.stderr`
+
+### `openspec/changes/extract-blob-castore-cache/evidence/v5-run-negative-mutations.sh`
+
+- Status: pass
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-mutations-summary.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-forbidden-app-summary.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-undocumented-backend-summary.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-missing-owner-summary.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-invalid-readiness-summary.txt`
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v5-negative-missing-downstream.txt`
 
 ### `scripts/openspec-preflight.sh extract-blob-castore-cache`
 
-- Status: pass after I6
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-openspec-preflight.txt`
+- Status: pass after V1-V5
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/v1-v5-openspec-preflight.txt`
 
 ## Notes
 
-- Fixture builds used `CARGO_TARGET_DIR=/tmp/aspen-downstream-fixtures` to avoid filling the nearly-full repo root filesystem.
+- `aspen-blob` still carries a documented default exception for `aspen-core` via `BlobAwareKeyValueStore`; the manifest records this as a later seam.
+- The checker now enforces downstream fixture evidence for the blob/castore/cache family.

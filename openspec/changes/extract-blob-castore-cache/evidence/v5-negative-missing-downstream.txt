@@ -1,0 +1,19 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family blob-castore-cache --output-json /tmp/tmp.H1RhtV5WWR/evidence/report.json --output-markdown /tmp/tmp.H1RhtV5WWR/evidence/report.md
+Exit: 1
+Expected substring: missing downstream fixture evidence
+# Crate Extraction Readiness Report
+
+- Candidate family: `blob-castore-cache`
+- Passed: `false`
+- Checked candidates: 11
+
+## Failures
+
+- blob-castore-cache: missing downstream fixture evidence `/tmp/tmp.H1RhtV5WWR/evidence/i6-downstream-blob-metadata.json`
+- blob-castore-cache: missing downstream fixture evidence `/tmp/tmp.H1RhtV5WWR/evidence/i6-downstream-cache-castore-metadata.json`
+- blob-castore-cache: missing downstream fixture evidence `/tmp/tmp.H1RhtV5WWR/evidence/i6-downstream-blob-forbidden-grep.txt`
+- blob-castore-cache: missing downstream fixture evidence `/tmp/tmp.H1RhtV5WWR/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
+
+## Warnings
+
+- none

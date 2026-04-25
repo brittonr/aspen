@@ -41,6 +41,13 @@ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
     "compatibility",
     "dependency-boundary",
 ];
+const BLOB_CASTORE_CACHE_FAMILY: &str = "blob-castore-cache";
+const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
+    "i6-downstream-blob-metadata.json",
+    "i6-downstream-cache-castore-metadata.json",
+    "i6-downstream-blob-forbidden-grep.txt",
+    "i6-downstream-cache-castore-forbidden-grep.txt",
+];
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -300,7 +307,11 @@ fn check_transitive_deps(
 }
 
 fn check_evidence_index(args: &Args, failures: &mut Vec<String>) {
-    let Some(change_dir) = args.output_markdown.parent().and_then(Path::parent) else {
+    let Some(evidence_dir) = args.output_markdown.parent() else {
+        failures.push("could not infer evidence directory from output path".to_string());
+        return;
+    };
+    let Some(change_dir) = evidence_dir.parent() else {
         failures.push("could not infer change directory from output path".to_string());
         return;
     };
@@ -315,6 +326,23 @@ fn check_evidence_index(args: &Args, failures: &mut Vec<String>) {
     };
     if !text.contains("## Task Coverage") || !text.contains("- Evidence:") {
         failures.push("verification index lacks task coverage evidence lines".to_string());
+    }
+    check_family_evidence(args, evidence_dir, failures);
+}
+
+fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<String>) {
+    if args.candidate_family != BLOB_CASTORE_CACHE_FAMILY {
+        return;
+    }
+    for file_name in BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE {
+        let artifact = evidence_dir.join(file_name);
+        if !artifact.exists() {
+            failures.push(format!(
+                "{}: missing downstream fixture evidence `{}`",
+                args.candidate_family,
+                artifact.display()
+            ));
+        }
     }
 }
 

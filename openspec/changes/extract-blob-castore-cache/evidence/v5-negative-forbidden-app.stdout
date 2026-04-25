@@ -1,0 +1,22 @@
+Aspen development environment
+
+Build caching:
+  incremental compilation enabled
+
+Common commands:
+  cargo build                          Build project
+  cargo nextest run                    Run all tests
+  cargo nextest run -P quick           Quick tests (~2-5 min)
+  cargo tigerstyle check               Run Tiger Style lints
+
+Nix apps:
+  nix run .#cluster                    3-node cluster
+  nix run .#bench                      Run benchmarks
+  nix run .#coverage [html|ci|update]  Code coverage
+  nix run .#fuzz-quick                 Fuzzing smoke test
+
+VM testing: aspen-vm-setup / aspen-vm-run <node-id>
+  nix run .#dogfood-vm                 Dogfood in isolated VMs
+
+CI worker setup (x86_64-linux only):
+  Status: ENABLED (kernel/initrd paths set)

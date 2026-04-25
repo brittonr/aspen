@@ -1,0 +1,32 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+   Compiling aspen-castore v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-castore)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.54s
+     Running unittests src/lib.rs (target/debug/deps/aspen_castore-6a28afd1059ba223)
+
+running 5 tests
+test circuit_breaker::tests::half_open_after_duration_elapses ... ok
+test circuit_breaker::tests::clock_regression_keeps_breaker_open ... ok
+test circuit_breaker::tests::opens_after_threshold_failures ... ok
+test circuit_breaker::tests::success_resets_open_breaker ... ok
+test circuit_breaker::tests::zero_threshold_is_normalized ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/nar_test.rs (target/debug/deps/nar_test-e58ff8204ea69950)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/wire_test.rs (target/debug/deps/wire_test-66f516c14267fb5f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+

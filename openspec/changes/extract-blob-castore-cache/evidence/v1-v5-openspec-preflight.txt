@@ -1,0 +1,4 @@
+OK: openspec/changes/extract-blob-castore-cache
+  tasks: 12 total / 12 checked
+  changed files listed: 8
+  verification artifacts: 7

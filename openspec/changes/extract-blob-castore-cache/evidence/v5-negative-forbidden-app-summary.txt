@@ -1,0 +1,4 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family blob-castore-cache --output-json openspec/changes/extract-blob-castore-cache/evidence/v5-negative-forbidden-app.json --output-markdown openspec/changes/extract-blob-castore-cache/evidence/v5-negative-forbidden-app.md
+Exit: 1
+Expected substring: aspen_cache: direct forbidden dependency `aspen-rpc-handlers`
+openspec/changes/extract-blob-castore-cache/evidence/v5-negative-forbidden-app.md:9:- aspen_cache: direct forbidden dependency `aspen-rpc-handlers`

@@ -1,0 +1,144 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling libc v0.2.183
+   Compiling fastrand v2.3.0
+   Compiling crypto-common v0.1.7
+   Compiling darling_core v0.20.11
+   Compiling bytes v1.11.1
+   Compiling smallvec v1.15.1
+   Compiling blake3 v1.8.3
+   Compiling iroh-metrics v0.38.3
+   Compiling rustix v1.1.4
+   Compiling aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+   Compiling chrono v0.4.44
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling aead v0.5.2
+   Compiling polyval v0.6.2
+   Compiling futures-lite v2.6.1
+   Compiling icu_normalizer v2.1.1
+   Compiling inplace-vec-builder v0.1.1
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling ghash v0.5.1
+   Compiling range-collections v0.4.6
+   Compiling aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+   Compiling http v1.4.0
+   Compiling aes-gcm v0.10.3
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling socket2 v0.6.3
+   Compiling mio v1.1.1
+   Compiling getrandom v0.3.4
+   Compiling getrandom v0.2.17
+   Compiling parking_lot_core v0.9.12
+   Compiling time v0.3.47
+   Compiling getrandom v0.4.2
+   Compiling netlink-packet-route v0.29.0
+   Compiling seize v0.5.1
+   Compiling positioned-io v0.3.5
+   Compiling url v2.5.8
+   Compiling redb v2.6.3
+   Compiling ring v0.17.14
+   Compiling ntimestamp v1.0.0
+   Compiling uuid v1.22.0
+   Compiling rand_core v0.9.5
+   Compiling parking_lot v0.12.5
+   Compiling papaya v0.2.3
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+   Compiling rand_chacha v0.9.0
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling tokio v1.50.0
+   Compiling noq-udp v0.9.0
+   Compiling http-body v1.0.1
+   Compiling aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+   Compiling http-body-util v0.1.3
+   Compiling moka v0.12.14
+   Compiling rand v0.9.2
+   Compiling attohttpc v0.30.1
+   Compiling reflink-copy v0.1.29
+   Compiling darling_macro v0.20.11
+   Compiling fastbloom v0.14.1
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling ed25519-dalek v3.0.0-pre.1
+   Compiling mainline v6.0.1
+   Compiling iroh-base v0.97.0
+   Compiling rustls-webpki v0.103.9
+   Compiling rcgen v0.14.7
+   Compiling derive_builder_macro v0.20.2
+   Compiling derive_builder v0.20.2
+   Compiling iroh-tickets v0.4.0
+   Compiling vergen-lib v9.1.0
+   Compiling vergen-lib v0.1.6
+   Compiling vergen v9.1.0
+   Compiling rustls v0.23.37
+   Compiling vergen-gitcl v1.0.8
+   Compiling iroh-relay v0.97.0
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling netlink-sys v0.8.8
+   Compiling async-compat v0.2.5
+   Compiling acto v0.8.0
+   Compiling backon v1.6.0
+   Compiling iroh-io v0.6.2
+   Compiling netlink-proto v0.12.0
+   Compiling netdev v0.40.1
+   Compiling bao-tree v0.16.0
+   Compiling tower-http v0.6.8
+   Compiling h2 v0.4.13
+   Compiling n0-future v0.3.2
+   Compiling tokio-stream v0.1.18
+   Compiling n0-watcher v0.6.1
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling netwatch v0.15.0
+   Compiling noq-proto v0.16.0
+   Compiling tokio-websockets v0.12.3
+   Compiling hyper v1.8.1
+   Compiling hickory-proto v0.25.2
+   Compiling hyper-util v0.1.20
+   Compiling noq v0.17.0
+   Compiling hyper-rustls v0.27.7
+   Compiling igd-next v0.16.2
+   Compiling reqwest v0.12.28
+   Compiling hickory-resolver v0.25.2
+   Compiling swarm-discovery v0.5.0
+   Compiling irpc v0.13.0
+   Compiling portmapper v0.15.0
+   Compiling pkarr v5.0.2
+   Compiling iroh v0.97.0
+   Compiling iroh-blobs v0.99.0
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.15s
+     Running unittests src/lib.rs (target/debug/deps/aspen_blob-1daa27a8789fc183)
+
+running 21 tests
+test store::memory_store::tests::test_add_bytes_returns_hash ... ok
+test store::memory_store::tests::test_clone_shares_storage ... ok
+test store::memory_store::tests::test_add_bytes_duplicate_not_new ... ok
+test store::memory_store::tests::test_add_bytes_too_large ... ok
+test store::memory_store::tests::test_get_bytes_missing_returns_none ... ok
+test store::memory_store::tests::test_get_bytes_returns_data ... ok
+test store::memory_store::tests::test_has_existing_blob ... ok
+test store::memory_store::tests::test_has_missing_blob ... ok
+test store::memory_store::tests::test_list_with_limit ... ok
+test store::memory_store::tests::test_list_blobs ... ok
+test store::memory_store::tests::test_new_store_is_empty ... ok
+test store::memory_store::tests::test_protect_unprotect_noop ... ok
+test store::memory_store::tests::test_reader_missing_returns_none ... ok
+test store::memory_store::tests::test_reader_returns_data ... ok
+test store::memory_store::tests::test_status_missing_blob ... ok
+test store::memory_store::tests::test_status_existing_blob ... ok
+test store::memory_store::tests::test_ticket_returns_error ... ok
+test store::memory_store::tests::test_wait_available_all_some_missing ... ok
+test store::memory_store::tests::test_wait_available_existing ... ok
+test store::memory_store::tests::test_wait_available_all_none_missing ... ok
+test store::memory_store::tests::test_wait_available_missing ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
+
