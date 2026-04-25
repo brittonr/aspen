@@ -358,6 +358,20 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
         Ok(stored_ref)
     }
 
+    /// Fetch and decode a JJ object blob by BLAKE3 blob hash.
+    pub async fn fetch_object_blob(&self, blob_hash: &str) -> Result<Option<JjObjectEnvelope>, JjObjectStoreError> {
+        let hash = blob_hash.parse::<iroh_blobs::Hash>().map_err(|source| JjObjectStoreError::Blob {
+            message: source.to_string(),
+        })?;
+        let Some(bytes) = self.blobs.get_bytes(&hash).await.map_err(|source| JjObjectStoreError::Blob {
+            message: source.to_string(),
+        })?
+        else {
+            return Ok(None);
+        };
+        decode_jj_object(&bytes).map(Some).map_err(JjObjectStoreError::from)
+    }
+
     /// Look up the stored blob reference for a repo-scoped JJ object.
     pub async fn lookup_object(
         &self,
@@ -999,6 +1013,24 @@ mod tests {
         let err = validate_jj_object(&envelope).expect_err("empty object ID rejected");
 
         assert_eq!(err, JjObjectEncodingError::EmptyField { field: "object_id" });
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_fetches_object_blob_by_hash() {
+        let store = object_store();
+        let envelope = object();
+        let stored = store.store_object(&envelope).await.expect("object stores");
+
+        let fetched = store
+            .fetch_object_blob(&stored.blob_hash)
+            .await
+            .expect("object blob fetch succeeds")
+            .expect("object blob exists");
+        let missing_hash = iroh_blobs::Hash::from_bytes([0; 32]);
+        let missing = store.fetch_object_blob(&missing_hash.to_string()).await.expect("missing blob fetch succeeds");
+
+        assert_eq!(fetched, envelope);
+        assert!(missing.is_none());
     }
 
     #[tokio::test]
