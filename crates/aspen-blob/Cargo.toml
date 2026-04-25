@@ -5,12 +5,16 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Content-addressed blob storage for Aspen using iroh-blobs"
 
+[features]
+default = []
+replication = ["dep:aspen-client-api"]
+
 [dependencies]
 # Core types and traits
 aspen-core = { path = "../aspen-core" }
 
 # Client API types (for replication RPC)
-aspen-client-api = { path = "../aspen-client-api" }
+aspen-client-api = { path = "../aspen-client-api", optional = true }
 
 # Iroh P2P and blobs
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }

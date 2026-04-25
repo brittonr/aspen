@@ -43,7 +43,7 @@ iroh = { version = "0.97.0" }
 [features]
 default = []
 sql = ["dep:aspen-sql"]
-blob = ["dep:aspen-blob"]
+blob = ["dep:aspen-blob", "aspen-blob/replication"]
 forge-core = ["dep:aspen-forge", "blob"]
 forge-runtime = ["dep:aspen-cluster"]
 forge = ["forge-core", "forge-runtime"]

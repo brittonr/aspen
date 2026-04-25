@@ -6,7 +6,7 @@
 
 ## Phase 2: Dependency cleanup and adapters
 
-- [ ] I3 Move or gate `aspen-blob` replication/client-RPC dependencies so default reusable blob APIs do not depend on `aspen-client-api`, handlers, root Aspen, or node bootstrap crates. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only]
+- [x] I3 Move or gate `aspen-blob` replication/client-RPC dependencies so default reusable blob APIs do not depend on `aspen-client-api`, handlers, root Aspen, or node bootstrap crates. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only] ✅ completed: 2026-04-25T18:51:25Z
 - [ ] I4 Replace, localize, or feature-gate `aspen-castore`'s `aspen-core-shell` circuit-breaker dependency so reusable castore APIs avoid core-shell/runtime app crates by default. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated]
 - [ ] I5 Separate `aspen-cache` reusable Nix cache metadata/signing helpers from cluster/testing/runtime integration, keeping publication paths behind named features or adapter crates. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable]
 - [ ] I6 Add downstream fixtures for canonical blob APIs and cache/castore domain APIs, with cargo metadata proving app-shell and handler crates are absent. [covers=blob-castore-cache-extraction.downstream-fixtures,blob-castore-cache-extraction.downstream-fixtures.blob-fixture-uses-canonical-api,blob-castore-cache-extraction.downstream-fixtures.cache-castore-fixture-uses-domain-apis]

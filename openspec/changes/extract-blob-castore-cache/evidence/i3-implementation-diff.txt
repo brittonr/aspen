@@ -1,0 +1,234 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index fd5472027..25a8ce695 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -518,7 +518,7 @@ forge-runtime = ["blob", "aspen-rpc-handlers/forge-runtime"]
+ forge = ["forge-core", "forge-runtime"]
+ git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
+ sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql", "aspen-testing?/sql"]
+-blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
++blob = ["dep:aspen-blob", "aspen-blob/replication", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
+ plugins = ["plugins-vm", "plugins-wasm", "plugins-rpc"]
+ plugins-vm = ["aspen-jobs/plugins-vm"]
+ plugins-wasm = ["aspen-jobs/plugins-wasm"]
+diff --git a/crates/aspen-blob/Cargo.toml b/crates/aspen-blob/Cargo.toml
+index 58671dcd5..b79ba0d72 100644
+--- a/crates/aspen-blob/Cargo.toml
++++ b/crates/aspen-blob/Cargo.toml
+@@ -5,12 +5,16 @@ edition = "2024"
+ license = "AGPL-3.0-or-later"
+ description = "Content-addressed blob storage for Aspen using iroh-blobs"
+ 
++[features]
++default = []
++replication = ["dep:aspen-client-api"]
++
+ [dependencies]
+ # Core types and traits
+ aspen-core = { path = "../aspen-core" }
+ 
+ # Client API types (for replication RPC)
+-aspen-client-api = { path = "../aspen-client-api" }
++aspen-client-api = { path = "../aspen-client-api", optional = true }
+ 
+ # Iroh P2P and blobs
+ iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+diff --git a/crates/aspen-blob/src/lib.rs b/crates/aspen-blob/src/lib.rs
+index c34274640..b4b50647a 100644
+--- a/crates/aspen-blob/src/lib.rs
++++ b/crates/aspen-blob/src/lib.rs
+@@ -54,6 +54,7 @@ pub mod background_downloader;
+ pub mod constants;
+ pub mod events;
+ pub mod kv_integration;
++#[cfg(feature = "replication")]
+ pub mod replication;
+ pub mod store;
+ pub mod traits;
+@@ -89,26 +90,47 @@ pub use events::UnprotectReason;
+ pub use events::create_blob_event_channel;
+ pub use kv_integration::BlobAwareKeyValueStore;
+ // Replication types
++#[cfg(feature = "replication")]
+ pub use replication::BlobReplicationManager;
++#[cfg(feature = "replication")]
+ pub use replication::DagRepairScanner;
++#[cfg(feature = "replication")]
+ pub use replication::IrohBlobTransfer;
++#[cfg(feature = "replication")]
+ pub use replication::KvReplicaMetadataStore;
++#[cfg(feature = "replication")]
+ pub use replication::MAX_CONCURRENT_REPLICATIONS;
++#[cfg(feature = "replication")]
+ pub use replication::MAX_REPAIR_BATCH_SIZE;
++#[cfg(feature = "replication")]
+ pub use replication::MAX_REPLICATION_FACTOR;
++#[cfg(feature = "replication")]
+ pub use replication::MIN_REPLICATION_FACTOR;
++#[cfg(feature = "replication")]
+ pub use replication::NodeInfo;
++#[cfg(feature = "replication")]
+ pub use replication::PlacementStrategy;
++#[cfg(feature = "replication")]
+ pub use replication::REPLICA_KEY_PREFIX;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicaBlobTransfer;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicaMetadataStore;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicaSet;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicationConfig;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicationPolicy;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicationRequest;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicationResult;
++#[cfg(feature = "replication")]
+ pub use replication::ReplicationStatus;
++#[cfg(feature = "replication")]
+ pub use replication::WeightedPlacement;
++#[cfg(feature = "replication")]
+ pub use replication::spawn_topology_watcher;
+ pub use store::AsyncReadSeek;
+ pub use store::BlobStoreError;
+diff --git a/crates/aspen-cluster/Cargo.toml b/crates/aspen-cluster/Cargo.toml
+index c4631a366..9fce6ea1e 100644
+--- a/crates/aspen-cluster/Cargo.toml
++++ b/crates/aspen-cluster/Cargo.toml
+@@ -113,7 +113,7 @@ secrets = ["dep:aspen-secrets"]
+ bolero = []
+ 
+ # Optional dependencies for reducing minimal compile times
+-blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-jobs?/blob", "aspen-cluster-bridges?/blob"]
++blob = ["dep:aspen-blob", "aspen-blob/replication", "dep:iroh-blobs", "aspen-jobs?/blob", "aspen-cluster-bridges?/blob"]
+ docs = ["dep:aspen-docs", "dep:iroh-docs", "aspen-cluster-bridges?/docs"]
+ federation = ["dep:aspen-federation"]
+ jobs-core = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance"]
+diff --git a/crates/aspen-rpc-core/Cargo.toml b/crates/aspen-rpc-core/Cargo.toml
+index 8560e62e8..594e6a3f0 100644
+--- a/crates/aspen-rpc-core/Cargo.toml
++++ b/crates/aspen-rpc-core/Cargo.toml
+@@ -43,7 +43,7 @@ iroh = { version = "0.97.0" }
+ [features]
+ default = []
+ sql = ["dep:aspen-sql"]
+-blob = ["dep:aspen-blob"]
++blob = ["dep:aspen-blob", "aspen-blob/replication"]
+ forge-core = ["dep:aspen-forge", "blob"]
+ forge-runtime = ["dep:aspen-cluster"]
+ forge = ["forge-core", "forge-runtime"]
+diff --git a/crates/aspen-rpc-handlers/Cargo.toml b/crates/aspen-rpc-handlers/Cargo.toml
+index dbeaf729e..2873af59e 100644
+--- a/crates/aspen-rpc-handlers/Cargo.toml
++++ b/crates/aspen-rpc-handlers/Cargo.toml
+@@ -76,7 +76,7 @@ sql = ["dep:aspen-sql", "aspen-rpc-core/sql"]
+ forge-core = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge-core"]
+ forge-runtime = ["aspen-rpc-core/forge-runtime"]
+ forge = ["forge-core", "forge-runtime"]
+-blob = ["dep:aspen-blob", "dep:aspen-blob-handler", "aspen-rpc-core/blob"]
++blob = ["dep:aspen-blob", "aspen-blob/replication", "dep:aspen-blob-handler", "aspen-rpc-core/blob"]
+ global-discovery = ["aspen-core/global-discovery", "aspen-rpc-core/global-discovery"]
+ git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-forge-handler/git-bridge"]
+ secrets = ["dep:aspen-secrets", "dep:aspen-secrets-handler"]
+diff --git a/openspec/changes/extract-blob-castore-cache/tasks.md b/openspec/changes/extract-blob-castore-cache/tasks.md
+index 37778c110..869ae1225 100644
+--- a/openspec/changes/extract-blob-castore-cache/tasks.md
++++ b/openspec/changes/extract-blob-castore-cache/tasks.md
+@@ -6,7 +6,7 @@
+ 
+ ## Phase 2: Dependency cleanup and adapters
+ 
+-- [ ] I3 Move or gate `aspen-blob` replication/client-RPC dependencies so default reusable blob APIs do not depend on `aspen-client-api`, handlers, root Aspen, or node bootstrap crates. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only]
++- [x] I3 Move or gate `aspen-blob` replication/client-RPC dependencies so default reusable blob APIs do not depend on `aspen-client-api`, handlers, root Aspen, or node bootstrap crates. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only] ✅ completed: 2026-04-25T18:51:25Z
+ - [ ] I4 Replace, localize, or feature-gate `aspen-castore`'s `aspen-core-shell` circuit-breaker dependency so reusable castore APIs avoid core-shell/runtime app crates by default. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated]
+ - [ ] I5 Separate `aspen-cache` reusable Nix cache metadata/signing helpers from cluster/testing/runtime integration, keeping publication paths behind named features or adapter crates. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable]
+ - [ ] I6 Add downstream fixtures for canonical blob APIs and cache/castore domain APIs, with cargo metadata proving app-shell and handler crates are absent. [covers=blob-castore-cache-extraction.downstream-fixtures,blob-castore-cache-extraction.downstream-fixtures.blob-fixture-uses-canonical-api,blob-castore-cache-extraction.downstream-fixtures.cache-castore-fixture-uses-domain-apis]
+diff --git a/openspec/changes/extract-blob-castore-cache/verification.md b/openspec/changes/extract-blob-castore-cache/verification.md
+index 322246485..f0de52fb4 100644
+--- a/openspec/changes/extract-blob-castore-cache/verification.md
++++ b/openspec/changes/extract-blob-castore-cache/verification.md
+@@ -2,29 +2,34 @@
+ 
+ ## Implementation Evidence
+ 
++- Changed file: `Cargo.toml`
++- Changed file: `crates/aspen-blob/Cargo.toml`
++- Changed file: `crates/aspen-blob/src/lib.rs`
++- Changed file: `crates/aspen-cluster/Cargo.toml`
++- Changed file: `crates/aspen-rpc-core/Cargo.toml`
++- Changed file: `crates/aspen-rpc-handlers/Cargo.toml`
+ - Changed file: `openspec/changes/extract-blob-castore-cache/tasks.md`
+ - Changed file: `openspec/changes/extract-blob-castore-cache/verification.md`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-capture-baseline.sh`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline.md`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-blob.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-castore.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-cache.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-rpc-core-blob.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-blob-handler.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-snix.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-snix-bridge.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-nix-cache-gateway.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-ci-executor-nix.txt`
+-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/r1-openspec-preflight.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-default.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-tree-aspen-blob-default.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-forbidden-tree-grep.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-replication.txt`
++- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-rpc-core-blob.txt`
+ 
+ ## Task Coverage
+ 
+ - [x] R1 Capture baseline compile and dependency graphs for `aspen-blob`, `aspen-castore`, `aspen-cache`, and representative consumers, classifying each dependency as backend-purpose, reusable domain, adapter/runtime, test-only, or forbidden. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells,blob-castore-cache-extraction.blob-default-avoids-app-shells,blob-castore-cache-extraction.blob-default-avoids-app-shells.iroh-backend-is-documented-exception,blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated,blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable] ✅ completed: 2026-04-25T18:49:10Z
+   - Evidence: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline.md`, `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/`
+ 
++- [x] I3 Move or gate `aspen-blob` replication/client-RPC dependencies so default reusable blob APIs do not depend on `aspen-client-api`, handlers, root Aspen, or node bootstrap crates. [covers=blob-castore-cache-extraction.blob-default-avoids-app-shells.replication-rpc-is-adapter-only] ✅ completed: 2026-04-25T18:51:25Z
++  - Evidence: `crates/aspen-blob/Cargo.toml`, `crates/aspen-blob/src/lib.rs`, `crates/aspen-rpc-core/Cargo.toml`, `crates/aspen-cluster/Cargo.toml`, `crates/aspen-rpc-handlers/Cargo.toml`, `Cargo.toml`, `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-tree-aspen-blob-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i3-forbidden-tree-grep.txt`
++
+ ## Review Scope Snapshot
+ 
+-R1 is evidence-only baseline capture. Source implementation diff begins with later tasks.
++### `git diff HEAD -- Cargo.toml crates/aspen-blob/Cargo.toml crates/aspen-blob/src/lib.rs crates/aspen-cluster/Cargo.toml crates/aspen-rpc-core/Cargo.toml crates/aspen-rpc-handlers/Cargo.toml openspec/changes/extract-blob-castore-cache/tasks.md openspec/changes/extract-blob-castore-cache/verification.md`
++
++- Status: captured after I3 implementation
++- Artifact: pending per-task diff in `openspec/changes/extract-blob-castore-cache/evidence/i3-implementation-diff.txt`
+ 
+ ## Verification Commands
+ 
+@@ -38,11 +43,31 @@ R1 is evidence-only baseline capture. Source implementation diff begins with lat
+ - Status: pass
+ - Artifact: `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline.md`
+ 
+-### `scripts/openspec-preflight.sh extract-blob-castore-cache`
++### `cargo check -p aspen-blob --no-default-features --locked`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-default.txt`
++
++### `cargo tree -p aspen-blob --no-default-features -e normal --locked`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-tree-aspen-blob-default.txt`
++
++### `rg -n 'aspen-client-api|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler' /tmp/i3-blob-tree.txt`
++
++- Status: pass, no matches
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-forbidden-tree-grep.txt`
++
++### `cargo check -p aspen-blob --features replication --locked`
++
++- Status: pass
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-blob-replication.txt`
++
++### `cargo check -p aspen-rpc-core --features blob --locked`
+ 
+ - Status: pass
+-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/r1-openspec-preflight.txt`
++- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i3-cargo-check-aspen-rpc-core-blob.txt`
+ 
+ ## Notes
+ 
+-- `aspen-castore` baseline compile fails before implementation because the existing client passes `Instant` into the `aspen-core` circuit breaker API that now expects `u64` milliseconds. See `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-castore.txt`.
++- `aspen-castore` baseline compile fails before I4 because the existing client passes `Instant` into the `aspen-core` circuit breaker API that now expects `u64` milliseconds. See `openspec/changes/extract-blob-castore-cache/evidence/r1-baseline-logs/cargo-check-aspen-castore.txt`.

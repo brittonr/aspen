@@ -113,7 +113,7 @@ secrets = ["dep:aspen-secrets"]
 bolero = []
 
 # Optional dependencies for reducing minimal compile times
-blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-jobs?/blob", "aspen-cluster-bridges?/blob"]
+blob = ["dep:aspen-blob", "aspen-blob/replication", "dep:iroh-blobs", "aspen-jobs?/blob", "aspen-cluster-bridges?/blob"]
 docs = ["dep:aspen-docs", "dep:iroh-docs", "aspen-cluster-bridges?/docs"]
 federation = ["dep:aspen-federation"]
 jobs-core = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance"]
