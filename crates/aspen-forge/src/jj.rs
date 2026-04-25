@@ -109,6 +109,28 @@ pub struct JjChangeHeadRecord {
     pub head_object_id: String,
 }
 
+/// Mutable JJ head kind used for conflict reporting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JjHeadKind {
+    /// JJ bookmark head.
+    Bookmark,
+    /// JJ change-id head.
+    ChangeId,
+}
+
+/// Conflict detected before final JJ publish.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjPublishConflict {
+    /// Conflicting head kind.
+    pub kind: JjHeadKind,
+    /// Bookmark name or change ID.
+    pub name: String,
+    /// Caller-supplied expected head.
+    pub expected: Option<String>,
+    /// Current authoritative head.
+    pub actual: Option<String>,
+}
+
 /// JJ object envelope validation or encoding failure.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum JjObjectEncodingError {
@@ -283,6 +305,28 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
         self.read_json(jj_change_head_key(repo_id, change_id)).await
     }
 
+    /// Check the expected bookmark head before final publish.
+    pub async fn check_bookmark_conflict(
+        &self,
+        repo_id: &str,
+        name: &str,
+        expected: Option<&str>,
+    ) -> Result<Option<JjPublishConflict>, JjObjectStoreError> {
+        let actual = self.get_bookmark(repo_id, name).await?.and_then(|record| record.head_object_id);
+        Ok(conflict_if_head_mismatch(JjHeadKind::Bookmark, name, expected, actual.as_deref()))
+    }
+
+    /// Check the expected change-id head before final publish.
+    pub async fn check_change_head_conflict(
+        &self,
+        repo_id: &str,
+        change_id: &str,
+        expected: Option<&str>,
+    ) -> Result<Option<JjPublishConflict>, JjObjectStoreError> {
+        let actual = self.get_change_head(repo_id, change_id).await?.map(|record| record.head_object_id);
+        Ok(conflict_if_head_mismatch(JjHeadKind::ChangeId, change_id, expected, actual.as_deref()))
+    }
+
     async fn write_json<T: Serialize>(&self, key: String, value: &T) -> Result<(), JjObjectStoreError> {
         let json = serde_json::to_string(value).map_err(|source| JjObjectStoreError::Kv {
             message: source.to_string(),
@@ -362,6 +406,26 @@ pub fn jj_bookmark_key(repo_id: &str, bookmark_name: &str) -> String {
 #[must_use]
 pub fn jj_change_head_key(repo_id: &str, change_id: &str) -> String {
     format!("{JJ_CHANGE_HEAD_KEY_PREFIX}{repo_id}:{change_id}")
+}
+
+/// Return a conflict when caller expectation differs from authoritative head.
+#[must_use]
+pub fn conflict_if_head_mismatch(
+    kind: JjHeadKind,
+    name: &str,
+    expected: Option<&str>,
+    actual: Option<&str>,
+) -> Option<JjPublishConflict> {
+    if expected == actual {
+        return None;
+    }
+
+    Some(JjPublishConflict {
+        kind,
+        name: name.to_string(),
+        expected: expected.map(ToString::to_string),
+        actual: actual.map(ToString::to_string),
+    })
 }
 
 /// Validate a JJ object envelope without encoding it.
@@ -563,6 +627,53 @@ mod tests {
         assert_eq!(record.head_object_id, TEST_OBJECT_ID);
         assert_eq!(found.change_id, TEST_CHANGE_ID);
         assert_eq!(found.head_object_id, TEST_OBJECT_ID);
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_detects_stale_bookmark_conflict() {
+        let store = object_store();
+        store.put_bookmark(TEST_REPO_ID, TEST_BOOKMARK, TEST_OBJECT_ID).await.expect("bookmark writes");
+
+        let ok = store
+            .check_bookmark_conflict(TEST_REPO_ID, TEST_BOOKMARK, Some(TEST_OBJECT_ID))
+            .await
+            .expect("conflict check succeeds");
+        let conflict = store
+            .check_bookmark_conflict(TEST_REPO_ID, TEST_BOOKMARK, Some(TEST_PARENT_ID))
+            .await
+            .expect("conflict check succeeds")
+            .expect("stale expected head conflicts");
+
+        assert!(ok.is_none());
+        assert_eq!(conflict.kind, JjHeadKind::Bookmark);
+        assert_eq!(conflict.expected.as_deref(), Some(TEST_PARENT_ID));
+        assert_eq!(conflict.actual.as_deref(), Some(TEST_OBJECT_ID));
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_detects_stale_change_head_conflict() {
+        let store = object_store();
+        store
+            .put_change_head(TEST_REPO_ID, TEST_CHANGE_ID, TEST_OBJECT_ID)
+            .await
+            .expect("change head writes");
+
+        let conflict = store
+            .check_change_head_conflict(TEST_REPO_ID, TEST_CHANGE_ID, None)
+            .await
+            .expect("conflict check succeeds")
+            .expect("missing expected head conflicts");
+
+        assert_eq!(conflict.kind, JjHeadKind::ChangeId);
+        assert!(conflict.expected.is_none());
+        assert_eq!(conflict.actual.as_deref(), Some(TEST_OBJECT_ID));
+    }
+
+    #[test]
+    fn jj_conflict_helper_accepts_matching_absent_heads() {
+        let conflict = conflict_if_head_mismatch(JjHeadKind::Bookmark, TEST_BOOKMARK, None, None);
+
+        assert!(conflict.is_none());
     }
 
     #[tokio::test]

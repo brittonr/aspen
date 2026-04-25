@@ -18,7 +18,7 @@
 - [x] 2.4 Implement Raft-backed JJ change-id indexes and JJ bookmark namespaces, including create/move/delete semantics.
 - [ ] 2.5 Implement staged JJ push publication so partial or failed streams do not make repo-visible state inconsistent.
 - [ ] 2.6 Validate incoming JJ payloads and reject malformed or inconsistent object graphs before final publish.
-- [ ] 2.7 Add optimistic final-publish conflict checks for stale bookmark heads and stale change-id heads.
+- [x] 2.7 Add optimistic final-publish conflict checks for stale bookmark heads and stale change-id heads.
 - [ ] 2.8 Add staged-data quota, expiry, and cleanup behavior for successful publish, timeout, rejection, and abandoned-session paths.
 - [ ] 2.9 Abort or reject in-flight JJ sessions when a repo is deleted or JJ support is disabled, and block final publish after that transition.
 
