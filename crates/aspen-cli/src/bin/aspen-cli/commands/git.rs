@@ -7,8 +7,10 @@ use anyhow::Context;
 use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::forge::ForgeRepoBackend;
 use clap::Args;
 use clap::Subcommand;
+use clap::ValueEnum;
 
 use crate::client::AspenClient;
 use crate::output::CommitOutput;
@@ -92,6 +94,14 @@ pub enum GitCommand {
     Diff(DiffArgs),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, ValueEnum)]
+pub enum RepoBackendArg {
+    /// Git-compatible repository backend.
+    Git,
+    /// JJ-native repository backend.
+    Jj,
+}
+
 #[derive(Args)]
 pub struct InitArgs {
     /// Repository name.
@@ -104,6 +114,10 @@ pub struct InitArgs {
     /// Default branch name.
     #[arg(long, default_value = "main")]
     pub default_branch: String,
+
+    /// Repository backend(s) to enable. Repeat or pass comma-separated values.
+    #[arg(long = "backend", value_enum, value_delimiter = ',', default_value = "git")]
+    pub backends: Vec<RepoBackendArg>,
 }
 
 #[derive(Args)]
@@ -362,17 +376,61 @@ impl GitCommand {
     }
 }
 
+fn repo_backends_from_args(args: &[RepoBackendArg]) -> Vec<ForgeRepoBackend> {
+    if args.is_empty() {
+        return vec![ForgeRepoBackend::Git];
+    }
+    let mut backends = std::collections::BTreeSet::new();
+    for backend in args {
+        match backend {
+            RepoBackendArg::Git => {
+                backends.insert(ForgeRepoBackend::Git);
+            }
+            RepoBackendArg::Jj => {
+                backends.insert(ForgeRepoBackend::Jj);
+            }
+        }
+    }
+    backends.into_iter().collect()
+}
+
+fn is_git_only_backend(backends: &[ForgeRepoBackend]) -> bool {
+    matches!(backends, [ForgeRepoBackend::Git])
+}
+
+fn create_repo_request(
+    name: String,
+    description: Option<String>,
+    default_branch: String,
+    backends: Vec<ForgeRepoBackend>,
+) -> ClientRpcRequest {
+    if is_git_only_backend(&backends) {
+        return ClientRpcRequest::ForgeCreateRepo {
+            name,
+            description,
+            default_branch: Some(default_branch),
+        };
+    }
+    ClientRpcRequest::ForgeCreateRepoWithBackends {
+        name,
+        description,
+        default_branch: Some(default_branch),
+        backends,
+    }
+}
+
 async fn git_init(client: &AspenClient, args: InitArgs, is_json_output: bool) -> Result<()> {
     debug_assert!(!args.name.is_empty(), "git init requires a repository name");
     debug_assert!(!args.default_branch.is_empty(), "git init requires a default branch");
 
-    let response = client
-        .send(ClientRpcRequest::ForgeCreateRepo {
-            name: args.name,
-            description: args.description,
-            default_branch: Some(args.default_branch),
-        })
-        .await?;
+    let InitArgs {
+        name,
+        description,
+        default_branch,
+        backends,
+    } = args;
+    let request = create_repo_request(name, description, default_branch, repo_backends_from_args(&backends));
+    let response = client.send(request).await?;
 
     match response {
         ClientRpcResponse::ForgeRepoResult(result) => {
@@ -2018,5 +2076,36 @@ async fn git_diff(client: &AspenClient, args: DiffArgs, is_json_output: bool) ->
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repo_backends_default_to_git() {
+        assert_eq!(repo_backends_from_args(&[]), vec![ForgeRepoBackend::Git]);
+    }
+
+    #[test]
+    fn repo_backends_deduplicate_and_sort() {
+        let backends = repo_backends_from_args(&[RepoBackendArg::Jj, RepoBackendArg::Git, RepoBackendArg::Jj]);
+        assert_eq!(backends, vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj]);
+    }
+
+    #[test]
+    fn create_repo_request_uses_legacy_git_variant_for_default() {
+        let request = create_repo_request("repo".to_string(), None, "main".to_string(), vec![ForgeRepoBackend::Git]);
+        assert!(matches!(request, ClientRpcRequest::ForgeCreateRepo { .. }));
+    }
+
+    #[test]
+    fn create_repo_request_uses_backend_variant_for_jj() {
+        let request = create_repo_request("repo".to_string(), None, "main".to_string(), vec![ForgeRepoBackend::Jj]);
+        let ClientRpcRequest::ForgeCreateRepoWithBackends { backends, .. } = request else {
+            panic!("expected backend-aware create request");
+        };
+        assert_eq!(backends, vec![ForgeRepoBackend::Jj]);
     }
 }

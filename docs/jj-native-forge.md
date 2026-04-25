@@ -4,16 +4,19 @@ Aspen Forge can advertise Git-compatible and JJ-native repository backends indep
 
 ## Enable JJ routing on a node
 
-1. Build or obtain a Forge plugin manifest that declares the protocol identifier `/aspen/forge/jj/1`.
-2. Install the plugin with `aspen-cli plugin install --manifest <manifest.json> <plugin.wasm>`.
-3. Keep the manifest `enabled` field true. Disabled manifests are ignored by Forge capability discovery.
-4. Verify repository discovery with `aspen-cli forge repo get <repo-id>` or list output. Active JJ nodes report a `Jj` backend route with the same transport identifier.
+1. Build Aspen with the `jj-native-forge` feature (included by `full`) so Forge, plugin RPC, and blob plumbing are enabled together.
+2. Build or obtain a Forge plugin manifest that declares the protocol identifier `/aspen/forge/jj/1`.
+3. Install the plugin with `aspen-cli plugin install --manifest <manifest.json> <plugin.wasm>`.
+4. Keep the manifest `enabled` field true. Disabled manifests are ignored by Forge capability discovery.
+5. Verify repository discovery with `aspen-cli forge repo get <repo-id>` or list output. Active JJ nodes report a `Jj` backend route with the same transport identifier.
 
 Protocol identifiers are unique across enabled plugins. Activation or install fails when two enabled plugins claim the same identifier, so clients never receive ambiguous JJ routes.
 
 ## Create repositories
 
 - Repositories without an explicit backend manifest behave as Git-only repositories.
+- Use `aspen-cli git init --backend jj <name>` for JJ-only repositories.
+- Use `aspen-cli git init --backend git --backend jj <name>` (or `--backend git,jj`) for dual-backend repositories.
 - Dual-backend repositories should declare both `Git` and `Jj` in repository metadata before advertising JJ routes.
 - JJ-only repositories should omit Git routes and reject Git-compatible access explicitly.
 

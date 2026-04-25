@@ -1,0 +1,1 @@
+rustfmt --check crates/aspen-cli/src/bin/aspen-cli/commands/git.rs passed.

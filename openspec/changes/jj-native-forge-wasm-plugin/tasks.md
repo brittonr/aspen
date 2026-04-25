@@ -36,7 +36,7 @@
 ## 4. Dual-backend behavior and rollout
 
 - [x] 4.1 Support JJ-only and dual-backend repos without collisions between Git refs and JJ bookmark/change namespaces.
-- [ ] 4.2 Add feature/config wiring and plugin-loading paths so JJ support can be enabled deliberately per deployment and per repo.
+- [x] 4.2 Add feature/config wiring and plugin-loading paths so JJ support can be enabled deliberately per deployment and per repo.
 - [x] 4.3 Document operator and developer workflows for creating JJ-enabled repos and connecting JJ clients.
 
 ## 5. Verification
