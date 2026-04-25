@@ -1,0 +1,11 @@
+[package]
+name = "downstream-blob-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-blob = { path = "../../../../../crates/aspen-blob", default-features = false }
+tokio = { version = "1", features = ["macros", "rt"] }

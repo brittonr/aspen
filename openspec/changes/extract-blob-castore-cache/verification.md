@@ -2,15 +2,24 @@
 
 ## Implementation Evidence
 
-- Changed file: `docs/crate-extraction/blob-castore-cache.md`
-- Changed file: `docs/crate-extraction.md`
-- Changed file: `docs/crate-extraction/policy.ncl`
-- Changed file: `scripts/check-crate-extraction-readiness.rs`
+- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/Cargo.toml`
+- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/src/lib.rs`
+- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/Cargo.toml`
+- Changed file: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/src/lib.rs`
 - Changed file: `openspec/changes/extract-blob-castore-cache/tasks.md`
 - Changed file: `openspec/changes/extract-blob-castore-cache/verification.md`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i1-i2-implementation-diff.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i1-i2-policy-summary.txt`
-- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i1-i2-openspec-preflight.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-test.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-metadata.json`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-packages.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-forbidden-grep.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-test.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-metadata.json`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-packages.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-rustfmt-check.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-summary.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-implementation-diff.txt`
+- Changed file: `openspec/changes/extract-blob-castore-cache/evidence/i6-openspec-preflight.txt`
 
 ## Task Coverage
 
@@ -32,25 +41,58 @@
 - [x] I5 Separate `aspen-cache` reusable Nix cache metadata/signing helpers from cluster/testing/runtime integration, keeping publication paths behind named features or adapter crates. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable] ✅ completed: 2026-04-25T19:03:50Z
   - Evidence: `crates/aspen-cache/Cargo.toml`, `crates/aspen-cache/src/index.rs`, `crates/aspen-cache/src/lib.rs`, `crates/aspen-cache/src/signing.rs`, `crates/aspen-nix-handler/Cargo.toml`, `crates/aspen-snix/Cargo.toml`, `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-tree-aspen-cache-default.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i5-forbidden-tree-grep.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i5-cargo-check-aspen-cache-kv-index-afterfmt.txt`
 
+- [x] I6 Add downstream fixtures for canonical blob APIs and cache/castore domain APIs, with cargo metadata proving app-shell and handler crates are absent. [covers=blob-castore-cache-extraction.downstream-fixtures,blob-castore-cache-extraction.downstream-fixtures.blob-fixture-uses-canonical-api,blob-castore-cache-extraction.downstream-fixtures.cache-castore-fixture-uses-domain-apis] ✅ completed: 2026-04-25T19:15:10Z
+  - Evidence: `openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/`, `openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-test.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-test.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-forbidden-grep.txt`, `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
+
 ## Review Scope Snapshot
 
-### `git diff HEAD -- docs/crate-extraction/blob-castore-cache.md docs/crate-extraction.md docs/crate-extraction/policy.ncl scripts/check-crate-extraction-readiness.rs openspec/changes/extract-blob-castore-cache/tasks.md openspec/changes/extract-blob-castore-cache/verification.md`
+### `git diff HEAD -- openspec/changes/extract-blob-castore-cache/fixtures openspec/changes/extract-blob-castore-cache/tasks.md openspec/changes/extract-blob-castore-cache/verification.md`
 
-- Status: captured after I1/I2 documentation and policy updates
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i1-i2-implementation-diff.txt`
+- Status: captured after I6 downstream fixtures
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-implementation-diff.txt`
 
 ## Verification Commands
 
-### Documentation and policy update summary
+### `cargo test --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/Cargo.toml`
 
-- Status: captured
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i1-i2-policy-summary.txt`
+- Status: pass
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-test.txt`
+
+### `cargo metadata --format-version 1 --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/Cargo.toml`
+
+- Status: pass
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-metadata.json`
+
+### `rg -n '^(aspen|aspen-client-api|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler|aspen-cluster|aspen-cli|aspen-tui|aspen-dogfood)$' openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-packages.txt`
+
+- Status: pass, no matches
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-blob-forbidden-grep.txt`
+
+### `cargo test --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/Cargo.toml`
+
+- Status: pass
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-test.txt`
+
+### `cargo metadata --format-version 1 --manifest-path openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/Cargo.toml`
+
+- Status: pass
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-metadata.json`
+
+### `rg -n '^(aspen|aspen-client-api|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler|aspen-cluster|aspen-cli|aspen-tui|aspen-dogfood)$' openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-packages.txt`
+
+- Status: pass, no matches
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
+
+### `rustfmt --check openspec/changes/extract-blob-castore-cache/fixtures/downstream-blob/src/lib.rs openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore/src/lib.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-rustfmt-check.txt`
 
 ### `scripts/openspec-preflight.sh extract-blob-castore-cache`
 
-- Status: pass after I1/I2
-- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i1-i2-openspec-preflight.txt`
+- Status: pass after I6
+- Artifact: `openspec/changes/extract-blob-castore-cache/evidence/i6-openspec-preflight.txt`
 
 ## Notes
 
-- Full checker execution and mutation evidence are tracked by V5. I1/I2 only install the manifest, inventory row, policy candidate records, and checker package mappings.
+- Fixture builds used `CARGO_TARGET_DIR=/tmp/aspen-downstream-fixtures` to avoid filling the nearly-full repo root filesystem.

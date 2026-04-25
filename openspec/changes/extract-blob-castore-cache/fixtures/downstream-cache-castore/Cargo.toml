@@ -1,0 +1,11 @@
+[package]
+name = "downstream-cache-castore-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-cache = { path = "../../../../../crates/aspen-cache", default-features = false }
+aspen-castore = { path = "../../../../../crates/aspen-castore", default-features = false }

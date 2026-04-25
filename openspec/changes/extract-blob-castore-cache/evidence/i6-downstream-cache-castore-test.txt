@@ -1,0 +1,283 @@
+    Updating crates.io index
+    Updating git repository `https://git.snix.dev/snix/snix.git`
+    Updating git repository `https://github.com/tvlfyi/wu-manber.git`
+     Locking 624 packages to latest Rust 1.97.0-nightly compatible versions
+      Adding blake3 v1.8.3 (available: v1.8.5)
+      Adding curve25519-dalek v5.0.0-pre.1 (available: v5.0.0-pre.6)
+      Adding digest v0.11.0-rc.10 (available: v0.11.2)
+      Adding ed25519-dalek v3.0.0-pre.1 (available: v3.0.0-pre.6)
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding mainline v6.0.1 (available: v6.1.1)
+      Adding matchit v0.8.4 (available: v0.8.6)
+      Adding pkarr v5.0.2 (available: v5.0.4)
+      Adding sha2 v0.11.0-rc.2 (available: v0.11.0)
+   Compiling serde_core v1.0.228
+   Compiling dunce v1.0.5
+   Compiling fs_extra v1.3.0
+   Compiling either v1.15.0
+   Compiling aws-lc-rs v1.16.3
+   Compiling strsim v0.11.1
+   Compiling rustls v0.23.39
+   Compiling bytes v1.11.1
+   Compiling prettyplease v0.2.37
+   Compiling rustix v1.1.4
+   Compiling jobserver v0.1.34
+   Compiling errno v0.3.14
+   Compiling getrandom v0.4.2
+   Compiling aho-corasick v1.1.4
+   Compiling regex-syntax v0.8.10
+   Compiling fixedbitset v0.5.7
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling fastrand v2.4.1
+   Compiling once_cell v1.21.4
+   Compiling log v0.4.29
+   Compiling multimap v0.10.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling foldhash v0.1.5
+   Compiling pulldown-cmark v0.13.3
+   Compiling rand_core v0.10.1
+   Compiling rayon-core v1.13.0
+   Compiling unicase v2.9.0
+   Compiling digest v0.10.7
+   Compiling cipher v0.4.4
+   Compiling universal-hash v0.5.1
+   Compiling crossbeam-deque v0.8.6
+   Compiling pkg-config v0.3.33
+   Compiling typeid v1.0.3
+   Compiling mime v0.3.17
+   Compiling itertools v0.14.0
+   Compiling darling_core v0.20.11
+   Compiling darling_core v0.23.0
+   Compiling aead v0.5.2
+   Compiling erased-serde v0.4.10
+   Compiling cc v1.2.61
+   Compiling hashbrown v0.15.5
+   Compiling polyval v0.6.2
+   Compiling matchit v0.8.4
+   Compiling utf8parse v0.2.2
+   Compiling anstyle-query v1.1.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle v1.0.14
+   Compiling typetag v0.2.21
+   Compiling unicode-width v0.2.2
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling anstyle-parse v1.0.0
+   Compiling colorchoice v1.0.5
+   Compiling zstd-safe v7.2.4
+   Compiling petgraph v0.7.1
+   Compiling vte v0.15.0
+   Compiling typetag-impl v0.2.21
+   Compiling ghash v0.5.1
+   Compiling clap_lex v1.1.0
+   Compiling inventory v0.3.24
+   Compiling lazy_static v1.5.0
+   Compiling uuid v1.23.1
+   Compiling anstream v1.0.0
+   Compiling sharded-slab v0.1.7
+   Compiling clap_derive v4.6.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling socket2 v0.5.10
+   Compiling thread_local v1.1.9
+   Compiling nu-ansi-term v0.50.3
+   Compiling unit-prefix v0.5.2
+   Compiling thiserror v1.0.69
+   Compiling vt100 v0.16.2
+   Compiling console v0.16.3
+   Compiling chacha20 v0.10.0
+   Compiling thiserror-impl v1.0.69
+   Compiling async-stream-impl v0.3.6
+   Compiling compression-core v0.4.32
+   Compiling clap_builder v4.6.0
+   Compiling signature v2.2.0
+   Compiling redb v3.1.3
+   Compiling tonic-build v0.14.5
+   Compiling same-file v1.0.6
+   Compiling ed25519 v2.2.3
+   Compiling rand v0.10.1
+   Compiling md-5 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling xattr v1.6.1
+   Compiling walkdir v2.5.0
+   Compiling aes-gcm v0.10.3
+   Compiling filetime v0.2.27
+   Compiling petgraph v0.8.3
+   Compiling nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+   Compiling fixedbitset v0.4.2
+   Compiling humantime v2.3.0
+   Compiling async-stream v0.3.6
+   Compiling nix-compat-derive v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+   Compiling petgraph v0.6.5
+   Compiling auto_impl v1.3.0
+   Compiling nom v8.0.0
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling cmake v0.1.58
+   Compiling pulldown-cmark-to-cmark v22.0.0
+   Compiling ring v0.17.14
+   Compiling blake3 v1.8.3
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling libmimalloc-sys v0.1.47
+   Compiling aws-lc-sys v0.40.0
+   Compiling regex-automata v0.4.14
+   Compiling prost-derive v0.14.3
+   Compiling prost-derive v0.13.5
+   Compiling tempfile v3.27.0
+   Compiling ed25519-dalek v2.2.0
+   Compiling darling_macro v0.20.11
+   Compiling mimalloc v0.1.50
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling darling_macro v0.23.0
+   Compiling darling v0.23.0
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling serde_bytes v0.11.19
+   Compiling serde_with_macros v3.18.0
+   Compiling prost v0.14.3
+   Compiling prost v0.13.5
+   Compiling clap v4.6.1
+   Compiling derive_builder_macro v0.20.2
+   Compiling prost-types v0.13.5
+   Compiling prost-types v0.14.3
+   Compiling portable-atomic v1.13.1
+   Compiling smallvec v1.15.1
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling heapless v0.7.17
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling serde_urlencoded v0.7.1
+   Compiling chrono v0.4.44
+   Compiling serde_bencode v0.2.4
+   Compiling bincode v1.3.3
+   Compiling uhlc v0.8.2
+   Compiling aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+   Compiling aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+   Compiling quick-xml v0.39.2
+   Compiling serde_tagged v0.3.0
+   Compiling serde_qs v0.12.0
+   Compiling derive_builder v0.20.2
+   Compiling vergen-lib v9.1.0
+   Compiling icu_normalizer v2.2.0
+   Compiling parking_lot_core v0.9.12
+   Compiling vergen-lib v0.1.6
+   Compiling serde_with v3.18.0
+   Compiling inplace-vec-builder v0.1.1
+   Compiling vergen v9.1.0
+   Compiling parking_lot v0.12.5
+   Compiling range-collections v0.4.6
+   Compiling aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+   Compiling vergen-gitcl v1.0.8
+   Compiling aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-storage-types)
+   Compiling matchers v0.2.0
+   Compiling bstr v1.12.1
+   Compiling tokio v1.52.1
+   Compiling http v1.4.0
+   Compiling idna_adapter v1.2.1
+   Compiling postcard v1.1.3
+   Compiling idna v1.1.0
+   Compiling moka v0.12.15
+   Compiling tracing-core v0.1.36
+   Compiling ntimestamp v1.0.0
+   Compiling indicatif v0.18.4
+   Compiling rcgen v0.14.7
+   Compiling iroh-relay v0.97.0
+   Compiling url v2.5.8
+   Compiling tracing v0.1.44
+   Compiling tracing-log v0.2.0
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling ed25519-dalek v3.0.0-pre.1
+   Compiling noq-udp v0.9.0
+   Compiling iroh-metrics v0.38.3
+   Compiling tracing-subscriber v0.3.23
+   Compiling tracing-futures v0.2.5
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+   Compiling tower v0.4.13
+   Compiling mainline v6.0.1
+   Compiling http-body v1.0.1
+   Compiling prost-wkt v0.7.1
+   Compiling aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+   Compiling http-body-util v0.1.3
+   Compiling regex v1.12.3
+   Compiling zstd v0.13.3
+   Compiling attohttpc v0.30.1
+   Compiling iroh-base v0.97.0
+   Compiling axum-core v0.5.6
+   Compiling compression-codecs v0.4.38
+   Compiling prost-build v0.14.3
+   Compiling prost-build v0.13.5
+   Compiling iroh-tickets v0.4.0
+   Compiling tonic-build v0.13.1
+   Compiling prost-wkt-build v0.7.1
+   Compiling tonic-prost-build v0.14.5
+   Compiling tracing-indicatif v0.3.14
+   Compiling prost-wkt-types v0.7.1
+   Compiling bigtable_rs v0.2.21
+   Compiling snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+   Compiling tokio-util v0.7.18
+   Compiling netlink-sys v0.8.8
+   Compiling async-compat v0.2.5
+   Compiling acto v0.8.0
+   Compiling backon v1.6.0
+   Compiling iroh-io v0.6.2
+   Compiling async-compression v0.4.42
+   Compiling netlink-proto v0.12.0
+   Compiling netdev v0.40.1
+   Compiling bao-tree v0.16.0
+   Compiling h2 v0.4.13
+   Compiling tower v0.5.3
+   Compiling tokio-stream v0.1.18
+   Compiling n0-future v0.3.2
+   Compiling n0-watcher v0.6.1
+   Compiling netwatch v0.15.0
+   Compiling fastcdc v3.2.1
+   Compiling astral-tokio-tar v0.5.6
+   Compiling tower-http v0.6.8
+   Compiling axum v0.8.9
+   Compiling aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cache)
+   Compiling rustls-webpki v0.103.13
+   Compiling hyper v1.9.0
+   Compiling hyper-util v0.1.20
+   Compiling hyper-timeout v0.5.2
+   Compiling igd-next v0.16.2
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling noq-proto v0.16.0
+   Compiling hyper-rustls v0.27.9
+   Compiling hickory-proto v0.25.2
+   Compiling tokio-websockets v0.12.3
+   Compiling tonic v0.13.1
+   Compiling tonic v0.14.5
+   Compiling reqwest v0.12.28
+   Compiling gcp_auth v0.12.6
+   Compiling portmapper v0.15.0
+   Compiling pkarr v5.0.2
+   Compiling object_store v0.13.2
+   Compiling snix-tracing v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+   Compiling tonic-health v0.13.1
+   Compiling tonic-prost v0.14.5
+   Compiling hickory-resolver v0.25.2
+   Compiling swarm-discovery v0.5.0
+   Compiling noq v0.17.0
+   Compiling irpc v0.13.0
+   Compiling iroh v0.97.0
+   Compiling iroh-blobs v0.99.0
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+   Compiling aspen-castore v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-castore)
+   Compiling downstream-cache-castore-fixture v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/openspec/changes/extract-blob-castore-cache/fixtures/downstream-cache-castore)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 59.80s
+     Running unittests src/lib.rs (/tmp/aspen-downstream-fixtures/debug/deps/downstream_cache_castore_fixture-791a8fb65e49f815)
+
+running 4 tests
+test tests::castore_adapter_alpn_is_available_without_app_shells ... ok
+test tests::malformed_cache_name_is_rejected ... ok
+test tests::narinfo_store_path_parsing_is_reusable ... ok
+test tests::cache_signing_roundtrip_is_reusable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests downstream_cache_castore_fixture
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

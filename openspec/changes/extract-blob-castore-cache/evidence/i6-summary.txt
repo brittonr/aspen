@@ -1,0 +1,4 @@
+I6 summary:
+- downstream-blob fixture imports aspen-blob directly with default-features=false and exercises InMemoryBlobStore add/get/has plus blob ref helper behavior.
+- downstream-cache-castore fixture imports aspen-cache and aspen-castore directly with default-features=false and exercises cache signing positive/negative cases, store path parsing, and castore ALPN availability.
+- cargo metadata package lists for both fixtures were checked for root app, client API, RPC core/handlers, blob handler, cluster, CLI, TUI, and dogfood crates; none were present.

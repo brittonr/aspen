@@ -1,0 +1,2 @@
+Command: rg -n '^(aspen|aspen-client-api|aspen-rpc-core|aspen-rpc-handlers|aspen-blob-handler|aspen-cluster|aspen-cli|aspen-tui|aspen-dogfood)$' openspec/changes/extract-blob-castore-cache/evidence/i6-downstream-cache-castore-packages.txt
+Status: pass (no forbidden app/client/handler packages)
