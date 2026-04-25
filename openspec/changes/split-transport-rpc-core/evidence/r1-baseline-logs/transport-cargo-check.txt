@@ -1,0 +1,68 @@
+$ env CARGO_TARGET_DIR=target cargo check -p aspen-transport
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Checking n0-future v0.3.2
+    Checking hyper v1.8.1
+    Checking noq v0.17.0
+    Checking tokio-websockets v0.12.3
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant...
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spell...
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option s...
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+    Checking hickory-proto v0.25.2
+    Checking iroh-base v0.97.0
+    Checking n0-watcher v0.6.1
+    Checking netwatch v0.15.0
+    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+    Checking aspen-sharding v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-sharding)
+    Checking irpc v0.13.0
+    Checking hyper-util v0.1.20
+    Checking aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft-types)
+    Checking hyper-rustls v0.27.7
+    Checking igd-next v0.16.2
+    Checking reqwest v0.12.28
+    Checking hickory-resolver v0.25.2
+    Checking swarm-discovery v0.5.0
+    Checking portmapper v0.15.0
+    Checking pkarr v5.0.2
+    Checking iroh-relay v0.97.0
+    Checking iroh v0.97.0
+    Checking aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core-shell)
+    Checking aspen-auth v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth)
+    Checking aspen-transport v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-transport)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.06s
+
+Exit: 0

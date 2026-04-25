@@ -1,0 +1,43 @@
+$ env CARGO_TARGET_DIR=target cargo check -p aspen-raft-network
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant...
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spell...
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option s...
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+    Checking aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft-network)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.46s
+
+Exit: 0

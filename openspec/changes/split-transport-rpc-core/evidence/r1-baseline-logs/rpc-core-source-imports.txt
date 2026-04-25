@@ -1,0 +1,126 @@
+$ rg aspen_\|openraft\|iroh\|irpc\|metrics\|tokio crates/aspen-rpc-core/src
+crates/aspen-rpc-core/src/proxy.rs:        use aspen_constants::proxy::*;
+crates/aspen-rpc-core/src/proxy.rs:        use aspen_constants::proxy::*;
+crates/aspen-rpc-core/src/context.rs:use aspen_auth::TokenVerifier;
+crates/aspen-rpc-core/src/context.rs:use aspen_client_api::IngestSpan;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::ClusterController;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::ContentDiscovery;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::DocsSyncProvider;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::EndpointProvider;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::KeyValueStore;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::NetworkFactory;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::PeerManager;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::SharedAppRegistry;
+crates/aspen-rpc-core/src/context.rs:use aspen_core::WatchRegistry;
+crates/aspen-rpc-core/src/context.rs:use aspen_raft::StateMachineVariant;
+crates/aspen-rpc-core/src/context.rs:use aspen_raft::connection_pool::ConnectionPoolMetrics;
+crates/aspen-rpc-core/src/context.rs:use aspen_sharding::ShardTopology;
+crates/aspen-rpc-core/src/context.rs:/// Provider trait for connection pool metrics.
+crates/aspen-rpc-core/src/context.rs:    /// Collect current connection pool metrics.
+crates/aspen-rpc-core/src/context.rs:    async fn metrics(&self) -> ConnectionPoolMetrics;
+crates/aspen-rpc-core/src/context.rs:    fn snapshot_history(&self) -> Vec<aspen_transport::snapshot_history::SnapshotTransferEntry> {
+crates/aspen-rpc-core/src/context.rs:where T: aspen_core::NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+crates/aspen-rpc-core/src/context.rs:    pool: Arc<aspen_raft::connection_pool::RaftConnectionPool<T>>,
+crates/aspen-rpc-core/src/context.rs:    snapshot_history: Option<Arc<aspen_transport::snapshot_history::SnapshotTransferHistory>>,
+crates/aspen-rpc-core/src/context.rs:where T: aspen_core::NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+crates/aspen-rpc-core/src/context.rs:    pub fn new(pool: Arc<aspen_raft::connection_pool::RaftConnectionPool<T>>) -> Self {
+crates/aspen-rpc-core/src/context.rs:        history: Arc<aspen_transport::snapshot_history::SnapshotTransferHistory>,
+crates/aspen-rpc-core/src/context.rs:where T: aspen_core::NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+crates/aspen-rpc-core/src/context.rs:    async fn metrics(&self) -> ConnectionPoolMetrics {
+crates/aspen-rpc-core/src/context.rs:        self.pool.metrics().await
+crates/aspen-rpc-core/src/context.rs:    fn snapshot_history(&self) -> Vec<aspen_transport::snapshot_history::SnapshotTransferEntry> {
+crates/aspen-rpc-core/src/context.rs:    pub sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>,
+crates/aspen-rpc-core/src/context.rs:    pub blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
+crates/aspen-rpc-core/src/context.rs:    pub blob_replication_manager: Option<aspen_blob::BlobReplicationManager>,
+crates/aspen-rpc-core/src/context.rs:    /// Docs sync resources for iroh-docs operations (optional).
+crates/aspen-rpc-core/src/context.rs:    pub topology: Option<Arc<tokio::sync::RwLock<ShardTopology>>>,
+crates/aspen-rpc-core/src/context.rs:    pub forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:    pub job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:    pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
+crates/aspen-rpc-core/src/context.rs:    pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:    pub hook_service: Option<Arc<aspen_hooks::HookService>>,
+crates/aspen-rpc-core/src/context.rs:    pub hooks_config: aspen_hooks_types::HooksConfig,
+crates/aspen-rpc-core/src/context.rs:    pub federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
+crates/aspen-rpc-core/src/context.rs:    pub federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+crates/aspen-rpc-core/src/context.rs:    pub federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
+crates/aspen-rpc-core/src/context.rs:    pub iroh_endpoint: Option<Arc<iroh::Endpoint>>,
+crates/aspen-rpc-core/src/context.rs:    pub federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+crates/aspen-rpc-core/src/context.rs:    pub ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:    pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
+crates/aspen-rpc-core/src/context.rs:    pub service_executors: Vec<Arc<dyn aspen_core::ServiceExecutor>>,
+crates/aspen-rpc-core/src/context.rs:    /// Prometheus metrics handle for rendering metrics on `GetMetrics` requests.
+crates/aspen-rpc-core/src/context.rs:    /// Installed once at node startup via `metrics_init::install_prometheus_recorder()`.
+crates/aspen-rpc-core/src/context.rs:    /// All `metrics::counter!()` / `metrics::gauge!()` / `metrics::histogram!()` calls
+crates/aspen-rpc-core/src/context.rs:    pub prometheus_handle: Option<Arc<metrics_exporter_prometheus::PrometheusHandle>>,
+crates/aspen-rpc-core/src/context.rs:    /// Connection pool metrics provider for `GetNetworkMetrics` handler.
+crates/aspen-rpc-core/src/context.rs:    pub network_metrics: Option<Arc<dyn NetworkMetricsProvider>>,
+crates/aspen-rpc-core/src/context.rs:    pub drain_state: Option<Arc<aspen_cluster::upgrade::DrainState>>,
+crates/aspen-rpc-core/src/context.rs:    pub blob_store: Arc<aspen_blob::IrohBlobStore>,
+crates/aspen-rpc-core/src/context.rs:    pub blob_replication_manager: Option<aspen_blob::BlobReplicationManager>,
+crates/aspen-rpc-core/src/context.rs:    pub forge_node: Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>,
+crates/aspen-rpc-core/src/context.rs:    pub federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+crates/aspen-rpc-core/src/context.rs:    pub federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
+crates/aspen-rpc-core/src/context.rs:    pub federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+crates/aspen-rpc-core/src/context.rs:    pub federation_cluster_identity: Option<Arc<aspen_cluster::federation::ClusterIdentity>>,
+crates/aspen-rpc-core/src/context.rs:    pub iroh_endpoint: Option<Arc<iroh::Endpoint>>,
+crates/aspen-rpc-core/src/context.rs:    pub hook_service: Option<Arc<aspen_hooks::HookService>>,
+crates/aspen-rpc-core/src/context.rs:    pub ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:    pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
+crates/aspen-rpc-core/src/context.rs:    pub forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:    pub blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
+crates/aspen-rpc-core/src/context.rs:    pub job_manager: Arc<aspen_jobs::JobManager<dyn KeyValueStore>>,
+crates/aspen-rpc-core/src/context.rs:    pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
+crates/aspen-rpc-core/src/context.rs:    pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:                target: "aspen_rpc::security",
+crates/aspen-rpc-core/src/context.rs:                target: "aspen_rpc::security",
+crates/aspen-rpc-core/src/context.rs:                target: "aspen_rpc::security",
+crates/aspen-rpc-core/src/context.rs:            iroh_endpoint: self.iroh_endpoint.clone(),
+crates/aspen-rpc-core/src/context.rs:    //! from `aspen_core` for in-memory testing.
+crates/aspen-rpc-core/src/context.rs:    //! use aspen_rpc_core::test_support::MockEndpointProvider;
+crates/aspen-rpc-core/src/context.rs:    use aspen_testing::DeterministicClusterController;
+crates/aspen-rpc-core/src/context.rs:    use aspen_testing::DeterministicKeyValueStore;
+crates/aspen-rpc-core/src/context.rs:    /// use aspen_rpc_core::test_support::MockEndpointProvider;
+crates/aspen-rpc-core/src/context.rs:    /// #[tokio::test]
+crates/aspen-rpc-core/src/context.rs:        endpoint: iroh::Endpoint,
+crates/aspen-rpc-core/src/context.rs:        node_addr: iroh::EndpointAddr,
+crates/aspen-rpc-core/src/context.rs:            let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
+crates/aspen-rpc-core/src/context.rs:            let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
+crates/aspen-rpc-core/src/context.rs:        fn node_addr(&self) -> &iroh::EndpointAddr {
+crates/aspen-rpc-core/src/context.rs:        fn endpoint(&self) -> &iroh::Endpoint {
+crates/aspen-rpc-core/src/context.rs:    /// use aspen_rpc_core::test_support::TestContextBuilder;
+crates/aspen-rpc-core/src/context.rs:        hooks_config: Option<aspen_hooks_types::HooksConfig>,
+crates/aspen-rpc-core/src/context.rs:        blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
+crates/aspen-rpc-core/src/context.rs:        blob_replication_manager: Option<aspen_blob::BlobReplicationManager>,
+crates/aspen-rpc-core/src/context.rs:        sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
+crates/aspen-rpc-core/src/context.rs:        forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:        job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:        worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
+crates/aspen-rpc-core/src/context.rs:        worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:        ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+crates/aspen-rpc-core/src/context.rs:        ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
+crates/aspen-rpc-core/src/context.rs:        pub fn with_hooks_config(mut self, hooks_config: aspen_hooks_types::HooksConfig) -> Self {
+crates/aspen-rpc-core/src/context.rs:        pub fn with_blob_store(mut self, blob_store: Arc<aspen_blob::IrohBlobStore>) -> Self {
+crates/aspen-rpc-core/src/context.rs:            blob_replication_manager: aspen_blob::BlobReplicationManager,
+crates/aspen-rpc-core/src/context.rs:        pub fn with_sql_executor(mut self, sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>) -> Self {
+crates/aspen-rpc-core/src/context.rs:            forge_node: Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn KeyValueStore>>,
+crates/aspen-rpc-core/src/context.rs:        pub fn with_job_manager(mut self, job_manager: Arc<aspen_jobs::JobManager<dyn KeyValueStore>>) -> Self {
+crates/aspen-rpc-core/src/context.rs:            worker_service: Arc<aspen_cluster::worker_service::WorkerService>,
+crates/aspen-rpc-core/src/context.rs:            worker_coordinator: Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>,
+crates/aspen-rpc-core/src/context.rs:            ci_orchestrator: Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>,
+crates/aspen-rpc-core/src/context.rs:        pub fn with_ci_trigger_service(mut self, ci_trigger_service: Arc<aspen_ci::TriggerService>) -> Self {
+crates/aspen-rpc-core/src/context.rs:                iroh_endpoint: None,
+crates/aspen-rpc-core/src/context.rs:                app_registry: aspen_core::shared_registry(),
+crates/aspen-rpc-core/src/context.rs:                network_metrics: None,
+crates/aspen-rpc-core/src/handler.rs://! use aspen_rpc_core::{HandlerFactory, RequestHandler, ClientProtocolContext};
+crates/aspen-rpc-core/src/handler.rs:use aspen_client_api::ClientRpcRequest;
+crates/aspen-rpc-core/src/handler.rs:use aspen_client_api::ClientRpcResponse;
+crates/aspen-rpc-core/src/handler.rs:/// use aspen_rpc_core::{RequestHandler, ClientProtocolContext};
+crates/aspen-rpc-core/src/handler.rs:/// use aspen_client_api::{ClientRpcRequest, ClientRpcResponse};
+crates/aspen-rpc-core/src/handler.rs:    ///   - 100: CoreHandler (health, metrics, node info)
+crates/aspen-rpc-core/src/service.rs://! use aspen_rpc_core::{ServiceExecutor, ServiceHandler, HandlerFactory};
+crates/aspen-rpc-core/src/service.rs:use aspen_client_api::ClientRpcRequest;
+crates/aspen-rpc-core/src/service.rs:use aspen_client_api::ClientRpcResponse;
+crates/aspen-rpc-core/src/service.rs:/// use aspen_rpc_core::ServiceExecutor;
+crates/aspen-rpc-core/src/service.rs:/// use aspen_rpc_core::{ServiceHandler, ServiceExecutor};
+
+Exit: 0

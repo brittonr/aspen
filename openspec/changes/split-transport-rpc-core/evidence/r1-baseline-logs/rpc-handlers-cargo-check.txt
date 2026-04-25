@@ -1,0 +1,219 @@
+$ env CARGO_TARGET_DIR=target cargo check -p aspen-rpc-handlers
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1480:9
+     |
+1480 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1496:9
+     |
+1496 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1526:9
+     |
+1526 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1552:9
+     |
+1552 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1582:9
+     |
+1582 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4270:9
+     |
+4270 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4359:9
+     |
+4359 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+    Checking aspen-client v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client)
+    Checking aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-rpc-core)
+    Checking aspen-cluster v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster)
+    Checking aspen-core-essentials-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core-essentials-handler)
+    Checking aspen-cluster-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-handler)
+    Checking aspen-rpc-handlers v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-rpc-handlers)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.15s
+
+Exit: 0
