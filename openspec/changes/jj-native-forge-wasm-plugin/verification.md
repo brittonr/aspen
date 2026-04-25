@@ -5,10 +5,12 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-forge-handler/src/executor.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-repo-lifecycle-integration-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-openspec-preflight.txt`
+- Changed file: `aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml`
+- Changed file: `aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.lock`
+- Changed file: `aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -49,6 +51,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 1.8 Publish and withdraw node-local JJ activation state so discovery only advertises nodes with an active JJ plugin.
   - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-7-1-8-forge-handler-route-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-7-1-8-rustfmt-check.txt`
+
+- [x] 3.1 Implement the JJ-native Forge WASM plugin with declared permissions, storage prefixes, request handlers, and protocol-session handlers.
+  - Evidence: `aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs`, `aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-rustfmt-check.txt`
 
 - [x] 2.8 Add staged-data quota, expiry, and cleanup behavior for successful publish, timeout, rejection, and abandoned-session paths.
   - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-8-aspen-forge-jj-staged-cleanup-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-8-rustfmt-check.txt`
@@ -242,6 +247,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-7-1-8-openspec-preflight.txt`
+
+### `cargo test --manifest-path aspen-wasm-plugin/crates/aspen-wasm-plugin/Cargo.toml -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`
+
+### `rustfmt --check aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-openspec-preflight.txt`
 
 ### `cargo test -p aspen-forge jj::`
 

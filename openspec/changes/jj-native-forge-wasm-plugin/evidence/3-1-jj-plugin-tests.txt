@@ -1,0 +1,28 @@
+    Updating crates.io index
+     Locking 16 packages to latest Rust 1.97.0-nightly compatible versions
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling semver v1.0.28
+   Compiling thiserror v2.0.18
+   Compiling serde_json v1.0.149
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+   Compiling aspen-plugin-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-plugin-api)
+   Compiling aspen-wasm-plugin v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/aspen-wasm-plugin/crates/aspen-wasm-plugin)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.00s
+     Running unittests src/lib.rs (target/debug/deps/aspen_wasm_plugin-2f157c3e5baa52ea)
+
+running 5 tests
+test tests::request_handler_rejects_incompatible_transport_version ... ok
+test tests::manifest_declares_jj_permissions_protocol_and_prefixes ... ok
+test tests::session_admission_rejects_undeclared_protocol ... ok
+test tests::session_admission_accepts_declared_protocol_within_limits ... ok
+test tests::session_admission_rejects_resource_limit_violations ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_wasm_plugin
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

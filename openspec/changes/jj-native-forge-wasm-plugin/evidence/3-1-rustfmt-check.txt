@@ -1,0 +1,1 @@
+rustfmt --check aspen-wasm-plugin/crates/aspen-wasm-plugin/src/lib.rs passed.

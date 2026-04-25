@@ -24,7 +24,7 @@
 
 ## 3. JJ Forge plugin and client path
 
-- [ ] 3.1 Implement the JJ-native Forge WASM plugin with declared permissions, storage prefixes, request handlers, and protocol-session handlers.
+- [x] 3.1 Implement the JJ-native Forge WASM plugin with declared permissions, storage prefixes, request handlers, and protocol-session handlers.
 - [ ] 3.2 After the 1.x discovery/routing foundation, 2.x storage/publish foundations, and 3.1 plugin session support land, implement standalone `jj-remote-aspen` session setup, capability discovery, version checks, and QUIC admission.
 - [ ] 3.3 Implement standalone `jj-remote-aspen` clone/fetch and the probe-first incremental sync path for missing JJ objects.
 - [ ] 3.4 Implement standalone `jj-remote-aspen` push and bookmark mutation flows, including explicit object/bookmark/change-head probes and conflict reporting.

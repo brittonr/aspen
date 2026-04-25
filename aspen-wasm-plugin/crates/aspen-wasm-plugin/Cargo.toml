@@ -4,6 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
+default = []
 hooks = []
 plugins-rpc = []
 blob = []
+
+[dependencies]
+aspen-forge-protocol = { path = "../../../crates/aspen-forge-protocol" }
+aspen-plugin-api = { path = "../../../crates/aspen-plugin-api" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+serde_json = "1"
+
+[workspace]
