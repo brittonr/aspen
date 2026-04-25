@@ -1,0 +1,330 @@
+COMMAND: cargo tree -p aspen-blob -e normal --depth 3 --locked
+START: 2026-04-25T18:45:17Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+├── anyhow v1.0.102
+├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+│   ├── aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+│   │   ├── base64 v0.22.1
+│   │   ├── blake3 v1.8.3
+│   │   ├── iroh-base v0.97.0
+│   │   ├── postcard v1.1.3
+│   │   ├── serde v1.0.228
+│   │   └── thiserror v2.0.18
+│   ├── aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+│   │   └── serde v1.0.228 (*)
+│   ├── aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+│   │   └── serde v1.0.228 (*)
+│   ├── aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs-protocol)
+│   │   └── serde v1.0.228 (*)
+│   ├── serde v1.0.228 (*)
+│   └── thiserror v2.0.18 (*)
+├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+│   ├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+│   │   ├── blake3 v1.8.3 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── uhlc v0.8.2 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/uhlc)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+│   │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-storage-types)
+│   │   ├── bincode v1.3.3
+│   │   └── serde v1.0.228 (*)
+│   ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+│   │   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types) (*)
+│   │   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types) (*)
+│   │   └── async-trait v0.1.89 (proc-macro)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── base64 v0.22.1
+│   ├── bincode v1.3.3 (*)
+│   ├── hex v0.4.3
+│   ├── serde v1.0.228 (*)
+│   ├── snafu v0.8.9
+│   │   └── snafu-derive v0.8.9 (proc-macro)
+│   └── thiserror v2.0.18 (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── bytes v1.11.1
+│   └── serde v1.0.228 (*)
+├── hex v0.4.3
+├── iroh v0.97.0
+│   ├── backon v1.6.0
+│   │   ├── fastrand v2.3.0
+│   │   └── tokio v1.50.0
+│   ├── bytes v1.11.1 (*)
+│   ├── data-encoding v2.10.0
+│   ├── derive_more v2.1.1
+│   │   └── derive_more-impl v2.1.1 (proc-macro)
+│   ├── ed25519-dalek v3.0.0-pre.1
+│   │   ├── curve25519-dalek v5.0.0-pre.1
+│   │   ├── ed25519 v3.0.0-rc.4
+│   │   ├── rand_core v0.9.5
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── sha2 v0.11.0-rc.2
+│   │   ├── signature v3.0.0-rc.10
+│   │   ├── subtle v2.6.1
+│   │   └── zeroize v1.8.2
+│   ├── futures-util v0.3.32
+│   │   ├── futures-channel v0.3.32
+│   │   ├── futures-core v0.3.32
+│   │   ├── futures-io v0.3.32
+│   │   ├── futures-macro v0.3.32 (proc-macro)
+│   │   ├── futures-sink v0.3.32
+│   │   ├── futures-task v0.3.32
+│   │   ├── memchr v2.8.0
+│   │   ├── pin-project-lite v0.2.17
+│   │   └── slab v0.4.12
+│   ├── hickory-resolver v0.25.2
+│   │   ├── cfg-if v1.0.4
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── hickory-proto v0.25.2
+│   │   ├── moka v0.12.14
+│   │   ├── once_cell v1.21.4
+│   │   ├── parking_lot v0.12.5
+│   │   ├── rand v0.9.2
+│   │   ├── resolv-conf v0.7.6
+│   │   ├── rustls v0.23.37
+│   │   ├── smallvec v1.15.1
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-rustls v0.26.4
+│   │   └── tracing v0.1.44
+│   ├── http v1.4.0
+│   │   ├── bytes v1.11.1 (*)
+│   │   └── itoa v1.0.17
+│   ├── ipnet v2.12.0
+│   ├── iroh-base v0.97.0 (*)
+│   ├── iroh-metrics v0.38.3
+│   │   ├── iroh-metrics-derive v0.4.1 (proc-macro)
+│   │   ├── itoa v1.0.17
+│   │   ├── n0-error v0.1.3
+│   │   ├── portable-atomic v1.13.1
+│   │   ├── postcard v1.1.3 (*)
+│   │   ├── ryu v1.0.23
+│   │   ├── serde v1.0.228 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── iroh-relay v0.97.0
+│   │   ├── blake3 v1.8.3 (*)
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── hickory-resolver v0.25.2 (*)
+│   │   ├── http v1.4.0 (*)
+│   │   ├── http-body-util v0.1.3
+│   │   ├── hyper v1.8.1
+│   │   ├── hyper-util v0.1.20
+│   │   ├── iroh-base v0.97.0 (*)
+│   │   ├── iroh-metrics v0.38.3 (*)
+│   │   ├── lru v0.16.3
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── n0-future v0.3.2
+│   │   ├── noq v0.17.0
+│   │   ├── noq-proto v0.16.0
+│   │   ├── num_enum v0.7.6
+│   │   ├── pin-project v1.1.11
+│   │   ├── pkarr v5.0.2
+│   │   ├── postcard v1.1.3 (*)
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── reqwest v0.12.28
+│   │   ├── rustls v0.23.37 (*)
+│   │   ├── rustls-pki-types v1.14.0
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_bytes v0.11.19
+│   │   ├── strum v0.28.0
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-rustls v0.26.4 (*)
+│   │   ├── tokio-util v0.7.18
+│   │   ├── tokio-websockets v0.12.3
+│   │   ├── tracing v0.1.44 (*)
+│   │   ├── url v2.5.8
+│   │   ├── webpki-roots v1.0.6
+│   │   └── z32 v1.3.0
+│   ├── n0-error v0.1.3 (*)
+│   ├── n0-future v0.3.2 (*)
+│   ├── n0-watcher v0.6.1
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── n0-error v0.1.3 (*)
+│   │   └── n0-future v0.3.2 (*)
+│   ├── netwatch v0.15.0
+│   │   ├── atomic-waker v1.1.2
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── libc v0.2.183
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── n0-future v0.3.2 (*)
+│   │   ├── n0-watcher v0.6.1 (*)
+│   │   ├── netdev v0.40.1
+│   │   ├── netlink-packet-core v0.8.1
+│   │   ├── netlink-packet-route v0.29.0
+│   │   ├── netlink-proto v0.12.0
+│   │   ├── netlink-sys v0.8.8
+│   │   ├── noq-udp v0.9.0
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── socket2 v0.6.3
+│   │   ├── time v0.3.47
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── noq v0.17.0 (*)
+│   ├── noq-proto v0.16.0 (*)
+│   ├── noq-udp v0.9.0 (*)
+│   ├── papaya v0.2.3
+│   │   ├── equivalent v1.0.2
+│   │   └── seize v0.5.1
+│   ├── pin-project v1.1.11 (*)
+│   ├── pkarr v5.0.2 (*)
+│   ├── pkcs8 v0.11.0-rc.11
+│   │   ├── der v0.8.0
+│   │   └── spki v0.8.0-rc.4
+│   ├── portable-atomic v1.13.1 (*)
+│   ├── portmapper v0.15.0
+│   │   ├── base64 v0.22.1
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── futures-lite v2.6.1
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── hyper-util v0.1.20 (*)
+│   │   ├── igd-next v0.16.2
+│   │   ├── iroh-metrics v0.38.3 (*)
+│   │   ├── libc v0.2.183
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── netwatch v0.15.0 (*)
+│   │   ├── num_enum v0.7.6 (*)
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1 (*)
+│   │   ├── socket2 v0.6.3 (*)
+│   │   ├── time v0.3.47 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   ├── tower-layer v0.3.3
+│   │   ├── tracing v0.1.44 (*)
+│   │   └── url v2.5.8 (*)
+│   ├── rand v0.9.2 (*)
+│   ├── reqwest v0.12.28 (*)
+│   ├── rustc-hash v2.1.1
+│   ├── rustls v0.23.37 (*)
+│   ├── rustls-pki-types v1.14.0 (*)
+│   ├── rustls-webpki v0.103.9
+│   │   ├── ring v0.17.14
+│   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   └── untrusted v0.9.0
+│   ├── serde v1.0.228 (*)
+│   ├── smallvec v1.15.1 (*)
+│   ├── strum v0.28.0 (*)
+│   ├── swarm-discovery v0.5.0
+│   │   ├── acto v0.8.0
+│   │   ├── hickory-proto v0.25.2 (*)
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── socket2 v0.6.3 (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── sync_wrapper v1.0.2
+│   │   └── futures-core v0.3.32
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio-stream v0.1.18
+│   │   ├── futures-core v0.3.32
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── tokio v1.50.0 (*)
+│   │   └── tokio-util v0.7.18 (*)
+│   ├── tokio-util v0.7.18 (*)
+│   ├── tracing v0.1.44 (*)
+│   ├── url v2.5.8 (*)
+│   └── webpki-roots v1.0.6 (*)
+├── iroh-blobs v0.99.0
+│   ├── arrayvec v0.7.6
+│   ├── bao-tree v0.16.0
+│   │   ├── blake3 v1.8.3 (*)
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── futures-lite v2.6.1 (*)
+│   │   ├── genawaiter v0.99.1
+│   │   ├── iroh-io v0.6.2
+│   │   ├── positioned-io v0.3.5
+│   │   ├── range-collections v0.4.6
+│   │   ├── self_cell v1.2.2
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1 (*)
+│   │   └── tokio v1.50.0 (*)
+│   ├── bytes v1.11.1 (*)
+│   ├── chrono v0.4.44
+│   │   ├── iana-time-zone v0.1.65
+│   │   └── num-traits v0.2.19
+│   ├── data-encoding v2.10.0
+│   ├── derive_more v2.1.1 (*)
+│   ├── futures-lite v2.6.1 (*)
+│   ├── genawaiter v0.99.1 (*)
+│   ├── hex v0.4.3
+│   ├── iroh v0.97.0 (*)
+│   ├── iroh-base v0.97.0 (*)
+│   ├── iroh-io v0.6.2 (*)
+│   ├── iroh-metrics v0.38.3 (*)
+│   ├── iroh-tickets v0.4.0
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── iroh-base v0.97.0 (*)
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── postcard v1.1.3 (*)
+│   │   └── serde v1.0.228 (*)
+│   ├── irpc v0.13.0
+│   │   ├── futures-buffered v0.2.13
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── irpc-derive v0.10.0 (proc-macro)
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── n0-future v0.3.2 (*)
+│   │   ├── noq v0.17.0 (*)
+│   │   ├── postcard v1.1.3 (*)
+│   │   ├── rcgen v0.14.7
+│   │   ├── rustls v0.23.37 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── n0-error v0.1.3 (*)
+│   ├── n0-future v0.3.2 (*)
+│   ├── nested_enum_utils v0.2.3 (proc-macro)
+│   │   ├── proc-macro-crate v3.5.0
+│   │   ├── proc-macro2 v1.0.106
+│   │   ├── quote v1.0.45
+│   │   └── syn v2.0.117
+│   ├── noq v0.17.0 (*)
+│   ├── postcard v1.1.3 (*)
+│   ├── rand v0.9.2 (*)
+│   ├── range-collections v0.4.6 (*)
+│   ├── redb v2.6.3
+│   │   └── libc v0.2.183
+│   ├── ref-cast v1.0.25
+│   │   └── ref-cast-impl v1.0.25 (proc-macro)
+│   ├── reflink-copy v0.1.29
+│   │   ├── cfg-if v1.0.4
+│   │   ├── libc v0.2.183
+│   │   └── rustix v1.1.4
+│   ├── self_cell v1.2.2
+│   ├── serde v1.0.228 (*)
+│   ├── smallvec v1.15.1 (*)
+│   ├── tokio v1.50.0 (*)
+│   └── tracing v0.1.44 (*)
+├── n0-future v0.3.2 (*)
+├── parking_lot v0.12.5 (*)
+├── postcard v1.1.3 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149
+│   ├── itoa v1.0.17
+│   ├── memchr v2.8.0
+│   ├── serde_core v1.0.228
+│   └── zmij v1.0.21
+├── snafu v0.8.9 (*)
+├── tokio v1.50.0 (*)
+├── tokio-util v0.7.18 (*)
+└── tracing v0.1.44 (*)
+END: 2026-04-25T18:45:17Z
+EXIT_CODE: 0

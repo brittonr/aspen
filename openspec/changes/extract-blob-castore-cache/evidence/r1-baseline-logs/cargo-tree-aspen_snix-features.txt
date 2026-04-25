@@ -1,0 +1,533 @@
+COMMAND: cargo tree -p aspen-snix -e features --depth 3 --locked
+START: 2026-04-25T18:45:21Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-snix v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-snix)
+├── anyhow feature "default"
+│   ├── anyhow v1.0.102
+│   └── anyhow feature "std"
+│       └── anyhow v1.0.102
+├── aspen-blob feature "default"
+│   └── aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+│       ├── anyhow feature "default" (*)
+│       ├── aspen-client-api feature "default"
+│       ├── serde feature "default"
+│       ├── serde feature "derive"
+│       ├── postcard feature "alloc"
+│       ├── postcard feature "default"
+│       ├── aspen-core feature "default"
+│       ├── async-trait feature "default"
+│       ├── hex feature "default"
+│       ├── snafu feature "default"
+│       ├── bytes feature "default"
+│       ├── iroh feature "address-lookup-mdns"
+│       ├── iroh feature "address-lookup-pkarr-dht"
+│       ├── iroh feature "default"
+│       ├── tokio feature "default"
+│       ├── tokio feature "io-util"
+│       ├── tokio feature "macros"
+│       ├── tokio feature "rt-multi-thread"
+│       ├── tokio feature "sync"
+│       ├── tokio feature "time"
+│       ├── tokio-util feature "default"
+│       ├── tokio-util feature "rt"
+│       ├── tracing feature "default"
+│       ├── parking_lot feature "default"
+│       ├── n0-future feature "default"
+│       ├── iroh-blobs feature "default"
+│       └── serde_json feature "default"
+├── aspen-client-api feature "default" (*)
+├── base64 feature "default"
+│   ├── base64 v0.22.1
+│   └── base64 feature "std"
+│       ├── base64 v0.22.1
+│       └── base64 feature "alloc"
+├── blake3 feature "default"
+│   ├── blake3 v1.8.3
+│   │   ├── arrayvec v0.7.6
+│   │   ├── constant_time_eq v0.4.2
+│   │   ├── arrayref feature "default"
+│   │   ├── cfg-if feature "default"
+│   │   ├── cpufeatures feature "default"
+│   │   ├── digest feature "default"
+│   │   ├── digest feature "mac"
+│   │   └── rayon-core feature "default"
+│   │   [build-dependencies]
+│   │   └── cc feature "default"
+│   └── blake3 feature "std"
+│       ├── blake3 v1.8.3 (*)
+│       └── constant_time_eq feature "std"
+├── serde feature "default" (*)
+├── serde feature "derive" (*)
+├── serde feature "rc"
+│   ├── serde v1.0.228
+│   │   ├── serde_core feature "result"
+│   │   └── serde_derive feature "default"
+│   └── serde_core feature "rc"
+│       └── serde_core v1.0.228
+├── postcard feature "alloc" (*)
+├── postcard feature "default" (*)
+├── thiserror feature "default"
+│   ├── thiserror v2.0.18
+│   │   └── thiserror-impl feature "default"
+│   └── thiserror feature "std"
+│       └── thiserror v2.0.18 (*)
+├── aspen-core feature "default" (*)
+├── async-trait feature "default" (*)
+├── hex feature "default" (*)
+├── snafu feature "default" (*)
+├── iroh feature "address-lookup-mdns" (*)
+├── iroh feature "address-lookup-pkarr-dht" (*)
+├── iroh feature "default" (*)
+├── tokio feature "fs"
+│   └── tokio v1.50.0
+│       ├── mio v1.1.1
+│       ├── libc feature "default"
+│       ├── bytes feature "default" (*)
+│       ├── pin-project-lite feature "default"
+│       ├── signal-hook-registry feature "default"
+│       ├── socket2 feature "all"
+│       ├── socket2 feature "default"
+│       └── tokio-macros feature "default"
+├── tokio feature "io-util" (*)
+├── tokio feature "macros" (*)
+├── tokio feature "rt"
+│   └── tokio v1.50.0 (*)
+├── tokio feature "rt-multi-thread" (*)
+├── tokio feature "signal"
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio feature "libc"
+│   │   └── tokio v1.50.0 (*)
+│   ├── tokio feature "mio"
+│   │   └── tokio v1.50.0 (*)
+│   ├── tokio feature "signal-hook-registry"
+│   │   └── tokio v1.50.0 (*)
+│   ├── mio feature "net"
+│   │   └── mio v1.1.1 (*)
+│   ├── mio feature "os-ext"
+│   │   ├── mio v1.1.1 (*)
+│   │   └── mio feature "os-poll"
+│   └── mio feature "os-poll" (*)
+├── tokio feature "sync" (*)
+├── tokio feature "time" (*)
+├── tracing feature "default" (*)
+├── n0-future feature "default" (*)
+├── tokio-stream feature "default"
+│   ├── tokio-stream v0.1.18
+│   │   ├── tokio feature "default" (*)
+│   │   ├── tokio feature "sync" (*)
+│   │   ├── pin-project-lite feature "default" (*)
+│   │   ├── futures-core feature "default"
+│   │   └── tokio-util feature "default" (*)
+│   └── tokio-stream feature "time"
+│       ├── tokio-stream v0.1.18 (*)
+│       └── tokio feature "time" (*)
+├── iroh-blobs feature "default" (*)
+├── serde_json feature "default" (*)
+├── aspen-cache feature "default"
+│   └── aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cache)
+│       ├── aspen-blob feature "default" (*)
+│       ├── serde feature "default" (*)
+│       ├── serde feature "derive" (*)
+│       ├── serde feature "rc" (*)
+│       ├── data-encoding feature "default"
+│       ├── aspen-core feature "default" (*)
+│       ├── aspen-kv-types feature "default"
+│       ├── async-trait feature "default" (*)
+│       ├── snafu feature "default" (*)
+│       ├── tokio feature "io-util" (*)
+│       ├── tokio feature "macros" (*)
+│       ├── tokio feature "process"
+│       ├── tokio feature "rt" (*)
+│       ├── tokio feature "rt-multi-thread" (*)
+│       ├── tokio feature "signal" (*)
+│       ├── tokio feature "sync" (*)
+│       ├── tokio feature "time" (*)
+│       ├── tracing feature "default" (*)
+│       ├── serde_json feature "default" (*)
+│       ├── ed25519-dalek feature "default"
+│       ├── ed25519-dalek feature "rand_core"
+│       ├── rand_core feature "default"
+│       ├── rand_core feature "getrandom"
+│       ├── sha2 feature "default"
+│       ├── nix-compat feature "async"
+│       ├── nix-compat feature "default"
+│       ├── nix-compat feature "flakeref"
+│       └── nix-compat feature "serde"
+├── nix-compat feature "async" (*)
+├── nix-compat feature "default" (*)
+├── nix-compat feature "flakeref" (*)
+├── nix-compat feature "serde" (*)
+├── aspen-dag feature "default"
+│   └── aspen-dag v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-dag)
+│       ├── blake3 feature "default" (*)
+│       ├── serde feature "default" (*)
+│       ├── serde feature "derive" (*)
+│       ├── postcard feature "alloc" (*)
+│       ├── postcard feature "default" (*)
+│       ├── hex feature "default" (*)
+│       ├── snafu feature "default" (*)
+│       ├── bytes feature "default" (*)
+│       ├── iroh feature "default" (*)
+│       ├── tokio feature "default" (*)
+│       ├── tokio feature "io-util" (*)
+│       ├── tokio feature "sync" (*)
+│       ├── tracing feature "default" (*)
+│       ├── iroh-blobs feature "default" (*)
+│       └── bao-tree feature "default"
+├── async-stream feature "default"
+│   └── async-stream v0.3.6
+│       ├── pin-project-lite feature "default" (*)
+│       ├── futures-core feature "default" (*)
+│       └── async-stream-impl feature "default"
+├── fastcdc feature "default"
+│   └── fastcdc v3.2.1
+│       ├── tokio feature "default" (*)
+│       ├── tokio feature "io-util" (*)
+│       ├── tokio-stream feature "default" (*)
+│       └── async-stream feature "default" (*)
+├── prost feature "default"
+│   ├── prost v0.13.5
+│   │   ├── bytes v1.11.1
+│   │   └── prost-derive feature "default"
+│   ├── prost feature "derive"
+│   │   └── prost v0.13.5 (*)
+│   └── prost feature "std"
+│       └── prost v0.13.5 (*)
+├── snix-castore feature "default"
+│   ├── snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── tonic-health v0.13.1
+│   │   ├── blake3 feature "default" (*)
+│   │   ├── blake3 feature "rayon"
+│   │   ├── blake3 feature "std" (*)
+│   │   ├── blake3 feature "traits-preview"
+│   │   ├── digest feature "default" (*)
+│   │   ├── libc feature "default" (*)
+│   │   ├── serde feature "default" (*)
+│   │   ├── serde feature "derive" (*)
+│   │   ├── data-encoding feature "default" (*)
+│   │   ├── url feature "default"
+│   │   ├── thiserror feature "default" (*)
+│   │   ├── bytes feature "default" (*)
+│   │   ├── tokio feature "default" (*)
+│   │   ├── tokio feature "fs" (*)
+│   │   ├── tokio feature "macros" (*)
+│   │   ├── tokio feature "net"
+│   │   ├── tokio feature "rt" (*)
+│   │   ├── tokio feature "rt-multi-thread" (*)
+│   │   ├── tokio feature "signal" (*)
+│   │   ├── pin-project-lite feature "default" (*)
+│   │   ├── tokio-util feature "codec"
+│   │   ├── tokio-util feature "default" (*)
+│   │   ├── tokio-util feature "io"
+│   │   ├── tokio-util feature "io-util"
+│   │   ├── tracing feature "default" (*)
+│   │   ├── parking_lot feature "default" (*)
+│   │   ├── hyper-util feature "default"
+│   │   ├── tokio-stream feature "default" (*)
+│   │   ├── tokio-stream feature "fs"
+│   │   ├── tokio-stream feature "net"
+│   │   ├── tower-http feature "default"
+│   │   ├── tower-http feature "trace"
+│   │   ├── futures feature "default"
+│   │   ├── bstr feature "default"
+│   │   ├── serde_with feature "macros"
+│   │   ├── clap feature "default"
+│   │   ├── clap feature "derive"
+│   │   ├── clap feature "env"
+│   │   ├── hashbrown feature "default"
+│   │   ├── walkdir feature "default"
+│   │   ├── async-stream feature "default" (*)
+│   │   ├── fastcdc feature "default" (*)
+│   │   ├── fastcdc feature "tokio"
+│   │   ├── prost feature "default" (*)
+│   │   ├── astral-tokio-tar feature "default"
+│   │   ├── async-compression feature "default"
+│   │   ├── async-compression feature "tokio"
+│   │   ├── async-compression feature "zstd"
+│   │   ├── zstd feature "default"
+│   │   ├── auto_impl feature "default"
+│   │   ├── bigtable_rs feature "default"
+│   │   ├── erased-serde feature "default"
+│   │   ├── fuse-backend-rs feature "default"
+│   │   ├── object_store feature "default"
+│   │   ├── object_store feature "http"
+│   │   ├── petgraph feature "default"
+│   │   ├── redb feature "default"
+│   │   ├── redb feature "logging"
+│   │   ├── serde_qs feature "default"
+│   │   ├── serde_tagged feature "default"
+│   │   ├── snix-tracing feature "clap"
+│   │   ├── snix-tracing feature "default"
+│   │   ├── snix-tracing feature "tonic"
+│   │   ├── tonic feature "default"
+│   │   ├── tonic feature "tls-aws-lc"
+│   │   ├── tonic feature "tls-native-roots"
+│   │   ├── tracing-indicatif feature "default"
+│   │   ├── threadpool feature "default"
+│   │   ├── tonic-reflection feature "default"
+│   │   ├── tower feature "default"
+│   │   ├── tower feature "util"
+│   │   └── wu-manber feature "default"
+│   │   [build-dependencies]
+│   │   ├── prost-build feature "default"
+│   │   └── tonic-build feature "default"
+│   └── snix-castore feature "cloud"
+│       ├── snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│       ├── object_store feature "aws"
+│       ├── object_store feature "azure"
+│       └── object_store feature "gcp"
+└── snix-store feature "default"
+    ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    │   ├── reqwest-middleware v0.5.1
+    │   ├── tonic-health v0.13.1 (*)
+    │   ├── anyhow feature "default" (*)
+    │   ├── blake3 feature "default" (*)
+    │   ├── blake3 feature "rayon" (*)
+    │   ├── blake3 feature "std" (*)
+    │   ├── serde feature "default" (*)
+    │   ├── serde feature "derive" (*)
+    │   ├── data-encoding feature "default" (*)
+    │   ├── url feature "default" (*)
+    │   ├── url feature "serde"
+    │   ├── thiserror feature "default" (*)
+    │   ├── bytes feature "default" (*)
+    │   ├── tokio feature "default" (*)
+    │   ├── tokio feature "fs" (*)
+    │   ├── tokio feature "macros" (*)
+    │   ├── tokio feature "net" (*)
+    │   ├── tokio feature "rt" (*)
+    │   ├── tokio feature "rt-multi-thread" (*)
+    │   ├── pin-project-lite feature "default" (*)
+    │   ├── tokio-util feature "compat"
+    │   ├── tokio-util feature "default" (*)
+    │   ├── tokio-util feature "io" (*)
+    │   ├── tokio-util feature "io-util" (*)
+    │   ├── tracing feature "default" (*)
+    │   ├── parking_lot feature "default" (*)
+    │   ├── hyper-util feature "default" (*)
+    │   ├── tokio-stream feature "default" (*)
+    │   ├── tokio-stream feature "fs" (*)
+    │   ├── tower-http feature "default" (*)
+    │   ├── tower-http feature "trace" (*)
+    │   ├── futures feature "default" (*)
+    │   ├── serde_json feature "default" (*)
+    │   ├── ed25519-dalek feature "default" (*)
+    │   ├── ed25519 feature "default"
+    │   ├── sha2 feature "default" (*)
+    │   ├── nix-compat feature "async" (*)
+    │   ├── nix-compat feature "default" (*)
+    │   ├── nix-compat feature "serde" (*)
+    │   ├── bstr feature "default" (*)
+    │   ├── mimalloc feature "default"
+    │   ├── serde_with feature "macros" (*)
+    │   ├── clap feature "default" (*)
+    │   ├── clap feature "derive" (*)
+    │   ├── clap feature "env" (*)
+    │   ├── walkdir feature "default" (*)
+    │   ├── md-5 feature "default"
+    │   ├── async-stream feature "default" (*)
+    │   ├── prost feature "default" (*)
+    │   ├── snix-castore feature "default" (*)
+    │   ├── async-compression feature "bzip2"
+    │   ├── async-compression feature "default" (*)
+    │   ├── async-compression feature "gzip"
+    │   ├── async-compression feature "tokio" (*)
+    │   ├── async-compression feature "xz"
+    │   ├── async-compression feature "zstd" (*)
+    │   ├── auto_impl feature "default" (*)
+    │   ├── bigtable_rs feature "default" (*)
+    │   ├── redb feature "default" (*)
+    │   ├── redb feature "logging" (*)
+    │   ├── serde_qs feature "default" (*)
+    │   ├── snix-tracing feature "clap" (*)
+    │   ├── snix-tracing feature "default" (*)
+    │   ├── snix-tracing feature "reqwest"
+    │   ├── snix-tracing feature "tonic" (*)
+    │   ├── reqwest feature "default"
+    │   ├── reqwest feature "stream"
+    │   ├── tonic feature "default" (*)
+    │   ├── tonic feature "tls-aws-lc" (*)
+    │   ├── tonic feature "tls-native-roots" (*)
+    │   ├── tracing-indicatif feature "default" (*)
+    │   ├── tonic-reflection feature "default" (*)
+    │   ├── tower feature "default" (*)
+    │   ├── count-write feature "default"
+    │   ├── lru feature "default"
+    │   ├── sha1 feature "default"
+    │   └── snix-cli feature "default"
+    │   [build-dependencies]
+    │   ├── prost-build feature "default" (*)
+    │   └── tonic-build feature "default" (*)
+    ├── snix-store feature "cloud"
+    │   ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+    │   └── snix-castore feature "cloud" (*)
+    ├── snix-store feature "fuse"
+    │   ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+    │   └── snix-castore feature "fuse"
+    └── snix-store feature "tonic-reflection"
+        ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+        └── snix-castore feature "tonic-reflection"
+[dev-dependencies]
+├── tokio feature "io-util" (*)
+├── tokio feature "macros" (*)
+├── tokio feature "rt" (*)
+├── tokio feature "rt-multi-thread" (*)
+├── tokio feature "signal" (*)
+├── tokio feature "sync" (*)
+├── tokio feature "test-util"
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio feature "rt" (*)
+│   ├── tokio feature "sync" (*)
+│   └── tokio feature "time" (*)
+├── tokio feature "time" (*)
+├── rand feature "default"
+│   ├── rand v0.9.2
+│   │   ├── rand_chacha v0.9.0
+│   │   └── rand_core v0.9.5
+│   ├── rand feature "os_rng"
+│   │   ├── rand v0.9.2 (*)
+│   │   └── rand_core feature "os_rng"
+│   ├── rand feature "small_rng"
+│   │   └── rand v0.9.2 (*)
+│   ├── rand feature "std"
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── rand_core feature "std"
+│   │   ├── rand feature "alloc"
+│   │   └── rand_chacha feature "std"
+│   ├── rand feature "std_rng"
+│   │   └── rand v0.9.2 (*)
+│   └── rand feature "thread_rng"
+│       ├── rand v0.9.2 (*)
+│       ├── rand feature "os_rng" (*)
+│       ├── rand feature "std" (*)
+│       └── rand feature "std_rng" (*)
+├── rand feature "std_rng" (*)
+├── aspen-testing feature "default"
+│   └── aspen-testing v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-testing)
+│       ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+│       ├── anyhow feature "default" (*)
+│       ├── base64 feature "default" (*)
+│       ├── blake3 feature "default" (*)
+│       ├── iroh-base feature "default"
+│       ├── serde feature "default" (*)
+│       ├── serde feature "derive" (*)
+│       ├── thiserror feature "default" (*)
+│       ├── aspen-constants feature "default"
+│       ├── aspen-kv-types feature "default" (*)
+│       ├── aspen-traits feature "default"
+│       ├── async-trait feature "default" (*)
+│       ├── hex feature "default" (*)
+│       ├── snafu feature "default" (*)
+│       ├── iroh feature "default" (*)
+│       ├── tokio feature "default" (*)
+│       ├── tokio feature "io-util" (*)
+│       ├── tokio feature "macros" (*)
+│       ├── tokio feature "process" (*)
+│       ├── tokio feature "rt-multi-thread" (*)
+│       ├── tokio feature "sync" (*)
+│       ├── tokio feature "time" (*)
+│       ├── tracing feature "default" (*)
+│       ├── rand feature "default" (*)
+│       ├── parking_lot feature "default" (*)
+│       ├── serde_json feature "default" (*)
+│       ├── sha2 feature "default" (*)
+│       ├── aspen-core-shell feature "default"
+│       ├── aspen-testing-core feature "default"
+│       ├── aspen-testing-fixtures feature "default"
+│       ├── tempfile feature "default"
+│       ├── clap feature "default" (*)
+│       ├── clap feature "derive" (*)
+│       ├── clap feature "env" (*)
+│       ├── nickel-lang feature "default"
+│       ├── walkdir feature "default" (*)
+│       ├── nix feature "default"
+│       ├── nix feature "net"
+│       ├── nix feature "process"
+│       └── nix feature "signal"
+├── tempfile feature "default" (*)
+├── madsim feature "default"
+│   ├── madsim v0.2.34
+│   │   ├── serde feature "default" (*)
+│   │   ├── serde feature "derive" (*)
+│   │   ├── spin feature "default"
+│   │   ├── bincode feature "default"
+│   │   ├── bytes feature "default" (*)
+│   │   ├── tokio feature "default" (*)
+│   │   ├── tokio feature "fs" (*)
+│   │   ├── tokio feature "io-util" (*)
+│   │   ├── tokio feature "net" (*)
+│   │   ├── tokio feature "rt" (*)
+│   │   ├── tokio feature "signal" (*)
+│   │   ├── tokio feature "sync" (*)
+│   │   ├── tokio feature "time" (*)
+│   │   ├── futures-util feature "default"
+│   │   ├── tokio-util feature "codec" (*)
+│   │   ├── tokio-util feature "default" (*)
+│   │   ├── tracing feature "default" (*)
+│   │   ├── lazy_static feature "default"
+│   │   ├── madsim-macros feature "default"
+│   │   ├── rand feature "default"
+│   │   └── tracing-subscriber feature "default"
+│   ├── madsim feature "macros"
+│   │   ├── madsim v0.2.34 (*)
+│   │   ├── tokio feature "macros" (*)
+│   │   └── madsim feature "madsim-macros"
+│   └── madsim feature "rpc"
+│       ├── madsim v0.2.34 (*)
+│       └── madsim feature "bincode"
+├── madsim feature "macros" (*)
+├── proptest feature "default"
+│   ├── proptest v1.10.0
+│   │   ├── num-traits v0.2.19
+│   │   │   [build-dependencies]
+│   │   ├── rand_chacha v0.9.0 (*)
+│   │   ├── rusty-fork v0.3.1
+│   │   ├── rand feature "alloc" (*)
+│   │   ├── bitflags feature "default"
+│   │   ├── regex-syntax feature "default"
+│   │   ├── tempfile feature "default" (*)
+│   │   ├── bit-set feature "default"
+│   │   ├── bit-vec feature "default"
+│   │   ├── rand_xorshift feature "default"
+│   │   └── unarray feature "default"
+│   ├── proptest feature "bit-set"
+│   │   └── proptest v1.10.0 (*)
+│   ├── proptest feature "fork"
+│   │   ├── proptest v1.10.0 (*)
+│   │   ├── proptest feature "rusty-fork"
+│   │   ├── proptest feature "std"
+│   │   └── proptest feature "tempfile"
+│   ├── proptest feature "std" (*)
+│   └── proptest feature "timeout"
+│       ├── proptest v1.10.0 (*)
+│       ├── proptest feature "fork" (*)
+│       ├── proptest feature "rusty-fork" (*)
+│       └── rusty-fork feature "timeout"
+├── rstest feature "default"
+│   ├── rstest v0.25.0
+│   │   ├── rstest_macros v0.25.0 (proc-macro)
+│   │   │   [build-dependencies]
+│   │   ├── futures-util feature "default" (*)
+│   │   └── futures-timer feature "default"
+│   │   [build-dependencies]
+│   │   └── rustc_version feature "default"
+│   ├── rstest feature "async-timeout"
+│   │   ├── rstest v0.25.0 (*)
+│   │   └── rstest_macros feature "async-timeout"
+│   └── rstest feature "crate-name"
+│       ├── rstest v0.25.0 (*)
+│       └── rstest_macros feature "crate-name"
+└── rstest_reuse feature "default"
+    └── rstest_reuse v0.7.0 (proc-macro)
+        ├── quote feature "default"
+        ├── syn feature "default"
+        ├── syn feature "extra-traits"
+        ├── syn feature "full"
+        └── rand feature "default" (*)
+END: 2026-04-25T18:45:21Z
+EXIT_CODE: 0

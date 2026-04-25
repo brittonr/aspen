@@ -1,0 +1,410 @@
+COMMAND: cargo tree -p aspen-castore -e features --depth 3 --locked
+START: 2026-04-25T18:45:18Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-castore v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-castore)
+├── aspen-blob feature "default"
+│   └── aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+│       ├── anyhow feature "default"
+│       ├── aspen-client-api feature "default"
+│       ├── serde feature "default"
+│       ├── serde feature "derive"
+│       ├── postcard feature "alloc"
+│       ├── postcard feature "default"
+│       ├── aspen-core feature "default"
+│       ├── async-trait feature "default"
+│       ├── hex feature "default"
+│       ├── snafu feature "default"
+│       ├── bytes feature "default"
+│       ├── iroh feature "address-lookup-mdns"
+│       ├── iroh feature "address-lookup-pkarr-dht"
+│       ├── iroh feature "default"
+│       ├── tokio feature "default"
+│       ├── tokio feature "io-util"
+│       ├── tokio feature "macros"
+│       ├── tokio feature "rt-multi-thread"
+│       ├── tokio feature "sync"
+│       ├── tokio feature "time"
+│       ├── tokio-util feature "default"
+│       ├── tokio-util feature "rt"
+│       ├── tracing feature "default"
+│       ├── parking_lot feature "default"
+│       ├── n0-future feature "default"
+│       ├── iroh-blobs feature "default"
+│       └── serde_json feature "default"
+├── serde feature "default" (*)
+├── serde feature "derive" (*)
+├── serde feature "rc"
+│   ├── serde v1.0.228
+│   │   ├── serde_core feature "result"
+│   │   └── serde_derive feature "default"
+│   └── serde_core feature "rc"
+│       └── serde_core v1.0.228
+├── n0-error feature "default"
+│   └── n0-error v0.1.3
+│       ├── n0-error-macros feature "default"
+│       └── spez feature "default"
+├── postcard feature "alloc" (*)
+├── postcard feature "default" (*)
+├── aspen-core feature "default" (*)
+├── async-trait feature "default" (*)
+├── hex feature "default" (*)
+├── snafu feature "default" (*)
+├── iroh feature "address-lookup-mdns" (*)
+├── iroh feature "default" (*)
+├── tokio feature "io-util" (*)
+├── tokio feature "macros" (*)
+├── tokio feature "rt"
+│   └── tokio v1.50.0
+│       ├── mio v1.1.1
+│       ├── libc feature "default"
+│       ├── bytes feature "default" (*)
+│       ├── pin-project-lite feature "default"
+│       ├── signal-hook-registry feature "default"
+│       ├── socket2 feature "all"
+│       ├── socket2 feature "default"
+│       └── tokio-macros feature "default"
+├── tokio feature "rt-multi-thread" (*)
+├── tokio feature "signal"
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio feature "libc"
+│   │   └── tokio v1.50.0 (*)
+│   ├── tokio feature "mio"
+│   │   └── tokio v1.50.0 (*)
+│   ├── tokio feature "signal-hook-registry"
+│   │   └── tokio v1.50.0 (*)
+│   ├── mio feature "net"
+│   │   └── mio v1.1.1 (*)
+│   ├── mio feature "os-ext"
+│   │   ├── mio v1.1.1 (*)
+│   │   └── mio feature "os-poll"
+│   └── mio feature "os-poll" (*)
+├── tokio feature "sync" (*)
+├── tokio feature "time" (*)
+├── tracing feature "default" (*)
+├── n0-future feature "default" (*)
+├── futures feature "default"
+│   ├── futures v0.3.32
+│   │   ├── futures-core v0.3.32
+│   │   ├── futures-executor v0.3.32
+│   │   ├── futures-io v0.3.32
+│   │   ├── futures-sink v0.3.32
+│   │   ├── futures-task v0.3.32
+│   │   ├── futures-util feature "sink"
+│   │   └── futures-channel feature "sink"
+│   ├── futures feature "async-await"
+│   │   ├── futures v0.3.32 (*)
+│   │   ├── futures-util feature "async-await"
+│   │   └── futures-util feature "async-await-macro"
+│   ├── futures feature "executor"
+│   │   ├── futures v0.3.32 (*)
+│   │   ├── futures feature "futures-executor"
+│   │   ├── futures feature "std"
+│   │   └── futures-executor feature "std"
+│   └── futures feature "std" (*)
+├── irpc feature "default"
+│   ├── irpc v0.13.0
+│   │   ├── n0-future v0.3.2
+│   │   │   [build-dependencies]
+│   │   ├── noq v0.17.0
+│   │   │   [build-dependencies]
+│   │   ├── tokio-util v0.7.18
+│   │   ├── tracing v0.1.44
+│   │   ├── serde feature "derive" (*)
+│   │   ├── n0-error feature "default" (*)
+│   │   ├── smallvec feature "default"
+│   │   ├── smallvec feature "write"
+│   │   ├── postcard feature "alloc" (*)
+│   │   ├── postcard feature "use-std"
+│   │   ├── tokio feature "macros" (*)
+│   │   ├── tokio feature "sync" (*)
+│   │   ├── futures-util feature "default"
+│   │   ├── futures-util feature "sink" (*)
+│   │   ├── rustls feature "std"
+│   │   ├── futures-buffered feature "default"
+│   │   ├── noq feature "runtime-tokio"
+│   │   ├── irpc-derive feature "default"
+│   │   └── rcgen feature "default"
+│   ├── irpc feature "derive"
+│   │   └── irpc v0.13.0 (*)
+│   ├── irpc feature "noq_endpoint_setup"
+│   │   ├── irpc v0.13.0 (*)
+│   │   ├── noq feature "rustls-ring"
+│   │   ├── irpc feature "noq"
+│   │   └── irpc feature "rpc"
+│   ├── irpc feature "rpc" (*)
+│   ├── irpc feature "spans"
+│   │   └── irpc v0.13.0 (*)
+│   └── irpc feature "stream"
+│       └── irpc v0.13.0 (*)
+├── irpc feature "derive" (*)
+├── async-stream feature "default"
+│   └── async-stream v0.3.6
+│       ├── pin-project-lite feature "default" (*)
+│       ├── futures-core feature "default"
+│       └── async-stream-impl feature "default"
+├── prost feature "default"
+│   ├── prost v0.13.5
+│   │   ├── bytes v1.11.1
+│   │   └── prost-derive feature "default"
+│   ├── prost feature "derive"
+│   │   └── prost v0.13.5 (*)
+│   └── prost feature "std"
+│       └── prost v0.13.5 (*)
+└── snix-castore feature "default"
+    ├── snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    │   ├── tonic-health v0.13.1
+    │   ├── blake3 feature "default"
+    │   ├── blake3 feature "rayon"
+    │   ├── blake3 feature "std"
+    │   ├── blake3 feature "traits-preview"
+    │   ├── digest feature "default"
+    │   ├── libc feature "default" (*)
+    │   ├── serde feature "default" (*)
+    │   ├── serde feature "derive" (*)
+    │   ├── data-encoding feature "default"
+    │   ├── url feature "default"
+    │   ├── thiserror feature "default"
+    │   ├── bytes feature "default" (*)
+    │   ├── tokio feature "default" (*)
+    │   ├── tokio feature "fs"
+    │   ├── tokio feature "macros" (*)
+    │   ├── tokio feature "net"
+    │   ├── tokio feature "rt" (*)
+    │   ├── tokio feature "rt-multi-thread" (*)
+    │   ├── tokio feature "signal" (*)
+    │   ├── pin-project-lite feature "default" (*)
+    │   ├── tokio-util feature "codec"
+    │   ├── tokio-util feature "default" (*)
+    │   ├── tokio-util feature "io"
+    │   ├── tokio-util feature "io-util"
+    │   ├── tracing feature "default" (*)
+    │   ├── parking_lot feature "default" (*)
+    │   ├── hyper-util feature "default"
+    │   ├── tokio-stream feature "default"
+    │   ├── tokio-stream feature "fs"
+    │   ├── tokio-stream feature "net"
+    │   ├── tower-http feature "default"
+    │   ├── tower-http feature "trace"
+    │   ├── futures feature "default" (*)
+    │   ├── async-stream feature "default" (*)
+    │   ├── bstr feature "default"
+    │   ├── serde_with feature "macros"
+    │   ├── prost feature "default" (*)
+    │   ├── astral-tokio-tar feature "default"
+    │   ├── async-compression feature "default"
+    │   ├── async-compression feature "tokio"
+    │   ├── async-compression feature "zstd"
+    │   ├── zstd feature "default"
+    │   ├── auto_impl feature "default"
+    │   ├── bigtable_rs feature "default"
+    │   ├── erased-serde feature "default"
+    │   ├── clap feature "default"
+    │   ├── clap feature "derive"
+    │   ├── clap feature "env"
+    │   ├── fastcdc feature "default"
+    │   ├── fastcdc feature "tokio"
+    │   ├── fuse-backend-rs feature "default"
+    │   ├── hashbrown feature "default"
+    │   ├── object_store feature "default"
+    │   ├── object_store feature "http"
+    │   ├── walkdir feature "default"
+    │   ├── petgraph feature "default"
+    │   ├── redb feature "default"
+    │   ├── redb feature "logging"
+    │   ├── serde_qs feature "default"
+    │   ├── serde_tagged feature "default"
+    │   ├── snix-tracing feature "clap"
+    │   ├── snix-tracing feature "default"
+    │   ├── snix-tracing feature "tonic"
+    │   ├── tonic feature "default"
+    │   ├── tonic feature "tls-aws-lc"
+    │   ├── tonic feature "tls-native-roots"
+    │   ├── tracing-indicatif feature "default"
+    │   ├── threadpool feature "default"
+    │   ├── tonic-reflection feature "default"
+    │   ├── tower feature "default"
+    │   ├── tower feature "util"
+    │   └── wu-manber feature "default"
+    │   [build-dependencies]
+    │   ├── prost-build feature "default"
+    │   └── tonic-build feature "default"
+    └── snix-castore feature "cloud"
+        ├── snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+        ├── object_store feature "aws"
+        ├── object_store feature "azure"
+        └── object_store feature "gcp"
+[dev-dependencies]
+├── aspen-blob feature "default" (*)
+├── tokio feature "io-util" (*)
+├── tokio feature "macros" (*)
+├── tokio feature "rt" (*)
+├── tokio feature "rt-multi-thread" (*)
+├── tokio feature "signal" (*)
+├── tokio feature "sync" (*)
+├── tokio feature "test-util"
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio feature "rt" (*)
+│   ├── tokio feature "sync" (*)
+│   └── tokio feature "time" (*)
+├── tokio feature "time" (*)
+├── tokio-stream feature "default" (*)
+├── futures feature "default" (*)
+├── nix-compat feature "async"
+│   ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── serde feature "default" (*)
+│   │   ├── serde feature "derive" (*)
+│   │   ├── data-encoding feature "default" (*)
+│   │   ├── url feature "default" (*)
+│   │   ├── thiserror feature "default" (*)
+│   │   ├── bytes feature "default" (*)
+│   │   ├── tokio feature "default" (*)
+│   │   ├── tokio feature "io-util" (*)
+│   │   ├── tokio feature "macros" (*)
+│   │   ├── tokio feature "sync" (*)
+│   │   ├── pin-project-lite feature "default" (*)
+│   │   ├── tracing feature "default" (*)
+│   │   ├── num_enum feature "default"
+│   │   ├── bitflags feature "default"
+│   │   ├── futures feature "default" (*)
+│   │   ├── serde_json feature "default" (*)
+│   │   ├── bstr feature "alloc"
+│   │   ├── bstr feature "default" (*)
+│   │   ├── bstr feature "serde"
+│   │   ├── bstr feature "unicode"
+│   │   ├── ed25519 feature "default"
+│   │   ├── ed25519-dalek feature "default"
+│   │   ├── sha2 feature "default"
+│   │   ├── mimalloc feature "default"
+│   │   ├── nix-compat-derive feature "default"
+│   │   ├── nom feature "default"
+│   │   └── serde_with feature "macros" (*)
+│   └── nix-compat feature "tokio"
+│       └── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+├── nix-compat feature "default"
+│   ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│   ├── nix-compat feature "async" (*)
+│   ├── nix-compat feature "daemon"
+│   │   ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│   │   ├── nix-compat feature "futures"
+│   │   ├── nix-compat feature "nix-compat-derive"
+│   │   └── nix-compat feature "tokio" (*)
+│   ├── nix-compat feature "nix-compat-derive" (*)
+│   └── nix-compat feature "wire"
+│       ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│       ├── nix-compat feature "bytes"
+│       ├── nix-compat feature "pin-project-lite"
+│       └── nix-compat feature "tokio" (*)
+├── nix-compat feature "flakeref"
+│   ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│   └── nix-compat feature "url"
+│       └── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+├── nix-compat feature "serde"
+│   └── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+├── sha2 feature "default" (*)
+├── tempfile feature "default"
+│   ├── tempfile v3.27.0
+│   │   ├── getrandom v0.4.2
+│   │   ├── fastrand feature "default"
+│   │   ├── rustix feature "default"
+│   │   ├── rustix feature "fs"
+│   │   └── once_cell feature "std"
+│   └── tempfile feature "getrandom"
+│       └── tempfile v3.27.0 (*)
+└── snix-store feature "default"
+    ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    │   ├── reqwest-middleware v0.5.1
+    │   ├── tonic-health v0.13.1 (*)
+    │   ├── anyhow feature "default" (*)
+    │   ├── blake3 feature "default" (*)
+    │   ├── blake3 feature "rayon" (*)
+    │   ├── blake3 feature "std" (*)
+    │   ├── serde feature "default" (*)
+    │   ├── serde feature "derive" (*)
+    │   ├── data-encoding feature "default" (*)
+    │   ├── url feature "default" (*)
+    │   ├── url feature "serde"
+    │   ├── thiserror feature "default" (*)
+    │   ├── bytes feature "default" (*)
+    │   ├── tokio feature "default" (*)
+    │   ├── tokio feature "fs" (*)
+    │   ├── tokio feature "macros" (*)
+    │   ├── tokio feature "net" (*)
+    │   ├── tokio feature "rt" (*)
+    │   ├── tokio feature "rt-multi-thread" (*)
+    │   ├── pin-project-lite feature "default" (*)
+    │   ├── tokio-util feature "compat"
+    │   ├── tokio-util feature "default" (*)
+    │   ├── tokio-util feature "io" (*)
+    │   ├── tokio-util feature "io-util" (*)
+    │   ├── tracing feature "default" (*)
+    │   ├── parking_lot feature "default" (*)
+    │   ├── hyper-util feature "default" (*)
+    │   ├── tokio-stream feature "default" (*)
+    │   ├── tokio-stream feature "fs" (*)
+    │   ├── tower-http feature "default" (*)
+    │   ├── tower-http feature "trace" (*)
+    │   ├── futures feature "default" (*)
+    │   ├── serde_json feature "default" (*)
+    │   ├── async-stream feature "default" (*)
+    │   ├── nix-compat feature "async" (*)
+    │   ├── nix-compat feature "default" (*)
+    │   ├── nix-compat feature "serde" (*)
+    │   ├── bstr feature "default" (*)
+    │   ├── ed25519 feature "default" (*)
+    │   ├── ed25519-dalek feature "default" (*)
+    │   ├── sha2 feature "default" (*)
+    │   ├── mimalloc feature "default" (*)
+    │   ├── serde_with feature "macros" (*)
+    │   ├── prost feature "default" (*)
+    │   ├── snix-castore feature "default" (*)
+    │   ├── async-compression feature "bzip2"
+    │   ├── async-compression feature "default" (*)
+    │   ├── async-compression feature "gzip"
+    │   ├── async-compression feature "tokio" (*)
+    │   ├── async-compression feature "xz"
+    │   ├── async-compression feature "zstd" (*)
+    │   ├── auto_impl feature "default" (*)
+    │   ├── bigtable_rs feature "default" (*)
+    │   ├── clap feature "default" (*)
+    │   ├── clap feature "derive" (*)
+    │   ├── clap feature "env" (*)
+    │   ├── md-5 feature "default"
+    │   ├── walkdir feature "default" (*)
+    │   ├── redb feature "default" (*)
+    │   ├── redb feature "logging" (*)
+    │   ├── serde_qs feature "default" (*)
+    │   ├── snix-tracing feature "clap" (*)
+    │   ├── snix-tracing feature "default" (*)
+    │   ├── snix-tracing feature "reqwest"
+    │   ├── snix-tracing feature "tonic" (*)
+    │   ├── reqwest feature "default"
+    │   ├── reqwest feature "stream"
+    │   ├── tonic feature "default" (*)
+    │   ├── tonic feature "tls-aws-lc" (*)
+    │   ├── tonic feature "tls-native-roots" (*)
+    │   ├── tracing-indicatif feature "default" (*)
+    │   ├── tonic-reflection feature "default" (*)
+    │   ├── tower feature "default" (*)
+    │   ├── count-write feature "default"
+    │   ├── lru feature "default"
+    │   ├── sha1 feature "default"
+    │   └── snix-cli feature "default"
+    │   [build-dependencies]
+    │   ├── prost-build feature "default" (*)
+    │   └── tonic-build feature "default" (*)
+    ├── snix-store feature "cloud"
+    │   ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+    │   └── snix-castore feature "cloud" (*)
+    ├── snix-store feature "fuse"
+    │   ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+    │   └── snix-castore feature "fuse"
+    └── snix-store feature "tonic-reflection"
+        ├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+        └── snix-castore feature "tonic-reflection"
+END: 2026-04-25T18:45:18Z
+EXIT_CODE: 0

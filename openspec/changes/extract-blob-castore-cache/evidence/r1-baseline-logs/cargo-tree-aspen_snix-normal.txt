@@ -1,0 +1,490 @@
+COMMAND: cargo tree -p aspen-snix -e normal --depth 3 --locked
+START: 2026-04-25T18:45:20Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-snix v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-snix)
+├── anyhow v1.0.102
+├── aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+│   ├── anyhow v1.0.102
+│   ├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+│   │   ├── aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+│   │   ├── aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+│   │   ├── aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+│   │   ├── aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs-protocol)
+│   │   ├── serde v1.0.228
+│   │   └── thiserror v2.0.18
+│   ├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+│   │   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+│   │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+│   │   ├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+│   │   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+│   │   ├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-storage-types)
+│   │   ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+│   │   ├── async-trait v0.1.89 (proc-macro)
+│   │   ├── base64 v0.22.1
+│   │   ├── bincode v1.3.3
+│   │   ├── hex v0.4.3
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── snafu v0.8.9
+│   │   └── thiserror v2.0.18 (*)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── bytes v1.11.1
+│   │   └── serde v1.0.228 (*)
+│   ├── hex v0.4.3
+│   ├── iroh v0.97.0
+│   │   ├── backon v1.6.0
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1
+│   │   ├── ed25519-dalek v3.0.0-pre.1
+│   │   ├── futures-util v0.3.32
+│   │   ├── hickory-resolver v0.25.2
+│   │   ├── http v1.4.0
+│   │   ├── ipnet v2.12.0
+│   │   ├── iroh-base v0.97.0
+│   │   ├── iroh-metrics v0.38.3
+│   │   ├── iroh-relay v0.97.0
+│   │   ├── n0-error v0.1.3
+│   │   ├── n0-future v0.3.2
+│   │   ├── n0-watcher v0.6.1
+│   │   ├── netwatch v0.15.0
+│   │   ├── noq v0.17.0
+│   │   ├── noq-proto v0.16.0
+│   │   ├── noq-udp v0.9.0
+│   │   ├── papaya v0.2.3
+│   │   ├── pin-project v1.1.11
+│   │   ├── pkarr v5.0.2
+│   │   ├── pkcs8 v0.11.0-rc.11
+│   │   ├── portable-atomic v1.13.1
+│   │   ├── portmapper v0.15.0
+│   │   ├── rand v0.9.2
+│   │   ├── reqwest v0.12.28
+│   │   ├── rustc-hash v2.1.1
+│   │   ├── rustls v0.23.37
+│   │   ├── rustls-pki-types v1.14.0
+│   │   ├── rustls-webpki v0.103.9
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1
+│   │   ├── strum v0.28.0
+│   │   ├── swarm-discovery v0.5.0
+│   │   ├── sync_wrapper v1.0.2
+│   │   ├── tokio v1.50.0
+│   │   ├── tokio-stream v0.1.18
+│   │   ├── tokio-util v0.7.18
+│   │   ├── tracing v0.1.44
+│   │   ├── url v2.5.8
+│   │   └── webpki-roots v1.0.6
+│   ├── iroh-blobs v0.99.0
+│   │   ├── arrayvec v0.7.6
+│   │   ├── bao-tree v0.16.0
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── chrono v0.4.44
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── futures-lite v2.6.1
+│   │   ├── genawaiter v0.99.1
+│   │   ├── hex v0.4.3
+│   │   ├── iroh v0.97.0 (*)
+│   │   ├── iroh-base v0.97.0 (*)
+│   │   ├── iroh-io v0.6.2
+│   │   ├── iroh-metrics v0.38.3 (*)
+│   │   ├── iroh-tickets v0.4.0
+│   │   ├── irpc v0.13.0
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── n0-future v0.3.2 (*)
+│   │   ├── nested_enum_utils v0.2.3 (proc-macro)
+│   │   ├── noq v0.17.0 (*)
+│   │   ├── postcard v1.1.3
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── range-collections v0.4.6
+│   │   ├── redb v2.6.3
+│   │   ├── ref-cast v1.0.25
+│   │   ├── reflink-copy v0.1.29
+│   │   ├── self_cell v1.2.2
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── n0-future v0.3.2 (*)
+│   ├── parking_lot v0.12.5
+│   │   ├── lock_api v0.4.14
+│   │   └── parking_lot_core v0.9.12
+│   ├── postcard v1.1.3 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149
+│   │   ├── itoa v1.0.17
+│   │   ├── memchr v2.8.0
+│   │   ├── serde_core v1.0.228
+│   │   └── zmij v1.0.21
+│   ├── snafu v0.8.9 (*)
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio-util v0.7.18 (*)
+│   └── tracing v0.1.44 (*)
+├── aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cache)
+│   ├── aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob) (*)
+│   ├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core) (*)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types) (*)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── data-encoding v2.10.0
+│   ├── ed25519-dalek v2.2.0
+│   │   ├── curve25519-dalek v4.1.3
+│   │   ├── ed25519 v2.2.3
+│   │   ├── rand_core v0.6.4
+│   │   ├── sha2 v0.10.9
+│   │   ├── subtle v2.6.1
+│   │   └── zeroize v1.8.2
+│   ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── bitflags v2.11.0
+│   │   ├── bstr v1.12.1
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── data-encoding v2.10.0
+│   │   ├── ed25519 v2.2.3 (*)
+│   │   ├── ed25519-dalek v2.2.0 (*)
+│   │   ├── futures v0.3.32
+│   │   ├── mimalloc v0.1.48
+│   │   ├── nix-compat-derive v0.1.0 (proc-macro) (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── nom v8.0.0
+│   │   ├── num_enum v0.7.6
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.149 (*)
+│   │   ├── serde_with v3.18.0
+│   │   ├── sha2 v0.10.9 (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tracing v0.1.44 (*)
+│   │   └── url v2.5.8 (*)
+│   ├── rand_core v0.6.4 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149 (*)
+│   ├── sha2 v0.10.9 (*)
+│   ├── snafu v0.8.9 (*)
+│   ├── tokio v1.50.0 (*)
+│   └── tracing v0.1.44 (*)
+├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core) (*)
+├── aspen-dag v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-dag)
+│   ├── bao-tree v0.16.0 (*)
+│   ├── blake3 v1.8.3
+│   │   ├── arrayref v0.3.9
+│   │   ├── arrayvec v0.7.6
+│   │   ├── cfg-if v1.0.4
+│   │   ├── constant_time_eq v0.4.2
+│   │   ├── cpufeatures v0.2.17
+│   │   ├── digest v0.10.7
+│   │   └── rayon-core v1.13.0
+│   ├── bytes v1.11.1 (*)
+│   ├── hex v0.4.3
+│   ├── iroh v0.97.0 (*)
+│   ├── iroh-blobs v0.99.0 (*)
+│   ├── postcard v1.1.3 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── snafu v0.8.9 (*)
+│   ├── tokio v1.50.0 (*)
+│   └── tracing v0.1.44 (*)
+├── async-stream v0.3.6
+│   ├── async-stream-impl v0.3.6 (proc-macro)
+│   │   ├── proc-macro2 v1.0.106
+│   │   ├── quote v1.0.45
+│   │   └── syn v2.0.117
+│   ├── futures-core v0.3.32
+│   └── pin-project-lite v0.2.17
+├── async-trait v0.1.89 (proc-macro) (*)
+├── base64 v0.22.1
+├── blake3 v1.8.3 (*)
+├── fastcdc v3.2.1
+│   ├── async-stream v0.3.6 (*)
+│   ├── tokio v1.50.0 (*)
+│   └── tokio-stream v0.1.18 (*)
+├── hex v0.4.3
+├── iroh v0.97.0 (*)
+├── iroh-blobs v0.99.0 (*)
+├── n0-future v0.3.2 (*)
+├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+├── postcard v1.1.3 (*)
+├── prost v0.13.5
+│   ├── bytes v1.11.1 (*)
+│   └── prost-derive v0.13.5 (proc-macro)
+│       ├── anyhow v1.0.102
+│       ├── itertools v0.14.0
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149 (*)
+├── snafu v0.8.9 (*)
+├── snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   ├── astral-tokio-tar v0.5.6
+│   │   ├── filetime v0.2.27
+│   │   ├── futures-core v0.3.32
+│   │   ├── libc v0.2.183
+│   │   ├── portable-atomic v1.13.1 (*)
+│   │   ├── rustc-hash v2.1.1
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-stream v0.1.18 (*)
+│   │   └── xattr v1.6.1
+│   ├── async-compression v0.4.19
+│   │   ├── bzip2 v0.5.2
+│   │   ├── flate2 v1.1.9
+│   │   ├── futures-core v0.3.32
+│   │   ├── memchr v2.8.0
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── xz2 v0.1.7
+│   │   ├── zstd v0.13.3
+│   │   └── zstd-safe v7.2.4
+│   ├── async-stream v0.3.6 (*)
+│   ├── auto_impl v1.3.0 (proc-macro)
+│   │   ├── proc-macro2 v1.0.106 (*)
+│   │   ├── quote v1.0.45 (*)
+│   │   └── syn v2.0.117 (*)
+│   ├── bigtable_rs v0.2.19
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── gcp_auth v0.12.6
+│   │   ├── http v1.4.0 (*)
+│   │   ├── hyper-util v0.1.20
+│   │   ├── log v0.4.29
+│   │   ├── prost v0.14.3
+│   │   ├── prost-types v0.14.3
+│   │   ├── prost-wkt v0.7.1
+│   │   ├── prost-wkt-types v0.7.1
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_with v3.18.0 (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tonic v0.14.5
+│   │   ├── tonic-prost v0.14.5
+│   │   └── tower v0.5.3
+│   ├── blake3 v1.8.3 (*)
+│   ├── bstr v1.12.1 (*)
+│   ├── bytes v1.11.1 (*)
+│   ├── clap v4.6.0
+│   │   ├── clap_builder v4.6.0
+│   │   └── clap_derive v4.6.0 (proc-macro)
+│   ├── data-encoding v2.10.0
+│   ├── digest v0.10.7 (*)
+│   ├── erased-serde v0.4.10
+│   │   ├── serde_core v1.0.228
+│   │   └── typeid v1.0.3
+│   ├── fastcdc v3.2.1 (*)
+│   ├── fuse-backend-rs v0.12.0
+│   │   ├── arc-swap v1.8.2
+│   │   ├── bitflags v1.3.2
+│   │   ├── caps v0.5.6
+│   │   ├── lazy_static v1.5.0
+│   │   ├── libc v0.2.183
+│   │   ├── log v0.4.29
+│   │   ├── mio v0.8.11
+│   │   ├── nix v0.24.3
+│   │   ├── radix_trie v0.2.1
+│   │   ├── vm-memory v0.10.0
+│   │   └── vmm-sys-util v0.11.2
+│   ├── futures v0.3.32 (*)
+│   ├── hashbrown v0.15.5
+│   │   ├── allocator-api2 v0.2.21
+│   │   ├── equivalent v1.0.2
+│   │   └── foldhash v0.1.5
+│   ├── hyper-util v0.1.20 (*)
+│   ├── libc v0.2.183
+│   ├── object_store v0.13.1
+│   │   ├── async-trait v0.1.89 (proc-macro) (*)
+│   │   ├── base64 v0.22.1
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── chrono v0.4.44 (*)
+│   │   ├── form_urlencoded v1.2.2
+│   │   ├── futures v0.3.32 (*)
+│   │   ├── http v1.4.0 (*)
+│   │   ├── http-body-util v0.1.3
+│   │   ├── httparse v1.10.1
+│   │   ├── humantime v2.3.0
+│   │   ├── hyper v1.8.1
+│   │   ├── itertools v0.14.0 (*)
+│   │   ├── md-5 v0.10.6
+│   │   ├── parking_lot v0.12.5 (*)
+│   │   ├── percent-encoding v2.3.2
+│   │   ├── quick-xml v0.38.4
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── reqwest v0.12.28 (*)
+│   │   ├── ring v0.17.14
+│   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.149 (*)
+│   │   ├── serde_urlencoded v0.7.1
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tracing v0.1.44 (*)
+│   │   ├── url v2.5.8 (*)
+│   │   └── walkdir v2.5.0
+│   ├── parking_lot v0.12.5 (*)
+│   ├── petgraph v0.6.5
+│   │   ├── fixedbitset v0.4.2
+│   │   └── indexmap v2.13.0
+│   ├── pin-project-lite v0.2.17
+│   ├── prost v0.13.5 (*)
+│   ├── redb v3.1.1
+│   │   └── log v0.4.29
+│   ├── serde v1.0.228 (*)
+│   ├── serde_qs v0.12.0
+│   │   ├── percent-encoding v2.3.2
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v1.0.69
+│   ├── serde_tagged v0.3.0
+│   │   ├── erased-serde v0.4.10 (*)
+│   │   └── serde v1.0.228 (*)
+│   ├── serde_with v3.18.0 (*)
+│   ├── snix-tracing v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── clap v4.6.0 (*)
+│   │   ├── clap-verbosity-flag v3.0.4
+│   │   ├── http v1.4.0 (*)
+│   │   ├── reqwest-tracing v0.6.0
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tonic v0.13.1
+│   │   ├── tracing v0.1.44 (*)
+│   │   ├── tracing-indicatif v0.3.14
+│   │   └── tracing-subscriber v0.3.23
+│   ├── thiserror v2.0.18 (*)
+│   ├── threadpool v1.8.1
+│   │   └── num_cpus v1.17.0
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio-stream v0.1.18 (*)
+│   ├── tokio-util v0.7.18 (*)
+│   ├── tonic v0.13.1 (*)
+│   ├── tonic-health v0.13.1
+│   │   ├── prost v0.13.5 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-stream v0.1.18 (*)
+│   │   └── tonic v0.13.1 (*)
+│   ├── tonic-reflection v0.13.1
+│   │   ├── prost v0.13.5 (*)
+│   │   ├── prost-types v0.13.5
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-stream v0.1.18 (*)
+│   │   └── tonic v0.13.1 (*)
+│   ├── tower v0.4.13
+│   │   ├── futures-core v0.3.32
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── pin-project v1.1.11 (*)
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── tower-layer v0.3.3
+│   │   ├── tower-service v0.3.3
+│   │   └── tracing v0.1.44 (*)
+│   ├── tower-http v0.6.8
+│   │   ├── bitflags v2.11.0
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── http v1.4.0 (*)
+│   │   ├── http-body v1.0.1
+│   │   ├── iri-string v0.7.10
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── tower v0.5.3 (*)
+│   │   ├── tower-layer v0.3.3
+│   │   ├── tower-service v0.3.3
+│   │   └── tracing v0.1.44 (*)
+│   ├── tracing v0.1.44 (*)
+│   ├── tracing-indicatif v0.3.14 (*)
+│   ├── url v2.5.8 (*)
+│   ├── walkdir v2.5.0 (*)
+│   ├── wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+│   └── zstd v0.13.3 (*)
+├── snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   ├── anyhow v1.0.102
+│   ├── async-compression v0.4.19 (*)
+│   ├── async-stream v0.3.6 (*)
+│   ├── auto_impl v1.3.0 (proc-macro) (*)
+│   ├── bigtable_rs v0.2.19 (*)
+│   ├── blake3 v1.8.3 (*)
+│   ├── bstr v1.12.1 (*)
+│   ├── bytes v1.11.1 (*)
+│   ├── clap v4.6.0 (*)
+│   ├── count-write v0.1.0
+│   ├── data-encoding v2.10.0
+│   ├── ed25519 v2.2.3 (*)
+│   ├── ed25519-dalek v2.2.0 (*)
+│   ├── futures v0.3.32 (*)
+│   ├── hyper-util v0.1.20 (*)
+│   ├── lru v0.12.5
+│   │   └── hashbrown v0.15.5 (*)
+│   ├── md-5 v0.10.6 (*)
+│   ├── mimalloc v0.1.48 (*)
+│   ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│   ├── parking_lot v0.12.5 (*)
+│   ├── pin-project-lite v0.2.17
+│   ├── prost v0.13.5 (*)
+│   ├── redb v3.1.1 (*)
+│   ├── reqwest v0.13.2
+│   │   ├── base64 v0.22.1
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── encoding_rs v0.8.35
+│   │   ├── futures-core v0.3.32
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── h2 v0.4.13
+│   │   ├── http v1.4.0 (*)
+│   │   ├── http-body v1.0.1 (*)
+│   │   ├── http-body-util v0.1.3 (*)
+│   │   ├── hyper v1.8.1 (*)
+│   │   ├── hyper-rustls v0.27.7
+│   │   ├── hyper-util v0.1.20 (*)
+│   │   ├── log v0.4.29
+│   │   ├── mime v0.3.17
+│   │   ├── percent-encoding v2.3.2
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── rustls v0.23.37 (*)
+│   │   ├── rustls-pki-types v1.14.0 (*)
+│   │   ├── rustls-platform-verifier v0.6.2
+│   │   ├── sync_wrapper v1.0.2 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-rustls v0.26.4
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   ├── tower v0.5.3 (*)
+│   │   ├── tower-http v0.6.8 (*)
+│   │   ├── tower-service v0.3.3
+│   │   └── url v2.5.8 (*)
+│   ├── reqwest-middleware v0.5.1
+│   │   ├── anyhow v1.0.102
+│   │   ├── async-trait v0.1.89 (proc-macro) (*)
+│   │   ├── http v1.4.0 (*)
+│   │   ├── reqwest v0.13.2 (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   └── tower-service v0.3.3
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149 (*)
+│   ├── serde_qs v0.12.0 (*)
+│   ├── serde_with v3.18.0 (*)
+│   ├── sha1 v0.10.6
+│   │   ├── cfg-if v1.0.4
+│   │   ├── cpufeatures v0.2.17
+│   │   └── digest v0.10.7 (*)
+│   ├── sha2 v0.10.9 (*)
+│   ├── snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│   ├── snix-cli v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── clap v4.6.0 (*)
+│   │   ├── clap-verbosity-flag v3.0.4 (*)
+│   │   ├── snix-tracing v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tracing v0.1.44 (*)
+│   │   └── which v8.0.2
+│   ├── snix-tracing v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+│   ├── thiserror v2.0.18 (*)
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio-stream v0.1.18 (*)
+│   ├── tokio-util v0.7.18 (*)
+│   ├── tonic v0.13.1 (*)
+│   ├── tonic-health v0.13.1 (*)
+│   ├── tonic-reflection v0.13.1 (*)
+│   ├── tower v0.4.13 (*)
+│   ├── tower-http v0.6.8 (*)
+│   ├── tracing v0.1.44 (*)
+│   ├── tracing-indicatif v0.3.14 (*)
+│   ├── url v2.5.8 (*)
+│   └── walkdir v2.5.0 (*)
+├── thiserror v2.0.18 (*)
+├── tokio v1.50.0 (*)
+├── tokio-stream v0.1.18 (*)
+└── tracing v0.1.44 (*)
+END: 2026-04-25T18:45:21Z
+EXIT_CODE: 0

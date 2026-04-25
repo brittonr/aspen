@@ -1,0 +1,259 @@
+COMMAND: cargo tree -p aspen-ci-executor-nix -e normal --depth 3 --locked
+START: 2026-04-25T18:45:22Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-ci-executor-nix v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-ci-executor-nix)
+├── aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+│   ├── anyhow v1.0.102
+│   ├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+│   │   ├── aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+│   │   ├── aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+│   │   ├── aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+│   │   ├── aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs-protocol)
+│   │   ├── serde v1.0.228
+│   │   └── thiserror v2.0.18
+│   ├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+│   │   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+│   │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+│   │   ├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+│   │   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+│   │   ├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-storage-types)
+│   │   ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+│   │   ├── async-trait v0.1.89 (proc-macro)
+│   │   ├── base64 v0.22.1
+│   │   ├── bincode v1.3.3
+│   │   ├── hex v0.4.3
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── snafu v0.8.9
+│   │   └── thiserror v2.0.18 (*)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── bytes v1.11.1
+│   │   └── serde v1.0.228 (*)
+│   ├── hex v0.4.3
+│   ├── iroh v0.97.0
+│   │   ├── backon v1.6.0
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1
+│   │   ├── ed25519-dalek v3.0.0-pre.1
+│   │   ├── futures-util v0.3.32
+│   │   ├── hickory-resolver v0.25.2
+│   │   ├── http v1.4.0
+│   │   ├── ipnet v2.12.0
+│   │   ├── iroh-base v0.97.0
+│   │   ├── iroh-metrics v0.38.3
+│   │   ├── iroh-relay v0.97.0
+│   │   ├── n0-error v0.1.3
+│   │   ├── n0-future v0.3.2
+│   │   ├── n0-watcher v0.6.1
+│   │   ├── netwatch v0.15.0
+│   │   ├── noq v0.17.0
+│   │   ├── noq-proto v0.16.0
+│   │   ├── noq-udp v0.9.0
+│   │   ├── papaya v0.2.3
+│   │   ├── pin-project v1.1.11
+│   │   ├── pkarr v5.0.2
+│   │   ├── pkcs8 v0.11.0-rc.11
+│   │   ├── portable-atomic v1.13.1
+│   │   ├── portmapper v0.15.0
+│   │   ├── rand v0.9.2
+│   │   ├── reqwest v0.12.28
+│   │   ├── rustc-hash v2.1.1
+│   │   ├── rustls v0.23.37
+│   │   ├── rustls-pki-types v1.14.0
+│   │   ├── rustls-webpki v0.103.9
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1
+│   │   ├── strum v0.28.0
+│   │   ├── swarm-discovery v0.5.0
+│   │   ├── sync_wrapper v1.0.2
+│   │   ├── tokio v1.50.0
+│   │   ├── tokio-stream v0.1.18
+│   │   ├── tokio-util v0.7.18
+│   │   ├── tracing v0.1.44
+│   │   ├── url v2.5.8
+│   │   └── webpki-roots v1.0.6
+│   ├── iroh-blobs v0.99.0
+│   │   ├── arrayvec v0.7.6
+│   │   ├── bao-tree v0.16.0
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── chrono v0.4.44
+│   │   ├── data-encoding v2.10.0
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── futures-lite v2.6.1
+│   │   ├── genawaiter v0.99.1
+│   │   ├── hex v0.4.3
+│   │   ├── iroh v0.97.0 (*)
+│   │   ├── iroh-base v0.97.0 (*)
+│   │   ├── iroh-io v0.6.2
+│   │   ├── iroh-metrics v0.38.3 (*)
+│   │   ├── iroh-tickets v0.4.0
+│   │   ├── irpc v0.13.0
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── n0-future v0.3.2 (*)
+│   │   ├── nested_enum_utils v0.2.3 (proc-macro)
+│   │   ├── noq v0.17.0 (*)
+│   │   ├── postcard v1.1.3
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── range-collections v0.4.6
+│   │   ├── redb v2.6.3
+│   │   ├── ref-cast v1.0.25
+│   │   ├── reflink-copy v0.1.29
+│   │   ├── self_cell v1.2.2
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── smallvec v1.15.1 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── n0-future v0.3.2 (*)
+│   ├── parking_lot v0.12.5
+│   │   ├── lock_api v0.4.14
+│   │   └── parking_lot_core v0.9.12
+│   ├── postcard v1.1.3 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149
+│   │   ├── itoa v1.0.17
+│   │   ├── memchr v2.8.0
+│   │   ├── serde_core v1.0.228
+│   │   └── zmij v1.0.21
+│   ├── snafu v0.8.9 (*)
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio-util v0.7.18 (*)
+│   └── tracing v0.1.44 (*)
+├── aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cache)
+│   ├── aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob) (*)
+│   ├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core) (*)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types) (*)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── data-encoding v2.10.0
+│   ├── ed25519-dalek v2.2.0
+│   │   ├── curve25519-dalek v4.1.3
+│   │   ├── ed25519 v2.2.3
+│   │   ├── rand_core v0.6.4
+│   │   ├── sha2 v0.10.9
+│   │   ├── subtle v2.6.1
+│   │   └── zeroize v1.8.2
+│   ├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── bitflags v2.11.0
+│   │   ├── bstr v1.12.1
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── data-encoding v2.10.0
+│   │   ├── ed25519 v2.2.3 (*)
+│   │   ├── ed25519-dalek v2.2.0 (*)
+│   │   ├── futures v0.3.32
+│   │   ├── mimalloc v0.1.48
+│   │   ├── nix-compat-derive v0.1.0 (proc-macro) (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+│   │   ├── nom v8.0.0
+│   │   ├── num_enum v0.7.6
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.149 (*)
+│   │   ├── serde_with v3.18.0
+│   │   ├── sha2 v0.10.9 (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tracing v0.1.44 (*)
+│   │   └── url v2.5.8 (*)
+│   ├── rand_core v0.6.4 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149 (*)
+│   ├── sha2 v0.10.9 (*)
+│   ├── snafu v0.8.9 (*)
+│   ├── tokio v1.50.0 (*)
+│   └── tracing v0.1.44 (*)
+├── aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-ci-core)
+│   ├── chrono v0.4.44 (*)
+│   ├── schemars v0.8.22
+│   │   ├── dyn-clone v1.0.20
+│   │   ├── schemars_derive v0.8.22 (proc-macro)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── serde_json v1.0.149 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149 (*)
+│   ├── snafu v0.8.9 (*)
+│   └── uuid v1.22.0
+│       ├── getrandom v0.4.2
+│       └── serde_core v1.0.228
+├── aspen-ci-executor-shell v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-ci-executor-shell)
+│   ├── aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob) (*)
+│   ├── aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-ci-core) (*)
+│   ├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core) (*)
+│   ├── aspen-jobs v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs)
+│   │   ├── anyhow v1.0.102
+│   │   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types) (*)
+│   │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+│   │   ├── aspen-coordination v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination)
+│   │   ├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core) (*)
+│   │   ├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc) (*)
+│   │   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types) (*)
+│   │   ├── aspen-time v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-time)
+│   │   ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits) (*)
+│   │   ├── async-trait v0.1.89 (proc-macro) (*)
+│   │   ├── base64 v0.22.1
+│   │   ├── bincode v1.3.3 (*)
+│   │   ├── blake3 v1.8.3
+│   │   ├── bytes v1.11.1 (*)
+│   │   ├── chrono v0.4.44 (*)
+│   │   ├── cron v0.13.0
+│   │   ├── flate2 v1.1.9
+│   │   ├── getrandom v0.2.17
+│   │   ├── glob v0.3.3
+│   │   ├── hex v0.4.3
+│   │   ├── iroh v0.97.0 (*)
+│   │   ├── libc v0.2.183
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── redb v2.6.3 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.149 (*)
+│   │   ├── snafu v0.8.9 (*)
+│   │   ├── tempfile v3.27.0
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio-util v0.7.18 (*)
+│   │   ├── tracing v0.1.44 (*)
+│   │   ├── uuid v1.22.0 (*)
+│   │   └── zstd v0.13.3
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── command-group v5.0.1
+│   │   ├── async-trait v0.1.89 (proc-macro) (*)
+│   │   ├── nix v0.27.1
+│   │   └── tokio v1.50.0 (*)
+│   ├── flate2 v1.1.9 (*)
+│   ├── glob v0.3.3
+│   ├── hex v0.4.3
+│   ├── iroh v0.97.0 (*)
+│   ├── iroh-blobs v0.99.0 (*)
+│   ├── nix v0.29.0
+│   │   ├── bitflags v2.11.0
+│   │   ├── cfg-if v1.0.4
+│   │   └── libc v0.2.183
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149 (*)
+│   ├── snafu v0.8.9 (*)
+│   ├── tar v0.4.44
+│   │   ├── filetime v0.2.27
+│   │   ├── libc v0.2.183
+│   │   └── xattr v1.6.1
+│   ├── tokio v1.50.0 (*)
+│   ├── tracing v0.1.44 (*)
+│   └── walkdir v2.5.0
+│       └── same-file v1.0.6
+├── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core) (*)
+├── aspen-jobs v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs) (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── blake3 v1.8.3 (*)
+├── glob v0.3.3
+├── hex v0.4.3
+├── iroh v0.97.0 (*)
+├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd) (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149 (*)
+├── tokio v1.50.0 (*)
+├── tracing v0.1.44 (*)
+└── wait-timeout v0.2.1
+    └── libc v0.2.183
+END: 2026-04-25T18:45:23Z
+EXIT_CODE: 0

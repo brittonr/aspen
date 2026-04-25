@@ -1,0 +1,342 @@
+COMMAND: cargo check -p aspen-snix --locked
+START: 2026-04-25T18:43:55Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling libc v0.2.183
+    Checking digest v0.10.7
+    Checking prost v0.13.5
+    Checking encoding_rs v0.8.35
+   Compiling memoffset v0.6.5
+   Compiling crc32fast v1.5.0
+    Checking bitflags v1.3.2
+    Checking simd-adler32 v0.3.8
+    Checking adler2 v2.0.1
+    Checking bstr v1.12.1
+    Checking nibble_vec v0.1.0
+    Checking endian-type v0.1.2
+   Compiling fuse-backend-rs v0.12.0
+    Checking arc-swap v1.8.2
+    Checking lru v0.12.5
+    Checking count-write v0.1.0
+    Checking miniz_oxide v0.8.9
+    Checking radix_trie v0.2.1
+    Checking curve25519-dalek v4.1.3
+    Checking sha2 v0.10.9
+    Checking md-5 v0.10.6
+    Checking sha1 v0.10.6
+    Checking prost-types v0.13.5
+    Checking flate2 v1.1.9
+   Compiling jobserver v0.1.34
+   Compiling getrandom v0.4.2
+   Compiling time v0.3.47
+   Compiling tempfile v3.27.0
+   Compiling cc v1.2.57
+   Compiling prost-build v0.14.3
+   Compiling prost-build v0.13.5
+    Checking socket2 v0.6.3
+    Checking errno v0.3.14
+    Checking mio v1.1.1
+    Checking getrandom v0.2.17
+    Checking getrandom v0.3.4
+    Checking parking_lot_core v0.9.12
+    Checking netlink-packet-route v0.29.0
+    Checking socket2 v0.5.10
+    Checking console v0.16.3
+    Checking seize v0.5.1
+    Checking positioned-io v0.3.5
+    Checking redb v2.6.3
+    Checking reflink-copy v0.1.29
+    Checking vm-memory v0.10.0
+    Checking filetime v0.2.27
+    Checking num_cpus v1.17.0
+    Checking vmm-sys-util v0.11.2
+    Checking caps v0.5.6
+    Checking nix v0.24.3
+    Checking mio v0.8.11
+    Checking which v8.0.2
+    Checking signal-hook-registry v1.4.8
+    Checking ntimestamp v1.0.0
+    Checking rand_core v0.6.4
+    Checking uuid v1.22.0
+    Checking threadpool v1.8.1
+    Checking papaya v0.2.3
+    Checking rand_core v0.9.5
+    Checking parking_lot v0.12.5
+   Compiling tonic-build v0.13.1
+    Checking ed25519-dalek v2.2.0
+    Checking noq-udp v0.9.0
+    Checking tokio v1.50.0
+   Compiling prost-wkt-build v0.7.1
+   Compiling tonic-prost-build v0.14.5
+    Checking rand_chacha v0.9.0
+    Checking curve25519-dalek v5.0.0-pre.1
+   Compiling cmake v0.1.57
+    Checking moka v0.12.14
+    Checking indicatif v0.18.4
+   Compiling prost-wkt-types v0.7.1
+    Checking rand v0.9.2
+   Compiling ring v0.17.14
+   Compiling blake3 v1.8.3
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling libmimalloc-sys v0.1.44
+   Compiling lzma-sys v0.1.20
+   Compiling bigtable_rs v0.2.19
+   Compiling aws-lc-sys v0.38.0
+   Compiling vergen-gitcl v1.0.8
+    Checking tracing-indicatif v0.3.14
+    Checking fastbloom v0.14.1
+    Checking bzip2 v0.5.2
+   Compiling iroh-relay v0.97.0
+   Compiling snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+   Compiling snix-store v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    Checking ed25519-dalek v3.0.0-pre.1
+    Checking mimalloc v0.1.48
+    Checking iroh-base v0.97.0
+    Checking mainline v6.0.1
+    Checking xz2 v0.1.7
+    Checking iroh-tickets v0.4.0
+    Checking aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+    Checking rcgen v0.14.7
+   Compiling zstd-safe v7.2.4
+    Checking zstd v0.13.3
+    Checking tokio-util v0.7.18
+    Checking netlink-sys v0.8.8
+    Checking async-compat v0.2.5
+    Checking acto v0.8.0
+    Checking iroh-io v0.6.2
+    Checking backon v1.6.0
+    Checking nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    Checking async-compression v0.4.19
+    Checking netdev v0.40.1
+    Checking netlink-proto v0.12.0
+    Checking bao-tree v0.16.0
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1480:9
+     |
+1480 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1496:9
+     |
+1496 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1526:9
+     |
+1526 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1552:9
+     |
+1552 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1582:9
+     |
+1582 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4270:9
+     |
+4270 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4359:9
+     |
+4359 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+    Checking h2 v0.4.13
+    Checking tower v0.5.3
+    Checking tokio-stream v0.1.18
+    Checking n0-future v0.3.2
+    Checking n0-watcher v0.6.1
+    Checking netwatch v0.15.0
+    Checking fastcdc v3.2.1
+    Checking astral-tokio-tar v0.5.6
+    Checking tower-http v0.6.8
+    Checking axum v0.8.8
+   Compiling aws-lc-rs v1.16.1
+   Compiling rustls v0.23.37
+    Checking hyper v1.8.1
+    Checking rustls-webpki v0.103.9
+    Checking hyper-util v0.1.20
+    Checking hyper-timeout v0.5.2
+    Checking igd-next v0.16.2
+    Checking portmapper v0.15.0
+    Checking tokio-rustls v0.26.4
+    Checking rustls-platform-verifier v0.6.2
+    Checking noq-proto v0.16.0
+    Checking hyper-rustls v0.27.7
+    Checking hickory-proto v0.25.2
+    Checking tonic v0.13.1
+    Checking tokio-websockets v0.12.3
+    Checking tonic v0.14.5
+    Checking reqwest v0.12.28
+    Checking reqwest v0.13.2
+    Checking gcp_auth v0.12.6
+    Checking pkarr v5.0.2
+    Checking reqwest-middleware v0.5.1
+    Checking object_store v0.13.1
+    Checking reqwest-tracing v0.6.0
+    Checking snix-tracing v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    Checking tonic-reflection v0.13.1
+    Checking tonic-health v0.13.1
+    Checking tonic-prost v0.14.5
+    Checking snix-cli v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    Checking hickory-resolver v0.25.2
+    Checking swarm-discovery v0.5.0
+    Checking noq v0.17.0
+    Checking irpc v0.13.0
+    Checking iroh v0.97.0
+warning: `aspen-client-api` (lib) generated 28 warnings
+    Checking iroh-blobs v0.99.0
+    Checking aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+    Checking aspen-dag v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-dag)
+    Checking aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cache)
+    Checking aspen-snix v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-snix)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.64s
+END: 2026-04-25T18:44:18Z
+EXIT_CODE: 0

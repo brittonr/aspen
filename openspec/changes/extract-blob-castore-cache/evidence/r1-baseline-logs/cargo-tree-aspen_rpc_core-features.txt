@@ -1,0 +1,384 @@
+COMMAND: cargo tree -p aspen-rpc-core -e features --depth 3 --locked
+START: 2026-04-25T18:45:19Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-rpc-core)
+├── anyhow feature "default"
+│   ├── anyhow v1.0.102
+│   └── anyhow feature "std"
+│       └── anyhow v1.0.102
+├── aspen-auth feature "default"
+│   └── aspen-auth v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth)
+│       ├── anyhow feature "default" (*)
+│       ├── aspen-auth-core feature "default"
+│       ├── base64 feature "alloc"
+│       ├── iroh-base feature "key"
+│       ├── serde feature "alloc"
+│       ├── serde feature "derive"
+│       ├── postcard feature "alloc"
+│       ├── postcard feature "default"
+│       ├── aspen-core-shell feature "default"
+│       ├── async-trait feature "default"
+│       ├── hex feature "alloc"
+│       ├── tracing feature "default"
+│       ├── rand feature "default"
+│       ├── hmac feature "default"
+│       └── sha2 feature "default"
+├── serde feature "default"
+│   ├── serde v1.0.228
+│   │   ├── serde_core feature "result"
+│   │   └── serde_derive feature "default"
+│   └── serde feature "std"
+│       ├── serde v1.0.228 (*)
+│       └── serde_core feature "std"
+├── serde feature "derive" (*)
+├── serde feature "rc"
+│   ├── serde v1.0.228 (*)
+│   └── serde_core feature "rc"
+│       └── serde_core v1.0.228
+├── aspen-core-shell feature "default" (*)
+├── aspen-constants feature "default"
+│   └── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+├── async-trait feature "default" (*)
+├── iroh feature "default"
+│   ├── iroh v0.97.0
+│   │   ├── iroh-metrics v0.38.3
+│   │   ├── iroh-relay v0.97.0
+│   │   │   [build-dependencies]
+│   │   ├── papaya v0.2.3
+│   │   ├── pkarr v5.0.2
+│   │   │   [build-dependencies]
+│   │   ├── portmapper v0.15.0
+│   │   ├── iroh-base feature "key" (*)
+│   │   ├── iroh-base feature "relay"
+│   │   ├── serde feature "default" (*)
+│   │   ├── serde feature "derive" (*)
+│   │   ├── serde feature "rc" (*)
+│   │   ├── data-encoding feature "default"
+│   │   ├── derive_more feature "debug"
+│   │   ├── derive_more feature "default"
+│   │   ├── derive_more feature "deref"
+│   │   ├── derive_more feature "display"
+│   │   ├── derive_more feature "from"
+│   │   ├── derive_more feature "from_str"
+│   │   ├── derive_more feature "into_iterator"
+│   │   ├── derive_more feature "try_into"
+│   │   ├── ed25519-dalek feature "default"
+│   │   ├── ed25519-dalek feature "pem"
+│   │   ├── ed25519-dalek feature "pkcs8"
+│   │   ├── ed25519-dalek feature "rand_core"
+│   │   ├── ed25519-dalek feature "serde"
+│   │   ├── ed25519-dalek feature "zeroize"
+│   │   ├── pkcs8 feature "default"
+│   │   ├── n0-error feature "default"
+│   │   ├── url feature "default"
+│   │   ├── url feature "serde"
+│   │   ├── smallvec feature "default"
+│   │   ├── backon feature "default"
+│   │   ├── tokio feature "default"
+│   │   ├── tokio feature "fs"
+│   │   ├── tokio feature "io-std"
+│   │   ├── tokio feature "io-util"
+│   │   ├── tokio feature "macros"
+│   │   ├── tokio feature "net"
+│   │   ├── tokio feature "rt"
+│   │   ├── tokio feature "sync"
+│   │   ├── bytes feature "default"
+│   │   ├── futures-util feature "default"
+│   │   ├── hickory-resolver feature "default"
+│   │   ├── http feature "default"
+│   │   ├── tokio-util feature "default"
+│   │   ├── tokio-util feature "io"
+│   │   ├── tokio-util feature "io-util"
+│   │   ├── tokio-util feature "rt"
+│   │   ├── tracing feature "default" (*)
+│   │   ├── portable-atomic feature "default"
+│   │   ├── ipnet feature "default"
+│   │   ├── rand feature "default" (*)
+│   │   ├── rustls feature "ring"
+│   │   ├── rustls-pki-types feature "default"
+│   │   ├── rustls-webpki feature "default"
+│   │   ├── rustls-webpki feature "ring"
+│   │   ├── n0-future feature "default"
+│   │   ├── pin-project feature "default"
+│   │   ├── noq feature "runtime-tokio"
+│   │   ├── noq feature "rustls-ring"
+│   │   ├── noq-proto feature "default"
+│   │   ├── rustc-hash feature "default"
+│   │   ├── noq-udp feature "default"
+│   │   ├── tokio-stream feature "default"
+│   │   ├── tokio-stream feature "sync"
+│   │   ├── reqwest feature "rustls-tls"
+│   │   ├── reqwest feature "stream"
+│   │   ├── webpki-roots feature "default"
+│   │   ├── sync_wrapper feature "default"
+│   │   ├── sync_wrapper feature "futures"
+│   │   ├── strum feature "default"
+│   │   ├── strum feature "derive"
+│   │   ├── n0-watcher feature "default"
+│   │   ├── netwatch feature "default"
+│   │   └── swarm-discovery feature "default"
+│   │   [build-dependencies]
+│   │   └── cfg_aliases feature "default"
+│   ├── iroh feature "fast-apple-datapath"
+│   │   ├── iroh v0.97.0 (*)
+│   │   └── noq feature "fast-apple-datapath"
+│   ├── iroh feature "metrics"
+│   │   ├── iroh v0.97.0 (*)
+│   │   ├── iroh-metrics feature "metrics"
+│   │   ├── iroh-relay feature "metrics"
+│   │   └── portmapper feature "metrics"
+│   └── iroh feature "portmapper"
+│       └── iroh v0.97.0 (*)
+├── tokio feature "default" (*)
+├── tokio feature "sync" (*)
+├── tracing feature "default" (*)
+├── aspen-client-api feature "default"
+│   ├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+│   │   ├── aspen-auth-core feature "default" (*)
+│   │   ├── serde feature "alloc" (*)
+│   │   ├── serde feature "derive" (*)
+│   │   ├── thiserror feature "default"
+│   │   ├── aspen-coordination-protocol feature "default"
+│   │   ├── aspen-forge-protocol feature "default"
+│   │   └── aspen-jobs-protocol feature "default"
+│   ├── aspen-client-api feature "auth"
+│   │   └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+│   ├── aspen-client-api feature "automerge"
+│   │   └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+│   ├── aspen-client-api feature "ci"
+│   │   └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+│   └── aspen-client-api feature "secrets"
+│       └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+├── aspen-coordination feature "default"
+│   └── aspen-coordination v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination)
+│       ├── anyhow feature "default" (*)
+│       ├── serde feature "default" (*)
+│       ├── serde feature "derive" (*)
+│       ├── thiserror feature "default" (*)
+│       ├── aspen-constants feature "default" (*)
+│       ├── aspen-kv-types feature "default"
+│       ├── aspen-traits feature "default"
+│       ├── async-trait feature "default" (*)
+│       ├── snafu feature "default"
+│       ├── aspen-time feature "default"
+│       ├── tokio feature "default" (*)
+│       ├── tokio feature "macros" (*)
+│       ├── tokio feature "rt-multi-thread"
+│       ├── tokio feature "sync" (*)
+│       ├── tokio feature "time"
+│       ├── tracing feature "default" (*)
+│       ├── rand feature "default" (*)
+│       ├── serde_json feature "default"
+│       └── metrics feature "default"
+├── metrics feature "default" (*)
+├── aspen-hooks-types feature "default"
+│   └── aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hooks-types)
+│       ├── serde feature "default" (*)
+│       ├── serde feature "derive" (*)
+│       ├── aspen-hlc feature "default"
+│       ├── snafu feature "default" (*)
+│       ├── serde_json feature "default" (*)
+│       └── schemars feature "default"
+├── aspen-raft feature "default"
+│   └── aspen-raft v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-raft)
+│       ├── anyhow feature "default" (*)
+│       ├── aspen-auth feature "default" (*)
+│       ├── base64 feature "default"
+│       ├── blake3 feature "default"
+│       ├── iroh-base feature "default"
+│       ├── serde feature "default" (*)
+│       ├── serde feature "derive" (*)
+│       ├── postcard feature "alloc" (*)
+│       ├── postcard feature "default" (*)
+│       ├── thiserror feature "default" (*)
+│       ├── aspen-core-shell feature "default" (*)
+│       ├── aspen-core-shell feature "layer"
+│       ├── aspen-cluster-types feature "iroh"
+│       ├── aspen-constants feature "default" (*)
+│       ├── aspen-hlc feature "default" (*)
+│       ├── aspen-kv-types feature "default" (*)
+│       ├── aspen-storage-types feature "default"
+│       ├── bincode feature "default"
+│       ├── aspen-traits feature "default" (*)
+│       ├── async-trait feature "default" (*)
+│       ├── hex feature "default"
+│       ├── snafu feature "default" (*)
+│       ├── aspen-time feature "default" (*)
+│       ├── chrono feature "default"
+│       ├── chrono feature "serde"
+│       ├── iroh feature "address-lookup-mdns"
+│       ├── iroh feature "address-lookup-pkarr-dht"
+│       ├── iroh feature "default" (*)
+│       ├── tokio feature "default" (*)
+│       ├── tokio feature "io-util" (*)
+│       ├── tokio feature "macros" (*)
+│       ├── tokio feature "net" (*)
+│       ├── tokio feature "rt-multi-thread" (*)
+│       ├── tokio feature "sync" (*)
+│       ├── tokio feature "time" (*)
+│       ├── bytes feature "default" (*)
+│       ├── parking_lot feature "default"
+│       ├── tokio-util feature "compat"
+│       ├── tokio-util feature "default" (*)
+│       ├── tokio-util feature "rt" (*)
+│       ├── tracing feature "default" (*)
+│       ├── rand feature "default" (*)
+│       ├── n0-future feature "default" (*)
+│       ├── redb feature "default"
+│       ├── serde_json feature "default" (*)
+│       ├── hmac feature "default" (*)
+│       ├── sha2 feature "default" (*)
+│       ├── aspen-client-api feature "default" (*)
+│       ├── metrics feature "default" (*)
+│       ├── schemars feature "default" (*)
+│       ├── aspen-raft-kv feature "default"
+│       ├── aspen-raft-kv-types feature "default"
+│       ├── openraft feature "default"
+│       ├── openraft feature "serde"
+│       ├── openraft feature "type-alias"
+│       ├── aspen-raft-network feature "default"
+│       ├── aspen-raft-types feature "default"
+│       ├── irpc feature "default"
+│       ├── irpc feature "derive"
+│       ├── aspen-sharding feature "default"
+│       ├── aspen-transport feature "default"
+│       ├── static_assertions feature "default"
+│       ├── aspen-redb-storage feature "default"
+│       ├── aspen-redb-storage feature "raft-storage"
+│       └── async-channel feature "default"
+├── aspen-sharding feature "default" (*)
+├── aspen-transport feature "default" (*)
+└── metrics-exporter-prometheus feature "default"
+    ├── metrics-exporter-prometheus v0.16.2
+    │   ├── http-body-util v0.1.3
+    │   ├── quanta v0.12.6
+    │   ├── thiserror v1.0.69
+    │   ├── tracing v0.1.44
+    │   ├── base64 feature "std"
+    │   ├── tokio feature "net" (*)
+    │   ├── tokio feature "rt" (*)
+    │   ├── tokio feature "rt-multi-thread" (*)
+    │   ├── tokio feature "time" (*)
+    │   ├── indexmap feature "std"
+    │   ├── ipnet feature "std"
+    │   ├── hyper feature "client"
+    │   ├── hyper feature "server"
+    │   ├── hyper-util feature "client"
+    │   ├── hyper-util feature "client-legacy"
+    │   ├── hyper-util feature "http1"
+    │   ├── hyper-util feature "service"
+    │   ├── hyper-util feature "tokio"
+    │   ├── hyper-rustls feature "aws-lc-rs"
+    │   ├── hyper-rustls feature "http1"
+    │   ├── hyper-rustls feature "rustls-native-certs"
+    │   ├── metrics feature "default" (*)
+    │   ├── metrics-util feature "recency"
+    │   ├── metrics-util feature "registry"
+    │   └── metrics-util feature "storage"
+    ├── metrics-exporter-prometheus feature "http-listener"
+    │   ├── metrics-exporter-prometheus v0.16.2 (*)
+    │   ├── metrics-exporter-prometheus feature "_hyper-server"
+    │   ├── metrics-exporter-prometheus feature "async-runtime"
+    │   ├── metrics-exporter-prometheus feature "ipnet"
+    │   └── metrics-exporter-prometheus feature "tracing"
+    └── metrics-exporter-prometheus feature "push-gateway"
+        ├── metrics-exporter-prometheus v0.16.2 (*)
+        ├── metrics-exporter-prometheus feature "_hyper-client"
+        ├── metrics-exporter-prometheus feature "async-runtime" (*)
+        └── metrics-exporter-prometheus feature "tracing" (*)
+[dev-dependencies]
+├── tokio feature "default" (*)
+├── tokio feature "full"
+│   ├── tokio v1.50.0
+│   │   ├── mio v1.1.1
+│   │   ├── libc feature "default"
+│   │   ├── bytes feature "default" (*)
+│   │   ├── parking_lot feature "default" (*)
+│   │   ├── pin-project-lite feature "default"
+│   │   ├── signal-hook-registry feature "default"
+│   │   ├── socket2 feature "all"
+│   │   ├── socket2 feature "default"
+│   │   └── tokio-macros feature "default"
+│   ├── tokio feature "fs" (*)
+│   ├── tokio feature "io-std" (*)
+│   ├── tokio feature "io-util" (*)
+│   ├── tokio feature "macros" (*)
+│   ├── tokio feature "net" (*)
+│   ├── tokio feature "parking_lot"
+│   │   └── tokio v1.50.0 (*)
+│   ├── tokio feature "process"
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio feature "bytes"
+│   │   ├── tokio feature "libc"
+│   │   ├── tokio feature "mio"
+│   │   ├── tokio feature "signal-hook-registry"
+│   │   ├── mio feature "net"
+│   │   ├── mio feature "os-ext"
+│   │   └── mio feature "os-poll"
+│   ├── tokio feature "rt" (*)
+│   ├── tokio feature "rt-multi-thread" (*)
+│   ├── tokio feature "signal"
+│   │   ├── tokio v1.50.0 (*)
+│   │   ├── tokio feature "libc" (*)
+│   │   ├── tokio feature "mio" (*)
+│   │   ├── tokio feature "signal-hook-registry" (*)
+│   │   ├── mio feature "net" (*)
+│   │   ├── mio feature "os-ext" (*)
+│   │   └── mio feature "os-poll" (*)
+│   ├── tokio feature "sync" (*)
+│   └── tokio feature "time" (*)
+├── tokio feature "test-util"
+│   ├── tokio v1.50.0 (*)
+│   ├── tokio feature "rt" (*)
+│   ├── tokio feature "sync" (*)
+│   └── tokio feature "time" (*)
+├── serde_json feature "default" (*)
+└── aspen-testing feature "default"
+    └── aspen-testing v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-testing)
+        ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+        ├── anyhow feature "default" (*)
+        ├── base64 feature "default" (*)
+        ├── blake3 feature "default" (*)
+        ├── iroh-base feature "default" (*)
+        ├── serde feature "default" (*)
+        ├── serde feature "derive" (*)
+        ├── thiserror feature "default" (*)
+        ├── aspen-core-shell feature "default" (*)
+        ├── aspen-constants feature "default" (*)
+        ├── aspen-kv-types feature "default" (*)
+        ├── aspen-traits feature "default" (*)
+        ├── async-trait feature "default" (*)
+        ├── hex feature "default" (*)
+        ├── snafu feature "default" (*)
+        ├── iroh feature "default" (*)
+        ├── tokio feature "default" (*)
+        ├── tokio feature "io-util" (*)
+        ├── tokio feature "macros" (*)
+        ├── tokio feature "process" (*)
+        ├── tokio feature "rt-multi-thread" (*)
+        ├── tokio feature "sync" (*)
+        ├── tokio feature "time" (*)
+        ├── parking_lot feature "default" (*)
+        ├── tracing feature "default" (*)
+        ├── rand feature "default" (*)
+        ├── serde_json feature "default" (*)
+        ├── sha2 feature "default" (*)
+        ├── clap feature "default"
+        ├── clap feature "derive"
+        ├── clap feature "env"
+        ├── aspen-testing-core feature "default"
+        ├── aspen-testing-fixtures feature "default"
+        ├── tempfile feature "default"
+        ├── nickel-lang feature "default"
+        ├── walkdir feature "default"
+        ├── nix feature "default"
+        ├── nix feature "net"
+        ├── nix feature "process"
+        └── nix feature "signal"
+END: 2026-04-25T18:45:20Z
+EXIT_CODE: 0

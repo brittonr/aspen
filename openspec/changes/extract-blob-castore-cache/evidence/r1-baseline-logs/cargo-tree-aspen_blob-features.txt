@@ -1,0 +1,290 @@
+COMMAND: cargo tree -p aspen-blob -e features --depth 3 --locked
+START: 2026-04-25T18:45:17Z
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-blob)
+├── anyhow feature "default"
+│   ├── anyhow v1.0.102
+│   └── anyhow feature "std"
+│       └── anyhow v1.0.102
+├── aspen-client-api feature "default"
+│   ├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+│   │   ├── aspen-auth-core feature "default"
+│   │   ├── serde feature "alloc"
+│   │   ├── serde feature "derive"
+│   │   ├── thiserror feature "default"
+│   │   ├── aspen-coordination-protocol feature "default"
+│   │   ├── aspen-forge-protocol feature "default"
+│   │   └── aspen-jobs-protocol feature "default"
+│   ├── aspen-client-api feature "auth"
+│   │   └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+│   ├── aspen-client-api feature "automerge"
+│   │   └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+│   ├── aspen-client-api feature "ci"
+│   │   └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+│   └── aspen-client-api feature "secrets"
+│       └── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api) (*)
+├── serde feature "default"
+│   ├── serde v1.0.228
+│   │   ├── serde_core feature "result"
+│   │   └── serde_derive feature "default"
+│   └── serde feature "std"
+│       ├── serde v1.0.228 (*)
+│       └── serde_core feature "std"
+├── serde feature "derive" (*)
+├── postcard feature "alloc"
+│   ├── postcard v1.1.3
+│   │   ├── cobs v0.3.0
+│   │   ├── serde feature "derive" (*)
+│   │   ├── heapless feature "serde"
+│   │   └── postcard-derive feature "default"
+│   └── serde feature "alloc" (*)
+├── postcard feature "default"
+│   ├── postcard v1.1.3 (*)
+│   └── postcard feature "heapless-cas"
+│       ├── postcard v1.1.3 (*)
+│       ├── postcard feature "heapless"
+│       └── heapless feature "cas"
+├── aspen-core feature "default"
+│   └── aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-core)
+│       ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-cluster-types)
+│       ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-constants)
+│       ├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-hlc)
+│       ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-kv-types)
+│       ├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-storage-types)
+│       ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-traits)
+│       ├── bincode v1.3.3
+│       ├── base64 feature "alloc"
+│       ├── serde feature "alloc" (*)
+│       ├── serde feature "derive" (*)
+│       ├── thiserror feature "default" (*)
+│       ├── async-trait feature "default"
+│       ├── hex feature "alloc"
+│       └── snafu feature "rust_1_65"
+├── async-trait feature "default" (*)
+├── hex feature "default"
+│   ├── hex v0.4.3
+│   └── hex feature "std"
+│       ├── hex v0.4.3
+│       └── hex feature "alloc" (*)
+├── snafu feature "default"
+│   ├── snafu v0.8.9
+│   │   └── snafu-derive feature "default"
+│   ├── snafu feature "rust_1_65" (*)
+│   └── snafu feature "std"
+│       ├── snafu v0.8.9 (*)
+│       └── snafu feature "alloc"
+├── bytes feature "default"
+│   ├── bytes v1.11.1
+│   │   └── serde feature "alloc" (*)
+│   └── bytes feature "std"
+│       └── bytes v1.11.1 (*)
+├── iroh feature "address-lookup-mdns"
+│   └── iroh v0.97.0
+│       ├── iroh-metrics v0.38.3
+│       ├── iroh-relay v0.97.0
+│       │   [build-dependencies]
+│       ├── papaya v0.2.3
+│       ├── pkarr v5.0.2
+│       │   [build-dependencies]
+│       ├── portmapper v0.15.0
+│       ├── iroh-base feature "key"
+│       ├── iroh-base feature "relay"
+│       ├── serde feature "default" (*)
+│       ├── serde feature "derive" (*)
+│       ├── serde feature "rc"
+│       ├── data-encoding feature "default"
+│       ├── derive_more feature "debug"
+│       ├── derive_more feature "default"
+│       ├── derive_more feature "deref"
+│       ├── derive_more feature "display"
+│       ├── derive_more feature "from"
+│       ├── derive_more feature "from_str"
+│       ├── derive_more feature "into_iterator"
+│       ├── derive_more feature "try_into"
+│       ├── ed25519-dalek feature "default"
+│       ├── ed25519-dalek feature "pem"
+│       ├── ed25519-dalek feature "pkcs8"
+│       ├── ed25519-dalek feature "rand_core"
+│       ├── ed25519-dalek feature "serde"
+│       ├── ed25519-dalek feature "zeroize"
+│       ├── pkcs8 feature "default"
+│       ├── n0-error feature "default"
+│       ├── url feature "default"
+│       ├── url feature "serde"
+│       ├── smallvec feature "default"
+│       ├── bytes feature "default" (*)
+│       ├── backon feature "default"
+│       ├── tokio feature "default"
+│       ├── tokio feature "fs"
+│       ├── tokio feature "io-std"
+│       ├── tokio feature "io-util"
+│       ├── tokio feature "macros"
+│       ├── tokio feature "net"
+│       ├── tokio feature "rt"
+│       ├── tokio feature "sync"
+│       ├── futures-util feature "default"
+│       ├── hickory-resolver feature "default"
+│       ├── http feature "default"
+│       ├── tokio-util feature "default"
+│       ├── tokio-util feature "io"
+│       ├── tokio-util feature "io-util"
+│       ├── tokio-util feature "rt"
+│       ├── tracing feature "default"
+│       ├── portable-atomic feature "default"
+│       ├── ipnet feature "default"
+│       ├── rand feature "default"
+│       ├── rustls feature "ring"
+│       ├── rustls-pki-types feature "default"
+│       ├── rustls-webpki feature "default"
+│       ├── rustls-webpki feature "ring"
+│       ├── n0-future feature "default"
+│       ├── pin-project feature "default"
+│       ├── noq feature "runtime-tokio"
+│       ├── noq feature "rustls-ring"
+│       ├── noq-proto feature "default"
+│       ├── rustc-hash feature "default"
+│       ├── noq-udp feature "default"
+│       ├── tokio-stream feature "default"
+│       ├── tokio-stream feature "sync"
+│       ├── reqwest feature "rustls-tls"
+│       ├── reqwest feature "stream"
+│       ├── webpki-roots feature "default"
+│       ├── sync_wrapper feature "default"
+│       ├── sync_wrapper feature "futures"
+│       ├── strum feature "default"
+│       ├── strum feature "derive"
+│       ├── n0-watcher feature "default"
+│       ├── netwatch feature "default"
+│       └── swarm-discovery feature "default"
+│       [build-dependencies]
+│       └── cfg_aliases feature "default"
+├── iroh feature "address-lookup-pkarr-dht"
+│   ├── iroh v0.97.0 (*)
+│   ├── pkarr feature "dht"
+│   │   ├── pkarr v5.0.2 (*)
+│   │   └── pkarr feature "__client"
+│   └── pkarr feature "relays"
+│       ├── pkarr v5.0.2 (*)
+│       └── pkarr feature "__client" (*)
+├── iroh feature "default"
+│   ├── iroh v0.97.0 (*)
+│   ├── iroh feature "fast-apple-datapath"
+│   │   ├── iroh v0.97.0 (*)
+│   │   └── noq feature "fast-apple-datapath"
+│   ├── iroh feature "metrics"
+│   │   ├── iroh v0.97.0 (*)
+│   │   ├── iroh-metrics feature "metrics"
+│   │   ├── iroh-relay feature "metrics"
+│   │   └── portmapper feature "metrics"
+│   └── iroh feature "portmapper"
+│       └── iroh v0.97.0 (*)
+├── tokio feature "default" (*)
+├── tokio feature "io-util" (*)
+├── tokio feature "macros" (*)
+├── tokio feature "rt-multi-thread"
+│   ├── tokio v1.50.0
+│   │   ├── mio v1.1.1
+│   │   ├── libc feature "default"
+│   │   ├── bytes feature "default" (*)
+│   │   ├── pin-project-lite feature "default"
+│   │   ├── socket2 feature "all"
+│   │   ├── socket2 feature "default"
+│   │   └── tokio-macros feature "default"
+│   └── tokio feature "rt" (*)
+├── tokio feature "sync" (*)
+├── tokio feature "time"
+│   └── tokio v1.50.0 (*)
+├── tokio-util feature "default" (*)
+├── tokio-util feature "rt" (*)
+├── tracing feature "default" (*)
+├── parking_lot feature "default"
+│   └── parking_lot v0.12.5
+│       ├── lock_api feature "default"
+│       └── parking_lot_core feature "default"
+├── n0-future feature "default" (*)
+├── iroh-blobs feature "default"
+│   ├── iroh-blobs v0.99.0
+│   │   ├── iroh v0.97.0 (*)
+│   │   ├── arrayvec feature "default"
+│   │   ├── iroh-base feature "default"
+│   │   ├── serde feature "default" (*)
+│   │   ├── data-encoding feature "default" (*)
+│   │   ├── derive_more feature "debug" (*)
+│   │   ├── derive_more feature "default" (*)
+│   │   ├── derive_more feature "deref" (*)
+│   │   ├── derive_more feature "deref_mut"
+│   │   ├── derive_more feature "display" (*)
+│   │   ├── derive_more feature "from" (*)
+│   │   ├── derive_more feature "into"
+│   │   ├── derive_more feature "try_from"
+│   │   ├── n0-error feature "default" (*)
+│   │   ├── smallvec feature "const_new"
+│   │   ├── smallvec feature "default" (*)
+│   │   ├── smallvec feature "serde"
+│   │   ├── postcard feature "default" (*)
+│   │   ├── postcard feature "experimental-derive"
+│   │   ├── postcard feature "use-std"
+│   │   ├── hex feature "default" (*)
+│   │   ├── bytes feature "default" (*)
+│   │   ├── bytes feature "serde"
+│   │   ├── tokio feature "sync" (*)
+│   │   ├── tracing feature "default" (*)
+│   │   ├── rand feature "default" (*)
+│   │   ├── iroh-metrics feature "default"
+│   │   ├── n0-future feature "default" (*)
+│   │   ├── futures-lite feature "default"
+│   │   ├── noq feature "default"
+│   │   ├── self_cell feature "default"
+│   │   ├── bao-tree feature "experimental-mixed"
+│   │   ├── bao-tree feature "serde"
+│   │   ├── bao-tree feature "tokio_fsm"
+│   │   ├── bao-tree feature "validate"
+│   │   ├── genawaiter feature "default"
+│   │   ├── genawaiter feature "futures03"
+│   │   ├── iroh-io feature "default"
+│   │   ├── range-collections feature "default"
+│   │   ├── range-collections feature "serde"
+│   │   ├── ref-cast feature "default"
+│   │   ├── chrono feature "default"
+│   │   ├── iroh-tickets feature "default"
+│   │   ├── irpc feature "derive"
+│   │   ├── irpc feature "spans"
+│   │   ├── irpc feature "stream"
+│   │   ├── irpc feature "varint-util"
+│   │   ├── nested_enum_utils feature "default"
+│   │   ├── redb feature "default"
+│   │   └── reflink-copy feature "default"
+│   │   [build-dependencies]
+│   │   └── cfg_aliases feature "default" (*)
+│   ├── iroh-blobs feature "fs-store"
+│   │   ├── iroh-blobs v0.99.0 (*)
+│   │   └── bao-tree feature "fs"
+│   ├── iroh-blobs feature "hide-proto-docs"
+│   │   └── iroh-blobs v0.99.0 (*)
+│   └── iroh-blobs feature "rpc"
+│       ├── iroh-blobs v0.99.0 (*)
+│       ├── irpc feature "noq_endpoint_setup"
+│       └── irpc feature "rpc"
+└── serde_json feature "default"
+    ├── serde_json v1.0.149
+    │   ├── memchr v2.8.0
+    │   ├── serde_core v1.0.228
+    │   ├── itoa feature "default"
+    │   └── zmij feature "default"
+    └── serde_json feature "std"
+        ├── serde_json v1.0.149 (*)
+        ├── serde_core feature "std" (*)
+        └── memchr feature "std"
+[dev-dependencies]
+├── rand feature "default" (*)
+└── rand feature "std_rng"
+    └── rand v0.9.2
+        ├── rand_chacha v0.9.0
+        └── rand_core v0.9.5
+END: 2026-04-25T18:45:18Z
+EXIT_CODE: 0
