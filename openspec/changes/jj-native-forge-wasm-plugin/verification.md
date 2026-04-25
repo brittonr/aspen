@@ -6,10 +6,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 ## Implementation Evidence
 
 - Changed file: `crates/aspen-forge/src/jj.rs`
-- Changed file: `crates/aspen-forge-handler/src/executor.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-dual-backend-namespace-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-openspec-preflight.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-jj-regression-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -68,6 +67,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 4.1 Support JJ-only and dual-backend repos without collisions between Git refs and JJ bookmark/change namespaces.
   - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-dual-backend-namespace-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-rustfmt-check.txt`
+
+- [x] 5.3 Add regression tests for change-id preservation, rewrite/update behavior, malformed-payload rejection, staged-publish no-partial-visibility, concurrent final-publish conflict rejection, repo-delete session abort/final-publish blocking, and dual-backend namespace isolation.
+  - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-jj-regression-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-dual-backend-namespace-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-rustfmt-check.txt`
 
 ## Review Scope Snapshot
 
@@ -294,6 +296,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge jj::`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-jj-regression-tests.txt`
+
+### `rustfmt --check crates/aspen-forge/src/jj.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-3-openspec-preflight.txt`
 
 ## Notes
 

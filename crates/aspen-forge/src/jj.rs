@@ -1050,13 +1050,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn jj_object_store_records_change_id_heads() {
+    async fn jj_object_store_records_and_updates_change_id_heads() {
         let store = object_store();
 
         let record = store
             .put_change_head(TEST_REPO_ID, TEST_CHANGE_ID, TEST_OBJECT_ID)
             .await
             .expect("change head writes");
+        let updated = store
+            .put_change_head(TEST_REPO_ID, TEST_CHANGE_ID, TEST_PARENT_ID)
+            .await
+            .expect("change head updates");
         let found = store
             .get_change_head(TEST_REPO_ID, TEST_CHANGE_ID)
             .await
@@ -1064,8 +1068,9 @@ mod tests {
             .expect("change head exists");
 
         assert_eq!(record.head_object_id, TEST_OBJECT_ID);
+        assert_eq!(updated.head_object_id, TEST_PARENT_ID);
         assert_eq!(found.change_id, TEST_CHANGE_ID);
-        assert_eq!(found.head_object_id, TEST_OBJECT_ID);
+        assert_eq!(found.head_object_id, TEST_PARENT_ID);
     }
 
     #[test]
@@ -1245,6 +1250,40 @@ mod tests {
         assert_eq!(receipt.change_head_updates, 1);
         assert_eq!(bookmark.head_object_id.as_deref(), Some(TEST_OBJECT_ID));
         assert_eq!(change.head_object_id, TEST_OBJECT_ID);
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_rejects_concurrent_publish_with_stale_expected_head() {
+        let store = object_store();
+        let first = JjStagedPublish {
+            session_id: None,
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: vec![object()],
+            known_object_ids: vec![TEST_PARENT_ID.to_string()],
+            bookmark_updates: vec![JjBookmarkUpdate {
+                name: TEST_BOOKMARK.to_string(),
+                expected_head: None,
+                new_head: Some(TEST_OBJECT_ID.to_string()),
+            }],
+            change_head_updates: Vec::new(),
+        };
+        let second = JjStagedPublish {
+            session_id: None,
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: Vec::new(),
+            known_object_ids: Vec::new(),
+            bookmark_updates: vec![JjBookmarkUpdate {
+                name: TEST_BOOKMARK.to_string(),
+                expected_head: None,
+                new_head: Some(TEST_PARENT_ID.to_string()),
+            }],
+            change_head_updates: Vec::new(),
+        };
+
+        store.publish_staged(&first).await.expect("first publish succeeds");
+        let err = store.publish_staged(&second).await.expect_err("stale concurrent publish conflicts");
+
+        assert!(matches!(err, JjObjectStoreError::Conflict { .. }));
     }
 
     #[tokio::test]
