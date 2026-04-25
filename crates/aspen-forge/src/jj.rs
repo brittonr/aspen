@@ -24,6 +24,10 @@ pub const MAX_JJ_OBJECT_CHANGE_IDS: usize = 32;
 pub const MAX_JJ_OBJECT_PAYLOAD_BYTES: usize = 128 * 1024 * 1024;
 /// KV prefix for repo-scoped JJ object reachability indexes.
 pub const JJ_REACHABILITY_KEY_PREFIX: &str = "forge:jj:reach:";
+/// KV prefix for repo-scoped JJ bookmarks.
+pub const JJ_BOOKMARK_KEY_PREFIX: &str = "forge:jj:bookmark:";
+/// KV prefix for repo-scoped JJ change-id heads.
+pub const JJ_CHANGE_HEAD_KEY_PREFIX: &str = "forge:jj:change:";
 
 /// Native JJ object kind stored by Forge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +85,28 @@ pub struct JjStoredObjectRef {
     pub encoded_size_bytes: u64,
     /// Whether the blob was newly added to the blob store.
     pub was_new: bool,
+}
+
+/// JJ bookmark state stored under a repo-scoped namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjBookmarkRecord {
+    /// Repo identifier this bookmark belongs to.
+    pub repo_id: String,
+    /// Bookmark name.
+    pub name: String,
+    /// Current JJ object head, or None for a deletion tombstone.
+    pub head_object_id: Option<String>,
+}
+
+/// JJ change-id head stored under a repo-scoped namespace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjChangeHeadRecord {
+    /// Repo identifier this change ID belongs to.
+    pub repo_id: String,
+    /// JJ change ID.
+    pub change_id: String,
+    /// Current JJ object head.
+    pub head_object_id: String,
 }
 
 /// JJ object envelope validation or encoding failure.
@@ -201,6 +227,102 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
         })?;
         Ok(Some(stored_ref))
     }
+
+    /// Create or move a JJ bookmark through the KV namespace.
+    pub async fn put_bookmark(
+        &self,
+        repo_id: &str,
+        name: &str,
+        head_object_id: &str,
+    ) -> Result<JjBookmarkRecord, JjObjectStoreError> {
+        let record = JjBookmarkRecord {
+            repo_id: repo_id.to_string(),
+            name: name.to_string(),
+            head_object_id: Some(head_object_id.to_string()),
+        };
+        self.write_json(jj_bookmark_key(repo_id, name), &record).await?;
+        Ok(record)
+    }
+
+    /// Delete a JJ bookmark from the KV namespace.
+    pub async fn delete_bookmark(&self, repo_id: &str, name: &str) -> Result<bool, JjObjectStoreError> {
+        self.delete_key(jj_bookmark_key(repo_id, name)).await
+    }
+
+    /// Read a JJ bookmark from the KV namespace.
+    pub async fn get_bookmark(
+        &self,
+        repo_id: &str,
+        name: &str,
+    ) -> Result<Option<JjBookmarkRecord>, JjObjectStoreError> {
+        self.read_json(jj_bookmark_key(repo_id, name)).await
+    }
+
+    /// Upsert a JJ change-id head through the KV namespace.
+    pub async fn put_change_head(
+        &self,
+        repo_id: &str,
+        change_id: &str,
+        head_object_id: &str,
+    ) -> Result<JjChangeHeadRecord, JjObjectStoreError> {
+        let record = JjChangeHeadRecord {
+            repo_id: repo_id.to_string(),
+            change_id: change_id.to_string(),
+            head_object_id: head_object_id.to_string(),
+        };
+        self.write_json(jj_change_head_key(repo_id, change_id), &record).await?;
+        Ok(record)
+    }
+
+    /// Read a JJ change-id head from the KV namespace.
+    pub async fn get_change_head(
+        &self,
+        repo_id: &str,
+        change_id: &str,
+    ) -> Result<Option<JjChangeHeadRecord>, JjObjectStoreError> {
+        self.read_json(jj_change_head_key(repo_id, change_id)).await
+    }
+
+    async fn write_json<T: Serialize>(&self, key: String, value: &T) -> Result<(), JjObjectStoreError> {
+        let json = serde_json::to_string(value).map_err(|source| JjObjectStoreError::Kv {
+            message: source.to_string(),
+        })?;
+        self.kv
+            .write(aspen_core::WriteRequest::set(key, json))
+            .await
+            .map_err(|source| JjObjectStoreError::Kv {
+                message: source.to_string(),
+            })?;
+        Ok(())
+    }
+
+    async fn read_json<T: for<'de> Deserialize<'de>>(&self, key: String) -> Result<Option<T>, JjObjectStoreError> {
+        let result = match self.kv.read(aspen_core::ReadRequest::new(key)).await {
+            Ok(result) => result,
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => return Ok(None),
+            Err(source) => {
+                return Err(JjObjectStoreError::Kv {
+                    message: source.to_string(),
+                });
+            }
+        };
+        let Some(kv) = result.kv else {
+            return Ok(None);
+        };
+        serde_json::from_str(&kv.value).map(Some).map_err(|source| JjObjectStoreError::Kv {
+            message: source.to_string(),
+        })
+    }
+
+    async fn delete_key(&self, key: String) -> Result<bool, JjObjectStoreError> {
+        match self.kv.delete(aspen_core::DeleteRequest::new(key)).await {
+            Ok(result) => Ok(result.is_deleted),
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => Ok(false),
+            Err(source) => Err(JjObjectStoreError::Kv {
+                message: source.to_string(),
+            }),
+        }
+    }
 }
 
 impl JjObjectEnvelope {
@@ -228,6 +350,18 @@ impl JjObjectEnvelope {
 #[must_use]
 pub fn jj_reachability_key(repo_id: &str, object_id: &str) -> String {
     format!("{JJ_REACHABILITY_KEY_PREFIX}{repo_id}:{object_id}")
+}
+
+/// Build the repo-scoped key for a JJ bookmark.
+#[must_use]
+pub fn jj_bookmark_key(repo_id: &str, bookmark_name: &str) -> String {
+    format!("{JJ_BOOKMARK_KEY_PREFIX}{repo_id}:{bookmark_name}")
+}
+
+/// Build the repo-scoped key for a JJ change-id head.
+#[must_use]
+pub fn jj_change_head_key(repo_id: &str, change_id: &str) -> String {
+    format!("{JJ_CHANGE_HEAD_KEY_PREFIX}{repo_id}:{change_id}")
 }
 
 /// Validate a JJ object envelope without encoding it.
@@ -301,6 +435,7 @@ mod tests {
     const TEST_REPO_ID: &str = "repo-1";
     const TEST_OBJECT_ID: &str = "object-1";
     const TEST_CHANGE_ID: &str = "change-1";
+    const TEST_BOOKMARK: &str = "main";
     const TEST_PARENT_ID: &str = "parent-1";
     const TEST_PAYLOAD: &[u8] = b"native-jj-payload";
     const UNSUPPORTED_VERSION: u16 = JJ_OBJECT_ENCODING_VERSION + 1;
@@ -324,6 +459,15 @@ mod tests {
         let key = jj_reachability_key(TEST_REPO_ID, TEST_OBJECT_ID);
 
         assert_eq!(key, "forge:jj:reach:repo-1:object-1");
+    }
+
+    #[test]
+    fn jj_bookmark_and_change_keys_are_repo_scoped() {
+        let bookmark_key = jj_bookmark_key(TEST_REPO_ID, TEST_BOOKMARK);
+        let change_key = jj_change_head_key(TEST_REPO_ID, TEST_CHANGE_ID);
+
+        assert_eq!(bookmark_key, "forge:jj:bookmark:repo-1:main");
+        assert_eq!(change_key, "forge:jj:change:repo-1:change-1");
     }
 
     #[test]
@@ -379,6 +523,57 @@ mod tests {
         let found = store.lookup_object(TEST_REPO_ID, "missing-object").await.expect("lookup succeeds");
 
         assert!(found.is_none());
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_moves_and_deletes_bookmarks() {
+        let store = object_store();
+
+        let first = store.put_bookmark(TEST_REPO_ID, TEST_BOOKMARK, TEST_OBJECT_ID).await.expect("bookmark creates");
+        let moved = store.put_bookmark(TEST_REPO_ID, TEST_BOOKMARK, TEST_PARENT_ID).await.expect("bookmark moves");
+        let found = store
+            .get_bookmark(TEST_REPO_ID, TEST_BOOKMARK)
+            .await
+            .expect("bookmark lookup succeeds")
+            .expect("bookmark exists");
+        let was_deleted = store.delete_bookmark(TEST_REPO_ID, TEST_BOOKMARK).await.expect("bookmark deletes");
+        let missing = store.get_bookmark(TEST_REPO_ID, TEST_BOOKMARK).await.expect("bookmark lookup succeeds");
+
+        assert_eq!(first.head_object_id.as_deref(), Some(TEST_OBJECT_ID));
+        assert_eq!(moved.head_object_id.as_deref(), Some(TEST_PARENT_ID));
+        assert_eq!(found.head_object_id.as_deref(), Some(TEST_PARENT_ID));
+        assert!(was_deleted);
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_records_change_id_heads() {
+        let store = object_store();
+
+        let record = store
+            .put_change_head(TEST_REPO_ID, TEST_CHANGE_ID, TEST_OBJECT_ID)
+            .await
+            .expect("change head writes");
+        let found = store
+            .get_change_head(TEST_REPO_ID, TEST_CHANGE_ID)
+            .await
+            .expect("change head lookup succeeds")
+            .expect("change head exists");
+
+        assert_eq!(record.head_object_id, TEST_OBJECT_ID);
+        assert_eq!(found.change_id, TEST_CHANGE_ID);
+        assert_eq!(found.head_object_id, TEST_OBJECT_ID);
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_returns_none_for_missing_bookmark_and_change() {
+        let store = object_store();
+
+        let bookmark = store.get_bookmark(TEST_REPO_ID, TEST_BOOKMARK).await.expect("bookmark lookup succeeds");
+        let change = store.get_change_head(TEST_REPO_ID, TEST_CHANGE_ID).await.expect("change head lookup succeeds");
+
+        assert!(bookmark.is_none());
+        assert!(change.is_none());
     }
 
     #[test]
