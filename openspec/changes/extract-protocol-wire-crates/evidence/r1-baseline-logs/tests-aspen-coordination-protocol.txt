@@ -1,0 +1,52 @@
+Command: cargo test -p aspen-coordination-protocol
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.84s
+     Running unittests src/lib.rs (target/debug/deps/aspen_coordination_protocol-3e8d6e248cbe749a)
+
+running 30 tests
+test tests::barrier_result_roundtrip ... ok
+test tests::counter_result_roundtrip ... ok
+test tests::lock_result_roundtrip_all_none ... ok
+test tests::lock_result_roundtrip_failure ... ok
+test tests::queue_create_result_roundtrip ... ok
+test tests::queue_ack_nack_roundtrip ... ok
+test tests::lock_result_roundtrip_success ... ok
+test tests::queue_delete_result_roundtrip ... ok
+test tests::queue_dequeue_result_roundtrip ... ok
+test tests::queue_enqueue_batch_result_roundtrip ... ok
+test tests::queue_dlq_roundtrip ... ok
+test tests::queue_enqueue_item_roundtrip ... ok
+test tests::queue_enqueue_result_roundtrip ... ok
+test tests::queue_extend_visibility_roundtrip ... ok
+test tests::queue_redrive_dlq_roundtrip ... ok
+test tests::queue_peek_result_roundtrip ... ok
+test tests::queue_status_roundtrip ... ok
+test tests::rate_limiter_result_roundtrip ... ok
+test tests::rwlock_result_roundtrip ... ok
+test tests::semaphore_result_roundtrip ... ok
+test tests::sequence_result_roundtrip ... ok
+test tests::service_deregister_result_roundtrip ... ok
+test tests::service_heartbeat_result_roundtrip ... ok
+test tests::service_list_result_roundtrip ... ok
+test tests::service_discover_result_roundtrip ... ok
+test tests::service_register_result_roundtrip ... ok
+test tests::service_get_instance_result_roundtrip ... ok
+test tests::service_update_health_result_roundtrip ... ok
+test tests::service_update_metadata_result_roundtrip ... ok
+test tests::signed_counter_result_roundtrip ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_coordination_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Exit: 0

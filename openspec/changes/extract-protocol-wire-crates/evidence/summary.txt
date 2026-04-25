@@ -1,0 +1,6 @@
+Protocol wire extraction summary:
+- expanded protocol-wire manifest and inventory/policy ownership
+- registered protocol candidate packages in readiness checker
+- added protocol family downstream evidence requirements
+- fixed client RPC postcard baseline test path after archive move
+- added downstream protocol serialization fixture using canonical protocol crates

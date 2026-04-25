@@ -1,0 +1,466 @@
+Command: cargo test -p aspen-client-api
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1480:9
+     |
+1480 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1496:9
+     |
+1496 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1526:9
+     |
+1526 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1552:9
+     |
+1552 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1582:9
+     |
+1582 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4270:9
+     |
+4270 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4359:9
+     |
+4359 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.73s
+     Running unittests src/lib.rs (target/debug/deps/aspen_client_api-1eda636bef9716e7)
+
+running 48 tests
+test messages::coordination::tests::test_lockset_requests_use_canonical_operation_member ... ok
+test messages::to_operation::coordination_ops::tests::test_client_rpc_lockset_requests_use_canonical_operation_member ... ok
+test messages::coordination::tests::test_lockset_token_requests_use_canonical_operation_member ... ok
+test messages::to_operation::coordination_ops::tests::test_client_rpc_lockset_token_requests_use_canonical_operation_member ... ok
+test test_authenticated_request_with_proxy_hops ... ok
+test test_capability_unavailable_response ... ok
+test test_coordination_operations_postcard_roundtrip ... ok
+test test_blob_operations_postcard_roundtrip ... ok
+test test_error_response_creation_and_fields ... ok
+test test_batch_operations_postcard_roundtrip ... ok
+test test_lease_operations_postcard_roundtrip ... ok
+test test_required_app_returns_correct_domain ... ok
+test test_to_operation_cluster_admin ... ok
+test test_to_operation_kv_operations ... ok
+test test_to_operation_none_for_public_operations ... ok
+test test_variant_name_core_requests ... ok
+test tests::test_all_enum_layout_features_are_default ... ok
+test test_watch_operations_postcard_roundtrip ... ok
+test tests::test_authenticated_request_from ... ok
+test tests::test_authenticated_request_unauthenticated ... ok
+test tests::test_client_alpn_is_correct ... ok
+test tests::test_constants_are_bounded ... ok
+test tests::test_deploy_required_app ... ok
+test tests::test_deploy_request_discriminant_golden_table ... ok
+test tests::test_deploy_to_operation ... ok
+test tests::test_deploy_response_discriminant_golden_table ... ok
+test tests::test_deploy_variant_names ... ok
+test tests::test_error_response_discriminant_is_stable ... ok
+test tests::test_feature_gated_variants_are_grouped_by_feature ... ok
+test tests::test_feature_gated_response_variants_postcard_roundtrip ... ok
+test tests::test_first_and_last_response_variants_postcard_stable ... ok
+test tests::test_federation_git_clone_postcard_roundtrip ... ok
+test tests::test_get_health_domain ... ok
+test tests::test_get_health_variant_name ... ok
+test tests::test_git_bridge_probe_objects_variant_name ... ok
+test tests::test_get_health_roundtrip_json ... ok
+test tests::test_kv_read_variant_name ... ok
+test tests::test_kv_write_variant_name ... ok
+test tests::test_plugin_reload_result_before_feature_gated_variants ... ok
+test tests::test_git_bridge_probe_objects_request_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_response_roundtrip ... ok
+test tests::test_request_discriminant_golden_table ... ok
+test tests::test_request_metadata_lookup_matches_sample_requests ... ok
+test tests::test_response_discriminant_golden_table ... ok
+test tests::test_response_error_roundtrip ... ok
+test tests::test_response_leader_roundtrip ... ok
+test tests::test_response_pong_roundtrip ... ok
+test tests::test_request_required_app_metadata_is_unique_and_known ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/client_rpc_postcard_baseline.rs (target/debug/deps/client_rpc_postcard_baseline-2d01adcf2646f448)
+
+running 1 test
+test client_rpc_postcard_baseline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/serialization_snapshots.rs (target/debug/deps/serialization_snapshots-0e6816299516ade1)
+
+running 12 tests
+test snapshot_read_result_response_not_found ... ok
+test snapshot_get_raft_metrics_request ... ok
+test snapshot_get_health_request ... ok
+test snapshot_read_key_request ... ok
+test snapshot_delete_key_request ... ok
+test snapshot_delete_result_response ... ok
+test snapshot_scan_keys_request ... ok
+test snapshot_write_key_request ... ok
+test snapshot_read_result_response_found ... ok
+test snapshot_error_response ... ok
+test snapshot_write_result_response ... ok
+test snapshot_scan_result_response ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/snapshot_redaction.rs (target/debug/deps/snapshot_redaction-1d3caf42c7de506a)
+
+running 3 tests
+test snapshot_error_response_with_dynamic_node_id ... ok
+test snapshot_error_response_with_uuid ... ok
+test snapshot_write_result_with_no_dynamic_fields ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/wire_format_golden.rs (target/debug/deps/wire_format_golden-054e03bfaacdba04)
+
+running 10 tests
+test test_get_health_request_discriminant_is_0 ... ok
+test test_error_response_discriminant_is_14 ... ok
+test test_pong_response_discriminant_is_12 ... ok
+test test_golden_files_are_sequential ... ok
+test test_request_variant_count ... ok
+test test_request_feature_gated_after_non_gated_sections ... ok
+test test_response_variant_count ... ok
+test test_response_feature_gated_ordering ... ok
+test test_request_discriminants_golden ... ok
+test test_response_discriminants_golden ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_client_api
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1480:9
+     |
+1480 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1496:9
+     |
+1496 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1526:9
+     |
+1526 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1552:9
+     |
+1552 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1582:9
+     |
+1582 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4270:9
+     |
+4270 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4359:9
+     |
+4359 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: 28 warnings emitted
+
+
+running 1 test
+test crates/aspen-client-api/src/lib.rs - (line 27) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.38s; merged doctests compilation took 0.37s
+Exit: 0

@@ -1,0 +1,324 @@
+Command: cargo test -p aspen-client-api
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling unicode-ident v1.0.24
+   Compiling smallvec v1.15.1
+   Compiling signature v3.0.0-rc.10
+   Compiling ucd-trie v0.1.7
+   Compiling rand_core v0.9.5
+   Compiling percent-encoding v2.3.2
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling regex-syntax v0.8.10
+   Compiling constant_time_eq v0.4.2
+   Compiling serde_json v1.0.149
+   Compiling base64 v0.22.1
+   Compiling similar v2.7.0
+   Compiling console v0.16.3
+   Compiling blake3 v1.8.3
+   Compiling form_urlencoded v1.2.2
+   Compiling pest v2.8.6
+   Compiling syn v2.0.117
+   Compiling pest_meta v2.8.6
+   Compiling regex-automata v0.4.14
+   Compiling regex v1.12.3
+   Compiling synstructure v0.13.2
+   Compiling pest_generator v2.8.6
+   Compiling serde_derive v1.0.228
+   Compiling zerovec-derive v0.11.2
+   Compiling displaydoc v0.2.5
+   Compiling zeroize_derive v1.4.3
+   Compiling thiserror-impl v2.0.18
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling derive_more-impl v2.1.1
+   Compiling n0-error-macros v0.1.3
+   Compiling spez v0.1.2
+   Compiling tokio-macros v2.6.1
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling pest_derive v2.8.6
+   Compiling zeroize v1.8.2
+   Compiling tokio v1.50.0
+   Compiling zerofrom v0.1.6
+   Compiling n0-error v0.1.3
+   Compiling yoke v0.8.1
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling thiserror v2.0.18
+   Compiling cobs v0.3.0
+   Compiling derive_more v2.1.1
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling icu_collections v2.1.1
+   Compiling icu_locale_core v2.1.1
+   Compiling icu_provider v2.1.1
+   Compiling serde v1.0.228
+   Compiling icu_normalizer v2.1.1
+   Compiling icu_properties v2.1.2
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling heapless v0.7.17
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-forge-protocol)
+   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs-protocol)
+   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+   Compiling insta v1.47.2
+   Compiling postcard v1.1.3
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling ed25519-dalek v3.0.0-pre.1
+   Compiling url v2.5.8
+   Compiling iroh-base v0.97.0
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-auth-core)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api)
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1480:9
+     |
+1480 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1496:9
+     |
+1496 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1526:9
+     |
+1526 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1552:9
+     |
+1552 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1582:9
+     |
+1582 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4270:9
+     |
+4270 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4277:9
+     |
+4277 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4284:9
+     |
+4284 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4291:9
+     |
+4291 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4298:9
+     |
+4298 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4305:9
+     |
+4305 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4312:9
+     |
+4312 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4319:9
+     |
+4319 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4359:9
+     |
+4359 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4366:9
+     |
+4366 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.35s
+     Running unittests src/lib.rs (target/debug/deps/aspen_client_api-1eda636bef9716e7)
+
+running 48 tests
+test messages::coordination::tests::test_lockset_token_requests_use_canonical_operation_member ... ok
+test messages::to_operation::coordination_ops::tests::test_client_rpc_lockset_requests_use_canonical_operation_member ... ok
+test messages::coordination::tests::test_lockset_requests_use_canonical_operation_member ... ok
+test messages::to_operation::coordination_ops::tests::test_client_rpc_lockset_token_requests_use_canonical_operation_member ... ok
+test test_authenticated_request_with_proxy_hops ... ok
+test test_blob_operations_postcard_roundtrip ... ok
+test test_batch_operations_postcard_roundtrip ... ok
+test test_capability_unavailable_response ... ok
+test test_error_response_creation_and_fields ... ok
+test test_coordination_operations_postcard_roundtrip ... ok
+test test_lease_operations_postcard_roundtrip ... ok
+test test_required_app_returns_correct_domain ... ok
+test test_to_operation_cluster_admin ... ok
+test test_to_operation_kv_operations ... ok
+test test_to_operation_none_for_public_operations ... ok
+test test_variant_name_core_requests ... ok
+test tests::test_all_enum_layout_features_are_default ... ok
+test test_watch_operations_postcard_roundtrip ... ok
+test tests::test_authenticated_request_from ... ok
+test tests::test_authenticated_request_unauthenticated ... ok
+test tests::test_client_alpn_is_correct ... ok
+test tests::test_constants_are_bounded ... ok
+test tests::test_deploy_required_app ... ok
+test tests::test_deploy_request_discriminant_golden_table ... ok
+test tests::test_deploy_variant_names ... ok
+test tests::test_deploy_to_operation ... ok
+test tests::test_deploy_response_discriminant_golden_table ... ok
+test tests::test_error_response_discriminant_is_stable ... ok
+test tests::test_feature_gated_variants_are_grouped_by_feature ... ok
+test tests::test_feature_gated_response_variants_postcard_roundtrip ... ok
+test tests::test_get_health_domain ... ok
+test tests::test_first_and_last_response_variants_postcard_stable ... ok
+test tests::test_get_health_variant_name ... ok
+test tests::test_federation_git_clone_postcard_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_variant_name ... ok
+test tests::test_kv_read_variant_name ... ok
+test tests::test_get_health_roundtrip_json ... ok
+test tests::test_kv_write_variant_name ... ok
+test tests::test_plugin_reload_result_before_feature_gated_variants ... ok
+test tests::test_git_bridge_probe_objects_request_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_response_roundtrip ... ok
+test tests::test_request_discriminant_golden_table ... ok
+test tests::test_response_discriminant_golden_table ... ok
+test tests::test_request_metadata_lookup_matches_sample_requests ... ok
+test tests::test_response_error_roundtrip ... ok
+test tests::test_response_pong_roundtrip ... ok
+test tests::test_response_leader_roundtrip ... ok
+test tests::test_request_required_app_metadata_is_unique_and_known ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/client_rpc_postcard_baseline.rs (target/debug/deps/client_rpc_postcard_baseline-2d01adcf2646f448)
+
+running 1 test
+test client_rpc_postcard_baseline ... FAILED
+
+failures:
+
+---- client_rpc_postcard_baseline stdout ----
+
+thread 'client_rpc_postcard_baseline' (774100) panicked at crates/aspen-client-api/tests/client_rpc_postcard_baseline.rs:167:9:
+failed to read saved postcard baseline /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-client-api/../../openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json: No such file or directory (os error 2). Generate it with ASPEN_UPDATE_CLIENT_RPC_POSTCARD_BASELINE=1 cargo test -p aspen-client-api client_rpc_postcard_baseline -- --nocapture
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    client_rpc_postcard_baseline
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+error: test failed, to rerun pass `-p aspen-client-api --test client_rpc_postcard_baseline`
+Exit: 101

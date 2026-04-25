@@ -1,0 +1,40 @@
+Command: cargo test -p aspen-jobs-protocol
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling thiserror v2.0.18
+   Compiling serde v1.0.228
+   Compiling cobs v0.3.0
+   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-jobs-protocol)
+   Compiling postcard v1.1.3
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.97s
+     Running unittests src/lib.rs (target/debug/deps/aspen_jobs_protocol-182452df47a68494)
+
+running 14 tests
+test tests::job_cancel_result_roundtrip ... ok
+test tests::job_details_boundary_values ... ok
+test tests::job_details_roundtrip ... ok
+test tests::job_get_result_roundtrip ... ok
+test tests::job_submit_result_roundtrip ... ok
+test tests::job_list_result_roundtrip ... ok
+test tests::job_update_progress_result_roundtrip ... ok
+test tests::job_queue_stats_roundtrip ... ok
+test tests::worker_complete_job_result_roundtrip ... ok
+test tests::worker_deregister_result_roundtrip ... ok
+test tests::worker_heartbeat_result_roundtrip ... ok
+test tests::worker_register_result_roundtrip ... ok
+test tests::worker_poll_jobs_result_roundtrip ... ok
+test tests::worker_status_result_roundtrip ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_jobs_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Exit: 0

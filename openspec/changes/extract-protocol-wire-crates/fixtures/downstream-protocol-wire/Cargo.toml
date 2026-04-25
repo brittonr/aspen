@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "downstream-protocol-wire"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+aspen-client-api = { path = "../../../../../crates/aspen-client-api", default-features = false }
+aspen-coordination-protocol = { path = "../../../../../crates/aspen-coordination-protocol" }
+aspen-forge-protocol = { path = "../../../../../crates/aspen-forge-protocol" }
+aspen-jobs-protocol = { path = "../../../../../crates/aspen-jobs-protocol" }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde_json = "1"

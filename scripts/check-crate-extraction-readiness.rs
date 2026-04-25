@@ -43,6 +43,7 @@ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
 ];
 const BLOB_CASTORE_CACHE_FAMILY: &str = "blob-castore-cache";
 const KV_BRANCH_COMMIT_DAG_FAMILY: &str = "kv-branch-commit-dag";
+const PROTOCOL_WIRE_FAMILY: &str = "protocol-wire";
 const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i6-downstream-blob-metadata.json",
     "i6-downstream-cache-castore-metadata.json",
@@ -52,6 +53,11 @@ const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
 const KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i5-downstream-branch-dag-metadata.json",
     "i5-downstream-branch-dag-forbidden-grep.txt",
+];
+const PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE: &[&str] = &[
+    "i5-downstream-protocol-wire-metadata.json",
+    "i5-downstream-protocol-wire-forbidden-grep.txt",
+    "i3-client-api-compatibility-tests.txt",
 ];
 
 #[derive(Debug, Parser)]
@@ -159,6 +165,9 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_raft_kv" => Some("aspen-raft-kv"),
         "aspen_coordination" => Some("aspen-coordination"),
         "aspen_coordination_protocol" => Some("aspen-coordination-protocol"),
+        "aspen_client_api" => Some("aspen-client-api"),
+        "aspen_forge_protocol" => Some("aspen-forge-protocol"),
+        "aspen_jobs_protocol" => Some("aspen-jobs-protocol"),
         "aspen_blob" => Some("aspen-blob"),
         "aspen_castore" => Some("aspen-castore"),
         "aspen_cache" => Some("aspen-cache"),
@@ -341,6 +350,7 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
     let required_files = match args.candidate_family.as_str() {
         BLOB_CASTORE_CACHE_FAMILY => BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE,
         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
+        PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
         _ => return,
     };
 

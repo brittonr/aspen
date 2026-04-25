@@ -1,0 +1,37 @@
+Command: cargo test -p aspen-forge-protocol
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/lib.rs (target/debug/deps/aspen_forge_protocol-ef05f2af1a1dae9d)
+
+running 16 tests
+test tests::test_chunked_push_start_response_roundtrip ... ok
+test tests::test_chunked_push_chunk_response_roundtrip ... ok
+test tests::test_chunked_push_complete_response_roundtrip ... ok
+test tests::test_forge_repo_info_roundtrip ... ok
+test tests::test_forge_issue_info_roundtrip ... ok
+test tests::test_forge_repo_result_error ... ok
+test tests::test_forge_repo_result_success ... ok
+test tests::test_forge_patch_info_roundtrip ... ok
+test tests::test_git_bridge_fetch_response_roundtrip ... ok
+test tests::test_git_bridge_list_refs_response_roundtrip ... ok
+test tests::test_git_bridge_object_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_response_empty ... ok
+test tests::test_git_bridge_probe_objects_response_error ... ok
+test tests::test_git_bridge_probe_objects_response_roundtrip ... ok
+test tests::test_git_bridge_push_response_roundtrip ... ok
+test tests::test_git_bridge_ref_update_roundtrip ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_forge_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Exit: 0

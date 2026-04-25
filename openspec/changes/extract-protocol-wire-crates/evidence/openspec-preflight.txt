@@ -1,0 +1,4 @@
+OK: openspec/changes/extract-protocol-wire-crates
+  tasks: 11 total / 11 checked
+  changed files listed: 17
+  verification artifacts: 13

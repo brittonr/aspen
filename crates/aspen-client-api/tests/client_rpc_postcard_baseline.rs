@@ -1,20 +1,35 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use aspen_client_api::{ClientRpcRequest, ClientRpcResponse};
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use serde::Deserialize;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Number, Value};
+use serde_json::Map;
+use serde_json::Number;
+use serde_json::Value;
+use syn::Attribute;
+use syn::Expr;
+use syn::ExprLit;
+use syn::Field;
+use syn::Fields;
+use syn::File;
+use syn::GenericArgument;
+use syn::Item;
+use syn::ItemEnum;
+use syn::ItemStruct;
+use syn::Lit;
+use syn::LitStr;
+use syn::PathArguments;
+use syn::Token;
+use syn::Type;
 use syn::punctuated::Punctuated;
-use syn::{
-    Attribute, Expr, ExprLit, Field, Fields, File, GenericArgument, Item, ItemEnum, ItemStruct, Lit, LitStr,
-    PathArguments, Token, Type,
-};
 
-const BASELINE_RELATIVE_PATH: &str =
-    "../../openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json";
+const BASELINE_RELATIVE_PATH: &str = "../../openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json";
 const CANONICAL_BOOL: bool = true;
 const CANONICAL_FLOAT: f64 = 7.5;
 const CANONICAL_SEQUENCE_LEN: usize = 1;
@@ -173,9 +188,7 @@ fn load_saved_artifact(baseline_path: &Path) -> PostcardBaselineArtifact {
 }
 
 fn generate_enum_samples<T>(enum_name: &str) -> BTreeMap<String, String>
-where
-    T: DeserializeOwned + Serialize,
-{
+where T: DeserializeOwned + Serialize {
     let registry = type_registry();
     let enum_definition = registry.enum_definition(enum_name);
     let mut samples = BTreeMap::new();
@@ -190,25 +203,20 @@ where
 }
 
 fn materialize_variant<T>(registry: &TypeRegistry, variant: &EnumVariantDefinition, variant_path: &str) -> T
-where
-    T: DeserializeOwned,
-{
+where T: DeserializeOwned {
     let json_value = json_for_variant(registry, variant, variant_path, 0);
     serde_json::from_value(json_value.clone()).unwrap_or_else(|error| {
-        panic!(
-            "failed to materialize {variant_path} from canonical JSON {}: {error}",
-            json_value,
-        )
+        panic!("failed to materialize {variant_path} from canonical JSON {}: {error}", json_value,)
     })
 }
 
 fn encode_postcard_hex<T>(value: &T, variant_path: &str) -> String
-where
-    T: DeserializeOwned + Serialize,
-{
+where T: DeserializeOwned + Serialize {
     let encoded = postcard::to_allocvec(value).unwrap_or_else(|error| panic!("serialize {variant_path}: {error}"));
-    let decoded: T = postcard::from_bytes(&encoded).unwrap_or_else(|error| panic!("deserialize {variant_path}: {error}"));
-    let reencoded = postcard::to_allocvec(&decoded).unwrap_or_else(|error| panic!("re-serialize {variant_path}: {error}"));
+    let decoded: T =
+        postcard::from_bytes(&encoded).unwrap_or_else(|error| panic!("deserialize {variant_path}: {error}"));
+    let reencoded =
+        postcard::to_allocvec(&decoded).unwrap_or_else(|error| panic!("re-serialize {variant_path}: {error}"));
     assert_eq!(encoded, reencoded, "postcard roundtrip changed bytes for {variant_path}");
     hex_encode(&encoded)
 }
@@ -255,10 +263,8 @@ fn json_for_local_type(registry: &TypeRegistry, type_name: &str, path: &str, dep
     match registry.definitions.get(type_name) {
         Some(TypeDefinition::Struct(definition)) => json_for_field_shape(registry, &definition.fields, path, depth + 1),
         Some(TypeDefinition::Enum(definition)) => {
-            let first_variant = definition
-                .variants
-                .first()
-                .unwrap_or_else(|| panic!("enum {type_name} has no variants"));
+            let first_variant =
+                definition.variants.first().unwrap_or_else(|| panic!("enum {type_name} has no variants"));
             json_for_variant(registry, first_variant, path, depth + 1)
         }
         None => panic!("unsupported field type {type_name} at {path}"),
@@ -273,12 +279,7 @@ fn json_for_field_shape(registry: &TypeRegistry, shape: &FieldShape, path: &str,
     }
 }
 
-fn json_for_named_fields(
-    registry: &TypeRegistry,
-    fields: &[FieldDefinition],
-    path: &str,
-    depth: usize,
-) -> Value {
+fn json_for_named_fields(registry: &TypeRegistry, fields: &[FieldDefinition], path: &str, depth: usize) -> Value {
     let mut object = Map::new();
     for field in fields {
         let field_path = format!("{path}.{}", field.rust_name);
@@ -351,12 +352,7 @@ fn json_for_path_type(registry: &TypeRegistry, path_type: &syn::TypePath, path: 
     }
 }
 
-fn json_for_map_type(
-    registry: &TypeRegistry,
-    segment: &syn::PathSegment,
-    path: &str,
-    depth: usize,
-) -> Value {
+fn json_for_map_type(registry: &TypeRegistry, segment: &syn::PathSegment, path: &str, depth: usize) -> Value {
     let arguments = generic_arguments(segment, path);
     assert!(arguments.len() == 2, "map type at {path} must have key and value arguments");
     let key_type = &arguments[0];
@@ -366,12 +362,7 @@ fn json_for_map_type(
     Value::Object(Map::from_iter([(key_string, value)]))
 }
 
-fn json_for_option_type(
-    registry: &TypeRegistry,
-    segment: &syn::PathSegment,
-    path: &str,
-    depth: usize,
-) -> Value {
+fn json_for_option_type(registry: &TypeRegistry, segment: &syn::PathSegment, path: &str, depth: usize) -> Value {
     if depth > MAX_RECURSION_DEPTH {
         return Value::Null;
     }
@@ -416,12 +407,7 @@ fn collect_type_arguments(arguments: &Punctuated<GenericArgument, syn::token::Co
 
 fn is_u8_type(ty: &Type) -> bool {
     match ty {
-        Type::Path(path_type) => path_type
-            .path
-            .segments
-            .last()
-            .map(|segment| segment.ident == "u8")
-            .unwrap_or(false),
+        Type::Path(path_type) => path_type.path.segments.last().map(|segment| segment.ident == "u8").unwrap_or(false),
         _ => false,
     }
 }
@@ -452,9 +438,9 @@ fn canonical_string(path: &str) -> String {
 
 fn parse_array_length(length: &Expr, path: &str) -> usize {
     match length {
-        Expr::Lit(ExprLit { lit: Lit::Int(value), .. }) => {
-            value.base10_parse().unwrap_or_else(|error| panic!("parse array length at {path}: {error}"))
-        }
+        Expr::Lit(ExprLit {
+            lit: Lit::Int(value), ..
+        }) => value.base10_parse().unwrap_or_else(|error| panic!("parse array length at {path}: {error}")),
         _ => panic!("unsupported array length expression at {path}"),
     }
 }
@@ -488,7 +474,8 @@ fn rust_files_under(directory: &Path) -> Vec<PathBuf> {
     let mut directories = vec![directory.to_path_buf()];
     let mut files = Vec::new();
     while let Some(current) = directories.pop() {
-        let entries = fs::read_dir(&current).unwrap_or_else(|error| panic!("read directory {}: {error}", current.display()));
+        let entries =
+            fs::read_dir(&current).unwrap_or_else(|error| panic!("read directory {}: {error}", current.display()));
         for entry in entries {
             let entry = entry.unwrap_or_else(|error| panic!("read directory entry in {}: {error}", current.display()));
             let path = entry.path();
@@ -512,10 +499,7 @@ fn register_file_items(registry: &mut TypeRegistry, syntax: &File) {
                 registry.insert(item_enum.ident.to_string(), TypeDefinition::Enum(enum_definition(item_enum)));
             }
             Item::Struct(item_struct) if cfg_is_enabled(&item_struct.attrs) => {
-                registry.insert(
-                    item_struct.ident.to_string(),
-                    TypeDefinition::Struct(struct_definition(item_struct)),
-                );
+                registry.insert(item_struct.ident.to_string(), TypeDefinition::Struct(struct_definition(item_struct)));
             }
             _ => {}
         }
@@ -546,13 +530,9 @@ fn enum_definition(item_enum: &ItemEnum) -> EnumDefinition {
 fn field_shape(fields: &Fields) -> FieldShape {
     match fields {
         Fields::Named(named_fields) => FieldShape::Named(named_fields.named.iter().map(field_definition).collect()),
-        Fields::Unnamed(unnamed_fields) => FieldShape::Tuple(
-            unnamed_fields
-                .unnamed
-                .iter()
-                .map(|field| field.ty.clone())
-                .collect(),
-        ),
+        Fields::Unnamed(unnamed_fields) => {
+            FieldShape::Tuple(unnamed_fields.unnamed.iter().map(|field| field.ty.clone()).collect())
+        }
         Fields::Unit => FieldShape::Unit,
     }
 }

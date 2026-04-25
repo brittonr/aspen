@@ -1,0 +1,4 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.GuXYo3jbZO.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family protocol-wire --output-json openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-invalid-readiness.json --output-markdown openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-invalid-readiness.md
+Exit: 1
+Expected substring: aspen_client_api: forbidden readiness state `publishable from monorepo`
+openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-invalid-readiness.md:9:- aspen_client_api: forbidden readiness state `publishable from monorepo`

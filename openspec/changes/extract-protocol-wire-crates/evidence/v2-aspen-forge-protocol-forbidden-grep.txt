@@ -1,0 +1,9 @@
+Command: bash -c cargo tree -p aspen-forge-protocol --edges normal --prefix none | awk '{print $1}' | rg -n '^(aspen|aspen-raft|aspen-core-shell|aspen-cluster|aspen-rpc-core|aspen-rpc-handlers|aspen-transport|aspen-raft-network|aspen-auth|iroh|iroh-base|irpc|aspen-trust|aspen-secrets|aspen-sql|aspen-cli|aspen-tui|aspen-dogfood|aspen-.*-handler)$' && exit 1 || echo 'No forbidden packages found.'
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+No forbidden packages found.
+Exit: 0

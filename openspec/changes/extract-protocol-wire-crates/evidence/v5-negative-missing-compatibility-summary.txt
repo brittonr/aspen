@@ -1,0 +1,4 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family protocol-wire --output-json openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-missing-compatibility.json --output-markdown openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-missing-compatibility.md
+Exit: 1
+Expected substring: aspen_client_api: manifest missing `## Compatibility and aliases`
+openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-missing-compatibility.md:9:- aspen_client_api: manifest missing `## Compatibility and aliases`

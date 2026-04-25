@@ -1,0 +1,6 @@
+Negative mutation checks passed:
+- forbidden runtime dependency injection failed readiness checking
+- missing exception owner failed readiness checking
+- invalid readiness state failed readiness checking
+- missing compatibility rail failed readiness checking
+- missing downstream fixture evidence failed readiness checking

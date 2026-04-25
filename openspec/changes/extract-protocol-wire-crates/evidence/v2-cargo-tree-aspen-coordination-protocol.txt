@@ -1,0 +1,20 @@
+Command: cargo tree -p aspen-coordination-protocol --edges normal
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-coordination-protocol)
+└── serde v1.0.228
+    ├── serde_core v1.0.228
+    └── serde_derive v1.0.228 (proc-macro)
+        ├── proc-macro2 v1.0.106
+        │   └── unicode-ident v1.0.24
+        ├── quote v1.0.45
+        │   └── proc-macro2 v1.0.106 (*)
+        └── syn v2.0.117
+            ├── proc-macro2 v1.0.106 (*)
+            ├── quote v1.0.45 (*)
+            └── unicode-ident v1.0.24
+Exit: 0

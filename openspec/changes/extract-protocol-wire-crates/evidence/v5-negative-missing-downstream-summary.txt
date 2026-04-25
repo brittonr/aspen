@@ -1,0 +1,18 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family protocol-wire --output-json /tmp/tmp.ZIJmt5n1J2/evidence/report.json --output-markdown /tmp/tmp.ZIJmt5n1J2/evidence/report.md
+Exit: 1
+Expected substring: missing downstream fixture evidence
+# Crate Extraction Readiness Report
+
+- Candidate family: `protocol-wire`
+- Passed: `false`
+- Checked candidates: 16
+
+## Failures
+
+- protocol-wire: missing downstream fixture evidence `/tmp/tmp.ZIJmt5n1J2/evidence/i5-downstream-protocol-wire-metadata.json`
+- protocol-wire: missing downstream fixture evidence `/tmp/tmp.ZIJmt5n1J2/evidence/i5-downstream-protocol-wire-forbidden-grep.txt`
+- protocol-wire: missing downstream fixture evidence `/tmp/tmp.ZIJmt5n1J2/evidence/i3-client-api-compatibility-tests.txt`
+
+## Warnings
+
+- none

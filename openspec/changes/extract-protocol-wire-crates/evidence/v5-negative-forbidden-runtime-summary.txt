@@ -1,0 +1,4 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family protocol-wire --output-json openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-forbidden-runtime.json --output-markdown openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-forbidden-runtime.md
+Exit: 1
+Expected substring: aspen_client_api: direct forbidden dependency `aspen-rpc-handlers`
+openspec/changes/extract-protocol-wire-crates/evidence/v5-negative-forbidden-runtime.md:9:- aspen_client_api: direct forbidden dependency `aspen-rpc-handlers`
