@@ -147,6 +147,9 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_raft_kv" => Some("aspen-raft-kv"),
         "aspen_coordination" => Some("aspen-coordination"),
         "aspen_coordination_protocol" => Some("aspen-coordination-protocol"),
+        "aspen_blob" => Some("aspen-blob"),
+        "aspen_castore" => Some("aspen-castore"),
+        "aspen_cache" => Some("aspen-cache"),
         _ => None,
     }
 }

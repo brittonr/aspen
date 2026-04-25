@@ -1,8 +1,8 @@
 ## Phase 1: Baseline and boundary design
 
 - [x] R1 Capture baseline compile and dependency graphs for `aspen-blob`, `aspen-castore`, `aspen-cache`, and representative consumers, classifying each dependency as backend-purpose, reusable domain, adapter/runtime, test-only, or forbidden. [covers=blob-castore-cache-extraction.castore-cache-avoid-app-shells,blob-castore-cache-extraction.blob-default-avoids-app-shells,blob-castore-cache-extraction.blob-default-avoids-app-shells.iroh-backend-is-documented-exception,blob-castore-cache-extraction.castore-cache-avoid-app-shells.castore-circuit-breaker-is-reusable-or-gated,blob-castore-cache-extraction.castore-cache-avoid-app-shells.cache-metadata-signing-reusable] ✅ completed: 2026-04-25T18:49:10Z
-- [ ] I1 Create `docs/crate-extraction/blob-castore-cache.md` with per-crate metadata, backend-purpose dependency exceptions, feature contracts, compatibility plan, representative consumers, and verification rails. [covers=blob-castore-cache-extraction.inventory-and-policy,blob-castore-cache-extraction.inventory-and-policy.checker-verifies-backend-exceptions]
-- [ ] I2 Add blob/castore/cache candidates to `docs/crate-extraction/policy.ncl` and update `docs/crate-extraction.md` with readiness state and next action. [covers=blob-castore-cache-extraction.inventory-and-policy.checker-verifies-backend-exceptions]
+- [x] I1 Create `docs/crate-extraction/blob-castore-cache.md` with per-crate metadata, backend-purpose dependency exceptions, feature contracts, compatibility plan, representative consumers, and verification rails. [covers=blob-castore-cache-extraction.inventory-and-policy,blob-castore-cache-extraction.inventory-and-policy.checker-verifies-backend-exceptions] ✅ completed: 2026-04-25T19:09:10Z
+- [x] I2 Add blob/castore/cache candidates to `docs/crate-extraction/policy.ncl` and update `docs/crate-extraction.md` with readiness state and next action. [covers=blob-castore-cache-extraction.inventory-and-policy.checker-verifies-backend-exceptions] ✅ completed: 2026-04-25T19:09:10Z
 
 ## Phase 2: Dependency cleanup and adapters
 

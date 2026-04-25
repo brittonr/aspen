@@ -1,0 +1,5 @@
+I1/I2 summary:
+- Added docs/crate-extraction/blob-castore-cache.md with candidate metadata, backend exceptions, feature contracts, compatibility plan, representative consumers, dependency exceptions, and verification rails.
+- Updated docs/crate-extraction.md inventory row to point at the manifest and describe the next action.
+- Added aspen_blob, aspen_castore, and aspen_cache candidates to docs/crate-extraction/policy.ncl with owners, feature sets, consumers, forbidden app/runtime dependencies, and backend/KV exceptions.
+- Added the three candidate package mappings to scripts/check-crate-extraction-readiness.rs so the policy checker can inspect their cargo metadata.
