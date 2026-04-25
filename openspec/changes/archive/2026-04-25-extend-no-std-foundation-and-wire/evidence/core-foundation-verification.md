@@ -1658,12 +1658,12 @@ aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
             └── aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport) (*)
 ```
 
-## `python3 scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/extend-no-std-foundation-and-wire/evidence/core-default-features.txt --smoke-manifest openspec/changes/extend-no-std-foundation-and-wire/evidence/smoke-manifest.txt --smoke-source openspec/changes/extend-no-std-foundation-and-wire/evidence/smoke-source.txt --cluster-features openspec/changes/extend-no-std-foundation-and-wire/evidence/cluster-core-features.txt --cli-features openspec/changes/extend-no-std-foundation-and-wire/evidence/cli-core-features.txt --output openspec/changes/extend-no-std-foundation-and-wire/evidence/feature-claims.json`
+## `python3 scripts/check-aspen-core-feature-claims.py --default-features openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/core-default-features.txt --smoke-manifest openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/smoke-manifest.txt --smoke-source openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/smoke-source.txt --cluster-features openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/cluster-core-features.txt --cli-features openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/cli-core-features.txt --output openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/feature-claims.json`
 
 ```text
 ```
 
-## `python3 scripts/check-aspen-core-no-std-boundary.py --manifest-path crates/aspen-core/Cargo.toml --allowlist scripts/aspen-core-no-std-transitives.txt --output openspec/changes/extend-no-std-foundation-and-wire/evidence/deps-transitive.json --diff-output openspec/changes/extend-no-std-foundation-and-wire/evidence/deps-allowlist-diff.txt`
+## `python3 scripts/check-aspen-core-no-std-boundary.py --manifest-path crates/aspen-core/Cargo.toml --allowlist scripts/aspen-core-no-std-transitives.txt --output openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/deps-transitive.json --diff-output openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/deps-allowlist-diff.txt`
 
 ```text
 ```

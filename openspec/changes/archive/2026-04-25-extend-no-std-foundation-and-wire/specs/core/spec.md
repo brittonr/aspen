@@ -1,10 +1,10 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: No-std core baseline
-ID: core.no-std-core-baseline
 
 The `aspen-core` crate MUST provide an alloc-backed `no_std` build that exposes Aspen's foundational types, traits, constants, and deterministic helper logic without requiring filesystem, process, networking, thread, async-runtime, or storage-engine dependencies.
 
+ID: core.no-std-core-baseline
 #### Scenario: Bare dependency uses alloc-only default
 ID: core.no-std-core-baseline.bare-dependency-uses-alloc-only-default
 
@@ -42,9 +42,9 @@ ID: core.no-std-core-baseline.compile-fail-verification-is-reviewable
 
 - **GIVEN** compile-fail fixtures under `crates/aspen-core/tests/ui/` that exercise shell imports without `std`
 - **WHEN** their negative verification is saved for review
-- **THEN** the exact fixture paths, commands, and stderr assertions SHALL be recorded under `openspec/changes/extend-no-std-foundation-and-wire/evidence/`
+- **THEN** the exact fixture paths, commands, and stderr assertions SHALL be recorded under `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/`
 - **AND** the fixture set SHALL cover at least failed alloc-only imports of `aspen_core::{AppRegistry, NetworkTransport, SimulationArtifact, ContentDiscovery, DirectoryLayer}` plus failed alloc-only imports of `aspen_core::storage::SM_KV_TABLE` without the required shell features
-- **AND** `openspec/changes/extend-no-std-foundation-and-wire/verification.md` SHALL identify which artifact proves each compile-fail expectation
+- **AND** `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/verification.md` SHALL identify which artifact proves each compile-fail expectation
 
 #### Scenario: Std-dependent helpers require explicit opt-in
 ID: core.no-std-core-baseline.std-dependent-helpers-require-explicit-opt-in
@@ -85,9 +85,9 @@ ID: core.no-std-core-baseline.shell-alias-path-proof-is-reviewable
 
 - **GIVEN** the preserved shell-facing import `aspen_core::storage::SM_KV_TABLE` through the `aspen-core-shell` alias pattern
 - **WHEN** that compatibility claim is verified for review
-- **THEN** the exact commands and results for `cargo check -p aspen-core-shell`, `cargo check -p aspen-core-shell --features layer`, `cargo check -p aspen-core-shell --features global-discovery`, `cargo check -p aspen-core-shell --features sql`, and `cargo check --manifest-path crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml` SHALL be saved under `openspec/changes/extend-no-std-foundation-and-wire/evidence/`
+- **THEN** the exact commands and results for `cargo check -p aspen-core-shell`, `cargo check -p aspen-core-shell --features layer`, `cargo check -p aspen-core-shell --features global-discovery`, `cargo check -p aspen-core-shell --features sql`, and `cargo check --manifest-path crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml` SHALL be saved under `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/`
 - **AND** the alias-form consumer fixture SHALL live at `crates/aspen-core/tests/fixtures/shell-alias-smoke/` and import `aspen_core::storage::SM_KV_TABLE` through the alias form `aspen-core = { package = "aspen-core-shell", ... }`
-- **AND** `openspec/changes/extend-no-std-foundation-and-wire/verification.md` SHALL identify which artifact proves the alias-path claim
+- **AND** `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/verification.md` SHALL identify which artifact proves the alias-path claim
 
 #### Scenario: Representative std consumers remain supported
 ID: core.no-std-core-baseline.representative-std-consumers-remain-supported
@@ -102,6 +102,6 @@ ID: core.no-std-core-baseline.compile-slice-verification-is-reviewable
 
 - **GIVEN** the alloc-only crate, alloc-safe `sql`, the shell package `aspen-core-shell` with its relevant feature combinations, the smoke consumer, and representative std consumers
 - **WHEN** their compile slices are verified for review
-- **THEN** the exact commands and results for `cargo check -p aspen-core`, `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core --no-default-features --features sql`, `cargo check -p aspen-core-shell`, `cargo check -p aspen-core-shell --features layer`, `cargo check -p aspen-core-shell --features global-discovery`, `cargo check -p aspen-core-shell --features sql`, `cargo check -p aspen-core-no-std-smoke`, `cargo check -p aspen-cluster`, `cargo check -p aspen-client`, `cargo check -p aspen-cli`, `cargo check -p aspen-rpc-handlers`, and `cargo check -p aspen --no-default-features --features node-runtime` SHALL be saved under `openspec/changes/extend-no-std-foundation-and-wire/evidence/`
+- **THEN** the exact commands and results for `cargo check -p aspen-core`, `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core --no-default-features --features sql`, `cargo check -p aspen-core-shell`, `cargo check -p aspen-core-shell --features layer`, `cargo check -p aspen-core-shell --features global-discovery`, `cargo check -p aspen-core-shell --features sql`, `cargo check -p aspen-core-no-std-smoke`, `cargo check -p aspen-cluster`, `cargo check -p aspen-client`, `cargo check -p aspen-cli`, `cargo check -p aspen-rpc-handlers`, and `cargo check -p aspen --no-default-features --features node-runtime` SHALL be saved under `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/`
 - **AND** the saved smoke-consumer artifact SHALL prove alloc-only `aspen_core::storage::KvEntry` remains reachable after the storage split
-- **AND** `openspec/changes/extend-no-std-foundation-and-wire/verification.md` SHALL identify which artifact proves each slice
+- **AND** `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/verification.md` SHALL identify which artifact proves each slice

@@ -11,14 +11,14 @@ Changed files for this task:
 
 - `crates/aspen-client-api/Cargo.toml`
 - `crates/aspen-client-api/tests/client_rpc_postcard_baseline.rs`
-- `openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
+- `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
 
 `crates/aspen-client-api/tests/client_rpc_postcard_baseline.rs` proves the wire-compatibility harness now:
 
 - uses alloc-safe postcard serializers (`postcard::to_allocvec` and `postcard::from_bytes`) for every generated sample
 - parses the live Rust source with `syn` to enumerate the current `ClientRpcRequest` and `ClientRpcResponse` variant sets instead of relying on hand-maintained lists
 - derives canonical sample payloads from fixed rules only: stable path-derived strings, fixed integers, fixed bytes, deterministic single-entry collections, and recursive type expansion with a fixed depth bound
-- writes and compares a deterministic baseline artifact at `openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
+- writes and compares a deterministic baseline artifact at `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
 - fails if the saved baseline keys no longer match the live request/response variant sets before comparing the rendered artifact byte-for-byte
 
 ## Baseline generation command
@@ -46,8 +46,8 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; fin
      Running tests/client_rpc_postcard_baseline.rs (target/debug/deps/client_rpc_postcard_baseline-0ba744cc521a0349)
 
 running 1 test
-updated postcard baseline artifact at /home/brittonr/git/aspen/crates/aspen-client-api/../../openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json
-baseline file: /home/brittonr/git/aspen/crates/aspen-client-api/../../openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json
+updated postcard baseline artifact at /home/brittonr/git/aspen/crates/aspen-client-api/../../openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json
+baseline file: /home/brittonr/git/aspen/crates/aspen-client-api/../../openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json
 request variants: 346
 response variants: 274
 test client_rpc_postcard_baseline ... ok
@@ -224,7 +224,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; fin
      Running tests/client_rpc_postcard_baseline.rs (target/debug/deps/client_rpc_postcard_baseline-0ba744cc521a0349)
 
 running 1 test
-baseline file: /home/brittonr/git/aspen/crates/aspen-client-api/../../openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json
+baseline file: /home/brittonr/git/aspen/crates/aspen-client-api/../../openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json
 request variants: 346
 response variants: 274
 test client_rpc_postcard_baseline ... ok
@@ -252,7 +252,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; fin
 
 ## Artifact checks
 
-- `openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json` now exists and contains one postcard hex encoding per live request/response variant.
+- `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json` now exists and contains one postcard hex encoding per live request/response variant.
 - The baseline compare test printed `request variants: 346` and `response variants: 274`, proving completeness against the live source-enumerated variant sets before byte-for-byte comparison.
 - The same compare test passed without update mode, proving the current wire behavior matches the saved baseline artifact exactly.
-- Representative runtime consumer compile evidence remains indexed in `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`, specifically the saved sections for `cargo check -p aspen-cluster`, `cargo check -p aspen-client`, `cargo check -p aspen-cli`, `cargo check -p aspen-rpc-handlers`, and `cargo check -p aspen --no-default-features --features node-runtime`.
+- Representative runtime consumer compile evidence remains indexed in `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`, specifically the saved sections for `cargo check -p aspen-cluster`, `cargo check -p aspen-client`, `cargo check -p aspen-cli`, `cargo check -p aspen-rpc-handlers`, and `cargo check -p aspen --no-default-features --features node-runtime`.

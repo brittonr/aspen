@@ -19,7 +19,7 @@ These artifacts are baseline context only. They are not final proof for the comp
 
 ## Artifact index
 
-### `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-storage-seam-verification.md`
+### `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/baseline-storage-seam-verification.md`
 
 Contains:
 
@@ -29,7 +29,7 @@ Contains:
 
 Use this artifact to review the pre-change state where alloc-only storage still exposed Redb-backed baggage and the final storage-boundary rail failed against baseline source.
 
-### `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-core-foundation-verification.md`
+### `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/baseline-core-foundation-verification.md`
 
 Contains:
 
@@ -41,7 +41,7 @@ Contains:
 
 Use this artifact to review the pre-change state where the final alloc-only core and leaf-crate rails still failed against baseline source.
 
-### `openspec/changes/extend-no-std-foundation-and-wire/evidence/baseline-wire-dependency-verification.md`
+### `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/baseline-wire-dependency-verification.md`
 
 Contains:
 
@@ -55,8 +55,8 @@ Use this artifact to review the pre-change state where final wire dependency/sou
 
 - Baseline artifacts above show what the pre-change source looked like under the final verification rails.
 - Final proof for this change lives in:
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/storage-seam-verification.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/core-foundation-verification.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-compatibility-verification.md`
-- `openspec/changes/extend-no-std-foundation-and-wire/verification.md` is the root claim-to-artifact index that distinguishes these baseline artifacts from final proof.
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/storage-seam-verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/core-foundation-verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/wire-compatibility-verification.md`
+- `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/verification.md` is the root claim-to-artifact index that distinguishes these baseline artifacts from final proof.

@@ -21,8 +21,8 @@ This artifact records that review and points back to the existing in-tree source
   - `crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml`
   - `crates/aspen-core/tests/fixtures/shell-alias-smoke/src/lib.rs`
 - Supporting durable proof remains anchored in:
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/storage-seam-verification.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/core-foundation-verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/storage-seam-verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/core-foundation-verification.md`
 
 ### Wire crate alloc-safe cleanup
 
@@ -33,24 +33,24 @@ This artifact records that review and points back to the existing in-tree source
   - `crates/aspen-jobs-protocol/Cargo.toml`
   - `crates/aspen-forge-protocol/Cargo.toml`
 - Supporting durable proof remains anchored in:
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/wire-compatibility-verification.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/wire-dependency-verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/wire-compatibility-verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
 
 ### Docs / traceability
 
 - Documentation and root verification mapping remain anchored in:
   - `docs/no-std-core.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/verification.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/verification-plan.md`
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/docs-no-std-core-review.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/verification-plan.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/docs-no-std-core-review.md`
 
 ## Current-turn verification refresh
 
 - `scripts/openspec-preflight.sh extend-no-std-foundation-and-wire` now passes and the refreshed transcript is saved at:
-  - `openspec/changes/extend-no-std-foundation-and-wire/evidence/openspec-preflight.txt`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/openspec-preflight.txt`
 - The root mapping remains at:
-  - `openspec/changes/extend-no-std-foundation-and-wire/verification.md`
+  - `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/verification.md`
 
 ## Conclusion
 

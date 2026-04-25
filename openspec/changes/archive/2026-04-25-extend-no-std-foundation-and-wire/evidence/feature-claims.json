@@ -5,12 +5,12 @@
     "cli_features": {
       "missing_markers": [],
       "ok": true,
-      "path": "/home/brittonr/git/aspen/openspec/changes/extend-no-std-foundation-and-wire/evidence/cli-core-features.txt"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/cli-core-features.txt"
     },
     "cluster_features": {
       "missing_markers": [],
       "ok": true,
-      "path": "/home/brittonr/git/aspen/openspec/changes/extend-no-std-foundation-and-wire/evidence/cluster-core-features.txt"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/cluster-core-features.txt"
     },
     "core_manifest": {
       "messages": [],
@@ -20,7 +20,7 @@
     "default_features": {
       "offending_lines": [],
       "ok": true,
-      "path": "/home/brittonr/git/aspen/openspec/changes/extend-no-std-foundation-and-wire/evidence/core-default-features.txt"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/core-default-features.txt"
     },
     "shell_manifest": {
       "messages": [],
@@ -30,12 +30,12 @@
     "smoke_manifest": {
       "messages": [],
       "ok": true,
-      "path": "/home/brittonr/git/aspen/openspec/changes/extend-no-std-foundation-and-wire/evidence/smoke-manifest.txt"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/smoke-manifest.txt"
     },
     "smoke_source": {
       "messages": [],
       "ok": true,
-      "path": "/home/brittonr/git/aspen/openspec/changes/extend-no-std-foundation-and-wire/evidence/smoke-source.txt"
+      "path": "/home/brittonr/git/aspen/openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/smoke-source.txt"
     }
   }
 }
