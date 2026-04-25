@@ -9,6 +9,7 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
@@ -124,6 +125,60 @@ pub struct JjNativeResponse {
     pub message: Option<String>,
 }
 
+/// Forge repository backend type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum ForgeRepoBackend {
+    /// Git-compatible Forge backend.
+    Git,
+    /// JJ-native Forge backend.
+    Jj,
+}
+
+/// Node-specific routing information for a repository backend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForgeRepoBackendRoute {
+    /// Backend this route serves.
+    pub backend: ForgeRepoBackend,
+    /// Node identifier advertising the route.
+    pub node_id: Option<u64>,
+    /// Transport identifier, such as an ALPN/protocol ID.
+    pub transport_id: Option<String>,
+    /// Transport version for compatibility checks.
+    pub transport_version: Option<u16>,
+}
+
+fn default_repo_backends() -> Vec<ForgeRepoBackend> {
+    vec![ForgeRepoBackend::Git]
+}
+
+fn default_backend_routes() -> Vec<ForgeRepoBackendRoute> {
+    Vec::new()
+}
+
+/// Repository backend manifest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForgeRepoBackendManifest {
+    /// Enabled backends for this repository.
+    #[serde(default = "default_repo_backends")]
+    pub backends: Vec<ForgeRepoBackend>,
+}
+
+impl ForgeRepoBackendManifest {
+    /// Manifest for pre-existing Git-only repositories.
+    #[must_use]
+    pub fn git_only() -> Self {
+        Self {
+            backends: vec![ForgeRepoBackend::Git],
+        }
+    }
+
+    /// Return true when this manifest enables the given backend.
+    #[must_use]
+    pub fn supports(&self, backend: ForgeRepoBackend) -> bool {
+        self.backends.iter().any(|candidate| *candidate == backend)
+    }
+}
+
 /// Repository information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoInfo {
@@ -142,6 +197,12 @@ pub struct ForgeRepoInfo {
     pub threshold_delegates: u32,
     /// Creation timestamp (ms since epoch).
     pub created_at_ms: u64,
+    /// Enabled repository backends. Missing legacy metadata defaults to Git.
+    #[serde(default = "default_repo_backends")]
+    pub backends: Vec<ForgeRepoBackend>,
+    /// Node-specific backend routing metadata.
+    #[serde(default = "default_backend_routes")]
+    pub backend_routes: Vec<ForgeRepoBackendRoute>,
 }
 
 /// Repository operation result.
@@ -721,6 +782,8 @@ mod tests {
             delegates: vec!["key1".into()],
             threshold_delegates: 1,
             created_at_ms: 1000,
+            backends: ForgeRepoBackendManifest::git_only().backends,
+            backend_routes: Vec::new(),
         };
         let json = serde_json::to_string(&repo).unwrap();
         let decoded: ForgeRepoInfo = serde_json::from_str(&json).unwrap();
@@ -742,6 +805,8 @@ mod tests {
                 delegates: vec![],
                 threshold_delegates: 0,
                 created_at_ms: 0,
+                backends: ForgeRepoBackendManifest::git_only().backends,
+                backend_routes: Vec::new(),
             }),
             error: None,
         };
@@ -980,6 +1045,34 @@ mod tests {
         assert_eq!(decoded.objects_imported, 42);
         assert_eq!(decoded.objects_skipped, 8);
         assert!(decoded.ref_results.is_empty());
+    }
+
+    #[test]
+    fn forge_repo_info_defaults_legacy_backends_to_git() {
+        let legacy_json = r#"{
+            "id":"repo-1",
+            "name":"repo",
+            "description":null,
+            "default_branch":"main",
+            "delegates":[],
+            "threshold":1,
+            "created_at_ms":1000
+        }"#;
+
+        let decoded: ForgeRepoInfo = serde_json::from_str(legacy_json).unwrap();
+
+        assert_eq!(decoded.backends, vec![ForgeRepoBackend::Git]);
+        assert!(decoded.backend_routes.is_empty());
+    }
+
+    #[test]
+    fn forge_repo_backend_manifest_reports_supported_backends() {
+        let manifest = ForgeRepoBackendManifest {
+            backends: vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj],
+        };
+
+        assert!(manifest.supports(ForgeRepoBackend::Git));
+        assert!(manifest.supports(ForgeRepoBackend::Jj));
     }
 
     #[test]

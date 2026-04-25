@@ -381,6 +381,8 @@ impl ForgeServiceExecutor {
                     delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
                     threshold_delegates: identity.threshold,
                     created_at_ms: identity.created_at_ms,
+                    backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
+                    backend_routes: Vec::new(),
                 };
                 Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                     is_success: true,
@@ -1508,6 +1510,8 @@ impl ForgeServiceExecutor {
                     delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
                     threshold_delegates: identity.threshold,
                     created_at_ms: identity.created_at_ms,
+                    backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
+                    backend_routes: Vec::new(),
                 };
                 Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                     is_success: true,
@@ -1701,6 +1705,8 @@ impl ForgeServiceExecutor {
                             delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
                             threshold_delegates: identity.threshold,
                             created_at_ms: identity.created_at_ms,
+                            backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
+                            backend_routes: Vec::new(),
                         };
                         Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                             is_success: true,
@@ -1739,6 +1745,8 @@ impl ForgeServiceExecutor {
                                 delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
                                 threshold_delegates: identity.threshold,
                                 created_at_ms: identity.created_at_ms,
+                                backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
+                                backend_routes: Vec::new(),
                             })
                             .collect();
                         Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {

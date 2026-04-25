@@ -1,8 +1,8 @@
 ## 1. Protocol and metadata foundation
 
-- [ ] 1.1 Extend Forge repo metadata, repository list responses, and client-facing capability discovery so a repo can declare `git`, `jj`, or both backends and return node-specific routing identifiers for active backends.
+- [x] 1.1 Extend Forge repo metadata, repository list responses, and client-facing capability discovery so a repo can declare `git`, `jj`, or both backends and return node-specific routing identifiers for active backends.
 - [ ] 1.2 Update repository create/delete flows so JJ-enabled repos allocate JJ namespaces on create and remove/tombstone JJ namespaces, change-id indexes, and discovery metadata on delete while leaving shared blobs on the normal retention/GC path.
-- [ ] 1.3 Default or backfill pre-existing repositories with no backend manifest to `git`-only behavior.
+- [x] 1.3 Default or backfill pre-existing repositories with no backend manifest to `git`-only behavior.
 - [x] 1.4 Add JJ-native request/response families, transport identifiers, and explicit transport-version advertisement/compatibility checks for clone, fetch, push, bookmark sync, and change-id lookup.
 - [ ] 1.5 Extend the plugin/runtime manifest and routing path so a WASM plugin can claim a bounded repo protocol session, not only unary requests.
 - [x] 1.6 Reject protocol-identifier collisions during plugin registration/activation and surface a deterministic error.

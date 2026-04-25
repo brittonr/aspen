@@ -5,11 +5,12 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-plugin-api/src/lib.rs`
-- Changed file: `crates/aspen-plugin-api/src/resolve.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-protocol-plugin-api-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-6-openspec-preflight.txt`
+- Changed file: `crates/aspen-forge-protocol/src/lib.rs`
+- Changed file: `crates/aspen-forge-handler/src/executor.rs`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-forge-protocol-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-forge-handler-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -20,6 +21,11 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 1.6 Reject protocol-identifier collisions during plugin registration/activation and surface a deterministic error.
   - Evidence: `crates/aspen-plugin-api/src/manifest.rs`, `crates/aspen-plugin-api/src/resolve.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-protocol-plugin-api-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-rustfmt-check.txt`
+
+- [x] 1.1 Extend Forge repo metadata, repository list responses, and client-facing capability discovery so a repo can declare `git`, `jj`, or both backends and return node-specific routing identifiers for active backends.
+  - Evidence: `crates/aspen-forge-protocol/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-forge-protocol-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-rustfmt-check.txt`
+- [x] 1.3 Default or backfill pre-existing repositories with no backend manifest to `git`-only behavior.
+  - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `crates/aspen-forge-protocol/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-forge-handler-check.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-forge-protocol-tests.txt`
 
 ## Review Scope Snapshot
 
@@ -46,6 +52,26 @@ Pending broader implementation diff for later tasks.
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-6-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge-protocol`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-forge-protocol-tests.txt`
+
+### `cargo check -p aspen-forge-handler`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-forge-handler-check.txt`
+
+### `rustfmt --check crates/aspen-forge-protocol/src/lib.rs crates/aspen-forge-handler/src/executor.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-1-1-3-openspec-preflight.txt`
 
 ## Notes
 
