@@ -20,7 +20,7 @@
 - [x] 2.6 Validate incoming JJ payloads and reject malformed or inconsistent object graphs before final publish.
 - [x] 2.7 Add optimistic final-publish conflict checks for stale bookmark heads and stale change-id heads.
 - [x] 2.8 Add staged-data quota, expiry, and cleanup behavior for successful publish, timeout, rejection, and abandoned-session paths.
-- [ ] 2.9 Abort or reject in-flight JJ sessions when a repo is deleted or JJ support is disabled, and block final publish after that transition.
+- [x] 2.9 Abort or reject in-flight JJ sessions when a repo is deleted or JJ support is disabled, and block final publish after that transition.
 
 ## 3. JJ Forge plugin and client path
 

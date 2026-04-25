@@ -33,6 +33,8 @@ pub const JJ_BOOKMARK_KEY_PREFIX: &str = "forge:jj:bookmark:";
 pub const JJ_CHANGE_HEAD_KEY_PREFIX: &str = "forge:jj:change:";
 /// KV prefix for repo-scoped JJ staged session records.
 pub const JJ_STAGED_SESSION_KEY_PREFIX: &str = "forge:jj:stage:";
+/// KV key prefix for repo JJ session availability.
+pub const JJ_REPO_SESSION_STATE_KEY_PREFIX: &str = "forge:jj:repo-state:";
 
 /// Native JJ object kind stored by Forge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,6 +180,26 @@ pub struct JjStagedQuota {
     pub max_staged_size_bytes: u64,
 }
 
+/// Repo-level JJ session availability state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JjRepoSessionState {
+    /// Repo identifier.
+    pub repo_id: String,
+    /// Whether repository deletion has begun.
+    pub is_deleted: bool,
+    /// Whether JJ support is currently enabled.
+    pub is_jj_enabled: bool,
+}
+
+/// Repo-level JJ unavailability reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JjRepoUnavailableReason {
+    /// Repository is deleted or deleting.
+    Deleted,
+    /// Repository no longer supports JJ.
+    JjDisabled,
+}
+
 /// Staged JJ publish payload applied atomically at repo-visible heads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JjStagedPublish {
@@ -279,6 +301,9 @@ pub enum JjObjectStoreError {
     /// Staged data exceeds quota.
     #[error("JJ staged data uses {used_bytes} bytes, max {max_bytes}")]
     QuotaExceeded { used_bytes: u64, max_bytes: u64 },
+    /// Repo cannot accept JJ session publication.
+    #[error("JJ repo unavailable: {reason:?}")]
+    RepoUnavailable { reason: JjRepoUnavailableReason },
     /// Stored blob size does not fit in u64.
     #[error("JJ object encoded size overflow")]
     SizeOverflow,
@@ -436,6 +461,10 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
 
     /// Publish a fully staged JJ payload after validation and conflict checks.
     pub async fn publish_staged(&self, staged: &JjStagedPublish) -> Result<JjPublishReceipt, JjObjectStoreError> {
+        if let Err(error) = self.ensure_repo_available(&staged.repo_id).await {
+            self.cleanup_staged_publish_session(staged).await?;
+            return Err(error);
+        }
         if let Err(source) = validate_jj_object_graph(&staged.objects, &staged.known_object_ids) {
             self.cleanup_staged_publish_session(staged).await?;
             return Err(JjObjectStoreError::Graph { source });
@@ -462,6 +491,29 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> JjObjectStore<K, B> {
             bookmark_updates: staged.bookmark_updates.len(),
             change_head_updates: staged.change_head_updates.len(),
         })
+    }
+
+    /// Store repo JJ session availability state.
+    pub async fn put_repo_session_state(&self, state: &JjRepoSessionState) -> Result<(), JjObjectStoreError> {
+        self.write_json(jj_repo_session_state_key(&state.repo_id), state).await
+    }
+
+    /// Read repo JJ session availability state.
+    pub async fn get_repo_session_state(
+        &self,
+        repo_id: &str,
+    ) -> Result<Option<JjRepoSessionState>, JjObjectStoreError> {
+        self.read_json(jj_repo_session_state_key(repo_id)).await
+    }
+
+    /// Return an error when repo deletion or JJ disablement blocks sessions.
+    pub async fn ensure_repo_available(&self, repo_id: &str) -> Result<(), JjObjectStoreError> {
+        match self.get_repo_session_state(repo_id).await? {
+            Some(state) => {
+                ensure_jj_repo_available(&state).map_err(|reason| JjObjectStoreError::RepoUnavailable { reason })
+            }
+            None => Ok(()),
+        }
     }
 
     /// Record a staged session if it is within quota.
@@ -627,6 +679,23 @@ pub fn jj_change_head_key(repo_id: &str, change_id: &str) -> String {
 #[must_use]
 pub fn jj_staged_session_key(repo_id: &str, session_id: &str) -> String {
     format!("{JJ_STAGED_SESSION_KEY_PREFIX}{repo_id}:{session_id}")
+}
+
+/// Build the repo-scoped key for JJ session availability.
+#[must_use]
+pub fn jj_repo_session_state_key(repo_id: &str) -> String {
+    format!("{JJ_REPO_SESSION_STATE_KEY_PREFIX}{repo_id}")
+}
+
+/// Validate repo availability for JJ session admission/publication.
+pub fn ensure_jj_repo_available(state: &JjRepoSessionState) -> Result<(), JjRepoUnavailableReason> {
+    if state.is_deleted {
+        return Err(JjRepoUnavailableReason::Deleted);
+    }
+    if !state.is_jj_enabled {
+        return Err(JjRepoUnavailableReason::JjDisabled);
+    }
+    Ok(())
 }
 
 /// Return true when a staged session is expired at `now_ms`.
@@ -821,6 +890,14 @@ mod tests {
         }
     }
 
+    fn repo_session_state(is_deleted: bool, is_jj_enabled: bool) -> JjRepoSessionState {
+        JjRepoSessionState {
+            repo_id: TEST_REPO_ID.to_string(),
+            is_deleted,
+            is_jj_enabled,
+        }
+    }
+
     #[test]
     fn jj_reachability_key_is_repo_scoped() {
         let key = jj_reachability_key(TEST_REPO_ID, TEST_OBJECT_ID);
@@ -977,6 +1054,63 @@ mod tests {
         assert_eq!(record.head_object_id, TEST_OBJECT_ID);
         assert_eq!(found.change_id, TEST_CHANGE_ID);
         assert_eq!(found.head_object_id, TEST_OBJECT_ID);
+    }
+
+    #[test]
+    fn jj_repo_availability_rejects_deleted_and_disabled_repos() {
+        let deleted = ensure_jj_repo_available(&repo_session_state(true, true)).expect_err("deleted repo rejected");
+        let disabled = ensure_jj_repo_available(&repo_session_state(false, false)).expect_err("disabled repo rejected");
+        let enabled = ensure_jj_repo_available(&repo_session_state(false, true));
+
+        assert_eq!(deleted, JjRepoUnavailableReason::Deleted);
+        assert_eq!(disabled, JjRepoUnavailableReason::JjDisabled);
+        assert!(enabled.is_ok());
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_blocks_publish_when_repo_deleted_and_cleans_session() {
+        let store = object_store();
+        store.put_repo_session_state(&repo_session_state(true, true)).await.expect("repo state writes");
+        store.put_staged_session(&staged_session(), staged_quota()).await.expect("staged session stores");
+        let staged = JjStagedPublish {
+            session_id: Some(TEST_SESSION_ID.to_string()),
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: vec![object()],
+            known_object_ids: vec![TEST_PARENT_ID.to_string()],
+            bookmark_updates: Vec::new(),
+            change_head_updates: Vec::new(),
+        };
+
+        let err = store.publish_staged(&staged).await.expect_err("deleted repo blocks publish");
+        let missing = store
+            .get_staged_session(TEST_REPO_ID, TEST_SESSION_ID)
+            .await
+            .expect("staged session lookup succeeds");
+
+        assert!(matches!(err, JjObjectStoreError::RepoUnavailable {
+            reason: JjRepoUnavailableReason::Deleted
+        }));
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn jj_object_store_blocks_publish_when_jj_disabled() {
+        let store = object_store();
+        store.put_repo_session_state(&repo_session_state(false, false)).await.expect("repo state writes");
+        let staged = JjStagedPublish {
+            session_id: None,
+            repo_id: TEST_REPO_ID.to_string(),
+            objects: vec![object()],
+            known_object_ids: vec![TEST_PARENT_ID.to_string()],
+            bookmark_updates: Vec::new(),
+            change_head_updates: Vec::new(),
+        };
+
+        let err = store.publish_staged(&staged).await.expect_err("disabled JJ blocks publish");
+
+        assert!(matches!(err, JjObjectStoreError::RepoUnavailable {
+            reason: JjRepoUnavailableReason::JjDisabled
+        }));
     }
 
     #[tokio::test]
