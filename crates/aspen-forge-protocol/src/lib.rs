@@ -17,6 +17,10 @@ use serde::Serialize;
 
 /// ALPN identifier for the JJ-native Forge protocol.
 pub const JJ_NATIVE_FORGE_ALPN: &[u8] = b"/aspen/forge/jj/1";
+/// Text form of [`JJ_NATIVE_FORGE_ALPN`] for JSON routing metadata.
+pub const JJ_NATIVE_FORGE_ALPN_STR: &str = "/aspen/forge/jj/1";
+/// Transport identifier used for Git-compatible Forge RPC routes.
+pub const FORGE_GIT_BACKEND_TRANSPORT_ID: &str = "aspen-client";
 
 /// Current JJ-native transport version.
 pub const JJ_TRANSPORT_VERSION_CURRENT: u16 = 1;
@@ -1045,6 +1049,11 @@ mod tests {
         assert_eq!(decoded.objects_imported, 42);
         assert_eq!(decoded.objects_skipped, 8);
         assert!(decoded.ref_results.is_empty());
+    }
+
+    #[test]
+    fn jj_native_alpn_text_matches_wire_bytes() {
+        assert_eq!(JJ_NATIVE_FORGE_ALPN_STR.as_bytes(), JJ_NATIVE_FORGE_ALPN);
     }
 
     #[test]

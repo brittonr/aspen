@@ -11,6 +11,12 @@ use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 #[cfg(not(feature = "git-bridge"))]
 use aspen_client_api::ErrorResponse;
+use aspen_client_api::forge::FORGE_GIT_BACKEND_TRANSPORT_ID;
+use aspen_client_api::forge::ForgeRepoBackend;
+use aspen_client_api::forge::ForgeRepoBackendManifest;
+use aspen_client_api::forge::ForgeRepoBackendRoute;
+use aspen_client_api::forge::JJ_NATIVE_FORGE_ALPN_STR;
+use aspen_core::KeyValueStore as _;
 use aspen_rpc_core::ServiceExecutor;
 use async_trait::async_trait;
 
@@ -22,6 +28,77 @@ fn unexpected_request_kind(request_family: &str) -> Result<ClientRpcResponse> {
 
 fn usize_from_u32(value: u32) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
+}
+
+const PLUGIN_ROUTE_SCAN_LIMIT: u32 = 1_000;
+
+fn git_only_backends() -> Vec<ForgeRepoBackend> {
+    ForgeRepoBackendManifest::git_only().backends
+}
+
+fn git_backend_route(node_id: u64) -> ForgeRepoBackendRoute {
+    ForgeRepoBackendRoute {
+        backend: ForgeRepoBackend::Git,
+        node_id: Some(node_id),
+        transport_id: Some(FORGE_GIT_BACKEND_TRANSPORT_ID.to_string()),
+        transport_version: None,
+    }
+}
+
+fn jj_backend_route_from_manifest(
+    node_id: u64,
+    manifest: &aspen_plugin_api::PluginManifest,
+) -> Option<ForgeRepoBackendRoute> {
+    manifest
+        .protocols
+        .iter()
+        .find(|protocol| protocol.identifier == JJ_NATIVE_FORGE_ALPN_STR)
+        .map(|protocol| ForgeRepoBackendRoute {
+            backend: ForgeRepoBackend::Jj,
+            node_id: Some(node_id),
+            transport_id: Some(protocol.identifier.clone()),
+            transport_version: Some(protocol.version),
+        })
+}
+
+fn routes_for_backends(
+    backends: &[ForgeRepoBackend],
+    active_routes: &[ForgeRepoBackendRoute],
+) -> Vec<ForgeRepoBackendRoute> {
+    active_routes
+        .iter()
+        .filter(|route| backends.iter().any(|backend| *backend == route.backend))
+        .cloned()
+        .collect()
+}
+
+fn repo_info_from_identity_with_backends(
+    identity: &aspen_forge::identity::RepoIdentity,
+    description: Option<String>,
+    backends: Vec<ForgeRepoBackend>,
+    active_routes: &[ForgeRepoBackendRoute],
+) -> aspen_client_api::ForgeRepoInfo {
+    let backend_routes = routes_for_backends(&backends, active_routes);
+
+    aspen_client_api::ForgeRepoInfo {
+        id: identity.repo_id().to_hex(),
+        name: identity.name.clone(),
+        description: description.or_else(|| identity.description.clone()),
+        default_branch: identity.default_branch.clone(),
+        delegates: identity.delegates.iter().map(|delegate| delegate.to_string()).collect(),
+        threshold_delegates: identity.threshold,
+        created_at_ms: identity.created_at_ms,
+        backends,
+        backend_routes,
+    }
+}
+
+fn repo_info_from_identity(
+    identity: &aspen_forge::identity::RepoIdentity,
+    description: Option<String>,
+    active_routes: &[ForgeRepoBackendRoute],
+) -> aspen_client_api::ForgeRepoInfo {
+    repo_info_from_identity_with_backends(identity, description, git_only_backends(), active_routes)
 }
 
 // ── Conversion helpers ──────────────────────────────────────────────
@@ -275,6 +352,36 @@ impl ForgeServiceExecutor {
             nostr_auth,
         }
     }
+
+    async fn active_backend_routes(&self) -> Vec<ForgeRepoBackendRoute> {
+        let mut routes = vec![git_backend_route(self.node_id)];
+        let request = aspen_core::ScanRequest {
+            prefix: aspen_plugin_api::PLUGIN_KV_PREFIX.to_string(),
+            limit_results: Some(PLUGIN_ROUTE_SCAN_LIMIT),
+            continuation_token: None,
+        };
+
+        match self.forge_node.kv().scan_local(request).await {
+            Ok(result) => {
+                for entry in result.entries {
+                    let Ok(manifest) = serde_json::from_str::<aspen_plugin_api::PluginManifest>(&entry.value) else {
+                        continue;
+                    };
+                    if !manifest.enabled {
+                        continue;
+                    }
+                    if let Some(route) = jj_backend_route_from_manifest(self.node_id, &manifest) {
+                        routes.push(route);
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, "failed to scan active plugin manifests for Forge backend routes");
+            }
+        }
+
+        routes
+    }
 }
 
 impl ForgeServiceExecutor {
@@ -365,7 +472,6 @@ impl ForgeServiceExecutor {
     // ========================================================================
 
     async fn handle_get_repo(&self, repo_id: String) -> Result<ClientRpcResponse> {
-        use aspen_client_api::ForgeRepoInfo;
         use aspen_client_api::ForgeRepoResultResponse;
 
         let hash = blake3::Hash::from_hex(&repo_id).map_err(|e| anyhow::anyhow!("invalid repo ID: {}", e))?;
@@ -373,17 +479,8 @@ impl ForgeServiceExecutor {
 
         match self.forge_node.get_repo(&repo_id).await {
             Ok(identity) => {
-                let repo_info = ForgeRepoInfo {
-                    id: identity.repo_id().to_hex(),
-                    name: identity.name.clone(),
-                    description: None,
-                    default_branch: "main".to_string(),
-                    delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
-                    threshold_delegates: identity.threshold,
-                    created_at_ms: identity.created_at_ms,
-                    backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
-                    backend_routes: Vec::new(),
-                };
+                let active_routes = self.active_backend_routes().await;
+                let repo_info = repo_info_from_identity(&identity, None, &active_routes);
                 Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                     is_success: true,
                     repo: Some(repo_info),
@@ -1502,17 +1599,8 @@ impl ForgeServiceExecutor {
 
         match self.forge_node.fork_repo(&upstream_repo_id, &name, delegates, threshold).await {
             Ok(identity) => {
-                let repo_info = aspen_client_api::ForgeRepoInfo {
-                    id: identity.repo_id().to_hex(),
-                    name: identity.name.clone(),
-                    description,
-                    default_branch: "main".to_string(),
-                    delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
-                    threshold_delegates: identity.threshold,
-                    created_at_ms: identity.created_at_ms,
-                    backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
-                    backend_routes: Vec::new(),
-                };
+                let active_routes = self.active_backend_routes().await;
+                let repo_info = repo_info_from_identity(&identity, description, &active_routes);
                 Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                     is_success: true,
                     repo: Some(repo_info),
@@ -1691,23 +1779,13 @@ impl ForgeServiceExecutor {
                 description,
                 default_branch: _,
             } => {
-                use aspen_client_api::ForgeRepoInfo;
                 use aspen_client_api::ForgeRepoResultResponse;
 
                 let delegates = vec![self.forge_node.public_key()];
                 match self.forge_node.create_repo(&name, delegates, 1).await {
                     Ok(identity) => {
-                        let repo_info = ForgeRepoInfo {
-                            id: identity.repo_id().to_hex(),
-                            name: name.clone(),
-                            description,
-                            default_branch: "main".to_string(),
-                            delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
-                            threshold_delegates: identity.threshold,
-                            created_at_ms: identity.created_at_ms,
-                            backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
-                            backend_routes: Vec::new(),
-                        };
+                        let active_routes = self.active_backend_routes().await;
+                        let repo_info = repo_info_from_identity(&identity, description, &active_routes);
                         Ok(ClientRpcResponse::ForgeRepoResult(ForgeRepoResultResponse {
                             is_success: true,
                             repo: Some(repo_info),
@@ -1725,29 +1803,19 @@ impl ForgeServiceExecutor {
                 limit: max_results_hint,
                 offset: start_offset_hint,
             } => {
-                use aspen_client_api::ForgeRepoInfo;
                 use aspen_client_api::ForgeRepoListResultResponse;
 
                 let max_results = usize_from_u32(max_results_hint.unwrap_or(100).min(1000));
                 let start_index = usize_from_u32(start_offset_hint.unwrap_or(0));
                 match self.forge_node.list_repos().await {
                     Ok(repos) => {
+                        let active_routes = self.active_backend_routes().await;
                         let count = u32::try_from(repos.len()).unwrap_or(u32::MAX);
                         let repos = repos
                             .into_iter()
                             .skip(start_index)
                             .take(max_results)
-                            .map(|identity| ForgeRepoInfo {
-                                id: identity.repo_id().to_hex(),
-                                name: identity.name.clone(),
-                                description: None,
-                                default_branch: "main".to_string(),
-                                delegates: identity.delegates.iter().map(|d| d.to_string()).collect(),
-                                threshold_delegates: identity.threshold,
-                                created_at_ms: identity.created_at_ms,
-                                backends: aspen_client_api::forge::ForgeRepoBackendManifest::git_only().backends,
-                                backend_routes: Vec::new(),
-                            })
+                            .map(|identity| repo_info_from_identity(&identity, None, &active_routes))
                             .collect();
                         Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
                             is_success: true,
@@ -2433,11 +2501,49 @@ mod tests {
     use std::sync::Arc;
 
     use aspen_blob::IrohBlobStore;
-    use aspen_core::EndpointProvider;
     use aspen_rpc_core::ServiceExecutor;
     use aspen_testing_core::DeterministicKeyValueStore;
 
     use super::*;
+
+    const TEST_NODE_ID: u64 = 7;
+    const TEST_THRESHOLD: u32 = 1;
+    const TEST_PROTOCOL_VERSION: u16 = 1;
+    const TEST_MAX_SESSIONS: u32 = 2;
+    const TEST_MAX_CHUNK_BYTES: u64 = 65_536;
+    const TEST_MAX_IN_FLIGHT_BYTES: u64 = 131_072;
+    const TEST_SESSION_TIMEOUT_MS: u64 = 30_000;
+
+    fn test_plugin_manifest(identifier: &str, is_enabled: bool) -> aspen_plugin_api::PluginManifest {
+        aspen_plugin_api::PluginManifest {
+            name: "jj-plugin".to_string(),
+            version: "1.0.0".to_string(),
+            wasm_hash: "hash".to_string(),
+            handles: vec![],
+            protocols: vec![aspen_plugin_api::PluginProtocol {
+                identifier: identifier.to_string(),
+                version: TEST_PROTOCOL_VERSION,
+                max_concurrent_sessions: TEST_MAX_SESSIONS,
+                max_chunk_size_bytes: TEST_MAX_CHUNK_BYTES,
+                max_in_flight_bytes: TEST_MAX_IN_FLIGHT_BYTES,
+                session_timeout_ms: TEST_SESSION_TIMEOUT_MS,
+            }],
+            priority: ForgeServiceExecutor::PRIORITY,
+            fuel_limit: None,
+            memory_limit: None,
+            enabled: is_enabled,
+            app_id: None,
+            execution_timeout_secs: None,
+            kv_prefixes: vec![],
+            permissions: aspen_plugin_api::PluginPermissions::default(),
+            signature: None,
+            description: None,
+            author: None,
+            tags: vec![],
+            min_api_version: None,
+            dependencies: vec![],
+        }
+    }
 
     async fn make_test_executor() -> ForgeServiceExecutor {
         let endpoint_secret = iroh::SecretKey::generate(&mut rand::rng());
@@ -2466,8 +2572,119 @@ mod tests {
             iroh_endpoint: Some(Arc::new(endpoint)),
             #[cfg(all(feature = "hooks", feature = "git-bridge"))]
             hook_service: None,
-            node_id: 7,
+            node_id: TEST_NODE_ID,
         })
+    }
+
+    #[test]
+    fn test_backend_route_helpers_advertise_git_and_active_jj() {
+        let git_route = git_backend_route(TEST_NODE_ID);
+        assert_eq!(git_route.backend, ForgeRepoBackend::Git);
+        assert_eq!(git_route.node_id, Some(TEST_NODE_ID));
+        assert_eq!(git_route.transport_id.as_deref(), Some(FORGE_GIT_BACKEND_TRANSPORT_ID));
+
+        let manifest = test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true);
+        let jj_route =
+            jj_backend_route_from_manifest(TEST_NODE_ID, &manifest).expect("JJ plugin should advertise route");
+        assert_eq!(jj_route.backend, ForgeRepoBackend::Jj);
+        assert_eq!(jj_route.node_id, Some(TEST_NODE_ID));
+        assert_eq!(jj_route.transport_id.as_deref(), Some(JJ_NATIVE_FORGE_ALPN_STR));
+        assert_eq!(jj_route.transport_version, Some(TEST_PROTOCOL_VERSION));
+    }
+
+    #[test]
+    fn test_repo_info_dual_backend_uses_only_active_routes() {
+        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let identity = aspen_forge::identity::RepoIdentity::new("repo", vec![secret.public()], TEST_THRESHOLD)
+            .expect("repo identity builds");
+        let active_routes = vec![
+            git_backend_route(TEST_NODE_ID),
+            jj_backend_route_from_manifest(TEST_NODE_ID, &test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true))
+                .expect("JJ route"),
+        ];
+
+        let info = repo_info_from_identity_with_backends(
+            &identity,
+            None,
+            vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj],
+            &active_routes,
+        );
+
+        assert_eq!(info.backends, vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj]);
+        assert_eq!(info.backend_routes.len(), 2);
+    }
+
+    #[test]
+    fn test_repo_info_omits_inactive_backend_routes() {
+        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let identity = aspen_forge::identity::RepoIdentity::new("repo", vec![secret.public()], TEST_THRESHOLD)
+            .expect("repo identity builds");
+        let active_routes = vec![git_backend_route(TEST_NODE_ID)];
+
+        let info = repo_info_from_identity_with_backends(
+            &identity,
+            None,
+            vec![ForgeRepoBackend::Git, ForgeRepoBackend::Jj],
+            &active_routes,
+        );
+
+        assert_eq!(info.backend_routes.len(), 1);
+        assert_eq!(info.backend_routes[0].backend, ForgeRepoBackend::Git);
+    }
+
+    #[test]
+    fn test_backend_routes_filter_by_repo_backend() {
+        let routes = vec![
+            git_backend_route(TEST_NODE_ID),
+            jj_backend_route_from_manifest(TEST_NODE_ID, &test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true))
+                .expect("JJ route"),
+        ];
+        let git_routes = routes_for_backends(&[ForgeRepoBackend::Git], &routes);
+
+        assert_eq!(git_routes.len(), 1);
+        assert_eq!(git_routes[0].backend, ForgeRepoBackend::Git);
+    }
+
+    #[tokio::test]
+    async fn test_active_backend_routes_reads_enabled_jj_plugin() {
+        let executor = make_test_executor().await;
+        let manifest = test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true);
+        let manifest_json = serde_json::to_string(&manifest).expect("manifest serializes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(
+                format!("{}{}", aspen_plugin_api::PLUGIN_KV_PREFIX, manifest.name),
+                manifest_json,
+            ))
+            .await
+            .expect("plugin manifest writes to KV");
+
+        let routes = executor.active_backend_routes().await;
+
+        assert!(routes.iter().any(|route| route.backend == ForgeRepoBackend::Git));
+        assert!(routes.iter().any(|route| route.backend == ForgeRepoBackend::Jj));
+    }
+
+    #[tokio::test]
+    async fn test_active_backend_routes_omits_disabled_jj_plugin() {
+        let executor = make_test_executor().await;
+        let manifest = test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, false);
+        let manifest_json = serde_json::to_string(&manifest).expect("manifest serializes");
+        executor
+            .forge_node
+            .kv()
+            .write(aspen_core::WriteRequest::set(
+                format!("{}{}", aspen_plugin_api::PLUGIN_KV_PREFIX, manifest.name),
+                manifest_json,
+            ))
+            .await
+            .expect("plugin manifest writes to KV");
+
+        let routes = executor.active_backend_routes().await;
+
+        assert!(routes.iter().any(|route| route.backend == ForgeRepoBackend::Git));
+        assert!(!routes.iter().any(|route| route.backend == ForgeRepoBackend::Jj));
     }
 
     #[test]
@@ -2549,6 +2766,9 @@ mod tests {
                 let repo = response.repo.expect("repo result should include created repo");
                 assert_eq!(repo.name, "repo");
                 assert_eq!(repo.default_branch, "main");
+                assert_eq!(repo.backends, vec![ForgeRepoBackend::Git]);
+                assert_eq!(repo.backend_routes.len(), 1);
+                assert_eq!(repo.backend_routes[0].backend, ForgeRepoBackend::Git);
             }
             other => panic!("expected ForgeRepoResult, got {other:?}"),
         }
@@ -2566,6 +2786,7 @@ mod tests {
                 assert_eq!(response.count, 1);
                 assert_eq!(response.repos.len(), 1);
                 assert_eq!(response.repos[0].name, "repo");
+                assert_eq!(response.repos[0].backend_routes.len(), 1);
             }
             other => panic!("expected ForgeRepoListResult, got {other:?}"),
         }

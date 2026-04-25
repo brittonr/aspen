@@ -1802,6 +1802,7 @@ dependencies = [
  "aspen-forge",
  "aspen-hooks",
  "aspen-hooks-types",
+ "aspen-plugin-api",
  "aspen-rpc-core",
  "aspen-testing-core",
  "async-trait",

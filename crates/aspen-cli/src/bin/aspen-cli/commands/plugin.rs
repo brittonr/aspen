@@ -516,6 +516,7 @@ struct ResolvedInstall {
     tags: Vec<String>,
     min_api_version: Option<String>,
     dependencies: Vec<aspen_plugin_api::PluginDependency>,
+    protocols: Vec<aspen_plugin_api::PluginProtocol>,
 }
 
 fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
@@ -592,6 +593,8 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
         .and_then(|v| serde_json::from_value(v["dependencies"].clone()).ok())
         .unwrap_or_default();
 
+    let protocols = base.as_ref().map(|b| b.protocols.clone()).unwrap_or_default();
+
     Ok(ResolvedInstall {
         name,
         handles,
@@ -607,7 +610,18 @@ fn resolve_install_args(args: &InstallArgs) -> Result<ResolvedInstall> {
         tags,
         min_api_version,
         dependencies,
+        protocols,
     })
+}
+
+fn installed_without_plugin(installed: &[PluginManifest], plugin_name: &str) -> Vec<PluginManifest> {
+    installed.iter().filter(|manifest| manifest.name != plugin_name).cloned().collect()
+}
+
+fn has_protocol_identifier_collision(errors: &[aspen_plugin_api::resolve::DependencyError]) -> bool {
+    errors
+        .iter()
+        .any(|error| matches!(error, aspen_plugin_api::resolve::DependencyError::ProtocolIdentifierCollision { .. }))
 }
 
 async fn fetch_installed_manifests(client: &AspenClient) -> Result<Vec<PluginManifest>> {
@@ -666,6 +680,7 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
         version: resolved.version,
         wasm_hash: wasm_hash.clone(),
         handles: resolved.handles,
+        protocols: resolved.protocols,
         priority: resolved.priority.max(900).min(999),
         fuel_limit: resolved.fuel_limit,
         memory_limit: resolved.memory_limit,
@@ -687,6 +702,9 @@ async fn plugin_install(client: &AspenClient, args: InstallArgs, json: bool) -> 
     if let Err(errors) = aspen_plugin_api::resolve::validate_install(&manifest, &installed) {
         for err in &errors {
             eprintln!("Dependency error: {err}");
+        }
+        if has_protocol_identifier_collision(&errors) {
+            anyhow::bail!("Install blocked by protocol identifier collision.");
         }
         if !args.force {
             anyhow::bail!("Install blocked by dependency errors. Use --force to override.");
@@ -782,6 +800,17 @@ async fn plugin_toggle(client: &AspenClient, name: &str, enabled: bool, json: bo
     };
 
     manifest.enabled = enabled;
+    if enabled {
+        let installed = fetch_installed_manifests(client).await?;
+        let peers = installed_without_plugin(&installed, &manifest.name);
+        if let Err(errors) = aspen_plugin_api::resolve::validate_install(&manifest, &peers) {
+            for err in &errors {
+                eprintln!("Dependency error: {err}");
+            }
+            anyhow::bail!("Plugin activation blocked by dependency errors.");
+        }
+    }
+
     let manifest_json = serde_json::to_string(&manifest)?;
 
     // Write updated manifest
@@ -974,9 +1003,19 @@ async fn plugin_check(client: &AspenClient, json: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use clap::Parser;
 
     use crate::cli::Cli;
+
+    const TEST_PRIORITY: u32 = 910;
+    const TEST_PRIORITY_TEXT: &str = "910";
+    const TEST_PROTOCOL_VERSION: u16 = 1;
+    const TEST_MAX_SESSIONS: u32 = 2;
+    const TEST_MAX_CHUNK_BYTES: u64 = 65_536;
+    const TEST_MAX_IN_FLIGHT_BYTES: u64 = 131_072;
+    const TEST_SESSION_TIMEOUT_MS: u64 = 30_000;
 
     #[test]
     fn plugin_list_parses() {
@@ -1047,7 +1086,7 @@ mod tests {
             "--name",
             "custom-name",
             "--priority",
-            "910",
+            TEST_PRIORITY_TEXT,
         ]);
         assert!(result.is_ok(), "install with --manifest and overrides should parse: {:?}", result.err());
     }
@@ -1105,7 +1144,7 @@ mod tests {
             manifest: None,
             name: Some("my-plugin".to_string()),
             handles: Some(vec!["ReadKey".to_string(), "WriteKey".to_string()]),
-            priority: Some(910),
+            priority: Some(TEST_PRIORITY),
             plugin_version: Some("1.0.0".to_string()),
             fuel_limit: None,
             memory_limit: None,
@@ -1120,7 +1159,7 @@ mod tests {
         let resolved = super::resolve_install_args(&args).expect("should resolve");
         assert_eq!(resolved.name, "my-plugin");
         assert_eq!(resolved.handles, vec!["ReadKey", "WriteKey"]);
-        assert_eq!(resolved.priority, 910);
+        assert_eq!(resolved.priority, TEST_PRIORITY);
         assert_eq!(resolved.version, "1.0.0");
     }
 
@@ -1146,6 +1185,99 @@ mod tests {
         let resolved = super::resolve_install_args(&args).expect("should resolve");
         assert_eq!(resolved.priority, 950);
         assert_eq!(resolved.version, "0.1.0");
+    }
+
+    #[test]
+    fn resolve_manifest_preserves_protocols() {
+        let mut manifest_file = tempfile::NamedTempFile::new().expect("temp manifest file");
+        let manifest = serde_json::json!({
+            "name": "jj-plugin",
+            "version": "1.0.0",
+            "handles": ["ForgeJjNative"],
+            "protocols": [{
+                "identifier": "/aspen/jj-native/1",
+                "version": TEST_PROTOCOL_VERSION,
+                "max_concurrent_sessions": TEST_MAX_SESSIONS,
+                "max_chunk_size_bytes": TEST_MAX_CHUNK_BYTES,
+                "max_in_flight_bytes": TEST_MAX_IN_FLIGHT_BYTES,
+                "session_timeout_ms": TEST_SESSION_TIMEOUT_MS
+            }],
+            "priority": TEST_PRIORITY
+        });
+        write!(manifest_file, "{}", manifest).expect("write manifest");
+
+        let args = super::InstallArgs {
+            wasm_file: "test.wasm".into(),
+            manifest: Some(manifest_file.path().to_path_buf()),
+            name: None,
+            handles: None,
+            priority: None,
+            plugin_version: None,
+            fuel_limit: None,
+            memory_limit: None,
+            app_id: None,
+            kv_prefixes: None,
+            description: None,
+            author: None,
+            tags: None,
+            min_api_version: None,
+            force: false,
+        };
+
+        let resolved = super::resolve_install_args(&args).expect("manifest resolves");
+
+        assert_eq!(resolved.protocols.len(), 1);
+        assert_eq!(resolved.protocols[0].identifier, "/aspen/jj-native/1");
+        assert_eq!(resolved.protocols[0].version, TEST_PROTOCOL_VERSION);
+    }
+
+    #[test]
+    fn installed_without_plugin_excludes_self_for_activation() {
+        let mut self_manifest = aspen_plugin_api::PluginManifest {
+            name: "candidate".to_string(),
+            version: "1.0.0".to_string(),
+            wasm_hash: "hash".to_string(),
+            handles: vec![],
+            protocols: vec![],
+            priority: TEST_PRIORITY,
+            fuel_limit: None,
+            memory_limit: None,
+            enabled: false,
+            app_id: None,
+            execution_timeout_secs: None,
+            kv_prefixes: vec![],
+            permissions: aspen_plugin_api::PluginPermissions::default(),
+            signature: None,
+            description: None,
+            author: None,
+            tags: vec![],
+            min_api_version: None,
+            dependencies: vec![],
+        };
+        let other_manifest = aspen_plugin_api::PluginManifest {
+            name: "other".to_string(),
+            ..self_manifest.clone()
+        };
+        self_manifest.enabled = true;
+        let installed = vec![self_manifest, other_manifest];
+
+        let peers = super::installed_without_plugin(&installed, "candidate");
+
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].name, "other");
+    }
+
+    #[test]
+    fn protocol_collision_is_not_force_overridable() {
+        let errors = vec![
+            aspen_plugin_api::resolve::DependencyError::ProtocolIdentifierCollision {
+                plugin: "candidate".to_string(),
+                identifier: "/aspen/jj-native/1".to_string(),
+                conflicts: vec!["installed".to_string(), "candidate".to_string()],
+            },
+        ];
+
+        assert!(super::has_protocol_identifier_collision(&errors));
     }
 
     #[test]
