@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-04-25-extract-coordination-crate
+  tasks: 12 total / 12 checked
+  changed files listed: 31
+  verification artifacts: 13

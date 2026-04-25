@@ -1,0 +1,21 @@
+# OpenSpec Validation
+
+## Pre-archive: openspec validate extract-coordination-crate --strict
+```
+Change 'extract-coordination-crate' is valid
+```
+
+## Canonical spec: openspec validate architecture-modularity --strict
+```
+Specification 'architecture-modularity' is valid
+```
+
+## Canonical spec: openspec validate coordination-extraction --strict
+```
+Specification 'coordination-extraction' is valid
+```
+
+## Existing prepare change after evidence-location contract fix
+```
+Change 'prepare-crate-extraction' is valid
+```

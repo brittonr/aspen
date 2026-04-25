@@ -105,6 +105,7 @@ struct CargoPackage {
 #[derive(Debug, Deserialize)]
 struct CargoDependency {
     name: String,
+    kind: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,6 +145,8 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_raft_network" => Some("aspen-raft-network"),
         "aspen_raft_compat" => Some("aspen-raft"),
         "aspen_raft_kv" => Some("aspen-raft-kv"),
+        "aspen_coordination" => Some("aspen-coordination"),
+        "aspen_coordination_protocol" => Some("aspen-coordination-protocol"),
         _ => None,
     }
 }
@@ -171,6 +174,10 @@ fn collect_default_forbidden(policy: &Policy, candidate: &Candidate) -> BTreeSet
         .collect()
 }
 
+fn is_normal_dependency(dependency: &CargoDependency) -> bool {
+    dependency.kind.is_none()
+}
+
 fn check_exception(candidate_key: &str, exception: &Exception, failures: &mut Vec<String>) {
     if exception.candidate.trim().is_empty() {
         failures.push(format!("{candidate_key}: exception has empty candidate"));
@@ -187,6 +194,11 @@ fn check_exception(candidate_key: &str, exception: &Exception, failures: &mut Ve
     if exception.reason.trim().is_empty() {
         failures.push(format!("{candidate_key}: exception `{}` has empty reason", exception.dependency_path));
     }
+}
+
+fn manifest_text_allows_no_reexporter(text: &str) -> bool {
+    let normalized = text.to_lowercase().replace('*', "");
+    normalized.contains("compatibility re-exports: none")
 }
 
 fn check_manifest(candidate_key: &str, candidate: &Candidate, failures: &mut Vec<String>) -> Result<String> {
@@ -239,7 +251,7 @@ fn check_direct_deps(
     if is_runtime_shell(candidate) {
         return;
     }
-    for dep in &package.dependencies {
+    for dep in package.dependencies.iter().filter(|dep| is_normal_dependency(dep)) {
         let has_exception = exception_allows_dependency(candidate, &dep.name);
         if forbidden.contains(&dep.name) && !has_exception {
             failures.push(format!("{candidate_key}: direct forbidden dependency `{}`", dep.name));
@@ -322,11 +334,11 @@ fn build_report(args: &Args) -> Result<Report> {
     for (candidate_key, candidate) in &policy.candidates {
         checked_candidates.push(candidate_key.clone());
         check_readiness(candidate_key, candidate, &blocked, &mut failures);
-        let _manifest_text = check_manifest(candidate_key, candidate, &mut failures)?;
+        let manifest_text = check_manifest(candidate_key, candidate, &mut failures)?;
         if candidate.representative_consumers.is_empty() {
             failures.push(format!("{candidate_key}: no representative consumers"));
         }
-        if candidate.reexporters.is_empty() {
+        if candidate.reexporters.is_empty() && !manifest_text_allows_no_reexporter(&manifest_text) {
             failures.push(format!("{candidate_key}: no re-exporters recorded"));
         }
         for exception in &candidate.exceptions {

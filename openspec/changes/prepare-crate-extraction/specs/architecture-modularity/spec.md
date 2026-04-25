@@ -16,8 +16,8 @@ ID: architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-
 ID: architecture.modularity.extractable-crate-boundaries-are-explicit.extraction-artifacts-have-canonical-locations
 
 - **WHEN** extraction readiness artifacts are authored
-- **THEN** the inventory summary SHALL live at `docs/crate-extraction.md`, per-candidate manifests SHALL live under `docs/crate-extraction/`, the typed dependency policy SHALL live at `docs/crate-extraction/policy.ncl`, and change-specific verification evidence SHALL live under `openspec/changes/prepare-crate-extraction/evidence/`
-- **AND** each evidence artifact SHALL be referenced from the change's `verification.md` before any related task is checked complete
+- **THEN** the inventory summary SHALL live at `docs/crate-extraction.md`, per-candidate manifests SHALL live under `docs/crate-extraction/`, the typed dependency policy SHALL live at `docs/crate-extraction/policy.ncl`, and change-specific verification evidence SHALL live under that change's own `openspec/changes/<change>/evidence/` directory while active or under `openspec/changes/archive/<date>-<change>/evidence/` after archive
+- **AND** each evidence artifact SHALL be referenced from the same change's `verification.md` before any related task is checked complete
 
 #### Scenario: Candidate defines documentation and release metadata
 ID: architecture.modularity.extractable-crate-boundaries-are-explicit.candidate-defines-documentation-and-release-metadata

@@ -135,7 +135,8 @@ let Candidate = {
   ],
 
   evidence_roots | Array RepoPath = [
-    "openspec/changes/prepare-crate-extraction/evidence",
+    "openspec/changes/*/evidence",
+    "openspec/changes/archive/*/evidence",
   ],
 
   candidates | { _: Candidate } = {
@@ -354,6 +355,40 @@ let Candidate = {
           reason = "Optional sharding-aware route metadata.",
         },
       ],
+    },
+
+    aspen_coordination = {
+      class = "service library",
+      readiness_state = "extraction-ready-in-workspace",
+      manifest = "docs/crate-extraction/coordination.md",
+      owner = "Aspen coordination maintainers",
+      default_feature_sets = ["default"],
+      named_reusable_feature_sets = ["verus"],
+      representative_consumers = ["aspen-cluster", "aspen-jobs", "aspen-rpc-core", "aspen-rpc-handlers", "aspen-core-essentials-handler", "aspen-job-handler", "aspen-testing"],
+      reexporters = [],
+      forbidden_unless_feature = ["aspen-core", "aspen-core-shell", "aspen-raft", "aspen-transport", "aspen-auth", "aspen-client-api", "aspen-trust", "aspen-secrets", "aspen-sql"],
+      exceptions = [
+        {
+          candidate = "aspen-coordination",
+          feature_set = "default",
+          dependency_path = "aspen-coordination -> tokio",
+          owner = "Aspen coordination maintainers",
+          reason = "Async runtime for timer-based coordination (lock TTL, election timeouts, rate limiter refill).",
+        },
+      ],
+    },
+
+    aspen_coordination_protocol = {
+      class = "protocol/wire",
+      readiness_state = "extraction-ready-in-workspace",
+      manifest = "docs/crate-extraction/coordination.md",
+      owner = "Aspen coordination maintainers",
+      default_feature_sets = ["default"],
+      named_reusable_feature_sets = [],
+      representative_consumers = ["aspen-coordination", "aspen-client-api"],
+      reexporters = [],
+      forbidden_unless_feature = [],
+      exceptions = [],
     },
 
     aspen_raft_compat = {

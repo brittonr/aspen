@@ -11,7 +11,7 @@
 //! - `QueueManager` - Distributed FIFO queue with visibility timeout
 //! - `ServiceRegistry` - Service discovery with health checks
 //!
-//! All primitives are built on top of the [`aspen_core::KeyValueStore`] trait's CAS operations,
+//! All primitives are built on top of the [`aspen_traits::KeyValueStore`] trait's CAS operations,
 //! providing linearizable semantics through Raft consensus.
 //!
 //! ## Leader Election Example

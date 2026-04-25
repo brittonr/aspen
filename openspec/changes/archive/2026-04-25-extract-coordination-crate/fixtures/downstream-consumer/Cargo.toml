@@ -1,0 +1,12 @@
+[package]
+name = "aspen-coordination-downstream-consumer"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-coordination = { path = "../../../../../crates/aspen-coordination" }
+aspen-kv-types = { path = "../../../../../crates/aspen-kv-types" }
+aspen-traits = { path = "../../../../../crates/aspen-traits" }

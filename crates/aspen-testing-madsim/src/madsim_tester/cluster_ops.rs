@@ -124,9 +124,9 @@ impl AspenRaftTester {
     async fn restart_redb_node(&mut self, node_slot: usize, node_id: NodeId, storage_path: &RedbStoragePath) {
         // Recreate the node with the same Redb storage
         let raft_config = Config {
-            heartbeat_interval: DEFAULT_HEARTBEAT_INTERVAL_MS,
-            election_timeout_min: DEFAULT_ELECTION_TIMEOUT_MIN_MS,
-            election_timeout_max: DEFAULT_ELECTION_TIMEOUT_MAX_MS,
+            heartbeat_interval_ms: DEFAULT_HEARTBEAT_INTERVAL_MS,
+            election_timeout_min_ms: DEFAULT_ELECTION_TIMEOUT_MIN_MS,
+            election_timeout_max_ms: DEFAULT_ELECTION_TIMEOUT_MAX_MS,
             ..Default::default()
         };
         let raft_config = Arc::new(raft_config.validate().expect("invalid raft config"));

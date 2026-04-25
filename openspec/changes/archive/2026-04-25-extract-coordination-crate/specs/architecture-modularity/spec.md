@@ -1,9 +1,9 @@
 ## ADDED Requirements
 
 ### Requirement: Extraction inventory tracks coordination family
-ID: architecture-modularity.extraction-inventory-tracks-coordination
-
 The crate extraction inventory at `docs/crate-extraction.md` SHALL include the coordination family with current readiness state, manifest link, owner status, and next action for both `aspen-coordination` and `aspen-coordination-protocol`.
+
+ID: architecture-modularity.extraction-inventory-tracks-coordination
 
 #### Scenario: Inventory row exists for coordination
 - **WHEN** `docs/crate-extraction.md` is read

@@ -1380,7 +1380,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-constants",
- "aspen-core",
  "aspen-kv-types",
  "aspen-testing",
  "aspen-time",

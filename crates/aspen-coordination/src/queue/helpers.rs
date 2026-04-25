@@ -54,7 +54,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     pub(super) async fn scan_keys(&self, prefix: &str, limit: u32) -> Result<Vec<String>> {
         match self
             .store
-            .scan(aspen_core::ScanRequest {
+            .scan(aspen_kv_types::ScanRequest {
                 prefix: prefix.to_string(),
                 limit_results: Some(limit),
                 continuation_token: None,

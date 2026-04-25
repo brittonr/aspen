@@ -1,8 +1,7 @@
-## ADDED Requirements
-
+## Purpose
+Aspen maintains explicit crate boundaries, feature topology, and extraction contracts so reusable library surfaces stay independent from app/runtime shells unless explicitly opted in.
+## Requirements
 ### Requirement: Acyclic no-std core boundary
-ID: architecture.modularity.acyclic-no-std-core-boundary
-
 Aspen MUST maintain an acyclic dependency boundary where the alloc-only `aspen-core` surface depends only on alloc-safe leaf crates, and `std`-bound runtime shells depend on that core rather than the reverse.
 
 For this requirement:
@@ -11,6 +10,7 @@ For this requirement:
 - **leaf crate** means an alloc-safe dependency that provides shared types, codecs, or deterministic helpers and does not depend on Aspen shell crates or app bundles.
 - **direct prerequisite** means a dependency selected directly by `crates/aspen-core/Cargo.toml` for the alloc-only build, not an arbitrary transitive dependency of another enabled crate.
 
+ID: architecture.modularity.acyclic-no-std-core-boundary
 #### Scenario: Runtime shells depend outward on core
 ID: architecture.modularity.acyclic-no-std-core-boundary.runtime-shells-depend-outward-on-core
 
@@ -35,13 +35,10 @@ ID: architecture.modularity.acyclic-no-std-core-boundary.pure-consumers-avoid-ru
 - **THEN** Cargo resolution MUST succeed without enabling Aspen runtime shell features
 - **AND** the consumer MUST NOT need to import shell modules just to reach foundational types and traits
 
-## MODIFIED Requirements
-
 ### Requirement: Feature bundles are explicit and bounded
-ID: architecture.modularity.feature-bundles-are-explicit-and-bounded
-
 The build feature graph SHALL distinguish alloc-only core surfaces, `std`-only shell features, and higher-level convenience bundles so enabling foundational Aspen contracts does not silently pull runtime dependencies.
 
+ID: architecture.modularity.feature-bundles-are-explicit-and-bounded
 #### Scenario: Alloc-only core excludes runtime shells
 ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.alloc-only-core-excludes-runtime-shells
 
@@ -79,3 +76,14 @@ ID: architecture.modularity.feature-bundles-are-explicit-and-bounded.feature-top
 - **WHEN** that contract is verified for review
 - **THEN** the exact commands and results for the default, `std`, `layer`, `global-discovery`, `sql`, and `std + sql` compile slices SHALL be saved under `openspec/changes/no-std-aspen-core/evidence/`
 - **AND** `openspec/changes/no-std-aspen-core/verification.md` SHALL identify which artifact proves each feature topology claim
+
+### Requirement: Extraction inventory tracks coordination family
+The crate extraction inventory at `docs/crate-extraction.md` SHALL include the coordination family with current readiness state, manifest link, owner status, and next action for both `aspen-coordination` and `aspen-coordination-protocol`.
+
+ID: architecture-modularity.extraction-inventory-tracks-coordination
+
+#### Scenario: Inventory row exists for coordination
+- **WHEN** `docs/crate-extraction.md` is read
+- **THEN** the broader candidate inventory table SHALL include a row for the coordination family
+- **AND** the row SHALL link to `docs/crate-extraction/coordination.md`
+- **AND** the readiness state SHALL reflect the verified extraction-readiness status

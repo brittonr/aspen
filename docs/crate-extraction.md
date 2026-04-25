@@ -2,7 +2,7 @@
 
 Aspen stays a monorepo while extraction seams are hardened. A crate is not extraction-ready just because it is a workspace member: it must have a documented audience, owner, feature contract, dependency boundary, verification rails, and compatibility plan.
 
-This document is the inventory and readiness contract. Detailed candidate manifests live under `docs/crate-extraction/`. Change-specific evidence for the current preparation work lives under `openspec/changes/prepare-crate-extraction/evidence/` and is linked from `openspec/changes/prepare-crate-extraction/verification.md`.
+This document is the inventory and readiness contract. Detailed candidate manifests live under `docs/crate-extraction/`. Change-specific evidence lives under that change's own `openspec/changes/<change>/evidence/` directory while active, then moves with the change under `openspec/changes/archive/<date>-<change>/evidence/` when archived. Each evidence artifact is linked from the same change's `verification.md`.
 
 ## Readiness states
 
@@ -67,8 +67,8 @@ scripts/check-crate-extraction-readiness.rs \
   --inventory docs/crate-extraction.md \
   --manifest-dir docs/crate-extraction \
   --candidate-family redb-raft-kv \
-  --output-json openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.json \
-  --output-markdown openspec/changes/prepare-crate-extraction/evidence/dependency-boundary.md
+  --output-json openspec/changes/<change>/evidence/dependency-boundary.json \
+  --output-markdown openspec/changes/<change>/evidence/dependency-boundary.md
 ```
 
 The checker must fail on unowned exceptions, missing required exception fields, forbidden readiness states before human license/publication decision, direct app-bundle dependencies, transitive app-bundle dependencies, representative-consumer leaks, and compatibility re-export leaks.
@@ -108,7 +108,7 @@ Mandatory first-slice rails:
 | Protocol/wire | `protocol/wire` | `aspen-client-api`, `aspen-forge-protocol`, `aspen-jobs-protocol`, `aspen-coordination-protocol` | owner needed | `docs/crate-extraction/protocol-wire.md` | `workspace-internal` | Preserve postcard baselines and alloc-safe serializers. |
 | Redb Raft KV | `storage/backend` + `service library` + `runtime adapter` | `aspen-kv-types`, `aspen-redb-storage`, `aspen-raft-kv-types`, `aspen-raft-kv`, `aspen-raft-network`, `aspen-raft` | owner needed | per-layer manifests | 4/6 `extraction-ready-in-workspace` | Type/storage/facade layers ready; adapter/compat remain `workspace-internal`; publishable/repo-split blocked on license policy. |
 | Iroh transport/RPC | `runtime adapter` | `aspen-transport`, `aspen-rpc-core`, `aspen-client` | owner needed | manifest not yet created | `workspace-internal` | Separate generic iroh RPC helpers from Aspen handler registry. |
-| Coordination | `service library` | `aspen-coordination`, `aspen-coordination-protocol` | owner needed | manifest not yet created | `workspace-internal` | Depend only on reusable KV traits/types plus time injection. |
+| Coordination | `service library` | `aspen-coordination`, `aspen-coordination-protocol` | Aspen coordination maintainers | [`docs/crate-extraction/coordination.md`](crate-extraction/coordination.md) | `extraction-ready-in-workspace` | `aspen-core` removed; depends only on `aspen-kv-types`, `aspen-traits`, `aspen-constants`, `aspen-time`; protocol crate standalone; publishable/repo-split blocked on license policy. |
 | Blob/castore/cache | `service library` | `aspen-blob`, `aspen-castore`, `aspen-cache`, `aspen-exec-cache` | owner needed | manifest not yet created | `workspace-internal` | Separate Aspen client integration from storage/cache APIs. |
 | Commit DAG / branches | `service library` | `aspen-commit-dag`, `aspen-kv-branch`, `aspen-dag` | owner needed | manifest not yet created | `workspace-internal` | Remove direct `aspen-raft` dependency where trait-based KV is enough. |
 | Jobs and CI core | `service library` | `aspen-jobs-protocol`, `aspen-jobs`, `aspen-ci-core`, executors | owner needed | manifest not yet created | `workspace-internal` | Split schema/scheduler from cluster worker runtime. |
@@ -119,4 +119,4 @@ Mandatory first-slice rails:
 
 ## Evidence discipline
 
-Every checked task must appear verbatim in `openspec/changes/prepare-crate-extraction/verification.md` with an `- Evidence:` line. Evidence must be repo-relative, checked in, and under the change directory unless it is a changed implementation file. Do not cite `/tmp` or chat-only summaries.
+Every checked task must appear verbatim in its change's `verification.md` with an `- Evidence:` line. Evidence must be repo-relative, checked in, and under that change directory unless it is a changed implementation file. Do not cite `/tmp` or chat-only summaries.

@@ -162,7 +162,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         let scan_result = self
             .store
-            .scan(aspen_core::ScanRequest {
+            .scan(aspen_kv_types::ScanRequest {
                 prefix,
                 limit_results: Some(MAX_STEAL_HINTS_PER_WORKER),
                 continuation_token: None,
@@ -223,7 +223,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     pub async fn has_steal_hint(&self, target_id: &str, source_id: &str) -> Result<bool> {
         let key = verified::steal_hint_key(target_id, source_id);
 
-        match self.store.read(aspen_core::ReadRequest::new(key)).await {
+        match self.store.read(aspen_kv_types::ReadRequest::new(key)).await {
             Ok(result) => {
                 if let Some(kv) = result.kv {
                     match serde_json::from_str::<StealHint>(&kv.value) {
@@ -245,7 +245,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     pub(super) async fn cleanup_expired_hints(&self) -> Result<usize> {
         let scan_result = self
             .store
-            .scan(aspen_core::ScanRequest {
+            .scan(aspen_kv_types::ScanRequest {
                 prefix: verified::STEAL_HINT_PREFIX.to_string(),
                 limit_results: Some(MAX_HINT_CLEANUP_BATCH),
                 continuation_token: None,
@@ -281,7 +281,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     pub async fn clear_all_steal_hints(&self) -> Result<usize> {
         let scan_result = self
             .store
-            .scan(aspen_core::ScanRequest {
+            .scan(aspen_kv_types::ScanRequest {
                 prefix: verified::STEAL_HINT_PREFIX.to_string(),
                 limit_results: Some(MAX_HINT_CLEANUP_BATCH),
                 continuation_token: None,

@@ -293,9 +293,9 @@ fn resolve_seed(config: &TesterConfig) -> u64 {
 /// Create a validated Raft config from tester config.
 fn create_raft_config(config: &TesterConfig) -> Arc<openraft::Config> {
     let raft_config = Config {
-        heartbeat_interval: config.heartbeat_interval_ms,
-        election_timeout_min: config.election_timeout_min_ms,
-        election_timeout_max: config.election_timeout_max_ms,
+        heartbeat_interval_ms: config.heartbeat_interval_ms,
+        election_timeout_min_ms: config.election_timeout_min_ms,
+        election_timeout_max_ms: config.election_timeout_max_ms,
         ..Default::default()
     };
     Arc::new(raft_config.validate().expect("invalid raft config"))
