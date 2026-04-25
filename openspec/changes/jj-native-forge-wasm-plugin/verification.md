@@ -5,12 +5,12 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `Cargo.toml`
-- Changed file: `crates/aspen-cli/Cargo.toml`
-- Changed file: `crates/aspen-cli/src/bin/jj-remote-aspen/main.rs`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-openspec-preflight.txt`
+- Changed file: `crates/aspen-plugin-api/src/lib.rs`
+- Changed file: `crates/aspen-plugin-api/src/manifest.rs`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-9-plugin-host-access-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-9-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-2-5-7-runtime-coverage-index.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/final-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -108,6 +108,21 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 2.3 Implement cross-node JJ blob fetch through Aspen's blob distribution path so peers can satisfy missing-object reads.
   - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-blob/src/traits/read.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-3-jj-blob-fetch-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-3-rustfmt-check.txt`
+
+- [x] 1.9 Implement host/runtime enforcement of declared KV/blob/protocol permissions, session limits, and cleanup on denied or terminated protocol sessions.
+  - Evidence: `crates/aspen-plugin-api/src/manifest.rs`, `crates/aspen-plugin-api/src/lib.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-9-plugin-host-access-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-9-rustfmt-check.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-2-5-7-runtime-coverage-index.txt`
+
+- [x] 5.2 Add integration tests for authorized JJ-native clone, incremental fetch, probe-first incremental push, bookmark movement, change-id resolution, cross-node JJ blob fetch, compatible/incompatible transport-version handling, and explicit no-fallback behavior to `git-remote-aspen` against a JJ-enabled Forge repo.
+  - Evidence: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-2-5-7-runtime-coverage-index.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-jj-remote-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-repo-lifecycle-integration-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-8-jj-authz-tests.txt`
+
+- [x] 5.5 Add runtime tests proving plugin registration records protocol metadata, protocol-identifier collisions are rejected, discovery advertises the stable JJ routing identifier from active plugin registration, activation-state changes are reflected in discovery, and JJ-native QUIC session admission accepts that same advertised identifier.
+  - Evidence: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-2-5-7-runtime-coverage-index.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-1-6-protocol-plugin-api-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-7-1-8-forge-handler-route-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`
+
+- [x] 5.6 Add runtime tests proving protocol sessions enforce declared permissions/resource limits and clean up per-session resources after timeout or limit-triggered termination.
+  - Evidence: `crates/aspen-plugin-api/src/manifest.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-9-plugin-host-access-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-2-5-7-runtime-coverage-index.txt`
+
+- [x] 5.7 Add transport/runtime tests proving large JJ transfers stay bounded, staged data is released after successful publish, staged data expires/cleans up on failed or abandoned sessions, and failed streams return retryable errors.
+  - Evidence: `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-2-5-7-runtime-coverage-index.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/2-8-aspen-forge-jj-staged-cleanup-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-1-jj-plugin-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/5-1-repo-lifecycle-integration-tests.txt`
 
 ## Review Scope Snapshot
 
@@ -289,6 +304,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-2-3-5-openspec-preflight.txt`
+
+### `cargo test -p aspen-plugin-api manifest::tests -- --nocapture`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-9-plugin-host-access-tests.txt`
+
+### `rustfmt --check crates/aspen-plugin-api/src/manifest.rs crates/aspen-plugin-api/src/lib.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-9-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/final-openspec-preflight.txt`
 
 ### `cargo test -p aspen-forge jj::`
 

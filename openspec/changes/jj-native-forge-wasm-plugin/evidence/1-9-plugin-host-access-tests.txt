@@ -1,0 +1,28 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/Cargo.toml
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling memchr v2.8.0
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling aspen-plugin-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777140788576-d2t2/crates/aspen-plugin-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.75s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-targets/jj-plugin-routing/debug/deps/aspen_plugin_api-64540576caecc91c)
+
+running 6 tests
+test manifest::tests::detects_enabled_protocol_collision ... ok
+test manifest::tests::ignores_disabled_protocol_collision ... ok
+test manifest::tests::rejects_kv_key_outside_declared_prefix ... ok
+test manifest::tests::rejects_undeclared_host_access ... ok
+test manifest::tests::protocol_manifest_roundtrips ... ok
+test manifest::tests::validates_declared_protocol_and_permissions ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
+

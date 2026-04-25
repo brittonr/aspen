@@ -8,7 +8,7 @@
 - [x] 1.6 Reject protocol-identifier collisions during plugin registration/activation and surface a deterministic error.
 - [x] 1.7 Persist the manifest-declared JJ routing identifier in plugin registration metadata, surface it in capability discovery, and keep it stable across reload/upgrade when unchanged.
 - [x] 1.8 Publish and withdraw node-local JJ activation state so discovery only advertises nodes with an active JJ plugin.
-- [ ] 1.9 Implement host/runtime enforcement of declared KV/blob/protocol permissions, session limits, and cleanup on denied or terminated protocol sessions.
+- [x] 1.9 Implement host/runtime enforcement of declared KV/blob/protocol permissions, session limits, and cleanup on denied or terminated protocol sessions.
 
 ## 2. JJ-native Forge storage
 
@@ -42,9 +42,9 @@
 ## 5. Verification
 
 - [x] 5.1 Add integration tests for Forge repo create/list/delete flows with backend manifests, repository list responses that report enabled backends, pre-existing repos that default to `git` when the manifest is absent, node-specific capability-discovery responses for Git-only, JJ-only, and dual-backend repos, positive routing-identifier presence on active JJ nodes, explicit post-delete rejection of both Git and JJ operations, post-delete unreachability of JJ discovery metadata, and shared-blob retention on the normal GC path.
-- [ ] 5.2 Add integration tests for authorized JJ-native clone, incremental fetch, probe-first incremental push, bookmark movement, change-id resolution, cross-node JJ blob fetch, compatible/incompatible transport-version handling, and explicit no-fallback behavior to `git-remote-aspen` against a JJ-enabled Forge repo.
+- [x] 5.2 Add integration tests for authorized JJ-native clone, incremental fetch, probe-first incremental push, bookmark movement, change-id resolution, cross-node JJ blob fetch, compatible/incompatible transport-version handling, and explicit no-fallback behavior to `git-remote-aspen` against a JJ-enabled Forge repo.
 - [x] 5.3 Add regression tests for change-id preservation, rewrite/update behavior, malformed-payload rejection, staged-publish no-partial-visibility, concurrent final-publish conflict rejection, repo-delete session abort/final-publish blocking, and dual-backend namespace isolation.
 - [x] 5.4 Add negative tests proving JJ-to-Git-only and Git-to-JJ-only access fail with capability errors, JJ-enabled repos on plugin-inactive target nodes return `capability-unavailable`, discovery omits JJ routing identifiers for those nodes, unauthorized JJ writes are rejected, and no path falls back silently.
-- [ ] 5.5 Add runtime tests proving plugin registration records protocol metadata, protocol-identifier collisions are rejected, discovery advertises the stable JJ routing identifier from active plugin registration, activation-state changes are reflected in discovery, and JJ-native QUIC session admission accepts that same advertised identifier.
-- [ ] 5.6 Add runtime tests proving protocol sessions enforce declared permissions/resource limits and clean up per-session resources after timeout or limit-triggered termination.
-- [ ] 5.7 Add transport/runtime tests proving large JJ transfers stay bounded, staged data is released after successful publish, staged data expires/cleans up on failed or abandoned sessions, and failed streams return retryable errors.
+- [x] 5.5 Add runtime tests proving plugin registration records protocol metadata, protocol-identifier collisions are rejected, discovery advertises the stable JJ routing identifier from active plugin registration, activation-state changes are reflected in discovery, and JJ-native QUIC session admission accepts that same advertised identifier.
+- [x] 5.6 Add runtime tests proving protocol sessions enforce declared permissions/resource limits and clean up per-session resources after timeout or limit-triggered termination.
+- [x] 5.7 Add transport/runtime tests proving large JJ transfers stay bounded, staged data is released after successful publish, staged data expires/cleans up on failed or abandoned sessions, and failed streams return retryable errors.

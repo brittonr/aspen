@@ -1,0 +1,1 @@
+rustfmt --check crates/aspen-plugin-api/src/manifest.rs crates/aspen-plugin-api/src/lib.rs passed.

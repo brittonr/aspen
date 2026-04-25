@@ -255,6 +255,111 @@ pub fn protocol_identifier_collisions(manifests: &[PluginManifest]) -> Vec<Plugi
         .collect()
 }
 
+/// Host operation attempted by a plugin protocol session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginHostAccess<'a> {
+    /// KV read under a concrete key.
+    KvRead { key: &'a str },
+    /// KV write under a concrete key.
+    KvWrite { key: &'a str },
+    /// Blob read capability.
+    BlobRead,
+    /// Blob write capability.
+    BlobWrite,
+    /// Protocol-session capability.
+    Protocol { identifier: &'a str },
+}
+
+/// Reason a host access request was denied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PluginHostAccessDenyReason {
+    /// Required capability bit was not declared.
+    PermissionMissing,
+    /// KV key was outside declared prefixes.
+    KvPrefixDenied,
+    /// Protocol identifier was not declared.
+    ProtocolNotDeclared,
+}
+
+/// Host access denial.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginHostAccessDenied {
+    /// Denial reason.
+    pub reason: PluginHostAccessDenyReason,
+}
+
+#[must_use]
+pub fn plugin_kv_key_allowed(manifest: &PluginManifest, key: &str) -> bool {
+    let default_prefix = format!("__plugin:{}:", manifest.name);
+    let prefixes = if manifest.kv_prefixes.is_empty() {
+        core::slice::from_ref(&default_prefix)
+    } else {
+        manifest.kv_prefixes.as_slice()
+    };
+    prefixes.iter().any(|prefix| key.starts_with(prefix))
+}
+
+pub fn validate_plugin_host_access(
+    manifest: &PluginManifest,
+    access: PluginHostAccess<'_>,
+) -> Result<(), PluginHostAccessDenied> {
+    match access {
+        PluginHostAccess::KvRead { key } => {
+            if !manifest.permissions.kv_read {
+                return Err(PluginHostAccessDenied {
+                    reason: PluginHostAccessDenyReason::PermissionMissing,
+                });
+            }
+            if !plugin_kv_key_allowed(manifest, key) {
+                return Err(PluginHostAccessDenied {
+                    reason: PluginHostAccessDenyReason::KvPrefixDenied,
+                });
+            }
+            Ok(())
+        }
+        PluginHostAccess::KvWrite { key } => {
+            if !manifest.permissions.kv_write {
+                return Err(PluginHostAccessDenied {
+                    reason: PluginHostAccessDenyReason::PermissionMissing,
+                });
+            }
+            if !plugin_kv_key_allowed(manifest, key) {
+                return Err(PluginHostAccessDenied {
+                    reason: PluginHostAccessDenyReason::KvPrefixDenied,
+                });
+            }
+            Ok(())
+        }
+        PluginHostAccess::BlobRead => {
+            if manifest.permissions.blob_read {
+                Ok(())
+            } else {
+                Err(PluginHostAccessDenied {
+                    reason: PluginHostAccessDenyReason::PermissionMissing,
+                })
+            }
+        }
+        PluginHostAccess::BlobWrite => {
+            if manifest.permissions.blob_write {
+                Ok(())
+            } else {
+                Err(PluginHostAccessDenied {
+                    reason: PluginHostAccessDenyReason::PermissionMissing,
+                })
+            }
+        }
+        PluginHostAccess::Protocol { identifier } => {
+            if manifest.protocols.iter().any(|protocol| protocol.identifier == identifier) {
+                Ok(())
+            } else {
+                Err(PluginHostAccessDenied {
+                    reason: PluginHostAccessDenyReason::ProtocolNotDeclared,
+                })
+            }
+        }
+    }
+}
+
 impl PluginPermissions {
     /// Create permissions with all capabilities granted.
     ///
@@ -388,5 +493,55 @@ mod tests {
         let collisions = protocol_identifier_collisions(&manifests);
 
         assert!(collisions.is_empty());
+    }
+
+    #[test]
+    fn validates_declared_protocol_and_permissions() {
+        let mut manifest = manifest("jj-native-forge", TEST_PROTOCOL_ID, true);
+        manifest.kv_prefixes = vec!["forge:jj:".to_string()];
+        manifest.permissions.kv_read = true;
+        manifest.permissions.kv_write = true;
+        manifest.permissions.blob_read = true;
+        manifest.permissions.blob_write = true;
+
+        assert!(
+            validate_plugin_host_access(&manifest, PluginHostAccess::Protocol {
+                identifier: TEST_PROTOCOL_ID
+            })
+            .is_ok()
+        );
+        assert!(validate_plugin_host_access(&manifest, PluginHostAccess::KvRead { key: "forge:jj:repo" }).is_ok());
+        assert!(validate_plugin_host_access(&manifest, PluginHostAccess::BlobRead).is_ok());
+        assert!(validate_plugin_host_access(&manifest, PluginHostAccess::BlobWrite).is_ok());
+    }
+
+    #[test]
+    fn rejects_undeclared_host_access() {
+        let manifest = manifest("jj-native-forge", TEST_PROTOCOL_ID, true);
+
+        let protocol_err = validate_plugin_host_access(&manifest, PluginHostAccess::Protocol {
+            identifier: "/aspen/other/1",
+        })
+        .expect_err("undeclared protocol rejected");
+        let kv_err = validate_plugin_host_access(&manifest, PluginHostAccess::KvWrite { key: "forge:jj:repo" })
+            .expect_err("missing kv permission rejected");
+        let blob_err = validate_plugin_host_access(&manifest, PluginHostAccess::BlobRead)
+            .expect_err("missing blob permission rejected");
+
+        assert_eq!(protocol_err.reason, PluginHostAccessDenyReason::ProtocolNotDeclared);
+        assert_eq!(kv_err.reason, PluginHostAccessDenyReason::PermissionMissing);
+        assert_eq!(blob_err.reason, PluginHostAccessDenyReason::PermissionMissing);
+    }
+
+    #[test]
+    fn rejects_kv_key_outside_declared_prefix() {
+        let mut manifest = manifest("jj-native-forge", TEST_PROTOCOL_ID, true);
+        manifest.kv_prefixes = vec!["forge:jj:".to_string()];
+        manifest.permissions.kv_write = true;
+
+        let err = validate_plugin_host_access(&manifest, PluginHostAccess::KvWrite { key: "forge:git:repo" })
+            .expect_err("wrong kv prefix rejected");
+
+        assert_eq!(err.reason, PluginHostAccessDenyReason::KvPrefixDenied);
     }
 }

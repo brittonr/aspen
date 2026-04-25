@@ -1,0 +1,23 @@
+Runtime coverage index for remaining JJ-native Forge verification tasks.
+
+Task 5.2 coverage sources:
+- `evidence/1-2-forge-repo-lifecycle-tests.txt`: JJ-enabled repo creation, deletion, metadata lifecycle.
+- `evidence/3-7-jj-plugin-inactive-tests.txt`: no-fallback rejection when no active JJ plugin route exists.
+- `evidence/3-8-jj-authz-tests.txt`: JJ-native read/write operation authorization mapping.
+- `evidence/5-1-repo-lifecycle-integration-tests.txt`: dual/JJ-only lifecycle, active route discovery, post-delete Git/JJ rejection, namespace cleanup, and retained blob fetch.
+- `evidence/5-4-git-jj-negative-tests.txt`: Git API rejection against JJ-only repos.
+- `evidence/3-2-3-5-jj-remote-tests.txt`: standalone jj-remote-aspen request planning for capability/session setup, fetch probe sets, push bookmark/change updates, and change-id resolution.
+
+Task 5.5 coverage sources:
+- `evidence/1-5-plugin-session-route-tests.txt`: plugin session-route metadata and discovery behavior.
+- `evidence/1-4-1-6-protocol-plugin-api-tests.txt`: protocol registration metadata and collision behavior.
+- `evidence/1-7-1-8-forge-handler-route-tests.txt`: activation-state discovery changes and backend route visibility.
+- `evidence/3-1-jj-plugin-tests.txt`: JJ-native plugin protocol/session admission constants and manifest metadata.
+- `evidence/3-7-jj-plugin-inactive-tests.txt`: inactive route rejection.
+
+Task 5.7 coverage sources:
+- `evidence/2-8-aspen-forge-jj-staged-cleanup-tests.txt`: staged JJ publish cleanup, timeout cleanup, and abandoned session handling.
+- `evidence/3-1-jj-plugin-tests.txt`: plugin admission rejects over-limit chunk and in-flight sizes.
+- `evidence/5-1-repo-lifecycle-integration-tests.txt`: retained published blobs remain fetchable while volatile JJ namespaces are removed after delete.
+
+This index is a durable pointer to previously saved command transcripts for tasks whose implementation landed in earlier commits of the same OpenSpec change.

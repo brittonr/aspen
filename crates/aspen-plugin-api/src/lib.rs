@@ -14,13 +14,18 @@ pub mod manifest;
 pub mod resolve;
 
 pub use manifest::PluginDependency;
+pub use manifest::PluginHostAccess;
+pub use manifest::PluginHostAccessDenied;
+pub use manifest::PluginHostAccessDenyReason;
 pub use manifest::PluginInfo;
 pub use manifest::PluginManifest;
 pub use manifest::PluginPermissions;
 pub use manifest::PluginProtocol;
 pub use manifest::PluginProtocolCollision;
 pub use manifest::PluginSignatureInfo;
+pub use manifest::plugin_kv_key_allowed;
 pub use manifest::protocol_identifier_collisions;
+pub use manifest::validate_plugin_host_access;
 
 /// Maximum priority value for WASM plugins.
 pub const MAX_PLUGIN_PRIORITY: u32 = 999;
