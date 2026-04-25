@@ -5,8 +5,11 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-plugin-session-route-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-openspec-preflight.txt`
+- Changed file: `crates/aspen-forge/src/jj.rs`
+- Changed file: `crates/aspen-forge-handler/src/executor.rs`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-dual-backend-namespace-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -62,6 +65,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 1.5 Extend the plugin/runtime manifest and routing path so a WASM plugin can claim a bounded repo protocol session, not only unary requests.
   - Evidence: `crates/aspen-plugin-api/src/manifest.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-plugin-session-route-tests.txt`
+
+- [x] 4.1 Support JJ-only and dual-backend repos without collisions between Git refs and JJ bookmark/change namespaces.
+  - Evidence: `crates/aspen-forge/src/jj.rs`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-dual-backend-namespace-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-rustfmt-check.txt`
 
 ## Review Scope Snapshot
 
@@ -273,6 +279,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-5-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge jj_namespace_keys_do_not_collide_with_git_refs && cargo test -p aspen-forge-handler test_repo_info_jj_only_omits_git_route`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-dual-backend-namespace-tests.txt`
+
+### `rustfmt --check crates/aspen-forge-handler/src/executor.rs crates/aspen-forge/src/jj.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/4-1-openspec-preflight.txt`
 
 ## Notes
 

@@ -2685,6 +2685,24 @@ mod tests {
     }
 
     #[test]
+    fn test_repo_info_jj_only_omits_git_route() {
+        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let identity = aspen_forge::identity::RepoIdentity::new("repo", vec![secret.public()], TEST_THRESHOLD)
+            .expect("repo identity builds");
+        let active_routes = vec![
+            git_backend_route(TEST_NODE_ID),
+            jj_backend_route_from_manifest(TEST_NODE_ID, &test_plugin_manifest(JJ_NATIVE_FORGE_ALPN_STR, true))
+                .expect("JJ route"),
+        ];
+
+        let info = repo_info_from_identity_with_backends(&identity, None, vec![ForgeRepoBackend::Jj], &active_routes);
+
+        assert_eq!(info.backends, vec![ForgeRepoBackend::Jj]);
+        assert_eq!(info.backend_routes.len(), 1);
+        assert_eq!(info.backend_routes[0].backend, ForgeRepoBackend::Jj);
+    }
+
+    #[test]
     fn test_repo_info_omits_inactive_backend_routes() {
         let secret = iroh::SecretKey::generate(&mut rand::rng());
         let identity = aspen_forge::identity::RepoIdentity::new("repo", vec![secret.public()], TEST_THRESHOLD)

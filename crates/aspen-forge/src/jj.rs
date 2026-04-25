@@ -906,6 +906,18 @@ mod tests {
     }
 
     #[test]
+    fn jj_namespace_keys_do_not_collide_with_git_refs() {
+        let git_ref_key = "refs/heads/main";
+        let bookmark_key = jj_bookmark_key(TEST_REPO_ID, TEST_BOOKMARK);
+        let change_key = jj_change_head_key(TEST_REPO_ID, TEST_CHANGE_ID);
+
+        assert!(!bookmark_key.starts_with(git_ref_key));
+        assert!(!change_key.starts_with(git_ref_key));
+        assert_ne!(bookmark_key, git_ref_key);
+        assert_ne!(change_key, git_ref_key);
+    }
+
+    #[test]
     fn jj_bookmark_and_change_keys_are_repo_scoped() {
         let bookmark_key = jj_bookmark_key(TEST_REPO_ID, TEST_BOOKMARK);
         let change_key = jj_change_head_key(TEST_REPO_ID, TEST_CHANGE_ID);
