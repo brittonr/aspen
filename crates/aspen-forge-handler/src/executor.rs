@@ -2379,6 +2379,9 @@ impl ForgeServiceExecutor {
                 if admission.status != aspen_client_api::forge::JjNativeStatus::Accepted {
                     return Ok(ClientRpcResponse::ForgeJjNative(admission));
                 }
+                if let Some(rejection) = self.reject_unavailable_jj_repo(&request.repo_id).await? {
+                    return Ok(ClientRpcResponse::ForgeJjNative(rejection));
+                }
                 Ok(ClientRpcResponse::ForgeJjNative(aspen_client_api::forge::jj_native_response(
                     aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable,
                     Some("JJ-native protocol session handler is not active on this node".to_string()),
@@ -2386,6 +2389,37 @@ impl ForgeServiceExecutor {
             }
             _ => unexpected_request_kind("jj native"),
         }
+    }
+
+    async fn reject_unavailable_jj_repo(
+        &self,
+        repo_id: &str,
+    ) -> Result<Option<aspen_client_api::forge::JjNativeResponse>> {
+        let Ok(hash) = blake3::Hash::from_hex(repo_id) else {
+            return Ok(Some(aspen_client_api::forge::jj_native_response(
+                aspen_client_api::forge::JjNativeStatus::Rejected,
+                Some("invalid repository identifier".to_string()),
+            )));
+        };
+        let repo_id = aspen_forge::identity::RepoId::from_hash(hash);
+        let identity = match self.forge_node.get_repo(&repo_id).await {
+            Ok(identity) => identity,
+            Err(error) => {
+                return Ok(Some(aspen_client_api::forge::jj_native_response(
+                    aspen_client_api::forge::JjNativeStatus::Rejected,
+                    Some(format!("repository unavailable: {error}")),
+                )));
+            }
+        };
+        let active_routes = self.active_backend_routes().await;
+        let info = repo_info_from_identity(&identity, None, &active_routes);
+        if !info.backends.contains(&ForgeRepoBackend::Jj) {
+            return Ok(Some(aspen_client_api::forge::jj_native_response(
+                aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable,
+                Some("JJ backend is not enabled for this repository; Git fallback is not allowed".to_string()),
+            )));
+        }
+        Ok(None)
     }
 
     async fn execute_nostr_request(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
@@ -2566,8 +2600,12 @@ mod tests {
     }
 
     fn jj_native_request(transport_version: u16) -> aspen_client_api::forge::JjNativeRequest {
+        jj_native_request_for_repo("repo", transport_version)
+    }
+
+    fn jj_native_request_for_repo(repo_id: &str, transport_version: u16) -> aspen_client_api::forge::JjNativeRequest {
         aspen_client_api::forge::JjNativeRequest {
-            repo_id: "repo".to_string(),
+            repo_id: repo_id.to_string(),
             operation: aspen_client_api::forge::JjNativeOperation::Fetch,
             transport_version,
             want_objects: vec![],
@@ -2775,11 +2813,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_jj_native_admission_accepts_version_before_session_availability() {
+    async fn test_jj_native_admission_rejects_git_only_repo_without_fallback() {
         let executor = make_test_executor().await;
+        let identity = executor
+            .forge_node
+            .create_repo("repo", vec![executor.forge_node.public_key()], TEST_THRESHOLD)
+            .await
+            .expect("repo creates");
         let response = executor
             .execute(ClientRpcRequest::ForgeJjNative {
-                request: jj_native_request(aspen_client_api::forge::JJ_TRANSPORT_VERSION_CURRENT),
+                request: jj_native_request_for_repo(
+                    &identity.repo_id().to_hex(),
+                    aspen_client_api::forge::JJ_TRANSPORT_VERSION_CURRENT,
+                ),
             })
             .await
             .expect("JJ-native request executes");
@@ -2790,6 +2836,7 @@ mod tests {
 
         assert_eq!(response.transport_range, aspen_client_api::forge::JjTransportVersionRange::current());
         assert_eq!(response.status, aspen_client_api::forge::JjNativeStatus::CapabilityUnavailable);
+        assert!(response.message.expect("message explains rejection").contains("Git fallback is not allowed"));
     }
 
     #[test]

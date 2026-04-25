@@ -5,15 +5,11 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-forge-protocol/src/lib.rs`
-- Changed file: `crates/aspen-client-api/src/messages/mod.rs`
-- Changed file: `crates/aspen-client-api/src/messages/request_metadata.rs`
-- Changed file: `crates/aspen-client-api/src/messages/request_metadata_apps/forge.rs`
-- Changed file: `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`
 - Changed file: `crates/aspen-forge-handler/src/executor.rs`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-jj-native-admission-tests.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-rustfmt-check.txt`
-- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-openspec-preflight.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-jj-native-no-fallback-tests.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-rustfmt-check.txt`
+- Changed file: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-3-6-openspec-preflight.txt`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/tasks.md`
 - Changed file: `openspec/changes/jj-native-forge-wasm-plugin/verification.md`
 
@@ -60,6 +56,9 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - [x] 1.4 Add JJ-native request/response families, transport identifiers, and explicit transport-version advertisement/compatibility checks for clone, fetch, push, bookmark sync, and change-id lookup.
   - Evidence: `crates/aspen-forge-protocol/src/lib.rs`, `crates/aspen-client-api/src/messages/mod.rs`, `crates/aspen-client-api/src/messages/request_metadata.rs`, `crates/aspen-client-api/src/messages/request_metadata_apps/forge.rs`, `openspec/changes/archive/2026-04-25-extend-no-std-foundation-and-wire/evidence/client-rpc-postcard-baseline.json`, `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-jj-native-admission-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-rustfmt-check.txt`
+
+- [x] 3.6 Reject unsupported JJ access explicitly for Git-only repos and reject silent fallback to Git transport.
+  - Evidence: `crates/aspen-forge-handler/src/executor.rs`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-jj-native-no-fallback-tests.txt`, `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-rustfmt-check.txt`
 
 ## Review Scope Snapshot
 
@@ -236,6 +235,21 @@ Review remediation after same-family review: tasks 1.1, 1.4, and 1.6 are intenti
 
 - Status: pass
 - Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-openspec-preflight.txt`
+
+### `cargo test -p aspen-forge-handler jj_native_admission`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-jj-native-no-fallback-tests.txt`
+
+### `rustfmt --check crates/aspen-forge-handler/src/executor.rs`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/3-6-rustfmt-check.txt`
+
+### `scripts/openspec-preflight.sh jj-native-forge-wasm-plugin`
+
+- Status: pass
+- Artifact: `openspec/changes/jj-native-forge-wasm-plugin/evidence/1-4-3-6-openspec-preflight.txt`
 
 ## Notes
 
