@@ -387,12 +387,97 @@ mod tests {
 
     #[test]
     fn test_nix_key_public_length() {
-        // Nix public keys are 32 bytes base64-encoded
         let key = CacheSigningKey::generate("test").unwrap();
         let public_str = key.to_nix_public_key();
         let colon_pos = public_str.find(':').unwrap();
         let data = &public_str[colon_pos + 1..];
         let bytes = BASE64.decode(data.as_bytes()).unwrap();
         assert_eq!(bytes.len(), 32);
+    }
+
+    /// In-memory SigningKeyStore fixture for testing the port trait.
+    struct InMemorySigningKeyStore {
+        secret: std::sync::Mutex<Option<String>>,
+        public: std::sync::Mutex<Option<String>>,
+    }
+
+    impl InMemorySigningKeyStore {
+        fn new() -> Self {
+            Self {
+                secret: std::sync::Mutex::new(None),
+                public: std::sync::Mutex::new(None),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SigningKeyStore for InMemorySigningKeyStore {
+        async fn load_signing_key(&self) -> Result<Option<String>> {
+            Ok(self.secret.lock().unwrap().clone())
+        }
+
+        async fn save_signing_key(&self, secret: &str, public: &str, _name: &str) -> Result<()> {
+            *self.secret.lock().unwrap() = Some(secret.to_string());
+            *self.public.lock().unwrap() = Some(public.to_string());
+            Ok(())
+        }
+
+        async fn load_public_key(&self) -> Result<Option<String>> {
+            Ok(self.public.lock().unwrap().clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn ensure_signing_key_generates_when_empty() {
+        let store = InMemorySigningKeyStore::new();
+        let (key, public) = ensure_signing_key(&store, "test-cache").await.unwrap();
+        assert!(public.starts_with("test-cache:"));
+        assert_eq!(key.name(), "test-cache");
+        assert!(store.secret.lock().unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn ensure_signing_key_loads_existing() {
+        let store = InMemorySigningKeyStore::new();
+        let (key1, pub1) = ensure_signing_key(&store, "c").await.unwrap();
+        let (key2, pub2) = ensure_signing_key(&store, "c").await.unwrap();
+        assert_eq!(pub1, pub2);
+        assert_eq!(key1.to_nix_secret_key(), key2.to_nix_secret_key());
+    }
+
+    #[tokio::test]
+    async fn ensure_signing_key_rejects_malformed_stored_key() {
+        let store = InMemorySigningKeyStore::new();
+        *store.secret.lock().unwrap() = Some("not-a-valid-key".to_string());
+        let result = ensure_signing_key(&store, "c").await;
+        assert!(result.is_err());
+    }
+
+    /// Failing store that returns errors on every operation.
+    struct FailingSigningKeyStore;
+
+    #[async_trait::async_trait]
+    impl SigningKeyStore for FailingSigningKeyStore {
+        async fn load_signing_key(&self) -> Result<Option<String>> {
+            Err(SigningError::KvError {
+                message: "simulated storage failure".to_string(),
+            })
+        }
+        async fn save_signing_key(&self, _: &str, _: &str, _: &str) -> Result<()> {
+            Err(SigningError::KvError {
+                message: "simulated storage failure".to_string(),
+            })
+        }
+        async fn load_public_key(&self) -> Result<Option<String>> {
+            Err(SigningError::KvError {
+                message: "simulated storage failure".to_string(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn ensure_signing_key_propagates_storage_errors() {
+        let result = ensure_signing_key(&FailingSigningKeyStore, "c").await;
+        assert!(matches!(result, Err(SigningError::KvError { .. })));
     }
 }

@@ -340,16 +340,30 @@ mod tests {
 
     #[test]
     fn test_validate_store_hash() {
-        // Valid nixbase32 hash (32 chars from nix alphabet: 0-9, a-z minus e,o,t,u)
         assert!(validate_store_hash("w1sn8rsa8p38m4i6h0qkdpxalx2hsjdb").is_ok());
-
-        // Too short
         assert!(validate_store_hash("abc").is_err());
-
-        // Contains uppercase
         assert!(validate_store_hash("ABCDEF12345678901234567890123456").is_err());
-
-        // Contains invalid nixbase32 char 'e'
         assert!(validate_store_hash("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee").is_err());
+    }
+
+    #[test]
+    fn lookup_only_fixture_compiles_without_publish() {
+        // A type implementing only CacheLookup proves consumers
+        // don't need CachePublish or CacheStatsProvider.
+        struct LookupOnlyIndex;
+
+        #[async_trait]
+        impl CacheLookup for LookupOnlyIndex {
+            async fn get(&self, _: &str) -> Result<Option<CacheEntry>> {
+                Ok(None)
+            }
+            async fn exists(&self, _: &str) -> Result<bool> {
+                Ok(false)
+            }
+        }
+
+        fn accepts_lookup<T: CacheLookup>(_: &T) {}
+        let idx = LookupOnlyIndex;
+        accepts_lookup(&idx);
     }
 }
