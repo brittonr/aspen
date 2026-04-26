@@ -92,7 +92,6 @@ impl ChainRead for SharedRedbStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
 
     #[test]
     fn test_shared_redb_implements_kv_state_read() {
