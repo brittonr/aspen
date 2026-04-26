@@ -3,7 +3,8 @@
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
-use aspen_traits::KeyValueStore;
+use aspen_traits::KvRead;
+use aspen_traits::KvWrite;
 use tracing::debug;
 
 use crate::constants::COMMIT_KV_PREFIX;
@@ -19,7 +20,7 @@ pub struct CommitStore;
 
 impl CommitStore {
     /// Serialize and store a commit at `_sys:commit:{hex}`.
-    pub async fn store_commit(commit: &Commit, kv: &dyn KeyValueStore) -> Result<(), CommitDagError> {
+    pub async fn store_commit(commit: &Commit, kv: &dyn KvWrite) -> Result<(), CommitDagError> {
         let hex_id = hash_to_hex(&commit.id);
         let key = format!("{COMMIT_KV_PREFIX}{hex_id}");
         let value = postcard::to_allocvec(commit)
@@ -40,7 +41,7 @@ impl CommitStore {
     }
 
     /// Load a commit by its CommitId from `_sys:commit:{hex}`.
-    pub async fn load_commit(id: &CommitId, kv: &dyn KeyValueStore) -> Result<Commit, CommitDagError> {
+    pub async fn load_commit(id: &CommitId, kv: &dyn KvRead) -> Result<Commit, CommitDagError> {
         let hex_id = hash_to_hex(id);
         let key = format!("{COMMIT_KV_PREFIX}{hex_id}");
 
@@ -66,7 +67,7 @@ impl CommitStore {
     pub async fn update_branch_tip(
         branch_id: &str,
         commit_id: &CommitId,
-        kv: &dyn KeyValueStore,
+        kv: &dyn KvWrite,
     ) -> Result<(), CommitDagError> {
         let hex_id = hash_to_hex(commit_id);
         let key = format!("{COMMIT_TIP_PREFIX}{branch_id}");
@@ -85,7 +86,7 @@ impl CommitStore {
     }
 
     /// Get the CommitId of the most recent commit on a branch.
-    pub async fn get_branch_tip(branch_id: &str, kv: &dyn KeyValueStore) -> Result<Option<CommitId>, CommitDagError> {
+    pub async fn get_branch_tip(branch_id: &str, kv: &dyn KvRead) -> Result<Option<CommitId>, CommitDagError> {
         let key = format!("{COMMIT_TIP_PREFIX}{branch_id}");
 
         let result = kv.read(ReadRequest::new(key)).await;
@@ -111,7 +112,7 @@ impl CommitStore {
     /// Stops after `max_depth` commits or when a commit has no parent.
     pub async fn walk_chain(
         start: CommitId,
-        kv: &dyn KeyValueStore,
+        kv: &dyn KvRead,
         max_depth: u32,
     ) -> Result<Vec<Commit>, CommitDagError> {
         let mut chain = Vec::new();
@@ -152,12 +153,54 @@ impl CommitStore {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    use aspen_kv_types::KeyValueStoreError;
+    use aspen_kv_types::KeyValueWithRevision;
     use aspen_testing_core::DeterministicKeyValueStore;
 
     use super::*;
     use crate::types::MutationType;
     use crate::verified::commit_hash::compute_commit_id;
     use crate::verified::commit_hash::compute_mutations_hash;
+
+    /// In-memory fixture implementing ONLY KvRead.
+    /// Proves narrowed function signatures work without full KeyValueStore.
+    struct ReadOnlyKvFixture {
+        data: Mutex<HashMap<String, String>>,
+    }
+
+    impl ReadOnlyKvFixture {
+        fn new() -> Self {
+            Self {
+                data: Mutex::new(HashMap::new()),
+            }
+        }
+
+        fn insert(&self, key: String, value: String) {
+            self.data.lock().unwrap().insert(key, value);
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl KvRead for ReadOnlyKvFixture {
+        async fn read(&self, request: ReadRequest) -> Result<aspen_kv_types::ReadResult, KeyValueStoreError> {
+            let data = self.data.lock().unwrap();
+            match data.get(&request.key) {
+                Some(value) => Ok(aspen_kv_types::ReadResult {
+                    kv: Some(KeyValueWithRevision {
+                        key: request.key,
+                        value: value.clone(),
+                        version: 1,
+                        create_revision: 1,
+                        mod_revision: 1,
+                    }),
+                }),
+                None => Ok(aspen_kv_types::ReadResult { kv: None }),
+            }
+        }
+    }
 
     fn make_commit(
         branch_id: &str,
@@ -255,5 +298,51 @@ mod tests {
             CommitDagError::CommitNotFound { .. } => {}
             other => panic!("expected CommitNotFound, got: {other}"),
         }
+    }
+
+    #[tokio::test]
+    async fn narrow_fixture_load_commit_with_read_only_store() {
+        let full_kv = DeterministicKeyValueStore::new();
+        let commit = make_commit("br", None, vec![("k".into(), MutationType::Set("v".into()))], 1, 1000);
+        CommitStore::store_commit(&commit, &full_kv).await.unwrap();
+
+        let read_only = ReadOnlyKvFixture::new();
+        let key = CommitStore::commit_key(&commit.id);
+        let value = CommitStore::serialize_commit(&commit).unwrap();
+        read_only.insert(key, value);
+
+        let loaded = CommitStore::load_commit(&commit.id, &read_only).await.unwrap();
+        assert_eq!(loaded, commit);
+    }
+
+    #[tokio::test]
+    async fn narrow_fixture_get_branch_tip_with_read_only_store() {
+        let read_only = ReadOnlyKvFixture::new();
+
+        let tip = CommitStore::get_branch_tip("br", &read_only).await.unwrap();
+        assert!(tip.is_none());
+
+        let commit = make_commit("br", None, vec![], 1, 1000);
+        let tip_key = CommitStore::branch_tip_key("br");
+        read_only.insert(tip_key, crate::verified::hash::hash_to_hex(&commit.id));
+
+        let tip = CommitStore::get_branch_tip("br", &read_only).await.unwrap();
+        assert_eq!(tip, Some(commit.id));
+    }
+
+    #[tokio::test]
+    async fn narrow_fixture_walk_chain_with_read_only_store() {
+        let c1 = make_commit("br", None, vec![("a".into(), MutationType::Set("1".into()))], 1, 1000);
+        let c2 = make_commit("br", Some(c1.id), vec![("b".into(), MutationType::Set("2".into()))], 2, 2000);
+
+        let read_only = ReadOnlyKvFixture::new();
+        for c in [&c1, &c2] {
+            read_only.insert(CommitStore::commit_key(&c.id), CommitStore::serialize_commit(c).unwrap());
+        }
+
+        let chain = CommitStore::walk_chain(c2.id, &read_only, 10).await.unwrap();
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain[0].id, c2.id);
+        assert_eq!(chain[1].id, c1.id);
     }
 }

@@ -1,6 +1,6 @@
 //! Fork a branch from a historical commit.
 
-use aspen_traits::KeyValueStore;
+use aspen_traits::KvRead;
 
 use crate::error::CommitDagError;
 use crate::store::CommitStore;
@@ -13,7 +13,7 @@ use crate::verified::commit_hash::verify_commit_integrity;
 /// The caller (BranchOverlay) is responsible for constructing the overlay
 /// and populating it with the returned mutations. This keeps the fork logic
 /// in aspen-commit-dag without creating a circular dependency.
-pub async fn load_fork_source(commit_id: CommitId, kv: &dyn KeyValueStore) -> Result<ForkSource, CommitDagError> {
+pub async fn load_fork_source(commit_id: CommitId, kv: &dyn KvRead) -> Result<ForkSource, CommitDagError> {
     let commit = CommitStore::load_commit(&commit_id, kv).await?;
 
     if !verify_commit_integrity(&commit) {
