@@ -10,6 +10,7 @@ default = []
 commit-dag = ["dep:aspen-commit-dag"]
 
 [dependencies]
+aspen-time = { workspace = true }
 aspen-traits = { workspace = true }
 aspen-kv-types = { workspace = true }
 aspen-constants = { workspace = true }

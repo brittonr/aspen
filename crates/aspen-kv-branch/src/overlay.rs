@@ -471,8 +471,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
             *pc
         };
 
-        let timestamp_ms =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let timestamp_ms = aspen_time::current_time_ms();
 
         // We don't have the Raft revision yet (it's assigned by the Raft batch),
         // so we use 0 as a placeholder. The chain_hash_at_commit is also [0; 32]

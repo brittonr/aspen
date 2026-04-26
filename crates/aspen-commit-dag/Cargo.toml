@@ -7,6 +7,7 @@ description = "Chain-hashed commit DAG for Aspen KV branch history and federatio
 
 [dependencies]
 aspen-kv-types = { workspace = true }
+aspen-time = { workspace = true }
 aspen-traits = { workspace = true }
 aspen-constants = { workspace = true }
 blake3 = { workspace = true }

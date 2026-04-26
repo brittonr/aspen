@@ -103,9 +103,7 @@ impl CommitGc {
             loop {
                 tokio::time::sleep(interval).await;
 
-                let now_ms =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                        as u64;
+                let now_ms = aspen_time::current_time_ms();
 
                 match Self::run_gc(kv.as_ref(), now_ms).await {
                     Ok(_) => {}

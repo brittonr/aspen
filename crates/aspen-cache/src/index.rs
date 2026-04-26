@@ -5,10 +5,7 @@
 
 #[cfg(feature = "kv-index")]
 use std::sync::Arc;
-#[cfg(feature = "kv-index")]
-use std::time::SystemTime;
-#[cfg(feature = "kv-index")]
-use std::time::UNIX_EPOCH;
+
 
 #[cfg(feature = "kv-index")]
 use aspen_kv_types::ReadConsistency;
@@ -138,7 +135,7 @@ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
 
         // Apply update
         updater(&mut stats);
-        stats.last_updated = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        stats.last_updated = aspen_time::current_time_secs();
 
         // Serialize to JSON string
         let json_value =
