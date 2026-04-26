@@ -258,6 +258,9 @@ aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "crates/aspen-client-api" }
 aspen-constants = { path = "crates/aspen-constants" }
 aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
+# Two `aspen-core` keys coexist: this one (real alloc-only crate) is what
+# `{ workspace = true }` consumers resolve to. The root [dependencies]
+# section overrides with `package = "aspen-core-shell"` for the root binary.
 aspen-core = { path = "crates/aspen-core" }
 aspen-core-shell = { path = "crates/aspen-core-shell" }
 aspen-hlc = { path = "crates/aspen-hlc" }

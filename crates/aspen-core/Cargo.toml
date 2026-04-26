@@ -24,8 +24,8 @@ aspen-traits = { path = "../aspen-traits", default-features = false }
 # Storage types (extracted from storage.rs)
 aspen-storage-types = { path = "../aspen-storage-types", default-features = false }
 
-# Async traits
-async-trait = "0.1"
+# Async traits (optional, gated behind `async` feature)
+async-trait = { version = "0.1", optional = true }
 
 # Serialization
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
@@ -46,5 +46,6 @@ serde_json = "1.0"
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "sync"] }
 
 [features]
-default = []
+default = ["async"]
+async = ["dep:async-trait", "aspen-traits/async"]
 sql = ["aspen-constants/sql"]

@@ -6,8 +6,8 @@ license = "AGPL-3.0-or-later"
 description = "Core traits for Aspen distributed systems"
 
 [dependencies]
-# Async traits
-async-trait = "0.1"
+# Async traits (optional, gated behind `async` feature)
+async-trait = { version = "0.1", optional = true }
 
 # Cluster types (for ClusterController trait)
 aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
@@ -17,3 +17,7 @@ aspen-kv-types = { path = "../aspen-kv-types", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }
+
+[features]
+default = ["async"]
+async = ["dep:async-trait"]

@@ -1,5 +1,7 @@
 //! Transaction types for atomic multi-key operations with conditions.
 
+use alloc::string::String;
+use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 

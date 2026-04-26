@@ -1,5 +1,7 @@
 //! Scan operation types for prefix-based key enumeration.
 
+use alloc::string::String;
+use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 

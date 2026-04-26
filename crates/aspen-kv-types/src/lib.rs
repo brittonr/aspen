@@ -1,3 +1,5 @@
+#![cfg_attr(not(test), no_std)]
+
 //! Key-value operation types for Aspen distributed systems.
 //!
 //! This crate provides types for distributed key-value operations through Raft consensus.
@@ -20,6 +22,9 @@
 //! - [`ScanRequest`]: Request to scan keys with a given prefix
 //! - [`KeyValueStoreError`]: Errors for key-value operations
 
+extern crate alloc;
+
+use alloc::string::String;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;

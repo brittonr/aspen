@@ -1,5 +1,6 @@
 //! Validation functions for write commands.
 
+use alloc::string::String;
 use aspen_constants::api::MAX_KEY_SIZE;
 use aspen_constants::api::MAX_SCAN_RESULTS;
 use aspen_constants::api::MAX_SETMULTI_KEYS;

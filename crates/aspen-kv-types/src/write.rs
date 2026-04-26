@@ -1,5 +1,7 @@
 //! Write operation types for modifying key-value state.
 
+use alloc::string::String;
+use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 

@@ -1,3 +1,5 @@
+#![cfg_attr(not(test), no_std)]
+
 //! Centralized constants for Aspen distributed system.
 //!
 //! This crate contains all configuration constants used throughout the Aspen

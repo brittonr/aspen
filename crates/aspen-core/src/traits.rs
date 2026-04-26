@@ -5,14 +5,22 @@
 //!
 //! Defines the primary interfaces for cluster control and key-value storage.
 
-// Re-export all traits from aspen-traits
+// Re-export async traits from aspen-traits (requires `async` feature)
+#[cfg(feature = "async")]
 pub use aspen_traits::ClusterController;
+#[cfg(feature = "async")]
 pub use aspen_traits::CoordinationBackend;
+#[cfg(feature = "async")]
 pub use aspen_traits::KeyValueStore;
+#[cfg(feature = "async")]
 pub use aspen_traits::KvDelete;
+#[cfg(feature = "async")]
 pub use aspen_traits::KvLocalScan;
+#[cfg(feature = "async")]
 pub use aspen_traits::KvRead;
+#[cfg(feature = "async")]
 pub use aspen_traits::KvScan;
+#[cfg(feature = "async")]
 pub use aspen_traits::KvWrite;
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 //! Read operation types for querying key-value state.
 
+use alloc::string::String;
 use serde::Deserialize;
 use serde::Serialize;
 

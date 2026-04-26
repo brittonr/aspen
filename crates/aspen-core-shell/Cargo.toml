@@ -7,7 +7,7 @@ description = "Std shell surface layered on top of alloc-only aspen-core"
 
 [dependencies]
 # Alloc-only core surface
-aspen-core = { path = "../aspen-core", default-features = false }
+aspen-core = { path = "../aspen-core", default-features = false, features = ["async"] }
 
 # Optional shell bundles
 aspen-layer = { path = "../aspen-layer", optional = true }

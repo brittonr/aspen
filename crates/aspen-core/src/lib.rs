@@ -154,14 +154,22 @@ pub use sql::validate_sql_query;
 pub use sql::validate_sql_request;
 // Storage types
 pub use storage::KvEntry;
-// Traits
+// Traits (async trait definitions gated behind `async` feature)
+#[cfg(feature = "async")]
 pub use traits::ClusterController;
+#[cfg(feature = "async")]
 pub use traits::CoordinationBackend;
+#[cfg(feature = "async")]
 pub use traits::KeyValueStore;
+#[cfg(feature = "async")]
 pub use traits::KvDelete;
+#[cfg(feature = "async")]
 pub use traits::KvLocalScan;
+#[cfg(feature = "async")]
 pub use traits::KvRead;
+#[cfg(feature = "async")]
 pub use traits::KvScan;
+#[cfg(feature = "async")]
 pub use traits::KvWrite;
 // Types
 pub use types::ClusterMetrics;
