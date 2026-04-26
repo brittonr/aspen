@@ -1,3 +1,5 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 //! Chain-hashed commit DAG for Aspen KV branch history.
 //!
 //! Every `BranchOverlay.commit()` produces a `CommitId` (BLAKE3 chain hash)

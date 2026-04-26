@@ -30,6 +30,10 @@ const TAG_DELETE: u8 = 0x02;
 /// Same sorted mutations always produce the same hash.
 #[inline]
 pub fn compute_mutations_hash(sorted_mutations: &[(String, MutationType)]) -> ChainHash {
+    debug_assert!(
+        sorted_mutations.windows(2).all(|w| w[0].0 <= w[1].0),
+        "mutations must be sorted by key"
+    );
     let mut hasher = blake3::Hasher::new();
 
     for (key, mutation) in sorted_mutations {
@@ -61,10 +65,11 @@ pub fn compute_mutations_hash(sorted_mutations: &[(String, MutationType)]) -> Ch
 ///
 /// Uses `GENESIS_HASH` ([0u8; 32]) when parent is None.
 #[inline]
+#[allow(tigerstyle::ambiguous_params)] // raft_revision and timestamp_ms are semantically distinct u64s with unit-suffixed names
 pub fn compute_commit_id(
     parent: &Option<CommitId>,
-    branch_id: &str,
     mutations_hash: &ChainHash,
+    branch_id: &str,
     raft_revision: u64,
     timestamp_ms: u64,
 ) -> CommitId {
@@ -191,7 +196,7 @@ mod tests {
     fn golden_commit_id_preserves_genesis_parent_behavior() {
         let mutations_hash = compute_mutations_hash(&[("k".to_string(), MutationType::Set("v".to_string()))]);
 
-        let id = compute_commit_id(&None, GOLDEN_BRANCH_ID, &mutations_hash, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
+        let id = compute_commit_id(&None, &mutations_hash, GOLDEN_BRANCH_ID, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
 
         assert_eq!(hash_to_hex(&id), GOLDEN_GENESIS_COMMIT_ID_HEX);
     }
@@ -202,7 +207,7 @@ mod tests {
         let parent = Some([GOLDEN_PARENT_BYTE; crate::verified::hash::CHAIN_HASH_BYTES]);
 
         let id =
-            compute_commit_id(&parent, GOLDEN_BRANCH_ID, &mutations_hash, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
+            compute_commit_id(&parent, &mutations_hash, GOLDEN_BRANCH_ID, GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS);
 
         assert_eq!(hash_to_hex(&id), GOLDEN_PARENT_COMMIT_ID_HEX);
     }
@@ -212,8 +217,8 @@ mod tests {
         let parent = None;
         let mutations_hash = compute_mutations_hash(&[("k".to_string(), MutationType::Set("v".to_string()))]);
 
-        let id1 = compute_commit_id(&parent, "branch-1", &mutations_hash, 42, 1000);
-        let id2 = compute_commit_id(&parent, "branch-1", &mutations_hash, 42, 1000);
+        let id1 = compute_commit_id(&parent, &mutations_hash, "branch-1", 42, 1000);
+        let id2 = compute_commit_id(&parent, &mutations_hash, "branch-1", 42, 1000);
         assert_eq!(id1, id2);
     }
 
@@ -223,8 +228,8 @@ mod tests {
         let p1 = Some([1u8; 32]);
         let p2 = Some([2u8; 32]);
 
-        let id1 = compute_commit_id(&p1, "b", &mutations_hash, 1, 1000);
-        let id2 = compute_commit_id(&p2, "b", &mutations_hash, 1, 1000);
+        let id1 = compute_commit_id(&p1, &mutations_hash, "b", 1, 1000);
+        let id2 = compute_commit_id(&p2, &mutations_hash, "b", 1, 1000);
         assert_ne!(id1, id2);
     }
 
@@ -233,8 +238,8 @@ mod tests {
         let mutations_hash = [0xAA; 32];
         let parent = None;
 
-        let id1 = compute_commit_id(&parent, "branch-a", &mutations_hash, 1, 1000);
-        let id2 = compute_commit_id(&parent, "branch-b", &mutations_hash, 1, 1000);
+        let id1 = compute_commit_id(&parent, &mutations_hash, "branch-a", 1, 1000);
+        let id2 = compute_commit_id(&parent, &mutations_hash, "branch-b", 1, 1000);
         assert_ne!(id1, id2);
     }
 
@@ -243,8 +248,8 @@ mod tests {
         let mutations_hash = [0xAA; 32];
         let parent = None;
 
-        let id1 = compute_commit_id(&parent, "b", &mutations_hash, 1, 1000);
-        let id2 = compute_commit_id(&parent, "b", &mutations_hash, 2, 1000);
+        let id1 = compute_commit_id(&parent, &mutations_hash, "b", 1, 1000);
+        let id2 = compute_commit_id(&parent, &mutations_hash, "b", 2, 1000);
         assert_ne!(id1, id2);
     }
 
@@ -253,16 +258,16 @@ mod tests {
         let mutations_hash = [0xAA; 32];
         let parent = None;
 
-        let id1 = compute_commit_id(&parent, "b", &mutations_hash, 1, 1000);
-        let id2 = compute_commit_id(&parent, "b", &mutations_hash, 1, 2000);
+        let id1 = compute_commit_id(&parent, &mutations_hash, "b", 1, 1000);
+        let id2 = compute_commit_id(&parent, &mutations_hash, "b", 1, 2000);
         assert_ne!(id1, id2);
     }
 
     #[test]
     fn first_commit_uses_genesis() {
         let mutations_hash = [0xAA; 32];
-        let with_none = compute_commit_id(&None, "b", &mutations_hash, 1, 1000);
-        let with_genesis = compute_commit_id(&Some(GENESIS_HASH), "b", &mutations_hash, 1, 1000);
+        let with_none = compute_commit_id(&None, &mutations_hash, "b", 1, 1000);
+        let with_genesis = compute_commit_id(&Some(GENESIS_HASH), &mutations_hash, "b", 1, 1000);
         assert_eq!(with_none, with_genesis);
     }
 
@@ -273,7 +278,7 @@ mod tests {
             ("b".to_string(), MutationType::Delete),
         ];
         let mutations_hash = compute_mutations_hash(&mutations);
-        let id = compute_commit_id(&None, "test", &mutations_hash, 1, 1000);
+        let id = compute_commit_id(&None, &mutations_hash, "test", 1, 1000);
 
         let commit = Commit {
             id,
@@ -293,7 +298,7 @@ mod tests {
     fn verify_commit_integrity_tampered() {
         let mutations = vec![("a".to_string(), MutationType::Set("1".to_string()))];
         let mutations_hash = compute_mutations_hash(&mutations);
-        let id = compute_commit_id(&None, "test", &mutations_hash, 1, 1000);
+        let id = compute_commit_id(&None, &mutations_hash, "test", 1, 1000);
 
         let mut commit = Commit {
             id,

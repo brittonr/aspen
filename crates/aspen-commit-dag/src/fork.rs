@@ -48,7 +48,7 @@ mod tests {
 
     fn make_commit(mutations: Vec<(String, MutationType)>) -> Commit {
         let mutations_hash = compute_mutations_hash(&mutations);
-        let id = compute_commit_id(&None, "source", &mutations_hash, 1, 1000);
+        let id = compute_commit_id(&None, &mutations_hash, "source", 1, 1000);
         Commit {
             id,
             parent: None,

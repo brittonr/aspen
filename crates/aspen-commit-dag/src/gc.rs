@@ -31,6 +31,7 @@ impl CommitGc {
     /// Run a single GC pass: scan commits, check TTL + reachability, delete expired.
     ///
     /// Returns the number of commits deleted.
+    #[allow(tigerstyle::platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
     pub async fn run_gc(kv: &dyn KeyValueStore, now_ms: u64) -> Result<u64, CommitDagError> {
         // 1. Scan all branch tips to find protected commit IDs
         let tips = Self::collect_branch_tips(kv).await?;
@@ -43,7 +44,7 @@ impl CommitGc {
 
         // 3. Build reachability set: any commit that is a parent of a non-expired commit
         let ttl_ms = COMMIT_GC_TTL_SECONDS.saturating_mul(1000);
-        let mut protected: HashSet<[u8; 32]> = HashSet::new();
+        let mut protected: HashSet<[u8; 32]> = HashSet::with_capacity(commits.len().saturating_add(tips.len()));
 
         // Branch tips are always protected
         for tip_hex in &tips {
@@ -65,7 +66,7 @@ impl CommitGc {
         }
 
         // 4. Collect expired, unreachable commits (up to batch size)
-        let mut to_delete: Vec<String> = Vec::new();
+        let mut to_delete: Vec<String> = Vec::with_capacity(COMMIT_GC_BATCH_SIZE as usize);
         for commit in &commits {
             if to_delete.len() as u32 >= COMMIT_GC_BATCH_SIZE {
                 break;
@@ -100,6 +101,7 @@ impl CommitGc {
     /// as `spawn_alert_evaluator`).
     pub fn spawn_gc_task(kv: Arc<dyn KeyValueStore>, interval: Duration) -> JoinHandle<()> {
         tokio::spawn(async move {
+            #[allow(tigerstyle::unbounded_loop)] // background GC task runs for the lifetime of the node
             loop {
                 tokio::time::sleep(interval).await;
 
@@ -149,7 +151,7 @@ impl CommitGc {
                 reason: format!("scan commits: {e}"),
             })?;
 
-        let mut commits = Vec::new();
+        let mut commits = Vec::with_capacity(result.entries.len());
         for entry in result.entries {
             let bytes = match hex::decode(&entry.value) {
                 Ok(b) => b,
@@ -178,7 +180,7 @@ mod tests {
     fn make_commit(branch_id: &str, parent: Option<[u8; 32]>, ts: u64) -> Commit {
         let mutations = vec![("k".into(), MutationType::Set("v".into()))];
         let mutations_hash = compute_mutations_hash(&mutations);
-        let id = compute_commit_id(&parent, branch_id, &mutations_hash, 1, ts);
+        let id = compute_commit_id(&parent, &mutations_hash, branch_id, 1, ts);
         Commit {
             id,
             parent,
@@ -257,7 +259,7 @@ mod tests {
             let mutations = vec![(format!("unique-key-{i}"), MutationType::Set(format!("val-{i}")))];
             let mutations_hash = compute_mutations_hash(&mutations);
             let branch = format!("gc-test-branch-{i}");
-            let id = compute_commit_id(&None, &branch, &mutations_hash, (i + 100) as u64, old_ts);
+            let id = compute_commit_id(&None, &mutations_hash, &branch, (i + 100) as u64, old_ts);
             let c = Commit {
                 id,
                 parent: None,

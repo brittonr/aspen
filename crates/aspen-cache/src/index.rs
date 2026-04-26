@@ -45,6 +45,8 @@ const MIN_STORE_HASH_LENGTH: usize = 32;
 /// Uses `nix_compat::nixbase32` validation: the hash must be within the
 /// configured length bounds and use the Nix base32 alphabet.
 pub fn validate_store_hash(store_hash: &str) -> Result<()> {
+    debug_assert!(MIN_STORE_HASH_LENGTH <= MAX_STORE_HASH_LENGTH);
+    debug_assert!(!store_hash.is_empty() || store_hash.len() < MIN_STORE_HASH_LENGTH);
     if store_hash.len() < MIN_STORE_HASH_LENGTH {
         return Err(CacheError::InvalidStoreHash {
             hash: store_hash.to_string(),
@@ -182,17 +184,17 @@ impl<KV: KeyValueStore + ?Sized> CacheLookup for KvCacheIndex<KV> {
                         "Cache hit"
                     );
 
-                    let _ = self.update_stats(|s| s.record_hit()).await;
+                    if let Err(e) = self.update_stats(|s| s.record_hit()).await { warn!(error = %e, "stats update failed"); }
                     Ok(Some(entry))
                 } else {
                     debug!(store_hash = %store_hash, "Cache miss");
-                    let _ = self.update_stats(|s| s.record_miss()).await;
+                    if let Err(e) = self.update_stats(|s| s.record_miss()).await { warn!(error = %e, "stats update failed"); }
                     Ok(None)
                 }
             }
             Err(aspen_kv_types::KeyValueStoreError::NotFound { .. }) => {
                 debug!(store_hash = %store_hash, "Cache miss");
-                let _ = self.update_stats(|s| s.record_miss()).await;
+                if let Err(e) = self.update_stats(|s| s.record_miss()).await { warn!(error = %e, "stats update failed"); }
                 Ok(None)
             }
             Err(e) => Err(CacheError::KvStore { message: e.to_string() }),
@@ -224,7 +226,7 @@ impl<KV: KeyValueStore + ?Sized> CachePublish for KvCacheIndex<KV> {
         validate_store_hash(&entry.store_hash)?;
 
         let key = entry.kv_key();
-        let nar_size = entry.nar_size;
+        let nar_size_bytes = entry.nar_size;
 
         let json_value =
             serde_json::to_string(&entry).map_err(|e| CacheError::Serialization { message: e.to_string() })?;
@@ -243,7 +245,7 @@ impl<KV: KeyValueStore + ?Sized> CachePublish for KvCacheIndex<KV> {
 
         self.kv.write(write_request).await.map_err(|e| CacheError::KvStore { message: e.to_string() })?;
 
-        let _ = self.update_stats(|s| s.record_entry_added(nar_size)).await;
+        if let Err(e) = self.update_stats(|s| s.record_entry_added(nar_size_bytes)).await { warn!(error = %e, "stats update failed"); }
         Ok(())
     }
 }

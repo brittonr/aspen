@@ -70,8 +70,7 @@ pub fn jj_native_response(status: JjNativeStatus, message: Option<String>) -> Jj
 /// Admit a JJ-native request before any object exchange.
 #[must_use]
 pub fn admit_jj_native_request(request: &JjNativeRequest) -> JjNativeResponse {
-    let transport_range = JjTransportVersionRange::current();
-    if !transport_range.accepts(request.transport_version) {
+    if !JjTransportVersionRange::current().accepts(request.transport_version) {
         return jj_native_response(
             JjNativeStatus::IncompatibleTransportVersion,
             Some("incompatible JJ-native transport version".to_string()),

@@ -1,3 +1,5 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
 //! Distributed Nix binary cache for Aspen.
 //!
 //! This crate provides a distributed Nix binary cache built on top of Aspen's
@@ -59,6 +61,7 @@
 pub mod error;
 pub mod index;
 pub mod nar;
+#[allow(tigerstyle::explicit_defaults)] // serde(default) on fields is required for backward-compatible deserialization
 pub mod narinfo;
 pub mod signing;
 

@@ -110,12 +110,13 @@ impl CommitStore {
     ///
     /// Returns commits in reverse chronological order (newest first).
     /// Stops after `max_depth` commits or when a commit has no parent.
+    #[allow(tigerstyle::platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
     pub async fn walk_chain(
         start: CommitId,
         kv: &dyn KvRead,
         max_depth: u32,
     ) -> Result<Vec<Commit>, CommitDagError> {
-        let mut chain = Vec::new();
+        let mut chain = Vec::with_capacity(max_depth as usize);
         let mut current = Some(start);
         let mut depth = 0u32;
 
@@ -210,7 +211,7 @@ mod tests {
         ts: u64,
     ) -> Commit {
         let mutations_hash = compute_mutations_hash(&mutations);
-        let id = compute_commit_id(&parent, branch_id, &mutations_hash, revision, ts);
+        let id = compute_commit_id(&parent, &mutations_hash, branch_id, revision, ts);
         Commit {
             id,
             parent,

@@ -235,7 +235,9 @@ pub fn protocol_identifier_collisions(manifests: &[PluginManifest]) -> Vec<Plugi
 
     let mut owners: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for manifest in manifests.iter().filter(|manifest| manifest.enabled) {
+        debug_assert!(!manifest.name.is_empty(), "enabled manifest must have a name");
         for protocol in &manifest.protocols {
+            debug_assert!(!protocol.identifier.is_empty(), "protocol must have an identifier");
             owners.entry(protocol.identifier.as_str()).or_default().push(manifest.name.clone());
         }
     }
@@ -436,7 +438,7 @@ mod tests {
         }
     }
 
-    fn manifest(name: &str, identifier: &str, enabled: bool) -> PluginManifest {
+    fn manifest(name: &str, enabled: bool, identifier: &str) -> PluginManifest {
         PluginManifest {
             name: name.to_string(),
             version: "1.0.0".to_string(),
@@ -472,8 +474,8 @@ mod tests {
     #[test]
     fn detects_enabled_protocol_collision() {
         let manifests = vec![
-            manifest("left", TEST_PROTOCOL_ID, true),
-            manifest("right", TEST_PROTOCOL_ID, true),
+            manifest("left", true, TEST_PROTOCOL_ID),
+            manifest("right", true, TEST_PROTOCOL_ID),
         ];
 
         let collisions = protocol_identifier_collisions(&manifests);
@@ -486,8 +488,8 @@ mod tests {
     #[test]
     fn ignores_disabled_protocol_collision() {
         let manifests = vec![
-            manifest("left", TEST_PROTOCOL_ID, true),
-            manifest("right", TEST_PROTOCOL_ID, false),
+            manifest("left", true, TEST_PROTOCOL_ID),
+            manifest("right", false, TEST_PROTOCOL_ID),
         ];
 
         let collisions = protocol_identifier_collisions(&manifests);
@@ -497,7 +499,7 @@ mod tests {
 
     #[test]
     fn validates_declared_protocol_and_permissions() {
-        let mut manifest = manifest("jj-native-forge", TEST_PROTOCOL_ID, true);
+        let mut manifest = manifest("jj-native-forge", true, TEST_PROTOCOL_ID);
         manifest.kv_prefixes = vec!["forge:jj:".to_string()];
         manifest.permissions.kv_read = true;
         manifest.permissions.kv_write = true;
@@ -517,7 +519,7 @@ mod tests {
 
     #[test]
     fn rejects_undeclared_host_access() {
-        let manifest = manifest("jj-native-forge", TEST_PROTOCOL_ID, true);
+        let manifest = manifest("jj-native-forge", true, TEST_PROTOCOL_ID);
 
         let protocol_err = validate_plugin_host_access(&manifest, PluginHostAccess::Protocol {
             identifier: "/aspen/other/1",
@@ -535,7 +537,7 @@ mod tests {
 
     #[test]
     fn rejects_kv_key_outside_declared_prefix() {
-        let mut manifest = manifest("jj-native-forge", TEST_PROTOCOL_ID, true);
+        let mut manifest = manifest("jj-native-forge", true, TEST_PROTOCOL_ID);
         manifest.kv_prefixes = vec!["forge:jj:".to_string()];
         manifest.permissions.kv_write = true;
 

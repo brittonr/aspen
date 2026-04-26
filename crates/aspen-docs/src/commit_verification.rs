@@ -170,7 +170,7 @@ mod tests {
     fn make_commit_bytes(tamper: bool) -> (String, Vec<u8>) {
         let mutations = vec![("a".to_string(), MutationType::Set("1".to_string()))];
         let mutations_hash = compute_mutations_hash(&mutations);
-        let id = compute_commit_id(&None, "test", &mutations_hash, 1, 1000);
+        let id = compute_commit_id(&None, &mutations_hash, "test", 1, 1000);
 
         let mut commit = Commit {
             id,

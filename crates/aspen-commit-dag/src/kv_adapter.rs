@@ -146,7 +146,7 @@ mod tests {
         ts: u64,
     ) -> Commit {
         let mutations_hash = compute_mutations_hash(&mutations);
-        let id = compute_commit_id(&parent, branch_id, &mutations_hash, revision, ts);
+        let id = compute_commit_id(&parent, &mutations_hash, branch_id, revision, ts);
         Commit {
             id,
             parent,

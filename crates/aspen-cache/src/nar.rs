@@ -83,19 +83,22 @@ pub async fn dump_path_nar_async(path: PathBuf) -> io::Result<(Vec<u8>, [u8; 32]
 }
 
 /// Write a single filesystem node to the NAR writer.
+#[allow(tigerstyle::no_recursion)] // nix_compat NAR writer API is inherently tree-recursive; depth bounded by filesystem
 fn write_node<W: Write>(path: &Path, node: nix_compat::nar::writer::sync::Node<'_, W>) -> io::Result<()> {
     let metadata = fs::symlink_metadata(path)?;
+    debug_assert!(metadata.is_symlink() || metadata.is_file() || metadata.is_dir());
+    debug_assert!(path.is_absolute() || !path.as_os_str().is_empty());
 
     if metadata.is_symlink() {
         let target = fs::read_link(path)?;
         let target_bytes = target.as_os_str().as_encoded_bytes();
         node.symlink(target_bytes)?;
     } else if metadata.is_file() {
-        let executable = metadata.permissions().mode() & 0o111 != 0;
-        let size = metadata.len();
+        let is_executable = metadata.permissions().mode() & 0o111 != 0;
+        let size_bytes = metadata.len();
         let file = fs::File::open(path)?;
         let mut reader = BufReader::new(file);
-        node.file(executable, size, &mut reader)?;
+        node.file(is_executable, size_bytes, &mut reader)?;
     } else if metadata.is_dir() {
         let mut dir = node.directory()?;
 

@@ -479,7 +479,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
         let raft_revision = 0u64;
         let chain_hash_at_commit = [0u8; 32];
 
-        let commit_id = compute_commit_id(&parent, &self.branch_id, &mutations_hash, raft_revision, timestamp_ms);
+        let commit_id = compute_commit_id(&parent, &mutations_hash, &self.branch_id, raft_revision, timestamp_ms);
 
         let commit = aspen_commit_dag::Commit {
             id: commit_id,

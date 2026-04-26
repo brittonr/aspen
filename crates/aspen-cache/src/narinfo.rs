@@ -81,7 +81,7 @@ pub struct CacheEntry {
 
 impl CacheEntry {
     /// Create a new cache entry with required fields.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, tigerstyle::too_many_parameters)] // data constructor for 7 required fields
     pub fn new(
         store_path: String,
         store_hash: String,

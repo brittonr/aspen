@@ -404,7 +404,7 @@ mod tests {
     use crate::PluginPermissions;
     use crate::PluginProtocol;
 
-    fn manifest(name: &str, version: &str, deps: Vec<PluginDependency>) -> PluginManifest {
+    fn manifest(name: &str, deps: Vec<PluginDependency>, version: &str) -> PluginManifest {
         PluginManifest {
             name: name.to_string(),
             version: version.to_string(),
@@ -456,9 +456,9 @@ mod tests {
     #[test]
     fn test_no_dependencies() {
         let manifests = vec![
-            manifest("a", "1.0.0", vec![]),
-            manifest("b", "1.0.0", vec![]),
-            manifest("c", "1.0.0", vec![]),
+            manifest("a", vec![], "1.0.0"),
+            manifest("b", vec![], "1.0.0"),
+            manifest("c", vec![], "1.0.0"),
         ];
         let order = resolve_load_order(&manifests).unwrap();
         assert_eq!(order.len(), 3);
@@ -472,9 +472,9 @@ mod tests {
     fn test_linear_chain() {
         // A → B → C means C loads first, then B, then A
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("b", None, false)]),
-            manifest("b", "1.0.0", vec![dep("c", None, false)]),
-            manifest("c", "1.0.0", vec![]),
+            manifest("a", vec![dep("b", None, false)], "1.0.0"),
+            manifest("b", vec![dep("c", None, false)], "1.0.0"),
+            manifest("c", vec![], "1.0.0"),
         ];
         let order = resolve_load_order(&manifests).unwrap();
         assert_eq!(order.len(), 3);
@@ -488,10 +488,10 @@ mod tests {
         // A → B, A → C, B → D, C → D
         // D loads first, B/C middle, A last
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("b", None, false), dep("c", None, false)]),
-            manifest("b", "1.0.0", vec![dep("d", None, false)]),
-            manifest("c", "1.0.0", vec![dep("d", None, false)]),
-            manifest("d", "1.0.0", vec![]),
+            manifest("a", vec![dep("b", None, false), dep("c", None, false)], "1.0.0"),
+            manifest("b", vec![dep("d", None, false)], "1.0.0"),
+            manifest("c", vec![dep("d", None, false)], "1.0.0"),
+            manifest("d", vec![], "1.0.0"),
         ];
         let order = resolve_load_order(&manifests).unwrap();
         assert_eq!(order.len(), 4);
@@ -508,8 +508,8 @@ mod tests {
     fn test_cycle_detection() {
         // A → B → A
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("b", None, false)]),
-            manifest("b", "1.0.0", vec![dep("a", None, false)]),
+            manifest("a", vec![dep("b", None, false)], "1.0.0"),
+            manifest("b", vec![dep("a", None, false)], "1.0.0"),
         ];
         let err = resolve_load_order(&manifests).unwrap_err();
         assert_eq!(err.len(), 1);
@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_missing_hard_dependency() {
-        let manifests = vec![manifest("a", "1.0.0", vec![dep("b", None, false)])];
+        let manifests = vec![manifest("a", vec![dep("b", None, false)], "1.0.0")];
         let err = resolve_load_order(&manifests).unwrap_err();
         assert_eq!(err.len(), 1);
         match &err[0] {
@@ -545,7 +545,7 @@ mod tests {
     #[test]
     fn test_missing_optional_dependency() {
         // Optional dep missing should not error
-        let manifests = vec![manifest("a", "1.0.0", vec![dep("b", None, true)])];
+        let manifests = vec![manifest("a", vec![dep("b", None, true)], "1.0.0")];
         let order = resolve_load_order(&manifests).unwrap();
         assert_eq!(order.len(), 1);
         assert_eq!(order[0].name, "a");
@@ -554,8 +554,8 @@ mod tests {
     #[test]
     fn test_version_mismatch() {
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("b", Some("2.0.0"), false)]),
-            manifest("b", "1.5.0", vec![]),
+            manifest("a", vec![dep("b", Some("2.0.0"), false)], "1.0.0"),
+            manifest("b", vec![], "1.5.0"),
         ];
         let err = resolve_load_order(&manifests).unwrap_err();
         assert_eq!(err.len(), 1);
@@ -578,8 +578,8 @@ mod tests {
     #[test]
     fn test_version_satisfied() {
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("b", Some("1.0.0"), false)]),
-            manifest("b", "1.5.0", vec![]),
+            manifest("a", vec![dep("b", Some("1.0.0"), false)], "1.0.0"),
+            manifest("b", vec![], "1.5.0"),
         ];
         let order = resolve_load_order(&manifests).unwrap();
         assert_eq!(order.len(), 2);
@@ -589,7 +589,7 @@ mod tests {
 
     #[test]
     fn test_api_version_too_new() {
-        let mut m = manifest("a", "1.0.0", vec![]);
+        let mut m = manifest("a", vec![], "1.0.0");
         m.min_api_version = Some("999.0.0".to_string());
         let err = check_api_version(&m).unwrap_err();
         match err {
@@ -608,16 +608,16 @@ mod tests {
 
     #[test]
     fn test_api_version_ok() {
-        let mut m = manifest("a", "1.0.0", vec![]);
+        let mut m = manifest("a", vec![], "1.0.0");
         m.min_api_version = Some("0.1.0".to_string());
         assert!(check_api_version(&m).is_ok());
     }
 
     #[test]
     fn test_disabled_plugins_excluded() {
-        let mut m = manifest("a", "1.0.0", vec![dep("b", None, false)]);
+        let mut m = manifest("a", vec![dep("b", None, false)], "1.0.0");
         m.enabled = false;
-        let manifests = vec![m, manifest("b", "1.0.0", vec![])];
+        let manifests = vec![m, manifest("b", vec![], "1.0.0")];
         let order = resolve_load_order(&manifests).unwrap();
         assert_eq!(order.len(), 1);
         assert_eq!(order[0].name, "b");
@@ -626,9 +626,9 @@ mod tests {
     #[test]
     fn test_reverse_dependents() {
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("c", None, false)]),
-            manifest("b", "1.0.0", vec![dep("c", None, false)]),
-            manifest("c", "1.0.0", vec![]),
+            manifest("a", vec![dep("c", None, false)], "1.0.0"),
+            manifest("b", vec![dep("c", None, false)], "1.0.0"),
+            manifest("c", vec![], "1.0.0"),
         ];
         let deps = reverse_dependents("c", &manifests);
         assert_eq!(deps.len(), 2);
@@ -639,9 +639,9 @@ mod tests {
     #[test]
     fn test_reverse_dependents_excludes_optional() {
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("c", None, false)]),
-            manifest("b", "1.0.0", vec![dep("c", None, true)]), // optional
-            manifest("c", "1.0.0", vec![]),
+            manifest("a", vec![dep("c", None, false)], "1.0.0"),
+            manifest("b", vec![dep("c", None, true)], "1.0.0"), // optional
+            manifest("c", vec![], "1.0.0"),
         ];
         let deps = reverse_dependents("c", &manifests);
         assert_eq!(deps.len(), 1);
@@ -650,7 +650,7 @@ mod tests {
 
     #[test]
     fn test_validate_install_missing_dep() {
-        let m = manifest("a", "1.0.0", vec![dep("b", None, false)]);
+        let m = manifest("a", vec![dep("b", None, false)], "1.0.0");
         let installed = vec![];
         let err = validate_install(&m, &installed).unwrap_err();
         assert_eq!(err.len(), 1);
@@ -664,17 +664,17 @@ mod tests {
 
     #[test]
     fn test_validate_install_ok() {
-        let m = manifest("a", "1.0.0", vec![dep("b", Some("1.0.0"), false)]);
-        let installed = vec![manifest("b", "1.5.0", vec![])];
+        let m = manifest("a", vec![dep("b", Some("1.0.0"), false)], "1.0.0");
+        let installed = vec![manifest("b", vec![], "1.5.0")];
         assert!(validate_install(&m, &installed).is_ok());
     }
 
     #[test]
     fn test_validate_install_rejects_protocol_collision() {
         const PROTOCOL_ID: &str = "/aspen/test/1";
-        let mut installed = manifest("installed", "1.0.0", vec![]);
+        let mut installed = manifest("installed", vec![], "1.0.0");
         installed.protocols.push(protocol(PROTOCOL_ID));
-        let mut candidate = manifest("candidate", "1.0.0", vec![]);
+        let mut candidate = manifest("candidate", vec![], "1.0.0");
         candidate.protocols.push(protocol(PROTOCOL_ID));
 
         let err = validate_install(&candidate, &[installed]).unwrap_err();
@@ -703,8 +703,8 @@ mod tests {
     fn test_optional_dependency_version_mismatch() {
         // Optional dep exists but version too low should error
         let manifests = vec![
-            manifest("a", "1.0.0", vec![dep("b", Some("2.0.0"), true)]),
-            manifest("b", "1.0.0", vec![]),
+            manifest("a", vec![dep("b", Some("2.0.0"), true)], "1.0.0"),
+            manifest("b", vec![], "1.0.0"),
         ];
         let err = resolve_load_order(&manifests).unwrap_err();
         assert_eq!(err.len(), 1);
