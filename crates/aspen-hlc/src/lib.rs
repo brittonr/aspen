@@ -279,9 +279,121 @@ impl From<HlcTimestamp> for SerializableTimestamp {
     }
 }
 
+/// Trait abstracting HLC timestamp generation and observation.
+///
+/// Consumers that only need to generate or observe timestamps can depend
+/// on this trait instead of the concrete `uhlc::HLC` type, enabling
+/// in-memory test fixtures and simulation.
+pub trait LogicalClock: Send + Sync {
+    /// Generate a new monotonically increasing timestamp.
+    fn new_timestamp(&self) -> HlcTimestamp;
+
+    /// Observe a received timestamp and advance the local clock if needed.
+    fn update_with_timestamp(&self, received: &HlcTimestamp) -> Result<(), String>;
+}
+
+impl LogicalClock for HLC {
+    fn new_timestamp(&self) -> HlcTimestamp {
+        HLC::new_timestamp(self)
+    }
+
+    fn update_with_timestamp(&self, received: &HlcTimestamp) -> Result<(), String> {
+        HLC::update_with_timestamp(self, received)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct SequentialClock {
+        counter: core::sync::atomic::AtomicU64,
+        node_id: [u8; 16],
+    }
+
+    impl SequentialClock {
+        fn new(node_id_str: &str) -> Self {
+            let hash = blake3::hash(node_id_str.as_bytes());
+            let bytes = hash.as_bytes();
+            let node_id: [u8; 16] = [
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+            ];
+            Self {
+                counter: core::sync::atomic::AtomicU64::new(1),
+                node_id,
+            }
+        }
+    }
+
+    impl LogicalClock for SequentialClock {
+        fn new_timestamp(&self) -> HlcTimestamp {
+            let count = self.counter.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+            let id = ID::try_from(self.node_id).unwrap_or_else(|_| ID::from(NonZeroU8::MIN));
+            HlcTimestamp::new(NTP64(count), id)
+        }
+
+        fn update_with_timestamp(&self, received: &HlcTimestamp) -> Result<(), String> {
+            let received_time = received.get_time().as_u64();
+            let current = self.counter.load(core::sync::atomic::Ordering::SeqCst);
+            if received_time >= current {
+                self.counter.store(received_time + 1, core::sync::atomic::Ordering::SeqCst);
+            }
+            Ok(())
+        }
+    }
+
+    fn _assert_logical_clock<T: LogicalClock>() {}
+
+    #[test]
+    fn hlc_implements_logical_clock() {
+        _assert_logical_clock::<HLC>();
+    }
+
+    #[test]
+    fn sequential_clock_implements_logical_clock() {
+        _assert_logical_clock::<SequentialClock>();
+    }
+
+    #[test]
+    fn sequential_clock_monotonic() {
+        let clock = SequentialClock::new("test");
+        let ts1 = clock.new_timestamp();
+        let ts2 = clock.new_timestamp();
+        let ts3 = clock.new_timestamp();
+        assert!(ts2 > ts1);
+        assert!(ts3 > ts2);
+    }
+
+    #[test]
+    fn sequential_clock_update_advances() {
+        let clock = SequentialClock::new("test");
+        let _ts1 = clock.new_timestamp();
+        let far_future = HlcTimestamp::new(
+            NTP64(1_000_000),
+            ID::try_from(clock.node_id).unwrap(),
+        );
+        clock.update_with_timestamp(&far_future).unwrap();
+        let ts_after = clock.new_timestamp();
+        assert!(ts_after.get_time().as_u64() > 1_000_000);
+    }
+
+    #[test]
+    fn generic_consumer_works_with_any_logical_clock() {
+        fn generate_ordered_pair(clock: &dyn LogicalClock) -> (HlcTimestamp, HlcTimestamp) {
+            let a = clock.new_timestamp();
+            let b = clock.new_timestamp();
+            (a, b)
+        }
+
+        let hlc = create_hlc("real-node");
+        let (a, b) = generate_ordered_pair(&hlc);
+        assert!(b > a);
+
+        let seq = SequentialClock::new("test-node");
+        let (a, b) = generate_ordered_pair(&seq);
+        assert!(b > a);
+    }
 
     #[test]
     fn test_create_hlc_deterministic() {
