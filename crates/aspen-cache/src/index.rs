@@ -11,15 +11,15 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 #[cfg(feature = "kv-index")]
-use aspen_core::KeyValueStore;
+use aspen_kv_types::ReadConsistency;
 #[cfg(feature = "kv-index")]
-use aspen_core::kv::ReadConsistency;
+use aspen_kv_types::ReadRequest;
 #[cfg(feature = "kv-index")]
-use aspen_core::kv::ReadRequest;
+use aspen_kv_types::WriteCommand;
 #[cfg(feature = "kv-index")]
-use aspen_core::kv::WriteCommand;
+use aspen_kv_types::WriteRequest;
 #[cfg(feature = "kv-index")]
-use aspen_core::kv::WriteRequest;
+use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 #[cfg(feature = "kv-index")]
 use tracing::debug;
@@ -193,7 +193,7 @@ impl<KV: KeyValueStore + ?Sized> CacheLookup for KvCacheIndex<KV> {
                     Ok(None)
                 }
             }
-            Err(aspen_core::error::KeyValueStoreError::NotFound { .. }) => {
+            Err(aspen_kv_types::KeyValueStoreError::NotFound { .. }) => {
                 debug!(store_hash = %store_hash, "Cache miss");
                 let _ = self.update_stats(|s| s.record_miss()).await;
                 Ok(None)
@@ -214,7 +214,7 @@ impl<KV: KeyValueStore + ?Sized> CacheLookup for KvCacheIndex<KV> {
 
         match self.kv.read(read_request).await {
             Ok(result) => Ok(result.kv.is_some()),
-            Err(aspen_core::error::KeyValueStoreError::NotFound { .. }) => Ok(false),
+            Err(aspen_kv_types::KeyValueStoreError::NotFound { .. }) => Ok(false),
             Err(e) => Err(CacheError::KvStore { message: e.to_string() }),
         }
     }

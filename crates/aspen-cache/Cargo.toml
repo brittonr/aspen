@@ -7,11 +7,11 @@ description = "Distributed Nix binary cache for Aspen using iroh-blobs storage"
 
 [features]
 default = []
-kv-index = ["dep:aspen-core", "dep:aspen-kv-types"]
+kv-index = ["dep:aspen-traits", "dep:aspen-kv-types"]
 
 [dependencies]
 # Cluster KV integration (feature-gated)
-aspen-core = { workspace = true, optional = true }
+aspen-traits = { workspace = true, optional = true }
 aspen-kv-types = { workspace = true, optional = true }
 
 # Serialization

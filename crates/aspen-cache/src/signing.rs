@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 #[cfg(feature = "kv-index")]
-use aspen_core::KeyValueStore;
+use aspen_traits::KeyValueStore;
 #[cfg(feature = "kv-index")]
 use aspen_kv_types::ReadRequest;
 #[cfg(feature = "kv-index")]
