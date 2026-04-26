@@ -19,6 +19,10 @@ use aspen_kv_types::ScanResult;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
 use aspen_traits::KeyValueStore;
+use aspen_traits::KvDelete;
+use aspen_traits::KvRead;
+use aspen_traits::KvScan;
+use aspen_traits::KvWrite;
 use async_trait::async_trait;
 
 /// A `KeyValueStore` that delegates to an `AspenClient` via RPC.
@@ -44,7 +48,7 @@ fn resp_err(code: &str, message: &str) -> KeyValueStoreError {
 }
 
 #[async_trait]
-impl KeyValueStore for ClientKvAdapter {
+impl KvWrite for ClientKvAdapter {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         let (key, value) = match &request.command {
             aspen_kv_types::WriteCommand::Set { key, value } => (key.clone(), value.as_bytes().to_vec()),
@@ -74,7 +78,10 @@ impl KeyValueStore for ClientKvAdapter {
             }),
         }
     }
+}
 
+#[async_trait]
+impl KvRead for ClientKvAdapter {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let rpc = ClientRpcRequest::ReadKey {
             key: request.key.clone(),
@@ -104,7 +111,10 @@ impl KeyValueStore for ClientKvAdapter {
             }),
         }
     }
+}
 
+#[async_trait]
+impl KvDelete for ClientKvAdapter {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let rpc = ClientRpcRequest::DeleteKey {
             key: request.key.clone(),
@@ -126,7 +136,10 @@ impl KeyValueStore for ClientKvAdapter {
             }),
         }
     }
+}
 
+#[async_trait]
+impl KvScan for ClientKvAdapter {
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         let rpc = ClientRpcRequest::ScanKeys {
             prefix: request.prefix.clone(),
@@ -165,3 +178,5 @@ impl KeyValueStore for ClientKvAdapter {
         }
     }
 }
+
+impl KeyValueStore for ClientKvAdapter {}

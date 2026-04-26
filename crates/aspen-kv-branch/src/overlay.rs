@@ -16,7 +16,7 @@ use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteOp;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
-use aspen_traits::KeyValueStore;
+use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite, KeyValueStore};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use tracing::debug;
@@ -548,7 +548,7 @@ impl<S: KeyValueStore + ?Sized> BranchOverlay<S> {
 }
 
 #[async_trait]
-impl<S: KeyValueStore + ?Sized> KeyValueStore for BranchOverlay<S> {
+impl<S: KeyValueStore + ?Sized> KvRead for BranchOverlay<S> {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let key = &request.key;
 
@@ -578,7 +578,10 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for BranchOverlay<S> {
 
         Ok(result)
     }
+}
 
+#[async_trait]
+impl<S: KeyValueStore + ?Sized> KvWrite for BranchOverlay<S> {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         // Extract key and value from the write command.
         let (key, value) = match &request.command {
@@ -626,7 +629,10 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for BranchOverlay<S> {
             conflict_actual_version: None,
         })
     }
+}
 
+#[async_trait]
+impl<S: KeyValueStore + ?Sized> KvDelete for BranchOverlay<S> {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let key = &request.key;
 
@@ -648,7 +654,10 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for BranchOverlay<S> {
             is_deleted: true,
         })
     }
+}
 
+#[async_trait]
+impl<S: KeyValueStore + ?Sized> KvScan for BranchOverlay<S> {
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         // Get parent results.
         let parent_result = self.parent.scan(request.clone()).await?;
@@ -672,6 +681,8 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for BranchOverlay<S> {
         })
     }
 }
+
+impl<S: KeyValueStore + ?Sized> KeyValueStore for BranchOverlay<S> {}
 
 impl<S: KeyValueStore + ?Sized> Drop for BranchOverlay<S> {
     fn drop(&mut self) {

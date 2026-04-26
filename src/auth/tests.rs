@@ -9,6 +9,8 @@ use iroh::SecretKey;
 
 use super::*;
 use crate::api::KeyValueStore;
+use crate::api::KvRead;
+use crate::api::KvWrite;
 use crate::api::ReadRequest;
 use crate::testing::DeterministicKeyValueStore;
 

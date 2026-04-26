@@ -592,6 +592,7 @@ mod tests {
     use aspen_kv_types::WriteRequest;
     use aspen_kv_types::WriteResult;
     use aspen_testing::DeterministicKeyValueStore;
+    use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite};
     use async_trait::async_trait;
 
     use super::*;
@@ -615,24 +616,35 @@ mod tests {
     }
 
     #[async_trait]
-    impl KeyValueStore for CountingStore {
+    impl KvWrite for CountingStore {
         async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
             self.write_count.fetch_add(1, Ordering::SeqCst);
             self.inner.write(request).await
         }
+    }
 
+    #[async_trait]
+    impl KvRead for CountingStore {
         async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
             self.inner.read(request).await
         }
+    }
 
+    #[async_trait]
+    impl KvDelete for CountingStore {
         async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
             self.inner.delete(request).await
         }
+    }
 
+    #[async_trait]
+    impl KvScan for CountingStore {
         async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
             self.inner.scan(request).await
         }
     }
+
+    impl KeyValueStore for CountingStore {}
 
     fn test_lockset(
         store: Arc<DeterministicKeyValueStore>,

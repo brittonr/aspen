@@ -694,6 +694,7 @@ mod mock_kv {
     use aspen_core::DeleteResult;
     use aspen_core::KeyValueStore;
     use aspen_core::KeyValueStoreError;
+    use aspen_core::{KvDelete, KvRead, KvScan, KvWrite};
     use aspen_core::KeyValueWithRevision;
     use aspen_core::ReadRequest;
     use aspen_core::ReadResult;
@@ -716,7 +717,7 @@ mod mock_kv {
     }
 
     #[async_trait::async_trait]
-    impl KeyValueStore for MockKvStore {
+    impl KvRead for MockKvStore {
         async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
             let data = self.data.read().await;
             let kv = data.get(&request.key).map(|v| KeyValueWithRevision {
@@ -728,7 +729,10 @@ mod mock_kv {
             });
             Ok(ReadResult { kv })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvWrite for MockKvStore {
         async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
             let mut data = self.data.write().await;
             match &request.command {
@@ -739,7 +743,10 @@ mod mock_kv {
             }
             Ok(WriteResult::default())
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvDelete for MockKvStore {
         async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
             let mut data = self.data.write().await;
             let is_deleted = data.remove(&request.key).is_some();
@@ -748,7 +755,10 @@ mod mock_kv {
                 is_deleted,
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvScan for MockKvStore {
         async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
             Ok(ScanResult {
                 entries: vec![],
@@ -758,6 +768,8 @@ mod mock_kv {
             })
         }
     }
+
+    impl KeyValueStore for MockKvStore {}
 }
 
 /// Test 3.5: Shell job with mock KV store produces log chunks with correct key format.

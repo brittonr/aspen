@@ -65,7 +65,7 @@ use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
 use aspen_raft_types::READ_INDEX_TIMEOUT;
-use aspen_traits::KeyValueStore;
+use aspen_traits::{KvDelete, KvLocalScan, KvRead, KvScan, KvWrite, KeyValueStore};
 use async_trait::async_trait;
 use openraft::ReadPolicy;
 use openraft::error::ClientWriteError;
@@ -83,7 +83,7 @@ use crate::types::member_endpoint_addr;
 use crate::write_batcher::command_conversion::write_command_to_app_request;
 
 #[async_trait]
-impl KeyValueStore for RaftNode {
+impl KvWrite for RaftNode {
     #[instrument(skip(self))]
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         let _permit = self.semaphore().acquire().await.map_err(|_| KeyValueStoreError::Failed {
@@ -159,7 +159,10 @@ impl KeyValueStore for RaftNode {
             }
         }
     }
+}
 
+#[async_trait]
+impl KvRead for RaftNode {
     #[instrument(skip(self))]
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let _permit = self.semaphore().acquire().await.map_err(|_| KeyValueStoreError::Failed {
@@ -187,7 +190,10 @@ impl KeyValueStore for RaftNode {
         // Read directly from state machine (linearizability guaranteed by consistency check above)
         self.read_from_state_machine(&request.key).await
     }
+}
 
+#[async_trait]
+impl KvDelete for RaftNode {
     #[instrument(skip(self))]
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let _permit = self.semaphore().acquire().await.map_err(|_| KeyValueStoreError::Failed {
@@ -259,7 +265,10 @@ impl KeyValueStore for RaftNode {
             }
         }
     }
+}
 
+#[async_trait]
+impl KvScan for RaftNode {
     #[instrument(skip(self))]
     async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         let _permit = self.semaphore().acquire().await.map_err(|_| KeyValueStoreError::Failed {
@@ -302,7 +311,10 @@ impl KeyValueStore for RaftNode {
             StateMachineVariant::Redb(sm) => self.scan_from_redb(sm, &_request, max_results_items),
         }
     }
+}
 
+#[async_trait]
+impl KvLocalScan for RaftNode {
     /// Scan from the local state machine without linearizability guarantees.
     ///
     /// Reads directly from the follower's replicated state machine, skipping
@@ -344,6 +356,8 @@ impl KeyValueStore for RaftNode {
         }
     }
 }
+
+impl KeyValueStore for RaftNode {}
 
 // ====================================================================================
 // read() helper methods (extracted for Tiger Style compliance)

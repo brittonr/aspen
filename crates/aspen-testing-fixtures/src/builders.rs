@@ -184,7 +184,7 @@ impl KvStoreBuilder {
     /// This populates the store with any initial entries that were configured.
     pub async fn build(self) -> Arc<DeterministicKeyValueStore> {
         use aspen_kv_types::WriteRequest;
-        use aspen_traits::KeyValueStore;
+        use aspen_traits::KvWrite;
 
         let store = DeterministicKeyValueStore::new();
 
@@ -273,7 +273,7 @@ mod tests {
     #[tokio::test]
     async fn test_kv_store_builder_with_entries() {
         use aspen_kv_types::ReadRequest;
-        use aspen_traits::KeyValueStore;
+        use aspen_traits::KvWrite;
 
         let store = KvStoreBuilder::new().with_entry("key1", "value1").with_entry("key2", "value2").build().await;
 
@@ -287,7 +287,7 @@ mod tests {
     #[tokio::test]
     async fn test_kv_store_builder_with_prefix_and_entries() {
         use aspen_kv_types::ReadRequest;
-        use aspen_traits::KeyValueStore;
+        use aspen_traits::KvWrite;
 
         let store = KvStoreBuilder::new().with_prefix("test/").with_entry("key1", "value1").build().await;
 

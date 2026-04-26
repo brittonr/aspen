@@ -37,6 +37,10 @@ use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
 use aspen_traits::KeyValueStore;
+use aspen_traits::KvDelete;
+use aspen_traits::KvRead;
+use aspen_traits::KvScan;
+use aspen_traits::KvWrite;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::warn;
@@ -242,7 +246,7 @@ impl<KV: KeyValueStore, B: BlobRead + BlobWrite> BlobAwareKeyValueStore<KV, B> {
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KeyValueStore for BlobAwareKeyValueStore<KV, B> {
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvRead for BlobAwareKeyValueStore<KV, B> {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         // Read from KV
         let result = self.kv.read(request.clone()).await?;
@@ -281,6 +285,10 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
         }
     }
 
+}
+
+#[async_trait]
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvWrite for BlobAwareKeyValueStore<KV, B> {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         // Process command, offloading large values to blobs
         let processed_command = match request.command {
@@ -300,6 +308,10 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
             .await
     }
 
+}
+
+#[async_trait]
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvDelete for BlobAwareKeyValueStore<KV, B> {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         // Unprotect blob before delete
         if let Some(old_value) = self.read_raw(&request.key).await
@@ -311,34 +323,21 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
         self.kv.delete(request).await
     }
 
+}
+
+#[async_trait]
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvScan for BlobAwareKeyValueStore<KV, B> {
     /// Scan keys in the underlying KV store.
     ///
     /// **IMPORTANT**: This returns raw KV values, which may include blob references
     /// (values starting with `__blob:`). To get the actual data for blob-backed values,
     /// callers should use `read()` on individual keys after scanning.
-    ///
-    /// This behavior is intentional to avoid loading potentially large blob data
-    /// during range scans. A scan over thousands of keys should remain fast even
-    /// if some values are multi-megabyte blobs.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // Scan returns raw values (may include __blob: references)
-    /// let scan_result = store.scan(request).await?;
-    ///
-    /// // To get actual blob data, read individual keys
-    /// for entry in scan_result.entries {
-    ///     if is_blob_ref(&entry.value) {
-    ///         let full_value = store.read(ReadRequest::new(entry.key)).await?;
-    ///         // full_value.kv.value contains the resolved blob data
-    ///     }
-    /// }
-    /// ```
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         self.kv.scan(request).await
     }
 }
+
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KeyValueStore for BlobAwareKeyValueStore<KV, B> {}
 
 #[cfg(test)]
 mod tests {

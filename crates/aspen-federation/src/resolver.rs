@@ -33,6 +33,8 @@ use std::sync::Arc;
 
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
+use aspen_core::KvRead;
+use aspen_core::KvScan;
 use aspen_core::ReadRequest;
 use aspen_core::ScanRequest;
 use async_trait::async_trait;

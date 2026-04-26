@@ -13,7 +13,7 @@ aspen-core = { path = "../aspen-core" }
 async-trait = "0.1"
 
 # Async runtime
-tokio = { version = "1.48", features = ["sync", "time"] }
+tokio = { workspace = true, features = ["macros"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 # Synchronization

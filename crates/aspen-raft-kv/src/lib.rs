@@ -382,6 +382,7 @@ fn validate_nonzero_timeout_ms(name: &'static str, actual_ms: u64) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite};
 
     const LOCAL_NODE_ID: NodeId = 1;
     const REMOTE_NODE_ID: NodeId = 2;
@@ -468,14 +469,17 @@ mod tests {
     struct EchoKeyValueStore;
 
     #[async_trait::async_trait]
-    impl KeyValueStore for EchoKeyValueStore {
+    impl KvWrite for EchoKeyValueStore {
         async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
             Ok(WriteResult {
                 command: Some(request.command),
                 ..WriteResult::default()
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvRead for EchoKeyValueStore {
         async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
             Ok(ReadResult {
                 kv: Some(KeyValueWithRevision {
@@ -487,14 +491,20 @@ mod tests {
                 }),
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvDelete for EchoKeyValueStore {
         async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
             Ok(DeleteResult {
                 key: request.key,
                 is_deleted: true,
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvScan for EchoKeyValueStore {
         async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
             Ok(ScanResult {
                 entries: Vec::new(),
@@ -505,34 +515,47 @@ mod tests {
         }
     }
 
+    impl KeyValueStore for EchoKeyValueStore {}
+
     struct FailingKeyValueStore;
 
     #[async_trait::async_trait]
-    impl KeyValueStore for FailingKeyValueStore {
+    impl KvWrite for FailingKeyValueStore {
         async fn write(&self, _request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
             Err(KeyValueStoreError::Failed {
                 reason: KV_FAILURE_REASON.to_string(),
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvRead for FailingKeyValueStore {
         async fn read(&self, _request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
             Err(KeyValueStoreError::Failed {
                 reason: KV_FAILURE_REASON.to_string(),
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvDelete for FailingKeyValueStore {
         async fn delete(&self, _request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
             Err(KeyValueStoreError::Failed {
                 reason: KV_FAILURE_REASON.to_string(),
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl KvScan for FailingKeyValueStore {
         async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
             Err(KeyValueStoreError::Failed {
                 reason: KV_FAILURE_REASON.to_string(),
             })
         }
     }
+
+    impl KeyValueStore for FailingKeyValueStore {}
 
     struct ReadyClusterController;
 

@@ -12,7 +12,7 @@ use aspen_kv_branch::BranchOverlay;
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::WriteRequest;
 use aspen_testing_core::DeterministicKeyValueStore;
-use aspen_traits::KeyValueStore;
+use aspen_traits::{KvRead, KvScan, KvWrite, KeyValueStore};
 
 fn make_store() -> Arc<DeterministicKeyValueStore> {
     DeterministicKeyValueStore::new()

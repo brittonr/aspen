@@ -439,6 +439,7 @@ mod tests {
     use aspen_kv_types::WriteRequest;
     use aspen_kv_types::WriteResult;
     use aspen_testing::DeterministicKeyValueStore;
+    use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite};
     use async_trait::async_trait;
 
     use super::*;
@@ -471,7 +472,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl KeyValueStore for ConflictThenSuccessStore {
+    impl KvWrite for ConflictThenSuccessStore {
         async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
             let mut state = self.state.lock().expect("lock conflict store");
             state.write_calls = state.write_calls.saturating_add(1);
@@ -495,7 +496,10 @@ mod tests {
                 }),
             }
         }
+    }
 
+    #[async_trait]
+    impl KvRead for ConflictThenSuccessStore {
         async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
             let state = self.state.lock().expect("lock conflict store");
             Ok(ReadResult {
@@ -508,19 +512,27 @@ mod tests {
                 }),
             })
         }
+    }
 
+    #[async_trait]
+    impl KvDelete for ConflictThenSuccessStore {
         async fn delete(&self, _request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
             Err(KeyValueStoreError::Failed {
                 reason: "delete must not be called in rate limiter test".to_string(),
             })
         }
+    }
 
+    #[async_trait]
+    impl KvScan for ConflictThenSuccessStore {
         async fn scan(&self, _request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
             Err(KeyValueStoreError::Failed {
                 reason: "scan must not be called in rate limiter test".to_string(),
             })
         }
     }
+
+    impl KeyValueStore for ConflictThenSuccessStore {}
 
     #[tokio::test]
     async fn test_rate_limiter_basic() {

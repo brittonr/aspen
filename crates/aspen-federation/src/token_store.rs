@@ -9,6 +9,8 @@
 //! - `_sys:fed:token:received:<issuer_key>` — tokens we received from remote clusters
 
 use aspen_auth::Credential;
+use aspen_traits::KvRead;
+use aspen_traits::KvWrite;
 use iroh::PublicKey;
 use tracing::debug;
 use tracing::warn;

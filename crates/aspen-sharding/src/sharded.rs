@@ -31,6 +31,10 @@ use aspen_core::DeleteRequest;
 use aspen_core::DeleteResult;
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
+use aspen_core::KvDelete;
+use aspen_core::KvRead;
+use aspen_core::KvScan;
+use aspen_core::KvWrite;
 use aspen_core::ReadRequest;
 use aspen_core::ReadResult;
 use aspen_core::ScanRequest;
@@ -452,7 +456,7 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValueStore<KV> {
+impl<KV: KeyValueStore + Send + Sync + 'static> KvWrite for ShardedKeyValueStore<KV> {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         // Validate all keys belong to the same shard
         let shard_id: u32 = self.validate_same_shard(&request.command)?.unwrap_or_default();
@@ -463,17 +467,26 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         let shard = self.get_shard_by_id(shard_id).await?;
         shard.write(request).await
     }
+}
 
+#[async_trait]
+impl<KV: KeyValueStore + Send + Sync + 'static> KvRead for ShardedKeyValueStore<KV> {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let shard = self.get_shard(&request.key).await?;
         shard.read(request).await
     }
+}
 
+#[async_trait]
+impl<KV: KeyValueStore + Send + Sync + 'static> KvDelete for ShardedKeyValueStore<KV> {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let shard = self.get_shard(&request.key).await?;
         shard.delete(request).await
     }
+}
 
+#[async_trait]
+impl<KV: KeyValueStore + Send + Sync + 'static> KvScan for ShardedKeyValueStore<KV> {
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         // Scan operations must query all shards since prefix queries can span multiple shards
         let shard_ids = self.router.get_shards_for_prefix(&request.prefix);
@@ -528,6 +541,8 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
         })
     }
 }
+
+impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValueStore<KV> {}
 
 #[cfg(test)]
 mod tests {
