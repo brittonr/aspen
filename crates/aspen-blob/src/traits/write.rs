@@ -7,6 +7,7 @@ use std::path::Path;
 use async_trait::async_trait;
 use iroh_blobs::Hash;
 
+use crate::events::UnprotectReason;
 use crate::store::BlobStoreError;
 use crate::types::AddBlobResult;
 
@@ -27,4 +28,17 @@ pub trait BlobWrite: Send + Sync {
 
     /// Remove protection tag.
     async fn unprotect(&self, tag_name: &str) -> Result<(), BlobStoreError>;
+
+    /// Remove protection tag with a reason for the removal.
+    ///
+    /// Defaults to calling [`unprotect`](BlobWrite::unprotect), ignoring the
+    /// reason. Concrete stores that emit lifecycle events should override this
+    /// to propagate the reason to event consumers.
+    async fn unprotect_with_reason(
+        &self,
+        tag_name: &str,
+        _reason: UnprotectReason,
+    ) -> Result<(), BlobStoreError> {
+        self.unprotect(tag_name).await
+    }
 }

@@ -26,17 +26,17 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use aspen_core::DeleteRequest;
-use aspen_core::DeleteResult;
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::ReadResult;
-use aspen_core::ScanRequest;
-use aspen_core::ScanResult;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
-use aspen_core::WriteResult;
+use aspen_kv_types::DeleteRequest;
+use aspen_kv_types::DeleteResult;
+use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::ReadResult;
+use aspen_kv_types::ScanRequest;
+use aspen_kv_types::ScanResult;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_kv_types::WriteResult;
+use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::warn;
@@ -46,31 +46,39 @@ use crate::BlobRead;
 use crate::BlobRef;
 use crate::BlobStoreError;
 use crate::BlobWrite;
-use crate::IrohBlobStore;
 use crate::UnprotectReason;
+use crate::constants::KV_TAG_PREFIX;
 use crate::is_blob_ref;
+
+/// Create a KV-scoped blob protection tag name.
+fn kv_blob_tag(key: &str) -> String {
+    format!("{}{}", KV_TAG_PREFIX, key)
+}
 
 /// Wrapper around KeyValueStore that offloads large values to blob storage.
 ///
 /// Values larger than `BLOB_THRESHOLD` (1MB) are automatically stored in
-/// iroh-blobs with a `BlobRef` saved in the KV store.
-pub struct BlobAwareKeyValueStore<KV: KeyValueStore> {
+/// the blob backend with a `BlobRef` saved in the KV store.
+///
+/// The blob backend `B` only needs [`BlobRead`] + [`BlobWrite`] capabilities;
+/// transfer and query surfaces are not required.
+pub struct BlobAwareKeyValueStore<KV: KeyValueStore, B: BlobRead + BlobWrite> {
     /// Underlying KV store for small values and blob references.
     kv: Arc<KV>,
     /// Blob store for large values.
-    blobs: Arc<IrohBlobStore>,
+    blobs: Arc<B>,
     /// Whether automatic blob offloading is enabled.
     auto_offload: bool,
 }
 
-impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
+impl<KV: KeyValueStore, B: BlobRead + BlobWrite> BlobAwareKeyValueStore<KV, B> {
     /// Create a new blob-aware KV store wrapper.
     ///
     /// # Arguments
     /// * `kv` - The underlying KeyValueStore implementation
-    /// * `blobs` - The IrohBlobStore for large value storage
+    /// * `blobs` - Any blob backend implementing [`BlobRead`] + [`BlobWrite`]
     /// * `auto_offload` - Whether to automatically offload large values
-    pub fn new(kv: Arc<KV>, blobs: Arc<IrohBlobStore>, auto_offload: bool) -> Self {
+    pub fn new(kv: Arc<KV>, blobs: Arc<B>, auto_offload: bool) -> Self {
         Self {
             kv,
             blobs,
@@ -84,7 +92,7 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
     }
 
     /// Get the blob store.
-    pub fn blobs(&self) -> &Arc<IrohBlobStore> {
+    pub fn blobs(&self) -> &Arc<B> {
         &self.blobs
     }
 
@@ -99,7 +107,7 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
         let result = self.blobs.add_bytes(value.as_bytes()).await?;
 
         // Create GC protection tag for this KV entry
-        let tag_name = IrohBlobStore::kv_tag(key);
+        let tag_name = kv_blob_tag(key);
         self.blobs.protect(&result.blob_ref.hash, &tag_name).await?;
 
         // Return serialized blob reference
@@ -140,7 +148,7 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
             return Ok(());
         }
 
-        let tag_name = IrohBlobStore::kv_tag(key);
+        let tag_name = kv_blob_tag(key);
         self.blobs.unprotect_with_reason(&tag_name, reason).await?;
         debug!(key, "removed blob GC protection");
 
@@ -234,7 +242,7 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyValueStore<KV> {
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KeyValueStore for BlobAwareKeyValueStore<KV, B> {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         // Read from KV
         let result = self.kv.read(request.clone()).await?;

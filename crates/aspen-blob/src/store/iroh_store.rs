@@ -290,6 +290,11 @@ impl IrohBlobStore {
 
 #[async_trait]
 impl BlobWrite for IrohBlobStore {
+    #[instrument(skip(self))]
+    async fn unprotect_with_reason(&self, tag_name: &str, reason: UnprotectReason) -> Result<(), BlobStoreError> {
+        IrohBlobStore::unprotect_with_reason(self, tag_name, reason).await
+    }
+
     #[instrument(skip(self, data), fields(size = data.len()))]
     async fn add_bytes(&self, data: &[u8]) -> Result<AddBlobResult, BlobStoreError> {
         let size = data.len() as u64;
