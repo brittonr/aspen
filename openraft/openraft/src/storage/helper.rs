@@ -510,10 +510,53 @@ impl ChunkCountBounds {
             };
         }
 
-        let chunk_count = span.saturating_add(self.step_count.saturating_sub(1)) / self.step_count;
+        let chunk_count_numerator = span.saturating_add(self.step_count.saturating_sub(1));
+        let Some(chunk_count) = chunk_count_numerator.checked_div(self.step_count) else {
+            return usize::MAX;
+        };
+
         match usize::try_from(chunk_count) {
             Ok(chunk_count) => chunk_count,
             Err(_) => usize::MAX,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ChunkCountBounds;
+
+    const START_LOG_INDEX: u64 = 10;
+    const END_LOG_INDEX_REQUIRING_TWO_CHUNKS: u64 = 75;
+    const CHUNK_STEP_COUNT: u64 = 64;
+    const EXPECTED_ROUNDED_CHUNKS: usize = 2;
+
+    const ZERO_STEP_COUNT: u64 = 0;
+    const END_LOG_INDEX_FOR_ZERO_STEP: u64 = 15;
+    const EXPECTED_SPAN_CHUNKS: usize = 5;
+
+    const REVERSED_START_LOG_INDEX: u64 = 75;
+    const REVERSED_END_LOG_INDEX: u64 = 10;
+    const EXPECTED_EMPTY_CHUNKS: usize = 0;
+
+    #[test]
+    fn chunk_count_rounds_up_partial_chunk() {
+        let bounds = ChunkCountBounds::new(START_LOG_INDEX, END_LOG_INDEX_REQUIRING_TWO_CHUNKS, CHUNK_STEP_COUNT);
+
+        assert_eq!(EXPECTED_ROUNDED_CHUNKS, bounds.chunk_count());
+    }
+
+    #[test]
+    fn chunk_count_zero_step_returns_span_without_division() {
+        let bounds = ChunkCountBounds::new(START_LOG_INDEX, END_LOG_INDEX_FOR_ZERO_STEP, ZERO_STEP_COUNT);
+
+        assert_eq!(EXPECTED_SPAN_CHUNKS, bounds.chunk_count());
+    }
+
+    #[test]
+    fn chunk_count_reversed_bounds_returns_zero() {
+        let bounds = ChunkCountBounds::new(REVERSED_START_LOG_INDEX, REVERSED_END_LOG_INDEX, CHUNK_STEP_COUNT);
+
+        assert_eq!(EXPECTED_EMPTY_CHUNKS, bounds.chunk_count());
     }
 }
