@@ -137,7 +137,6 @@ mod tests {
     use crate::types::MutationType;
     use crate::verified::commit_hash::{compute_commit_id, compute_mutations_hash};
     use aspen_testing_core::DeterministicKeyValueStore;
-    use std::sync::Arc;
 
     fn make_commit(
         branch_id: &str,
@@ -162,8 +161,8 @@ mod tests {
 
     #[tokio::test]
     async fn kv_adapter_store_and_load_roundtrip() {
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let adapter = KvCommitAdapter::new(kv.clone());
+        let kv = DeterministicKeyValueStore::new();
+        let adapter = KvCommitAdapter::new(&kv);
         let commit =
             make_commit("br", None, vec![("k".into(), MutationType::Set("v".into()))], 1, 1000);
 
@@ -174,16 +173,16 @@ mod tests {
 
     #[tokio::test]
     async fn kv_adapter_load_missing_commit() {
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let adapter = KvCommitAdapter::new(kv);
+        let kv = DeterministicKeyValueStore::new();
+        let adapter = KvCommitAdapter::new(&kv);
         let result = adapter.load_commit(&[0xAA; 32]).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn kv_adapter_branch_tip_crud() {
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let adapter = KvCommitAdapter::new(kv);
+        let kv = DeterministicKeyValueStore::new();
+        let adapter = KvCommitAdapter::new(&kv);
 
         assert!(adapter.get_branch_tip("br").await.unwrap().is_none());
 
@@ -196,8 +195,8 @@ mod tests {
 
     #[tokio::test]
     async fn kv_adapter_walk_chain_via_trait() {
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let adapter = KvCommitAdapter::new(kv);
+        let kv = DeterministicKeyValueStore::new();
+        let adapter = KvCommitAdapter::new(&kv);
 
         let c1 = make_commit("br", None, vec![("a".into(), MutationType::Set("1".into()))], 1, 1000);
         let c2 =
@@ -217,24 +216,24 @@ mod tests {
 
     #[tokio::test]
     async fn kv_adapter_compatible_with_commit_store_format() {
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let adapter = KvCommitAdapter::new(kv.clone());
+        let kv = DeterministicKeyValueStore::new();
+        let adapter = KvCommitAdapter::new(&kv);
         let commit = make_commit("br", None, vec![("k".into(), MutationType::Set("v".into()))], 1, 1000);
 
         // Write via static CommitStore, read via adapter
-        crate::store::CommitStore::store_commit(&commit, kv.as_ref()).await.unwrap();
+        crate::store::CommitStore::store_commit(&commit, &kv).await.unwrap();
         let loaded = adapter.load_commit(&commit.id).await.unwrap();
         assert_eq!(loaded, commit);
     }
 
     #[tokio::test]
     async fn kv_adapter_branch_tip_compatible_with_commit_store() {
-        let kv = Arc::new(DeterministicKeyValueStore::new());
-        let adapter = KvCommitAdapter::new(kv.clone());
+        let kv = DeterministicKeyValueStore::new();
+        let adapter = KvCommitAdapter::new(&kv);
         let commit = make_commit("br", None, vec![], 1, 1000);
 
         // Write tip via static CommitStore, read via adapter
-        crate::store::CommitStore::update_branch_tip("br", &commit.id, kv.as_ref()).await.unwrap();
+        crate::store::CommitStore::update_branch_tip("br", &commit.id, &kv).await.unwrap();
         let tip = adapter.get_branch_tip("br").await.unwrap();
         assert_eq!(tip, Some(commit.id));
     }
@@ -246,11 +245,15 @@ mod tests {
 
     #[test]
     fn kv_adapter_implements_all_domain_traits() {
-        _assert_commit_read::<KvCommitAdapter<Arc<DeterministicKeyValueStore>>>();
-        _assert_commit_write::<KvCommitAdapter<Arc<DeterministicKeyValueStore>>>();
-        _assert_branch_tip_read::<KvCommitAdapter<Arc<DeterministicKeyValueStore>>>();
-        _assert_branch_tip_write::<KvCommitAdapter<Arc<DeterministicKeyValueStore>>>();
+        _assert_commit_read::<KvCommitAdapter<DeterministicKeyValueStore>>();
+        _assert_commit_write::<KvCommitAdapter<DeterministicKeyValueStore>>();
+        _assert_branch_tip_read::<KvCommitAdapter<DeterministicKeyValueStore>>();
+        _assert_branch_tip_write::<KvCommitAdapter<DeterministicKeyValueStore>>();
     }
 
-
+    #[test]
+    fn kv_adapter_read_only_ref_satisfies_read_traits() {
+        _assert_commit_read::<KvCommitAdapter<&DeterministicKeyValueStore>>();
+        _assert_branch_tip_read::<KvCommitAdapter<&DeterministicKeyValueStore>>();
+    }
 }
