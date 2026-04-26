@@ -158,6 +158,11 @@ pub use storage::KvEntry;
 pub use traits::ClusterController;
 pub use traits::CoordinationBackend;
 pub use traits::KeyValueStore;
+pub use traits::KvDelete;
+pub use traits::KvLocalScan;
+pub use traits::KvRead;
+pub use traits::KvScan;
+pub use traits::KvWrite;
 // Types
 pub use types::ClusterMetrics;
 pub use types::NodeAddress;

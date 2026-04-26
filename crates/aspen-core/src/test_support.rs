@@ -34,6 +34,10 @@ use crate::kv::WriteCommand;
 use crate::kv::WriteRequest;
 use crate::kv::WriteResult;
 use crate::traits::ClusterController;
+use crate::traits::KvDelete;
+use crate::traits::KvRead;
+use crate::traits::KvScan;
+use crate::traits::KvWrite;
 use crate::traits::KeyValueStore;
 use crate::types::ClusterMetrics;
 use crate::types::NodeState;
@@ -84,7 +88,7 @@ impl DeterministicKeyValueStore {
 }
 
 #[async_trait]
-impl KeyValueStore for DeterministicKeyValueStore {
+impl KvRead for DeterministicKeyValueStore {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let data = self.data.read().await;
         match data.get(&request.key) {
@@ -101,6 +105,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
         }
     }
 
+}
+
+#[async_trait]
+impl KvWrite for DeterministicKeyValueStore {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         let revision = self.next_revision().await;
         let mut data = self.data.write().await;
@@ -337,6 +345,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
         })
     }
 
+}
+
+#[async_trait]
+impl KvDelete for DeterministicKeyValueStore {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let _revision = self.next_revision().await;
         let mut data = self.data.write().await;
@@ -348,7 +360,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
             is_deleted,
         })
     }
+}
 
+#[async_trait]
+impl KvScan for DeterministicKeyValueStore {
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         let data = self.data.read().await;
 
@@ -382,6 +397,9 @@ impl KeyValueStore for DeterministicKeyValueStore {
         })
     }
 }
+
+#[async_trait]
+impl KeyValueStore for DeterministicKeyValueStore {}
 
 /// A deterministic in-memory cluster controller for testing.
 pub struct DeterministicClusterController {

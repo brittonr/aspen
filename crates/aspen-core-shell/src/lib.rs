@@ -199,6 +199,11 @@ pub use storage::SM_KV_TABLE;
 pub use traits::ClusterController;
 pub use traits::CoordinationBackend;
 pub use traits::KeyValueStore;
+pub use traits::KvDelete;
+pub use traits::KvLocalScan;
+pub use traits::KvRead;
+pub use traits::KvScan;
+pub use traits::KvWrite;
 // Transport types
 pub use transport::BlobAnnouncedCallback;
 pub use transport::BlobAnnouncedInfo;

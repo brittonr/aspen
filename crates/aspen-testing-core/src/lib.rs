@@ -65,6 +65,10 @@ use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
 use aspen_kv_types::validate_write_command;
 use aspen_traits::ClusterController;
+use aspen_traits::KvDelete;
+use aspen_traits::KvRead;
+use aspen_traits::KvScan;
+use aspen_traits::KvWrite;
 use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
@@ -736,7 +740,7 @@ impl DeterministicKeyValueStore {
 }
 
 #[async_trait]
-impl KeyValueStore for DeterministicKeyValueStore {
+impl KvWrite for DeterministicKeyValueStore {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         validate_write_command(&request.command)?;
 
@@ -797,6 +801,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
         }
     }
 
+}
+
+#[async_trait]
+impl KvRead for DeterministicKeyValueStore {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let guard = self.inner.lock().await;
         match guard.get(&request.key) {
@@ -812,7 +820,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
             None => Err(KeyValueStoreError::NotFound { key: request.key }),
         }
     }
+}
 
+#[async_trait]
+impl KvDelete for DeterministicKeyValueStore {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let mut inner = self.inner.lock().await;
         let is_deleted = inner.remove(&request.key).is_some();
@@ -821,7 +832,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
             is_deleted,
         })
     }
+}
 
+#[async_trait]
+impl KvScan for DeterministicKeyValueStore {
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         let inner = self.inner.lock().await;
 
@@ -888,6 +902,9 @@ impl KeyValueStore for DeterministicKeyValueStore {
         })
     }
 }
+
+#[async_trait]
+impl KeyValueStore for DeterministicKeyValueStore {}
 
 #[cfg(test)]
 mod tests {

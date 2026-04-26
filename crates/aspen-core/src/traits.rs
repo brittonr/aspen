@@ -9,6 +9,11 @@
 pub use aspen_traits::ClusterController;
 pub use aspen_traits::CoordinationBackend;
 pub use aspen_traits::KeyValueStore;
+pub use aspen_traits::KvDelete;
+pub use aspen_traits::KvLocalScan;
+pub use aspen_traits::KvRead;
+pub use aspen_traits::KvScan;
+pub use aspen_traits::KvWrite;
 
 #[cfg(test)]
 mod tests {

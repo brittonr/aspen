@@ -5,7 +5,7 @@
 
 ## 1. Foundational KV trait split
 
-- [ ] I1 Introduce narrow KV capability traits in `aspen-traits` for read, write, delete, scan, local scan/read, and any currently exposed transaction or lease behavior, then preserve existing full-store behavior through a composite compatibility trait or alias with documented migration notes. [covers=low-level-trait-seams.kv-capability-traits-are-narrow-and-composable,low-level-trait-seams.kv-capability-traits-are-narrow-and-composable.composite-kv-trait-preserves-compatibility]
+- [x] I1 Introduce narrow KV capability traits in `aspen-traits` for read, write, delete, scan, local scan/read, and any currently exposed transaction or lease behavior, then preserve existing full-store behavior through a composite compatibility trait or alias with documented migration notes. [covers=low-level-trait-seams.kv-capability-traits-are-narrow-and-composable,low-level-trait-seams.kv-capability-traits-are-narrow-and-composable.composite-kv-trait-preserves-compatibility]
 - [ ] I2 Migrate at least one read-only or scan-only low-level consumer to the narrow KV traits and add an in-memory downstream fixture that implements only the needed capabilities. [covers=low-level-trait-seams.kv-capability-traits-are-narrow-and-composable.read-only-consumers-depend-only-on-read-traits,architecture.modularity.extraction-candidates-expose-narrow-reusable-seams.reusable-defaults-avoid-broad-root-contracts]
 - [ ] I3 Make local/stale scan behavior an explicit capability where used, and add a negative fixture proving a linearizable-only KV implementation is not forced to expose local-read behavior. [covers=low-level-trait-seams.kv-capability-traits-are-narrow-and-composable.local-and-linearizable-reads-are-explicit-capabilities]
 

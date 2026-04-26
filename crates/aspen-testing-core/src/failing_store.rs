@@ -36,6 +36,10 @@ use aspen_kv_types::ScanRequest;
 use aspen_kv_types::ScanResult;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
+use aspen_traits::KvDelete;
+use aspen_traits::KvRead;
+use aspen_traits::KvScan;
+use aspen_traits::KvWrite;
 use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
@@ -222,9 +226,8 @@ impl<S: KeyValueStore + ?Sized> FailingKeyValueStore<S> {
 }
 
 #[async_trait]
-impl<S: KeyValueStore + ?Sized> KeyValueStore for FailingKeyValueStore<S> {
+impl<S: KeyValueStore + ?Sized> KvWrite for FailingKeyValueStore<S> {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
-        // Write faults apply to all writes (key extraction is complex for multi-key ops)
         let cfg = self.write_faults.read().await;
         if cfg.should_fail(None) {
             return Err(cfg.make_error());
@@ -232,7 +235,10 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for FailingKeyValueStore<S> {
         drop(cfg);
         self.inner.write(request).await
     }
+}
 
+#[async_trait]
+impl<S: KeyValueStore + ?Sized> KvRead for FailingKeyValueStore<S> {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         let key = request.key.clone();
         let cfg = self.read_faults.read().await;
@@ -242,7 +248,10 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for FailingKeyValueStore<S> {
         drop(cfg);
         self.inner.read(request).await
     }
+}
 
+#[async_trait]
+impl<S: KeyValueStore + ?Sized> KvDelete for FailingKeyValueStore<S> {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let key = request.key.clone();
         let cfg = self.delete_faults.read().await;
@@ -252,7 +261,10 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for FailingKeyValueStore<S> {
         drop(cfg);
         self.inner.delete(request).await
     }
+}
 
+#[async_trait]
+impl<S: KeyValueStore + ?Sized> KvScan for FailingKeyValueStore<S> {
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         let prefix = request.prefix.clone();
         let cfg = self.scan_faults.read().await;
@@ -263,6 +275,9 @@ impl<S: KeyValueStore + ?Sized> KeyValueStore for FailingKeyValueStore<S> {
         self.inner.scan(request).await
     }
 }
+
+#[async_trait]
+impl<S: KeyValueStore + ?Sized> KeyValueStore for FailingKeyValueStore<S> {}
 
 #[cfg(test)]
 mod tests {

@@ -2,10 +2,22 @@
 //!
 //! This crate defines the primary interfaces for cluster control and key-value storage.
 //!
-//! ## Traits
+//! ## KV Capability Traits
+//!
+//! Narrow capability traits following the Interface Segregation Principle:
+//!
+//! - [`KvRead`]: Single-key reads
+//! - [`KvWrite`]: Write commands
+//! - [`KvDelete`]: Delete commands
+//! - [`KvScan`]: Prefix scans (linearizable)
+//! - [`KvLocalScan`]: Local state-machine scans (stale/eventual)
+//!
+//! The composite [`KeyValueStore`] trait preserves compatibility for consumers
+//! that need the full KV surface.
+//!
+//! ## Other Traits
 //!
 //! - [`ClusterController`]: Manages cluster membership and Raft consensus operations
-//! - [`KeyValueStore`]: Distributed key-value store interface
 //! - [`CoordinationBackend`]: Backend trait for coordination primitives
 //!
 //! ## Blanket Implementations
@@ -40,6 +52,97 @@ pub use aspen_kv_types::WriteRequest;
 pub use aspen_kv_types::WriteResult;
 use async_trait::async_trait;
 
+// ============================================================================
+// KV Capability Traits
+// ============================================================================
+
+/// Read a single key from the store.
+#[async_trait]
+pub trait KvRead: Send + Sync {
+    /// Read a value by key with revision metadata.
+    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError>;
+}
+
+/// Write one or more key-value pairs to the store.
+#[async_trait]
+pub trait KvWrite: Send + Sync {
+    /// Write one or more key-value pairs to the store.
+    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError>;
+}
+
+/// Delete a key from the store.
+#[async_trait]
+pub trait KvDelete: Send + Sync {
+    /// Delete a key from the store.
+    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError>;
+}
+
+/// Scan keys matching a prefix with linearizable consistency.
+#[async_trait]
+pub trait KvScan: Send + Sync {
+    /// Scan keys matching a prefix with pagination support.
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError>;
+}
+
+/// Scan keys from the local state machine without linearizability guarantees.
+///
+/// Unlike [`KvScan::scan`], this reads directly from the local state machine
+/// without confirming leadership or contacting the Raft leader. The data may
+/// be slightly stale, but it is safe for use cases where eventual consistency
+/// is acceptable:
+///
+/// - Plugin manifest discovery at startup
+/// - Cache warming on followers
+/// - Background index rebuilding
+#[async_trait]
+pub trait KvLocalScan: Send + Sync {
+    /// Scan keys from the local state machine.
+    async fn scan_local(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError>;
+}
+
+// ============================================================================
+// Arc blanket impls for KV capability traits
+// ============================================================================
+
+#[async_trait]
+impl<T: KvRead + ?Sized> KvRead for Arc<T> {
+    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+        (**self).read(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvWrite + ?Sized> KvWrite for Arc<T> {
+    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+        (**self).write(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvDelete + ?Sized> KvDelete for Arc<T> {
+    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+        (**self).delete(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvScan + ?Sized> KvScan for Arc<T> {
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        (**self).scan(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvLocalScan + ?Sized> KvLocalScan for Arc<T> {
+    async fn scan_local(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        (**self).scan_local(request).await
+    }
+}
+
+// ============================================================================
+// CoordinationBackend
+// ============================================================================
+
 /// Backend trait for coordination primitives to abstract away Raft dependency.
 ///
 /// This trait provides a unified interface for coordination primitives (queues,
@@ -62,6 +165,10 @@ pub trait CoordinationBackend: Send + Sync + 'static {
     /// Get the cluster controller implementation.
     fn cluster_controller(&self) -> Arc<dyn ClusterController>;
 }
+
+// ============================================================================
+// ClusterController
+// ============================================================================
 
 /// Manages cluster membership and Raft consensus operations.
 ///
@@ -103,7 +210,6 @@ pub trait ClusterController: Send + Sync {
     fn is_initialized(&self) -> bool;
 }
 
-// Blanket implementation for Arc<T>
 #[async_trait]
 impl<T: ClusterController> ClusterController for Arc<T> {
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
@@ -143,36 +249,23 @@ impl<T: ClusterController> ClusterController for Arc<T> {
     }
 }
 
+// ============================================================================
+// KeyValueStore (composite compatibility trait)
+// ============================================================================
+
 /// Distributed key-value store interface.
+///
+/// This is a composite trait combining all KV capabilities for consumers that
+/// need the full store surface. New code should prefer narrow capability traits
+/// ([`KvRead`], [`KvWrite`], [`KvDelete`], [`KvScan`]) where possible.
 ///
 /// Provides linearizable read/write access to a distributed key-value store
 /// backed by Raft consensus.
 #[async_trait]
-pub trait KeyValueStore: Send + Sync {
-    /// Write one or more key-value pairs to the store.
-    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError>;
-
-    /// Read a value by key with revision metadata.
-    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError>;
-
-    /// Delete a key from the store.
-    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError>;
-
-    /// Scan keys matching a prefix with pagination support.
-    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError>;
-
+pub trait KeyValueStore: KvRead + KvWrite + KvDelete + KvScan + Send + Sync {
     /// Scan keys from the local state machine without linearizability guarantees.
     ///
-    /// Unlike [`scan()`](Self::scan), this method reads directly from the local
-    /// state machine without confirming leadership or contacting the Raft leader.
-    /// The data may be slightly stale (not yet committed entries won't appear),
-    /// but it is safe for use cases where eventual consistency is acceptable:
-    ///
-    /// - Plugin manifest discovery at startup
-    /// - Cache warming on followers
-    /// - Background index rebuilding
-    ///
-    /// The default implementation delegates to [`scan()`](Self::scan) since most
+    /// The default implementation delegates to [`KvScan::scan`] since most
     /// backends (in-memory, deterministic) don't distinguish between linearizable
     /// and local reads. Only the Raft-backed implementation overrides this to skip
     /// the ReadIndex protocol.
@@ -181,37 +274,20 @@ pub trait KeyValueStore: Send + Sync {
     }
 }
 
-// Blanket implementation for Arc<T>
 #[async_trait]
 impl<T: KeyValueStore + ?Sized> KeyValueStore for Arc<T> {
-    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
-        (**self).write(request).await
-    }
-
-    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
-        (**self).read(request).await
-    }
-
-    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
-        (**self).delete(request).await
-    }
-
-    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-        (**self).scan(request).await
-    }
-
     async fn scan_local(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
         (**self).scan_local(request).await
     }
 }
 
+// ============================================================================
+// Tests
+// ============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ============================================================================
-    // Send + Sync bounds verification
-    // ============================================================================
 
     fn assert_send<T: Send>() {}
     fn assert_sync<T: Sync>() {}
@@ -232,5 +308,50 @@ mod tests {
     fn coordination_backend_is_send_sync() {
         assert_send::<Arc<dyn CoordinationBackend>>();
         assert_sync::<Arc<dyn CoordinationBackend>>();
+    }
+
+    #[test]
+    fn kv_read_is_send_sync() {
+        assert_send::<Arc<dyn KvRead>>();
+        assert_sync::<Arc<dyn KvRead>>();
+    }
+
+    #[test]
+    fn kv_write_is_send_sync() {
+        assert_send::<Arc<dyn KvWrite>>();
+        assert_sync::<Arc<dyn KvWrite>>();
+    }
+
+    #[test]
+    fn kv_delete_is_send_sync() {
+        assert_send::<Arc<dyn KvDelete>>();
+        assert_sync::<Arc<dyn KvDelete>>();
+    }
+
+    #[test]
+    fn kv_scan_is_send_sync() {
+        assert_send::<Arc<dyn KvScan>>();
+        assert_sync::<Arc<dyn KvScan>>();
+    }
+
+    #[test]
+    fn kv_local_scan_is_send_sync() {
+        assert_send::<Arc<dyn KvLocalScan>>();
+        assert_sync::<Arc<dyn KvLocalScan>>();
+    }
+
+    #[test]
+    fn key_value_store_implies_capabilities() {
+        fn accepts_read<T: KvRead>(_: &T) {}
+        fn accepts_write<T: KvWrite>(_: &T) {}
+        fn accepts_delete<T: KvDelete>(_: &T) {}
+        fn accepts_scan<T: KvScan>(_: &T) {}
+        fn from_kv_store<T: KeyValueStore>(store: &T) {
+            accepts_read(store);
+            accepts_write(store);
+            accepts_delete(store);
+            accepts_scan(store);
+        }
+        let _ = from_kv_store::<Arc<dyn KeyValueStore>>;
     }
 }
