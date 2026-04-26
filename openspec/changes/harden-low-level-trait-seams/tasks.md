@@ -30,7 +30,7 @@
 ## 5. Branch/DAG domain stores
 
 - [x] I13 Introduce `CommitStore` and branch-tip persistence traits for commit metadata, branch-tip compare/update, diff/GC traversal, and conflict detection, with in-memory fixtures. [covers=low-level-trait-seams.branch-and-commit-dag-use-domain-store-traits.commit-dag-persistence-uses-a-commit-store-trait,low-level-trait-seams.branch-and-commit-dag-use-domain-store-traits.branch-tips-use-a-branch-tip-store-trait]
-- [ ] I14 Implement KV-backed adapters for the branch/DAG domain store traits and migrate existing Aspen branch/DAG consumers through direct APIs or documented compatibility re-exports. [covers=low-level-trait-seams.branch-and-commit-dag-use-domain-store-traits.kv-adapters-are-compatibility-layers,architecture.modularity.extraction-candidates-expose-narrow-reusable-seams.compatibility-composites-are-not-primary-reusable-api]
+- [x] I14 Implement KV-backed adapters for the branch/DAG domain store traits and migrate existing Aspen branch/DAG consumers through direct APIs or documented compatibility re-exports. [covers=low-level-trait-seams.branch-and-commit-dag-use-domain-store-traits.kv-adapters-are-compatibility-layers,architecture.modularity.extraction-candidates-expose-narrow-reusable-seams.compatibility-composites-are-not-primary-reusable-api]
 - [ ] I15 Add positive and negative branch/DAG tests for valid commits, missing parents, malformed commit payloads, over-limit traversal, stale-tip conflicts, and failed compare/update operations. [covers=low-level-trait-seams.branch-and-commit-dag-use-domain-store-traits,architecture.modularity.low-level-trait-migrations-remain-traceable.negative-fixture-coverage-is-required]
 
 ## 6. Time and logical clock injection
