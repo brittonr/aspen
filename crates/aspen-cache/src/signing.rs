@@ -28,7 +28,6 @@ use data_encoding::BASE64;
 use ed25519_dalek::Signer;
 use nix_compat::narinfo;
 use snafu::Snafu;
-#[cfg(feature = "kv-index")]
 use tracing::info;
 
 // Tiger Style: explicit bounds
@@ -203,50 +202,91 @@ impl CacheVerifyingKey {
     }
 }
 
-/// Load an existing signing key from KV, or generate and store a new one.
+/// Port trait for loading and saving cache signing keys.
+#[async_trait::async_trait]
+pub trait SigningKeyStore: Send + Sync {
+    /// Load the signing secret key, if one has been stored.
+    async fn load_signing_key(&self) -> Result<Option<String>>;
+
+    /// Save the signing key material (secret, public, and cache name).
+    async fn save_signing_key(&self, secret: &str, public: &str, name: &str) -> Result<()>;
+
+    /// Load just the public key, if one has been stored.
+    async fn load_public_key(&self) -> Result<Option<String>>;
+}
+
+/// KV-backed implementation of `SigningKeyStore`.
+#[cfg(feature = "kv-index")]
+pub struct KvSigningKeyStore {
+    kv: Arc<dyn KeyValueStore>,
+}
+
+#[cfg(feature = "kv-index")]
+impl KvSigningKeyStore {
+    /// Create a new KV-backed signing key store.
+    pub fn new(kv: Arc<dyn KeyValueStore>) -> Self {
+        Self { kv }
+    }
+}
+
+#[cfg(feature = "kv-index")]
+#[async_trait::async_trait]
+impl SigningKeyStore for KvSigningKeyStore {
+    async fn load_signing_key(&self) -> Result<Option<String>> {
+        let read_result = self
+            .kv
+            .read(ReadRequest::new(CACHE_SIGNING_KEY_KV))
+            .await
+            .map_err(|e| SigningError::KvError { message: e.to_string() })?;
+        Ok(read_result.kv.map(|kv| kv.value))
+    }
+
+    async fn save_signing_key(&self, secret: &str, public: &str, name: &str) -> Result<()> {
+        self.kv
+            .write(WriteRequest::set(CACHE_SIGNING_KEY_KV, secret))
+            .await
+            .map_err(|e| SigningError::KvError { message: e.to_string() })?;
+        self.kv
+            .write(WriteRequest::set(CACHE_PUBLIC_KEY_KV, public))
+            .await
+            .map_err(|e| SigningError::KvError { message: e.to_string() })?;
+        self.kv
+            .write(WriteRequest::set(CACHE_NAME_KV, name))
+            .await
+            .map_err(|e| SigningError::KvError { message: e.to_string() })?;
+        Ok(())
+    }
+
+    async fn load_public_key(&self) -> Result<Option<String>> {
+        let read_result = self
+            .kv
+            .read(ReadRequest::new(CACHE_PUBLIC_KEY_KV))
+            .await
+            .map_err(|e| SigningError::KvError { message: e.to_string() })?;
+        Ok(read_result.kv.map(|kv| kv.value))
+    }
+}
+
+/// Load an existing signing key from the store, or generate and save a new one.
 ///
 /// Returns the signing key and the public key in Nix format.
 /// This is idempotent — if a key already exists, it's returned as-is.
-#[cfg(feature = "kv-index")]
 pub async fn ensure_signing_key(
-    kv_store: &Arc<dyn KeyValueStore>,
+    store: &dyn SigningKeyStore,
     cache_name: &str,
 ) -> std::result::Result<(CacheSigningKey, String), SigningError> {
-    // Try to load existing key
-    let read_result = kv_store
-        .read(ReadRequest::new(CACHE_SIGNING_KEY_KV))
-        .await
-        .map_err(|e| SigningError::KvError { message: e.to_string() })?;
-
-    if let Some(kv) = read_result.kv {
-        let key = CacheSigningKey::from_nix_format(&kv.value)?;
+    if let Some(secret_str) = store.load_signing_key().await? {
+        let key = CacheSigningKey::from_nix_format(&secret_str)?;
         let public_key = key.to_nix_public_key();
         info!(cache_name = key.name(), "loaded existing cache signing key");
         return Ok((key, public_key));
     }
 
-    // Generate new key
     let key = CacheSigningKey::generate(cache_name)?;
     let secret_str = key.to_nix_secret_key();
     let public_str = key.to_nix_public_key();
 
-    // Store secret key
-    kv_store
-        .write(WriteRequest::set(CACHE_SIGNING_KEY_KV, &secret_str))
-        .await
-        .map_err(|e| SigningError::KvError { message: e.to_string() })?;
-
-    // Store public key (for easy retrieval by clients)
-    kv_store
-        .write(WriteRequest::set(CACHE_PUBLIC_KEY_KV, &public_str))
-        .await
-        .map_err(|e| SigningError::KvError { message: e.to_string() })?;
-
-    // Store cache name
-    kv_store
-        .write(WriteRequest::set(CACHE_NAME_KV, cache_name))
-        .await
-        .map_err(|e| SigningError::KvError { message: e.to_string() })?;
+    store.save_signing_key(&secret_str, &public_str, cache_name).await?;
 
     info!(cache_name, public_key = %public_str, "generated new cache signing key");
     Ok((key, public_str))

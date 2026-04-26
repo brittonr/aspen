@@ -265,7 +265,8 @@ pub async fn ensure_nix_cache_signing_key(
     use tracing::debug;
     use tracing::warn;
 
-    match aspen_cache::signing::ensure_signing_key(kv_store, cache_name).await {
+    let signing_store = aspen_cache::KvSigningKeyStore::new(std::sync::Arc::clone(kv_store));
+    match aspen_cache::signing::ensure_signing_key(&signing_store, cache_name).await {
         Ok((_key, public_key)) => {
             info!(
                 public_key = %public_key,

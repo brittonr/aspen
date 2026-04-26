@@ -65,6 +65,9 @@ pub mod signing;
 pub use error::CacheError;
 pub use error::Result;
 pub use index::CacheIndex;
+pub use index::CacheLookup;
+pub use index::CachePublish;
+pub use index::CacheStatsProvider;
 #[cfg(feature = "kv-index")]
 pub use index::KvCacheIndex;
 pub use index::parse_store_path;
@@ -82,4 +85,7 @@ pub use signing::CACHE_PUBLIC_KEY_KV;
 pub use signing::CACHE_SIGNING_KEY_KV;
 pub use signing::CacheSigningKey;
 pub use signing::CacheVerifyingKey;
+#[cfg(feature = "kv-index")]
+pub use signing::KvSigningKeyStore;
+pub use signing::SigningKeyStore;
 pub use signing::DEFAULT_CACHE_NAME;

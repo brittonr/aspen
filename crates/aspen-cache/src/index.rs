@@ -72,21 +72,33 @@ pub fn validate_store_hash(store_hash: &str) -> Result<()> {
     Ok(())
 }
 
-/// Trait for Nix binary cache index operations.
+/// Look up cache entries by store hash.
 #[async_trait]
-pub trait CacheIndex: Send + Sync {
+pub trait CacheLookup: Send + Sync {
     /// Get a cache entry by store hash.
     async fn get(&self, store_hash: &str) -> Result<Option<CacheEntry>>;
 
-    /// Put a cache entry into the index.
-    async fn put(&self, entry: CacheEntry) -> Result<()>;
-
     /// Check if a store hash exists in the cache.
     async fn exists(&self, store_hash: &str) -> Result<bool>;
+}
 
+/// Publish cache entries to the index.
+#[async_trait]
+pub trait CachePublish: Send + Sync {
+    /// Put a cache entry into the index.
+    async fn put(&self, entry: CacheEntry) -> Result<()>;
+}
+
+/// Read cache statistics.
+#[async_trait]
+pub trait CacheStatsProvider: Send + Sync {
     /// Get cache statistics.
     async fn stats(&self) -> Result<CacheStats>;
 }
+
+/// Composite trait preserving backward compatibility.
+#[async_trait]
+pub trait CacheIndex: CacheLookup + CachePublish + CacheStatsProvider + Send + Sync {}
 
 /// Implementation of cache index backed by a KeyValueStore.
 #[cfg(feature = "kv-index")]
@@ -148,7 +160,7 @@ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
 
 #[cfg(feature = "kv-index")]
 #[async_trait]
-impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
+impl<KV: KeyValueStore + ?Sized> CacheLookup for KvCacheIndex<KV> {
     async fn get(&self, store_hash: &str) -> Result<Option<CacheEntry>> {
         validate_store_hash(store_hash)?;
 
@@ -163,7 +175,6 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
         match self.kv.read(read_request).await {
             Ok(result) => {
                 if let Some(kv_entry) = result.kv {
-                    // Parse JSON from the value string
                     let entry = serde_json::from_str::<CacheEntry>(&kv_entry.value)
                         .map_err(|e| CacheError::Deserialization { message: e.to_string() })?;
 
@@ -174,57 +185,21 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
                         "Cache hit"
                     );
 
-                    // Record hit in stats (best effort)
                     let _ = self.update_stats(|s| s.record_hit()).await;
-
                     Ok(Some(entry))
                 } else {
                     debug!(store_hash = %store_hash, "Cache miss");
-
-                    // Record miss in stats (best effort)
                     let _ = self.update_stats(|s| s.record_miss()).await;
-
                     Ok(None)
                 }
             }
             Err(aspen_core::error::KeyValueStoreError::NotFound { .. }) => {
-                // NotFound is a cache miss, not an error
                 debug!(store_hash = %store_hash, "Cache miss");
                 let _ = self.update_stats(|s| s.record_miss()).await;
                 Ok(None)
             }
             Err(e) => Err(CacheError::KvStore { message: e.to_string() }),
         }
-    }
-
-    async fn put(&self, entry: CacheEntry) -> Result<()> {
-        validate_store_hash(&entry.store_hash)?;
-
-        let key = entry.kv_key();
-        let nar_size = entry.nar_size;
-
-        // Serialize to JSON string
-        let json_value =
-            serde_json::to_string(&entry).map_err(|e| CacheError::Serialization { message: e.to_string() })?;
-
-        info!(
-            key = %key,
-            store_path = %entry.store_path,
-            blob_hash = %entry.blob_hash,
-            nar_size = entry.nar_size,
-            "Adding cache entry"
-        );
-
-        let write_request = WriteRequest {
-            command: WriteCommand::Set { key, value: json_value },
-        };
-
-        self.kv.write(write_request).await.map_err(|e| CacheError::KvStore { message: e.to_string() })?;
-
-        // Update stats
-        let _ = self.update_stats(|s| s.record_entry_added(nar_size)).await;
-
-        Ok(())
     }
 
     async fn exists(&self, store_hash: &str) -> Result<bool> {
@@ -243,7 +218,42 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
             Err(e) => Err(CacheError::KvStore { message: e.to_string() }),
         }
     }
+}
 
+#[cfg(feature = "kv-index")]
+#[async_trait]
+impl<KV: KeyValueStore + ?Sized> CachePublish for KvCacheIndex<KV> {
+    async fn put(&self, entry: CacheEntry) -> Result<()> {
+        validate_store_hash(&entry.store_hash)?;
+
+        let key = entry.kv_key();
+        let nar_size = entry.nar_size;
+
+        let json_value =
+            serde_json::to_string(&entry).map_err(|e| CacheError::Serialization { message: e.to_string() })?;
+
+        info!(
+            key = %key,
+            store_path = %entry.store_path,
+            blob_hash = %entry.blob_hash,
+            nar_size = entry.nar_size,
+            "Adding cache entry"
+        );
+
+        let write_request = WriteRequest {
+            command: WriteCommand::Set { key, value: json_value },
+        };
+
+        self.kv.write(write_request).await.map_err(|e| CacheError::KvStore { message: e.to_string() })?;
+
+        let _ = self.update_stats(|s| s.record_entry_added(nar_size)).await;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "kv-index")]
+#[async_trait]
+impl<KV: KeyValueStore + ?Sized> CacheStatsProvider for KvCacheIndex<KV> {
     async fn stats(&self) -> Result<CacheStats> {
         let read_request = ReadRequest {
             key: CACHE_STATS_KEY.to_string(),
@@ -263,6 +273,9 @@ impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {
         }
     }
 }
+
+#[cfg(feature = "kv-index")]
+impl<KV: KeyValueStore + ?Sized> CacheIndex for KvCacheIndex<KV> {}
 
 /// Parse a Nix store path and extract the hash and name components.
 ///

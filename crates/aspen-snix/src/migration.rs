@@ -349,7 +349,7 @@ where
 }
 
 #[async_trait]
-impl<K, L> CacheIndex for MigrationAwareCacheIndex<K, L>
+impl<K, L> aspen_cache::CacheLookup for MigrationAwareCacheIndex<K, L>
 where
     K: KeyValueStore + Send + Sync + 'static,
     L: CacheIndex + Send + Sync + 'static,
@@ -358,15 +358,21 @@ where
         Ok(self.get_versioned(store_hash).await?.map(|v| v.entry))
     }
 
+    async fn exists(&self, store_hash: &str) -> aspen_cache::Result<bool> {
+        self.exists_any(store_hash).await
+    }
+}
+
+#[async_trait]
+impl<K, L> aspen_cache::CachePublish for MigrationAwareCacheIndex<K, L>
+where
+    K: KeyValueStore + Send + Sync + 'static,
+    L: CacheIndex + Send + Sync + 'static,
+{
     async fn put(&self, entry: CacheEntry) -> aspen_cache::Result<()> {
-        // Always write to legacy for backward compatibility
         self.legacy_index.put(entry.clone()).await?;
 
         if self.dual_write_enabled {
-            // Also write to SNIX if dual-write is enabled
-            // Note: This requires the blob to be in decomposed format already,
-            // which won't be the case for legacy entries. Skip SNIX write for now
-            // and let the migration worker handle conversion.
             debug!(
                 store_hash = %entry.store_hash,
                 "dual-write: written to legacy, SNIX write requires migration"
@@ -375,16 +381,17 @@ where
 
         Ok(())
     }
+}
 
-    async fn exists(&self, store_hash: &str) -> aspen_cache::Result<bool> {
-        self.exists_any(store_hash).await
-    }
-
+#[async_trait]
+impl<K, L> aspen_cache::CacheStatsProvider for MigrationAwareCacheIndex<K, L>
+where
+    K: KeyValueStore + Send + Sync + 'static,
+    L: CacheIndex + Send + Sync + 'static,
+{
     async fn stats(&self) -> aspen_cache::Result<CacheStats> {
-        // Get legacy stats (includes query/hit/miss operational metrics)
         let legacy_stats = self.legacy_index.stats().await?;
 
-        // Count SNIX entries and their NAR sizes
         let mut snix_count: u64 = 0;
         let mut snix_nar_bytes: u64 = 0;
         let mut stream = self.snix_pathinfo.list();
@@ -397,17 +404,10 @@ where
                 }
                 Err(e) => {
                     warn!(error = %e, "failed to read PathInfo during stats enumeration");
-                    // Continue counting what we can
                 }
             }
         }
 
-        // Merge stats:
-        // - total_entries: Use SNIX count if available (migration in progress/complete), otherwise fall
-        //   back to legacy. During migration, some entries may be in both, but SNIX count represents the
-        //   target state.
-        // - total_nar_bytes: Prefer SNIX sum if available (more accurate for decomposed storage)
-        // - Operational stats (query/hit/miss): Keep from legacy (these are tracked there)
         let total_entries = if snix_count > 0 {
             snix_count
         } else {
@@ -428,6 +428,13 @@ where
             last_updated: legacy_stats.last_updated,
         })
     }
+}
+
+impl<K, L> CacheIndex for MigrationAwareCacheIndex<K, L>
+where
+    K: KeyValueStore + Send + Sync + 'static,
+    L: CacheIndex + Send + Sync + 'static,
+{
 }
 
 /// Convert a SNIX PathInfo to a legacy CacheEntry.

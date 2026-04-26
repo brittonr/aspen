@@ -68,7 +68,7 @@ mod rpc_cache_index {
     }
 
     #[async_trait]
-    impl aspen_cache::CacheIndex for RpcCacheIndex {
+    impl aspen_cache::CacheLookup for RpcCacheIndex {
         async fn get(&self, store_hash: &str) -> Result<Option<CacheEntry>> {
             debug!(store_hash, "RpcCacheIndex::get");
 
@@ -100,14 +100,6 @@ mod rpc_cache_index {
             }
         }
 
-        async fn put(&self, _entry: CacheEntry) -> Result<()> {
-            // Cache entries are created by the node during nix builds,
-            // not by workers. Workers only read the index.
-            Err(CacheError::KvStore {
-                message: "RpcCacheIndex is read-only; cache entries are created by the cluster node".to_string(),
-            })
-        }
-
         async fn exists(&self, store_hash: &str) -> Result<bool> {
             debug!(store_hash, "RpcCacheIndex::exists");
 
@@ -134,7 +126,19 @@ mod rpc_cache_index {
                 }),
             }
         }
+    }
 
+    #[async_trait]
+    impl aspen_cache::CachePublish for RpcCacheIndex {
+        async fn put(&self, _entry: CacheEntry) -> Result<()> {
+            Err(CacheError::KvStore {
+                message: "RpcCacheIndex is read-only; cache entries are created by the cluster node".to_string(),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl aspen_cache::CacheStatsProvider for RpcCacheIndex {
         async fn stats(&self) -> Result<CacheStats> {
             debug!("RpcCacheIndex::stats");
 
@@ -165,6 +169,8 @@ mod rpc_cache_index {
             }
         }
     }
+
+    impl aspen_cache::CacheIndex for RpcCacheIndex {}
 }
 
 #[cfg(feature = "cache-index")]

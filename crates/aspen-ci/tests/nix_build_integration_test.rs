@@ -87,12 +87,20 @@ pub struct MockCacheIndex {
 }
 
 #[async_trait]
-impl CacheIndex for MockCacheIndex {
+impl aspen_cache::CacheLookup for MockCacheIndex {
     async fn get(&self, store_hash: &str) -> Result<Option<CacheEntry>, CacheError> {
         let entries = self.entries.lock().await;
         Ok(entries.get(store_hash).cloned())
     }
 
+    async fn exists(&self, store_hash: &str) -> Result<bool, CacheError> {
+        let entries = self.entries.lock().await;
+        Ok(entries.contains_key(store_hash))
+    }
+}
+
+#[async_trait]
+impl aspen_cache::CachePublish for MockCacheIndex {
     async fn put(&self, entry: CacheEntry) -> Result<(), CacheError> {
         let store_hash = entry.store_hash.clone();
 
@@ -104,24 +112,24 @@ impl CacheIndex for MockCacheIndex {
 
         Ok(())
     }
+}
 
-    async fn exists(&self, store_hash: &str) -> Result<bool, CacheError> {
-        let entries = self.entries.lock().await;
-        Ok(entries.contains_key(store_hash))
-    }
-
+#[async_trait]
+impl aspen_cache::CacheStatsProvider for MockCacheIndex {
     async fn stats(&self) -> Result<CacheStats, CacheError> {
         let entries = self.entries.lock().await;
         Ok(CacheStats {
             total_entries: entries.len() as u64,
-            total_nar_bytes: 0, // Mock doesn't track NAR sizes
+            total_nar_bytes: 0,
             query_count: entries.len() as u64,
-            hit_count: 0,  // Mock doesn't track hits
-            miss_count: 0, // Mock doesn't track misses
+            hit_count: 0,
+            miss_count: 0,
             last_updated: chrono::Utc::now().timestamp() as u64,
         })
     }
 }
+
+impl CacheIndex for MockCacheIndex {}
 
 /// Create a minimal test flake that builds successfully.
 async fn create_test_flake(temp_dir: &TempDir) -> std::io::Result<String> {
