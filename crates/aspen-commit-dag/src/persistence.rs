@@ -250,4 +250,189 @@ mod tests {
         _assert_branch_tip_read::<InMemoryCommitStore>();
         _assert_branch_tip_write::<InMemoryCommitStore>();
     }
+
+    // === Negative / edge-case tests (I15) ===
+
+    struct FailingCommitStore;
+
+    #[async_trait]
+    impl CommitRead for FailingCommitStore {
+        async fn load_commit(&self, id: &CommitId) -> Result<Commit, CommitDagError> {
+            Err(CommitDagError::CommitStorageError {
+                reason: format!("storage unavailable for {}", hex::encode(id)),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl CommitWrite for FailingCommitStore {
+        async fn store_commit(&self, _commit: &Commit) -> Result<(), CommitDagError> {
+            Err(CommitDagError::CommitStorageError {
+                reason: "storage unavailable".into(),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl BranchTipRead for FailingCommitStore {
+        async fn get_branch_tip(&self, _branch_id: &str) -> Result<Option<CommitId>, CommitDagError> {
+            Err(CommitDagError::CommitStorageError {
+                reason: "storage unavailable".into(),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl BranchTipWrite for FailingCommitStore {
+        async fn update_branch_tip(&self, _branch_id: &str, _commit_id: &CommitId) -> Result<(), CommitDagError> {
+            Err(CommitDagError::CommitStorageError {
+                reason: "storage unavailable".into(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_failing_store_load_commit() {
+        let store = FailingCommitStore;
+        let result = store.load_commit(&[0u8; 32]).await;
+        assert!(matches!(result, Err(CommitDagError::CommitStorageError { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_failing_store_store_commit() {
+        let store = FailingCommitStore;
+        let commit = make_commit("br", None, vec![], 1, 1000);
+        let result = store.store_commit(&commit).await;
+        assert!(matches!(result, Err(CommitDagError::CommitStorageError { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_failing_store_branch_tip_read() {
+        let store = FailingCommitStore;
+        let result = store.get_branch_tip("br").await;
+        assert!(matches!(result, Err(CommitDagError::CommitStorageError { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_failing_store_branch_tip_write() {
+        let store = FailingCommitStore;
+        let result = store.update_branch_tip("br", &[0u8; 32]).await;
+        assert!(matches!(result, Err(CommitDagError::CommitStorageError { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_walk_chain_fails_on_storage_error() {
+        let store = FailingCommitStore;
+        let result = walk_chain([1u8; 32], &store, 10).await;
+        assert!(matches!(result, Err(CommitDagError::CommitStorageError { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_walk_chain_zero_depth_returns_empty() {
+        let store = InMemoryCommitStore::new();
+        let c1 = make_commit("br", None, vec![], 1, 1000);
+        store.store_commit(&c1).await.unwrap();
+
+        let chain = walk_chain(c1.id, &store, 0).await.unwrap();
+        assert!(chain.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_walk_chain_single_commit_no_parent() {
+        let store = InMemoryCommitStore::new();
+        let c1 = make_commit("br", None, vec![], 1, 1000);
+        store.store_commit(&c1).await.unwrap();
+
+        let chain = walk_chain(c1.id, &store, 100).await.unwrap();
+        assert_eq!(chain.len(), 1);
+        assert!(chain[0].parent.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_store_commit_overwrite() {
+        let store = InMemoryCommitStore::new();
+        let c1 = make_commit("br", None, vec![("k".into(), MutationType::Set("v1".into()))], 1, 1000);
+        store.store_commit(&c1).await.unwrap();
+
+        let c1_updated = Commit {
+            timestamp_ms: 9999,
+            ..c1.clone()
+        };
+        store.store_commit(&c1_updated).await.unwrap();
+
+        let loaded = store.load_commit(&c1.id).await.unwrap();
+        assert_eq!(loaded.timestamp_ms, 9999);
+    }
+
+    #[tokio::test]
+    async fn test_stale_tip_detection() {
+        let store = InMemoryCommitStore::new();
+        let c1 = make_commit("br", None, vec![], 1, 1000);
+        let c2 = make_commit("br", Some(c1.id), vec![], 2, 2000);
+
+        store.store_commit(&c1).await.unwrap();
+        store.store_commit(&c2).await.unwrap();
+        store.update_branch_tip("br", &c2.id).await.unwrap();
+
+        // Stale tip: c1 is not current tip
+        let tip = store.get_branch_tip("br").await.unwrap().unwrap();
+        assert_ne!(tip, c1.id, "tip should be c2, not c1");
+        assert_eq!(tip, c2.id);
+    }
+
+    #[tokio::test]
+    async fn test_empty_branch_id_is_valid() {
+        let store = InMemoryCommitStore::new();
+        let commit = make_commit("", None, vec![], 1, 1000);
+        store.update_branch_tip("", &commit.id).await.unwrap();
+
+        let tip = store.get_branch_tip("").await.unwrap();
+        assert_eq!(tip, Some(commit.id));
+    }
+
+    #[tokio::test]
+    async fn test_walk_chain_depth_one() {
+        let store = InMemoryCommitStore::new();
+        let c1 = make_commit("br", None, vec![], 1, 1000);
+        let c2 = make_commit("br", Some(c1.id), vec![], 2, 2000);
+        let c3 = make_commit("br", Some(c2.id), vec![], 3, 3000);
+
+        store.store_commit(&c1).await.unwrap();
+        store.store_commit(&c2).await.unwrap();
+        store.store_commit(&c3).await.unwrap();
+
+        let chain = walk_chain(c3.id, &store, 1).await.unwrap();
+        assert_eq!(chain.len(), 1);
+        assert_eq!(chain[0].id, c3.id);
+    }
+
+    #[tokio::test]
+    async fn test_commit_with_tombstone_mutations() {
+        let store = InMemoryCommitStore::new();
+        let commit = make_commit(
+            "br",
+            None,
+            vec![
+                ("key1".into(), MutationType::Set("val".into())),
+                ("key2".into(), MutationType::Delete),
+            ],
+            1,
+            1000,
+        );
+
+        store.store_commit(&commit).await.unwrap();
+        let loaded = store.load_commit(&commit.id).await.unwrap();
+        assert_eq!(loaded.mutations.len(), 2);
+        assert!(matches!(loaded.mutations[1].1, MutationType::Delete));
+    }
+
+    #[tokio::test]
+    async fn test_commit_with_empty_mutations() {
+        let store = InMemoryCommitStore::new();
+        let commit = make_commit("br", None, vec![], 1, 1000);
+
+        store.store_commit(&commit).await.unwrap();
+        let loaded = store.load_commit(&commit.id).await.unwrap();
+        assert!(loaded.mutations.is_empty());
+    }
 }
