@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_testing_core::DeterministicKeyValueStore;
-use aspen_traits::KeyValueStore;
+use aspen_traits::{KvDelete, KvRead, KvWrite};
 
 /// Helper for testing coordination primitives.
 ///

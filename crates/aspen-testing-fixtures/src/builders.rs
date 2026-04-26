@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use aspen_testing_core::DeterministicClusterController;
 use aspen_testing_core::DeterministicKeyValueStore;
+use aspen_traits::KvWrite;
 
 /// Builder for configuring test cluster setups.
 ///
