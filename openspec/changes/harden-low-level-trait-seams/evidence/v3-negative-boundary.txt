@@ -1,0 +1,35 @@
+=== V3: Negative boundary evidence ===
+
+--- Failing store fixtures proving error paths ---
+FailingCommitStore in persistence.rs:
+10
+FailingKvState in storage_ports.rs:
+8
+
+--- Negative test cases (error path coverage) ---
+persistence.rs negative tests:
+    async fn test_load_missing_commit() {
+    async fn test_walk_chain_missing_parent() {
+    async fn test_failing_store_load_commit() {
+    async fn test_failing_store_store_commit() {
+    async fn test_failing_store_branch_tip_read() {
+    async fn test_failing_store_branch_tip_write() {
+    async fn test_walk_chain_fails_on_storage_error() {
+
+kv_adapter.rs negative tests:
+    async fn kv_adapter_load_missing_commit() {
+
+storage_ports.rs negative tests:
+    fn test_failing_kv_state_read_returns_error() {
+    fn test_failing_kv_state_write_returns_error() {
+    fn test_failing_chain_read() {
+
+--- Malformed value rejection ---
+HLC rejects far-future timestamps:
+    fn hlc_rejects_far_future_timestamp() {
+
+--- Cache adapter requires kv-index feature ---
+KvCacheIndex is feature-gated:
+#[cfg(feature = "kv-index")]
+#[cfg(feature = "kv-index")]
+#[cfg(feature = "kv-index")]

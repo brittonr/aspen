@@ -1,0 +1,45 @@
+=== V2: Downstream fixture evidence for narrow traits ===
+
+--- KV traits (aspen-traits) ---
+61:pub trait KvRead: Send + Sync {
+68:pub trait KvWrite: Send + Sync {
+75:pub trait KvDelete: Send + Sync {
+82:pub trait KvScan: Send + Sync {
+98:pub trait KvLocalScan: Send + Sync {
+
+--- Cache port traits (aspen-cache) ---
+crates/aspen-cache/src/index.rs:74:pub trait CacheLookup: Send + Sync {
+crates/aspen-cache/src/index.rs:84:pub trait CachePublish: Send + Sync {
+crates/aspen-cache/src/index.rs:91:pub trait CacheStatsProvider: Send + Sync {
+crates/aspen-cache/src/index.rs:98:pub trait CacheIndex: CacheLookup + CachePublish + CacheStatsProvider + Send + Sync {}
+
+--- Storage port traits (aspen-raft) ---
+27:pub trait KvStateRead: Send + Sync {
+50:pub trait KvStateWrite: Send + Sync {
+55:pub trait LeaseRead: Send + Sync {
+64:pub trait LeaseWrite: Send + Sync {
+69:pub trait ChainRead: Send + Sync {
+
+--- Commit DAG domain traits (aspen-commit-dag) ---
+16:pub trait CommitRead: Send + Sync {
+22:pub trait CommitWrite: Send + Sync {
+28:pub trait BranchTipRead: Send + Sync {
+34:pub trait BranchTipWrite: Send + Sync {
+
+--- KV adapter (aspen-commit-dag) ---
+28:pub struct KvCommitAdapter<S> {
+
+--- TimeProvider trait (aspen-time) ---
+130:pub trait TimeProvider: Send + Sync {
+
+--- LogicalClock trait (aspen-hlc) ---
+287:pub trait LogicalClock: Send + Sync {
+
+--- In-memory fixtures (test-only, not re-exported from root) ---
+InMemoryCommitStore: crates/aspen-commit-dag/src/persistence.rs
+SequentialClock: crates/aspen-hlc/src/lib.rs
+SimulatedTimeProvider: crates/aspen-time/src/lib.rs (feature=simulation)
+InMemoryKvState/InMemoryLeaseState: crates/aspen-raft/src/storage_ports.rs
+
+--- Proof: root aspen crate does NOT re-export narrow traits ---
+(confirmed: no re-exports from root crate)

@@ -1,0 +1,60 @@
+=== V1: Default feature dependency trees for touched low-level crates ===
+
+--- aspen-traits (no default features) ---
+aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-traits)
+├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-cluster-types)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-kv-types)
+└── async-trait v0.1.89 (proc-macro)
+[dev-dependencies]
+└── tokio v1.50.0
+
+--- aspen-commit-dag (no default features) ---
+aspen-commit-dag v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-commit-dag)
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-constants)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-kv-types)
+├── aspen-time v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-time)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-traits)
+├── async-trait v0.1.89 (proc-macro)
+├── blake3 v1.8.3
+│   [build-dependencies]
+├── hex v0.4.3
+├── postcard v1.1.3
+├── serde v1.0.228
+├── snafu v0.8.9
+├── tokio v1.50.0
+└── tracing v0.1.44
+[dev-dependencies]
+├── aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-testing-core)
+└── tokio v1.50.0 (*)
+
+--- aspen-cache (no default features) ---
+aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-cache)
+├── async-trait v0.1.89 (proc-macro)
+├── data-encoding v2.10.0
+├── ed25519-dalek v2.2.0
+├── nix-compat v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+├── rand_core v0.6.4
+├── serde v1.0.228
+├── serde_json v1.0.149
+├── sha2 v0.10.9
+├── snafu v0.8.9
+├── tokio v1.50.0
+└── tracing v0.1.44
+[dev-dependencies]
+├── aspen-testing v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-testing)
+├── tempfile v3.27.0
+└── tokio v1.50.0 (*)
+
+--- aspen-time (no default features) ---
+aspen-time v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-time)
+
+--- aspen-hlc (no default features) ---
+aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-hlc)
+├── blake3 v1.8.3
+│   [build-dependencies]
+├── serde v1.0.228
+└── uhlc v0.8.2 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/vendor/uhlc)
+[dev-dependencies]
+├── bincode v1.3.3
+├── postcard v1.1.3
+└── serde_json v1.0.149

@@ -1,0 +1,4 @@
+OK: openspec/changes/harden-low-level-trait-seams
+  tasks: 25 total / 25 checked
+  changed files listed: 7
+  verification artifacts: 1

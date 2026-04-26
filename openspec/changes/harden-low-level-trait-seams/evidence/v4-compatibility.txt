@@ -1,0 +1,16 @@
+=== V4: Compatibility compile/test evidence ===
+
+--- CommitStore static API preserved (compatibility re-export) ---
+pub use store::CommitStore;
+
+--- KvCommitAdapter format-compatible with CommitStore ---
+    async fn kv_adapter_compatible_with_commit_store_format() {
+    async fn kv_adapter_branch_tip_compatible_with_commit_store() {
+
+--- Compile evidence: affected crates build ---
+   Compiling aspen-cache v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-cache)
+   Compiling aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777160659362-060s/crates/aspen-hlc)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
+
+--- Test evidence: all affected crates pass ---
+     Summary [   0.185s] 119 tests run: 119 passed, 0 skipped
