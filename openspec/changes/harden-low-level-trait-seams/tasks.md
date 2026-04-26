@@ -37,7 +37,7 @@
 
 - [x] I16 Replace ambient wall-clock reads in low-level reusable code with `TimeProvider` parameters or explicit timestamps for cache stats, leases, deadlines, branch commits, and blob repair where applicable. [covers=low-level-trait-seams.time-and-logical-clocks-are-injected-at-reusable-seams.wall-clock-reads-use-timeprovider]
 - [x] I17 Add a logical-clock trait around HLC timestamp generation and observation, implement it for the current HLC adapter, and migrate at least one consumer away from direct `uhlc` dependence where the concrete type is not required. [covers=low-level-trait-seams.time-and-logical-clocks-are-injected-at-reusable-seams.hlc-behavior-is-behind-a-logical-clock-trait]
-- [ ] I18 Add simulated-time and logical-clock tests covering non-expired and expired deadlines, saturating timestamp arithmetic, monotonic HLC generation, observe/update success, and rejected future or malformed timestamps. [covers=low-level-trait-seams.time-and-logical-clocks-are-injected-at-reusable-seams,architecture.modularity.adapter-crates-own-runtime-and-persistence-coupling.domain-logic-is-testable-without-adapters]
+- [x] I18 Add simulated-time and logical-clock tests covering non-expired and expired deadlines, saturating timestamp arithmetic, monotonic HLC generation, observe/update success, and rejected future or malformed timestamps. [covers=low-level-trait-seams.time-and-logical-clocks-are-injected-at-reusable-seams,architecture.modularity.adapter-crates-own-runtime-and-persistence-coupling.domain-logic-is-testable-without-adapters]
 
 ## 7. Verification and readiness evidence
 

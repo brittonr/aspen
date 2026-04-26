@@ -404,11 +404,65 @@ mod simulation_tests {
     fn simulated_time_from_system() {
         let time = SimulatedTimeProvider::from_system_time();
         let system = current_time_ms();
-        // Should be within 100ms of system time
         let simulated = time.now_unix_ms();
         assert!(
             simulated >= system.saturating_sub(100) && simulated <= system + 100,
             "from_system_time should be close to current time"
         );
+    }
+
+    // === I18: Simulated-time deadline and arithmetic tests ===
+
+    #[test]
+    fn deadline_not_expired_with_simulated_time() {
+        let time = SimulatedTimeProvider::new(1_000_000);
+        let deadline_ms: u64 = 1_005_000;
+        assert!(time.now_unix_ms() < deadline_ms, "deadline should not be expired");
+    }
+
+    #[test]
+    fn deadline_expired_after_advance() {
+        let time = SimulatedTimeProvider::new(1_000_000);
+        let deadline_ms: u64 = 1_005_000;
+        time.advance_ms(6_000);
+        assert!(time.now_unix_ms() > deadline_ms, "deadline should be expired after advance");
+    }
+
+    #[test]
+    fn deadline_exactly_at_boundary() {
+        let time = SimulatedTimeProvider::new(1_000_000);
+        let deadline_ms: u64 = 1_005_000;
+        time.advance_ms(5_000);
+        assert_eq!(time.now_unix_ms(), deadline_ms);
+    }
+
+    #[test]
+    fn saturating_secs_to_ms_conversion() {
+        let time = SimulatedTimeProvider::new(0);
+        time.set_secs(u64::MAX / 1000);
+        let ms = time.now_unix_ms();
+        assert!(ms > 0);
+    }
+
+    #[test]
+    fn advance_secs_saturating() {
+        let time = SimulatedTimeProvider::new(u64::MAX - 500);
+        time.advance_secs(1);
+        let _ = time.now_unix_ms();
+    }
+
+    #[test]
+    fn generic_time_consumer_works() {
+        fn is_expired(time: &dyn TimeProvider, deadline_ms: u64) -> bool {
+            time.now_unix_ms() > deadline_ms
+        }
+
+        let sim = SimulatedTimeProvider::new(1_000);
+        assert!(!is_expired(&sim, 2_000));
+        sim.advance_ms(1_500);
+        assert!(is_expired(&sim, 2_000));
+
+        let real = SystemTimeProvider;
+        assert!(!is_expired(&real, u64::MAX));
     }
 }

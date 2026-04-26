@@ -566,4 +566,69 @@ mod tests {
 
         assert_eq!(ser, deser);
     }
+
+    // === I18: Additional logical-clock tests ===
+
+    #[test]
+    fn hlc_monotonic_under_rapid_generation() {
+        let hlc = create_hlc("rapid");
+        let mut prev = hlc.new_timestamp();
+        for _ in 0..1000 {
+            let next = hlc.new_timestamp();
+            assert!(next > prev, "HLC must be strictly monotonic");
+            prev = next;
+        }
+    }
+
+    #[test]
+    fn hlc_rejects_far_future_timestamp() {
+        let hlc = create_hlc("reject-test");
+        // Default max delta is 100ms. Create a timestamp far in the future.
+        let far_future = HlcTimestamp::new(
+            NTP64(u64::MAX / 2),
+            ID::try_from([1u8; 16]).unwrap(),
+        );
+        let result = update_from_timestamp(&hlc, &far_future);
+        assert!(result.is_err(), "Should reject timestamps too far in the future");
+    }
+
+    #[test]
+    fn logical_clock_trait_observe_advances_past_received() {
+        let clock: &dyn LogicalClock = &create_hlc("observe-test");
+        let ts1 = clock.new_timestamp();
+        // Another node's timestamp should be accepted
+        let other = create_hlc("other-node");
+        let other_ts = other.new_timestamp();
+        assert!(clock.update_with_timestamp(&other_ts).is_ok());
+        let ts2 = clock.new_timestamp();
+        assert!(ts2 > ts1);
+        assert!(ts2 >= other_ts);
+    }
+
+    #[test]
+    fn sequential_clock_zero_initial_counter() {
+        let clock = SequentialClock::new("zero-test");
+        let ts = clock.new_timestamp();
+        assert_eq!(ts.get_time().as_u64(), 1, "first timestamp should be counter=1");
+    }
+
+    #[test]
+    fn sequential_clock_update_with_past_timestamp_no_regression() {
+        let clock = SequentialClock::new("past-test");
+        // Generate several timestamps to advance counter
+        let _ = clock.new_timestamp();
+        let _ = clock.new_timestamp();
+        let ts3 = clock.new_timestamp();
+
+        // Update with a timestamp from the past
+        let past = HlcTimestamp::new(
+            NTP64(1),
+            ID::try_from([0u8; 16]).unwrap_or_else(|_| ID::from(NonZeroU8::MIN)),
+        );
+        clock.update_with_timestamp(&past).unwrap();
+
+        // Next timestamp should still be after ts3
+        let ts4 = clock.new_timestamp();
+        assert!(ts4 > ts3, "clock must not regress after observing a past timestamp");
+    }
 }
