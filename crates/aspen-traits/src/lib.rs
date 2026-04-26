@@ -354,4 +354,74 @@ mod tests {
         }
         let _ = from_kv_store::<Arc<dyn KeyValueStore>>;
     }
+
+    /// Fixture: linearizable-only store implementing KvRead+KvWrite+KvDelete+KvScan
+    /// but NOT KvLocalScan. Proves narrow trait consumers aren't forced to provide
+    /// local scan.
+    struct LinearizableOnlyStore;
+
+    #[async_trait]
+    impl KvRead for LinearizableOnlyStore {
+        async fn read(&self, _: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+            unimplemented!()
+        }
+    }
+    #[async_trait]
+    impl KvWrite for LinearizableOnlyStore {
+        async fn write(&self, _: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+            unimplemented!()
+        }
+    }
+    #[async_trait]
+    impl KvDelete for LinearizableOnlyStore {
+        async fn delete(&self, _: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+            unimplemented!()
+        }
+    }
+    #[async_trait]
+    impl KvScan for LinearizableOnlyStore {
+        async fn scan(&self, _: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+            unimplemented!()
+        }
+    }
+
+    /// Fixture: store implementing both KvScan + KvLocalScan.
+    struct BothScansStore;
+
+    #[async_trait]
+    impl KvScan for BothScansStore {
+        async fn scan(&self, _: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+            unimplemented!()
+        }
+    }
+    #[async_trait]
+    impl KvLocalScan for BothScansStore {
+        async fn scan_local(&self, _: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn linearizable_only_store_does_not_require_local_scan() {
+        fn accepts_read<T: KvRead>(_: &T) {}
+        fn accepts_write<T: KvWrite>(_: &T) {}
+        fn accepts_delete<T: KvDelete>(_: &T) {}
+        fn accepts_scan<T: KvScan>(_: &T) {}
+
+        let store = LinearizableOnlyStore;
+        accepts_read(&store);
+        accepts_write(&store);
+        accepts_delete(&store);
+        accepts_scan(&store);
+        // LinearizableOnlyStore does NOT impl KvLocalScan.
+        // A consumer requiring KvLocalScan would not accept this store.
+    }
+
+    #[test]
+    fn explicit_local_scan_capability_is_additive() {
+        fn needs_both_scans<T: KvScan + KvLocalScan>(_: &T) {}
+        let store = BothScansStore;
+        needs_both_scans(&store);
+        // LinearizableOnlyStore would NOT satisfy T: KvLocalScan.
+    }
 }
