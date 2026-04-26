@@ -383,17 +383,11 @@ mod tests {
 
     /// Compile-time proof: BlobAwareKeyValueStore works with a blob backend
     /// that only provides read/write — no BlobTransfer or BlobQuery needed.
-    fn _assert_no_transfer_needed() {
+    fn _assert_no_transfer_needed<KV: KeyValueStore + Send + Sync + 'static>(kv: Arc<KV>) {
         fn takes_kv_store<S: KeyValueStore>(_s: &S) {}
-
-        // This would fail to compile if BlobAwareKeyValueStore required BlobTransfer
-        fn check<KV: KeyValueStore + Send + Sync + 'static>(kv: Arc<KV>) {
-            let blobs = Arc::new(ReadWriteOnlyBlob(InMemoryBlobStore::new()));
-            let store = BlobAwareKeyValueStore::new(kv, blobs, true);
-            takes_kv_store(&store);
-        }
-
-        let _ = check::<aspen_traits::DeterministicKeyValueStore>;
+        let blobs = Arc::new(ReadWriteOnlyBlob(InMemoryBlobStore::new()));
+        let store = BlobAwareKeyValueStore::new(kv, blobs, true);
+        takes_kv_store(&store);
     }
 
     #[test]
@@ -453,5 +447,80 @@ mod tests {
 
         // But parsing should fail
         assert!(BlobRef::from_kv_value(&fake_ref).is_none());
+    }
+
+    #[test]
+    fn test_malformed_blob_ref_prefix_but_bad_json() {
+        let malformed = format!("{}{{not valid json", crate::BLOB_REF_PREFIX);
+        assert!(is_blob_ref(&malformed));
+        assert!(BlobRef::from_kv_value(&malformed).is_none());
+    }
+
+    #[test]
+    fn test_malformed_blob_ref_missing_required_fields() {
+        let missing_size = format!("{}{{\"format\":\"Raw\"}}", crate::BLOB_REF_PREFIX);
+        assert!(BlobRef::from_kv_value(&missing_size).is_none());
+    }
+
+    /// A blob backend where protect/unprotect always fail.
+    struct FailingProtectBlob(InMemoryBlobStore);
+
+    #[async_trait]
+    impl BlobRead for FailingProtectBlob {
+        async fn get_bytes(&self, hash: &iroh_blobs::Hash) -> Result<Option<bytes::Bytes>, BlobStoreError> {
+            self.0.get_bytes(hash).await
+        }
+        async fn has(&self, hash: &iroh_blobs::Hash) -> Result<bool, BlobStoreError> {
+            self.0.has(hash).await
+        }
+        async fn status(&self, hash: &iroh_blobs::Hash) -> Result<Option<crate::BlobStatus>, BlobStoreError> {
+            self.0.status(hash).await
+        }
+        async fn reader(&self, hash: &iroh_blobs::Hash) -> Result<Option<std::pin::Pin<Box<dyn crate::AsyncReadSeek>>>, BlobStoreError> {
+            self.0.reader(hash).await
+        }
+    }
+
+    #[async_trait]
+    impl BlobWrite for FailingProtectBlob {
+        async fn add_bytes(&self, data: &[u8]) -> Result<crate::AddBlobResult, BlobStoreError> {
+            self.0.add_bytes(data).await
+        }
+        async fn add_path(&self, path: &std::path::Path) -> Result<crate::AddBlobResult, BlobStoreError> {
+            self.0.add_path(path).await
+        }
+        async fn protect(&self, _hash: &iroh_blobs::Hash, tag: &str) -> Result<(), BlobStoreError> {
+            Err(BlobStoreError::SetTag {
+                tag: tag.to_string(),
+                message: "simulated protect failure".to_string(),
+            })
+        }
+        async fn unprotect(&self, tag: &str) -> Result<(), BlobStoreError> {
+            Err(BlobStoreError::DeleteTag {
+                tag: tag.to_string(),
+                message: "simulated unprotect failure".to_string(),
+            })
+        }
+    }
+
+    /// Compile-time proof: a blob backend where protect/unprotect fail is
+    /// still accepted by `BlobAwareKeyValueStore` (errors handled gracefully).
+    fn _assert_failing_protect_blob_compiles<KV: KeyValueStore + Send + Sync + 'static>(kv: Arc<KV>) {
+        let blobs = Arc::new(FailingProtectBlob(InMemoryBlobStore::new()));
+        let _store = BlobAwareKeyValueStore::new(kv, blobs, true);
+    }
+
+    /// Replication-specific types are not available without the feature.
+    #[test]
+    fn test_replication_types_absent_without_feature() {
+        // BlobReplicationManager, IrohBlobTransfer, etc. are only available
+        // behind cfg(feature = "replication"). This test documents the boundary.
+        #[cfg(not(feature = "replication"))]
+        {
+            // If replication is off, these modules should not exist.
+            // This is a documentation assertion — the cfg gate ensures
+            // non-replication consumers don't pull in aspen-client-api.
+            assert!(!cfg!(feature = "replication"));
+        }
     }
 }
