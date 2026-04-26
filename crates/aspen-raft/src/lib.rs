@@ -81,6 +81,8 @@ pub mod sharded;
 pub mod spec;
 /// Storage implementations (in-memory and redb).
 pub mod storage;
+/// Aspen-owned storage port traits (KV state, leases, chain integrity).
+pub mod storage_ports;
 /// Single-fsync Redb storage (shared log + state machine).
 pub mod storage_shared;
 /// Offline storage validation and integrity checks.
