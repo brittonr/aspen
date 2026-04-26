@@ -28,6 +28,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::storage_ports::{LeaseRead, LeaseWrite};
 use crate::storage_shared::SharedRedbStorage;
 
 /// Configuration for the lease cleanup task.
@@ -61,15 +62,16 @@ pub fn spawn_redb_lease_cleanup_task(storage: Arc<SharedRedbStorage>, config: Le
     let cancel_clone = cancel.clone();
 
     tokio::spawn(async move {
-        run_redb_lease_cleanup_loop(storage, config, cancel_clone).await;
+        run_lease_cleanup_loop(&*storage, config, cancel_clone).await;
     });
 
     cancel
 }
 
-/// Main cleanup loop for Redb storage.
-async fn run_redb_lease_cleanup_loop(
-    storage: Arc<SharedRedbStorage>,
+/// Main cleanup loop. Generic over storage port traits so domain logic
+/// is testable with in-memory implementations.
+async fn run_lease_cleanup_loop<S: LeaseRead + LeaseWrite>(
+    storage: &S,
     config: LeaseCleanupConfig,
     cancel: CancellationToken,
 ) {
@@ -80,18 +82,18 @@ async fn run_redb_lease_cleanup_loop(
         interval_secs = config.cleanup_interval.as_secs(),
         batch_size_leases = config.batch_size_leases,
         max_batches = config.max_batches_per_run,
-        "Redb lease cleanup task started"
+        "Lease cleanup task started"
     );
 
     while wait_for_lease_cleanup_tick(&mut ticker, &cancel).await {
-        run_redb_cleanup_iteration(&storage, &config).await;
+        run_cleanup_iteration(storage, &config);
     }
 }
 
 async fn wait_for_lease_cleanup_tick(ticker: &mut tokio::time::Interval, cancel: &CancellationToken) -> bool {
     tokio::select! {
         _ = cancel.cancelled() => {
-            info!("Redb lease cleanup task shutting down");
+            info!("Lease cleanup task shutting down");
             false
         }
         _ = ticker.tick() => true,
@@ -103,7 +105,7 @@ fn should_stop_lease_cleanup(deleted: u32, config: &LeaseCleanupConfig) -> bool 
     deleted == 0 || deleted < config.batch_size_leases
 }
 
-fn log_lease_cleanup_results(storage: &SharedRedbStorage, total_deleted: u64, batches_run: u32) {
+fn log_lease_cleanup_results<S: LeaseRead>(storage: &S, total_deleted: u64, batches_run: u32) {
     if total_deleted > 0 {
         let remaining = storage.count_expired_leases().unwrap_or(0);
         let active = storage.count_active_leases().unwrap_or(0);
@@ -112,15 +114,15 @@ fn log_lease_cleanup_results(storage: &SharedRedbStorage, total_deleted: u64, ba
             batches_run,
             remaining_expired = remaining,
             active_leases = active,
-            "Redb lease cleanup iteration completed"
+            "Lease cleanup iteration completed"
         );
     } else {
-        debug!("Redb lease cleanup: no expired leases to delete");
+        debug!("Lease cleanup: no expired leases to delete");
     }
 }
 
-/// Run a single cleanup iteration for Redb storage.
-async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &LeaseCleanupConfig) {
+/// Run a single cleanup iteration. Generic over port traits.
+fn run_cleanup_iteration<S: LeaseRead + LeaseWrite>(storage: &S, config: &LeaseCleanupConfig) {
     let mut total_deleted: u64 = 0;
     let mut batches_run: u32 = 0;
 
@@ -128,7 +130,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &LeaseC
         let deleted = match storage.delete_expired_leases(config.batch_size_leases) {
             Ok(deleted) => deleted,
             Err(error) => {
-                warn!(error = %error, "Redb lease cleanup batch failed");
+                warn!(error = %error, "Lease cleanup batch failed");
                 break;
             }
         };
@@ -153,7 +155,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &LeaseC
             total_deleted,
             batches_run,
             max_batches = config.max_batches_per_run,
-            "Redb lease cleanup reached max batches limit"
+            "Lease cleanup reached max batches limit"
         );
     }
     log_lease_cleanup_results(storage, total_deleted, batches_run);
@@ -293,5 +295,41 @@ mod tests {
         let config = LeaseCleanupConfig::default();
         // Verify interval is reasonable (not longer than a minute)
         assert!(config.cleanup_interval <= Duration::from_secs(60));
+    }
+
+    #[test]
+    fn test_cleanup_iteration_uses_port_traits() {
+        use crate::storage_ports::{LeaseRead, LeaseWrite};
+        use crate::storage_shared::SharedStorageError;
+
+        struct NoExpiredLeases;
+
+        impl LeaseRead for NoExpiredLeases {
+            fn get_lease(&self, _lease_id: u64) -> Result<Option<(u32, u32)>, SharedStorageError> {
+                Ok(None)
+            }
+            fn get_lease_keys(&self, _lease_id: u64) -> Result<Vec<String>, SharedStorageError> {
+                Ok(Vec::new())
+            }
+            fn list_leases(&self) -> Result<Vec<(u64, u32, u32)>, SharedStorageError> {
+                Ok(Vec::new())
+            }
+            fn count_expired_leases(&self) -> Result<u64, SharedStorageError> {
+                Ok(0)
+            }
+            fn count_active_leases(&self) -> Result<u64, SharedStorageError> {
+                Ok(0)
+            }
+        }
+
+        impl LeaseWrite for NoExpiredLeases {
+            fn delete_expired_leases(&self, _batch_limit: u32) -> Result<u32, SharedStorageError> {
+                Ok(0)
+            }
+        }
+
+        let storage = NoExpiredLeases;
+        let config = LeaseCleanupConfig::default();
+        run_cleanup_iteration(&storage, &config);
     }
 }

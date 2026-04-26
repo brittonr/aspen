@@ -28,6 +28,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::storage_ports::{KvStateRead, KvStateWrite};
 use crate::storage_shared::SharedRedbStorage;
 
 /// Configuration for the TTL cleanup task.
@@ -60,15 +61,16 @@ pub fn spawn_redb_ttl_cleanup_task(storage: Arc<SharedRedbStorage>, config: TtlC
     let cancel_clone = cancel.clone();
 
     tokio::spawn(async move {
-        run_redb_ttl_cleanup_loop(storage, config, cancel_clone).await;
+        run_ttl_cleanup_loop(&*storage, config, cancel_clone).await;
     });
 
     cancel
 }
 
-/// Main cleanup loop for Redb storage.
-async fn run_redb_ttl_cleanup_loop(
-    storage: Arc<SharedRedbStorage>,
+/// Main cleanup loop. Generic over storage port traits so domain logic
+/// is testable with in-memory implementations.
+async fn run_ttl_cleanup_loop<S: KvStateRead + KvStateWrite>(
+    storage: &S,
     config: TtlCleanupConfig,
     cancel: CancellationToken,
 ) {
@@ -79,18 +81,18 @@ async fn run_redb_ttl_cleanup_loop(
         interval_secs = config.cleanup_interval.as_secs(),
         batch_size = config.batch_size_keys,
         max_batches = config.max_batches_per_run,
-        "Redb TTL cleanup task started"
+        "TTL cleanup task started"
     );
 
     while wait_for_ttl_cleanup_tick(&mut ticker, &cancel).await {
-        run_redb_cleanup_iteration(&storage, &config).await;
+        run_cleanup_iteration(storage, &config);
     }
 }
 
 async fn wait_for_ttl_cleanup_tick(ticker: &mut tokio::time::Interval, cancel: &CancellationToken) -> bool {
     tokio::select! {
         _ = cancel.cancelled() => {
-            info!("Redb TTL cleanup task shutting down");
+            info!("TTL cleanup task shutting down");
             false
         }
         _ = ticker.tick() => true,
@@ -102,7 +104,7 @@ fn should_stop_ttl_cleanup(deleted: u32, config: &TtlCleanupConfig) -> bool {
     deleted == 0 || deleted < config.batch_size_keys
 }
 
-fn log_ttl_cleanup_results(storage: &SharedRedbStorage, total_deleted: u64, batches_run: u32) {
+fn log_ttl_cleanup_results<S: KvStateRead>(storage: &S, total_deleted: u64, batches_run: u32) {
     if total_deleted > 0 {
         let remaining = storage.count_expired_keys().unwrap_or(0);
         let with_ttl = storage.count_keys_with_ttl().unwrap_or(0);
@@ -111,15 +113,15 @@ fn log_ttl_cleanup_results(storage: &SharedRedbStorage, total_deleted: u64, batc
             batches_run,
             remaining_expired = remaining,
             keys_with_ttl = with_ttl,
-            "Redb TTL cleanup iteration completed"
+            "TTL cleanup iteration completed"
         );
     } else {
-        debug!("Redb TTL cleanup: no expired keys to delete");
+        debug!("TTL cleanup: no expired keys to delete");
     }
 }
 
-/// Run a single cleanup iteration for Redb storage.
-async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCleanupConfig) {
+/// Run a single cleanup iteration. Generic over port traits.
+fn run_cleanup_iteration<S: KvStateRead + KvStateWrite>(storage: &S, config: &TtlCleanupConfig) {
     let mut total_deleted: u64 = 0;
     let mut batches_run: u32 = 0;
 
@@ -127,7 +129,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCle
         let deleted = match storage.delete_expired_keys(config.batch_size_keys) {
             Ok(deleted) => deleted,
             Err(error) => {
-                warn!(error = %error, "Redb TTL cleanup batch failed");
+                warn!(error = %error, "TTL cleanup batch failed");
                 break;
             }
         };
@@ -152,7 +154,7 @@ async fn run_redb_cleanup_iteration(storage: &SharedRedbStorage, config: &TtlCle
             total_deleted,
             batches_run,
             max_batches = config.max_batches_per_run,
-            "Redb TTL cleanup reached max batches limit"
+            "TTL cleanup reached max batches limit"
         );
     }
     log_ttl_cleanup_results(storage, total_deleted, batches_run);
@@ -283,5 +285,46 @@ mod tests {
         };
         // This is a valid but useless config - cleanup will do nothing
         assert_eq!(config.max_batches_per_run, 0);
+    }
+
+    #[test]
+    fn test_cleanup_iteration_uses_port_traits() {
+        use crate::storage_ports::{KvStateRead, KvStateWrite};
+        use crate::storage_shared::SharedStorageError;
+        use aspen_kv_types::KeyValueWithRevision;
+        use aspen_storage_types::KvEntry;
+
+        struct NoExpiredKeys;
+
+        impl KvStateRead for NoExpiredKeys {
+            fn get(&self, _key: &str) -> Result<Option<KvEntry>, SharedStorageError> {
+                Ok(None)
+            }
+            fn get_with_revision(&self, _key: &str) -> Result<Option<KeyValueWithRevision>, SharedStorageError> {
+                Ok(None)
+            }
+            fn scan(&self, _prefix: &str, _after: Option<&str>, _limit: Option<u32>) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
+                Ok(Vec::new())
+            }
+            fn count_expired_keys(&self) -> Result<u64, SharedStorageError> {
+                Ok(0)
+            }
+            fn count_keys_with_ttl(&self) -> Result<u64, SharedStorageError> {
+                Ok(0)
+            }
+            fn get_expired_keys_with_metadata(&self, _batch_limit: u32) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
+                Ok(Vec::new())
+            }
+        }
+
+        impl KvStateWrite for NoExpiredKeys {
+            fn delete_expired_keys(&self, _batch_limit: u32) -> Result<u32, SharedStorageError> {
+                Ok(0)
+            }
+        }
+
+        let storage = NoExpiredKeys;
+        let config = TtlCleanupConfig::default();
+        run_cleanup_iteration(&storage, &config);
     }
 }
