@@ -97,7 +97,7 @@ where C: RaftTypeConfig
 
                 // Use send_if_modified to ensure error permanence:
                 // once the value becomes Err, never change back to Ok
-                let modified = tx.send_if_modified(move |current| {
+                let has_modified = tx.send_if_modified(move |current| {
                     if current.is_err() {
                         // Already in error state, don't modify
                         tracing::debug!("IO completion ignored: already in error state");
@@ -109,7 +109,7 @@ where C: RaftTypeConfig
                     }
                 });
 
-                if !modified {
+                if !has_modified {
                     tracing::debug!("IO completion not sent: channel state unchanged");
                 }
             }
