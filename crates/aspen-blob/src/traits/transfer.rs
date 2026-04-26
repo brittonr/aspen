@@ -1,6 +1,9 @@
-//! Network/P2P transfer operations for blob storage.
+//! Iroh-specific P2P transfer operations for blob storage.
 //!
-//! The `BlobTransfer` trait provides methods for sharing and downloading blobs.
+//! The `BlobTransfer` trait carries iroh types (`BlobTicket`, `PublicKey`) and
+//! is the designated adapter surface for peer-to-peer blob exchange. Non-transfer
+//! consumers should bound on [`BlobRead`](super::BlobRead) and/or
+//! [`BlobWrite`](super::BlobWrite) instead.
 
 use async_trait::async_trait;
 use iroh::PublicKey;

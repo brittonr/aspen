@@ -343,6 +343,58 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::InMemoryBlobStore;
+
+    /// A blob backend that implements BlobRead + BlobWrite but NOT BlobTransfer.
+    /// Proves that `BlobAwareKeyValueStore` compiles without transfer capabilities.
+    struct ReadWriteOnlyBlob(InMemoryBlobStore);
+
+    #[async_trait]
+    impl BlobRead for ReadWriteOnlyBlob {
+        async fn get_bytes(&self, hash: &iroh_blobs::Hash) -> Result<Option<bytes::Bytes>, BlobStoreError> {
+            self.0.get_bytes(hash).await
+        }
+        async fn has(&self, hash: &iroh_blobs::Hash) -> Result<bool, BlobStoreError> {
+            self.0.has(hash).await
+        }
+        async fn status(&self, hash: &iroh_blobs::Hash) -> Result<Option<crate::BlobStatus>, BlobStoreError> {
+            self.0.status(hash).await
+        }
+        async fn reader(&self, hash: &iroh_blobs::Hash) -> Result<Option<std::pin::Pin<Box<dyn crate::AsyncReadSeek>>>, BlobStoreError> {
+            self.0.reader(hash).await
+        }
+    }
+
+    #[async_trait]
+    impl BlobWrite for ReadWriteOnlyBlob {
+        async fn add_bytes(&self, data: &[u8]) -> Result<crate::AddBlobResult, BlobStoreError> {
+            self.0.add_bytes(data).await
+        }
+        async fn add_path(&self, path: &std::path::Path) -> Result<crate::AddBlobResult, BlobStoreError> {
+            self.0.add_path(path).await
+        }
+        async fn protect(&self, hash: &iroh_blobs::Hash, tag: &str) -> Result<(), BlobStoreError> {
+            self.0.protect(hash, tag).await
+        }
+        async fn unprotect(&self, tag: &str) -> Result<(), BlobStoreError> {
+            self.0.unprotect(tag).await
+        }
+    }
+
+    /// Compile-time proof: BlobAwareKeyValueStore works with a blob backend
+    /// that only provides read/write — no BlobTransfer or BlobQuery needed.
+    fn _assert_no_transfer_needed() {
+        fn takes_kv_store<S: KeyValueStore>(_s: &S) {}
+
+        // This would fail to compile if BlobAwareKeyValueStore required BlobTransfer
+        fn check<KV: KeyValueStore + Send + Sync + 'static>(kv: Arc<KV>) {
+            let blobs = Arc::new(ReadWriteOnlyBlob(InMemoryBlobStore::new()));
+            let store = BlobAwareKeyValueStore::new(kv, blobs, true);
+            takes_kv_store(&store);
+        }
+
+        let _ = check::<aspen_traits::DeterministicKeyValueStore>;
+    }
 
     #[test]
     fn test_small_value_stored_directly() {

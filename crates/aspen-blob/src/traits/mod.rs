@@ -4,11 +4,20 @@
 //!
 //! - [`BlobWrite`]: Write operations (add, protect, unprotect)
 //! - [`BlobRead`]: Read operations (get, has, status, reader)
-//! - [`BlobTransfer`]: Network/P2P operations (ticket, download)
+//! - [`BlobTransfer`]: Iroh-specific P2P transfer (ticket, download, download_from_peer)
 //! - [`BlobQuery`]: Query operations (list, wait_available)
 //!
+//! ## Capability tiers
+//!
+//! Non-transfer consumers such as [`BlobAwareKeyValueStore`](crate::BlobAwareKeyValueStore)
+//! require only `BlobRead + BlobWrite`. The `BlobTransfer` trait carries iroh-specific
+//! types (`BlobTicket`, `PublicKey`) and should only be bounded when P2P download or
+//! ticket creation is actually needed. `BlobQuery` is additive for listing and
+//! availability polling.
+//!
 //! The composite [`BlobStore`] trait requires all sub-traits for implementations
-//! that provide full blob store functionality.
+//! that provide full blob store functionality; prefer narrow bounds for consumers
+//! that only use a subset.
 
 mod query;
 mod read;
