@@ -18,6 +18,8 @@ use aspen::api::ClusterController;
 use aspen::api::ClusterNode;
 use aspen::api::InitRequest;
 use aspen::api::KeyValueStore;
+use aspen::api::KvRead;
+use aspen::api::KvWrite;
 use aspen::api::KeyValueStoreError;
 use aspen::api::ReadRequest;
 use aspen::api::WriteCommand;

@@ -124,7 +124,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
         // Build a temporary client for probing (uses all bootstrap peers)
         let probe_peers: Vec<BootstrapPeer> = bootstrap_addrs.iter().map(BootstrapPeer::from_endpoint_addr).collect();
         let probe_ticket = AspenClusterTicket {
-            topic_id,
+            topic_id: topic_id.into(),
             bootstrap: probe_peers,
             cluster_id: cluster_id.clone(),
         };
@@ -185,7 +185,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     let bootstrap_peers: Vec<BootstrapPeer> = bootstrap_addrs.iter().map(BootstrapPeer::from_endpoint_addr).collect();
 
     let client_ticket = AspenClusterTicket {
-        topic_id,
+        topic_id: topic_id.into(),
         bootstrap: bootstrap_peers,
         cluster_id: cluster_id.clone(),
     };

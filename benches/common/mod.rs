@@ -279,6 +279,7 @@ pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
     let endpoint_addr = node.endpoint_addr();
     raft_node
         .init(InitRequest {
+                trust: Default::default(),
             initial_members: vec![ClusterNode::with_iroh_addr(1, endpoint_addr)],
         })
         .await?;
@@ -356,6 +357,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
     let raft1 = node1.raft_node();
     raft1
         .init(InitRequest {
+                trust: Default::default(),
             initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
         })
         .await?;
@@ -469,6 +471,7 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
     let raft1 = node1.raft_node();
     raft1
         .init(InitRequest {
+                trust: Default::default(),
             initial_members: vec![ClusterNode::with_iroh_addr(1, node1.endpoint_addr())],
         })
         .await?;

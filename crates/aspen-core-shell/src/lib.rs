@@ -217,8 +217,12 @@ pub use transport::PeerDiscovery;
 pub use transport::StaleTopologyInfo;
 pub use transport::TopologyStaleCallback;
 // Types
+pub use cluster::AddLearnerRequest;
+pub use cluster::ChangeMembershipRequest;
 pub use cluster::ClusterNode;
 pub use cluster::ClusterState;
+pub use cluster::InitRequest;
+pub use cluster::TrustConfig;
 pub use types::ClusterMetrics;
 pub use types::NodeAddress;
 pub use types::NodeId;

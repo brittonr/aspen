@@ -3104,7 +3104,7 @@ dependencies = [
  "aspen-blob",
  "aspen-client-api",
  "aspen-constants",
- "aspen-core",
+ "aspen-core-shell",
  "aspen-hlc",
  "aspen-hooks",
  "aspen-hooks-types",

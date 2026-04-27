@@ -100,10 +100,10 @@ impl MinimalForgeServer {
         let forge_node = Arc::new(ForgeNode::new(blobs, kv.clone(), secret_key.clone()));
 
         // Create iroh endpoint that accepts CLIENT_ALPN connections
-        let endpoint = Endpoint::builder()
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![CLIENT_ALPN.to_vec()])
-            .clear_discovery()
+            .clear_address_lookup()
             .bind()
             .await
             .expect("failed to bind iroh endpoint");

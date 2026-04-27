@@ -268,7 +268,7 @@ async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust()
     }
 
     #[async_trait::async_trait]
-    impl aspen_core::KeyValueStore for InMemoryKvStore {
+    impl aspen_core::KvRead for InMemoryKvStore {
         async fn read(
             &self,
             request: aspen_core::ReadRequest,
@@ -283,7 +283,10 @@ async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust()
             });
             Ok(aspen_core::ReadResult { kv })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl aspen_core::KvWrite for InMemoryKvStore {
         async fn write(
             &self,
             request: aspen_core::WriteRequest,
@@ -308,7 +311,10 @@ async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust()
                 conflict_actual_version: None,
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl aspen_core::KvDelete for InMemoryKvStore {
         async fn delete(
             &self,
             request: aspen_core::DeleteRequest,
@@ -319,7 +325,10 @@ async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust()
                 is_deleted: existed,
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl aspen_core::KvScan for InMemoryKvStore {
         async fn scan(
             &self,
             request: aspen_core::ScanRequest,
@@ -344,6 +353,8 @@ async fn test_finish_secrets_service_setup_keeps_service_without_runtime_trust()
             })
         }
     }
+
+    impl aspen_core::KeyValueStore for InMemoryKvStore {}
 
     let kv = Arc::new(InMemoryKvStore {
         data: Arc::new(RwLock::new(HashMap::new())),

@@ -38,6 +38,7 @@ use aspen::api::ClusterController;
 use aspen::api::ClusterNode;
 use aspen::api::InitRequest;
 use aspen::api::KeyValueStore;
+use aspen::api::KvScan;
 use aspen::api::ScanRequest;
 use aspen::node::Node;
 use aspen::node::NodeBuilder;

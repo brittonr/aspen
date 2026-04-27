@@ -424,6 +424,8 @@ async fn test_lock_contention() {
 use aspen::api::BatchCondition;
 use aspen::api::BatchOperation;
 use aspen::api::KeyValueStore;
+use aspen::api::KvRead;
+use aspen::api::KvWrite;
 use aspen::api::ReadRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;

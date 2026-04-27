@@ -140,6 +140,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) -> Result<()> {
             "init_request",
             serde_json::to_string(&InitRequest {
                 initial_members: vec![],
+                trust: Default::default(),
             })
             .context("failed to serialize init_request")?,
         ),

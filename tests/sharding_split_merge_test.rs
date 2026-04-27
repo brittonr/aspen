@@ -9,6 +9,9 @@ use std::sync::Arc;
 
 use aspen::api::KeyValueStore;
 use aspen::api::KeyValueStoreError;
+use aspen::api::KvRead;
+use aspen::api::KvScan;
+use aspen::api::KvWrite;
 use aspen::api::ReadRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;

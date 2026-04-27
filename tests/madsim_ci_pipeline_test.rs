@@ -333,6 +333,7 @@ async fn test_pipeline_run_limits() {
             commit_hash: [i as u8; 32],
             ref_name: "refs/heads/main".to_string(),
             triggered_by: "test".to_string(),
+            run_id: String::new(),
             env: HashMap::new(),
             checkout_dir: None,
             source_hash: None,
@@ -389,6 +390,9 @@ fn test_job(name: &str, command: &str) -> JobConfig {
         expected_binary: None,
         stateful: None,
         validate_only: None,
+        cached_execution: false,
+        force_cold_boot: false,
+        speculative_count: None,
     }
 }
 
@@ -467,6 +471,7 @@ fn test_context(repo_name: &str) -> PipelineContext {
         commit_hash: [1u8; 32],
         ref_name: "refs/heads/main".to_string(),
         triggered_by: "test".to_string(),
+        run_id: String::new(),
         env: HashMap::new(),
         checkout_dir: None,
         source_hash: None,

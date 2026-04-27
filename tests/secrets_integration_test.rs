@@ -30,7 +30,7 @@
 
 mod support;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use aspen_client_api::ClientRpcRequest;
@@ -74,7 +74,7 @@ async fn test_secrets_kv_write_read() {
     let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
 
     // Write a secret
-    let mut data = HashMap::new();
+    let mut data = BTreeMap::new();
     data.insert("username".to_string(), "admin".to_string());
     data.insert("password".to_string(), "secret123".to_string());
 
@@ -149,7 +149,7 @@ async fn test_secrets_kv_versioning() {
     let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
 
     // Write version 1
-    let mut data_v1 = HashMap::new();
+    let mut data_v1 = BTreeMap::new();
     data_v1.insert("value".to_string(), "version1".to_string());
 
     let write1 = tester
@@ -172,7 +172,7 @@ async fn test_secrets_kv_versioning() {
     };
 
     // Write version 2
-    let mut data_v2 = HashMap::new();
+    let mut data_v2 = BTreeMap::new();
     data_v2.insert("value".to_string(), "version2".to_string());
 
     let write2 = tester
@@ -259,7 +259,7 @@ async fn test_secrets_kv_list() {
 
     // Write multiple secrets
     for name in ["config", "credentials", "settings"] {
-        let mut data = HashMap::new();
+        let mut data = BTreeMap::new();
         data.insert("name".to_string(), name.to_string());
 
         let response = tester
@@ -323,7 +323,7 @@ async fn test_secrets_kv_cas_conflict() {
     let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
 
     // Write initial secret (version 1)
-    let mut data = HashMap::new();
+    let mut data = BTreeMap::new();
     data.insert("value".to_string(), "initial".to_string());
 
     let write_response = tester
@@ -347,7 +347,7 @@ async fn test_secrets_kv_cas_conflict() {
     assert_eq!(version, 1, "first write should be version 1");
 
     // Attempt write with CAS=0 (should fail - version mismatch)
-    let mut data_v2 = HashMap::new();
+    let mut data_v2 = BTreeMap::new();
     data_v2.insert("value".to_string(), "updated".to_string());
 
     let cas_fail_response = tester
@@ -422,7 +422,7 @@ async fn test_secrets_kv_metadata() {
     let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
 
     // Write a secret
-    let mut data = HashMap::new();
+    let mut data = BTreeMap::new();
     data.insert("key".to_string(), "value".to_string());
 
     let write_response = tester
@@ -484,7 +484,7 @@ async fn test_secrets_kv_delete_undelete() {
     let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
 
     // Write a secret
-    let mut data = HashMap::new();
+    let mut data = BTreeMap::new();
     data.insert("key".to_string(), "value".to_string());
 
     let write_response = tester
@@ -1645,7 +1645,7 @@ async fn test_secrets_multi_node_consistency() {
     let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
 
     // Write secret
-    let mut data = HashMap::new();
+    let mut data = BTreeMap::new();
     data.insert("distributed".to_string(), "secret".to_string());
 
     let write_response = tester
@@ -1711,7 +1711,7 @@ async fn test_secrets_concurrent_writes() {
 
     // Write multiple secrets in sequence (simulating concurrent access)
     for i in 0..5 {
-        let mut data = HashMap::new();
+        let mut data = BTreeMap::new();
         data.insert("index".to_string(), i.to_string());
 
         let write_response = tester
@@ -1778,7 +1778,7 @@ async fn test_secrets_kv_destroy() {
     let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
 
     // Write a secret
-    let mut data = HashMap::new();
+    let mut data = BTreeMap::new();
     data.insert("key".to_string(), "to-destroy".to_string());
 
     let write_response = tester

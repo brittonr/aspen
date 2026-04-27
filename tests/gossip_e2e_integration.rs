@@ -19,6 +19,7 @@ use aspen::node::NodeBuilder;
 use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
 use iroh_gossip::proto::TopicId;
+use aspen::cluster::ticket::ClusterTopicId;
 use tempfile::TempDir;
 use tokio::time::sleep;
 use tracing::info;
@@ -184,7 +185,7 @@ async fn test_gossip_ticket_handling() -> Result<()> {
 
     // Deserialize the ticket
     let deserialized = AspenClusterTicket::deserialize(&ticket_str)?;
-    assert_eq!(deserialized.topic_id, topic_id);
+    assert_eq!(deserialized.topic_id, ClusterTopicId::from(topic_id));
     assert_eq!(deserialized.cluster_id, TEST_CLUSTER_COOKIE);
     assert_eq!(deserialized.bootstrap.len(), 1);
     assert!(deserialized.endpoint_ids().unwrap().contains(&endpoint_id));
