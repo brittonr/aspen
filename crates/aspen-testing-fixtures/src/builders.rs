@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use aspen_testing_core::DeterministicClusterController;
 use aspen_testing_core::DeterministicKeyValueStore;
-use aspen_traits::KvWrite;
 
 /// Builder for configuring test cluster setups.
 ///
@@ -273,7 +272,7 @@ mod tests {
     #[tokio::test]
     async fn test_kv_store_builder_with_entries() {
         use aspen_kv_types::ReadRequest;
-        use aspen_traits::KvWrite;
+        use aspen_traits::KvRead;
 
         let store = KvStoreBuilder::new().with_entry("key1", "value1").with_entry("key2", "value2").build().await;
 
@@ -287,7 +286,7 @@ mod tests {
     #[tokio::test]
     async fn test_kv_store_builder_with_prefix_and_entries() {
         use aspen_kv_types::ReadRequest;
-        use aspen_traits::KvWrite;
+        use aspen_traits::KvRead;
 
         let store = KvStoreBuilder::new().with_prefix("test/").with_entry("key1", "value1").build().await;
 

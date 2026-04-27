@@ -107,6 +107,45 @@ impl<T: KvLocalScan + ?Sized> KvLocalScan for Arc<T> {
 }
 
 // ============================================================================
+// Reference blanket impls for KV capability traits
+// ============================================================================
+
+#[async_trait]
+impl<T: KvRead + ?Sized> KvRead for &T {
+    async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+        (**self).read(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvWrite + ?Sized> KvWrite for &T {
+    async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+        (**self).write(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvDelete + ?Sized> KvDelete for &T {
+    async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+        (**self).delete(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvScan + ?Sized> KvScan for &T {
+    async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        (**self).scan(request).await
+    }
+}
+
+#[async_trait]
+impl<T: KvLocalScan + ?Sized> KvLocalScan for &T {
+    async fn scan_local(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
+        (**self).scan_local(request).await
+    }
+}
+
+// ============================================================================
 // CoordinationBackend
 // ============================================================================
 

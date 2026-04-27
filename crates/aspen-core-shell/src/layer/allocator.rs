@@ -447,7 +447,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::test_support::DeterministicKeyValueStore;
+    use aspen_testing_core::DeterministicKeyValueStore;
 
     #[tokio::test]
     async fn test_allocate_sequential() {
@@ -858,6 +858,7 @@ mod tests {
         use crate::constants::directory::DIR_HCA_PREFIX;
         use crate::constants::directory::DIRECTORY_PREFIX;
         use crate::kv::WriteRequest;
+        use crate::traits::KvWrite;
 
         let store = DeterministicKeyValueStore::new();
 
@@ -886,6 +887,7 @@ mod tests {
         use crate::constants::directory::DIR_HCA_PREFIX;
         use crate::constants::directory::DIRECTORY_PREFIX;
         use crate::kv::WriteRequest;
+        use crate::traits::KvWrite;
 
         let store = DeterministicKeyValueStore::new();
 

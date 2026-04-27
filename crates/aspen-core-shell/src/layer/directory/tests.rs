@@ -8,7 +8,7 @@ mod tests {
     use crate::layer::Tuple;
     use crate::layer::directory::DirectoryError;
     use crate::layer::directory::DirectoryLayer;
-    use crate::test_support::DeterministicKeyValueStore;
+    use aspen_testing_core::DeterministicKeyValueStore;
 
     #[tokio::test]
     async fn test_create_and_open() {
@@ -183,8 +183,8 @@ mod tests {
 
         // Keys in directory should be in range
         let key = dir.pack(&Tuple::new().push("test"));
-        assert!(key >= start, "key={key:x} start={start:x}");
-        assert!(key < end, "key={key:x} end={end:x}");
+        assert!(key >= start, "key={key:02x?} start={start:02x?}");
+        assert!(key < end, "key={key:02x?} end={end:02x?}");
     }
 
     // =========================================================================
@@ -765,10 +765,10 @@ mod tests {
         let key1 = dir.pack(&Tuple::new().push("a"));
         let key2 = dir.pack(&Tuple::new().push("z").push(1u64).push("nested"));
 
-        assert!(key1 >= start, "key1={key1:x} start={start:x}");
-        assert!(key1 < end, "key1={key1:x} end={end:x}");
-        assert!(key2 >= start, "key2={key2:x} start={start:x}");
-        assert!(key2 < end, "key2={key2:x} end={end:x}");
+        assert!(key1 >= start, "key1={key1:02x?} start={start:02x?}");
+        assert!(key1 < end, "key1={key1:02x?} end={end:02x?}");
+        assert!(key2 >= start, "key2={key2:02x?} start={start:02x?}");
+        assert!(key2 < end, "key2={key2:02x?} end={end:02x?}");
     }
 
     #[tokio::test]
@@ -1000,7 +1000,7 @@ mod tests {
     #[tokio::test]
     async fn test_directory_keys_stored_in_kv() {
         use crate::kv::ScanRequest;
-        use crate::traits::KeyValueStore;
+        use crate::traits::KvScan;
 
         let store = Arc::new(DeterministicKeyValueStore::new());
         let dir = DirectoryLayer::new(store.clone());
@@ -1027,7 +1027,7 @@ mod tests {
     async fn test_directory_data_isolation() {
         use crate::kv::ScanRequest;
         use crate::kv::WriteRequest;
-        use crate::traits::KeyValueStore;
+        use crate::traits::{KvScan, KvWrite};
 
         let store = Arc::new(DeterministicKeyValueStore::new());
         let dir_layer = DirectoryLayer::new(store.clone());

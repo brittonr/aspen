@@ -32,6 +32,7 @@ hex = "0.4"
 redb = "2.0.0"
 
 [dev-dependencies]
+aspen-testing-core = { path = "../aspen-testing-core" }
 postcard = { version = "1.0", features = ["alloc"] }
 
 [features]
