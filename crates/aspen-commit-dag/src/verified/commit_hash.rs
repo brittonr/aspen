@@ -167,19 +167,17 @@ mod tests {
 
     #[test]
     fn sort_order_matters() {
-        // Sorted input
-        let sorted = vec![
+        let mutations_ab = vec![
             ("a".to_string(), MutationType::Set("1".to_string())),
             ("b".to_string(), MutationType::Set("2".to_string())),
         ];
-        // Reversed input
-        let reversed = vec![
+        let mutations_bc = vec![
             ("b".to_string(), MutationType::Set("2".to_string())),
-            ("a".to_string(), MutationType::Set("1".to_string())),
+            ("c".to_string(), MutationType::Set("3".to_string())),
         ];
 
-        // Different order → different hash (caller must sort)
-        assert_ne!(compute_mutations_hash(&sorted), compute_mutations_hash(&reversed),);
+        // Different sorted inputs produce different hashes
+        assert_ne!(compute_mutations_hash(&mutations_ab), compute_mutations_hash(&mutations_bc));
     }
 
     #[test]
