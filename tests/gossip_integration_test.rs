@@ -15,6 +15,7 @@ use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
 use aspen::cluster::ticket::AspenClusterTicket;
+use aspen::cluster::ticket::ClusterTopicId;
 use iroh::SecretKey;
 use iroh_gossip::proto::TopicId;
 use support::mock_gossip::MockGossip;
@@ -67,7 +68,7 @@ fn test_ticket_serialization_roundtrip() {
 
     // Deserialize
     let deserialized = AspenClusterTicket::deserialize(&serialized).unwrap();
-    assert_eq!(deserialized.topic_id, topic_id);
+    assert_eq!(deserialized.topic_id, ClusterTopicId::from(topic_id));
     assert_eq!(deserialized.cluster_id, "test-cluster");
     assert_eq!(deserialized.bootstrap.len(), 1);
     assert!(deserialized.endpoint_ids().unwrap().contains(&endpoint_id));

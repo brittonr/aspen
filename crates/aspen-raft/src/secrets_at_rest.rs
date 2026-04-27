@@ -89,7 +89,7 @@ fn collection_failed(reason: impl Into<String>) -> aspen_trust::key_manager::Sha
 }
 
 struct ShareCollectionContext {
-    members: BTreeMap<u64, iroh::EndpointAddr>,
+    members: BTreeMap<u64, aspen_core::NodeAddress>,
     digests: BTreeMap<u64, aspen_trust::shamir::ShareDigest>,
     threshold: u8,
     local_share: Option<aspen_trust::shamir::Share>,
@@ -431,10 +431,15 @@ impl aspen_trust::key_manager::ShareCollector for RaftShareCollector {
         }
 
         let mut join_set = JoinSet::new();
+        let endpoint_members: BTreeMap<u64, iroh::EndpointAddr> = context
+            .members
+            .into_iter()
+            .filter_map(|(id, addr)| addr.try_into().ok().map(|ea| (id, ea)))
+            .collect();
         spawn_remote_share_requests(
             &mut join_set,
             client,
-            context.members,
+            endpoint_members,
             &context.digests,
             self.node.node_id().0,
             epoch,

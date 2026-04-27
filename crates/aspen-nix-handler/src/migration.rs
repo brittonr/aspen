@@ -10,7 +10,7 @@
 //! - `CacheMigrationCancel`: Cancel running migration
 //! - `CacheMigrationValidate`: Validate migration completeness
 
-use aspen_cache::CacheIndex;
+use aspen_cache::CacheStatsProvider;
 use aspen_cache::KvCacheIndex;
 use aspen_client_api::CacheMigrationCancelResultResponse;
 use aspen_client_api::CacheMigrationProgressResponse;

@@ -5,5 +5,6 @@
 
 pub use aspen_ticket::AspenClusterTicket;
 pub use aspen_ticket::BootstrapPeer;
+pub use aspen_ticket::ClusterTopicId;
 pub use aspen_ticket::SignedAspenClusterTicket;
 pub use aspen_ticket::parse_ticket_to_addrs;
