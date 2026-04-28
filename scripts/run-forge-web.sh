@@ -25,9 +25,13 @@ CLI="./target/debug/aspen-cli"
 # Check if port is available before doing expensive work
 check_port() {
   if ss -tln 2>/dev/null | grep -q ":${PORT} "; then
-    local holder
+    local holder holder_suffix
     holder=$(ss -tlnp 2>/dev/null | grep ":${PORT} " | sed 's/.*users:(("\([^"]*\)".*/\1/' | head -1)
-    err "Port $PORT already in use${holder:+ by '$holder'}"
+    holder_suffix=""
+    if [ -n "$holder" ]; then
+      holder_suffix=" by '$holder'"
+    fi
+    err "Port $PORT already in use$holder_suffix"
     echo -e "  ${BLUE}Fix: FORGE_WEB_PORT=8081 $0${NC}"
     echo -e "  ${BLUE} or: kill the process using port $PORT${NC}"
     exit 1
@@ -100,6 +104,31 @@ trap cleanup EXIT
 
 cli() { "$CLI" --ticket "$TICKET" --quiet "$@"; }
 cli_json() { "$CLI" --ticket "$TICKET" --quiet --json "$@"; }
+
+generate_demo_cargo_lockfile() (
+  unset CARGO_INCREMENTAL
+  RUSTC_WRAPPER='' cargo generate-lockfile -q
+  test -s Cargo.lock
+)
+
+generate_demo_flake_lockfile() {
+  if ! command -v nix >/dev/null 2>&1; then
+    err "nix CLI not found; cannot generate flake.lock for the CI demo"
+    return 1
+  fi
+
+  nix --extra-experimental-features "nix-command flakes" flake lock --quiet
+  test -s flake.lock
+}
+
+require_staged_file() {
+  local file_path="$1"
+
+  if ! git ls-files --error-unmatch "$file_path" >/dev/null 2>&1; then
+    err "$file_path was not staged; refusing to push a demo that CI cannot build reproducibly"
+    exit 1
+  fi
+}
 
 # Parse a JSON field. Usage: parse_field "key" <<< "$json"
 parse_field() {
@@ -187,9 +216,9 @@ if command -v git-remote-aspen >/dev/null 2>&1; then
   log "Pushing demo content via git-remote-aspen..."
   TMPGIT="$CLUSTER_DIR/demo-git"
   mkdir -p "$TMPGIT"
-  (
-    cd "$TMPGIT"
-    git init -q
+  if (
+    cd "$TMPGIT" || exit 1
+    git init -q || exit 1
 
     cat > README.md << 'INNER_MD'
 # Hello World
@@ -214,8 +243,13 @@ INNER_MD
     printf 'fn main() {\n    println!("Hello from Aspen Forge!");\n}\n' > src/main.rs
     printf '[package]\nname = "hello"\nversion = "0.1.0"\nedition = "2024"\n' > Cargo.toml
 
-    # Generate Cargo.lock so the Nix build can vendor dependencies
-    cargo generate-lockfile -q 2>/dev/null || true
+    # Generate Cargo.lock so the Nix build can vendor dependencies.
+    # The temp repo lives outside Aspen's .cargo/config.toml, so clear host
+    # wrappers that reject the dev shell's CARGO_INCREMENTAL setting.
+    if ! generate_demo_cargo_lockfile; then
+      err "Failed to generate Cargo.lock for the demo repository"
+      exit 1
+    fi
 
     # Nix flake for building the project
     cat > flake.nix << 'INNER_FLAKE'
@@ -239,6 +273,20 @@ INNER_MD
 }
 INNER_FLAKE
 
+    # Nix flakes loaded from a Git working tree only see tracked files, so
+    # stage flake.nix before asking Nix to create the lock file.
+    if ! git add flake.nix; then
+      err "Failed to stage flake.nix before generating flake.lock"
+      exit 1
+    fi
+
+    # Commit flake.lock so CI uses the same pinned nixpkgs input instead of
+    # creating a lock file inside the checkout at build time.
+    if ! generate_demo_flake_lockfile; then
+      err "Failed to generate flake.lock for the demo repository"
+      exit 1
+    fi
+
     # CI config — triggers automatically on push when --ci-auto-trigger is set
     mkdir -p .aspen
     cat > .aspen/ci.ncl << 'INNER_NCL'
@@ -260,9 +308,22 @@ INNER_FLAKE
 }
 INNER_NCL
 
-    git add -A && git commit -q -m "Initial commit"
+    if ! git add -A; then
+      err "Failed to stage demo repository"
+      exit 1
+    fi
+    require_staged_file Cargo.lock
+    require_staged_file flake.lock
+    if ! git commit -q -m "Initial commit"; then
+      err "Failed to commit demo repository"
+      exit 1
+    fi
     RUST_LOG=warn git push "aspen://${TICKET}/${REPO_ID}" HEAD:main 2>/dev/null
-  ) && ok "Content pushed" || log "Push failed (git-remote-aspen may need fixes)"
+  ); then
+    ok "Content pushed"
+  else
+    log "Push failed (git-remote-aspen may need fixes)"
+  fi
 else
   log "git-remote-aspen not found — repo created but empty"
   log "To populate: build git-remote-aspen or use nix run .#dogfood-local"
@@ -271,7 +332,11 @@ fi
 # ── Enable CI for the repository ─────────────────────────────────────
 
 log "Enabling CI for repository..."
-cli ci watch "$REPO_ID" 2>/dev/null && ok "CI watch enabled" || log "CI watch failed (will trigger manually)"
+if cli ci watch "$REPO_ID" 2>/dev/null; then
+  ok "CI watch enabled"
+else
+  log "CI watch failed (will trigger manually)"
+fi
 sleep 2
 
 # Check if CI auto-triggered from the replay buffer, otherwise trigger manually

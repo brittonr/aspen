@@ -135,6 +135,11 @@ git push → forge git_bridge → RefUpdate gossip → CiTriggerHandler → Trig
 
 Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 
+### run-forge-web CI demo lockfile gotcha (2026-04-28)
+
+- `scripts/run-forge-web.sh` creates the demo repo in `/tmp`, where Aspen's `.cargo/config.toml` does not clear the global `sccache` wrapper. If `cargo generate-lockfile` inherits `CARGO_INCREMENTAL=1`, it can fail before writing `Cargo.lock`; do not hide that failure or Forge CI later reports Nix error `Path 'Cargo.lock' does not exist in Git repository`.
+- Working fix: generate the demo Cargo lockfile with `unset CARGO_INCREMENTAL` and `RUSTC_WRAPPER=''`, generate `flake.lock`, then verify both `Cargo.lock` and `flake.lock` with `git ls-files --error-unmatch` before pushing to Forge.
+
 ## Hook/auth seam split follow-ups (2026-04-22)
 
 **Discovery**: `aspen-auth` and `aspen-hooks-types` had runtime baggage hidden behind seemingly lightweight public types.
