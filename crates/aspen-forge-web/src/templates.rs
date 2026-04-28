@@ -1559,6 +1559,8 @@ fn dummy_repo() -> ForgeRepoInfo {
         delegates: vec![],
         threshold_delegates: 0,
         created_at_ms: 0,
+        backends: vec![],
+        backend_routes: vec![],
     }
 }
 
