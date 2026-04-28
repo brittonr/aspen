@@ -116,6 +116,13 @@ filter = "test(test_split_brain_heal) | test(test_slow_follower_cluster)"
 retries = 1
 slow-timeout = { period = "120s", terminate-after = 1 }
 
+# Patchbay link-heal tests: explicit follower catch-up waits can consume the
+# default slow timeout before the test gets to report its bounded wait result.
+[[profile.default.overrides]]
+filter = "test(test_region_partition_heal_catchup) | test(test_link_up_follower_catchup)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
 # Clock-skewed coordination: drift + writes + convergence can take 30s
 [[profile.default.overrides]]
 filter = "test(test_clock_skew_coordination)"

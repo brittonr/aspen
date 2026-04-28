@@ -1,0 +1,327 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/Cargo.toml
+   Compiling aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-kv-types)
+   Compiling aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-storage-types)
+   Compiling aspen-time v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-time)
+   Compiling aspen-hlc v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-hlc)
+   Compiling aspen-layer v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-layer)
+   Compiling aspen-trust v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-trust)
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+   Compiling aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-cluster-types)
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-auth-core)
+   Compiling aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-hooks-types)
+   Compiling aspen-ticket v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-ticket)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-client-api)
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-traits)
+   Compiling aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-raft-kv-types)
+   Compiling aspen-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-core)
+   Compiling aspen-coordination v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-coordination)
+   Compiling aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-testing-core)
+   Compiling aspen-nostr-relay v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-nostr-relay)
+   Compiling aspen-redb-storage v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-redb-storage)
+   Compiling aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-raft-kv)
+   Compiling aspen-testing-fixtures v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-testing-fixtures)
+   Compiling aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-core-shell)
+   Compiling aspen-sharding v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-sharding)
+   Compiling aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-raft-types)
+   Compiling aspen-auth v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-auth)
+   Compiling aspen-testing v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-testing)
+   Compiling aspen-transport v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-transport)
+   Compiling aspen-federation v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-federation)
+   Compiling aspen-jobs v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-jobs)
+   Compiling aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-raft-network)
+   Compiling aspen-h3-proxy v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-h3-proxy)
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
+     |
+4299 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
+     |
+4306 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
+     |
+4313 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
+     |
+4320 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
+     |
+4327 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
+     |
+4334 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
+     |
+4341 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
+     |
+4348 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
+     |
+4388 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
+     |
+4395 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+   Compiling aspen-raft v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-raft)
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-blob)
+   Compiling aspen-client v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-client)
+   Compiling aspen-forge-web v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-forge-web)
+warning: `aspen-client-api` (lib) generated 28 warnings
+   Compiling aspen-cluster v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-cluster)
+   Compiling aspen-forge v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-forge)
+   Compiling aspen-testing-patchbay v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-testing-patchbay)
+   Compiling aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-rpc-core)
+   Compiling aspen-cluster-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-cluster-handler)
+   Compiling aspen-blob-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-blob-handler)
+   Compiling aspen-forge-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-forge-handler)
+   Compiling aspen-core-essentials-handler v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-core-essentials-handler)
+warning: unused import: `aspen_core::KeyValueStore`
+  --> crates/aspen-core-essentials-handler/src/alert_evaluator.rs:28:5
+   |
+28 | use aspen_core::KeyValueStore;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling aspen-rpc-handlers v0.1.0 (/home/brittonr/git/aspen/.pi/worktrees/session-1777346661274-r1ff/crates/aspen-rpc-handlers)
+warning: `aspen-core-essentials-handler` (lib) generated 1 warning (run `cargo fix --lib -p aspen-core-essentials-handler` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.31s
+────────────
+ Nextest run ID 4faf3c7f-76fd-4f81-b1a1-39a97d381be4 with nextest profile: default
+    Starting 54 tests across 3 binaries
+        PASS [   0.005s] ( 1/54) aspen-forge-web routes::tests::ansi_to_html_nested_colors
+        PASS [   0.005s] ( 2/54) aspen-forge-web routes::tests::ansi_to_html_no_escapes
+        PASS [   0.005s] ( 3/54) aspen-forge-web routes::tests::ansi_to_html_plain_text
+        PASS [   0.005s] ( 4/54) aspen-forge-web routes::tests::ansi_to_html_red_text
+        PASS [   0.005s] ( 5/54) aspen-forge-web routes::tests::ansi_to_html_reset
+        PASS [   0.002s] ( 6/54) aspen-forge-web routes::tests::artifacts_section_renders_in_log_viewer
+        PASS [   0.002s] ( 7/54) aspen-forge-web routes::tests::ci_config_source_truncates_large_files
+        PASS [   0.002s] ( 8/54) aspen-forge-web routes::tests::ci_config_viewer_renders_config_with_run_context
+        PASS [   0.002s] ( 9/54) aspen-forge-web routes::tests::ci_status_badge_variants
+        PASS [   0.001s] (10/54) aspen-forge-web routes::tests::ci_unavailable_page
+        PASS [   0.002s] (11/54) aspen-forge-web routes::tests::cluster_overview_renders
+        PASS [   0.002s] (12/54) aspen-forge-web routes::tests::commit_no_statuses_no_badges
+        PASS [   0.002s] (13/54) aspen-forge-web routes::tests::commit_status_badges_render
+        PASS [   0.002s] (14/54) aspen-forge-web routes::tests::content_type_binary_fallback
+        PASS [   0.002s] (15/54) aspen-forge-web routes::tests::content_type_images
+        PASS [   0.002s] (16/54) aspen-forge-web routes::tests::content_type_source_files
+        PASS [   0.002s] (17/54) aspen-forge-web routes::tests::content_type_web_assets
+        PASS [   0.002s] (18/54) aspen-forge-web routes::tests::forge_unavailable_is_503
+        PASS [   0.002s] (19/54) aspen-forge-web routes::tests::forge_unavailable_with_hints
+        PASS [   0.002s] (20/54) aspen-forge-web routes::tests::format_bytes_units
+        PASS [   0.002s] (21/54) aspen-forge-web routes::tests::generic_error_still_500
+        PASS [   0.006s] (22/54) aspen-forge-web routes::tests::job_full_output_stdout_and_stderr
+        PASS [   0.005s] (23/54) aspen-forge-web routes::tests::job_full_output_stdout_only
+        PASS [   0.002s] (24/54) aspen-forge-web routes::tests::job_log_viewer_has_load_more
+        PASS [   0.005s] (25/54) aspen-forge-web routes::tests::job_log_viewer_line_numbers_sequential
+        PASS [   0.005s] (26/54) aspen-forge-web routes::tests::job_log_viewer_running_has_meta_refresh
+        PASS [   0.002s] (27/54) aspen-forge-web routes::tests::job_row_shows_error
+        PASS [   0.002s] (28/54) aspen-forge-web routes::tests::method_not_allowed_is_405
+        PASS [   0.002s] (29/54) aspen-forge-web routes::tests::not_found_is_404
+        PASS [   0.002s] (30/54) aspen-forge-web routes::tests::parse_form_empty
+        PASS [   0.002s] (31/54) aspen-forge-web routes::tests::parse_form_urlencoded
+        PASS [   0.002s] (32/54) aspen-forge-web routes::tests::pipeline_detail_completed_no_meta_refresh
+        PASS [   0.002s] (33/54) aspen-forge-web routes::tests::pipeline_detail_completed_shows_retrigger_button
+        PASS [   0.002s] (34/54) aspen-forge-web routes::tests::pipeline_detail_error_callout
+        PASS [   0.002s] (35/54) aspen-forge-web routes::tests::pipeline_detail_no_error_when_none
+        PASS [   0.002s] (36/54) aspen-forge-web routes::tests::pipeline_detail_running_has_meta_refresh
+        PASS [   0.002s] (37/54) aspen-forge-web routes::tests::pipeline_detail_running_shows_cancel_button
+        PASS [   0.002s] (38/54) aspen-forge-web routes::tests::pipeline_detail_with_stages_and_jobs
+        PASS [   0.002s] (39/54) aspen-forge-web routes::tests::pipeline_list_empty_state
+        PASS [   0.002s] (40/54) aspen-forge-web routes::tests::pipeline_list_running_shows_running_duration
+        PASS [   0.002s] (41/54) aspen-forge-web routes::tests::pipeline_list_with_runs
+        PASS [   0.002s] (42/54) aspen-forge-web routes::tests::pipeline_list_with_status_filter
+        PASS [   0.002s] (43/54) aspen-forge-web routes::tests::redirect_is_303
+        PASS [   0.002s] (44/54) aspen-forge-web routes::tests::render_markdown_headings_and_code
+        PASS [   0.002s] (45/54) aspen-forge-web routes::tests::render_markdown_tables
+        PASS [   0.005s] (46/54) aspen-forge-web routes::tests::render_markdown_truncates_large_input
+        PASS [   0.002s] (47/54) aspen-forge-web routes::tests::repo_overview_branch_ci_dots
+        PASS [   0.002s] (48/54) aspen-forge-web routes::tests::route_response_html_content_type
+        PASS [   0.002s] (49/54) aspen-forge-web routes::tests::route_response_raw_content_type
+        PASS [   0.002s] (50/54) aspen-forge-web routes::tests::stage_timeline_empty_stages_no_render
+        PASS [   0.002s] (51/54) aspen-forge-web routes::tests::stage_timeline_renders_segments
+        PASS [   0.494s] (52/54) aspen-forge-web::patchbay_forge_web_test patchbay_forge_web_all_pages
+        PASS [   0.286s] (53/54) aspen-forge-web::patchbay_forge_web_test patchbay_nostr_auth_and_backward_compat
+        PASS [   0.387s] (54/54) aspen-forge-web::patchbay_forge_web_test patchbay_two_users_distinct_commits
+────────────
+     Summary [   1.293s] 54 tests run: 54 passed, 0 skipped

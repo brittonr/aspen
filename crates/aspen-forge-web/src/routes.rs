@@ -9,6 +9,11 @@ use tracing::warn;
 use crate::state::AppState;
 use crate::templates;
 
+const CI_CONFIG_PATH: &str = ".aspen/ci.ncl";
+const BYTES_PER_KIB: usize = 1024;
+const MAX_CI_CONFIG_VIEW_KIB: usize = 256;
+const MAX_CI_CONFIG_VIEW_BYTES: usize = MAX_CI_CONFIG_VIEW_KIB * BYTES_PER_KIB;
+
 /// Response from a route handler — either an HTML page or raw bytes.
 pub enum RouteResponse {
     /// HTML page (rendered with maud templates).
@@ -253,6 +258,7 @@ async fn dispatch_get(state: &AppState, request: &ParsedRequest<'_>) -> RouteRes
         [repo_id, "patches", id] => patch_detail(state, RepoPatchRoute { repo_id, patch_id: id }).await,
         [repo_id, "ci"] => ci_list_repo(state, repo_id, &request.query).await,
         [repo_id, "ci", run_id] => ci_run_detail(state, RepoRunRoute { repo_id, run_id }).await,
+        [repo_id, "ci", run_id, "config"] => ci_config_view(state, RepoRunRoute { repo_id, run_id }).await,
         [repo_id, "ci", run_id, job_id] => {
             ci_job_logs(
                 state,
@@ -678,6 +684,86 @@ async fn ci_run_detail(st: &AppState, route: RepoRunRoute<'_>) -> RouteResponse 
     }
 }
 
+async fn ci_config_view(st: &AppState, route: RepoRunRoute<'_>) -> RouteResponse {
+    debug_assert!(!route.repo_id.is_empty());
+    debug_assert!(!route.run_id.is_empty());
+
+    let repo = match st.get_repo(route.repo_id).await {
+        Ok(r) => r,
+        Err(e) => return err(e),
+    };
+
+    let run_status = match st.get_run_status(route.run_id).await {
+        Ok(resp) if !resp.was_found => return not_found(&format!("/{}/ci/{}", route.repo_id, route.run_id)),
+        Ok(resp) => resp,
+        Err(e) => return err(e),
+    };
+
+    let Some(commit_hash) = run_status.commit_hash.as_deref() else {
+        return not_found(CI_CONFIG_PATH);
+    };
+
+    let commit = match st.get_commit(commit_hash).await {
+        Ok(commit) => commit,
+        Err(e) => return err(e),
+    };
+
+    let blob_hash = match walk_to_blob(st, TreeLookupPath {
+        root_tree: &commit.tree,
+        path: CI_CONFIG_PATH,
+    })
+    .await
+    {
+        Ok(hash) => hash,
+        Err(error) if is_lookup_not_found(&error) => return not_found(CI_CONFIG_PATH),
+        Err(error) => return err(error),
+    };
+
+    let blob = match st.get_blob(&blob_hash).await {
+        Ok(blob) => blob,
+        Err(e) => return err(e),
+    };
+
+    let Some(data) = blob.content else {
+        return not_found(CI_CONFIG_PATH);
+    };
+    let (source, is_truncated) = ci_config_source(&data);
+    let size_bytes = blob.size.unwrap_or_else(|| usize_to_u64(data.len()));
+
+    ok(templates::ci_config_viewer(&templates::CiConfigViewParams {
+        repo_id: route.repo_id,
+        repo_name: &repo.name,
+        run_id: route.run_id,
+        ref_name: run_status.ref_name.as_deref(),
+        commit_hash: Some(commit_hash),
+        path: CI_CONFIG_PATH,
+        source: &source,
+        size_bytes,
+        is_truncated,
+    }))
+}
+
+fn ci_config_source(data: &[u8]) -> (String, bool) {
+    let is_truncated = data.len() > MAX_CI_CONFIG_VIEW_BYTES;
+    let visible = if is_truncated {
+        &data[..MAX_CI_CONFIG_VIEW_BYTES]
+    } else {
+        data
+    };
+    (String::from_utf8_lossy(visible).into_owned(), is_truncated)
+}
+
+fn is_lookup_not_found(error: &anyhow::Error) -> bool {
+    error.to_string().contains("not found")
+}
+
+fn usize_to_u64(value: usize) -> u64 {
+    match u64::try_from(value) {
+        Ok(converted) => converted,
+        Err(_) => u64::MAX,
+    }
+}
+
 async fn ci_job_logs(st: &AppState, route: RepoRunJobRoute<'_>, query: &HashMap<String, String>) -> RouteResponse {
     debug_assert!(!route.repo_id.is_empty());
     debug_assert!(!route.job_id.is_empty());
@@ -988,6 +1074,20 @@ fn content_type_for_path(path: &str) -> &'static str {
 mod tests {
     use super::*;
 
+    fn test_repo_info() -> aspen_forge_protocol::ForgeRepoInfo {
+        aspen_forge_protocol::ForgeRepoInfo {
+            id: "repo1".into(),
+            name: "my-repo".into(),
+            description: None,
+            default_branch: "main".into(),
+            delegates: vec![],
+            threshold_delegates: 0,
+            created_at_ms: 0,
+            backends: vec![aspen_forge_protocol::ForgeRepoBackend::Git],
+            backend_routes: vec![],
+        }
+    }
+
     #[test]
     fn content_type_source_files() {
         assert_eq!(content_type_for_path("lib.rs"), "text/plain; charset=utf-8");
@@ -1215,6 +1315,8 @@ mod tests {
         let html = templates::pipeline_detail("repo1", "my-repo", &resp).into_string();
         assert!(html.contains("meta http-equiv=\"refresh\""));
         assert!(html.contains("ci-running"));
+        assert!(html.contains("/repo1/ci/run123/config"));
+        assert!(html.contains("View .aspen/ci.ncl"));
     }
 
     #[test]
@@ -1266,6 +1368,43 @@ mod tests {
         assert!(html.contains("compile"));
         assert!(html.contains("45s"));
         assert!(html.contains("logs"));
+        assert!(!html.contains("/repo1/ci/run456/config"));
+    }
+
+    #[test]
+    fn ci_config_viewer_renders_config_with_run_context() {
+        const CONFIG_SIZE_BYTES: u64 = 64;
+
+        let html = templates::ci_config_viewer(&templates::CiConfigViewParams {
+            repo_id: "repo1",
+            repo_name: "my-repo",
+            run_id: "run123",
+            ref_name: Some("main"),
+            commit_hash: Some("deadbeefcafebabe"),
+            path: CI_CONFIG_PATH,
+            source: "jobs = { build.command = \"nix flake check\" }\n# <script>",
+            size_bytes: CONFIG_SIZE_BYTES,
+            is_truncated: false,
+        })
+        .into_string();
+
+        assert!(html.contains("my-repo"));
+        assert!(html.contains("Run: "));
+        assert!(html.contains("run123"));
+        assert!(html.contains("deadbee"));
+        assert!(html.contains(CI_CONFIG_PATH));
+        assert!(html.contains("nix flake check"));
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(html.contains("/repo1/ci/run123"));
+        assert!(!html.contains("<script>"));
+    }
+
+    #[test]
+    fn ci_config_source_truncates_large_files() {
+        let oversized = vec![b'a'; MAX_CI_CONFIG_VIEW_BYTES + 1];
+        let (source, is_truncated) = ci_config_source(&oversized);
+        assert!(is_truncated);
+        assert_eq!(source.len(), MAX_CI_CONFIG_VIEW_BYTES);
     }
 
     #[test]
@@ -1539,15 +1678,7 @@ mod tests {
 
     #[test]
     fn commit_status_badges_render() {
-        let repo = aspen_forge_protocol::ForgeRepoInfo {
-            id: "repo1".into(),
-            name: "my-repo".into(),
-            description: None,
-            default_branch: "main".into(),
-            delegates: vec![],
-            threshold_delegates: 0,
-            created_at_ms: 0,
-        };
+        let repo = test_repo_info();
         let commit = aspen_forge_protocol::ForgeCommitInfo {
             hash: "abcdef1234567890".into(),
             tree: "tree1".into(),
@@ -1585,15 +1716,7 @@ mod tests {
 
     #[test]
     fn commit_no_statuses_no_badges() {
-        let repo = aspen_forge_protocol::ForgeRepoInfo {
-            id: "repo1".into(),
-            name: "my-repo".into(),
-            description: None,
-            default_branch: "main".into(),
-            delegates: vec![],
-            threshold_delegates: 0,
-            created_at_ms: 0,
-        };
+        let repo = test_repo_info();
         let commit = aspen_forge_protocol::ForgeCommitInfo {
             hash: "abcdef1234567890".into(),
             tree: "tree1".into(),
@@ -1775,15 +1898,7 @@ mod tests {
 
     #[test]
     fn repo_overview_branch_ci_dots() {
-        let repo = aspen_forge_protocol::ForgeRepoInfo {
-            id: "repo1".into(),
-            name: "my-repo".into(),
-            description: None,
-            default_branch: "main".into(),
-            delegates: vec![],
-            threshold_delegates: 0,
-            created_at_ms: 0,
-        };
+        let repo = test_repo_info();
         let branches = vec![
             aspen_forge_protocol::ForgeRefInfo {
                 name: "main".into(),

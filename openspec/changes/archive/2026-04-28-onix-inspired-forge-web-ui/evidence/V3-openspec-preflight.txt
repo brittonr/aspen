@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-04-28-onix-inspired-forge-web-ui
+  tasks: 6 total / 6 checked
+  changed files listed: 2
+  verification artifacts: 3

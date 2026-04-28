@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use aspen_testing_core::wait_for_key_present;
 use aspen_testing_patchbay::prelude::*;
 
 #[ctor::ctor]
@@ -15,6 +16,14 @@ fn init_userns() {
     }
 }
 
+const EU_REGION_NODE_COUNT: u32 = 2;
+const US_REGION_NODE_COUNT: u32 = 1;
+const REGION_LINK_LATENCY_MS: u32 = 20;
+const US_REGION_NODE_INDEX: usize = 2;
+const NODE_DATA_IFACE: &str = "eth0";
+const REGION_PARTITION_SETTLE: Duration = Duration::from_secs(5);
+const MINORITY_PARTITION_SETTLE: Duration = Duration::from_secs(10);
+
 // ============================================================================
 // Region partition tests
 // ============================================================================
@@ -23,39 +32,38 @@ fn init_userns() {
 async fn test_region_partition_majority_quorum() {
     skip_unless_patchbay!();
 
-    let harness = PatchbayHarness::two_region(2, 1, 20).await.expect("failed to create two-region topology");
+    let harness = PatchbayHarness::two_region(EU_REGION_NODE_COUNT, US_REGION_NODE_COUNT, REGION_LINK_LATENCY_MS)
+        .await
+        .expect("failed to create two-region topology");
 
     harness.init_cluster().await.expect("cluster init failed");
 
-    // Write a value before partition
     harness.write_kv("pre-partition", "exists").await.expect("pre-partition write failed");
 
-    // Break the inter-region link
-    let eu = harness.region("eu").expect("eu region not found").clone();
-    let us = harness.region("us").expect("us region not found").clone();
-    harness.lab.break_region_link(&eu, &us).expect("failed to break region link");
+    // Isolate the single-node US region. Patchbay's break_region_link reroutes
+    // through an intermediate region, so a two-region quorum test must drop the
+    // US device link directly.
+    harness.devices()[US_REGION_NODE_INDEX]
+        .link_down(NODE_DATA_IFACE)
+        .await
+        .expect("failed to isolate US region node");
 
-    // Allow partition to take effect
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(REGION_PARTITION_SETTLE).await;
 
-    // EU partition (2 nodes) should maintain quorum
-    // The EU nodes are handles[0] and handles[1]
     let eu_leader = harness.handles()[0].get_leader().await;
     match eu_leader {
         Ok(Some(leader)) => {
             assert!(leader.0 > 0, "EU partition should have a leader");
         }
         Ok(None) => {
-            // Partition may need more time
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            tokio::time::sleep(REGION_PARTITION_SETTLE).await;
             let retry = harness.handles()[0].get_leader().await;
             assert!(matches!(retry, Ok(Some(_))), "EU partition should eventually elect a leader");
         }
-        Err(e) => panic!("failed to query EU node: {}", e),
+        Err(error) => panic!("failed to query EU node: {error}"),
     }
 
-    // Restore the link
-    harness.lab.restore_region_link(&eu, &us).expect("failed to restore region link");
+    link_up_after_admin_down(&harness.devices()[US_REGION_NODE_INDEX], NODE_DATA_IFACE).await;
 
     harness.shutdown().await;
 }
@@ -64,33 +72,30 @@ async fn test_region_partition_majority_quorum() {
 async fn test_region_partition_heal_catchup() {
     skip_unless_patchbay!();
 
-    let harness = PatchbayHarness::two_region(2, 1, 20).await.expect("failed to create topology");
+    let harness = PatchbayHarness::two_region(EU_REGION_NODE_COUNT, US_REGION_NODE_COUNT, REGION_LINK_LATENCY_MS)
+        .await
+        .expect("failed to create topology");
 
     harness.init_cluster().await.expect("cluster init failed");
 
-    let eu = harness.region("eu").expect("eu region").clone();
-    let us = harness.region("us").expect("us region").clone();
+    harness.devices()[US_REGION_NODE_INDEX]
+        .link_down(NODE_DATA_IFACE)
+        .await
+        .expect("failed to isolate US region node");
+    tokio::time::sleep(REGION_PARTITION_SETTLE).await;
 
-    // Partition
-    harness.lab.break_region_link(&eu, &us).expect("break link");
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    harness.write_kv("during-partition", "value").await.expect("write during partition failed");
 
-    // Write during partition (EU has quorum)
-    let _ = harness.write_kv("during-partition", "value").await;
+    link_up_after_admin_down(&harness.devices()[US_REGION_NODE_INDEX], NODE_DATA_IFACE).await;
 
-    // Heal
-    harness.lab.restore_region_link(&eu, &us).expect("restore");
-
-    // Wait for US node to catch up
-    tokio::time::sleep(Duration::from_secs(30)).await;
-
-    // US node (index 2) should have the value
-    let val = harness.read_kv(2, "during-partition").await;
-    match val {
-        Ok(Some(v)) => assert_eq!(v, "value", "US node should have caught up"),
-        Ok(None) => eprintln!("US node hasn't caught up yet (may need relay)"),
-        Err(e) => eprintln!("US node read error (may need relay): {}", e),
-    }
+    wait_for_key_present("during-partition", FOLLOWER_CATCHUP_TIMEOUT, || async {
+        match harness.read_kv(US_REGION_NODE_INDEX, "during-partition").await {
+            Ok(Some(value)) => Ok(value == "value"),
+            Ok(None) | Err(_) => Ok(false),
+        }
+    })
+    .await
+    .expect("US region node should catch up after partition heals");
 
     harness.shutdown().await;
 }
@@ -99,20 +104,20 @@ async fn test_region_partition_heal_catchup() {
 async fn test_region_partition_minority_rejects_writes() {
     skip_unless_patchbay!();
 
-    let harness = PatchbayHarness::two_region(2, 1, 20).await.expect("failed to create topology");
+    let harness = PatchbayHarness::two_region(EU_REGION_NODE_COUNT, US_REGION_NODE_COUNT, REGION_LINK_LATENCY_MS)
+        .await
+        .expect("failed to create topology");
 
     harness.init_cluster().await.expect("cluster init failed");
 
-    let eu = harness.region("eu").expect("eu region").clone();
-    let us = harness.region("us").expect("us region").clone();
+    harness.devices()[US_REGION_NODE_INDEX]
+        .link_down(NODE_DATA_IFACE)
+        .await
+        .expect("failed to isolate US region node");
+    tokio::time::sleep(MINORITY_PARTITION_SETTLE).await;
 
-    harness.lab.break_region_link(&eu, &us).expect("break link");
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    let result = harness.handles()[US_REGION_NODE_INDEX].write_kv("isolated-write", "fail").await;
 
-    // The isolated US node (index 2) should reject writes (no quorum)
-    let result = harness.handles()[2].write_kv("isolated-write", "fail").await;
-
-    // Write should fail or timeout — the node can't reach quorum
     match result {
         Err(_) => { /* Expected: write fails without quorum */ }
         Ok(()) => {
@@ -120,13 +125,40 @@ async fn test_region_partition_minority_rejects_writes() {
         }
     }
 
-    harness.lab.restore_region_link(&eu, &us).expect("restore");
+    link_up_after_admin_down(&harness.devices()[US_REGION_NODE_INDEX], NODE_DATA_IFACE).await;
     harness.shutdown().await;
 }
 
 // ============================================================================
 // Latency injection tests
 // ============================================================================
+
+const TOTAL_LEADER_EGRESS_LOSS_PCT: f32 = 100.0;
+const LEADER_FAILOVER_WAIT: Duration = Duration::from_secs(15);
+const PATCHBAY_IPV6_ROUTE_RESTORE_GAP: &str = "No route to host";
+const LINK_UP_ROUTE_RESTORE_ATTEMPTS: u32 = 3;
+const LINK_UP_ROUTE_RESTORE_RETRY_DELAY: Duration = Duration::from_millis(500);
+const FOLLOWER_CATCHUP_TIMEOUT: Duration = Duration::from_secs(60);
+
+async fn link_up_after_admin_down(device: &Device, ifname: &str) {
+    let mut last_route_restore_gap = None;
+
+    for _attempt in 0..LINK_UP_ROUTE_RESTORE_ATTEMPTS {
+        match device.link_up(ifname).await {
+            Ok(()) => return,
+            Err(error) => {
+                let message = error.to_string();
+                assert!(message.contains(PATCHBAY_IPV6_ROUTE_RESTORE_GAP), "link_up failed unexpectedly: {message}");
+                last_route_restore_gap = Some(message);
+                tokio::time::sleep(LINK_UP_ROUTE_RESTORE_RETRY_DELAY).await;
+            }
+        }
+    }
+
+    if let Some(message) = last_route_restore_gap {
+        eprintln!("patchbay link_up route restore warning after retries: {message}");
+    }
+}
 
 #[tokio::test]
 async fn test_latency_200ms_no_false_election() {
@@ -173,7 +205,7 @@ async fn test_latency_200ms_no_false_election() {
 }
 
 #[tokio::test]
-async fn test_latency_exceeds_election_timeout() {
+async fn test_leader_egress_loss_triggers_new_election() {
     skip_unless_patchbay!();
 
     let harness = PatchbayHarness::three_node_public().await.expect("failed to create topology");
@@ -183,22 +215,22 @@ async fn test_latency_exceeds_election_timeout() {
     let original_leader = harness.check_leader().await.expect("no leader");
     let leader_idx = harness.handles().iter().position(|h| h.node_id == original_leader).expect("leader not found");
 
-    // Inject 5000ms latency only on the leader's link
+    // Pure latency does not imply isolation: once delayed heartbeats pipeline,
+    // followers can keep observing the original leader. Drop all leader egress
+    // packets to exercise the failover path while leaving the interface up.
     harness.devices()[leader_idx]
         .set_link_condition(
             "eth0",
             Some(LinkCondition::Manual(LinkLimits {
-                latency_ms: 5000,
+                loss_pct: TOTAL_LEADER_EGRESS_LOSS_PCT,
                 ..Default::default()
             })),
         )
         .await
-        .expect("failed to set latency on leader");
+        .expect("failed to drop leader egress");
 
-    // Wait for followers to time out and elect a new leader
-    tokio::time::sleep(Duration::from_secs(15)).await;
+    tokio::time::sleep(LEADER_FAILOVER_WAIT).await;
 
-    // At least one follower should have a different leader
     let mut new_leader_found = false;
     for handle in harness.handles() {
         if handle.node_id == original_leader {
@@ -212,7 +244,7 @@ async fn test_latency_exceeds_election_timeout() {
         }
     }
 
-    assert!(new_leader_found, "a new leader should be elected when leader has 5s latency");
+    assert!(new_leader_found, "followers should elect a new leader when leader egress is dropped");
 
     harness.shutdown().await;
 }
@@ -367,14 +399,19 @@ async fn test_link_up_follower_catchup() {
     // Write while follower is down
     harness.write_kv("missed-write", "catchup-value").await.expect("write during link down failed");
 
-    // Link up
-    harness.devices()[follower_idx].link_up("eth0").await.expect("link_up failed");
+    // Link up. Patchbay may report an IPv6 default-route restore warning after
+    // the interface is already administratively up; catchup below proves the
+    // data path recovered.
+    link_up_after_admin_down(&harness.devices()[follower_idx], "eth0").await;
 
-    // Wait for catchup
-    tokio::time::sleep(Duration::from_secs(15)).await;
-
-    let val = harness.read_kv(follower_idx, "missed-write").await.expect("read failed");
-    assert_eq!(val, Some("catchup-value".to_string()), "follower should catch up after link restored");
+    wait_for_key_present("missed-write", FOLLOWER_CATCHUP_TIMEOUT, || async {
+        match harness.read_kv(follower_idx, "missed-write").await {
+            Ok(Some(value)) => Ok(value == "catchup-value"),
+            Ok(None) | Err(_) => Ok(false),
+        }
+    })
+    .await
+    .expect("follower should catch up after link restored");
 
     harness.shutdown().await;
 }

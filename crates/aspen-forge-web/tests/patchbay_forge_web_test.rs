@@ -24,6 +24,7 @@ use aspen_forge_web::routes;
 use aspen_forge_web::state::AppState;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_handlers::ClientProtocolHandler;
+use aspen_rpc_handlers::NativeHandlerPlan;
 use aspen_testing_core::DeterministicKeyValueStore;
 use aspen_testing_patchbay::skip_unless_patchbay;
 use aspen_transport::CLIENT_ALPN;
@@ -80,7 +81,7 @@ async fn patchbay_forge_web_all_pages() {
             });
 
             let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
-            let mut plan = aspen::NativeHandlerPlan::core_only();
+            let mut plan = NativeHandlerPlan::core_only();
             plan.set_forge_enabled(true);
             let handler = ClientProtocolHandler::new(ctx, plan).expect("client handler should build");
 
@@ -325,7 +326,7 @@ async fn patchbay_nostr_auth_and_backward_compat() {
                 addr: ep.addr(),
             });
             let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
-            let mut plan = aspen::NativeHandlerPlan::core_only();
+            let mut plan = NativeHandlerPlan::core_only();
             plan.set_forge_enabled(true);
             let handler = ClientProtocolHandler::new(ctx, plan).expect("client handler should build");
             let _router = iroh::protocol::Router::builder(ep.clone())
@@ -472,7 +473,7 @@ async fn patchbay_two_users_distinct_commits() {
                 addr: ep.addr(),
             });
             let ctx = build_test_context(1, kv.clone(), endpoint_provider, Some(forge_node.clone()));
-            let mut plan = aspen::NativeHandlerPlan::core_only();
+            let mut plan = NativeHandlerPlan::core_only();
             plan.set_forge_enabled(true);
             let handler = ClientProtocolHandler::new(ctx, plan).expect("client handler should build");
             let _router = iroh::protocol::Router::builder(ep.clone())

@@ -142,3 +142,7 @@ madsim for deterministic simulation, proptest/Bolero for property-based testing 
 ## License
 
 Aspen: AGPL-3.0-or-later. Vendored OpenRaft: MIT OR Apache-2.0.
+
+## References
+
+- `../onix-site/` — UI design reference for Forge web. Use `design-system/colors_and_type.css` for theme/type tokens and `ui_kits/site/` for promoted Onix Computer layout, header/footer, card, chrome, and code-surface patterns.
