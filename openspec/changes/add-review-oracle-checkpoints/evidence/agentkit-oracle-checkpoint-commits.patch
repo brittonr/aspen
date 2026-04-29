@@ -243,3 +243,107 @@
 | 	} finally {
 | 		await cleanup();
 | 	}
+|
+|commit 4acbad6c4aa79c68482bd7912bec2f0d4c79c0dd
+|Author:     brittonr <b@robitzs.ch>
+|AuthorDate: Wed Apr 29 10:08:22 2026 -0400
+|Commit:     brittonr <b@robitzs.ch>
+|CommitDate: Wed Apr 29 10:08:22 2026 -0400
+|
+|    test oracle checkpoint fixtures
+|---
+| _global/extensions/lib/review-metrics.ts | 16 +++++++++++++
+| tools/test-review-parsing.mjs            | 39 ++++++++++++++++++++++++++++++++
+| 2 files changed, 55 insertions(+)
+|
+|diff --git a/_global/extensions/lib/review-metrics.ts b/_global/extensions/lib/review-metrics.ts
+|index e7e95a6..9b9c6a1 100644
+|--- a/_global/extensions/lib/review-metrics.ts
+|+++ b/_global/extensions/lib/review-metrics.ts
+|@@ -115,6 +115,18 @@ function mergeCounts(target: Record<string, number>, source: Record<string, numb
+| const ORACLE_CHECKPOINT_ROUTE_TAGS = new Set(["human"]);
+| const ORACLE_CHECKPOINT_CLASS_TAGS = new Set(["preference"]);
+| const ORACLE_CHECKPOINT_TEXT_RE = /\b(?:ambiguous|ambiguity|checkpoint|human|oracle)\b/i;
+|+const ORACLE_CHECKPOINT_FIELD_PATTERNS = [
+|+	/^##\s+Question\s*$/im,
+|+	/^\s*-\s*Unresolved question:\s*\S/im,
+|+	/^##\s+Evidence Inspected\s*$/im,
+|+	/^\s*-\s*`[^`]+`:\s*\S/im,
+|+	/^##\s+Decision\s*$/im,
+|+	/^\s*-\s*Outcome:\s*\S/im,
+|+	/^##\s+Owner\s*$/im,
+|+	/^\s*-\s*Decision owner:\s*\S/im,
+|+	/^##\s+Next Action\s*$/im,
+|+	/^\s*-\s*Action:\s*\S/im,
+|+];
+| const PROMOTION_HINT_LIMIT = 3;
+|
+| function average(values: number[]): number | undefined {
+|@@ -128,6 +140,10 @@ export function findingNeedsOracleCheckpoint(finding: Pick<ReviewFindingTag, "cl
+| 		|| ORACLE_CHECKPOINT_TEXT_RE.test(finding.text ?? "");
+| }
+|
+|+export function hasCompleteOracleCheckpoint(markdown: string): boolean {
+|+	return ORACLE_CHECKPOINT_FIELD_PATTERNS.every((pattern) => pattern.test(markdown));
+|+}
+|+
+| function candidateNeedsOracleCheckpoint(candidate: Pick<PromotionCandidate, "classTag" | "routeTag" | "task" | "examples">): boolean {
+| 	return findingNeedsOracleCheckpoint({
+| 		classTag: candidate.classTag,
+|diff --git a/tools/test-review-parsing.mjs b/tools/test-review-parsing.mjs
+|index 7517523..43c947f 100755
+|--- a/tools/test-review-parsing.mjs
+|+++ b/tools/test-review-parsing.mjs
+|@@ -115,6 +115,43 @@ function reviewRecord(routeTag, text, tsSuffix) {
+| 	};
+| }
+|
+|+function completeOracleCheckpointFixture() {
+|+	return [
+|+		"# Oracle Checkpoint",
+|+		"",
+|+		"## Question",
+|+		"- Unresolved question: Can the reviewer verify the archived evidence path rewrite?",
+|+		"- Why deterministic evidence is insufficient: Historical gate output omitted verification.md.",
+|+		"",
+|+		"## Evidence Inspected",
+|+		"- `openspec/changes/example/verification.md`: task evidence exists but reviewer packet was incomplete",
+|+		"",
+|+		"## Decision",
+|+		"- Outcome: blocked",
+|+		"- Rationale: rerun preflight after staging before completion claim",
+|+		"",
+|+		"## Owner",
+|+		"- Decision owner: maintainer",
+|+		"- Follow-up owner: agent",
+|+		"",
+|+		"## Next Action",
+|+		"- Action: save staged preflight transcript",
+|+		"- Required before completion claim: yes",
+|+	].join("\n");
+|+}
+|+
+|+function incompleteOracleCheckpointFixture() {
+|+	return [
+|+		"# Oracle Checkpoint",
+|+		"",
+|+		"## Question",
+|+		"- Unresolved question: Can the reviewer verify the archived evidence path rewrite?",
+|+		"",
+|+		"## Decision",
+|+		"- Outcome: blocked",
+|+	].join("\n");
+|+}
+|+
+| function lowVerbosityReviewReport() {
+| 	return [
+| 		"VERDICT: FAIL",
+|@@ -189,6 +226,8 @@ async function main() {
+| 		assert.equal(metrics.findingNeedsOracleCheckpoint({ routeTag: ORACLE_ROUTE }), true);
+| 		assert.equal(metrics.findingNeedsOracleCheckpoint({ routeTag: DETERMINISTIC_ROUTE }), false);
+| 		assert.equal(metrics.findingNeedsOracleCheckpoint({ text: "ambiguous evidence needs oracle" }), true);
+|+		assert.equal(metrics.hasCompleteOracleCheckpoint(completeOracleCheckpointFixture()), true);
+|+		assert.equal(metrics.hasCompleteOracleCheckpoint(incompleteOracleCheckpointFixture()), false);
+|
+| 		const currentFindings = [{ classTag: "omission", scopeTag: "review", routeTag: ORACLE_ROUTE, promotedTag: "no", text: "ambiguous completion" }];
+| 		const records = [

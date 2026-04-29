@@ -20,6 +20,8 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
   - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
 - [x] I5 Add review-metrics promotion handling so repeated human-route findings can trigger checkpoint requirements. [covers=openspec-governance.review-oracle-checkpoints.missing-checkpoint-flagged,openspec-governance.review-oracle-checkpoints.records-ambiguity] ✅ 1m (started: 2026-04-29T14:07:07Z → completed: 2026-04-29T14:07:15Z)
   - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
+- [x] V1 Add done-review and OpenSpec gate fixtures for positive checkpoint, negative missing-checkpoint, review-metrics-triggered checkpoint, and concrete-blocker accepted paths. [covers=openspec-governance.review-oracle-checkpoints] ✅ 1m (started: 2026-04-29T14:08:30Z → completed: 2026-04-29T14:08:43Z)
+  - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`
 
 ## Review Scope Snapshot
 
@@ -40,7 +42,7 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 - Status: pass
 - Artifact: `openspec/changes/add-review-oracle-checkpoints/evidence/openspec-preflight-i1.txt`
 
-### `git -C ../agentkit show --stat --patch 7b03596 7966c67 074131f`
+### `git -C ../agentkit show --stat --patch 7b03596 7966c67 074131f 4acbad6`
 
 - Status: captured
 - Artifact: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`
