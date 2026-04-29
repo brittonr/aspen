@@ -1,0 +1,2 @@
+$ openspec validate remove-blob-replication-core-dependency --type change --strict --no-interactive
+Change 'remove-blob-replication-core-dependency' is valid
