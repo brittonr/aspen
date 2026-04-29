@@ -6,7 +6,7 @@ VERDICT: FAIL
 
 ## Findings
 - [blocker] [class=incoherent] [scope=tasks] [route=deterministic-check] [promoted=yes] Tasks are checked complete before the required verification discipline task is done.
-  - Evidence: `openspec/changes/decompose-next-five-crate-families/tasks.md` has 23 checked tasks; `V5` remains unchecked and says “Before checking any task complete, create `openspec/changes/decompose-next-five-crate-families/verification.md`… link every checked task verbatim with repo-relative evidence paths… run `scripts/openspec-preflight.sh decompose-next-five-crate-families` plus the relevant OpenSpec stage gate transcript.”
+  - Evidence: `openspec/changes/archive/2026-04-29-decompose-next-five-crate-families/tasks.md` has 23 checked tasks; `V5` remains unchecked and says “Before checking any task complete, create `openspec/changes/archive/2026-04-29-decompose-next-five-crate-families/verification.md`… link every checked task verbatim with repo-relative evidence paths… run `scripts/openspec-preflight.sh decompose-next-five-crate-families` plus the relevant OpenSpec stage gate transcript.”
 
 - [blocker] [class=omission] [scope=tasks] [route=human] [promoted=yes] Deferred checked tasks lack supplied evidence that the scoped implementation sub-change exists and owns the deferred verification.
   - Evidence: `tasks.md` marks `I3`, `I4`–`I17`, and `V1`–`V4` as `[x] Deferred to openspec change: decompose-next-five-crate-families-implementation`; supplied artifacts do not include that sub-change path or its tasks/spec linkage.
