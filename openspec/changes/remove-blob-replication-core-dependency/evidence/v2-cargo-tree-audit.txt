@@ -1,0 +1,16 @@
+# V2 cargo tree boundary audit
+
+## Command: cargo tree -p aspen-blob --features replication -e normal
+
+## aspen-core search
+PASS: root aspen-core package is absent from replication tree.
+
+## aspen-client-api search
+├── aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+PASS: aspen-client-api remains present for replication RPC schemas.
+
+## leaf KV package search
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+PASS: leaf KV packages are present.

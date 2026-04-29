@@ -7,8 +7,8 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - Changed file: `openspec/changes/remove-blob-replication-core-dependency/tasks.md`
 - Changed file: `openspec/changes/remove-blob-replication-core-dependency/verification.md`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-cargo-check-replication.txt`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-kv-metadata-tests.txt`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-replication.txt`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-audit.txt`
 
 ## Task Coverage
 
@@ -22,10 +22,12 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
   - Evidence: `docs/crate-extraction/blob-castore-cache.md`, `docs/crate-extraction/policy.ncl`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-doc-policy-audit.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-doc-policy-diff.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-policy-export.json`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-policy-export.stderr`
 - [x] V1 Run `cargo check -p aspen-blob --features replication` plus focused replica metadata adapter tests, including positive get/save/delete/scan behavior and negative missing or malformed metadata behavior; save transcripts under `openspec/changes/remove-blob-replication-core-dependency/evidence/`. ✅ 1m (started: 2026-04-29T03:57:45Z → completed: 2026-04-29T03:58:33Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replica-metadata-behavior-preserved]
   - Evidence: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-cargo-check-replication.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-kv-metadata-tests.txt`
+- [x] V2 Run `cargo tree -p aspen-blob --features replication -e normal` with a deterministic audit proving root `aspen-core` is absent while `aspen-client-api` remains feature-gated for replication RPC; save the tree and audit under `openspec/changes/remove-blob-replication-core-dependency/evidence/`. ✅ 1m (started: 2026-04-29T03:59:10Z → completed: 2026-04-29T03:59:36Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replication-adapter-compiles-without-root-core,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.runtime-wire-schemas-remain-separately-gated]
+  - Evidence: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-replication.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-audit.txt`
 
 ## Review Scope Snapshot
 
-No source diff for V1; command transcripts prove the post-change check and adapter tests.
+No source diff for V2; cargo tree and deterministic audit transcripts prove the dependency boundary.
 
 ## Verification Commands
 
@@ -88,6 +90,16 @@ No source diff for V1; command transcripts prove the post-change check and adapt
 
 - Status: pass
 - Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-kv-metadata-tests.txt`
+
+### `cargo tree -p aspen-blob --features replication -e normal`
+
+- Status: pass
+- Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-replication.txt`
+
+### deterministic V2 cargo tree audit
+
+- Status: pass
+- Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-audit.txt`
 
 ## Notes
 
