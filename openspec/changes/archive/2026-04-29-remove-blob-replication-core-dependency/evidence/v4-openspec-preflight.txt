@@ -1,4 +1,4 @@
-OK: openspec/changes/remove-blob-replication-core-dependency
+OK: openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency
   tasks: 8 total / 8 checked
   changed files listed: 5
   verification artifacts: 18

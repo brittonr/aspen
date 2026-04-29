@@ -242,10 +242,10 @@ index 7bf681be6..9c28c100b 100644
      #[tokio::test]
      async fn test_kv_metadata_store_scan_by_status() {
          let kv = Arc::new(MockKvStore::default());
-diff --git a/openspec/changes/remove-blob-replication-core-dependency/tasks.md b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+diff --git a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 index 9768d80af..e958db990 100644
---- a/openspec/changes/remove-blob-replication-core-dependency/tasks.md
-+++ b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+--- a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
++++ b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 @@ -5,7 +5,7 @@
  ## 1. Implementation
  

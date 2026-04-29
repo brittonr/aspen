@@ -1,0 +1,1 @@
+OK: no checked tasks in openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md

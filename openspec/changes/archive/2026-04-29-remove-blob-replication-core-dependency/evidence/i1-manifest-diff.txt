@@ -16,10 +16,10 @@ index deb592f67..db5c2bb4b 100644
  # Narrow KV types and trait
  aspen-traits = { path = "../aspen-traits" }
  aspen-kv-types = { path = "../aspen-kv-types" }
-diff --git a/openspec/changes/remove-blob-replication-core-dependency/tasks.md b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+diff --git a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 index 6e8582551..38243114b 100644
---- a/openspec/changes/remove-blob-replication-core-dependency/tasks.md
-+++ b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+--- a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
++++ b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 @@ -4,7 +4,7 @@
  
  ## 1. Implementation

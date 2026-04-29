@@ -97,10 +97,10 @@ index e9c4249f9..a60378022 100644
        ],
      },
  
-diff --git a/openspec/changes/remove-blob-replication-core-dependency/tasks.md b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+diff --git a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 index 83f8d7024..856606c2c 100644
---- a/openspec/changes/remove-blob-replication-core-dependency/tasks.md
-+++ b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+--- a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
++++ b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 @@ -6,7 +6,7 @@
  
  - [x] I1 Remove optional `aspen-core` dependency and `replication` feature edge from `crates/aspen-blob/Cargo.toml`, keeping `aspen-client-api` behind `replication`. ✅ 1m (started: 2026-04-29T03:49:35Z → completed: 2026-04-29T03:50:10Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replication-adapter-compiles-without-root-core,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.runtime-wire-schemas-remain-separately-gated]

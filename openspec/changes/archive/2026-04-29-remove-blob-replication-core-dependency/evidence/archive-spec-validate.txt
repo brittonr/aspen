@@ -1,0 +1,2 @@
+Specification 'architecture-modularity' is valid
+Specification 'blob-castore-cache-extraction' is valid
