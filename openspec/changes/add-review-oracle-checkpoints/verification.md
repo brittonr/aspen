@@ -18,6 +18,8 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
   - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
 - [x] I4 Teach OpenSpec gate and review guidance/checker to accept concrete blocker reports that stop without claiming completion. [covers=openspec-governance.review-oracle-checkpoints.concrete-blocker-acceptable] ✅ 1m (started: 2026-04-29T14:06:25Z → completed: 2026-04-29T14:06:31Z)
   - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
+- [x] I5 Add review-metrics promotion handling so repeated human-route findings can trigger checkpoint requirements. [covers=openspec-governance.review-oracle-checkpoints.missing-checkpoint-flagged,openspec-governance.review-oracle-checkpoints.records-ambiguity] ✅ 1m (started: 2026-04-29T14:07:07Z → completed: 2026-04-29T14:07:15Z)
+  - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
 
 ## Review Scope Snapshot
 
