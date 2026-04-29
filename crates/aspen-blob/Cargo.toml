@@ -7,12 +7,9 @@ description = "Content-addressed blob storage for Aspen using iroh-blobs"
 
 [features]
 default = []
-replication = ["dep:aspen-client-api", "dep:aspen-core"]
+replication = ["dep:aspen-client-api"]
 
 [dependencies]
-# Core types and traits (only needed by replication adapters)
-aspen-core = { path = "../aspen-core", optional = true }
-
 # Narrow KV types and trait
 aspen-traits = { path = "../aspen-traits" }
 aspen-kv-types = { path = "../aspen-kv-types" }

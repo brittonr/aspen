@@ -774,7 +774,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-client-api",
- "aspen-core",
  "aspen-kv-types",
  "aspen-traits",
  "async-trait",

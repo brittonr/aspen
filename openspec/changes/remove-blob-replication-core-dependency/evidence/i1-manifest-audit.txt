@@ -1,0 +1,10 @@
+# I1 manifest feature audit
+
+## Command: rg -n "replication|aspen-core|aspen-client-api" crates/aspen-blob/Cargo.toml
+
+10:replication = ["dep:aspen-client-api"]
+17:# Client API types (for replication RPC)
+18:aspen-client-api = { path = "../aspen-client-api", optional = true }
+
+## Assertions
+PASS: aspen-core dependency and feature edge removed; aspen-client-api remains replication-gated.
