@@ -1,0 +1,224 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
+     |
+4299 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
+     |
+4306 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
+     |
+4313 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
+     |
+4320 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
+     |
+4327 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
+     |
+4334 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
+     |
+4341 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
+     |
+4348 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
+     |
+4388 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
+     |
+4395 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+warning: unused variable: `tx`
+   --> crates/aspen-blob/src/replication/topology_watcher.rs:196:14
+    |
+196 |         let (tx, rx) = watch::channel(TestMetrics { nodes: vec![] });
+    |              ^^ help: if this is intentional, prefix it with an underscore: `_tx`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `rx`
+   --> crates/aspen-blob/src/replication/topology_watcher.rs:196:18
+    |
+196 |         let (tx, rx) = watch::channel(TestMetrics { nodes: vec![] });
+    |                  ^^ help: if this is intentional, prefix it with an underscore: `_rx`
+
+warning: unused variable: `extractor`
+   --> crates/aspen-blob/src/replication/topology_watcher.rs:198:13
+    |
+198 |         let extractor: NodeInfoExtractor<TestMetrics> =
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_extractor`
+
+warning: struct `ReadWriteOnlyBlob` is never constructed
+   --> crates/aspen-blob/src/kv_integration.rs:349:12
+    |
+349 |     struct ReadWriteOnlyBlob(InMemoryBlobStore);
+    |            ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `FailingProtectBlob` is never constructed
+   --> crates/aspen-blob/src/kv_integration.rs:465:12
+    |
+465 |     struct FailingProtectBlob(InMemoryBlobStore);
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: `aspen-blob` (lib test) generated 5 warnings (run `cargo fix --lib -p aspen-blob --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.39s
+     Running unittests src/lib.rs (target/debug/deps/aspen_blob-dbb08e3ff30576f0)
+
+running 4 tests
+test replication::adapters::tests::test_kv_metadata_store_missing_returns_none ... ok
+test replication::adapters::tests::test_kv_metadata_store_malformed_metadata_returns_error ... ok
+test replication::adapters::tests::test_kv_metadata_store_roundtrip ... ok
+test replication::adapters::tests::test_kv_metadata_store_scan_by_status ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 69 filtered out; finished in 0.00s
+

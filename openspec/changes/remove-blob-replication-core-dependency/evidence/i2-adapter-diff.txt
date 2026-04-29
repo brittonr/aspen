@@ -1,0 +1,257 @@
+diff --git a/crates/aspen-blob/src/replication/adapters.rs b/crates/aspen-blob/src/replication/adapters.rs
+index 7bf681be6..9c28c100b 100644
+--- a/crates/aspen-blob/src/replication/adapters.rs
++++ b/crates/aspen-blob/src/replication/adapters.rs
+@@ -43,6 +43,12 @@ use std::time::Instant;
+ 
+ use anyhow::Context;
+ use anyhow::Result;
++use aspen_kv_types::DeleteRequest;
++use aspen_kv_types::ReadRequest;
++use aspen_kv_types::ScanRequest;
++use aspen_kv_types::WriteCommand;
++use aspen_kv_types::WriteRequest;
++use aspen_traits::KeyValueStore;
+ use async_trait::async_trait;
+ use iroh::Endpoint;
+ use iroh::EndpointAddr;
+@@ -67,6 +73,9 @@ use crate::traits::BlobRead;
+ // KV-backed Replica Metadata Store
+ // ============================================================================
+ 
++/// Scan extra rows so status filtering can still return a full repair batch.
++const REPLICA_STATUS_SCAN_OVERSAMPLE: u32 = 10;
++
+ /// Adapter that implements `ReplicaMetadataStore` using Aspen's KeyValueStore.
+ ///
+ /// Stores replica metadata in the Raft-backed KV store under the
+@@ -85,16 +94,12 @@ impl<KV> KvReplicaMetadataStore<KV> {
+ 
+ #[async_trait]
+ impl<KV> ReplicaMetadataStore for KvReplicaMetadataStore<KV>
+-where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
++where KV: KeyValueStore + Send + Sync + 'static
+ {
+     async fn get_replica_set(&self, hash: &Hash) -> Result<Option<ReplicaSet>> {
+         let key = format!("{}{}", REPLICA_KEY_PREFIX, hash.to_hex());
+ 
+-        let result = self
+-            .kv_store
+-            .read(aspen_core::kv::ReadRequest::new(&key))
+-            .await
+-            .context("failed to read replica set from KV")?;
++        let result = self.kv_store.read(ReadRequest::new(&key)).await.context("failed to read replica set from KV")?;
+ 
+         match result.kv {
+             Some(kv) => {
+@@ -110,8 +115,8 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
+         let value = replicas.to_json().context("failed to serialize replica set")?;
+ 
+         self.kv_store
+-            .write(aspen_core::kv::WriteRequest {
+-                command: aspen_core::kv::WriteCommand::Set { key, value },
++            .write(WriteRequest {
++                command: WriteCommand::Set { key, value },
+             })
+             .await
+             .context("failed to write replica set to KV")?;
+@@ -123,10 +128,7 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
+     async fn delete_replica_set(&self, hash: &Hash) -> Result<()> {
+         let key = format!("{}{}", REPLICA_KEY_PREFIX, hash.to_hex());
+ 
+-        self.kv_store
+-            .delete(aspen_core::kv::DeleteRequest { key })
+-            .await
+-            .context("failed to delete replica set from KV")?;
++        self.kv_store.delete(DeleteRequest { key }).await.context("failed to delete replica set from KV")?;
+ 
+         debug!(hash = %hash.to_hex(), "replica set deleted");
+         Ok(())
+@@ -136,9 +138,9 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
+         // Scan all replica metadata with the system prefix
+         let scan_result = self
+             .kv_store
+-            .scan(aspen_core::kv::ScanRequest {
++            .scan(ScanRequest {
+                 prefix: REPLICA_KEY_PREFIX.to_string(),
+-                limit_results: Some(MAX_REPAIR_BATCH_SIZE * 10), // Scan extra to find enough matching status
++                limit_results: Some(MAX_REPAIR_BATCH_SIZE * REPLICA_STATUS_SCAN_OVERSAMPLE),
+                 continuation_token: None,
+             })
+             .await
+@@ -376,6 +378,17 @@ mod tests {
+     use std::sync::atomic::AtomicU64;
+     use std::sync::atomic::Ordering;
+ 
++    use aspen_kv_types::DeleteResult;
++    use aspen_kv_types::KeyValueStoreError;
++    use aspen_kv_types::KeyValueWithRevision;
++    use aspen_kv_types::ReadResult;
++    use aspen_kv_types::ScanResult;
++    use aspen_kv_types::WriteResult;
++    use aspen_traits::KvDelete;
++    use aspen_traits::KvRead;
++    use aspen_traits::KvScan;
++    use aspen_traits::KvWrite;
++
+     use super::*;
+     use crate::replication::ReplicationPolicy;
+ 
+@@ -386,67 +399,71 @@ mod tests {
+         revision: AtomicU64,
+     }
+ 
++    const DEFAULT_SCAN_LIMIT: usize = 100;
++    const INITIAL_REVISION: u64 = 1;
++    const IROH_HASH_SIZE_BYTES: usize = 32;
++    const MISSING_HASH_BYTE: u8 = 0x99;
++    const MALFORMED_HASH_BYTE: u8 = 0x55;
++
+     #[async_trait]
+-    impl aspen_core::traits::KeyValueStore for MockKvStore {
+-        async fn write(
+-            &self,
+-            request: aspen_core::kv::WriteRequest,
+-        ) -> Result<aspen_core::kv::WriteResult, aspen_core::error::KeyValueStoreError> {
++    impl KvWrite for MockKvStore {
++        async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
+             match request.command {
+-                aspen_core::kv::WriteCommand::Set { key, value } => {
++                WriteCommand::Set { key, value } => {
+                     self.data.write().unwrap().insert(key, value);
+-                    self.revision.fetch_add(1, Ordering::SeqCst);
+-                    Ok(aspen_core::kv::WriteResult::default())
++                    self.revision.fetch_add(INITIAL_REVISION, Ordering::SeqCst);
++                    Ok(WriteResult::default())
+                 }
+-                _ => Ok(aspen_core::kv::WriteResult::default()),
++                _ => Ok(WriteResult::default()),
+             }
+         }
++    }
+ 
+-        async fn read(
+-            &self,
+-            request: aspen_core::kv::ReadRequest,
+-        ) -> Result<aspen_core::kv::ReadResult, aspen_core::error::KeyValueStoreError> {
++    #[async_trait]
++    impl KvRead for MockKvStore {
++        async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
+             let data = self.data.read().unwrap();
+-            let kv = data.get(&request.key).map(|v| aspen_core::kv::KeyValueWithRevision {
++            let kv = data.get(&request.key).map(|v| KeyValueWithRevision {
+                 key: request.key.clone(),
+                 value: v.clone(),
+-                version: 1,
+-                create_revision: 1,
++                version: INITIAL_REVISION,
++                create_revision: INITIAL_REVISION,
+                 mod_revision: self.revision.load(Ordering::SeqCst),
+             });
+-            Ok(aspen_core::kv::ReadResult { kv })
++            Ok(ReadResult { kv })
+         }
++    }
+ 
+-        async fn delete(
+-            &self,
+-            request: aspen_core::kv::DeleteRequest,
+-        ) -> Result<aspen_core::kv::DeleteResult, aspen_core::error::KeyValueStoreError> {
++    #[async_trait]
++    impl KvDelete for MockKvStore {
++        async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
+             let is_deleted = self.data.write().unwrap().remove(&request.key).is_some();
+-            Ok(aspen_core::kv::DeleteResult {
++            Ok(DeleteResult {
+                 key: request.key,
+                 is_deleted,
+             })
+         }
++    }
+ 
+-        async fn scan(
+-            &self,
+-            request: aspen_core::kv::ScanRequest,
+-        ) -> Result<aspen_core::kv::ScanResult, aspen_core::error::KeyValueStoreError> {
++    #[async_trait]
++    impl KvScan for MockKvStore {
++        async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
++            let limit_results = request.limit_results.map_or(DEFAULT_SCAN_LIMIT, |limit| limit as usize);
+             let data = self.data.read().unwrap();
+             let entries: Vec<_> = data
+                 .iter()
+                 .filter(|(k, _)| k.starts_with(&request.prefix))
+-                .take(request.limit_results.unwrap_or(100) as usize)
+-                .map(|(k, v)| aspen_core::kv::KeyValueWithRevision {
++                .take(limit_results)
++                .map(|(k, v)| KeyValueWithRevision {
+                     key: k.clone(),
+                     value: v.clone(),
+-                    version: 1,
+-                    create_revision: 1,
+-                    mod_revision: 1,
++                    version: INITIAL_REVISION,
++                    create_revision: INITIAL_REVISION,
++                    mod_revision: INITIAL_REVISION,
+                 })
+                 .collect();
+             let result_count = entries.len() as u32;
+-            Ok(aspen_core::kv::ScanResult {
++            Ok(ScanResult {
+                 entries,
+                 result_count,
+                 is_truncated: false,
+@@ -455,6 +472,8 @@ mod tests {
+         }
+     }
+ 
++    impl KeyValueStore for MockKvStore {}
++
+     #[tokio::test]
+     async fn test_kv_metadata_store_roundtrip() {
+         let kv = Arc::new(MockKvStore::default());
+@@ -481,6 +500,31 @@ mod tests {
+         assert!(deleted.is_none());
+     }
+ 
++    #[tokio::test]
++    async fn test_kv_metadata_store_missing_returns_none() {
++        let kv = Arc::new(MockKvStore::default());
++        let store = KvReplicaMetadataStore::new(kv);
++
++        let hash = Hash::from_bytes([MISSING_HASH_BYTE; IROH_HASH_SIZE_BYTES]);
++        let loaded = store.get_replica_set(&hash).await.unwrap();
++
++        assert!(loaded.is_none());
++    }
++
++    #[tokio::test]
++    async fn test_kv_metadata_store_malformed_metadata_returns_error() {
++        let kv = Arc::new(MockKvStore::default());
++        let store = KvReplicaMetadataStore::new(kv.clone());
++
++        let hash = Hash::from_bytes([MALFORMED_HASH_BYTE; IROH_HASH_SIZE_BYTES]);
++        let key = format!("{}{}", REPLICA_KEY_PREFIX, hash.to_hex());
++        kv.data.write().unwrap().insert(key, "not-json".to_string());
++
++        let err = store.get_replica_set(&hash).await.expect_err("malformed metadata must fail");
++
++        assert!(err.to_string().contains("failed to deserialize replica set"));
++    }
++
+     #[tokio::test]
+     async fn test_kv_metadata_store_scan_by_status() {
+         let kv = Arc::new(MockKvStore::default());
+diff --git a/openspec/changes/remove-blob-replication-core-dependency/tasks.md b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+index 9768d80af..e958db990 100644
+--- a/openspec/changes/remove-blob-replication-core-dependency/tasks.md
++++ b/openspec/changes/remove-blob-replication-core-dependency/tasks.md
+@@ -5,7 +5,7 @@
+ ## 1. Implementation
+ 
+ - [x] I1 Remove optional `aspen-core` dependency and `replication` feature edge from `crates/aspen-blob/Cargo.toml`, keeping `aspen-client-api` behind `replication`. ✅ 1m (started: 2026-04-29T03:49:35Z → completed: 2026-04-29T03:50:10Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replication-adapter-compiles-without-root-core,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.runtime-wire-schemas-remain-separately-gated]
+-- [ ] I2 Migrate `KvReplicaMetadataStore` and its tests from `aspen_core::traits`, `aspen_core::kv`, and `aspen_core::error` to `aspen-traits` and `aspen-kv-types`, preserving get/save/delete/scan behavior and error context. [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replica-metadata-behavior-preserved,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.kv-metadata-uses-leaf-kv-contracts]
++- [~] I2 Migrate `KvReplicaMetadataStore` and its tests from `aspen_core::traits`, `aspen_core::kv`, and `aspen_core::error` to `aspen-traits` and `aspen-kv-types`, preserving get/save/delete/scan behavior and error context. ⏱ started: 2026-04-29T03:50:30Z [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replica-metadata-behavior-preserved,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.kv-metadata-uses-leaf-kv-contracts]
+ - [ ] I3 Update `docs/crate-extraction/blob-castore-cache.md` and `docs/crate-extraction/policy.ncl` so `aspen-blob -> aspen-core` is no longer documented or allowed for replication metadata storage. [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.policy-rejects-stale-core-exception,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.boundary-policy-catches-stale-blob-core-dependency]
+ 
+ ## 2. Verification

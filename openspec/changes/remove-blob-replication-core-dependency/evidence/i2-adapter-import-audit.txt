@@ -1,0 +1,25 @@
+# I2 adapter import audit
+
+## Command: rg -n "aspen_core::|aspen-traits|aspen-kv-types|aspen_traits::|aspen_kv_types::" crates/aspen-blob/src/replication/adapters.rs crates/aspen-blob/Cargo.toml
+
+crates/aspen-blob/Cargo.toml:14:aspen-traits = { path = "../aspen-traits" }
+crates/aspen-blob/Cargo.toml:15:aspen-kv-types = { path = "../aspen-kv-types" }
+crates/aspen-blob/src/replication/adapters.rs:46:use aspen_kv_types::DeleteRequest;
+crates/aspen-blob/src/replication/adapters.rs:47:use aspen_kv_types::ReadRequest;
+crates/aspen-blob/src/replication/adapters.rs:48:use aspen_kv_types::ScanRequest;
+crates/aspen-blob/src/replication/adapters.rs:49:use aspen_kv_types::WriteCommand;
+crates/aspen-blob/src/replication/adapters.rs:50:use aspen_kv_types::WriteRequest;
+crates/aspen-blob/src/replication/adapters.rs:51:use aspen_traits::KeyValueStore;
+crates/aspen-blob/src/replication/adapters.rs:381:    use aspen_kv_types::DeleteResult;
+crates/aspen-blob/src/replication/adapters.rs:382:    use aspen_kv_types::KeyValueStoreError;
+crates/aspen-blob/src/replication/adapters.rs:383:    use aspen_kv_types::KeyValueWithRevision;
+crates/aspen-blob/src/replication/adapters.rs:384:    use aspen_kv_types::ReadResult;
+crates/aspen-blob/src/replication/adapters.rs:385:    use aspen_kv_types::ScanResult;
+crates/aspen-blob/src/replication/adapters.rs:386:    use aspen_kv_types::WriteResult;
+crates/aspen-blob/src/replication/adapters.rs:387:    use aspen_traits::KvDelete;
+crates/aspen-blob/src/replication/adapters.rs:388:    use aspen_traits::KvRead;
+crates/aspen-blob/src/replication/adapters.rs:389:    use aspen_traits::KvScan;
+crates/aspen-blob/src/replication/adapters.rs:390:    use aspen_traits::KvWrite;
+
+## Assertions
+PASS: adapter/test code uses leaf KV contracts and no aspen_core paths remain.
