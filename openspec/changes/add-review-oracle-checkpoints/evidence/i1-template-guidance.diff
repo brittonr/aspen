@@ -1,0 +1,55 @@
+diff --git a/openspec/changes/add-review-oracle-checkpoints/tasks.md b/openspec/changes/add-review-oracle-checkpoints/tasks.md
+index 5fe969fa4..4c04a408a 100644
+--- a/openspec/changes/add-review-oracle-checkpoints/tasks.md
++++ b/openspec/changes/add-review-oracle-checkpoints/tasks.md
+@@ -3 +3 @@
+-- [ ] I1 Add checkpoint template/guidance for unresolved review questions. [covers=openspec-governance.review-oracle-checkpoints.records-ambiguity]
++- [x] I1 Add checkpoint template/guidance for unresolved review questions. [covers=openspec-governance.review-oracle-checkpoints.records-ambiguity] ✅ 1m (started: 2026-04-29T13:58:56Z → completed: 2026-04-29T13:59:36Z)
+diff --git a/openspec/templates/oracle-checkpoint.md b/openspec/templates/oracle-checkpoint.md
+new file mode 100644
+index 000000000..a0b17bd2d
+--- /dev/null
++++ b/openspec/templates/oracle-checkpoint.md
+@@ -0,0 +1,28 @@
++# Oracle Checkpoint
++
++Use this record only when deterministic evidence cannot resolve a review-critical question.
++Do not use it to bypass missing implementation or verification work.
++
++## Question
++
++- Unresolved question:
++- Why deterministic evidence is insufficient:
++
++## Evidence Inspected
++
++- `repo/path`: what was checked and what remained ambiguous
++
++## Decision
++
++- Outcome: approved | rejected | blocked | deferred
++- Rationale:
++
++## Owner
++
++- Decision owner:
++- Follow-up owner:
++
++## Next Action
++
++- Action:
++- Required before completion claim: yes | no
+diff --git a/openspec/templates/verification.md b/openspec/templates/verification.md
+index 42a175ba2..86aabb033 100644
+--- a/openspec/templates/verification.md
++++ b/openspec/templates/verification.md
+@@ -24,0 +25,9 @@ For implementation-complete claims, prefer citing a saved diff artifact in addit
++## Oracle Checkpoints
++
++Use an oracle checkpoint when a reviewer or gate cannot resolve a review-critical
++question from deterministic repo evidence. Store the checkpoint under the change
++`evidence/` directory, or inline here, using `openspec/templates/oracle-checkpoint.md`.
++A valid checkpoint records the unresolved question, inspected evidence, decision,
++owner, and next action. If no decision exists, report a concrete blocker and stop
++without claiming completion instead of fabricating certainty.
++

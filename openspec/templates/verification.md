@@ -22,6 +22,15 @@ For implementation-complete claims, prefer citing a saved diff artifact in addit
 - [x] Exact checked task text from tasks.md
   - Evidence: `path/to/changed_file.rs`, `openspec/changes/active/<change>/evidence/example.txt`
 
+## Oracle Checkpoints
+
+Use an oracle checkpoint when a reviewer or gate cannot resolve a review-critical
+question from deterministic repo evidence. Store the checkpoint under the change
+`evidence/` directory, or inline here, using `openspec/templates/oracle-checkpoint.md`.
+A valid checkpoint records the unresolved question, inspected evidence, decision,
+owner, and next action. If no decision exists, report a concrete blocker and stop
+without claiming completion instead of fabricating certainty.
+
 ## Review Scope Snapshot
 
 If a reviewer needs the exact implementation delta, save a diff artifact that covers the
