@@ -1,0 +1,1 @@
+Change 'require-completion-claim-evidence' is valid

@@ -1,0 +1,1 @@
+Change 'require-design-verification-strategy' is valid

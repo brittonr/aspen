@@ -1,0 +1,1 @@
+Change 'verify-verification-index-freshness' is valid

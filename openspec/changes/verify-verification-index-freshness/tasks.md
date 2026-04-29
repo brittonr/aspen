@@ -1,0 +1,10 @@
+## 1. Implementation
+
+- [ ] I1 Add freshness checks for stale active paths, placeholder transcripts, and evidence generated before final reviewed source/doc diffs, scoped to active changes and newly archived changes touched in the current diff. [covers=openspec-governance.verification-index-freshness.stale-active-path-fails,openspec-governance.verification-index-freshness.placeholder-preflight-fails,openspec-governance.verification-index-freshness.generated-before-final-diff-fails]
+- [ ] I2 Add an exception that allows stale active paths only inside saved diff artifacts used as historical review context. [covers=openspec-governance.verification-index-freshness.saved-diff-may-contain-historical-paths]
+- [ ] I3 Update archive/preflight guidance and the verification template to capture final preflight after staging and path rewrite. [covers=openspec-governance.verification-index-freshness.stale-active-path-fails,openspec-governance.verification-index-freshness.placeholder-preflight-fails,openspec-governance.verification-index-freshness.generated-before-final-diff-fails]
+
+## 2. Verification
+
+- [ ] V1 Add fixtures for fresh pass, stale active path fail, stale active path inside saved diff pass, placeholder preflight fail, generated-before-final-diff fail, and out-of-scope old archive ignored. [covers=openspec-governance.verification-index-freshness.fresh-index-passes,openspec-governance.verification-index-freshness.stale-active-path-fails,openspec-governance.verification-index-freshness.saved-diff-may-contain-historical-paths,openspec-governance.verification-index-freshness.placeholder-preflight-fails,openspec-governance.verification-index-freshness.generated-before-final-diff-fails]
+- [ ] V2 Run preflight on fixtures and save transcripts. [covers=openspec-governance.verification-index-freshness.fresh-index-passes,openspec-governance.verification-index-freshness.stale-active-path-fails,openspec-governance.verification-index-freshness.saved-diff-may-contain-historical-paths,openspec-governance.verification-index-freshness.placeholder-preflight-fails,openspec-governance.verification-index-freshness.generated-before-final-diff-fails]

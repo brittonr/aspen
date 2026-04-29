@@ -1,0 +1,9 @@
+## 1. Implementation
+
+- [ ] I1 Add a drain verification matrix section to the verification template and drain instructions, including rail, command, status, artifact, scope rationale, and next-best-check fields. [covers=openspec-governance.drain-verification-cycle.full-cycle-recorded,openspec-governance.drain-verification-cycle.scoped-alternative-recorded,openspec-governance.drain-verification-cycle.doc-only-bypass-explicit]
+- [ ] I2 Extend preflight or done-review to flag missing matrix entries for checked implementation tasks and before final verification tasks are checked, while allowing explicit doc-only bypasses with no source changes. [covers=openspec-governance.drain-verification-cycle.missing-cycle-fails,openspec-governance.drain-verification-cycle.doc-only-bypass-explicit,openspec-governance.drain-verification-cycle.final-verification-requires-matrix-first]
+
+## 2. Verification
+
+- [ ] V1 Add full-cycle, scoped-alternative, doc-only-bypass, missing-cycle, and final-verification-before-matrix fixtures. [covers=openspec-governance.drain-verification-cycle.full-cycle-recorded,openspec-governance.drain-verification-cycle.scoped-alternative-recorded,openspec-governance.drain-verification-cycle.doc-only-bypass-explicit,openspec-governance.drain-verification-cycle.missing-cycle-fails,openspec-governance.drain-verification-cycle.final-verification-requires-matrix-first]
+- [ ] V2 Run checks over fixtures and save transcripts. [covers=openspec-governance.drain-verification-cycle.full-cycle-recorded,openspec-governance.drain-verification-cycle.scoped-alternative-recorded,openspec-governance.drain-verification-cycle.doc-only-bypass-explicit,openspec-governance.drain-verification-cycle.missing-cycle-fails,openspec-governance.drain-verification-cycle.final-verification-requires-matrix-first]
