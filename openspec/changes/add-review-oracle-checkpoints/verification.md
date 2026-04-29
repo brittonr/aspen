@@ -14,6 +14,8 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 - [x] I2 Teach done-review to flag ambiguous completion without checkpoint. [covers=openspec-governance.review-oracle-checkpoints.missing-checkpoint-flagged] ✅ 4m (started: 2026-04-29T14:00:50Z → completed: 2026-04-29T14:04:27Z)
   - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
+- [x] I3 Teach OpenSpec gates to recognize checkpoint records and flag ambiguous stage completion without checkpoint. [covers=openspec-governance.review-oracle-checkpoints.missing-checkpoint-flagged,openspec-governance.review-oracle-checkpoints.records-ambiguity] ✅ 1m (started: 2026-04-29T14:05:59Z → completed: 2026-04-29T14:06:08Z)
+  - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
 
 ## Review Scope Snapshot
 
