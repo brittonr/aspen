@@ -139,6 +139,7 @@ Forge-web connects via `aspen-client` RPC calls to the same CI handlers.
 
 - `scripts/run-forge-web.sh` creates the demo repo in `/tmp`, where Aspen's `.cargo/config.toml` does not clear the global `sccache` wrapper. If `cargo generate-lockfile` inherits `CARGO_INCREMENTAL=1`, it can fail before writing `Cargo.lock`; do not hide that failure or Forge CI later reports Nix error `Path 'Cargo.lock' does not exist in Git repository`.
 - Working fix: generate the demo Cargo lockfile with `unset CARGO_INCREMENTAL` and `RUSTC_WRAPPER=''`, generate `flake.lock`, then verify both `Cargo.lock` and `flake.lock` with `git ls-files --error-unmatch` before pushing to Forge.
+- Do not wrap fatal demo prep in the same nonfatal `if (...) then ok else log` block as optional `git push`; a subshell `exit 1` only becomes fatal if the outer command is not swallowed by an `else log ...` branch. Split prep/commit from push.
 
 ## Hook/auth seam split follow-ups (2026-04-22)
 

@@ -216,7 +216,7 @@ if command -v git-remote-aspen >/dev/null 2>&1; then
   log "Pushing demo content via git-remote-aspen..."
   TMPGIT="$CLUSTER_DIR/demo-git"
   mkdir -p "$TMPGIT"
-  if (
+  (
     cd "$TMPGIT" || exit 1
     git init -q || exit 1
 
@@ -318,8 +318,8 @@ INNER_NCL
       err "Failed to commit demo repository"
       exit 1
     fi
-    RUST_LOG=warn git push "aspen://${TICKET}/${REPO_ID}" HEAD:main 2>/dev/null
-  ); then
+  )
+  if RUST_LOG=warn git -C "$TMPGIT" push "aspen://${TICKET}/${REPO_ID}" HEAD:main 2>/dev/null; then
     ok "Content pushed"
   else
     log "Push failed (git-remote-aspen may need fixes)"
