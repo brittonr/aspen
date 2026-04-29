@@ -1,0 +1,1 @@
+OK: no checked tasks in openspec/changes/remove-blob-replication-core-dependency/tasks.md
