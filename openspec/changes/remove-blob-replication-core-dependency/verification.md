@@ -5,14 +5,10 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 ## Implementation Evidence
 
-- Changed file: `docs/crate-extraction/blob-castore-cache.md`
-- Changed file: `docs/crate-extraction/policy.ncl`
 - Changed file: `openspec/changes/remove-blob-replication-core-dependency/tasks.md`
 - Changed file: `openspec/changes/remove-blob-replication-core-dependency/verification.md`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-doc-policy-audit.txt`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-doc-policy-diff.txt`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-policy-export.json`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-policy-export.stderr`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-cargo-check-replication.txt`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-kv-metadata-tests.txt`
 
 ## Task Coverage
 
@@ -24,13 +20,12 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
   - Evidence: `crates/aspen-blob/src/replication/adapters.rs`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i2-adapter-import-audit.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i2-adapter-diff.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i2-cargo-check-replication.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i2-kv-metadata-tests.txt`
 - [x] I3 Update `docs/crate-extraction/blob-castore-cache.md` and `docs/crate-extraction/policy.ncl` so `aspen-blob -> aspen-core` is no longer documented or allowed for replication metadata storage. ✅ 2m (started: 2026-04-29T03:54:40Z → completed: 2026-04-29T03:56:50Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.policy-rejects-stale-core-exception,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.boundary-policy-catches-stale-blob-core-dependency]
   - Evidence: `docs/crate-extraction/blob-castore-cache.md`, `docs/crate-extraction/policy.ncl`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-doc-policy-audit.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-doc-policy-diff.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-policy-export.json`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-policy-export.stderr`
+- [x] V1 Run `cargo check -p aspen-blob --features replication` plus focused replica metadata adapter tests, including positive get/save/delete/scan behavior and negative missing or malformed metadata behavior; save transcripts under `openspec/changes/remove-blob-replication-core-dependency/evidence/`. ✅ 1m (started: 2026-04-29T03:57:45Z → completed: 2026-04-29T03:58:33Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replica-metadata-behavior-preserved]
+  - Evidence: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-cargo-check-replication.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-kv-metadata-tests.txt`
 
 ## Review Scope Snapshot
 
-### `git diff HEAD -- docs/crate-extraction/blob-castore-cache.md docs/crate-extraction/policy.ncl openspec/changes/remove-blob-replication-core-dependency/tasks.md`
-
-- Status: captured
-- Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-doc-policy-diff.txt`
+No source diff for V1; command transcripts prove the post-change check and adapter tests.
 
 ## Verification Commands
 
@@ -83,6 +78,16 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - Status: pass
 - Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/i3-policy-export.stderr`
+
+### `cargo check -p aspen-blob --features replication` final V1 run
+
+- Status: pass
+- Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-cargo-check-replication.txt`
+
+### `cargo test -p aspen-blob --features replication kv_metadata_store -- --nocapture` final V1 run
+
+- Status: pass
+- Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-kv-metadata-tests.txt`
 
 ## Notes
 
