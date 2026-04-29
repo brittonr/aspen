@@ -1729,7 +1729,7 @@
 
           # Remove external optional deps: aspen-wasm-plugin, aspen-dns
           # Strip path deps, feature activations, and Cargo.lock entries.
-          # These are never activated by our feature sets (no plugins-rpc, no dns).
+          # These are never activated by our feature sets (no plugins/jj-native-forge, no dns).
           ${pkgs.python3}/bin/python3 ${pkgs.writeText "strip-external-deps.py" ''
             import re, sys
             out = sys.argv[1]
@@ -1745,15 +1745,17 @@
             # Root Cargo.toml: remove wasm-plugin dep + plugin features
             strip_lines(f"{out}/aspen/Cargo.toml", [
                 'aspen-wasm-plugin = { path',
+                'jj-native-forge = [',
                 'plugins-rpc = [',
                 'plugins = ["plugins-vm"',
                 'plugins-vm = [',
                 'plugins-wasm = [',
             ])
-            # Strip "plugins" from the full feature list
+            # Strip plugin-backed features from the full feature list
             root_toml = f"{out}/aspen/Cargo.toml"
             with open(root_toml) as f:
                 content = f.read()
+            content = content.replace('"jj-native-forge", ', "")
             content = content.replace('"plugins", ', "")
             with open(root_toml, "w") as f:
                 f.write(content)
@@ -2557,6 +2559,23 @@
 
                 echo "ciSrc has no unvendored git deps" > $out
               '';
+
+              forge-web-demo-prep =
+                pkgs.runCommand "forge-web-demo-prep" {
+                  nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.git pkgs.gnugrep pkgs.gawk pkgs.shellcheck rustToolChain];
+                } ''
+                  export HOME="$PWD/home"
+                  mkdir -p "$HOME" source/scripts/lib
+                  cp ${./scripts/run-forge-web.sh} source/scripts/run-forge-web.sh
+                  cp ${./scripts/lib/run-forge-web-demo.sh} source/scripts/lib/run-forge-web-demo.sh
+                  cp ${./scripts/test-run-forge-web-demo-prep.sh} source/scripts/test-run-forge-web-demo-prep.sh
+                  chmod -R u+w source
+                  chmod +x source/scripts/run-forge-web.sh source/scripts/lib/run-forge-web-demo.sh source/scripts/test-run-forge-web-demo-prep.sh
+                  cd source
+                  shellcheck scripts/run-forge-web.sh scripts/lib/run-forge-web-demo.sh scripts/test-run-forge-web-demo-prep.sh
+                  bash scripts/test-run-forge-web-demo-prep.sh
+                  touch $out
+                '';
 
               # Clippy and doc checks using ciCommonArgs (stubbed aspen-wasm-plugin).
               # Works in pure evaluation without external repos.
