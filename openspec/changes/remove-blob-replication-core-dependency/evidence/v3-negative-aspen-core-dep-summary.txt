@@ -1,0 +1,10 @@
+# V3 negative aspen-core dependency mutation
+
+## Mutation
+Inserted a normal `aspen-core = { path = "../aspen-core" }` dependency into `crates/aspen-blob/Cargo.toml`.
+
+## Exit status
+1
+
+## Assertion
+PASS: readiness checker rejected stale aspen-blob -> aspen-core dependency.

@@ -7,8 +7,19 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
 
 - Changed file: `openspec/changes/remove-blob-replication-core-dependency/tasks.md`
 - Changed file: `openspec/changes/remove-blob-replication-core-dependency/verification.md`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-replication.txt`
-- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-audit.txt`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i6-downstream-blob-metadata.json`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i6-downstream-cache-castore-metadata.json`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i6-downstream-blob-forbidden-grep.txt`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-readiness.json`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-readiness.md`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-readiness.stdout`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-readiness.stderr`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep.json`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep.md`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep.stdout`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep.stderr`
+- Changed file: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep-summary.txt`
 
 ## Task Coverage
 
@@ -24,10 +35,12 @@ Do not rely on chat-only summaries, `/tmp` logs, or memory.
   - Evidence: `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-cargo-check-replication.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v1-kv-metadata-tests.txt`
 - [x] V2 Run `cargo tree -p aspen-blob --features replication -e normal` with a deterministic audit proving root `aspen-core` is absent while `aspen-client-api` remains feature-gated for replication RPC; save the tree and audit under `openspec/changes/remove-blob-replication-core-dependency/evidence/`. ✅ 1m (started: 2026-04-29T03:59:10Z → completed: 2026-04-29T03:59:36Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replication-adapter-compiles-without-root-core,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.runtime-wire-schemas-remain-separately-gated]
   - Evidence: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-replication.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-audit.txt`
+- [x] V3 Run `scripts/check-crate-extraction-readiness.rs --candidate-family blob-castore-cache` plus a negative mutation proving stale `aspen-blob -> aspen-core` dependency or exception is rejected; save outputs under `openspec/changes/remove-blob-replication-core-dependency/evidence/`. ✅ 1m (started: 2026-04-29T04:00:40Z → completed: 2026-04-29T04:01:58Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.policy-rejects-stale-core-exception,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.boundary-policy-catches-stale-blob-core-dependency]
+  - Evidence: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-readiness.md`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-readiness.json`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep-summary.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep.md`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i6-downstream-blob-forbidden-grep.txt`, `openspec/changes/remove-blob-replication-core-dependency/evidence/i6-downstream-cache-castore-forbidden-grep.txt`
 
 ## Review Scope Snapshot
 
-No source diff for V2; cargo tree and deterministic audit transcripts prove the dependency boundary.
+No source diff for V3; readiness checker transcripts and negative mutation artifacts prove the policy boundary.
 
 ## Verification Commands
 
@@ -100,6 +113,16 @@ No source diff for V2; cargo tree and deterministic audit transcripts prove the 
 
 - Status: pass
 - Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v2-cargo-tree-audit.txt`
+
+### `scripts/check-crate-extraction-readiness.rs --candidate-family blob-castore-cache`
+
+- Status: pass
+- Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-readiness.md`
+
+### negative mutation: `aspen-blob -> aspen-core` direct dependency
+
+- Status: pass; checker rejected the mutation
+- Artifact: `openspec/changes/remove-blob-replication-core-dependency/evidence/v3-negative-aspen-core-dep-summary.txt`
 
 ## Notes
 
