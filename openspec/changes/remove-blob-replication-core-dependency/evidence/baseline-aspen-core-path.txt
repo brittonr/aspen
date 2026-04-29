@@ -1,0 +1,6 @@
+# Baseline cargo tree aspen-core path
+
+## Command: cargo tree -p aspen-blob --features replication -e normal -i aspen-core
+
+aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+└── aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)

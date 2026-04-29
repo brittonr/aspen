@@ -1,0 +1,48 @@
+# Baseline source audit
+
+## Command: grep current aspen-core imports and policy exceptions
+
+### crates/aspen-blob/src/replication/adapters.rs aspen_core references
+88:where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
+95:            .read(aspen_core::kv::ReadRequest::new(&key))
+113:            .write(aspen_core::kv::WriteRequest {
+114:                command: aspen_core::kv::WriteCommand::Set { key, value },
+127:            .delete(aspen_core::kv::DeleteRequest { key })
+139:            .scan(aspen_core::kv::ScanRequest {
+390:    impl aspen_core::traits::KeyValueStore for MockKvStore {
+393:            request: aspen_core::kv::WriteRequest,
+394:        ) -> Result<aspen_core::kv::WriteResult, aspen_core::error::KeyValueStoreError> {
+396:                aspen_core::kv::WriteCommand::Set { key, value } => {
+399:                    Ok(aspen_core::kv::WriteResult::default())
+401:                _ => Ok(aspen_core::kv::WriteResult::default()),
+407:            request: aspen_core::kv::ReadRequest,
+408:        ) -> Result<aspen_core::kv::ReadResult, aspen_core::error::KeyValueStoreError> {
+410:            let kv = data.get(&request.key).map(|v| aspen_core::kv::KeyValueWithRevision {
+417:            Ok(aspen_core::kv::ReadResult { kv })
+422:            request: aspen_core::kv::DeleteRequest,
+423:        ) -> Result<aspen_core::kv::DeleteResult, aspen_core::error::KeyValueStoreError> {
+425:            Ok(aspen_core::kv::DeleteResult {
+433:            request: aspen_core::kv::ScanRequest,
+434:        ) -> Result<aspen_core::kv::ScanResult, aspen_core::error::KeyValueStoreError> {
+440:                .map(|(k, v)| aspen_core::kv::KeyValueWithRevision {
+449:            Ok(aspen_core::kv::ScanResult {
+
+### crates/aspen-blob/Cargo.toml aspen-core dependency and feature edge
+10:replication = ["dep:aspen-client-api", "dep:aspen-core"]
+13:# Core types and traits (only needed by replication adapters)
+14:aspen-core = { path = "../aspen-core", optional = true }
+20:# Client API types (for replication RPC)
+
+### docs/crate-extraction/blob-castore-cache.md aspen-blob core exception
+39:| `aspen-blob` | `aspen-core` | keep for now | Provides `KeyValueStore` and KV request/response types for `BlobAwareKeyValueStore`; not an app shell. Future seam can move this to alloc-safe trait/type crates. |
+113:| `aspen-blob` | default | `aspen-blob -> aspen-core` | Aspen storage/cache maintainers | Current `BlobAwareKeyValueStore` uses Aspen KV traits/types; app-shell split is tracked as a later seam. |
+
+### docs/crate-extraction/policy.ncl aspen-blob core exception
+540:          candidate = "aspen-blob",
+547:          candidate = "aspen-blob",
+554:          candidate = "aspen-blob",
+561:          candidate = "aspen-blob",
+568:          candidate = "aspen-blob",
+570:          dependency_path = "aspen-blob -> aspen-core",
+572:          reason = "Current BlobAwareKeyValueStore uses Aspen KV traits/types; app-shell split is a later seam.",
+575:          candidate = "aspen-blob",
