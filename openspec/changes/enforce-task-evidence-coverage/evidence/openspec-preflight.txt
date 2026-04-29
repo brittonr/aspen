@@ -1,4 +1,0 @@
-OK: openspec/changes/enforce-task-evidence-coverage
-  tasks: 7 total / 7 checked
-  changed files listed: 12
-  verification artifacts: 5

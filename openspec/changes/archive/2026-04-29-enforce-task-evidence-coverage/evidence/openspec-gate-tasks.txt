@@ -6,7 +6,7 @@ VERDICT: FAIL
 
 ## Findings
 - [blocker] [class=omission] [scope=review] [route=prompt] [promoted=no] Checked verification tasks claim saved transcripts, but no evidence artifacts or `verification.md` coverage were supplied for review.
-  - Evidence: `openspec/changes/enforce-task-evidence-coverage/tasks.md` V1 requires saved transcripts under `openspec/changes/enforce-task-evidence-coverage/evidence/`; V2 requires saved known-good and negative fixture results under the same path; V3 requires `openspec/changes/enforce-task-evidence-coverage/verification.md` coverage for every checked task.
+  - Evidence: `openspec/changes/archive/2026-04-29-enforce-task-evidence-coverage/tasks.md` V1 requires saved transcripts under `openspec/changes/archive/2026-04-29-enforce-task-evidence-coverage/evidence/`; V2 requires saved known-good and negative fixture results under the same path; V3 requires `openspec/changes/archive/2026-04-29-enforce-task-evidence-coverage/verification.md` coverage for every checked task.
 
 - [blocker] [class=omission] [scope=tasks] [route=prompt] [promoted=no] Negative-case proof remains unreviewable despite checked tasks requiring it.
   - Evidence: `tasks.md` I2 lists negative fixtures for missing, untracked, empty, `pending`, `TODO`, `placeholder`, and tracked-but-disallowed external evidence; V1/V2 are checked but no corresponding evidence file paths or transcripts are supplied.
@@ -18,8 +18,8 @@ VERDICT: FAIL
 - No gate status should be claimed from the supplied artifacts.
 
 ## Next Actions
-- Supply `openspec/changes/enforce-task-evidence-coverage/verification.md`.
-- Supply saved fixture/preflight transcripts under `openspec/changes/enforce-task-evidence-coverage/evidence/`.
+- Supply `openspec/changes/archive/2026-04-29-enforce-task-evidence-coverage/verification.md`.
+- Supply saved fixture/preflight transcripts under `openspec/changes/archive/2026-04-29-enforce-task-evidence-coverage/evidence/`.
 - Include negative transcripts showing task text, invalid/missing path or reason, and remediation.
 - After evidence passes review, archive/sync the completed change.
 
