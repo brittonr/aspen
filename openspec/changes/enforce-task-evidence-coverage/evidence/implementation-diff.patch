@@ -1,0 +1,627 @@
+diff --git a/openspec/changes/enforce-task-evidence-coverage/fixtures/openspec-preflight-evidence/README.md b/openspec/changes/enforce-task-evidence-coverage/fixtures/openspec-preflight-evidence/README.md
+new file mode 100644
+index 000000000..328cdb8ce
+--- /dev/null
++++ b/openspec/changes/enforce-task-evidence-coverage/fixtures/openspec-preflight-evidence/README.md
+@@ -0,0 +1,24 @@
++# OpenSpec Preflight Evidence Fixtures
++
++`scripts/test-openspec-preflight-evidence.sh` materializes these fixtures in a temporary git repository so each case can control tracked, staged, and untracked state without polluting this checkout.
++
++## Positive cases
++
++- `active-change-local`: active change cites a tracked evidence file under its own `evidence/` directory.
++- `active-changed-file`: active change cites a currently changed documentation/source file listed in `## Implementation Evidence`.
++- `archived-change-local`: archived change path cites a tracked evidence file under its own `evidence/` directory.
++- `archived-changed-file`: archived change path cites a currently changed documentation/source file listed in `## Implementation Evidence`.
++
++## Negative cases
++
++Each negative case runs in both active (`openspec/changes/<case>`) and archived (`openspec/changes/archive/2026-04-29-<case>`) layouts.
++
++- `missing-evidence`: checked task has no `- Evidence:` line.
++- `untracked-evidence`: checked task cites an existing but untracked evidence file.
++- `empty-evidence`: checked task cites an empty tracked evidence file.
++- `pending-evidence`: checked task cites a tracked evidence file containing only `pending`.
++- `todo-evidence`: checked task cites a tracked evidence file containing only `TODO`.
++- `placeholder-evidence`: checked task cites a tracked evidence file containing only `placeholder`.
++- `disallowed-external`: checked task cites a tracked file outside the change that is not listed as implementation evidence.
++
++Set `OPENSPEC_PREFLIGHT_SHOW_CASE_OUTPUT=1` to include full per-case command, stdout, stderr, expected status, and actual status in the saved transcript.
+diff --git a/openspec/changes/enforce-task-evidence-coverage/tasks.md b/openspec/changes/enforce-task-evidence-coverage/tasks.md
+index 9d3a2a593..03d4bb3fa 100644
+--- a/openspec/changes/enforce-task-evidence-coverage/tasks.md
++++ b/openspec/changes/enforce-task-evidence-coverage/tasks.md
+@@ -1,12 +1,12 @@
+ ## 1. Implementation
+
+-- [ ] I1 Extend `scripts/openspec-preflight.sh` to reject missing, untracked, empty, or placeholder evidence for checked tasks, while accepting only change-local evidence or currently changed source/doc files. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
+-- [ ] I2 Add positive and negative fixtures for active and archived changes with both valid evidence routes (change-local evidence and currently changed source/doc implementation evidence) plus missing, untracked, empty, `pending`, `TODO`, `placeholder`, and tracked-but-disallowed external evidence path cases. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
+-- [ ] I3 Add failure-message output that names the checked task, missing or invalid evidence path, and concrete remediation. [covers=openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.invalid-evidence-output-actionable,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
+-- [ ] I4 Update OpenSpec gate/template documentation so task evidence coverage and placeholder rejection are visible before implementation starts. [covers=openspec-governance.task-evidence-coverage]
++- [x] I1 Extend `scripts/openspec-preflight.sh` to reject missing, untracked, empty, or placeholder evidence for checked tasks, while accepting only change-local evidence or currently changed source/doc files. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++- [x] I2 Add positive and negative fixtures for active and archived changes with both valid evidence routes (change-local evidence and currently changed source/doc implementation evidence) plus missing, untracked, empty, `pending`, `TODO`, `placeholder`, and tracked-but-disallowed external evidence path cases. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++- [x] I3 Add failure-message output that names the checked task, missing or invalid evidence path, and concrete remediation. [covers=openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.invalid-evidence-output-actionable,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++- [x] I4 Update OpenSpec gate/template documentation so task evidence coverage and placeholder rejection are visible before implementation starts. [covers=openspec-governance.task-evidence-coverage]
+
+ ## 2. Verification
+
+-- [ ] V1 Run the active-change and archived-change fixture suite and save transcripts under `openspec/changes/enforce-task-evidence-coverage/evidence/` for change-local valid evidence, changed source/doc valid evidence, missing, untracked, empty, `pending`, `TODO`, `placeholder`, and disallowed external evidence path cases. [covers=openspec-governance.task-evidence-coverage]
+-- [ ] V2 Run `scripts/openspec-preflight.sh` against a known-good change and each negative fixture; assert failure output includes the task text, missing/invalid path, and remediation; save all results under `openspec/changes/enforce-task-evidence-coverage/evidence/`. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
+-- [ ] V3 Update this change's `verification.md` so every checked task appears verbatim with evidence paths before any task is checked complete. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence]
++- [x] V1 Run the active-change and archived-change fixture suite and save transcripts under `openspec/changes/enforce-task-evidence-coverage/evidence/` for change-local valid evidence, changed source/doc valid evidence, missing, untracked, empty, `pending`, `TODO`, `placeholder`, and disallowed external evidence path cases. [covers=openspec-governance.task-evidence-coverage]
++- [x] V2 Run `scripts/openspec-preflight.sh` against a known-good change and each negative fixture; assert failure output includes the task text, missing/invalid path, and remediation; save all results under `openspec/changes/enforce-task-evidence-coverage/evidence/`. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++- [x] V3 Update this change's `verification.md` so every checked task appears verbatim with evidence paths before any task is checked complete. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence]
+diff --git a/openspec/changes/enforce-task-evidence-coverage/verification.md b/openspec/changes/enforce-task-evidence-coverage/verification.md
+new file mode 100644
+index 000000000..f8b88e874
+--- /dev/null
++++ b/openspec/changes/enforce-task-evidence-coverage/verification.md
+@@ -0,0 +1,69 @@
++# Verification Evidence
++
++Use this file to back every checked task in `tasks.md` with durable repo evidence.
++
++## Implementation Evidence
++
++- Changed file: `scripts/openspec-preflight.sh`
++- Changed file: `scripts/test-openspec-preflight-evidence.sh`
++- Changed file: `openspec/templates/verification.md`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/fixtures/openspec-preflight-evidence/README.md`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/tasks.md`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/verification.md`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/evidence/bash-n-preflight-scripts.txt`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/evidence/preflight-fixture-suite.txt`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-validate.txt`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/evidence/implementation-diff.patch`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-preflight.txt`
++- Changed file: `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-gate-tasks.txt`
++
++## Task Coverage
++
++- [x] I1 Extend `scripts/openspec-preflight.sh` to reject missing, untracked, empty, or placeholder evidence for checked tasks, while accepting only change-local evidence or currently changed source/doc files. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++  - Evidence: `scripts/openspec-preflight.sh`, `openspec/changes/enforce-task-evidence-coverage/evidence/implementation-diff.patch`, `openspec/changes/enforce-task-evidence-coverage/evidence/preflight-fixture-suite.txt`
++- [x] I2 Add positive and negative fixtures for active and archived changes with both valid evidence routes (change-local evidence and currently changed source/doc implementation evidence) plus missing, untracked, empty, `pending`, `TODO`, `placeholder`, and tracked-but-disallowed external evidence path cases. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++  - Evidence: `scripts/test-openspec-preflight-evidence.sh`, `openspec/changes/enforce-task-evidence-coverage/fixtures/openspec-preflight-evidence/README.md`, `openspec/changes/enforce-task-evidence-coverage/evidence/preflight-fixture-suite.txt`
++- [x] I3 Add failure-message output that names the checked task, missing or invalid evidence path, and concrete remediation. [covers=openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.invalid-evidence-output-actionable,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++  - Evidence: `scripts/openspec-preflight.sh`, `scripts/test-openspec-preflight-evidence.sh`, `openspec/changes/enforce-task-evidence-coverage/evidence/preflight-fixture-suite.txt`, `openspec/changes/enforce-task-evidence-coverage/evidence/implementation-diff.patch`
++- [x] I4 Update OpenSpec gate/template documentation so task evidence coverage and placeholder rejection are visible before implementation starts. [covers=openspec-governance.task-evidence-coverage]
++  - Evidence: `openspec/templates/verification.md`, `scripts/openspec-preflight.sh`, `openspec/changes/enforce-task-evidence-coverage/evidence/implementation-diff.patch`
++- [x] V1 Run the active-change and archived-change fixture suite and save transcripts under `openspec/changes/enforce-task-evidence-coverage/evidence/` for change-local valid evidence, changed source/doc valid evidence, missing, untracked, empty, `pending`, `TODO`, `placeholder`, and disallowed external evidence path cases. [covers=openspec-governance.task-evidence-coverage]
++  - Evidence: `openspec/changes/enforce-task-evidence-coverage/evidence/preflight-fixture-suite.txt`
++- [x] V2 Run `scripts/openspec-preflight.sh` against a known-good change and each negative fixture; assert failure output includes the task text, missing/invalid path, and remediation; save all results under `openspec/changes/enforce-task-evidence-coverage/evidence/`. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence,openspec-governance.task-evidence-coverage.missing-evidence-fails,openspec-governance.task-evidence-coverage.placeholder-evidence-fails]
++  - Evidence: `scripts/test-openspec-preflight-evidence.sh`, `openspec/changes/enforce-task-evidence-coverage/evidence/preflight-fixture-suite.txt`, `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-preflight.txt`
++- [x] V3 Update this change's `verification.md` so every checked task appears verbatim with evidence paths before any task is checked complete. [covers=openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence]
++  - Evidence: `openspec/changes/enforce-task-evidence-coverage/verification.md`, `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-preflight.txt`
++
++## Review Scope Snapshot
++
++### `git diff HEAD -- scripts/openspec-preflight.sh scripts/test-openspec-preflight-evidence.sh openspec/templates/verification.md openspec/changes/enforce-task-evidence-coverage/fixtures/openspec-preflight-evidence/README.md`
++
++- Status: captured
++- Artifact: `openspec/changes/enforce-task-evidence-coverage/evidence/implementation-diff.patch`
++
++## Verification Commands
++
++### `bash -n scripts/openspec-preflight.sh scripts/test-openspec-preflight-evidence.sh`
++
++- Status: pass
++- Artifact: `openspec/changes/enforce-task-evidence-coverage/evidence/bash-n-preflight-scripts.txt`
++
++### `scripts/test-openspec-preflight-evidence.sh`
++
++- Status: pass
++- Artifact: `openspec/changes/enforce-task-evidence-coverage/evidence/preflight-fixture-suite.txt`
++
++### `openspec validate enforce-task-evidence-coverage --type change --strict --no-interactive`
++
++- Status: pass
++- Artifact: `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-validate.txt`
++
++### `scripts/openspec-preflight.sh enforce-task-evidence-coverage`
++
++- Status: pass
++- Artifact: `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-preflight.txt`
++
++### `openspec_gate stage=tasks change=enforce-task-evidence-coverage`
++
++- Status: fail (diagnostic reviewer packet did not include saved evidence paths; transcript retained to avoid unsupported gate-status claims)
++- Artifact: `openspec/changes/enforce-task-evidence-coverage/evidence/openspec-gate-tasks.txt`
+diff --git a/openspec/templates/verification.md b/openspec/templates/verification.md
+index 28c412055..42a175ba2 100644
+--- a/openspec/templates/verification.md
++++ b/openspec/templates/verification.md
+@@ -15,6 +15,8 @@ Each path must be repo-relative and currently appear in `git status`.
+
+ Copy each checked task from `tasks.md` exactly and cite the evidence paths that justify it.
+ Every checked task must appear here.
++Evidence paths must be tracked, repo-relative files that are non-empty and not placeholder-only (`pending`, `TODO`, or `placeholder`).
++Task evidence may cite only files under the current change directory or currently modified/staged source/doc files listed above as changed files.
+ For implementation-complete claims, prefer citing a saved diff artifact in addition to the source paths.
+
+ - [x] Exact checked task text from tasks.md
+diff --git a/scripts/openspec-preflight.sh b/scripts/openspec-preflight.sh
+index facf1b4a3..3e2a6eada 100755
+--- a/scripts/openspec-preflight.sh
++++ b/scripts/openspec-preflight.sh
+@@ -10,7 +10,8 @@ Checks that checked OpenSpec tasks are backed by durable repo evidence.
+ Rules enforced:
+   - checked tasks in tasks.md must have matching entries in verification.md
+   - each checked task must cite repo-relative evidence paths
+-  - evidence paths must exist and be tracked by git
++  - evidence paths must exist, be tracked by git, and contain non-placeholder content
++  - task evidence must be change-local or a currently changed file listed in verification.md
+   - changed files listed in verification.md must currently appear in git status
+   - no untracked files may remain in the repo unless OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1
+   - newly added files must be tracked (prevents nix/flake source-filter misses)
+@@ -80,7 +81,7 @@ import pathlib
+ import re
+ import subprocess
+ import sys
+-from typing import Dict, List
++from typing import Dict, List, Optional
+
+ repo_root = pathlib.Path(sys.argv[1]).resolve()
+ change_dir = pathlib.Path(sys.argv[2]).resolve()
+@@ -89,10 +90,34 @@ change_dir_rel = change_dir.relative_to(repo_root).as_posix()
+ tasks_path = change_dir / "tasks.md"
+ verification_path = change_dir / "verification.md"
+
++PLACEHOLDER_TERMS = ("pending", "todo", "placeholder")
++PLACEHOLDER_LINE_RE = re.compile(
++    r"^\s*(?:[-*]\s*)?(?:status\s*:\s*)?(pending|todo|placeholder)\s*[.!]?\s*$",
++    re.IGNORECASE,
++)
++
++
+ def fail(message: str) -> None:
+     print(f"FAIL: {message}", file=sys.stderr)
+     raise SystemExit(1)
+
++
++def task_remediation() -> str:
++    return (
++        "Remediation: copy the checked task verbatim into verification.md under "
++        "'## Task Coverage' and add '- Evidence: `repo/path`' pointing to a "
++        "tracked change-local evidence artifact or a currently modified/staged "
++        "source/doc file listed in '## Implementation Evidence'."
++    )
++
++
++def fail_task(task: str, reason: str, evidence_path: Optional[str] = None) -> None:
++    details = [f"checked task evidence is invalid: {reason}", f"Task: {task}"]
++    if evidence_path is not None:
++        details.append(f"Evidence: {evidence_path}")
++    details.append(task_remediation())
++    fail("\n  ".join(details))
++
+ if not tasks_path.exists():
+     fail(f"missing tasks.md: {tasks_path}")
+
+@@ -105,7 +130,13 @@ if not checked_tasks:
+     raise SystemExit(0)
+
+ if not verification_path.exists():
+-    fail(f"checked tasks require verification.md: {verification_path}")
++    fail(
++        f"checked tasks require verification.md: {verification_path}\n"
++        + "Checked tasks:\n  - "
++        + "\n  - ".join(checked_tasks)
++        + "\n"
++        + task_remediation()
++    )
+
+ verification_text = verification_path.read_text()
+ changed_files = [m.group(1).strip() for m in re.finditer(r"^\s*-\s*Changed file:\s*`([^`]+)`\s*$", verification_text, re.MULTILINE)]
+@@ -132,7 +163,12 @@ for raw_line in coverage_section.splitlines():
+ missing = [task for task in checked_tasks if task not in coverage]
+ extra = [task for task in coverage if task not in checked_tasks]
+ if missing:
+-    fail("verification.md is missing checked task coverage entries for:\n  - " + "\n  - ".join(missing))
++    fail(
++        "verification.md is missing checked task coverage entries for:\n  - "
++        + "\n  - ".join(missing)
++        + "\n"
++        + task_remediation()
++    )
+ if extra:
+     fail("verification.md has task coverage entries for unchecked tasks:\n  - " + "\n  - ".join(extra))
+
+@@ -171,17 +207,56 @@ def list_untracked_paths() -> List[str]:
+     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+-def normalize_repo_path(path: str) -> pathlib.Path:
++def normalize_repo_path(path: str, task: Optional[str] = None) -> pathlib.Path:
+     candidate = pathlib.Path(path)
+     if candidate.is_absolute():
++        if task is not None:
++            fail_task(task, "evidence path must be repo-relative, not absolute", path)
+         fail(f"evidence path must be repo-relative, not absolute: {path}")
+     resolved = (repo_root / candidate).resolve()
+     try:
+         resolved.relative_to(repo_root)
+     except ValueError:
++        if task is not None:
++            fail_task(task, "evidence path escapes repo root", path)
+         fail(f"evidence path escapes repo root: {path}")
+     return resolved
+
++
++def is_change_local(path: str) -> bool:
++    return path == change_dir_rel or path.startswith(change_dir_rel + "/")
++
++
++def placeholder_reason(text: str) -> Optional[str]:
++    stripped = text.strip()
++    if not stripped:
++        return "evidence file is empty"
++    lower = stripped.lower()
++    if lower in PLACEHOLDER_TERMS:
++        return f"evidence file contains only placeholder text: {stripped!r}"
++    material_lines = [line.strip() for line in stripped.splitlines() if line.strip() and not line.strip().startswith("#")]
++    if material_lines and all(PLACEHOLDER_LINE_RE.match(line) for line in material_lines):
++        return "evidence file contains only placeholder lines"
++    return None
++
++
++def validate_evidence_content(path: str, resolved: pathlib.Path, task: Optional[str] = None) -> None:
++    if resolved.is_dir():
++        if task is not None:
++            fail_task(task, "evidence path must be a file, not a directory", path)
++        fail(f"evidence path must be a file, not a directory: {path}")
++    try:
++        text = resolved.read_text(errors="replace")
++    except OSError as exc:
++        if task is not None:
++            fail_task(task, f"could not read evidence file: {exc}", path)
++        fail(f"could not read evidence file {path}: {exc}")
++    reason = placeholder_reason(text)
++    if reason is not None:
++        if task is not None:
++            fail_task(task, reason, path)
++        fail(f"invalid evidence artifact {path}: {reason}")
++
+ allow_untracked = os.environ.get("OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED") == "1"
+ if not allow_untracked:
+     untracked_paths = list_untracked_paths()
+@@ -210,31 +285,31 @@ if not artifact_paths:
+
+ for path in artifact_paths:
+     resolved = normalize_repo_path(path)
++    normalized_path = resolved.relative_to(repo_root).as_posix()
+     if not resolved.exists():
+         fail(f"verification artifact does not exist: {path}")
+-    if not is_tracked(path):
++    if not is_tracked(normalized_path):
+         fail(f"verification artifact is not tracked by git: {path}")
++    validate_evidence_content(normalized_path, resolved)
+
+ changed_file_set = set(changed_files)
+ for task, evidence_paths in coverage.items():
+     if not evidence_paths:
+-        fail(f"task coverage entry has no evidence paths: {task}")
+-    normalized_paths = []
++        fail_task(task, "task coverage entry has no evidence paths")
+     for path in evidence_paths:
+-        resolved = normalize_repo_path(path)
++        resolved = normalize_repo_path(path, task)
+         normalized_path = resolved.relative_to(repo_root).as_posix()
+-        normalized_paths.append(normalized_path)
+         if not resolved.exists():
+-            fail(f"task evidence path does not exist for '{task}': {path}")
++            fail_task(task, "task evidence path does not exist", path)
+         if not is_tracked(normalized_path):
+-            fail(f"task evidence path is not tracked by git for '{task}': {path}")
+-
+-    if not any(path in changed_file_set or path.startswith(change_dir_rel + "/") for path in normalized_paths):
+-        fail(
+-            "task coverage must cite at least one changed file or change-local artifact for '\n"
+-            + task
+-            + "'"
+-        )
++            fail_task(task, "task evidence path is not tracked by git", path)
++        if normalized_path not in changed_file_set and not is_change_local(normalized_path):
++            fail_task(
++                task,
++                "task evidence path must be change-local or listed as current implementation evidence",
++                path,
++            )
++        validate_evidence_content(normalized_path, resolved, task)
+
+ print(f"OK: {change_dir_rel}")
+ print(f"  tasks: {len(all_tasks)} total / {len(checked_tasks)} checked")
+diff --git a/scripts/test-openspec-preflight-evidence.sh b/scripts/test-openspec-preflight-evidence.sh
+new file mode 100755
+index 000000000..ffa76d7e4
+--- /dev/null
++++ b/scripts/test-openspec-preflight-evidence.sh
+@@ -0,0 +1,288 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
++REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
++PREFLIGHT="$REPO_ROOT/scripts/openspec-preflight.sh"
++DETAIL_OUTPUT="${OPENSPEC_PREFLIGHT_SHOW_CASE_OUTPUT:-0}"
++
++readonly SUCCESS_STATUS=0
++readonly FAILURE_STATUS=1
++readonly TASK_TEXT="I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]"
++readonly ARCHIVE_PREFIX="2026-04-29"
++
++TMP_ROOT=""
++cleanup() {
++  if [[ -n "$TMP_ROOT" && -d "$TMP_ROOT" ]]; then
++    rm -rf -- "$TMP_ROOT"
++  fi
++}
++trap cleanup EXIT
++
++init_fixture_repo() {
++  local repo_dir="$1"
++  mkdir -p -- "$repo_dir"
++  git -C "$repo_dir" init -q
++  git -C "$repo_dir" config user.email "openspec-preflight-fixture@example.invalid"
++  git -C "$repo_dir" config user.name "OpenSpec Preflight Fixture"
++}
++
++write_tasks() {
++  local change_dir="$1"
++  cat > "$change_dir/tasks.md" <<EOF_TASKS
++## 1. Implementation
++
++- [x] $TASK_TEXT
++EOF_TASKS
++}
++
++write_common_files() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  local evidence_path="$3"
++  local changed_file="$4"
++  local artifact_path="$change_rel/evidence/preflight-fixture.txt"
++  local change_dir="$repo_dir/$change_rel"
++
++  mkdir -p -- "$change_dir/evidence" "$repo_dir/docs" "$repo_dir/src"
++  write_tasks "$change_dir"
++
++  cat > "$repo_dir/$artifact_path" <<'EOF_ARTIFACT'
++preflight fixture artifact: command output captured for durable evidence validation
++EOF_ARTIFACT
++
++  cat > "$repo_dir/$changed_file" <<'EOF_CHANGED'
++Current changed source/doc evidence used by the fixture.
++EOF_CHANGED
++
++  cat > "$change_dir/verification.md" <<EOF_VERIFY
++# Verification Evidence
++
++## Implementation Evidence
++
++- Changed file: \`$changed_file\`
++
++## Task Coverage
++
++- [x] $TASK_TEXT
++  - Evidence: \`$evidence_path\`
++
++## Verification Commands
++
++### \`fixture command\`
++
++- Status: pass
++- Artifact: \`$artifact_path\`
++EOF_VERIFY
++}
++
++stage_fixture_repo() {
++  local repo_dir="$1"
++  git -C "$repo_dir" add -A
++}
++
++make_active_change_rel() {
++  local case_name="$1"
++  printf 'openspec/changes/%s\n' "$case_name"
++}
++
++make_archived_change_rel() {
++  local case_name="$1"
++  printf 'openspec/changes/archive/%s-%s\n' "$ARCHIVE_PREFIX" "$case_name"
++}
++
++setup_valid_change_local() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  local evidence_path="$change_rel/evidence/task-proof.txt"
++  write_common_files "$repo_dir" "$change_rel" "$evidence_path" "docs/current.md"
++  cat > "$repo_dir/$evidence_path" <<'EOF_EVIDENCE'
++Valid change-local evidence: checked task cites a tracked file inside the change evidence directory.
++EOF_EVIDENCE
++  stage_fixture_repo "$repo_dir"
++}
++
++setup_valid_changed_file() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  write_common_files "$repo_dir" "$change_rel" "docs/current.md" "docs/current.md"
++  stage_fixture_repo "$repo_dir"
++}
++
++setup_missing_evidence() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  local change_dir="$repo_dir/$change_rel"
++  mkdir -p -- "$change_dir/evidence" "$repo_dir/docs"
++  write_tasks "$change_dir"
++  cat > "$repo_dir/docs/current.md" <<'EOF_CHANGED'
++Current changed doc exists, but task coverage has no evidence line.
++EOF_CHANGED
++  cat > "$change_dir/evidence/preflight-fixture.txt" <<'EOF_ARTIFACT'
++artifact exists, task evidence missing
++EOF_ARTIFACT
++  cat > "$change_dir/verification.md" <<EOF_VERIFY
++# Verification Evidence
++
++## Implementation Evidence
++
++- Changed file: \`docs/current.md\`
++
++## Task Coverage
++
++- [x] $TASK_TEXT
++
++## Verification Commands
++
++### \`fixture command\`
++
++- Status: pass
++- Artifact: \`$change_rel/evidence/preflight-fixture.txt\`
++EOF_VERIFY
++  stage_fixture_repo "$repo_dir"
++}
++
++setup_untracked_evidence() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  local evidence_path="$change_rel/evidence/untracked-proof.txt"
++  write_common_files "$repo_dir" "$change_rel" "$evidence_path" "docs/current.md"
++  cat > "$repo_dir/$evidence_path" <<'EOF_EVIDENCE'
++This file exists but remains untracked to prove path-specific failure output.
++EOF_EVIDENCE
++  stage_fixture_repo "$repo_dir"
++  git -C "$repo_dir" reset -q -- "$evidence_path"
++}
++
++setup_empty_evidence() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  local evidence_path="$change_rel/evidence/empty-proof.txt"
++  write_common_files "$repo_dir" "$change_rel" "$evidence_path" "docs/current.md"
++  : > "$repo_dir/$evidence_path"
++  stage_fixture_repo "$repo_dir"
++}
++
++setup_placeholder_evidence() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  local placeholder_text="$3"
++  local evidence_path="$change_rel/evidence/placeholder-proof.txt"
++  write_common_files "$repo_dir" "$change_rel" "$evidence_path" "docs/current.md"
++  printf '%s\n' "$placeholder_text" > "$repo_dir/$evidence_path"
++  stage_fixture_repo "$repo_dir"
++}
++
++setup_disallowed_external_evidence() {
++  local repo_dir="$1"
++  local change_rel="$2"
++  write_common_files "$repo_dir" "$change_rel" "docs/external-proof.md" "docs/current.md"
++  cat > "$repo_dir/docs/external-proof.md" <<'EOF_EVIDENCE'
++Tracked external evidence exists but is neither change-local nor listed as implementation evidence.
++EOF_EVIDENCE
++  stage_fixture_repo "$repo_dir"
++}
++
++run_case() {
++  local case_name="$1"
++  local change_rel="$2"
++  local expected_status="$3"
++  local allow_untracked="$4"
++  local required_reason="$5"
++  local expected_evidence_path="$6"
++  local repo_dir="$TMP_ROOT/$case_name"
++  local stdout_path="$TMP_ROOT/$case_name.stdout"
++  local stderr_path="$TMP_ROOT/$case_name.stderr"
++  local combined_path="$TMP_ROOT/$case_name.combined"
++
++  shift 6
++  local setup_fn="$1"
++  shift
++  init_fixture_repo "$repo_dir"
++  "$setup_fn" "$repo_dir" "$change_rel" "$@"
++
++  local display_command="$PREFLIGHT $change_rel"
++  set +e
++  if [[ "$allow_untracked" == "yes" ]]; then
++    display_command="OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1 $display_command"
++    (cd "$repo_dir" && OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1 "$PREFLIGHT" "$change_rel") >"$stdout_path" 2>"$stderr_path"
++  else
++    (cd "$repo_dir" && "$PREFLIGHT" "$change_rel") >"$stdout_path" 2>"$stderr_path"
++  fi
++  local actual_status=$?
++  set -e
++
++  {
++    printf '$ %s\n' "$display_command"
++    printf 'expected_status=%s actual_status=%s\n' "$expected_status" "$actual_status"
++    printf -- '--- stdout ---\n'
++    cat "$stdout_path"
++    printf -- '--- stderr ---\n'
++    cat "$stderr_path"
++  } > "$combined_path"
++  if [[ "$actual_status" -ne "$expected_status" ]]; then
++    echo "FAIL: $case_name expected status $expected_status got $actual_status" >&2
++    cat "$combined_path" >&2
++    return "$FAILURE_STATUS"
++  fi
++
++  if [[ "$expected_status" -ne "$SUCCESS_STATUS" ]]; then
++    grep -Fq "$TASK_TEXT" "$combined_path" || {
++      echo "FAIL: $case_name missing task text in failure output" >&2
++      cat "$combined_path" >&2
++      return "$FAILURE_STATUS"
++    }
++    grep -Fq "Remediation:" "$combined_path" || {
++      echo "FAIL: $case_name missing remediation in failure output" >&2
++      cat "$combined_path" >&2
++      return "$FAILURE_STATUS"
++    }
++    grep -Fq "$required_reason" "$combined_path" || {
++      echo "FAIL: $case_name missing expected reason: $required_reason" >&2
++      cat "$combined_path" >&2
++      return "$FAILURE_STATUS"
++    }
++    if [[ -n "$expected_evidence_path" ]]; then
++      grep -Fq "Evidence: $expected_evidence_path" "$combined_path" || {
++        echo "FAIL: $case_name missing expected evidence path: $expected_evidence_path" >&2
++        cat "$combined_path" >&2
++        return "$FAILURE_STATUS"
++      }
++    fi
++  fi
++
++  if [[ "$DETAIL_OUTPUT" == "1" ]]; then
++    printf -- '--- case %s transcript ---\n' "$case_name"
++    cat "$combined_path"
++    printf -- '--- end case %s transcript ---\n' "$case_name"
++  fi
++
++  printf 'PASS %s\n' "$case_name"
++}
++
++main() {
++  TMP_ROOT=$(mktemp -d)
++
++  run_case "active-change-local" "$(make_active_change_rel active-change-local)" "$SUCCESS_STATUS" "no" "" "" setup_valid_change_local
++  run_case "active-changed-file" "$(make_active_change_rel active-changed-file)" "$SUCCESS_STATUS" "no" "" "" setup_valid_changed_file
++  run_case "archived-change-local" "$(make_archived_change_rel archived-change-local)" "$SUCCESS_STATUS" "no" "" "" setup_valid_change_local
++  run_case "archived-changed-file" "$(make_archived_change_rel archived-changed-file)" "$SUCCESS_STATUS" "no" "" "" setup_valid_changed_file
++
++  run_case "active-missing-evidence" "$(make_active_change_rel active-missing-evidence)" "$FAILURE_STATUS" "no" "task coverage entry has no evidence paths" "" setup_missing_evidence
++  run_case "active-untracked-evidence" "$(make_active_change_rel active-untracked-evidence)" "$FAILURE_STATUS" "yes" "task evidence path is not tracked by git" "openspec/changes/active-untracked-evidence/evidence/untracked-proof.txt" setup_untracked_evidence
++  run_case "active-empty-evidence" "$(make_active_change_rel active-empty-evidence)" "$FAILURE_STATUS" "no" "evidence file is empty" "openspec/changes/active-empty-evidence/evidence/empty-proof.txt" setup_empty_evidence
++  run_case "active-pending-evidence" "$(make_active_change_rel active-pending-evidence)" "$FAILURE_STATUS" "no" "placeholder" "openspec/changes/active-pending-evidence/evidence/placeholder-proof.txt" setup_placeholder_evidence "pending"
++  run_case "active-todo-evidence" "$(make_active_change_rel active-todo-evidence)" "$FAILURE_STATUS" "no" "placeholder" "openspec/changes/active-todo-evidence/evidence/placeholder-proof.txt" setup_placeholder_evidence "TODO"
++  run_case "active-placeholder-evidence" "$(make_active_change_rel active-placeholder-evidence)" "$FAILURE_STATUS" "no" "placeholder" "openspec/changes/active-placeholder-evidence/evidence/placeholder-proof.txt" setup_placeholder_evidence "placeholder"
++  run_case "active-disallowed-external" "$(make_active_change_rel active-disallowed-external)" "$FAILURE_STATUS" "no" "must be change-local or listed as current implementation evidence" "docs/external-proof.md" setup_disallowed_external_evidence
++
++  run_case "archived-missing-evidence" "$(make_archived_change_rel missing-evidence)" "$FAILURE_STATUS" "no" "task coverage entry has no evidence paths" "" setup_missing_evidence
++  run_case "archived-untracked-evidence" "$(make_archived_change_rel untracked-evidence)" "$FAILURE_STATUS" "yes" "task evidence path is not tracked by git" "openspec/changes/archive/2026-04-29-untracked-evidence/evidence/untracked-proof.txt" setup_untracked_evidence
++  run_case "archived-empty-evidence" "$(make_archived_change_rel empty-evidence)" "$FAILURE_STATUS" "no" "evidence file is empty" "openspec/changes/archive/2026-04-29-empty-evidence/evidence/empty-proof.txt" setup_empty_evidence
++  run_case "archived-pending-evidence" "$(make_archived_change_rel pending-evidence)" "$FAILURE_STATUS" "no" "placeholder" "openspec/changes/archive/2026-04-29-pending-evidence/evidence/placeholder-proof.txt" setup_placeholder_evidence "pending"
++  run_case "archived-todo-evidence" "$(make_archived_change_rel todo-evidence)" "$FAILURE_STATUS" "no" "placeholder" "openspec/changes/archive/2026-04-29-todo-evidence/evidence/placeholder-proof.txt" setup_placeholder_evidence "TODO"
++  run_case "archived-placeholder-evidence" "$(make_archived_change_rel placeholder-evidence)" "$FAILURE_STATUS" "no" "placeholder" "openspec/changes/archive/2026-04-29-placeholder-evidence/evidence/placeholder-proof.txt" setup_placeholder_evidence "placeholder"
++  run_case "archived-disallowed-external" "$(make_archived_change_rel disallowed-external)" "$FAILURE_STATUS" "no" "must be change-local or listed as current implementation evidence" "docs/external-proof.md" setup_disallowed_external_evidence
++}
++
++main "$@"

@@ -1,0 +1,34 @@
+OpenSpec tasks gate (enforce-task-evidence-coverage)
+
+Strategy: same-family
+
+VERDICT: FAIL
+
+## Findings
+- [blocker] [class=omission] [scope=review] [route=prompt] [promoted=no] Checked verification tasks claim saved transcripts, but no evidence artifacts or `verification.md` coverage were supplied for review.
+  - Evidence: `openspec/changes/enforce-task-evidence-coverage/tasks.md` V1 requires saved transcripts under `openspec/changes/enforce-task-evidence-coverage/evidence/`; V2 requires saved known-good and negative fixture results under the same path; V3 requires `openspec/changes/enforce-task-evidence-coverage/verification.md` coverage for every checked task.
+
+- [blocker] [class=omission] [scope=tasks] [route=prompt] [promoted=no] Negative-case proof remains unreviewable despite checked tasks requiring it.
+  - Evidence: `tasks.md` I2 lists negative fixtures for missing, untracked, empty, `pending`, `TODO`, `placeholder`, and tracked-but-disallowed external evidence; V1/V2 are checked but no corresponding evidence file paths or transcripts are supplied.
+
+## Stage Check
+- Tasks trace to the proposal/design/spec: implementation, fixtures, actionable failures, docs, and verification all map to `openspec-governance.task-evidence-coverage`.
+- Task ordering is sensible and includes positive/negative verification.
+- However, all tasks are checked complete while the required durable evidence and `verification.md` task coverage are not supplied, so the change is not ready to move past tasks/done review.
+- No gate status should be claimed from the supplied artifacts.
+
+## Next Actions
+- Supply `openspec/changes/enforce-task-evidence-coverage/verification.md`.
+- Supply saved fixture/preflight transcripts under `openspec/changes/enforce-task-evidence-coverage/evidence/`.
+- Include negative transcripts showing task text, invalid/missing path or reason, and remediation.
+- After evidence passes review, archive/sync the completed change.
+
+## Promotion Hints
+- repeated 101x [class=omission] [scope=tasks] [route=prompt]
+  suggestion: Promote into OpenSpec rule/template/stage-gate check.
+  task: Strengthen OpenSpec tasks gate/template to block repeated omission findings. Example trigger: Missing verification tasks for the modified Forge repository-management requirements. `openspec/changes/jj-native-forge-wasm-plugin/specs/forge/spec.md` adds scenarios for create/list/delete behavior, backend manifests, and repository capability discovery, and `design.md` explicitly says `specs/forge/spec.md` needs integration tests for “repo create/list/delete with backend manifests, plus capability-discovery responses for Git-only, JJ-only, and dual-backend repos.” `tasks.md` has implementation work in 1.1/1.2 but no corresponding verification task in section 5 for those Forge scenarios.
+  sources: openspec-gate=94, done-review=7
+- repeated 12x [class=omission] [scope=review] [route=prompt]
+  suggestion: Repeated soft finding: tighten prompt guidance now, then promote into a spec rule or deterministic check if repeats continue.
+  task: Tighten reviewer/prompt guidance for repeated omission findings, then promote to a spec rule or deterministic check if it persists. Example trigger: Verification traceability is incomplete for required negative paths. `proposal.md` calls for “Negative tests proving Git access to JJ-only repos and JJ access to Git-only repos fail with capability errors and do not fall back silently.” `specs/jj-native-forge/spec.md` adds another negative path: JJ-enabled repo on a node without the active JJ plugin must fail with capability-unavailable. `design.md` Verification Strategy mentions unsupported-repo rejection generically under `specs/jj-remote-aspen/spec.md`, but it does not explicitly map tests for Git remote-helper access to JJ-only repos or for JJ access to a target node lacking the active plugin.
+  sources: openspec-gate=9, done-review=3

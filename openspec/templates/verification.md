@@ -15,6 +15,8 @@ Each path must be repo-relative and currently appear in `git status`.
 
 Copy each checked task from `tasks.md` exactly and cite the evidence paths that justify it.
 Every checked task must appear here.
+Evidence paths must be tracked, repo-relative files that are non-empty and not placeholder-only (`pending`, `TODO`, or `placeholder`).
+Task evidence may cite only files under the current change directory or currently modified/staged source/doc files listed above as changed files.
 For implementation-complete claims, prefer citing a saved diff artifact in addition to the source paths.
 
 - [x] Exact checked task text from tasks.md

@@ -10,7 +10,8 @@ Checks that checked OpenSpec tasks are backed by durable repo evidence.
 Rules enforced:
   - checked tasks in tasks.md must have matching entries in verification.md
   - each checked task must cite repo-relative evidence paths
-  - evidence paths must exist and be tracked by git
+  - evidence paths must exist, be tracked by git, and contain non-placeholder content
+  - task evidence must be change-local or a currently changed file listed in verification.md
   - changed files listed in verification.md must currently appear in git status
   - no untracked files may remain in the repo unless OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1
   - newly added files must be tracked (prevents nix/flake source-filter misses)
@@ -80,7 +81,7 @@ import pathlib
 import re
 import subprocess
 import sys
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 repo_root = pathlib.Path(sys.argv[1]).resolve()
 change_dir = pathlib.Path(sys.argv[2]).resolve()
@@ -89,9 +90,33 @@ change_dir_rel = change_dir.relative_to(repo_root).as_posix()
 tasks_path = change_dir / "tasks.md"
 verification_path = change_dir / "verification.md"
 
+PLACEHOLDER_TERMS = ("pending", "todo", "placeholder")
+PLACEHOLDER_LINE_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?(?:status\s*:\s*)?(pending|todo|placeholder)\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+
+
 def fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+def task_remediation() -> str:
+    return (
+        "Remediation: copy the checked task verbatim into verification.md under "
+        "'## Task Coverage' and add '- Evidence: `repo/path`' pointing to a "
+        "tracked change-local evidence artifact or a currently modified/staged "
+        "source/doc file listed in '## Implementation Evidence'."
+    )
+
+
+def fail_task(task: str, reason: str, evidence_path: Optional[str] = None) -> None:
+    details = [f"checked task evidence is invalid: {reason}", f"Task: {task}"]
+    if evidence_path is not None:
+        details.append(f"Evidence: {evidence_path}")
+    details.append(task_remediation())
+    fail("\n  ".join(details))
 
 if not tasks_path.exists():
     fail(f"missing tasks.md: {tasks_path}")
@@ -105,7 +130,13 @@ if not checked_tasks:
     raise SystemExit(0)
 
 if not verification_path.exists():
-    fail(f"checked tasks require verification.md: {verification_path}")
+    fail(
+        f"checked tasks require verification.md: {verification_path}\n"
+        + "Checked tasks:\n  - "
+        + "\n  - ".join(checked_tasks)
+        + "\n"
+        + task_remediation()
+    )
 
 verification_text = verification_path.read_text()
 changed_files = [m.group(1).strip() for m in re.finditer(r"^\s*-\s*Changed file:\s*`([^`]+)`\s*$", verification_text, re.MULTILINE)]
@@ -132,7 +163,12 @@ for raw_line in coverage_section.splitlines():
 missing = [task for task in checked_tasks if task not in coverage]
 extra = [task for task in coverage if task not in checked_tasks]
 if missing:
-    fail("verification.md is missing checked task coverage entries for:\n  - " + "\n  - ".join(missing))
+    fail(
+        "verification.md is missing checked task coverage entries for:\n  - "
+        + "\n  - ".join(missing)
+        + "\n"
+        + task_remediation()
+    )
 if extra:
     fail("verification.md has task coverage entries for unchecked tasks:\n  - " + "\n  - ".join(extra))
 
@@ -171,16 +207,55 @@ def list_untracked_paths() -> List[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def normalize_repo_path(path: str) -> pathlib.Path:
+def normalize_repo_path(path: str, task: Optional[str] = None) -> pathlib.Path:
     candidate = pathlib.Path(path)
     if candidate.is_absolute():
+        if task is not None:
+            fail_task(task, "evidence path must be repo-relative, not absolute", path)
         fail(f"evidence path must be repo-relative, not absolute: {path}")
     resolved = (repo_root / candidate).resolve()
     try:
         resolved.relative_to(repo_root)
     except ValueError:
+        if task is not None:
+            fail_task(task, "evidence path escapes repo root", path)
         fail(f"evidence path escapes repo root: {path}")
     return resolved
+
+
+def is_change_local(path: str) -> bool:
+    return path == change_dir_rel or path.startswith(change_dir_rel + "/")
+
+
+def placeholder_reason(text: str) -> Optional[str]:
+    stripped = text.strip()
+    if not stripped:
+        return "evidence file is empty"
+    lower = stripped.lower()
+    if lower in PLACEHOLDER_TERMS:
+        return f"evidence file contains only placeholder text: {stripped!r}"
+    material_lines = [line.strip() for line in stripped.splitlines() if line.strip() and not line.strip().startswith("#")]
+    if material_lines and all(PLACEHOLDER_LINE_RE.match(line) for line in material_lines):
+        return "evidence file contains only placeholder lines"
+    return None
+
+
+def validate_evidence_content(path: str, resolved: pathlib.Path, task: Optional[str] = None) -> None:
+    if resolved.is_dir():
+        if task is not None:
+            fail_task(task, "evidence path must be a file, not a directory", path)
+        fail(f"evidence path must be a file, not a directory: {path}")
+    try:
+        text = resolved.read_text(errors="replace")
+    except OSError as exc:
+        if task is not None:
+            fail_task(task, f"could not read evidence file: {exc}", path)
+        fail(f"could not read evidence file {path}: {exc}")
+    reason = placeholder_reason(text)
+    if reason is not None:
+        if task is not None:
+            fail_task(task, reason, path)
+        fail(f"invalid evidence artifact {path}: {reason}")
 
 allow_untracked = os.environ.get("OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED") == "1"
 if not allow_untracked:
@@ -210,31 +285,31 @@ if not artifact_paths:
 
 for path in artifact_paths:
     resolved = normalize_repo_path(path)
+    normalized_path = resolved.relative_to(repo_root).as_posix()
     if not resolved.exists():
         fail(f"verification artifact does not exist: {path}")
-    if not is_tracked(path):
+    if not is_tracked(normalized_path):
         fail(f"verification artifact is not tracked by git: {path}")
+    validate_evidence_content(normalized_path, resolved)
 
 changed_file_set = set(changed_files)
 for task, evidence_paths in coverage.items():
     if not evidence_paths:
-        fail(f"task coverage entry has no evidence paths: {task}")
-    normalized_paths = []
+        fail_task(task, "task coverage entry has no evidence paths")
     for path in evidence_paths:
-        resolved = normalize_repo_path(path)
+        resolved = normalize_repo_path(path, task)
         normalized_path = resolved.relative_to(repo_root).as_posix()
-        normalized_paths.append(normalized_path)
         if not resolved.exists():
-            fail(f"task evidence path does not exist for '{task}': {path}")
+            fail_task(task, "task evidence path does not exist", path)
         if not is_tracked(normalized_path):
-            fail(f"task evidence path is not tracked by git for '{task}': {path}")
-
-    if not any(path in changed_file_set or path.startswith(change_dir_rel + "/") for path in normalized_paths):
-        fail(
-            "task coverage must cite at least one changed file or change-local artifact for '\n"
-            + task
-            + "'"
-        )
+            fail_task(task, "task evidence path is not tracked by git", path)
+        if normalized_path not in changed_file_set and not is_change_local(normalized_path):
+            fail_task(
+                task,
+                "task evidence path must be change-local or listed as current implementation evidence",
+                path,
+            )
+        validate_evidence_content(normalized_path, resolved, task)
 
 print(f"OK: {change_dir_rel}")
 print(f"  tasks: {len(all_tasks)} total / {len(checked_tasks)} checked")

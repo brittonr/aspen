@@ -1,1 +1,2 @@
+$ openspec validate enforce-task-evidence-coverage --type change --strict --no-interactive
 Change 'enforce-task-evidence-coverage' is valid

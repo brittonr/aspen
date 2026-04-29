@@ -1,0 +1,197 @@
+$ OPENSPEC_PREFLIGHT_SHOW_CASE_OUTPUT=1 scripts/test-openspec-preflight-evidence.sh
+--- case active-change-local transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-change-local
+expected_status=0 actual_status=0
+--- stdout ---
+OK: openspec/changes/active-change-local
+  tasks: 1 total / 1 checked
+  changed files listed: 1
+  verification artifacts: 1
+--- stderr ---
+--- end case active-change-local transcript ---
+PASS active-change-local
+--- case active-changed-file transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-changed-file
+expected_status=0 actual_status=0
+--- stdout ---
+OK: openspec/changes/active-changed-file
+  tasks: 1 total / 1 checked
+  changed files listed: 1
+  verification artifacts: 1
+--- stderr ---
+--- end case active-changed-file transcript ---
+PASS active-changed-file
+--- case archived-change-local transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-archived-change-local
+expected_status=0 actual_status=0
+--- stdout ---
+OK: openspec/changes/archive/2026-04-29-archived-change-local
+  tasks: 1 total / 1 checked
+  changed files listed: 1
+  verification artifacts: 1
+--- stderr ---
+--- end case archived-change-local transcript ---
+PASS archived-change-local
+--- case archived-changed-file transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-archived-changed-file
+expected_status=0 actual_status=0
+--- stdout ---
+OK: openspec/changes/archive/2026-04-29-archived-changed-file
+  tasks: 1 total / 1 checked
+  changed files listed: 1
+  verification artifacts: 1
+--- stderr ---
+--- end case archived-changed-file transcript ---
+PASS archived-changed-file
+--- case active-missing-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-missing-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: task coverage entry has no evidence paths
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case active-missing-evidence transcript ---
+PASS active-missing-evidence
+--- case active-untracked-evidence transcript ---
+$ OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1 /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-untracked-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: task evidence path is not tracked by git
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/active-untracked-evidence/evidence/untracked-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case active-untracked-evidence transcript ---
+PASS active-untracked-evidence
+--- case active-empty-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-empty-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file is empty
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/active-empty-evidence/evidence/empty-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case active-empty-evidence transcript ---
+PASS active-empty-evidence
+--- case active-pending-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-pending-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file contains only placeholder text: 'pending'
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/active-pending-evidence/evidence/placeholder-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case active-pending-evidence transcript ---
+PASS active-pending-evidence
+--- case active-todo-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-todo-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file contains only placeholder text: 'TODO'
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/active-todo-evidence/evidence/placeholder-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case active-todo-evidence transcript ---
+PASS active-todo-evidence
+--- case active-placeholder-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-placeholder-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file contains only placeholder text: 'placeholder'
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/active-placeholder-evidence/evidence/placeholder-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case active-placeholder-evidence transcript ---
+PASS active-placeholder-evidence
+--- case active-disallowed-external transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/active-disallowed-external
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: task evidence path must be change-local or listed as current implementation evidence
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: docs/external-proof.md
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case active-disallowed-external transcript ---
+PASS active-disallowed-external
+--- case archived-missing-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-missing-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: task coverage entry has no evidence paths
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case archived-missing-evidence transcript ---
+PASS archived-missing-evidence
+--- case archived-untracked-evidence transcript ---
+$ OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1 /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-untracked-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: task evidence path is not tracked by git
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/archive/2026-04-29-untracked-evidence/evidence/untracked-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case archived-untracked-evidence transcript ---
+PASS archived-untracked-evidence
+--- case archived-empty-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-empty-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file is empty
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/archive/2026-04-29-empty-evidence/evidence/empty-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case archived-empty-evidence transcript ---
+PASS archived-empty-evidence
+--- case archived-pending-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-pending-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file contains only placeholder text: 'pending'
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/archive/2026-04-29-pending-evidence/evidence/placeholder-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case archived-pending-evidence transcript ---
+PASS archived-pending-evidence
+--- case archived-todo-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-todo-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file contains only placeholder text: 'TODO'
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/archive/2026-04-29-todo-evidence/evidence/placeholder-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case archived-todo-evidence transcript ---
+PASS archived-todo-evidence
+--- case archived-placeholder-evidence transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-placeholder-evidence
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: evidence file contains only placeholder text: 'placeholder'
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: openspec/changes/archive/2026-04-29-placeholder-evidence/evidence/placeholder-proof.txt
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case archived-placeholder-evidence transcript ---
+PASS archived-placeholder-evidence
+--- case archived-disallowed-external transcript ---
+$ /home/brittonr/git/aspen/scripts/openspec-preflight.sh openspec/changes/archive/2026-04-29-disallowed-external
+expected_status=1 actual_status=1
+--- stdout ---
+--- stderr ---
+FAIL: checked task evidence is invalid: task evidence path must be change-local or listed as current implementation evidence
+  Task: I1 Fixture checked task proves durable evidence coverage. [covers=fixture.checked-task]
+  Evidence: docs/external-proof.md
+  Remediation: copy the checked task verbatim into verification.md under '## Task Coverage' and add '- Evidence: `repo/path`' pointing to a tracked change-local evidence artifact or a currently modified/staged source/doc file listed in '## Implementation Evidence'.
+--- end case archived-disallowed-external transcript ---
+PASS archived-disallowed-external

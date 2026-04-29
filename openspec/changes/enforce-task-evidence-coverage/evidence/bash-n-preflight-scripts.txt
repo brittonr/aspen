@@ -1,0 +1,1 @@
+$ bash -n scripts/openspec-preflight.sh scripts/test-openspec-preflight-evidence.sh
