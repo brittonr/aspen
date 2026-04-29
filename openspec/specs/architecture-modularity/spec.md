@@ -654,4 +654,3 @@ ID: architecture.modularity.blob-replication-prefers-leaf-kv-contracts.boundary-
 - **GIVEN** crate-extraction policy records the blob/castore/cache family
 - **WHEN** a broad `aspen-blob -> aspen-core` dependency or exception is reintroduced for replica metadata persistence
 - **THEN** deterministic policy or cargo tree checks SHALL fail with a clear dependency path
-

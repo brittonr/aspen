@@ -15,12 +15,12 @@ index deb592f67..db5c2bb4b 100644
 --- a/crates/aspen-blob/Cargo.toml
 +++ b/crates/aspen-blob/Cargo.toml
 @@ -7,12 +7,9 @@ description = "Content-addressed blob storage for Aspen using iroh-blobs"
- 
+
  [features]
  default = []
 -replication = ["dep:aspen-client-api", "dep:aspen-core"]
 +replication = ["dep:aspen-client-api"]
- 
+
  [dependencies]
 -# Core types and traits (only needed by replication adapters)
 -aspen-core = { path = "../aspen-core", optional = true }
@@ -33,7 +33,7 @@ index 7bf681be6..9c28c100b 100644
 --- a/crates/aspen-blob/src/replication/adapters.rs
 +++ b/crates/aspen-blob/src/replication/adapters.rs
 @@ -43,6 +43,12 @@ use std::time::Instant;
- 
+
  use anyhow::Context;
  use anyhow::Result;
 +use aspen_kv_types::DeleteRequest;
@@ -48,7 +48,7 @@ index 7bf681be6..9c28c100b 100644
 @@ -67,6 +73,9 @@ use crate::traits::BlobRead;
  // KV-backed Replica Metadata Store
  // ============================================================================
- 
+
 +/// Scan extra rows so status filtering can still return a full repair batch.
 +const REPLICA_STATUS_SCAN_OVERSAMPLE: u32 = 10;
 +
@@ -56,7 +56,7 @@ index 7bf681be6..9c28c100b 100644
  ///
  /// Stores replica metadata in the Raft-backed KV store under the
 @@ -85,16 +94,12 @@ impl<KV> KvReplicaMetadataStore<KV> {
- 
+
  #[async_trait]
  impl<KV> ReplicaMetadataStore for KvReplicaMetadataStore<KV>
 -where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
@@ -64,19 +64,19 @@ index 7bf681be6..9c28c100b 100644
  {
      async fn get_replica_set(&self, hash: &Hash) -> Result<Option<ReplicaSet>> {
          let key = format!("{}{}", REPLICA_KEY_PREFIX, hash.to_hex());
- 
+
 -        let result = self
 -            .kv_store
 -            .read(aspen_core::kv::ReadRequest::new(&key))
 -            .await
 -            .context("failed to read replica set from KV")?;
 +        let result = self.kv_store.read(ReadRequest::new(&key)).await.context("failed to read replica set from KV")?;
- 
+
          match result.kv {
              Some(kv) => {
 @@ -110,8 +115,8 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
          let value = replicas.to_json().context("failed to serialize replica set")?;
- 
+
          self.kv_store
 -            .write(aspen_core::kv::WriteRequest {
 -                command: aspen_core::kv::WriteCommand::Set { key, value },
@@ -88,13 +88,13 @@ index 7bf681be6..9c28c100b 100644
 @@ -123,10 +128,7 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
      async fn delete_replica_set(&self, hash: &Hash) -> Result<()> {
          let key = format!("{}{}", REPLICA_KEY_PREFIX, hash.to_hex());
- 
+
 -        self.kv_store
 -            .delete(aspen_core::kv::DeleteRequest { key })
 -            .await
 -            .context("failed to delete replica set from KV")?;
 +        self.kv_store.delete(DeleteRequest { key }).await.context("failed to delete replica set from KV")?;
- 
+
          debug!(hash = %hash.to_hex(), "replica set deleted");
          Ok(())
 @@ -136,9 +138,9 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
@@ -112,7 +112,7 @@ index 7bf681be6..9c28c100b 100644
 @@ -376,6 +378,17 @@ mod tests {
      use std::sync::atomic::AtomicU64;
      use std::sync::atomic::Ordering;
- 
+
 +    use aspen_kv_types::DeleteResult;
 +    use aspen_kv_types::KeyValueStoreError;
 +    use aspen_kv_types::KeyValueWithRevision;
@@ -126,11 +126,11 @@ index 7bf681be6..9c28c100b 100644
 +
      use super::*;
      use crate::replication::ReplicationPolicy;
- 
+
 @@ -386,67 +399,71 @@ mod tests {
          revision: AtomicU64,
      }
- 
+
 +    const DEFAULT_SCAN_LIMIT: usize = 100;
 +    const INITIAL_REVISION: u64 = 1;
 +    const IROH_HASH_SIZE_BYTES: usize = 32;
@@ -159,7 +159,7 @@ index 7bf681be6..9c28c100b 100644
              }
          }
 +    }
- 
+
 -        async fn read(
 -            &self,
 -            request: aspen_core::kv::ReadRequest,
@@ -182,7 +182,7 @@ index 7bf681be6..9c28c100b 100644
 +            Ok(ReadResult { kv })
          }
 +    }
- 
+
 -        async fn delete(
 -            &self,
 -            request: aspen_core::kv::DeleteRequest,
@@ -198,7 +198,7 @@ index 7bf681be6..9c28c100b 100644
              })
          }
 +    }
- 
+
 -        async fn scan(
 -            &self,
 -            request: aspen_core::kv::ScanRequest,
@@ -234,7 +234,7 @@ index 7bf681be6..9c28c100b 100644
 @@ -455,6 +472,8 @@ mod tests {
          }
      }
- 
+
 +    impl KeyValueStore for MockKvStore {}
 +
      #[tokio::test]
@@ -243,7 +243,7 @@ index 7bf681be6..9c28c100b 100644
 @@ -481,6 +500,31 @@ mod tests {
          assert!(deleted.is_none());
      }
- 
+
 +    #[tokio::test]
 +    async fn test_kv_metadata_store_missing_returns_none() {
 +        let kv = Arc::new(MockKvStore::default());
@@ -277,7 +277,7 @@ index ca05a0998..5664fac60 100644
 --- a/docs/crate-extraction/blob-castore-cache.md
 +++ b/docs/crate-extraction/blob-castore-cache.md
 @@ -36,7 +36,7 @@
- 
+
  | Crate | Dependency | Decision | Reason |
  | --- | --- | --- | --- |
 -| `aspen-blob` | `aspen-core` | keep for now | Provides `KeyValueStore` and KV request/response types for `BlobAwareKeyValueStore`; not an app shell. Future seam can move this to alloc-safe trait/type crates. |
@@ -286,9 +286,9 @@ index ca05a0998..5664fac60 100644
  | `aspen-castore` | `aspen-blob` | keep | Server wraps a reusable `BlobStore` implementation; this is the storage backend boundary. |
  | `aspen-castore` | `aspen-core` / `aspen-core-shell` | removed | Circuit breaker moved local to avoid app/core-shell coupling in the reusable castore graph. |
 @@ -53,10 +53,10 @@
- 
+
  ### aspen-blob: BlobAwareKeyValueStore generics
- 
+
 -- `BlobAwareKeyValueStore` currently hardcoded to `IrohBlobStore` (kv_integration.rs:61)
 -- Should be generic over `BlobRead + BlobWrite` capabilities instead
 -- Transfer traits (`BlobTransfer`) stay in iroh adapter features
@@ -297,9 +297,9 @@ index ca05a0998..5664fac60 100644
 +- `KvReplicaMetadataStore` uses `aspen_traits::KeyValueStore` plus `aspen-kv-types` request/response/error types; root `aspen-core` is not part of the replication metadata seam.
 +- Transfer traits (`BlobTransfer`) stay in iroh adapter features.
 +- Future work may narrow the composite `KeyValueStore` bound to `KvRead + KvWrite + KvDelete + KvScan` if the adapter needs a smaller port.
- 
+
  ### aspen-cache: Storage port traits
- 
+
 @@ -109,8 +109,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
  | `aspen-blob` | default | `aspen-blob -> iroh` | Aspen storage/cache maintainers | Iroh endpoint/address types are the backend transport purpose for blob storage. |
  | `aspen-blob` | default | `aspen-blob -> iroh-blobs` | Aspen storage/cache maintainers | iroh-blobs is the content-addressed storage backend purpose. |
@@ -311,7 +311,7 @@ index ca05a0998..5664fac60 100644
  | `aspen-castore` | default | `aspen-castore -> aspen-blob` | Aspen storage/cache maintainers | Castore server wraps the reusable blob store trait/implementation. |
  | `aspen-castore` | default | `aspen-castore -> snix-castore` | Aspen storage/cache maintainers | snix trait implementation is the crate purpose. |
 @@ -126,7 +125,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
- 
+
  - `cargo check -p aspen-blob --no-default-features`
  - `cargo check -p aspen-blob --features replication`
 -- `cargo tree -p aspen-blob --no-default-features -e normal` plus negative boundary grep for `aspen-client-api`, handlers, root app, and node bootstrap crates
@@ -320,14 +320,14 @@ index ca05a0998..5664fac60 100644
  - `cargo check -p aspen-castore --no-default-features`
  - `cargo tree -p aspen-castore --no-default-features -e normal` plus negative boundary grep for core-shell, handlers, and blob handler crates
 @@ -143,7 +142,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
- 
+
  Current status is `workspace-internal`. I3/I4/I5 have moved the highest-risk app couplings behind features or local helpers:
- 
+
 -- `aspen-blob/replication` owns client-RPC replication coupling.
 +- `aspen-blob/replication` owns client-RPC replication coupling while replica metadata storage uses leaf KV traits/types, not root `aspen-core`.
  - `aspen-castore` owns its local irpc circuit breaker without `aspen-core-shell`.
  - `aspen-cache` default owns narinfo/NAR/signing helpers only; `kv-index` owns Aspen KV publication.
- 
+
 diff --git a/docs/crate-extraction/policy.ncl b/docs/crate-extraction/policy.ncl
 index e9c4249f9..a60378022 100644
 --- a/docs/crate-extraction/policy.ncl
@@ -370,4 +370,3 @@ index e9c4249f9..a60378022 100644
 -        },
        ],
      },
- 

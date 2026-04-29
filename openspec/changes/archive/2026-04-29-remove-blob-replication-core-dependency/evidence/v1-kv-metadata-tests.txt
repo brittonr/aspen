@@ -220,4 +220,3 @@ test replication::adapters::tests::test_kv_metadata_store_roundtrip ... ok
 test replication::adapters::tests::test_kv_metadata_store_scan_by_status ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 69 filtered out; finished in 0.00s
-

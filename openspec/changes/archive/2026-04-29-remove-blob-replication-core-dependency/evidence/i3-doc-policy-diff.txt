@@ -3,7 +3,7 @@ index ca05a0998..5664fac60 100644
 --- a/docs/crate-extraction/blob-castore-cache.md
 +++ b/docs/crate-extraction/blob-castore-cache.md
 @@ -36,7 +36,7 @@
- 
+
  | Crate | Dependency | Decision | Reason |
  | --- | --- | --- | --- |
 -| `aspen-blob` | `aspen-core` | keep for now | Provides `KeyValueStore` and KV request/response types for `BlobAwareKeyValueStore`; not an app shell. Future seam can move this to alloc-safe trait/type crates. |
@@ -12,9 +12,9 @@ index ca05a0998..5664fac60 100644
  | `aspen-castore` | `aspen-blob` | keep | Server wraps a reusable `BlobStore` implementation; this is the storage backend boundary. |
  | `aspen-castore` | `aspen-core` / `aspen-core-shell` | removed | Circuit breaker moved local to avoid app/core-shell coupling in the reusable castore graph. |
 @@ -53,10 +53,10 @@
- 
+
  ### aspen-blob: BlobAwareKeyValueStore generics
- 
+
 -- `BlobAwareKeyValueStore` currently hardcoded to `IrohBlobStore` (kv_integration.rs:61)
 -- Should be generic over `BlobRead + BlobWrite` capabilities instead
 -- Transfer traits (`BlobTransfer`) stay in iroh adapter features
@@ -23,9 +23,9 @@ index ca05a0998..5664fac60 100644
 +- `KvReplicaMetadataStore` uses `aspen_traits::KeyValueStore` plus `aspen-kv-types` request/response/error types; root `aspen-core` is not part of the replication metadata seam.
 +- Transfer traits (`BlobTransfer`) stay in iroh adapter features.
 +- Future work may narrow the composite `KeyValueStore` bound to `KvRead + KvWrite + KvDelete + KvScan` if the adapter needs a smaller port.
- 
+
  ### aspen-cache: Storage port traits
- 
+
 @@ -109,8 +109,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
  | `aspen-blob` | default | `aspen-blob -> iroh` | Aspen storage/cache maintainers | Iroh endpoint/address types are the backend transport purpose for blob storage. |
  | `aspen-blob` | default | `aspen-blob -> iroh-blobs` | Aspen storage/cache maintainers | iroh-blobs is the content-addressed storage backend purpose. |
@@ -37,7 +37,7 @@ index ca05a0998..5664fac60 100644
  | `aspen-castore` | default | `aspen-castore -> aspen-blob` | Aspen storage/cache maintainers | Castore server wraps the reusable blob store trait/implementation. |
  | `aspen-castore` | default | `aspen-castore -> snix-castore` | Aspen storage/cache maintainers | snix trait implementation is the crate purpose. |
 @@ -126,7 +125,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
- 
+
  - `cargo check -p aspen-blob --no-default-features`
  - `cargo check -p aspen-blob --features replication`
 -- `cargo tree -p aspen-blob --no-default-features -e normal` plus negative boundary grep for `aspen-client-api`, handlers, root app, and node bootstrap crates
@@ -46,14 +46,14 @@ index ca05a0998..5664fac60 100644
  - `cargo check -p aspen-castore --no-default-features`
  - `cargo tree -p aspen-castore --no-default-features -e normal` plus negative boundary grep for core-shell, handlers, and blob handler crates
 @@ -143,7 +142,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
- 
+
  Current status is `workspace-internal`. I3/I4/I5 have moved the highest-risk app couplings behind features or local helpers:
- 
+
 -- `aspen-blob/replication` owns client-RPC replication coupling.
 +- `aspen-blob/replication` owns client-RPC replication coupling while replica metadata storage uses leaf KV traits/types, not root `aspen-core`.
  - `aspen-castore` owns its local irpc circuit breaker without `aspen-core-shell`.
  - `aspen-cache` default owns narinfo/NAR/signing helpers only; `kv-index` owns Aspen KV publication.
- 
+
 diff --git a/docs/crate-extraction/policy.ncl b/docs/crate-extraction/policy.ncl
 index e9c4249f9..a60378022 100644
 --- a/docs/crate-extraction/policy.ncl
@@ -96,17 +96,16 @@ index e9c4249f9..a60378022 100644
 -        },
        ],
      },
- 
+
 diff --git a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 index 83f8d7024..856606c2c 100644
 --- a/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 +++ b/openspec/changes/archive/2026-04-29-remove-blob-replication-core-dependency/tasks.md
 @@ -6,7 +6,7 @@
- 
+
  - [x] I1 Remove optional `aspen-core` dependency and `replication` feature edge from `crates/aspen-blob/Cargo.toml`, keeping `aspen-client-api` behind `replication`. ✅ 1m (started: 2026-04-29T03:49:35Z → completed: 2026-04-29T03:50:10Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replication-adapter-compiles-without-root-core,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.runtime-wire-schemas-remain-separately-gated]
  - [x] I2 Migrate `KvReplicaMetadataStore` and its tests from `aspen_core::traits`, `aspen_core::kv`, and `aspen_core::error` to `aspen-traits` and `aspen-kv-types`, preserving get/save/delete/scan behavior and error context. ✅ 3m (started: 2026-04-29T03:50:30Z → completed: 2026-04-29T03:53:39Z) [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.replica-metadata-behavior-preserved,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.kv-metadata-uses-leaf-kv-contracts]
 -- [ ] I3 Update `docs/crate-extraction/blob-castore-cache.md` and `docs/crate-extraction/policy.ncl` so `aspen-blob -> aspen-core` is no longer documented or allowed for replication metadata storage. [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.policy-rejects-stale-core-exception,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.boundary-policy-catches-stale-blob-core-dependency]
 +- [~] I3 Update `docs/crate-extraction/blob-castore-cache.md` and `docs/crate-extraction/policy.ncl` so `aspen-blob -> aspen-core` is no longer documented or allowed for replication metadata storage. ⏱ started: 2026-04-29T03:54:40Z [covers=blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.policy-rejects-stale-core-exception,architecture.modularity.blob-replication-prefers-leaf-kv-contracts.boundary-policy-catches-stale-blob-core-dependency]
- 
+
  ## 2. Verification
- 

@@ -108,4 +108,3 @@ ID: blob-castore-cache-extraction.blob-replication-kv-uses-leaf-contracts.policy
 - **GIVEN** the blob/castore/cache extraction policy is checked
 - **WHEN** `aspen-blob` or the blob/castore transitive path reintroduces `aspen-core` for replication metadata storage
 - **THEN** the extraction-readiness checker SHALL fail unless a future OpenSpec change documents a new owner, feature gate, reason, and compatibility evidence
-
