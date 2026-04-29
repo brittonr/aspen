@@ -1,0 +1,660 @@
+### aspen-storage-types
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+bincode = { version = "1.3", default-features = false }
+
+### aspen-traits
+# Async traits (optional, gated behind `async` feature)
+async-trait = { version = "0.1", optional = true }
+# Cluster types (for ClusterController trait)
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+# KV types (for KeyValueStore trait)
+aspen-kv-types = { path = "../aspen-kv-types", default-features = false }
+
+### aspen-cluster-types
+# Serialization
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+# Error handling
+thiserror = { version = "2.0", default-features = false }
+# Optional P2P address conversion helpers
+iroh-base = { version = "0.97.0", default-features = false, features = ["key"], optional = true }
+
+### aspen-hlc
+# Hybrid Logical Clock for deterministic distributed ordering
+uhlc = { version = "0.8", default-features = false }
+blake3 = { version = "1", default-features = false }
+# Serialization
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+
+### aspen-time
+# No dependencies - pure std::time
+
+### aspen-constants
+# No dependencies - pure constants only
+
+### aspen-auth-core
+iroh-base = { version = "0.97.0", default-features = false, features = ["key"] }
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+postcard = { version = "1.0", features = ["alloc"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+blake3 = { version = "1.5", default-features = false }
+thiserror = "2.0"
+
+### aspen-auth
+# Core shell integration
+aspen-auth-core = { path = "../aspen-auth-core" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
+# Async traits
+async-trait = "0.1"
+# Serialization
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+postcard = { version = "1.0", features = ["alloc"] }
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+# Cryptography
+hmac = "0.12"
+sha2 = "0.10"
+iroh-base = { version = "0.97.0", default-features = false, features = ["key"] }
+# Error handling
+anyhow = "1.0"
+# Utilities
+rand = "0.9"
+tracing = "0.1"
+
+### aspen-ticket
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+iroh-tickets = "0.4.0"
+iroh-base = { version = "0.97.0", optional = true }
+iroh-gossip = { version = "0.97.0", optional = true }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+thiserror = { version = "2.0", default-features = false }
+rand = { version = "0.9", optional = true }
+
+### aspen-hooks-ticket
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+iroh-tickets = "0.4.0"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde = { version = "1", default-features = false, features = ["derive"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+thiserror = { version = "2", default-features = false }
+
+### aspen-jobs
+# Core dependencies
+aspen-core = { path = "../aspen-core" }
+aspen-coordination = { path = "../aspen-coordination" }
+# Extracted crates for lighter dependencies
+aspen-constants = { path = "../aspen-constants" }
+aspen-hlc = { path = "../aspen-hlc" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false }
+aspen-time = { path = "../aspen-time" }
+aspen-traits = { path = "../aspen-traits" }
+aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-kv-branch = { path = "../aspen-kv-branch", optional = true }
+# P2P networking
+iroh = "0.97.0"
+iroh-blobs = { version = "0.99.0", optional = true }
+# Async runtime
+tokio = { version = "1.41", features = ["rt-multi-thread", "sync", "time", "macros", "fs"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+async-trait = "0.1"
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Error handling
+anyhow = "1.0"
+snafu = { version = "0.8", features = ["futures"] }
+thiserror = "2.0"
+# Time and scheduling
+chrono = { version = "0.4", features = ["serde"] }
+cron = "0.13"
+# Logging
+tracing = "0.1"
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+rand = "0.9"
+bytes = "1.8"
+flate2 = "1.0"
+hex = "0.4"
+getrandom = "0.2"
+libc = "0.2"
+# Storage (for worker implementations)
+redb = "2.0.0"
+bincode = "1.3"
+zstd = "0.13"
+# VM execution (optional)
+hyperlight-host = { version = "0.12", optional = true }
+hyperlight-wasm = { version = "0.12", optional = true }
+tempfile = "3.4"
+blake3 = "1.5"
+base64 = "0.22"
+glob = "0.3"
+
+### aspen-jobs-protocol
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+
+### aspen-jobs-guest
+# Allocator for no_std
+linked_list_allocator = "0.10"
+# Serialization (no_std compatible)
+serde = { version = "1.0", features = ["derive"], default-features = false }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+
+### aspen-jobs-worker-blob
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-blob = { path = "../aspen-blob" }
+async-trait = "0.1"
+flate2 = "1.0"
+hex = "0.4"
+iroh-blobs = "0.99.0"
+serde_json = "1.0"
+tracing = "0.1"
+zstd = "0.13"
+
+### aspen-jobs-worker-maintenance
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-blob = { path = "../aspen-blob" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
+aspen-traits = { path = "../aspen-traits" }
+async-trait = "0.1"
+bincode = "1.3"
+chrono = { version = "0.4", features = ["serde"] }
+redb = "2.0.0"
+serde_json = "1.0"
+tracing = "0.1"
+
+### aspen-jobs-worker-replication
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-blob = { path = "../aspen-blob" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-traits = { path = "../aspen-traits" }
+async-trait = "0.1"
+bincode = "1.3"
+chrono = { version = "0.4", features = ["serde"] }
+hex = "0.4"
+iroh-blobs = "0.99.0"
+redb = "2.0.0"
+serde_json = "1.0"
+tracing = "0.1"
+
+### aspen-jobs-worker-shell
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-auth = { path = "../aspen-auth" }
+aspen-blob = { path = "../aspen-blob" }
+async-trait = "0.1"
+command-group = { version = "5.0", features = ["with-tokio"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.41", features = ["rt-multi-thread", "sync", "time", "macros", "process", "io-util"] }
+tracing = "0.1"
+
+### aspen-jobs-worker-sql
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-blob = { path = "../aspen-blob" }
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
+async-trait = "0.1"
+bincode = "1.3"
+chrono = { version = "0.4", features = ["serde"] }
+redb = "2.0.0"
+serde_json = "1.0"
+tracing = "0.1"
+
+### aspen-ci-core
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Schema generation
+schemars = { workspace = true }
+# Error handling
+snafu = "0.8.9"
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { workspace = true }
+
+### aspen-ci
+# Core Aspen dependencies
+aspen-core = { workspace = true }
+aspen-forge = { workspace = true }
+aspen-jobs = { workspace = true }
+aspen-blob = { workspace = true }
+aspen-auth = { workspace = true }
+aspen-ticket = { workspace = true }
+# CI executor crates
+aspen-ci-core = { path = "../aspen-ci-core" }
+aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell", optional = true }
+aspen-ci-executor-vm = { path = "../aspen-ci-executor-vm", optional = true }
+aspen-ci-executor-nix = { path = "../aspen-ci-executor-nix", optional = true }
+# Optional Nickel configuration support
+aspen-nickel = { path = "../aspen-nickel", optional = true }
+# SNIX dependencies for direct NAR ingestion (optional, forwarded to executor crates)
+snix-serde = { workspace = true, optional = true }
+snix-eval = { workspace = true, optional = true }
+# Nickel language for config parsing (optional)
+nickel-lang = { workspace = true, optional = true }
+# Serialization
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+n0-future = { workspace = true }
+# Error handling
+snafu = "0.8.9"
+thiserror = { workspace = true }
+# Logging and tracing
+tracing = { workspace = true }
+# Utilities
+blake3 = { workspace = true }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { workspace = true }
+hex = "0.4"
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-blobs = "0.99.0"
+tokio-util = { version = "0.7", features = ["rt"] }
+postcard = { version = "1.0", features = ["alloc"] }
+rand = { workspace = true }
+# Stack growth for deeply recursive Nickel evaluation (optional, only needed with nickel)
+stacker = { version = "0.1", optional = true }
+# TOML editing for CI build preparation
+toml_edit = "0.22"
+# Agent dependencies (for aspen-ci-agent binary and local executor)
+tokio-vsock = "0.7"
+command-group = { version = "5.0", features = ["with-tokio"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bytes = { workspace = true }
+
+### aspen-ci-executor-shell
+# Core Aspen dependencies
+aspen-core = { workspace = true }
+aspen-ci-core = { path = "../aspen-ci-core" }
+aspen-blob = { workspace = true }
+aspen-cache = { workspace = true, optional = true }
+aspen-jobs = { workspace = true }
+aspen-kv-branch = { path = "../aspen-kv-branch", optional = true }
+# Iroh for P2P networking
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-blobs = "0.99.0"
+# Serialization
+serde = { workspace = true }
+serde_json = "1.0"
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+# Error handling
+snafu = "0.8.9"
+# Logging and tracing
+tracing = { workspace = true }
+# Utilities
+hex = "0.4"
+glob = "0.3"
+# Archive extraction for workspace seeding
+flate2 = "1.0"
+tar = "0.4"
+walkdir = "2"
+# Process execution
+command-group = { version = "5.0", features = ["with-tokio"] }
+# SNIX dependencies for direct NAR ingestion (optional)
+snix-castore = { workspace = true, optional = true }
+snix-store = { workspace = true, optional = true }
+nix-compat = { workspace = true, optional = true }
+# HTTP/3 cache proxy for Nix binary cache substitution (optional)
+h3 = { workspace = true, optional = true }
+iroh-h3 = { workspace = true, optional = true }
+hyper = { version = "1.0", features = ["server", "http1"], optional = true }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto"], optional = true }
+http-body-util = { version = "0.1", optional = true }
+http = { version = "1.0", optional = true }
+bytes = { workspace = true, optional = true }
+tokio-stream = { version = "0.1", optional = true }
+
+### aspen-ci-executor-vm
+# Core Aspen dependencies
+aspen-core = { workspace = true }
+aspen-ci-core = { path = "../aspen-ci-core" }
+aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell" }
+aspen-blob = { workspace = true }
+aspen-fuse = { workspace = true, features = ["virtiofs"] }
+aspen-jobs = { workspace = true }
+aspen-ticket = { workspace = true }
+# Iroh for blob hashes
+iroh-blobs = "0.99.0"
+# HTTP dependencies for Cloud Hypervisor REST API (Unix socket)
+hyper = { version = "1.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
+http-body-util = { version = "0.1" }
+http = { version = "1.0" }
+bytes = { workspace = true }
+# Process execution and vsock
+tokio-vsock = "0.7"
+command-group = { version = "5.0", features = ["with-tokio"] }
+# Serialization
+serde = { workspace = true }
+serde_json = "1.0"
+postcard = { version = "1.0", features = ["alloc"] }
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+# Error handling
+snafu = "0.8.9"
+# Logging and tracing
+tracing = { workspace = true }
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { workspace = true }
+glob = "0.3"
+hex = "0.4"
+# Archive handling for workspace seeding
+flate2 = "1.0"
+tar = "0.4"
+
+### aspen-ci-executor-nix
+# Core Aspen dependencies
+aspen-core = { workspace = true }
+aspen-ci-core = { path = "../aspen-ci-core" }
+aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell" }
+aspen-blob = { workspace = true }
+aspen-cache = { workspace = true }
+aspen-jobs = { workspace = true }
+# Iroh for P2P networking
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+# SNIX dependencies
+snix-castore = { workspace = true, optional = true }
+snix-store = { workspace = true, optional = true }
+# nix-compat: always needed for FlakeRef parsing; also used for NAR ingestion with snix feature
+nix-compat = { workspace = true }
+# snix-eval: in-process Nix evaluation (Tier 3)
+snix-eval = { workspace = true, optional = true }
+snix-glue = { workspace = true, optional = true }
+snix-build = { workspace = true, optional = true }
+# Build service utilities
+uuid = { version = "1", features = ["v4"], optional = true }
+futures = { version = "0.3", optional = true }
+tonic = { workspace = true, optional = true }
+# Serialization
+serde = { workspace = true }
+serde_json = "1.0"
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+# Logging and tracing
+tracing = { workspace = true }
+# Utilities
+blake3 = { workspace = true }
+bstr = { version = "1.0", optional = true }
+bytes = { version = "1.0", optional = true }
+hex = "0.4"
+glob = "0.3"
+# Fetching: tarball download + unpack for flake inputs
+flate2 = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+# In-process HTTP client (replaces curl subprocess)
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"], optional = true }
+# NAR decompression for upstream cache fetches
+xz2 = { version = "0.1", optional = true }
+zstd = { version = "0.13", optional = true }
+bzip2 = { version = "0.5", optional = true }
+# Git clone timeout support
+wait-timeout = "0.2"
+
+### aspen-trust
+async-trait = "0.1"
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+rand = "0.9"
+secrecy = { version = "0.10", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha3 = "0.10"
+snafu = "0.8"
+subtle = "2.6"
+tokio = { workspace = true, features = ["sync"] }
+zeroize = { version = "1.8", features = ["derive"] }
+
+### aspen-crypto
+blake3 = "1.5"
+hex = "0.4"
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+rand = "0.9"
+thiserror = "2.0"
+tokio = { version = "1.48.0", features = ["fs"] }
+
+### aspen-secrets
+# Core Aspen crates
+aspen-core = { path = "../aspen-core" }
+aspen-auth = { path = "../aspen-auth" }
+aspen-crypto = { path = "../aspen-crypto" }
+# Age encryption (SOPS-compatible)
+age = { version = "0.11", features = ["armor"] }
+# Symmetric encryption (Transit engine)
+chacha20poly1305 = "0.10"
+aes-gcm = "0.10"  # SOPS compatibility (AES-256-GCM)
+aes = "0.8"       # AesGcm<Aes256, U32> for Go sops 32-byte nonce compat
+# Cryptographic utilities
+blake3 = "1.5"
+rand = "0.9"
+zeroize = { version = "1.8", features = ["derive"] }
+# PKI / X.509 certificates
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+x509-cert = { version = "0.2", features = ["pem"] }
+der = "0.7"
+time = "0.3"
+# Ed25519 signing (for Transit engine)
+ed25519-dalek = "2.1"
+# Serialization
+schemars = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+toml = "0.8"
+postcard = { version = "1.0", features = ["alloc"] }
+base64 = "0.22"
+hex = "0.4"
+# Error handling
+thiserror = "2.0"
+snafu = "0.8.9"
+anyhow = "1.0"
+# Async
+async-trait = "0.1"
+tokio = { version = "1.48.0", features = ["fs", "sync", "time"] }
+# Iroh identity (for Ed25519 keys)
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+# Logging
+tracing = "0.1"
+# SOPS native encrypt/decrypt (feature-gated)
+aspen-client = { path = "../aspen-client", optional = true }
+aspen-client-api = { path = "../aspen-client-api", features = ["secrets"], optional = true }
+aspen-transport = { path = "../aspen-transport", optional = true }
+toml_edit = { version = "0.22", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+chrono = { version = "0.4", optional = true }
+regex = { version = "1", optional = true }
+subtle = { version = "2.6", optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+aspen-trust = { path = "../aspen-trust", optional = true }
+
+### aspen-secrets-handler
+# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["runtime-context"] }
+# Local crates
+aspen-client-api = { workspace = true }
+aspen-core = { path = "../aspen-core" }
+aspen-secrets = { path = "../aspen-secrets" }
+# Core dependencies
+tokio = { version = "1.0", features = ["macros"] }
+tracing = "0.1"
+anyhow = "1.0"
+async-trait = "0.1"
+# Encoding
+base64 = "0.22"
+
+### aspen-testing-core
+# Core Aspen type crates (minimal dependencies)
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+# Async runtime
+async-trait = "0.1"
+tokio = { version = "1.48.0", features = ["sync", "time"] }
+# Utilities
+base64 = "0.22"
+
+### aspen-testing
+# Core Aspen dependencies
+aspen-core = { package = "aspen-core-shell", version = "0.1.0", path = "../aspen-core-shell" }
+# Lightweight testing core (deterministic implementations)
+aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
+# Test fixtures and builders
+aspen-testing-fixtures = { version = "0.1.0", path = "../aspen-testing-fixtures" }
+# Madsim simulation testing (optional)
+aspen-testing-madsim = { version = "0.1.0", path = "../aspen-testing-madsim", optional = true }
+# Network testing utilities (optional)
+aspen-testing-network = { version = "0.1.0", path = "../aspen-testing-network", optional = true }
+# Extracted crates for lighter dependencies
+aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+# Raft testing (optional - required for router module)
+# Feature-gated to allow lighter builds for crates that only need deterministic mocks
+aspen-raft = { version = "0.1.0", path = "../aspen-raft", features = ["testing"], optional = true }
+# Blob, cluster, jobs dependencies (optional - required for router module)
+aspen-blob = { version = "0.1.0", path = "../aspen-blob", optional = true }
+aspen-cluster = { version = "0.1.0", path = "../aspen-cluster", optional = true }
+aspen-jobs = { version = "0.1.0", path = "../aspen-jobs", optional = true }
+aspen-coordination = { version = "0.1.0", path = "../aspen-coordination", optional = true }
+aspen-forge = { version = "0.1.0", path = "../aspen-forge", optional = true }
+aspen-ci = { version = "0.1.0", path = "../aspen-ci", optional = true }
+# Iroh networking dependencies
+iroh = "0.97.0"
+iroh-base = "0.97.0"
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "process", "io-util"] }
+async-trait = "0.1"
+# Simulation testing (optional, heavy dependencies)
+madsim = { version = "0.2.34", features = ["macros"], optional = true }
+mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a", optional = true }
+# Raft consensus (optional - required for router module)
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"], optional = true }
+# Error handling
+anyhow = "1.0"
+snafu = "0.8.9"
+thiserror = "2.0"
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# CLI + Nickel metadata export
+clap = { workspace = true, features = ["derive"] }
+nickel-lang = { workspace = true }
+sha2 = "0.10"
+walkdir = "2"
+# Utilities
+rand = "0.9"
+tracing = "0.1"
+blake3 = "1.5"
+hex = "0.4"
+base64 = "0.22"
+tempfile = "3.4.0"
+nix = { version = "0.29", features = ["process", "signal", "net"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+parking_lot = "0.12"
+
+### aspen-testing-fixtures
+# Core Aspen type crates
+aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+# Async runtime
+async-trait = "0.1"
+tokio = { version = "1.48.0", features = ["sync", "time"] }
+# Utilities
+tempfile = "3.4.0"
+tracing = "0.1"
+
+### aspen-testing-madsim
+# Core Aspen dependencies
+aspen-core = { package = "aspen-core-shell", version = "0.1.0", path = "../aspen-core-shell" }
+aspen-testing-core = { version = "0.1.0", path = "../aspen-testing-core" }
+aspen-constants = { version = "0.1.0", path = "../aspen-constants" }
+aspen-cluster-types = { version = "0.1.0", path = "../aspen-cluster-types", default-features = false }
+aspen-kv-types = { version = "0.1.0", path = "../aspen-kv-types" }
+aspen-traits = { version = "0.1.0", path = "../aspen-traits" }
+aspen-raft = { version = "0.1.0", path = "../aspen-raft", features = ["testing"] }
+# Simulation testing
+madsim = { version = "0.2.34", features = ["macros"] }
+mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a" }
+# Raft consensus
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+# Iroh networking (for test member info)
+iroh = "0.97.0"
+iroh-base = "0.97.0"
+# Async runtime
+tokio = { version = "1.48.0", features = ["sync", "time"] }
+async-trait = "0.1"
+# Error handling
+anyhow = "1.0"
+snafu = "0.8.9"
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Utilities
+rand = "0.9"
+tracing = "0.1"
+parking_lot = "0.12"
+
+### aspen-testing-network
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time", "process", "io-util"] }
+async-trait = "0.1"
+# Error handling
+snafu = "0.8.9"
+anyhow = "1.0"
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# HTTP client for health checks
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+# Utilities
+tracing = "0.1"
+
+### aspen-testing-patchbay
+# Patchbay - network namespace simulation (pinned to specific revision)
+patchbay = { git = "https://github.com/n0-computer/patchbay.git", rev = "e0c48e094ae11442b1ea374b6d4d8fd55a498ac1" }
+# Core Aspen dependencies (minimal set for test nodes)
+aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
+aspen-constants = { path = "../aspen-constants" }
+aspen-raft = { path = "../aspen-raft" }
+aspen-raft-types = { path = "../aspen-raft-types" }
+aspen-raft-network = { path = "../aspen-raft-network" }
+aspen-redb-storage = { path = "../aspen-redb-storage" }
+aspen-cluster = { path = "../aspen-cluster" }
+aspen-cluster-types = { path = "../aspen-cluster-types", default-features = false, features = ["iroh"] }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-testing-core = { path = "../aspen-testing-core" }
+aspen-traits = { path = "../aspen-traits" }
+aspen-transport = { path = "../aspen-transport" }
+aspen-sharding = { path = "../aspen-sharding" }
+# Networking
+iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.97.0"
+iroh-gossip = "0.97.0"
+# OpenRaft
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time", "macros", "process"] }
+async-trait = "0.1"
+# Error handling
+anyhow = "1.0"
+snafu = "0.8.9"
+# Storage (for tmpdir-backed redb)
+redb = "2.0.0"
+tempfile = "3.4.0"
+# Utilities
+tracing = "0.1"
+rand = "0.9"

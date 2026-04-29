@@ -1,0 +1,4 @@
+OK: openspec/changes/decompose-next-five-crate-families
+  tasks: 24 total / 2 checked
+  changed files listed: 2
+  verification artifacts: 4
