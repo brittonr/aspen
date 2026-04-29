@@ -1,0 +1,25 @@
+OpenSpec tasks gate (decompose-next-five-crate-families)
+
+Strategy: same-family
+
+VERDICT: FAIL
+
+## Findings
+- [blocker] [class=incoherent] [scope=tasks] [route=deterministic-check] [promoted=yes] Tasks are checked complete before the required verification discipline task is done.
+  - Evidence: `openspec/changes/decompose-next-five-crate-families/tasks.md` has 23 checked tasks; `V5` remains unchecked and says “Before checking any task complete, create `openspec/changes/decompose-next-five-crate-families/verification.md`… link every checked task verbatim with repo-relative evidence paths… run `scripts/openspec-preflight.sh decompose-next-five-crate-families` plus the relevant OpenSpec stage gate transcript.”
+
+- [blocker] [class=omission] [scope=tasks] [route=human] [promoted=yes] Deferred checked tasks lack supplied evidence that the scoped implementation sub-change exists and owns the deferred verification.
+  - Evidence: `tasks.md` marks `I3`, `I4`–`I17`, and `V1`–`V4` as `[x] Deferred to openspec change: decompose-next-five-crate-families-implementation`; supplied artifacts do not include that sub-change path or its tasks/spec linkage.
+
+- [blocker] [class=omission] [scope=tasks] [route=spec-rule] [promoted=yes] Policy/checker coverage remains deferred while the delta spec requires it for this change’s selected wave.
+  - Evidence: Delta spec requirement `architecture.modularity.next-decomposition-policy-covers-wave` requires `docs/crate-extraction/policy.ncl` entries and checker validation for all five families; `tasks.md` item `I3` is only “Deferred to openspec change: decompose-next-five-crate-families-implementation.”
+
+## Stage Check
+- Matches: tasks are organized by baseline, roadmap/manifests/policy, per-family first slices, and verification discipline; most tasks cite relevant requirement IDs.
+- Missing/blocking: verification discipline is explicitly unfinished, checked tasks lack required `verification.md` evidence mapping, and deferred implementation/policy tasks are marked complete without supplied sub-change evidence.
+- Stage is not ready to move past tasks.
+
+## Next Actions
+- Complete `V5`: create `verification.md`, map every checked task to evidence, run preflight and task gate.
+- Provide or create `openspec/changes/decompose-next-five-crate-families-implementation` with traceable tasks/spec coverage.
+- Reconcile whether `I3` policy/checker coverage is completed in this change or formally transferred to the implementation sub-change.
