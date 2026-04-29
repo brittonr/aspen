@@ -4,6 +4,7 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 ## Implementation Evidence
 
+- Changed file: `docs/crate-extraction.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families/verification.md`
 
@@ -14,6 +15,8 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 - [x] R2 Capture per-family dependency/source baselines for `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness`, including direct dependencies, transitive app/runtime leak paths, representative consumers, existing test rails, and first blockers; save artifacts under `openspec/changes/decompose-next-five-crate-families/evidence/`. [covers=architecture.modularity.next-decomposition-first-blockers-are-explicit] ✅ 3m (started: 2026-04-29T14:13:37Z → completed: 2026-04-29T14:15:29Z)
   - Evidence: `openspec/changes/decompose-next-five-crate-families/evidence/r2-family-baselines.md`, `openspec/changes/decompose-next-five-crate-families/evidence/r2-direct-dependency-snapshot.txt`, `openspec/changes/decompose-next-five-crate-families/evidence/r2-family-baselines-check.txt`
+- [x] I1 Update `docs/crate-extraction.md` with a next-wave section that lists exactly `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness`, records selected crates, ordering rationale, first blockers, deferred-candidate rationale for config/plugin APIs and binary-shell cleanup, and a required note format for any out-of-order implementation that documents the bypassed prerequisite plus temporary compatibility guard. [covers=architecture.modularity.next-decomposition-wave-is-selected,architecture.modularity.next-decomposition-first-blockers-are-explicit] ✅ 1m (started: 2026-04-29T14:16:34Z → completed: 2026-04-29T14:17:07Z)
+  - Evidence: `docs/crate-extraction.md`, `openspec/changes/decompose-next-five-crate-families/evidence/i1-roadmap-diff.patch`, `openspec/changes/decompose-next-five-crate-families/evidence/i1-roadmap-check.txt`
 
 ## Review Scope Snapshot
 
@@ -48,3 +51,13 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 - Status: pass
 - Artifact: `openspec/changes/decompose-next-five-crate-families/evidence/openspec-preflight-r2.txt`
+
+### `grep docs/crate-extraction.md next-wave requirements`
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families/evidence/i1-roadmap-check.txt`
+
+### `scripts/openspec-preflight.sh decompose-next-five-crate-families` (I1)
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families/evidence/openspec-preflight-i1.txt`

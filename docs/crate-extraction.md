@@ -99,6 +99,37 @@ Mandatory first-slice rails:
 - CAS and lease/TTL regression tests;
 - Aspen compatibility consumer proof for re-exported or migrated paths.
 
+## Next decomposition wave
+
+The next wave is ordered by prerequisite value first, then self-hosting impact:
+
+| Order | Family | Selected crates | First blocker | Required before readiness changes |
+| --- | --- | --- | --- | --- |
+| 1 | `foundational-types` | `aspen-storage-types`, `aspen-traits`, `aspen-cluster-types`, `aspen-hlc`, `aspen-time`, `aspen-constants` | Split `SM_KV_TABLE` / `redb::TableDefinition` out of portable storage types, then prove/split narrower KV capability traits. | Full manifest, policy entry, downstream fixture, no-default/default dependency rails, compatibility evidence. |
+| 2 | `auth-ticket` | `aspen-auth-core`, `aspen-auth`, `aspen-ticket`, `aspen-hooks-ticket` | Migrate portable consumers to `aspen-auth-core` / `aspen-hooks-ticket`; pin token/ticket serialization compatibility. | Full manifest, runtime-shell negative checks, malformed token/ticket tests, compatibility re-export policy. |
+| 3 | `jobs-ci-core` | `aspen-jobs`, `aspen-jobs-protocol`, `aspen-jobs-guest`, `aspen-jobs-worker-*`, `aspen-ci-core`, `aspen-ci`, `aspen-ci-executor-*` | Separate scheduler/config/run-state logic from worker/executor runtime shells and concrete process/Nix execution. | Full manifest, scheduler/config downstream fixture, executor-shell negative checks, CI/jobs compatibility evidence. |
+| 4 | `trust-crypto-secrets` | `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime coverage for `aspen-secrets-handler` | Isolate Shamir/GF/HKDF/share-chain helpers and trust/secrets state machines from Raft/Iroh/storage/runtime shells. | Full manifest, positive/negative crypto/state-machine tests, malformed share/key checks, runtime compatibility evidence. |
+| 5 | `testing-harness` | `aspen-testing-core`, `aspen-testing`, `aspen-testing-fixtures`, `aspen-testing-madsim`, `aspen-testing-network`, `aspen-testing-patchbay` | Inventory reusable simulation/workload/assertion helpers separately from Aspen cluster bootstrap and concrete runtime helpers. | Full manifest, generic harness downstream fixture, negative app-bootstrap dependency check, madsim/network/patchbay compatibility evidence. |
+
+Deferred candidates:
+
+- **Config/plugin APIs**: `aspen-nickel` and `aspen-plugin-api` are deferred until the jobs/CI Nickel config seam identifies the stable reusable contract.
+- **Binary shells**: `aspen-cli`, `aspen-tui`, node binaries, bridges, gateways, web, and dogfood stay final consumers. They are compatibility targets, not reusable extraction families.
+
+Out-of-order work note format:
+
+```markdown
+### Out-of-order implementation note
+- Target family:
+- Bypassed prerequisite:
+- Reason for bypass:
+- Temporary compatibility guard:
+- Owner:
+- Required follow-up evidence before readiness changes:
+```
+
+No selected family may advance beyond `workspace-internal` or `extraction-ready-in-workspace` until human license/publication policy is decided and that family's manifest/policy/evidence gates pass.
+
 ## Broader candidate inventory
 
 | Family | Canonical class | Crates | Owner | Manifest | Readiness | Next action |

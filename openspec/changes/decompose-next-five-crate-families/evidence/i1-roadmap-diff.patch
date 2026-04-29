@@ -1,0 +1,43 @@
+diff --git a/docs/crate-extraction.md b/docs/crate-extraction.md
+index 4c6440fbc..5205e6455 100644
+--- a/docs/crate-extraction.md
++++ b/docs/crate-extraction.md
+@@ -101,0 +102,31 @@ Mandatory first-slice rails:
++## Next decomposition wave
++
++The next wave is ordered by prerequisite value first, then self-hosting impact:
++
++| Order | Family | Selected crates | First blocker | Required before readiness changes |
++| --- | --- | --- | --- | --- |
++| 1 | `foundational-types` | `aspen-storage-types`, `aspen-traits`, `aspen-cluster-types`, `aspen-hlc`, `aspen-time`, `aspen-constants` | Split `SM_KV_TABLE` / `redb::TableDefinition` out of portable storage types, then prove/split narrower KV capability traits. | Full manifest, policy entry, downstream fixture, no-default/default dependency rails, compatibility evidence. |
++| 2 | `auth-ticket` | `aspen-auth-core`, `aspen-auth`, `aspen-ticket`, `aspen-hooks-ticket` | Migrate portable consumers to `aspen-auth-core` / `aspen-hooks-ticket`; pin token/ticket serialization compatibility. | Full manifest, runtime-shell negative checks, malformed token/ticket tests, compatibility re-export policy. |
++| 3 | `jobs-ci-core` | `aspen-jobs`, `aspen-jobs-protocol`, `aspen-jobs-guest`, `aspen-jobs-worker-*`, `aspen-ci-core`, `aspen-ci`, `aspen-ci-executor-*` | Separate scheduler/config/run-state logic from worker/executor runtime shells and concrete process/Nix execution. | Full manifest, scheduler/config downstream fixture, executor-shell negative checks, CI/jobs compatibility evidence. |
++| 4 | `trust-crypto-secrets` | `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime coverage for `aspen-secrets-handler` | Isolate Shamir/GF/HKDF/share-chain helpers and trust/secrets state machines from Raft/Iroh/storage/runtime shells. | Full manifest, positive/negative crypto/state-machine tests, malformed share/key checks, runtime compatibility evidence. |
++| 5 | `testing-harness` | `aspen-testing-core`, `aspen-testing`, `aspen-testing-fixtures`, `aspen-testing-madsim`, `aspen-testing-network`, `aspen-testing-patchbay` | Inventory reusable simulation/workload/assertion helpers separately from Aspen cluster bootstrap and concrete runtime helpers. | Full manifest, generic harness downstream fixture, negative app-bootstrap dependency check, madsim/network/patchbay compatibility evidence. |
++
++Deferred candidates:
++
++- **Config/plugin APIs**: `aspen-nickel` and `aspen-plugin-api` are deferred until the jobs/CI Nickel config seam identifies the stable reusable contract.
++- **Binary shells**: `aspen-cli`, `aspen-tui`, node binaries, bridges, gateways, web, and dogfood stay final consumers. They are compatibility targets, not reusable extraction families.
++
++Out-of-order work note format:
++
++```markdown
++### Out-of-order implementation note
++- Target family:
++- Bypassed prerequisite:
++- Reason for bypass:
++- Temporary compatibility guard:
++- Owner:
++- Required follow-up evidence before readiness changes:
++```
++
++No selected family may advance beyond `workspace-internal` or `extraction-ready-in-workspace` until human license/publication policy is decided and that family's manifest/policy/evidence gates pass.
++
+diff --git a/openspec/changes/decompose-next-five-crate-families/tasks.md b/openspec/changes/decompose-next-five-crate-families/tasks.md
+index f1a946e6e..1c5bcf5e3 100644
+--- a/openspec/changes/decompose-next-five-crate-families/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families/tasks.md
+@@ -9 +9 @@
+-- [ ] I1 Update `docs/crate-extraction.md` with a next-wave section that lists exactly `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness`, records selected crates, ordering rationale, first blockers, deferred-candidate rationale for config/plugin APIs and binary-shell cleanup, and a required note format for any out-of-order implementation that documents the bypassed prerequisite plus temporary compatibility guard. [covers=architecture.modularity.next-decomposition-wave-is-selected,architecture.modularity.next-decomposition-first-blockers-are-explicit]
++- [x] I1 Update `docs/crate-extraction.md` with a next-wave section that lists exactly `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness`, records selected crates, ordering rationale, first blockers, deferred-candidate rationale for config/plugin APIs and binary-shell cleanup, and a required note format for any out-of-order implementation that documents the bypassed prerequisite plus temporary compatibility guard. [covers=architecture.modularity.next-decomposition-wave-is-selected,architecture.modularity.next-decomposition-first-blockers-are-explicit] ✅ 1m (started: 2026-04-29T14:16:34Z → completed: 2026-04-29T14:17:07Z)
