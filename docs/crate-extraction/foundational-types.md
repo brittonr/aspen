@@ -1,80 +1,58 @@
-# Extraction Manifest Stub: Foundational Types and Helpers
+# Extraction Manifest: Foundational Types and Helpers
 
 ## Candidate
 
-- **Family**: Foundational types/helpers
+- **Family**: `foundational-types`
 - **Canonical class**: `leaf type/helper`
-- **Crates**: `aspen-constants`, `aspen-hlc`, `aspen-kv-types`, `aspen-storage-types`, `aspen-cluster-types`, `aspen-traits`, `aspen-time`
-- **Intended audience**: Rust projects that need Aspen's bounded constants, portable clocks/types, KV/storage type contracts, cluster address types, or shared traits without Aspen runtime shells.
+- **Crates**: `aspen-storage-types`, `aspen-traits`, `aspen-cluster-types`, `aspen-hlc`, `aspen-time`, `aspen-constants`
+- **Intended audience**: Rust projects that need Aspen bounded constants, portable clocks/types, KV/storage contracts, cluster address types, or shared traits without Aspen runtime shells.
 - **Public API owner**: owner needed
 - **Readiness state**: `workspace-internal`
-- **Dependency policy class**: reusable leaf/helper candidates
 
-## Package and release metadata
+## Package metadata
 
-- **Documentation entrypoint**: crate-level Rustdoc per crate plus family-level examples once selected.
+- **Documentation entrypoint**: crate-level Rustdoc plus this family manifest.
 - **License policy**: AGPL-3.0-or-later until human license strategy changes.
-- **Repository/homepage policy**: monorepo path until publication policy is decided.
-- **Semver/compatibility policy**: no external semver guarantee yet.
-- **Publish readiness**: blocked; no crate in this family may be marked publishable during `prepare-crate-extraction`.
+- **Repository/homepage policy**: Aspen monorepo path until publication policy is decided.
+- **Semver policy**: internal compatibility only; no external semver guarantee yet.
+- **Publication policy**: no publishable/repo-split state in this change.
 
 ## Feature contract
 
-Foundational defaults should be alloc/no-std friendly where already designed that way. Runtime helpers must be opt-in.
-
-| Crate | Default-feature contract | Current status | Next action |
+| Crate | Default contract | Optional adapter/runtime features | First action |
 | --- | --- | --- | --- |
-| `aspen-constants` | Leaf constants only. | `workspace-internal` | Document semver policy and downstream examples. |
-| `aspen-hlc` | Portable HLC types; `std` only when explicitly needed. | `workspace-internal` | Keep `uhlc` rand/getrandom optional and prove no unexpected std graph. |
-| `aspen-kv-types` | Reusable KV types. | Covered by Redb Raft KV manifest. | Keep direct manifest as first-slice layer. |
-| `aspen-storage-types` | Reusable storage data types without Redb table definitions. | `workspace-internal` | Split `SM_KV_TABLE` / `redb::TableDefinition` into shell/storage crate. |
-| `aspen-cluster-types` | Alloc-safe defaults; iroh helpers behind explicit feature. | `workspace-internal` | Keep `default = []` and prove representative consumers do not re-enable defaults accidentally. |
-| `aspen-traits` | Trait contracts without std/runtime leaks. | `workspace-internal` | Replace std-only assumptions or move blanket impls to shell crates; verify transitive default-feature leak absence. |
-| `aspen-time` | Explicit time boundary helpers. | `workspace-internal` | Document wall-clock boundary ownership and examples. |
+| `aspen-constants` | Leaf constants only. | none expected | Document semver and examples. |
+| `aspen-hlc` | Portable HLC/timestamp types with `uhlc` default features disabled. | explicit std/runtime only if needed | Prove no rand/getrandom leak. |
+| `aspen-storage-types` | Reusable data types only. | Redb definitions must move out. | Split `SM_KV_TABLE` / `redb::TableDefinition`. |
+| `aspen-cluster-types` | Alloc-safe defaults. | `iroh` conversion helpers. | Keep `default = []` and prove consumer feature unification. |
+| `aspen-traits` | Narrow reusable KV capability traits. | async/runtime blanket impls only behind documented shell/feature. | Split/prove KV capability traits. |
+| `aspen-time` | Explicit wall-clock boundary helpers. | simulation helpers as documented. | Keep ambient time owned here. |
 
 ## Dependency decisions
 
-- `aspen-storage-types` Redb table definitions are not portable type surface and must move before readiness.
-- `aspen-traits` must be checked through representative consumers because prior no-std work showed transitive default-feature leaks can re-enable runtime dependencies.
-- `aspen-cluster-types` may expose iroh conversions only behind explicit feature gates.
+- `redb::TableDefinition` is storage/backend surface, not foundational portable type surface.
+- `aspen-traits` must avoid pulling std/runtime shells through blanket impls or default-feature unification.
+- `aspen-cluster-types` may expose Iroh address conversion only through explicit opt-in features.
+- `aspen-time` owns wall-clock access; lower crates should take explicit time inputs or a provider.
 
-## Compatibility and aliases
+## Compatibility plan
 
-No compatibility re-exports are planned by this stub. If a future task moves storage table definitions or trait blanket impls, it must add old path, new path, owner, tests, and removal criteria.
+- Keep existing public paths until consumers migrate.
+- Any moved table definition or trait blanket impl must record old path, new path, owner, tests, and removal criteria.
+- Representative consumers: `aspen-core`, `aspen-core-shell`, `aspen-coordination`, `aspen-commit-dag`, `aspen-kv-branch`, `aspen-jobs`, `aspen-testing-core`.
 
-## Trait seam plan
+## Downstream fixture plan
 
-### aspen-traits: KV capability split
-
-| Trait | Methods | First consumer |
-| --- | --- | --- |
-| `KvRead` | `read` | aspen-cache (lookup), aspen-commit-dag (load_commit) |
-| `KvWrite` | `write` | aspen-cache (publish), aspen-commit-dag (store_commit) |
-| `KvDelete` | `delete` | aspen-commit-dag (gc) |
-| `KvScan` | `scan` | aspen-commit-dag (scan_all_commits), aspen-kv-branch (scan fallthrough) |
-| `KvLocalScan` | `scan_local` | aspen-kv-branch (BranchOverlay local reads) |
-| `KeyValueStore` | composite of all above | Compatibility trait for existing consumers |
-
-### aspen-time: TimeProvider
-
-- Already has `TimeProvider` trait with `now_unix_ms()` and `now_unix_secs()`
-- `SystemTimeProvider` (production) and `SimulatedTimeProvider` (simulation feature)
-- Low-level crates should accept `TimeProvider` parameter instead of calling `current_time_ms()` directly
-
-### aspen-hlc: Logical clock trait
-
-- Currently re-exports raw `uhlc` types: `HLC`, `ID`, `NTP64`, `HlcTimestamp`
-- Need `LogicalClock` trait with `now()` and `observe()` methods
-- `SerializableTimestamp` already exists as the stable leaf timestamp type
-- Consumers (aspen-jobs) should depend on trait, not concrete `uhlc::HLC`
+- Fixture depends directly on selected foundational crates, not root `aspen`.
+- Fixture demonstrates KV entry/type imports, cluster address type without Iroh defaults, HLC timestamp usage, constants, and trait bounds.
+- Negative fixture proves Redb table definitions and runtime Iroh helpers are unavailable without explicit adapter crates/features.
 
 ## Verification rails
 
-- compile selected crates with `--no-default-features` where supported;
-- dependency-boundary checker with direct and representative-consumer paths;
-- positive examples for portable imports;
-- negative checks proving runtime-only helpers are unavailable without opt-in features.
+- Positive: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
+- Negative: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
+- Compatibility: compile consumers named above after any moved path.
 
 ## First blocker
 
-The highest-ROI blocker is `aspen-storage-types`: `KvEntry` is alloc-safe, but `SM_KV_TABLE` keeps `redb`/`libc` in the foundational graph. The next blocker is `aspen-traits` transitive default-feature leak proof.
+Move `SM_KV_TABLE` / `redb::TableDefinition` out of `aspen-storage-types`, then split/prove narrower `aspen-traits` KV capabilities.

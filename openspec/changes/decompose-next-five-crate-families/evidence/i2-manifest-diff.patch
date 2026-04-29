@@ -1,0 +1,185 @@
+diff --git a/docs/crate-extraction/auth-ticket.md b/docs/crate-extraction/auth-ticket.md
+index 24ccaa62b..849adf87a 100644
+--- a/docs/crate-extraction/auth-ticket.md
++++ b/docs/crate-extraction/auth-ticket.md
+@@ -1 +1 @@
+-# Extraction Manifest Stub: Auth and Tickets
++# Extraction Manifest: Auth and Tickets
+@@ -5 +5 @@
+-- **Family**: Auth and tickets
++- **Family**: `auth-ticket`
+@@ -8 +8 @@
+-- **Intended audience**: Rust projects that need portable capability/token/ticket types, plus optional runtime verification helpers when explicitly enabled.
++- **Intended audience**: Rust projects that need portable capability/token/ticket types, with runtime verification helpers only through explicit shells.
+@@ -11 +10,0 @@
+-- **Dependency policy class**: reusable leaf/helper family with runtime shell split
+@@ -13 +12 @@
+-## Package and release metadata
++## Package metadata
+@@ -15 +14 @@
+-- **Documentation entrypoint**: crate-level Rustdoc for `aspen-auth-core` and `aspen-hooks-ticket`; runtime examples for `aspen-auth` only after feature contract is explicit.
++- **Documentation entrypoint**: crate-level Rustdoc for `aspen-auth-core`, `aspen-ticket`, and `aspen-hooks-ticket`; runtime examples for `aspen-auth` only after feature contract is explicit.
+@@ -17,3 +16,3 @@
+-- **Repository/homepage policy**: monorepo path until publication policy is decided.
+-- **Semver/compatibility policy**: no external semver guarantee yet; token serialization formats become compatibility-relevant once ready.
+-- **Publish readiness**: blocked; do not mark publishable during this change.
++- **Repository/homepage policy**: Aspen monorepo path until publication policy is decided.
++- **Semver policy**: token/ticket serialization formats become compatibility contracts once ready.
++- **Publication policy**: no publishable/repo-split state in this change.
+@@ -23 +22 @@
+-| Crate | Default-feature contract | Current status | Next action |
++| Crate | Default contract | Runtime/adapter surface | First action |
+@@ -25,4 +24,4 @@
+-| `aspen-auth-core` | Portable capability, operation, token, and error types. | `workspace-internal` | Document wire/serialization compatibility and examples. |
+-| `aspen-auth` | Runtime shell for token builder/verifier, HMAC auth, revocation storage. | `workspace-internal` | Keep std/runtime helpers out of portable consumers. |
+-| `aspen-ticket` | Ticket helper types. | `workspace-internal` | Inventory dependencies and serialization compatibility. |
+-| `aspen-hooks-ticket` | Portable hook ticket URL type. | `workspace-internal` | Prove default deps stay lightweight and document examples. |
++| `aspen-auth-core` | Portable capabilities, operations, tokens, errors, postcard/base64 helpers. | none | Add goldens and malformed-token rejection. |
++| `aspen-auth` | Runtime shell over auth-core. | HMAC, verifier, revocation storage, runtime auth helpers. | Document compatibility re-exports and runtime-only API boundary. |
++| `aspen-ticket` | Portable ticket helper types with minimal defaults. | optional Iroh/gossip helpers. | Inventory feature gates and serialization format. |
++| `aspen-hooks-ticket` | Portable hook trigger ticket URLs. | runtime hook crate re-exports only. | Prove malformed ticket rejection and lightweight defaults. |
+@@ -32,3 +31,4 @@
+-- Portable consumers should prefer `aspen-auth-core` for capability/token types.
+-- Runtime consumers use `aspen-auth` for builder/verifier/HMAC/revocation behavior.
+-- Hook-ticket consumers use `aspen-hooks-ticket` or `aspen-hooks` re-exports only when the runtime crate is already desired.
++- Portable consumers should import token/capability types from `aspen-auth-core`.
++- Runtime consumers use `aspen-auth` for HMAC/verifier/revocation storage.
++- Hook config/event schema stays in `aspen-hooks-types`; hook ticket URLs stay in `aspen-hooks-ticket`.
++- `iroh-base` key types are allowed key-only dependencies, not concrete transport runtime.
+@@ -36 +36 @@
+-## Compatibility and aliases
++## Compatibility plan
+@@ -38 +38,8 @@
+-No new aliases are introduced by this stub. If runtime `aspen-auth` continues to re-export portable types, tests must cover both direct `aspen-auth-core` imports and compatibility imports with a removal/retention policy.
++- If `aspen-auth` keeps re-exporting portable types, document retention/removal owner, tests, and criteria.
++- Representative consumers: `aspen-client-api`, `aspen-cli`, `aspen-rpc-core`, `aspen-rpc-handlers`, `aspen-hooks`, `aspen-ci`, Forge/CI ticket paths.
++
++## Downstream fixture plan
++
++- Fixture imports `Capability`, `Operation`, and token/ticket types directly from portable crates.
++- Fixture serializes/deserializes valid token and hook ticket values.
++- Negative fixture rejects malformed token bytes, malformed ticket URL, and runtime verifier/revocation API access from portable defaults.
+@@ -42,4 +49,3 @@ No new aliases are introduced by this stub. If runtime `aspen-auth` continues to
+-- compile `aspen-auth-core` and `aspen-hooks-ticket` with minimal defaults;
+-- serialization/wire compatibility tests for token/ticket formats;
+-- negative checks proving runtime revocation/HMAC/storage APIs are unavailable from portable crates;
+-- dependency-boundary checker for transitive runtime leaks.
++- Positive: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
++- Negative: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
++- Compatibility: compile/test representative consumers and any documented re-export paths.
+@@ -49 +55 @@ No new aliases are introduced by this stub. If runtime `aspen-auth` continues to
+-Document which consumers still import portable auth/ticket types through runtime shells, then migrate or record compatibility re-export policy.
++Migrate portable consumers to canonical `aspen-auth-core` and `aspen-hooks-ticket` imports where possible, then document any retained runtime `aspen-auth` compatibility re-exports.
+diff --git a/docs/crate-extraction/foundational-types.md b/docs/crate-extraction/foundational-types.md
+index e443a9d86..f0ed42b9f 100644
+--- a/docs/crate-extraction/foundational-types.md
++++ b/docs/crate-extraction/foundational-types.md
+@@ -1 +1 @@
+-# Extraction Manifest Stub: Foundational Types and Helpers
++# Extraction Manifest: Foundational Types and Helpers
+@@ -5 +5 @@
+-- **Family**: Foundational types/helpers
++- **Family**: `foundational-types`
+@@ -7,2 +7,2 @@
+-- **Crates**: `aspen-constants`, `aspen-hlc`, `aspen-kv-types`, `aspen-storage-types`, `aspen-cluster-types`, `aspen-traits`, `aspen-time`
+-- **Intended audience**: Rust projects that need Aspen's bounded constants, portable clocks/types, KV/storage type contracts, cluster address types, or shared traits without Aspen runtime shells.
++- **Crates**: `aspen-storage-types`, `aspen-traits`, `aspen-cluster-types`, `aspen-hlc`, `aspen-time`, `aspen-constants`
++- **Intended audience**: Rust projects that need Aspen bounded constants, portable clocks/types, KV/storage contracts, cluster address types, or shared traits without Aspen runtime shells.
+@@ -11 +10,0 @@
+-- **Dependency policy class**: reusable leaf/helper candidates
+@@ -13 +12 @@
+-## Package and release metadata
++## Package metadata
+@@ -15 +14 @@
+-- **Documentation entrypoint**: crate-level Rustdoc per crate plus family-level examples once selected.
++- **Documentation entrypoint**: crate-level Rustdoc plus this family manifest.
+@@ -17,3 +16,3 @@
+-- **Repository/homepage policy**: monorepo path until publication policy is decided.
+-- **Semver/compatibility policy**: no external semver guarantee yet.
+-- **Publish readiness**: blocked; no crate in this family may be marked publishable during `prepare-crate-extraction`.
++- **Repository/homepage policy**: Aspen monorepo path until publication policy is decided.
++- **Semver policy**: internal compatibility only; no external semver guarantee yet.
++- **Publication policy**: no publishable/repo-split state in this change.
+@@ -23,3 +22 @@
+-Foundational defaults should be alloc/no-std friendly where already designed that way. Runtime helpers must be opt-in.
+-
+-| Crate | Default-feature contract | Current status | Next action |
++| Crate | Default contract | Optional adapter/runtime features | First action |
+@@ -27,7 +24,6 @@ Foundational defaults should be alloc/no-std friendly where already designed tha
+-| `aspen-constants` | Leaf constants only. | `workspace-internal` | Document semver policy and downstream examples. |
+-| `aspen-hlc` | Portable HLC types; `std` only when explicitly needed. | `workspace-internal` | Keep `uhlc` rand/getrandom optional and prove no unexpected std graph. |
+-| `aspen-kv-types` | Reusable KV types. | Covered by Redb Raft KV manifest. | Keep direct manifest as first-slice layer. |
+-| `aspen-storage-types` | Reusable storage data types without Redb table definitions. | `workspace-internal` | Split `SM_KV_TABLE` / `redb::TableDefinition` into shell/storage crate. |
+-| `aspen-cluster-types` | Alloc-safe defaults; iroh helpers behind explicit feature. | `workspace-internal` | Keep `default = []` and prove representative consumers do not re-enable defaults accidentally. |
+-| `aspen-traits` | Trait contracts without std/runtime leaks. | `workspace-internal` | Replace std-only assumptions or move blanket impls to shell crates; verify transitive default-feature leak absence. |
+-| `aspen-time` | Explicit time boundary helpers. | `workspace-internal` | Document wall-clock boundary ownership and examples. |
++| `aspen-constants` | Leaf constants only. | none expected | Document semver and examples. |
++| `aspen-hlc` | Portable HLC/timestamp types with `uhlc` default features disabled. | explicit std/runtime only if needed | Prove no rand/getrandom leak. |
++| `aspen-storage-types` | Reusable data types only. | Redb definitions must move out. | Split `SM_KV_TABLE` / `redb::TableDefinition`. |
++| `aspen-cluster-types` | Alloc-safe defaults. | `iroh` conversion helpers. | Keep `default = []` and prove consumer feature unification. |
++| `aspen-traits` | Narrow reusable KV capability traits. | async/runtime blanket impls only behind documented shell/feature. | Split/prove KV capability traits. |
++| `aspen-time` | Explicit wall-clock boundary helpers. | simulation helpers as documented. | Keep ambient time owned here. |
+@@ -37,20 +33,4 @@ Foundational defaults should be alloc/no-std friendly where already designed tha
+-- `aspen-storage-types` Redb table definitions are not portable type surface and must move before readiness.
+-- `aspen-traits` must be checked through representative consumers because prior no-std work showed transitive default-feature leaks can re-enable runtime dependencies.
+-- `aspen-cluster-types` may expose iroh conversions only behind explicit feature gates.
+-
+-## Compatibility and aliases
+-
+-No compatibility re-exports are planned by this stub. If a future task moves storage table definitions or trait blanket impls, it must add old path, new path, owner, tests, and removal criteria.
+-
+-## Trait seam plan
+-
+-### aspen-traits: KV capability split
+-
+-| Trait | Methods | First consumer |
+-| --- | --- | --- |
+-| `KvRead` | `read` | aspen-cache (lookup), aspen-commit-dag (load_commit) |
+-| `KvWrite` | `write` | aspen-cache (publish), aspen-commit-dag (store_commit) |
+-| `KvDelete` | `delete` | aspen-commit-dag (gc) |
+-| `KvScan` | `scan` | aspen-commit-dag (scan_all_commits), aspen-kv-branch (scan fallthrough) |
+-| `KvLocalScan` | `scan_local` | aspen-kv-branch (BranchOverlay local reads) |
+-| `KeyValueStore` | composite of all above | Compatibility trait for existing consumers |
++- `redb::TableDefinition` is storage/backend surface, not foundational portable type surface.
++- `aspen-traits` must avoid pulling std/runtime shells through blanket impls or default-feature unification.
++- `aspen-cluster-types` may expose Iroh address conversion only through explicit opt-in features.
++- `aspen-time` owns wall-clock access; lower crates should take explicit time inputs or a provider.
+@@ -58 +38 @@ No compatibility re-exports are planned by this stub. If a future task moves sto
+-### aspen-time: TimeProvider
++## Compatibility plan
+@@ -60,3 +40,3 @@ No compatibility re-exports are planned by this stub. If a future task moves sto
+-- Already has `TimeProvider` trait with `now_unix_ms()` and `now_unix_secs()`
+-- `SystemTimeProvider` (production) and `SimulatedTimeProvider` (simulation feature)
+-- Low-level crates should accept `TimeProvider` parameter instead of calling `current_time_ms()` directly
++- Keep existing public paths until consumers migrate.
++- Any moved table definition or trait blanket impl must record old path, new path, owner, tests, and removal criteria.
++- Representative consumers: `aspen-core`, `aspen-core-shell`, `aspen-coordination`, `aspen-commit-dag`, `aspen-kv-branch`, `aspen-jobs`, `aspen-testing-core`.
+@@ -64 +44 @@ No compatibility re-exports are planned by this stub. If a future task moves sto
+-### aspen-hlc: Logical clock trait
++## Downstream fixture plan
+@@ -66,4 +46,3 @@ No compatibility re-exports are planned by this stub. If a future task moves sto
+-- Currently re-exports raw `uhlc` types: `HLC`, `ID`, `NTP64`, `HlcTimestamp`
+-- Need `LogicalClock` trait with `now()` and `observe()` methods
+-- `SerializableTimestamp` already exists as the stable leaf timestamp type
+-- Consumers (aspen-jobs) should depend on trait, not concrete `uhlc::HLC`
++- Fixture depends directly on selected foundational crates, not root `aspen`.
++- Fixture demonstrates KV entry/type imports, cluster address type without Iroh defaults, HLC timestamp usage, constants, and trait bounds.
++- Negative fixture proves Redb table definitions and runtime Iroh helpers are unavailable without explicit adapter crates/features.
+@@ -73,4 +52,3 @@ No compatibility re-exports are planned by this stub. If a future task moves sto
+-- compile selected crates with `--no-default-features` where supported;
+-- dependency-boundary checker with direct and representative-consumer paths;
+-- positive examples for portable imports;
+-- negative checks proving runtime-only helpers are unavailable without opt-in features.
++- Positive: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
++- Negative: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
++- Compatibility: compile consumers named above after any moved path.
+@@ -80 +58 @@ No compatibility re-exports are planned by this stub. If a future task moves sto
+-The highest-ROI blocker is `aspen-storage-types`: `KvEntry` is alloc-safe, but `SM_KV_TABLE` keeps `redb`/`libc` in the foundational graph. The next blocker is `aspen-traits` transitive default-feature leak proof.
++Move `SM_KV_TABLE` / `redb::TableDefinition` out of `aspen-storage-types`, then split/prove narrower `aspen-traits` KV capabilities.
+diff --git a/openspec/changes/decompose-next-five-crate-families/tasks.md b/openspec/changes/decompose-next-five-crate-families/tasks.md
+index 1c5bcf5e3..4b0b9bc4c 100644
+--- a/openspec/changes/decompose-next-five-crate-families/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families/tasks.md
+@@ -11 +11 @@
+-- [ ] I2 Upgrade or create full manifests at `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction/jobs-ci-core.md`, `docs/crate-extraction/trust-crypto-secrets.md`, and `docs/crate-extraction/testing-harness.md`, including audience, owner, package metadata, license/publication policy, feature contract, dependency decisions, compatibility plan, representative consumers, downstream fixture plan, positive/negative verification rails, readiness state, and first blocker. [covers=architecture.modularity.next-decomposition-manifests-are-complete]
++- [x] I2 Upgrade or create full manifests at `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction/jobs-ci-core.md`, `docs/crate-extraction/trust-crypto-secrets.md`, and `docs/crate-extraction/testing-harness.md`, including audience, owner, package metadata, license/publication policy, feature contract, dependency decisions, compatibility plan, representative consumers, downstream fixture plan, positive/negative verification rails, readiness state, and first blocker. [covers=architecture.modularity.next-decomposition-manifests-are-complete] ✅ 3m (started: 2026-04-29T14:18:20Z → completed: 2026-04-29T14:19:21Z)
