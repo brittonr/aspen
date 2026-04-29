@@ -1,0 +1,4 @@
+$ nix shell nixpkgs#nodejs -c node --check _global/extensions/lib/review-metrics.ts
+$ nix shell nixpkgs#nodejs -c node --check _global/extensions/done-review.ts
+$ nix shell nixpkgs#nodejs -c node --check _global/extensions/openspec-gates.ts
+$ nix shell nixpkgs#nodejs -c node --check tools/test-review-parsing.mjs

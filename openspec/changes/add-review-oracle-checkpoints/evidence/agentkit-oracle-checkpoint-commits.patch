@@ -1,0 +1,245 @@
+|commit 7b035963033285951cdd15c5cba0a227c267a6eb
+|Author:     brittonr <b@robitzs.ch>
+|AuthorDate: Wed Apr 29 10:03:54 2026 -0400
+|Commit:     brittonr <b@robitzs.ch>
+|CommitDate: Wed Apr 29 10:03:54 2026 -0400
+|
+|    require checkpoint for ambiguous done reviews
+|---
+| _global/extensions/done-review.ts | 5 ++++-
+| 1 file changed, 4 insertions(+), 1 deletion(-)
+|
+|diff --git a/_global/extensions/done-review.ts b/_global/extensions/done-review.ts
+|index a033460..c0e2e90 100644
+|--- a/_global/extensions/done-review.ts
+|+++ b/_global/extensions/done-review.ts
+|@@ -100,6 +100,8 @@ Rules:
+| - Use only the supplied evidence.
+| - Cite concrete file paths, task text, or diff hunks.
+| - If evidence is insufficient, say that plainly.
+|+- Oracle checkpoints: when a completion claim depends on unavailable or ambiguous review-critical evidence, require a repo-local checkpoint that records question, inspected evidence, decision, owner, and next action. If no checkpoint exists, emit a finding that says missing oracle checkpoint, route=human, promoted=yes.
+|+- Concrete blockers: if the assistant reports a specific blocker and stops without claiming completion, accept that stop condition instead of demanding an oracle checkpoint.
+| - Do not praise. Do not pad.
+| - Be willing to say the work is not actually done.
+| - Treat the current user request and current OpenSpec artifacts as the contract. Treat napkin entries as prior guidance and memory, not as a replacement spec.
+|@@ -781,7 +783,8 @@ export default function (pi: ExtensionAPI) {
+| 			sections.push(`# OpenSpec Changes\nNo relevant active change was identified from the available evidence.`);
+| 		}
+|
+|-		sections.push(`# What To Check\n1. Is the work actually done, or does the assistant's final response overclaim?\n2. Are there correctness bugs, missed edge cases, or suspicious gaps in the diff?\n3. If OpenSpec is involved, does the implementation match the proposal/design/spec delta?\n4. For every task marked [x], is there evidence it is actually complete?\n5. Are any required verification steps missing?\n6. If every task is complete, should the change already have been synced/archived?\n7. Does the work repeat any known repo mistakes, ignored preferences, or failure patterns captured in the napkin?\n8. If a finding matches a napkin pattern, say whether it should stay as guidance or be promoted into a deterministic check, spec rule, or explicit human escalation.`);
+|+		sections.push(`# What To Check\n1. Is the work actually done, or does the assistant's final response overclaim?\n2. Are there correctness bugs, missed edge cases, or suspicious gaps in the diff?\n3. If OpenSpec is involved, does the implementation match the proposal/design/spec delta?\n4. For every task marked [x], is there evidence it is actually complete?\n5. Are any required verification steps missing?\n6. If every task is complete, should the change already have been synced/archived?\n7. Does the work repeat any known repo mistakes, ignored preferences, or failure patterns captured in the napkin?\n8. If a finding matches a napkin pattern, say whether it should stay as guidance or be promoted into a deterministic check, spec rule, or explicit human escalation.
+|+9. If ambiguity blocks verification, require an oracle checkpoint or a concrete blocker report that does not claim completion.`);
+| 		return sections.join("\n\n");
+| 	};
+|
+|
+|commit 7966c6728a7ef01898ed36ea047f023b40d00aef
+|Author:     brittonr <b@robitzs.ch>
+|AuthorDate: Wed Apr 29 10:03:54 2026 -0400
+|Commit:     brittonr <b@robitzs.ch>
+|CommitDate: Wed Apr 29 10:03:54 2026 -0400
+|
+|    require checkpoint for ambiguous OpenSpec gates
+|---
+| _global/extensions/openspec-gates.ts | 2 ++
+| 1 file changed, 2 insertions(+)
+|
+|diff --git a/_global/extensions/openspec-gates.ts b/_global/extensions/openspec-gates.ts
+|index ee2529e..8cafc48 100644
+|--- a/_global/extensions/openspec-gates.ts
+|+++ b/_global/extensions/openspec-gates.ts
+|@@ -82,6 +82,8 @@ Check:
+| - Evidence: cite concrete file paths, task text, requirement IDs, or diff/spec text only.
+| - Blockers: missing scope, constraints, traceability, verification, or archive/sync work.
+| - Napkin: use as prior memory; call out conflicts instead of letting it override artifacts.
+|+- Oracle checkpoints: when stage readiness depends on unavailable or ambiguous review-critical evidence, require a repo-local checkpoint that records question, inspected evidence, decision, owner, and next action. If no checkpoint exists, emit a finding that says missing oracle checkpoint, route=human, promoted=yes.
+|+- Concrete blockers: if the artifact reports a specific blocker and does not claim the stage is complete, accept that stop condition instead of demanding an oracle checkpoint.
+|
+| Finding tags: every finding uses severity plus class, scope, route, and promoted tags. Prefer class=omission|systematic|incoherent|preference|env|pattern, scope=proposal|spec|design|tasks|review|tooling, route=auto-fix|prompt|deterministic-check|spec-rule|human|guidance.
+|
+|
+|commit 074131f2e3872d3169de8f47c3c9162bcd0fac18
+|Author:     brittonr <b@robitzs.ch>
+|AuthorDate: Wed Apr 29 10:03:54 2026 -0400
+|Commit:     brittonr <b@robitzs.ch>
+|CommitDate: Wed Apr 29 10:03:54 2026 -0400
+|
+|    surface checkpoint promotion hints
+|---
+| _global/APPEND_SYSTEM.md                 |  1 +
+| _global/extensions/lib/review-metrics.ts | 26 +++++++++++++--
+| tools/test-review-parsing.mjs            | 56 +++++++++++++++++++++++++++++++-
+| 3 files changed, 79 insertions(+), 4 deletions(-)
+|
+|diff --git a/_global/APPEND_SYSTEM.md b/_global/APPEND_SYSTEM.md
+|index 8fff0e6..b4bb924 100644
+|--- a/_global/APPEND_SYSTEM.md
+|+++ b/_global/APPEND_SYSTEM.md
+|@@ -41,6 +41,7 @@ Use compact, outcome-first instructions when adding global prompt text, skills,
+| - Use `action='promoted'` to inspect what has already been promoted and where.
+| - `action='promoted'` supports `target='napkin'`, `target='openspec'`, or exact `target='openspec:<change>'`.
+| - Use `action='promote'` only when you intend to write promotion stubs to napkin or OpenSpec tasks.
+|+- Repeated findings with `route=human` indicate oracle/checkpoint work: record the unresolved question, inspected evidence, decision owner, and next action, or stop with a concrete blocker instead of claiming completion.
+| - Examples:
+|   - `review_metrics action='promoted' target='napkin'`
+|   - `review_metrics action='promoted' target='openspec'`
+|diff --git a/_global/extensions/lib/review-metrics.ts b/_global/extensions/lib/review-metrics.ts
+|index 28ff0cf..e7e95a6 100644
+|--- a/_global/extensions/lib/review-metrics.ts
+|+++ b/_global/extensions/lib/review-metrics.ts
+|@@ -112,11 +112,30 @@ function mergeCounts(target: Record<string, number>, source: Record<string, numb
+| 	for (const [key, value] of Object.entries(source)) inc(target, key, value);
+| }
+|
+|+const ORACLE_CHECKPOINT_ROUTE_TAGS = new Set(["human"]);
+|+const ORACLE_CHECKPOINT_CLASS_TAGS = new Set(["preference"]);
+|+const ORACLE_CHECKPOINT_TEXT_RE = /\b(?:ambiguous|ambiguity|checkpoint|human|oracle)\b/i;
+|+const PROMOTION_HINT_LIMIT = 3;
+|+
+| function average(values: number[]): number | undefined {
+| 	if (values.length === 0) return undefined;
+| 	return values.reduce((sum, value) => sum + value, 0) / values.length;
+| }
+|
+|+export function findingNeedsOracleCheckpoint(finding: Pick<ReviewFindingTag, "classTag" | "routeTag" | "text">): boolean {
+|+	return ORACLE_CHECKPOINT_ROUTE_TAGS.has(finding.routeTag ?? "")
+|+		|| ORACLE_CHECKPOINT_CLASS_TAGS.has(finding.classTag ?? "")
+|+		|| ORACLE_CHECKPOINT_TEXT_RE.test(finding.text ?? "");
+|+}
+|+
+|+function candidateNeedsOracleCheckpoint(candidate: Pick<PromotionCandidate, "classTag" | "routeTag" | "task" | "examples">): boolean {
+|+	return findingNeedsOracleCheckpoint({
+|+		classTag: candidate.classTag,
+|+		routeTag: candidate.routeTag,
+|+		text: [candidate.task, ...candidate.examples].join("\n"),
+|+	});
+|+}
+|+
+| function formatPercent(count: number, total: number): string {
+| 	if (total <= 0) return "0%";
+| 	return `${((count / total) * 100).toFixed(1)}%`;
+|@@ -192,7 +211,7 @@ function promotedKeys(records: ReviewMetricRecord[]): Set<string> {
+| }
+|
+| function promotionSuggestion(finding: ReviewFindingTag): string {
+|-	if (finding.routeTag === "human" || finding.classTag === "preference") {
+|+	if (findingNeedsOracleCheckpoint(finding)) {
+| 		return "Promote into explicit human/oracle escalation checkpoint or decision note.";
+| 	}
+| 	if (["proposal", "spec", "design", "tasks"].includes(finding.scopeTag ?? "") || finding.routeTag === "spec-rule") {
+|@@ -206,7 +225,7 @@ function promotionSuggestion(finding: ReviewFindingTag): string {
+|
+| function promotionTask(finding: ReviewFindingTag): string {
+| 	const example = finding.text ? ` Example trigger: ${finding.text}` : "";
+|-	if (finding.routeTag === "human" || finding.classTag === "preference") {
+|+	if (findingNeedsOracleCheckpoint(finding)) {
+| 		return `Add explicit oracle/human checkpoint for repeated ${finding.classTag ?? "review"} findings in ${finding.scopeTag ?? "this scope"}.${example}`;
+| 	}
+| 	if (["proposal", "spec", "design", "tasks"].includes(finding.scopeTag ?? "") || finding.routeTag === "spec-rule") {
+|@@ -654,10 +673,11 @@ export function formatPromotionHintsForFindings(records: ReviewMetricRecord[], c
+| 	if (candidates.length === 0) return undefined;
+|
+| 	const lines = ["## Promotion Hints"];
+|-	for (const candidate of candidates.slice(0, 3)) {
+|+	for (const candidate of candidates.slice(0, PROMOTION_HINT_LIMIT)) {
+| 		lines.push(`- repeated ${candidate.count}x [class=${candidate.classTag ?? "?"}] [scope=${candidate.scopeTag ?? "?"}] [route=${candidate.routeTag ?? "?"}]`);
+| 		lines.push(`  suggestion: ${candidate.suggestion}`);
+| 		lines.push(`  task: ${candidate.task}`);
+|+		if (candidateNeedsOracleCheckpoint(candidate)) lines.push("  checkpoint: required for future completion claims unless a concrete blocker is reported instead");
+| 		lines.push(`  sources: ${formatCountList(candidate.sources)}`);
+| 	}
+| 	return lines.join("\n");
+|diff --git a/tools/test-review-parsing.mjs b/tools/test-review-parsing.mjs
+|index ea81e68..7517523 100755
+|--- a/tools/test-review-parsing.mjs
+|+++ b/tools/test-review-parsing.mjs
+|@@ -1,6 +1,6 @@
+| #!/usr/bin/env node
+| import assert from "node:assert/strict";
+|-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+|+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+| import { tmpdir } from "node:os";
+| import { dirname, join, resolve } from "node:path";
+| import { fileURLToPath, pathToFileURL } from "node:url";
+|@@ -20,6 +20,11 @@ const BEFORE_NEXT_SECTION_INDEX = 0;
+| const EXPECTED_TAGGED_FINDINGS = 2;
+| const FIRST_FINDING_INDEX = 0;
+| const SECOND_FINDING_INDEX = 1;
+|+const PROMOTION_HINT_COUNT = 2;
+|+const SINGLE_FINDING_COUNT = 1;
+|+const FIRST_RECORD_SUFFIX = 1;
+|+const ORACLE_ROUTE = "human";
+|+const DETERMINISTIC_ROUTE = "deterministic-check";
+|
+| const stubPackageJson = JSON.stringify({ type: "module", main: "index.js" }, null, JSON_INDENT_SPACES);
+|
+|@@ -92,6 +97,24 @@ function taggedFindingsReport() {
+| 	].join("\n");
+| }
+|
+|+function reviewRecord(routeTag, text, tsSuffix) {
+|+	return {
+|+		ts: `2026-04-29T14:00:0${tsSuffix}Z`,
+|+		source: "done-review",
+|+		stage: "auto",
+|+		repoRoot: REPO_ROOT,
+|+		verdict: "WARN",
+|+		findings: [{ severity: "high", classTag: "omission", scopeTag: "review", routeTag, promotedTag: "no", text }],
+|+		reportSummary: {
+|+			findings: SINGLE_FINDING_COUNT,
+|+			classes: { omission: SINGLE_FINDING_COUNT },
+|+			scopes: { review: SINGLE_FINDING_COUNT },
+|+			routes: { [routeTag]: SINGLE_FINDING_COUNT },
+|+			promoted: { no: SINGLE_FINDING_COUNT },
+|+		},
+|+	};
+|+}
+|+
+| function lowVerbosityReviewReport() {
+| 	return [
+| 		"VERDICT: FAIL",
+|@@ -110,6 +133,16 @@ function lowVerbosityReviewReport() {
+| 	].join("\n");
+| }
+|
+|+async function assertOracleGuidancePresent() {
+|+	const doneReview = await readFile(join(SOURCE_EXTENSIONS_DIR, "done-review.ts"), "utf8");
+|+	const openspecGates = await readFile(join(SOURCE_EXTENSIONS_DIR, "openspec-gates.ts"), "utf8");
+|+	for (const source of [doneReview, openspecGates]) {
+|+		assert.equal(source.includes("missing oracle checkpoint"), true);
+|+		assert.equal(source.includes("Concrete blockers"), true);
+|+		assert.equal(source.includes("question, inspected evidence, decision, owner, and next action"), true);
+|+	}
+|+}
+|+
+| function assertNoChecklistInFindings(markdown) {
+| 	const afterFindings = markdown.split(`${FINDINGS_SECTION_HEADING}\n`).at(FINDINGS_SPLIT_BODY_INDEX) ?? "";
+| 	const beforeNextSection = afterFindings.split(NEXT_SECTION_HEADING).at(BEFORE_NEXT_SECTION_INDEX) ?? "";
+|@@ -152,6 +185,27 @@ async function main() {
+| 		const lowVerbosityFormatted = report.formatReviewMarkdown(lowVerbosityReport);
+| 		assert.equal(lowVerbosityFormatted.includes("  - Evidence: tools/test-review-parsing.mjs"), true);
+| 		assert.equal(lowVerbosityFormatted.includes("## Gaps\n- Parser must keep later sections separate."), true);
+|+
+|+		assert.equal(metrics.findingNeedsOracleCheckpoint({ routeTag: ORACLE_ROUTE }), true);
+|+		assert.equal(metrics.findingNeedsOracleCheckpoint({ routeTag: DETERMINISTIC_ROUTE }), false);
+|+		assert.equal(metrics.findingNeedsOracleCheckpoint({ text: "ambiguous evidence needs oracle" }), true);
+|+
+|+		const currentFindings = [{ classTag: "omission", scopeTag: "review", routeTag: ORACLE_ROUTE, promotedTag: "no", text: "ambiguous completion" }];
+|+		const records = [
+|+			reviewRecord(ORACLE_ROUTE, "ambiguous completion", FIRST_RECORD_SUFFIX),
+|+			reviewRecord(ORACLE_ROUTE, "ambiguous completion", PROMOTION_HINT_COUNT),
+|+		];
+|+		const hints = metrics.formatPromotionHintsForFindings(records, currentFindings, PROMOTION_HINT_COUNT);
+|+		assert.equal(hints?.includes("checkpoint: required for future completion claims"), true);
+|+		assert.equal(hints?.includes("route=human"), true);
+|+
+|+		const deterministicHints = metrics.formatPromotionHintsForFindings(
+|+			[reviewRecord(DETERMINISTIC_ROUTE, "needs lint", FIRST_RECORD_SUFFIX), reviewRecord(DETERMINISTIC_ROUTE, "needs lint", PROMOTION_HINT_COUNT)],
+|+			[{ classTag: "omission", scopeTag: "review", routeTag: DETERMINISTIC_ROUTE, promotedTag: "no", text: "needs lint" }],
+|+			PROMOTION_HINT_COUNT,
+|+		);
+|+		assert.equal(deterministicHints?.includes("checkpoint: required for future completion claims"), false);
+|+		await assertOracleGuidancePresent();
+| 	} finally {
+| 		await cleanup();
+| 	}

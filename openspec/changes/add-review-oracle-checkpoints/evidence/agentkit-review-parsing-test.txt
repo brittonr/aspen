@@ -1,0 +1,2 @@
+$ nix shell nixpkgs#nodejs -c node tools/test-review-parsing.mjs
+review parsing checks passed
