@@ -9,4 +9,4 @@
 ## 2. Verification
 
 - [x] V1 Add done-review and OpenSpec gate fixtures for positive checkpoint, negative missing-checkpoint, review-metrics-triggered checkpoint, and concrete-blocker accepted paths. [covers=openspec-governance.review-oracle-checkpoints] ✅ 1m (started: 2026-04-29T14:08:30Z → completed: 2026-04-29T14:08:43Z)
-- [ ] V2 Run reviewer/gate fixtures and save transcripts. [covers=openspec-governance.review-oracle-checkpoints]
+- [x] V2 Run reviewer/gate fixtures and save transcripts. [covers=openspec-governance.review-oracle-checkpoints] ✅ 1m (started: 2026-04-29T14:09:12Z → completed: 2026-04-29T14:09:47Z)

@@ -22,6 +22,8 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
   - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`
 - [x] V1 Add done-review and OpenSpec gate fixtures for positive checkpoint, negative missing-checkpoint, review-metrics-triggered checkpoint, and concrete-blocker accepted paths. [covers=openspec-governance.review-oracle-checkpoints] ✅ 1m (started: 2026-04-29T14:08:30Z → completed: 2026-04-29T14:08:43Z)
   - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-oracle-checkpoint-commits.patch`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`
+- [x] V2 Run reviewer/gate fixtures and save transcripts. [covers=openspec-governance.review-oracle-checkpoints] ✅ 1m (started: 2026-04-29T14:09:12Z → completed: 2026-04-29T14:09:47Z)
+  - Evidence: `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-review-parsing-test.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/agentkit-node-checks.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/openspec-gate-tasks-v2.txt`, `openspec/changes/add-review-oracle-checkpoints/evidence/openspec-validate-v2.txt`
 
 ## Review Scope Snapshot
 
@@ -61,3 +63,18 @@ Use this file to back every checked task in `tasks.md` with durable repo evidenc
 
 - Status: pass
 - Artifact: `openspec/changes/add-review-oracle-checkpoints/evidence/openspec-preflight-i2.txt`
+
+### `openspec_gate stage=tasks change=add-review-oracle-checkpoints`
+
+- Status: warn (reviewer packet did not recognize `verification.md`; deterministic preflight is recorded separately)
+- Artifact: `openspec/changes/add-review-oracle-checkpoints/evidence/openspec-gate-tasks-v2.txt`
+
+### `openspec validate add-review-oracle-checkpoints --type change --strict --no-interactive`
+
+- Status: pass
+- Artifact: `openspec/changes/add-review-oracle-checkpoints/evidence/openspec-validate-v2.txt`
+
+### `scripts/openspec-preflight.sh add-review-oracle-checkpoints` (final active change)
+
+- Status: pass
+- Artifact: `openspec/changes/add-review-oracle-checkpoints/evidence/openspec-preflight-final.txt`

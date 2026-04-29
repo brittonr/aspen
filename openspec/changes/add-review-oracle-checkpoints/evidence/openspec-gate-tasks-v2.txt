@@ -1,0 +1,36 @@
+OpenSpec tasks gate (add-review-oracle-checkpoints)
+
+Strategy: same-family
+
+VERDICT: WARN
+
+## Findings
+- [medium] [class=omission] [scope=tasks] [route=human] [promoted=no] Checked tasks are present, but supplied artifacts do not include durable evidence coverage for them.
+  - Evidence: `openspec/changes/add-review-oracle-checkpoints/tasks.md` marks I1, I2, I3, I4, I5, and V1 as `[x]`; `openspec/specs/openspec-governance/spec.md` requirement `openspec-governance.task-evidence-coverage` says every checked OpenSpec task SHALL cite durable evidence via `verification.md`.
+
+- [medium] [class=omission] [scope=tasks] [route=deterministic-check] [promoted=no] Verification is not complete; one required transcript task remains todo.
+  - Evidence: `openspec/changes/add-review-oracle-checkpoints/tasks.md` has `- [ ] V2 Run reviewer/gate fixtures and save transcripts. [covers=openspec-governance.review-oracle-checkpoints]`.
+
+## Stage Check
+- The task list traces to the proposal, design, and delta spec:
+  - I1 maps to checkpoint records in `records-ambiguity`.
+  - I2/I3/I5 map to `missing-checkpoint-flagged`.
+  - I4 maps to `concrete-blocker-acceptable`.
+  - V1/V2 provide fixture and transcript verification.
+- Tasks are small, ordered sensibly, and include verification work.
+- The stage is structurally ready as a task plan, but the change is not completion/archive-ready because V2 remains unchecked and checked-task evidence was not supplied.
+
+## Next Actions
+- Complete V2 by running reviewer/gate fixtures and saving transcripts.
+- Add or supply `verification.md` evidence coverage for all checked tasks.
+- After all tasks are `[x]`, sync specs and archive the change.
+
+## Promotion Hints
+- repeated 75x [class=omission] [scope=tasks] [route=deterministic-check]
+  suggestion: Promote into OpenSpec rule/template/stage-gate check.
+  task: Strengthen OpenSpec tasks gate/template to block repeated omission findings. Example trigger: Verification references were added, but no evidence files were created
+  sources: openspec-gate=73, done-review=2
+- repeated 30x [class=omission] [scope=tasks] [route=human]
+  suggestion: Promote into explicit human/oracle escalation checkpoint or decision note.
+  task: Add explicit oracle/human checkpoint for repeated omission findings in tasks. Example trigger: Task-traceability concerns from the prior gate cannot be rechecked from the supplied design evidence
+  sources: openspec-gate=26, done-review=4
