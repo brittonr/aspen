@@ -1,4 +1,4 @@
-OK: openspec/changes/add-review-oracle-checkpoints
+OK: openspec/changes/archive/2026-04-29-add-review-oracle-checkpoints
   tasks: 7 total / 2 checked
   changed files listed: 2
   verification artifacts: 5

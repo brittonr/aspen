@@ -6,10 +6,10 @@ VERDICT: WARN
 
 ## Findings
 - [medium] [class=omission] [scope=tasks] [route=human] [promoted=no] Checked tasks are present, but supplied artifacts do not include durable evidence coverage for them.
-  - Evidence: `openspec/changes/add-review-oracle-checkpoints/tasks.md` marks I1, I2, I3, I4, I5, and V1 as `[x]`; `openspec/specs/openspec-governance/spec.md` requirement `openspec-governance.task-evidence-coverage` says every checked OpenSpec task SHALL cite durable evidence via `verification.md`.
+  - Evidence: `openspec/changes/archive/2026-04-29-add-review-oracle-checkpoints/tasks.md` marks I1, I2, I3, I4, I5, and V1 as `[x]`; `openspec/specs/openspec-governance/spec.md` requirement `openspec-governance.task-evidence-coverage` says every checked OpenSpec task SHALL cite durable evidence via `verification.md`.
 
 - [medium] [class=omission] [scope=tasks] [route=deterministic-check] [promoted=no] Verification is not complete; one required transcript task remains todo.
-  - Evidence: `openspec/changes/add-review-oracle-checkpoints/tasks.md` has `- [ ] V2 Run reviewer/gate fixtures and save transcripts. [covers=openspec-governance.review-oracle-checkpoints]`.
+  - Evidence: `openspec/changes/archive/2026-04-29-add-review-oracle-checkpoints/tasks.md` has `- [ ] V2 Run reviewer/gate fixtures and save transcripts. [covers=openspec-governance.review-oracle-checkpoints]`.
 
 ## Stage Check
 - The task list traces to the proposal, design, and delta spec:
