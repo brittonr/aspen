@@ -1,5 +1,9 @@
 # Napkin - Mistakes and Learnings
 
+## Architecture docs (2026-04-29)
+
+- Source currently has `CLIENT_ALPN`, `RAFT_AUTH_ALPN`, legacy `RAFT_ALPN`, `GOSSIP_ALPN`, log/net/trust/DAG ALPNs, but no separate `TUI_ALPN`; TUI uses client RPC paths. Do not copy older docs that mention `TUI_ALPN` unless code adds it.
+
 ## No-std aspen-core baseline (2026-04-21)
 
 **Discovery**: `cargo check -p aspen-cluster` is currently blocked by pre-existing workspace breakage outside the no-std scaffolding slice.

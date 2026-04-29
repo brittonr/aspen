@@ -84,8 +84,8 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 
 **No HTTP API** - all communication uses Iroh QUIC with ALPN-based protocol routing:
 
-- Client APIs: `CLIENT_ALPN` via `ClientProtocolHandler`
-- Node-to-node: ALPN routing (RAFT_ALPN, TUI_ALPN, GOSSIP_ALPN)
+- Client APIs: `CLIENT_ALPN` via `ClientProtocolHandler` (TUI currently uses client RPC, not a separate `TUI_ALPN`)
+- Node-to-node: ALPN routing (`RAFT_AUTH_ALPN` for production Raft, legacy `RAFT_ALPN`, `GOSSIP_ALPN`, log/net/trust/DAG protocols as enabled)
 - Blob transfer: iroh-blobs protocol
 - Real-time sync: iroh-docs CRDT replication
 

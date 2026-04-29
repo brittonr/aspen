@@ -128,6 +128,7 @@ madsim for deterministic simulation, proptest/Bolero for property-based testing 
 
 ## Docs
 
+- [Architecture](docs/developer-guide/architecture.md)
 - [Deploy](docs/deploy.md)
 - [Federation](docs/FEDERATION.md)
 - [Forge](docs/forge.md)
