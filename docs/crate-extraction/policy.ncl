@@ -534,7 +534,7 @@ let Candidate = {
       named_reusable_feature_sets = ["replication"],
       representative_consumers = ["aspen-rpc-core", "aspen-rpc-handlers", "aspen-blob-handler", "aspen-cluster", "aspen-snix", "aspen-nix-cache-gateway", "aspen-ci-executor-nix"],
       reexporters = [],
-      forbidden_unless_feature = ["aspen-client-api", "aspen-rpc-core", "aspen-rpc-handlers", "aspen-blob-handler", "aspen-cluster", "aspen"],
+      forbidden_unless_feature = ["aspen-core", "aspen-client-api", "aspen-rpc-core", "aspen-rpc-handlers", "aspen-blob-handler", "aspen-cluster", "aspen"],
       exceptions = [
         {
           candidate = "aspen-blob",
@@ -562,14 +562,7 @@ let Candidate = {
           feature_set = "default",
           dependency_path = "aspen-blob -> irpc",
           owner = "Aspen storage/cache maintainers",
-          reason = "Current Aspen KV/core trait path brings irpc transitively until the KV-aware seam is split.",
-        },
-        {
-          candidate = "aspen-blob",
-          feature_set = "default",
-          dependency_path = "aspen-blob -> aspen-core",
-          owner = "Aspen storage/cache maintainers",
-          reason = "Current BlobAwareKeyValueStore uses Aspen KV traits/types; app-shell split is a later seam.",
+          reason = "Transitive iroh/iroh-blobs backend RPC framing dependency.",
         },
         {
           candidate = "aspen-blob",
@@ -619,13 +612,6 @@ let Candidate = {
           dependency_path = "aspen-castore -> snix-castore",
           owner = "Aspen storage/cache maintainers",
           reason = "snix castore trait implementation is the crate purpose.",
-        },
-        {
-          candidate = "aspen-castore",
-          feature_set = "default",
-          dependency_path = "aspen-castore -> aspen-core",
-          owner = "Aspen storage/cache maintainers",
-          reason = "Transitive dependency through aspen-blob KV-aware storage until that later seam is split.",
         },
       ],
     },

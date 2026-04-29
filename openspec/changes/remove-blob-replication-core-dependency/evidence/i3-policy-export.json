@@ -1,0 +1,1083 @@
+{
+  "allowed_reusable_dependencies": [
+    "aspen-constants",
+    "aspen-hlc",
+    "aspen-kv-types",
+    "aspen-storage-types",
+    "aspen-cluster-types",
+    "aspen-traits",
+    "aspen-time",
+    "aspen-auth-core",
+    "aspen-hooks-ticket",
+    "aspen-hooks-types",
+    "aspen-coordination-protocol",
+    "aspen-forge-protocol",
+    "aspen-jobs-protocol",
+    "aspen-client-api",
+    "aspen-raft-kv-types",
+    "aspen-redb-storage",
+    "aspen-raft-kv",
+    "aspen-commit-dag",
+    "aspen-kv-branch",
+    "aspen-layer",
+    "openraft",
+    "redb",
+    "serde",
+    "postcard",
+    "blake3",
+    "hex",
+    "tracing",
+    "metrics"
+  ],
+  "blocked_until_license_publication_decision": [
+    "publishable from monorepo",
+    "future repository split candidate"
+  ],
+  "candidate_classes": [
+    "leaf type/helper",
+    "protocol/wire",
+    "storage/backend",
+    "runtime adapter",
+    "service library",
+    "binary shell"
+  ],
+  "candidates": {
+    "aspen_blob": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-blob",
+          "dependency_path": "aspen-blob -> iroh",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Iroh endpoint/address types are backend-purpose dependencies for blob storage."
+        },
+        {
+          "candidate": "aspen-blob",
+          "dependency_path": "aspen-blob -> iroh-blobs",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "iroh-blobs is the content-addressed storage backend purpose."
+        },
+        {
+          "candidate": "aspen-blob",
+          "dependency_path": "aspen-blob -> iroh-base",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "iroh-base is a transitive iroh backend type dependency."
+        },
+        {
+          "candidate": "aspen-blob",
+          "dependency_path": "aspen-blob -> irpc",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Transitive iroh/iroh-blobs backend RPC framing dependency."
+        },
+        {
+          "candidate": "aspen-blob",
+          "dependency_path": "aspen-blob -> aspen-client-api",
+          "feature_set": "replication",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Replication pull RPCs are explicit adapter-only compatibility."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-core",
+        "aspen-client-api",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-blob-handler",
+        "aspen-cluster",
+        "aspen"
+      ],
+      "manifest": "docs/crate-extraction/blob-castore-cache.md",
+      "named_reusable_feature_sets": [
+        "replication"
+      ],
+      "owner": "Aspen storage/cache maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-blob-handler",
+        "aspen-cluster",
+        "aspen-snix",
+        "aspen-nix-cache-gateway",
+        "aspen-ci-executor-nix"
+      ]
+    },
+    "aspen_cache": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-cache",
+          "dependency_path": "aspen-cache -> nix-compat",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Nix narinfo/store path/NAR support is the crate purpose."
+        },
+        {
+          "candidate": "aspen-cache",
+          "dependency_path": "aspen-cache -> ed25519-dalek",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Nix binary cache signing."
+        },
+        {
+          "candidate": "aspen-cache",
+          "dependency_path": "aspen-cache -> sha2",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "NAR hash computation for Nix compatibility."
+        },
+        {
+          "candidate": "aspen-cache",
+          "dependency_path": "aspen-cache -> aspen-core",
+          "feature_set": "kv-index",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Optional Aspen KV publication adapter."
+        },
+        {
+          "candidate": "aspen-cache",
+          "dependency_path": "aspen-cache -> aspen-kv-types",
+          "feature_set": "kv-index",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Optional Aspen KV request helpers for signing-key persistence."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-core",
+        "aspen-core-shell",
+        "aspen-kv-types",
+        "aspen-blob",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-testing",
+        "aspen"
+      ],
+      "manifest": "docs/crate-extraction/blob-castore-cache.md",
+      "named_reusable_feature_sets": [
+        "kv-index"
+      ],
+      "owner": "Aspen storage/cache maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-ci",
+        "aspen-ci-executor-nix",
+        "aspen-nix-handler",
+        "aspen-nix-cache-gateway",
+        "aspen-snix"
+      ]
+    },
+    "aspen_castore": {
+      "class": "runtime adapter",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-castore",
+          "dependency_path": "aspen-castore -> aspen-blob",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Castore server wraps reusable Aspen blob storage APIs."
+        },
+        {
+          "candidate": "aspen-castore",
+          "dependency_path": "aspen-castore -> iroh",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Castore irpc adapter transport."
+        },
+        {
+          "candidate": "aspen-castore",
+          "dependency_path": "aspen-castore -> irpc",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "Castore adapter RPC framing."
+        },
+        {
+          "candidate": "aspen-castore",
+          "dependency_path": "aspen-castore -> snix-castore",
+          "feature_set": "default",
+          "owner": "Aspen storage/cache maintainers",
+          "reason": "snix castore trait implementation is the crate purpose."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-core-shell",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-blob-handler",
+        "aspen-cluster",
+        "aspen"
+      ],
+      "manifest": "docs/crate-extraction/blob-castore-cache.md",
+      "named_reusable_feature_sets": [
+        "default"
+      ],
+      "owner": "Aspen storage/cache maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-snix",
+        "aspen-snix-bridge",
+        "aspen-nix-cache-gateway"
+      ]
+    },
+    "aspen_client_api": {
+      "class": "protocol/wire",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-client-api",
+          "dependency_path": "aspen-client-api -> aspen-auth-core",
+          "feature_set": "default",
+          "owner": "Aspen protocol maintainers",
+          "reason": "Portable auth/capability wire types without runtime auth shell."
+        },
+        {
+          "candidate": "aspen-client-api",
+          "dependency_path": "aspen-client-api -> aspen-auth-core -> iroh-base",
+          "feature_set": "default",
+          "owner": "Aspen protocol maintainers",
+          "reason": "Key-only public-key type dependency from auth-core; not concrete transport runtime."
+        },
+        {
+          "candidate": "aspen-client-api",
+          "dependency_path": "aspen-client-api -> aspen-coordination-protocol",
+          "feature_set": "default",
+          "owner": "Aspen protocol maintainers",
+          "reason": "Coordination wire responses are part of client RPC schema."
+        },
+        {
+          "candidate": "aspen-client-api",
+          "dependency_path": "aspen-client-api -> aspen-forge-protocol",
+          "feature_set": "default",
+          "owner": "Aspen protocol maintainers",
+          "reason": "Forge wire responses are part of client RPC schema."
+        },
+        {
+          "candidate": "aspen-client-api",
+          "dependency_path": "aspen-client-api -> aspen-jobs-protocol",
+          "feature_set": "default",
+          "owner": "Aspen protocol maintainers",
+          "reason": "Jobs wire responses are part of client RPC schema."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen",
+        "aspen-raft",
+        "aspen-cluster",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-transport",
+        "aspen-raft-network",
+        "aspen-auth",
+        "iroh",
+        "iroh-base",
+        "irpc",
+        "aspen-trust",
+        "aspen-secrets",
+        "aspen-sql"
+      ],
+      "manifest": "docs/crate-extraction/protocol-wire.md",
+      "named_reusable_feature_sets": [
+        "auth",
+        "ci",
+        "secrets",
+        "automerge",
+        "no-default-features"
+      ],
+      "owner": "Aspen protocol maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-client",
+        "aspen-cli",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers"
+      ]
+    },
+    "aspen_commit_dag": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-commit-dag",
+          "dependency_path": "aspen-commit-dag -> aspen-traits",
+          "feature_set": "default",
+          "owner": "Aspen branch/DAG maintainers",
+          "reason": "Reusable KV trait boundary."
+        },
+        {
+          "candidate": "aspen-commit-dag",
+          "dependency_path": "aspen-commit-dag -> aspen-kv-types",
+          "feature_set": "default",
+          "owner": "Aspen branch/DAG maintainers",
+          "reason": "Reusable KV request and response types."
+        },
+        {
+          "candidate": "aspen-commit-dag",
+          "dependency_path": "aspen-commit-dag -> aspen-constants",
+          "feature_set": "default",
+          "owner": "Aspen branch/DAG maintainers",
+          "reason": "Shared bounded GC limits."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-raft",
+        "aspen",
+        "aspen-core-shell",
+        "aspen-cluster",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-transport",
+        "aspen-raft-network",
+        "iroh",
+        "iroh-base",
+        "irpc",
+        "aspen-trust",
+        "aspen-secrets",
+        "aspen-sql"
+      ],
+      "manifest": "docs/crate-extraction/kv-branch-commit-dag.md",
+      "named_reusable_feature_sets": [
+        "default"
+      ],
+      "owner": "Aspen branch/DAG maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-kv-branch",
+        "aspen-docs",
+        "aspen-cli"
+      ]
+    },
+    "aspen_coordination": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-coordination",
+          "dependency_path": "aspen-coordination -> tokio",
+          "feature_set": "default",
+          "owner": "Aspen coordination maintainers",
+          "reason": "Async runtime for timer-based coordination (lock TTL, election timeouts, rate limiter refill)."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-core",
+        "aspen-core-shell",
+        "aspen-raft",
+        "aspen-transport",
+        "aspen-auth",
+        "aspen-client-api",
+        "aspen-trust",
+        "aspen-secrets",
+        "aspen-sql"
+      ],
+      "manifest": "docs/crate-extraction/coordination.md",
+      "named_reusable_feature_sets": [
+        "verus"
+      ],
+      "owner": "Aspen coordination maintainers",
+      "readiness_state": "extraction-ready-in-workspace",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-cluster",
+        "aspen-jobs",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-core-essentials-handler",
+        "aspen-job-handler",
+        "aspen-testing"
+      ]
+    },
+    "aspen_coordination_protocol": {
+      "class": "protocol/wire",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [],
+      "forbidden_unless_feature": [],
+      "manifest": "docs/crate-extraction/coordination.md",
+      "named_reusable_feature_sets": [],
+      "owner": "Aspen coordination maintainers",
+      "readiness_state": "extraction-ready-in-workspace",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-coordination",
+        "aspen-client-api"
+      ]
+    },
+    "aspen_forge_protocol": {
+      "class": "protocol/wire",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [],
+      "forbidden_unless_feature": [
+        "aspen",
+        "aspen-raft",
+        "aspen-cluster",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-transport",
+        "aspen-raft-network",
+        "aspen-auth",
+        "iroh",
+        "iroh-base",
+        "irpc",
+        "aspen-trust",
+        "aspen-secrets",
+        "aspen-sql"
+      ],
+      "manifest": "docs/crate-extraction/protocol-wire.md",
+      "named_reusable_feature_sets": [
+        "no-default-features"
+      ],
+      "owner": "Aspen protocol maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-client-api",
+        "aspen-forge-handler",
+        "aspen-rpc-handlers"
+      ]
+    },
+    "aspen_jobs_protocol": {
+      "class": "protocol/wire",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [],
+      "forbidden_unless_feature": [
+        "aspen",
+        "aspen-raft",
+        "aspen-cluster",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-transport",
+        "aspen-raft-network",
+        "aspen-auth",
+        "iroh",
+        "iroh-base",
+        "irpc",
+        "aspen-trust",
+        "aspen-secrets",
+        "aspen-sql"
+      ],
+      "manifest": "docs/crate-extraction/protocol-wire.md",
+      "named_reusable_feature_sets": [
+        "no-default-features"
+      ],
+      "owner": "Aspen protocol maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-client-api",
+        "aspen-job-handler",
+        "aspen-rpc-handlers"
+      ]
+    },
+    "aspen_kv_branch": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default",
+        "no-default-features"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-kv-branch",
+          "dependency_path": "aspen-kv-branch -> aspen-traits",
+          "feature_set": "default",
+          "owner": "Aspen branch/DAG maintainers",
+          "reason": "Reusable KV trait boundary."
+        },
+        {
+          "candidate": "aspen-kv-branch",
+          "dependency_path": "aspen-kv-branch -> aspen-kv-types",
+          "feature_set": "default",
+          "owner": "Aspen branch/DAG maintainers",
+          "reason": "Reusable KV request and response types."
+        },
+        {
+          "candidate": "aspen-kv-branch",
+          "dependency_path": "aspen-kv-branch -> aspen-constants",
+          "feature_set": "default",
+          "owner": "Aspen branch/DAG maintainers",
+          "reason": "Shared branch resource limits."
+        },
+        {
+          "candidate": "aspen-kv-branch",
+          "dependency_path": "aspen-kv-branch -> aspen-commit-dag",
+          "feature_set": "commit-dag",
+          "owner": "Aspen branch/DAG maintainers",
+          "reason": "Explicit commit history integration feature."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-commit-dag",
+        "aspen-raft",
+        "aspen",
+        "aspen-core-shell",
+        "aspen-cluster",
+        "aspen-rpc-core",
+        "aspen-rpc-handlers",
+        "aspen-transport",
+        "aspen-raft-network",
+        "iroh",
+        "iroh-base",
+        "irpc",
+        "aspen-trust",
+        "aspen-secrets",
+        "aspen-sql"
+      ],
+      "manifest": "docs/crate-extraction/kv-branch-commit-dag.md",
+      "named_reusable_feature_sets": [
+        "commit-dag"
+      ],
+      "owner": "Aspen branch/DAG maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-jobs",
+        "aspen-ci-executor-shell",
+        "aspen-deploy",
+        "aspen-fuse",
+        "aspen-docs",
+        "aspen-cli"
+      ]
+    },
+    "aspen_kv_types": {
+      "class": "leaf type/helper",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-kv-types",
+          "dependency_path": "aspen-kv-types -> aspen-constants",
+          "feature_set": "default",
+          "owner": "Aspen KV types maintainers",
+          "reason": "KV validation limits are reusable contract data."
+        }
+      ],
+      "forbidden_unless_feature": [],
+      "manifest": "docs/crate-extraction/aspen-kv-types.md",
+      "named_reusable_feature_sets": [],
+      "owner": "Aspen KV types maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [
+        "aspen-raft",
+        "aspen"
+      ],
+      "representative_consumers": [
+        "aspen-raft",
+        "aspen-coordination",
+        "aspen-jobs",
+        "aspen-kv-branch"
+      ]
+    },
+    "aspen_raft_compat": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-raft-compat",
+          "dependency_path": "aspen-raft -> aspen-core-shell",
+          "feature_set": "default",
+          "owner": "Aspen Raft compatibility maintainers",
+          "reason": "Compatibility shell for existing Aspen integration."
+        },
+        {
+          "candidate": "aspen-raft-compat",
+          "dependency_path": "aspen-raft -> iroh",
+          "feature_set": "default",
+          "owner": "Aspen Raft compatibility maintainers",
+          "reason": "Existing Aspen runtime networking until adapter split completes."
+        }
+      ],
+      "forbidden_unless_feature": [],
+      "manifest": "docs/crate-extraction/aspen-raft-compat.md",
+      "named_reusable_feature_sets": [
+        "sql",
+        "coordination",
+        "trust",
+        "secrets",
+        "sharding",
+        "testing"
+      ],
+      "owner": "Aspen Raft compatibility maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [
+        "aspen",
+        "aspen-cluster"
+      ],
+      "representative_consumers": [
+        "aspen",
+        "aspen-cluster",
+        "aspen-rpc-handlers",
+        "aspen-cli"
+      ]
+    },
+    "aspen_raft_kv": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-raft-kv",
+          "dependency_path": "aspen-raft-kv -> openraft",
+          "feature_set": "default",
+          "owner": "Aspen Raft/KV facade maintainers",
+          "reason": "Consensus engine and public trait boundary."
+        },
+        {
+          "candidate": "aspen-raft-kv",
+          "dependency_path": "aspen-raft-kv -> aspen-redb-storage",
+          "feature_set": "redb",
+          "owner": "Aspen Raft/KV facade maintainers",
+          "reason": "Reusable storage backend integration once storage migration lands."
+        },
+        {
+          "candidate": "aspen-raft-kv",
+          "dependency_path": "aspen-raft-kv -> aspen-raft-network",
+          "feature_set": "iroh-adapter",
+          "owner": "Aspen Raft/KV facade maintainers",
+          "reason": "Explicit iroh adapter integration only."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-raft-network",
+        "aspen-transport",
+        "aspen-auth",
+        "aspen-client-api",
+        "aspen-core-shell",
+        "aspen-trust",
+        "aspen-secrets",
+        "aspen-sql",
+        "aspen-coordination"
+      ],
+      "manifest": "docs/crate-extraction/aspen-raft-kv.md",
+      "named_reusable_feature_sets": [
+        "redb",
+        "iroh-adapter"
+      ],
+      "owner": "Aspen Raft/KV facade maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [
+        "aspen-raft"
+      ],
+      "representative_consumers": [
+        "aspen-raft",
+        "aspen-cluster",
+        "aspen-core-essentials-handler"
+      ]
+    },
+    "aspen_raft_kv_types": {
+      "class": "protocol/wire",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-raft-kv-types",
+          "dependency_path": "aspen-raft-kv-types -> openraft",
+          "feature_set": "default",
+          "owner": "Aspen Raft/KV extraction maintainers",
+          "reason": "OpenRaft trait/type exposure is the crate purpose."
+        }
+      ],
+      "forbidden_unless_feature": [],
+      "manifest": "docs/crate-extraction/aspen-raft-kv-types.md",
+      "named_reusable_feature_sets": [],
+      "owner": "Aspen Raft/KV extraction maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [
+        "aspen-raft"
+      ],
+      "representative_consumers": [
+        "aspen-redb-storage",
+        "aspen-raft-kv",
+        "aspen-raft-network",
+        "aspen-raft"
+      ]
+    },
+    "aspen_raft_network": {
+      "class": "runtime adapter",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-raft-network",
+          "dependency_path": "aspen-raft-network -> iroh",
+          "feature_set": "default",
+          "owner": "Aspen Raft network adapter maintainers",
+          "reason": "Explicit adapter purpose."
+        },
+        {
+          "candidate": "aspen-raft-network",
+          "dependency_path": "aspen-raft-network -> irpc",
+          "feature_set": "default",
+          "owner": "Aspen Raft network adapter maintainers",
+          "reason": "Adapter message framing."
+        },
+        {
+          "candidate": "aspen-raft-network",
+          "dependency_path": "aspen-raft-network -> openraft",
+          "feature_set": "default",
+          "owner": "Aspen Raft network adapter maintainers",
+          "reason": "OpenRaft network trait integration."
+        },
+        {
+          "candidate": "aspen-raft-network",
+          "dependency_path": "aspen-raft-network -> aspen-sharding",
+          "feature_set": "sharding",
+          "owner": "Aspen Raft network adapter maintainers",
+          "reason": "Optional sharding-aware route metadata."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-sharding"
+      ],
+      "manifest": "docs/crate-extraction/aspen-raft-network.md",
+      "named_reusable_feature_sets": [
+        "sharding"
+      ],
+      "owner": "Aspen Raft network adapter maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [
+        "aspen-raft"
+      ],
+      "representative_consumers": [
+        "aspen-raft-kv",
+        "aspen-raft",
+        "aspen-cluster"
+      ]
+    },
+    "aspen_redb_storage": {
+      "class": "storage/backend",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> redb",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "Redb backend purpose."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> openraft",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "OpenRaft storage trait implementation."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> aspen-raft-kv-types",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "App type config for reusable KV storage."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> tokio",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "OpenRaft async trait implementation."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> aspen-layer",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "Secondary index support for KV storage."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> aspen-storage-types",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "KvEntry type for state machine."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> aspen-time",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "Wall-clock time for TTL and lease expiration."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> n0-future",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "Stream trait for OpenRaft state machine apply."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> snafu",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "Error handling with context."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> futures",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "Async utilities for storage operations."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> bincode",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "Log entry and state machine serialization."
+        },
+        {
+          "candidate": "aspen-redb-storage",
+          "dependency_path": "aspen-redb-storage -> aspen-kv-types",
+          "feature_set": "raft-storage",
+          "owner": "Aspen Redb storage maintainers",
+          "reason": "KV command types for state machine dispatch."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "openraft",
+        "redb",
+        "tokio",
+        "aspen-raft-kv-types",
+        "aspen-layer",
+        "aspen-storage-types",
+        "aspen-time",
+        "n0-future",
+        "snafu",
+        "futures",
+        "bincode"
+      ],
+      "manifest": "docs/crate-extraction/aspen-redb-storage.md",
+      "named_reusable_feature_sets": [
+        "raft-storage"
+      ],
+      "owner": "Aspen Redb storage maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [
+        "aspen-raft"
+      ],
+      "representative_consumers": [
+        "aspen-raft-kv",
+        "aspen-raft"
+      ]
+    },
+    "aspen_rpc_core": {
+      "class": "service library",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-rpc-core",
+          "dependency_path": "aspen-rpc-core -> aspen-client-api",
+          "feature_set": "default",
+          "owner": "Aspen transport/RPC maintainers",
+          "reason": "Client request and response enums are the reusable dispatch contract."
+        },
+        {
+          "candidate": "aspen-rpc-core",
+          "dependency_path": "aspen-rpc-core -> aspen-client-api -> aspen-auth-core -> iroh-base",
+          "feature_set": "default",
+          "owner": "Aspen transport/RPC maintainers",
+          "reason": "Key-only public-key type path inherited from protocol schema; not concrete Iroh endpoint runtime."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-core-shell",
+        "aspen-auth",
+        "aspen-raft",
+        "aspen-transport",
+        "aspen-sharding",
+        "aspen-coordination",
+        "aspen-cluster",
+        "aspen-jobs",
+        "aspen-hooks",
+        "aspen-blob",
+        "aspen-sql",
+        "aspen-forge",
+        "aspen-ci",
+        "aspen-testing",
+        "iroh",
+        "iroh-base",
+        "metrics-exporter-prometheus",
+        "tokio",
+        "aspen-rpc-handlers",
+        "aspen"
+      ],
+      "manifest": "docs/crate-extraction/transport-rpc.md",
+      "named_reusable_feature_sets": [
+        "runtime-context",
+        "blob",
+        "forge",
+        "ci",
+        "jobs",
+        "hooks",
+        "worker",
+        "deploy",
+        "sql",
+        "testing"
+      ],
+      "owner": "Aspen transport/RPC maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [
+        "aspen-rpc-handlers"
+      ],
+      "representative_consumers": [
+        "aspen-rpc-handlers",
+        "aspen-core-essentials-handler",
+        "aspen-blob-handler",
+        "aspen-cluster-handler",
+        "downstream-rpc-core"
+      ]
+    },
+    "aspen_transport": {
+      "class": "runtime adapter",
+      "default_feature_sets": [
+        "default"
+      ],
+      "exceptions": [
+        {
+          "candidate": "aspen-transport",
+          "dependency_path": "aspen-transport -> iroh",
+          "feature_set": "default",
+          "owner": "Aspen transport/RPC maintainers",
+          "reason": "Iroh endpoint, connection, and stream types are the explicit reusable transport API."
+        },
+        {
+          "candidate": "aspen-transport",
+          "dependency_path": "aspen-transport[raft-rpc] -> irpc",
+          "feature_set": "raft-rpc",
+          "owner": "Aspen transport/RPC maintainers",
+          "reason": "IRPC declarations are owned by the named Raft RPC adapter feature."
+        }
+      ],
+      "forbidden_unless_feature": [
+        "aspen-core-shell",
+        "aspen-auth",
+        "aspen-sharding",
+        "aspen-trust",
+        "aspen-raft-types",
+        "openraft",
+        "irpc",
+        "postcard",
+        "metrics",
+        "parking_lot",
+        "aspen-raft",
+        "aspen-cluster",
+        "aspen-rpc-handlers",
+        "aspen"
+      ],
+      "manifest": "docs/crate-extraction/transport-rpc.md",
+      "named_reusable_feature_sets": [
+        "raft-rpc",
+        "raft-handler",
+        "auth-raft-handler",
+        "sharded-raft-handler",
+        "trust-handler",
+        "log-subscriber",
+        "runtime"
+      ],
+      "owner": "Aspen transport/RPC maintainers",
+      "readiness_state": "workspace-internal",
+      "reexporters": [],
+      "representative_consumers": [
+        "aspen-raft-network",
+        "aspen-raft",
+        "aspen-cluster",
+        "aspen-client",
+        "downstream-transport"
+      ]
+    }
+  },
+  "concrete_transport_crates": [
+    "iroh",
+    "iroh-base",
+    "irpc",
+    "aspen-transport",
+    "aspen-raft-network"
+  ],
+  "evidence_roots": [
+    "openspec/changes/*/evidence",
+    "openspec/changes/archive/*/evidence"
+  ],
+  "feature_gated_by_default": [
+    "aspen-trust",
+    "aspen-secrets",
+    "aspen-sql",
+    "aspen-coordination",
+    "aspen-sharding",
+    "aspen-proxy",
+    "aspen-cluster",
+    "aspen-core-shell",
+    "aspen-client-api",
+    "aspen-auth",
+    "aspen-transport",
+    "aspen-raft-network"
+  ],
+  "forbidden_by_default": [
+    "aspen",
+    "aspen-cli",
+    "aspen-tui",
+    "aspen-dogfood",
+    "aspen-forge-web",
+    "aspen-nix-cache-gateway",
+    "aspen-snix-bridge",
+    "aspen-rpc-handlers",
+    "aspen-core-essentials-handler",
+    "aspen-blob-handler",
+    "aspen-ci-handler",
+    "aspen-cluster-handler",
+    "aspen-docs-handler",
+    "aspen-forge-handler",
+    "aspen-job-handler",
+    "aspen-nix-handler",
+    "aspen-secrets-handler"
+  ],
+  "readiness_states": [
+    "workspace-internal",
+    "extraction-ready-in-workspace",
+    "blocked-pending-license/publication-policy",
+    "publishable from monorepo",
+    "future repository split candidate"
+  ],
+  "required_exception_fields": [
+    "candidate",
+    "feature_set",
+    "dependency_path",
+    "owner",
+    "reason"
+  ],
+  "schema_version": "1"
+}

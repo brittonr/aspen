@@ -1,0 +1,23 @@
+# I3 extraction policy/docs audit
+
+## Command: rg relevant blob/core policy text
+
+### docs/crate-extraction/blob-castore-cache.md
+39:| `aspen-blob` | `aspen-traits`, `aspen-kv-types` | keep | Provides leaf KV capability traits and request/response/error types for `BlobAwareKeyValueStore` and replication metadata storage without root `aspen-core`. |
+43:| `aspen-cache` | `aspen-core`, `aspen-kv-types` | gated behind `kv-index` | KV-backed index and signing-key persistence are Aspen publication adapters, not required for narinfo/signing helpers. |
+56:- `BlobAwareKeyValueStore` is generic over `BlobRead + BlobWrite` blob capabilities and leaf `aspen-traits` KV contracts.
+57:- `KvReplicaMetadataStore` uses `aspen_traits::KeyValueStore` plus `aspen-kv-types` request/response/error types; root `aspen-core` is not part of the replication metadata seam.
+70:- KV-backed adapters use `KvRead + KvWrite` from aspen-traits instead of aspen-core
+122:| `aspen-cache` | `kv-index` | `aspen-cache -> aspen-kv-types` | Aspen storage/cache maintainers | Optional Aspen KV request helpers for signing-key persistence. |
+128:- `cargo tree -p aspen-blob --no-default-features -e normal` plus negative boundary grep for root `aspen-core`, `aspen-client-api`, handlers, root app, and node bootstrap crates
+145:- `aspen-blob/replication` owns client-RPC replication coupling while replica metadata storage uses leaf KV traits/types, not root `aspen-core`.
+
+### docs/crate-extraction/policy.ncl
+372:      forbidden_unless_feature = ["aspen-core", "aspen-core-shell", "aspen-raft", "aspen-transport", "aspen-auth", "aspen-client-api", "aspen-trust", "aspen-secrets", "aspen-sql"],
+537:      forbidden_unless_feature = ["aspen-core", "aspen-client-api", "aspen-rpc-core", "aspen-rpc-handlers", "aspen-blob-handler", "aspen-cluster", "aspen"],
+563:          dependency_path = "aspen-blob -> irpc",
+570:          dependency_path = "aspen-blob -> aspen-client-api",
+628:      forbidden_unless_feature = ["aspen-core", "aspen-core-shell", "aspen-kv-types", "aspen-blob", "aspen-rpc-core", "aspen-rpc-handlers", "aspen-testing", "aspen"],
+
+## Assertions
+PASS: docs and policy remove stale aspen-blob -> aspen-core allowance and document leaf KV contracts.

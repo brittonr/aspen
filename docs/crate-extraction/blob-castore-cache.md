@@ -36,7 +36,7 @@
 
 | Crate | Dependency | Decision | Reason |
 | --- | --- | --- | --- |
-| `aspen-blob` | `aspen-core` | keep for now | Provides `KeyValueStore` and KV request/response types for `BlobAwareKeyValueStore`; not an app shell. Future seam can move this to alloc-safe trait/type crates. |
+| `aspen-blob` | `aspen-traits`, `aspen-kv-types` | keep | Provides leaf KV capability traits and request/response/error types for `BlobAwareKeyValueStore` and replication metadata storage without root `aspen-core`. |
 | `aspen-blob` | `aspen-client-api` | gated behind `replication` | Only replication pull RPCs need client request/response schemas and `CLIENT_ALPN`. |
 | `aspen-castore` | `aspen-blob` | keep | Server wraps a reusable `BlobStore` implementation; this is the storage backend boundary. |
 | `aspen-castore` | `aspen-core` / `aspen-core-shell` | removed | Circuit breaker moved local to avoid app/core-shell coupling in the reusable castore graph. |
@@ -53,10 +53,10 @@
 
 ### aspen-blob: BlobAwareKeyValueStore generics
 
-- `BlobAwareKeyValueStore` currently hardcoded to `IrohBlobStore` (kv_integration.rs:61)
-- Should be generic over `BlobRead + BlobWrite` capabilities instead
-- Transfer traits (`BlobTransfer`) stay in iroh adapter features
-- KV bound should narrow to `KvRead + KvWrite + KvScan` once KV split lands
+- `BlobAwareKeyValueStore` is generic over `BlobRead + BlobWrite` blob capabilities and leaf `aspen-traits` KV contracts.
+- `KvReplicaMetadataStore` uses `aspen_traits::KeyValueStore` plus `aspen-kv-types` request/response/error types; root `aspen-core` is not part of the replication metadata seam.
+- Transfer traits (`BlobTransfer`) stay in iroh adapter features.
+- Future work may narrow the composite `KeyValueStore` bound to `KvRead + KvWrite + KvDelete + KvScan` if the adapter needs a smaller port.
 
 ### aspen-cache: Storage port traits
 
@@ -109,8 +109,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
 | `aspen-blob` | default | `aspen-blob -> iroh` | Aspen storage/cache maintainers | Iroh endpoint/address types are the backend transport purpose for blob storage. |
 | `aspen-blob` | default | `aspen-blob -> iroh-blobs` | Aspen storage/cache maintainers | iroh-blobs is the content-addressed storage backend purpose. |
 | `aspen-blob` | default | `aspen-blob -> iroh-base` | Aspen storage/cache maintainers | Transitive iroh backend type dependency. |
-| `aspen-blob` | default | `aspen-blob -> irpc` | Aspen storage/cache maintainers | Current Aspen KV/core trait path brings irpc transitively until the KV-aware seam is split. |
-| `aspen-blob` | default | `aspen-blob -> aspen-core` | Aspen storage/cache maintainers | Current `BlobAwareKeyValueStore` uses Aspen KV traits/types; app-shell split is tracked as a later seam. |
+| `aspen-blob` | default | `aspen-blob -> irpc` | Aspen storage/cache maintainers | Transitive iroh/iroh-blobs backend RPC framing dependency. |
 | `aspen-blob` | `replication` | `aspen-blob -> aspen-client-api` | Aspen storage/cache maintainers | Replication pull RPCs are adapter-only compatibility. |
 | `aspen-castore` | default | `aspen-castore -> aspen-blob` | Aspen storage/cache maintainers | Castore server wraps the reusable blob store trait/implementation. |
 | `aspen-castore` | default | `aspen-castore -> snix-castore` | Aspen storage/cache maintainers | snix trait implementation is the crate purpose. |
@@ -126,7 +125,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
 
 - `cargo check -p aspen-blob --no-default-features`
 - `cargo check -p aspen-blob --features replication`
-- `cargo tree -p aspen-blob --no-default-features -e normal` plus negative boundary grep for `aspen-client-api`, handlers, root app, and node bootstrap crates
+- `cargo tree -p aspen-blob --no-default-features -e normal` plus negative boundary grep for root `aspen-core`, `aspen-client-api`, handlers, root app, and node bootstrap crates
 - `cargo test -p aspen-castore circuit_breaker`
 - `cargo check -p aspen-castore --no-default-features`
 - `cargo tree -p aspen-castore --no-default-features -e normal` plus negative boundary grep for core-shell, handlers, and blob handler crates
@@ -143,7 +142,7 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
 
 Current status is `workspace-internal`. I3/I4/I5 have moved the highest-risk app couplings behind features or local helpers:
 
-- `aspen-blob/replication` owns client-RPC replication coupling.
+- `aspen-blob/replication` owns client-RPC replication coupling while replica metadata storage uses leaf KV traits/types, not root `aspen-core`.
 - `aspen-castore` owns its local irpc circuit breaker without `aspen-core-shell`.
 - `aspen-cache` default owns narinfo/NAR/signing helpers only; `kv-index` owns Aspen KV publication.
 
