@@ -63,7 +63,19 @@ impl std::fmt::Display for JobId {
 }
 
 /// Priority level for job execution.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize
+)]
 pub enum Priority {
     /// Lowest priority.
     Low = 0,
@@ -90,8 +102,8 @@ impl Priority {
 
     /// Priorities ordered from highest to lowest.
     #[must_use]
-    pub fn all_ordered() -> [Self; 4] {
-        [Self::Critical, Self::High, Self::Normal, Self::Low]
+    pub fn all_ordered() -> Vec<Self> {
+        vec![Self::Critical, Self::High, Self::Normal, Self::Low]
     }
 }
 
@@ -197,6 +209,32 @@ impl RetryPolicy {
             initial_delay: Duration::from_secs(1),
             multiplier: 2.0,
             max_delay: Some(Duration::from_secs(300)),
+        }
+    }
+
+    /// Create an exponential backoff policy with custom parameters.
+    #[must_use]
+    pub fn exponential_custom(
+        max_attempts: u32,
+        initial_delay: Duration,
+        multiplier: f64,
+        max_delay: Option<Duration>,
+    ) -> Self {
+        Self::Exponential {
+            max_attempts,
+            initial_delay,
+            multiplier,
+            max_delay,
+        }
+    }
+
+    /// Create a custom retry policy with specific delays.
+    #[must_use]
+    pub fn custom(delays: Vec<Duration>) -> Self {
+        let max_attempts = delays.len() as u32;
+        Self::Custom {
+            delays,
+            max_attempts: Some(max_attempts),
         }
     }
 
@@ -415,7 +453,12 @@ pub enum JobEvent {
 
 /// Compute the next job status without touching storage or runtime services.
 #[must_use]
-pub fn transition_status(current: JobStatus, event: JobEvent, policy: &RetryPolicy, attempts_completed: u32) -> JobStatus {
+pub fn transition_status(
+    current: JobStatus,
+    event: JobEvent,
+    policy: &RetryPolicy,
+    attempts_completed: u32,
+) -> JobStatus {
     match event {
         JobEvent::Enqueue if matches!(current, JobStatus::Pending) => JobStatus::Scheduled,
         JobEvent::Start if matches!(current, JobStatus::Scheduled | JobStatus::Retrying) => JobStatus::Running,

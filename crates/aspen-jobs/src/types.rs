@@ -2,150 +2,14 @@
 
 use std::time::Duration;
 
+pub use aspen_jobs_core::Priority;
+pub use aspen_jobs_core::RetryPolicy;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Timelike;
 use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
-
-/// Priority level for job execution.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize
-)]
-pub enum Priority {
-    /// Lowest priority.
-    Low = 0,
-    /// Normal priority (default).
-    #[default]
-    Normal = 1,
-    /// High priority.
-    High = 2,
-    /// Critical priority (highest).
-    Critical = 3,
-}
-
-impl Priority {
-    /// Get the queue name for this priority level.
-    pub fn queue_name(&self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Normal => "normal",
-            Self::High => "high",
-            Self::Critical => "critical",
-        }
-    }
-
-    /// Get all priority levels in order from highest to lowest.
-    pub fn all_ordered() -> Vec<Self> {
-        vec![Self::Critical, Self::High, Self::Normal, Self::Low]
-    }
-}
-
-/// Retry policy for failed jobs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RetryPolicy {
-    /// No retries.
-    None,
-    /// Fixed delay between retries.
-    Fixed {
-        /// Maximum number of retry attempts.
-        max_attempts: u32,
-        /// Delay between retries.
-        delay: Duration,
-    },
-    /// Exponential backoff.
-    Exponential {
-        /// Maximum number of retry attempts.
-        max_attempts: u32,
-        /// Initial delay.
-        initial_delay: Duration,
-        /// Multiplier for each retry (e.g., 2.0 for doubling).
-        multiplier: f64,
-        /// Maximum delay between retries.
-        max_delay: Option<Duration>,
-    },
-    /// Custom retry delays.
-    Custom {
-        /// List of delays for each retry attempt.
-        delays: Vec<Duration>,
-        /// Maximum number of attempts (if None, uses delays.len()).
-        max_attempts: Option<u32>,
-    },
-}
-
-impl Default for RetryPolicy {
-    fn default() -> Self {
-        // Default to exponential backoff with 3 retries
-        Self::exponential(3)
-    }
-}
-
-impl RetryPolicy {
-    /// Create a no-retry policy.
-    pub fn none() -> Self {
-        Self::None
-    }
-
-    /// Create a fixed retry policy.
-    pub fn fixed(max_attempts: u32, delay: Duration) -> Self {
-        Self::Fixed { max_attempts, delay }
-    }
-
-    /// Create an exponential backoff policy with defaults.
-    pub fn exponential(max_attempts: u32) -> Self {
-        Self::Exponential {
-            max_attempts,
-            initial_delay: Duration::from_secs(1),
-            multiplier: 2.0,
-            max_delay: Some(Duration::from_secs(300)), // 5 minutes max
-        }
-    }
-
-    /// Create an exponential backoff policy with custom parameters.
-    pub fn exponential_custom(
-        max_attempts: u32,
-        initial_delay: Duration,
-        multiplier: f64,
-        max_delay: Option<Duration>,
-    ) -> Self {
-        Self::Exponential {
-            max_attempts,
-            initial_delay,
-            multiplier,
-            max_delay,
-        }
-    }
-
-    /// Create a custom retry policy with specific delays.
-    pub fn custom(delays: Vec<Duration>) -> Self {
-        let max_attempts = delays.len() as u32;
-        Self::Custom {
-            delays,
-            max_attempts: Some(max_attempts),
-        }
-    }
-
-    /// Get the maximum number of attempts for this policy.
-    pub fn max_attempts(&self) -> u32 {
-        match self {
-            Self::None => 1,
-            Self::Fixed { max_attempts, .. } => *max_attempts,
-            Self::Exponential { max_attempts, .. } => *max_attempts,
-            Self::Custom { max_attempts, delays } => max_attempts.unwrap_or(delays.len() as u32),
-        }
-    }
-}
 
 /// Schedule for job execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -410,36 +274,5 @@ pub struct JobTypeStats {
     pub success_rate: f64,
 }
 
-/// Queue statistics.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct QueueStats {
-    /// Jobs by priority.
-    pub by_priority: std::collections::HashMap<Priority, u64>,
-    /// Total jobs in queue.
-    pub total_queued: u64,
-    /// Jobs being processed.
-    pub processing: u64,
-    /// Queue depth (waiting jobs).
-    pub depth: u64,
-    /// Oldest job age in seconds.
-    pub oldest_job_age_sec: Option<u64>,
-    /// Average wait time in seconds.
-    pub avg_wait_time_sec: Option<u64>,
-    /// DLQ statistics.
-    pub dlq_stats: DLQStats,
-}
-
-/// Dead Letter Queue statistics.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct DLQStats {
-    /// Total jobs in DLQ across all priorities.
-    pub total_count: u64,
-    /// Jobs in DLQ by priority.
-    pub by_priority: std::collections::HashMap<Priority, u64>,
-    /// Jobs in DLQ by job type.
-    pub by_job_type: std::collections::HashMap<String, u64>,
-    /// Oldest DLQ entry age in seconds.
-    pub oldest_entry_age_sec: Option<u64>,
-    /// Total jobs redriven from DLQ.
-    pub total_redriven: u64,
-}
+pub use aspen_jobs_core::DLQStats;
+pub use aspen_jobs_core::QueueStats;
