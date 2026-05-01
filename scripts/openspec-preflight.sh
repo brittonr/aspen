@@ -91,6 +91,10 @@ if [[ -x "$repo_root/scripts/check-openspec-drain-verification.py" ]]; then
   "$repo_root/scripts/check-openspec-drain-verification.py" "$change_dir" --repo-root "$repo_root" >/dev/null
 fi
 
+if [[ -x "$repo_root/scripts/check-openspec-task-size.py" ]]; then
+  "$repo_root/scripts/check-openspec-task-size.py" "$change_dir" --repo-root "$repo_root" >/dev/null
+fi
+
 python3 - "$repo_root" "$change_dir" <<'PY'
 import os
 import pathlib

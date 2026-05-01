@@ -13,6 +13,14 @@ Task gates repeatedly flag oversized or incoherently ordered tasks that bundle m
 ### New Capabilities
 - `openspec-governance.task-size-and-ordering`: Task lists are small enough and ordered enough to verify cleanly.
 
+## Verification Expectations
+
+- `openspec-governance.task-size-and-ordering`: positive task-gate fixture covers bounded and dependency-aware task lists.
+- `openspec-governance.task-size-and-ordering.bounded-implementation-task-passes`: bounded implementation fixture with small `[covers=...]` fan-out must pass.
+- `openspec-governance.task-size-and-ordering.oversized-implementation-task-flagged`: oversized implementation fixture must fail with split guidance.
+- `openspec-governance.task-size-and-ordering.integration-verification-may-be-broad`: broad verification fixture labeled as an integration proof with evidence expectations must pass.
+- `openspec-governance.task-size-and-ordering.dependency-order-explicit`: out-of-order and ambiguous dependency fixtures must fail unless an explicit prerequisite note is present.
+
 ## Impact
 
 - **Files**: tasks template/instructions, tasks gate logic, fixtures.

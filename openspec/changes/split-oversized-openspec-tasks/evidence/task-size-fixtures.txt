@@ -1,0 +1,8 @@
+PASS: bounded
+PASS: oversized rejected: oversized implementation task covers 4 IDs
+PASS: integration
+PASS: broad-verification-missing-label rejected: broad verification task covers 4 IDs
+PASS: out-of-order rejected: dependency ordering is ambiguous
+PASS: ambiguous-dependency rejected: ambiguous foundation dependency
+PASS: explicit-prerequisite
+task size/order fixtures passed

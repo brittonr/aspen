@@ -1,0 +1,6 @@
+tasks template guidance check: pass
+- contains: fan-out to three
+- contains: Split tasks
+- contains: Prerequisite:
+- contains: integration proof
+- contains: evidence

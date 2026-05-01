@@ -1,0 +1,2 @@
+OK: OpenSpec tasks are bounded and dependency-aware
+  max implementation fan-out: 3
