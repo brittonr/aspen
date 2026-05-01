@@ -1,6 +1,6 @@
 ## 1. Implementation
 
-- [ ] I1 Update design template/instructions to require `## Verification Strategy` for spec-changing changes. [covers=openspec-governance.design-verification-strategy.mapped-strategy-present]
+- [x] I1 Update design template/instructions to require `## Verification Strategy` for spec-changing changes. [covers=openspec-governance.design-verification-strategy.mapped-strategy-present] ✅ 5m (started: 2026-05-01T02:20:30Z → completed: 2026-05-01T02:25:28Z)
 - [ ] I2 Extend the design gate to fail missing strategy sections and strategies that omit requirement/scenario ID references. [covers=openspec-governance.design-verification-strategy.mapped-strategy-present,openspec-governance.design-verification-strategy.missing-strategy-fails]
 - [ ] I3 Extend the design gate to require negative-path checks or explicit defer-with-rationale entries when changed specs include negative behavior. [covers=openspec-governance.design-verification-strategy.negative-paths-planned]
 

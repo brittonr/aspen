@@ -1,0 +1,3 @@
+I1 design template evidence
+
+Added openspec/templates/design.md with a mandatory ## Verification Strategy section for spec-changing changes. The template requires mapping changed requirement or scenario IDs to concrete verification rails before tasks are approved, including positive and negative/failure behavior when the delta spec defines rejection, failure, timeout, malformed, unauthorized, forbidden, invalid, or missing-input behavior. It also allows explicit defer-with-rationale entries for rails that cannot run in the current slice.
