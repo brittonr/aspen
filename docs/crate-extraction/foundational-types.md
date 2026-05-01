@@ -23,7 +23,7 @@
 | --- | --- | --- | --- |
 | `aspen-constants` | Leaf constants only. | none expected | Document semver and examples. |
 | `aspen-hlc` | Portable HLC/timestamp types with `uhlc` default features disabled. | explicit std/runtime only if needed | Prove no rand/getrandom leak. |
-| `aspen-storage-types` | Reusable data types only. | Redb definitions must move out. | Split `SM_KV_TABLE` / `redb::TableDefinition`. |
+| `aspen-storage-types` | Reusable data types only; no Redb dependency in reusable defaults. | Shell-facing Redb table definitions remain in `aspen-core-shell::storage`. | I4 evidence proves `SM_KV_TABLE` is unavailable from no-default `aspen-core::storage` and available through the shell alias fixture. |
 | `aspen-cluster-types` | Alloc-safe defaults. | `iroh` conversion helpers. | Keep `default = []` and prove consumer feature unification. |
 | `aspen-traits` | Narrow reusable KV capability traits. | async/runtime blanket impls only behind documented shell/feature. | Split/prove KV capability traits. |
 | `aspen-time` | Explicit wall-clock boundary helpers. | simulation helpers as documented. | Keep ambient time owned here. |
@@ -55,4 +55,4 @@
 
 ## First blocker
 
-Move `SM_KV_TABLE` / `redb::TableDefinition` out of `aspen-storage-types`, then split/prove narrower `aspen-traits` KV capabilities.
+I4 resolved the `SM_KV_TABLE` / `redb::TableDefinition` storage-types boundary with evidence; next blocker is to split/prove narrower `aspen-traits` KV capabilities.

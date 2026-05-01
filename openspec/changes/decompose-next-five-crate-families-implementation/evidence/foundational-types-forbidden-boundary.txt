@@ -1,0 +1,11 @@
+family: foundational-types
+task: I4
+status: pass
+
+Negative boundary checked:
+- `cargo tree -p aspen-storage-types --no-default-features -e normal` contains serde/bincode only and does not include redb.
+- `cargo check --manifest-path crates/aspen-core/tests/ui/storage-table-no-std/Cargo.toml --color never --quiet` fails with `no SM_KV_TABLE in storage`, proving alloc/no-default `aspen-core::storage` does not expose the Redb table definition.
+
+Evidence:
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt

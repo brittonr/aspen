@@ -1,0 +1,544 @@
+diff --git a/docs/crate-extraction/foundational-types.md b/docs/crate-extraction/foundational-types.md
+index 24cf8f02b..c438ec6a8 100644
+--- a/docs/crate-extraction/foundational-types.md
++++ b/docs/crate-extraction/foundational-types.md
+@@ -23,7 +23,7 @@
+ | --- | --- | --- | --- |
+ | `aspen-constants` | Leaf constants only. | none expected | Document semver and examples. |
+ | `aspen-hlc` | Portable HLC/timestamp types with `uhlc` default features disabled. | explicit std/runtime only if needed | Prove no rand/getrandom leak. |
+-| `aspen-storage-types` | Reusable data types only. | Redb definitions must move out. | Split `SM_KV_TABLE` / `redb::TableDefinition`. |
++| `aspen-storage-types` | Reusable data types only; no Redb dependency in reusable defaults. | Shell-facing Redb table definitions remain in `aspen-core-shell::storage`. | I4 evidence proves `SM_KV_TABLE` is unavailable from no-default `aspen-core::storage` and available through the shell alias fixture. |
+ | `aspen-cluster-types` | Alloc-safe defaults. | `iroh` conversion helpers. | Keep `default = []` and prove consumer feature unification. |
+ | `aspen-traits` | Narrow reusable KV capability traits. | async/runtime blanket impls only behind documented shell/feature. | Split/prove KV capability traits. |
+ | `aspen-time` | Explicit wall-clock boundary helpers. | simulation helpers as documented. | Keep ambient time owned here. |
+@@ -55,4 +55,4 @@
+ 
+ ## First blocker
+ 
+-Move `SM_KV_TABLE` / `redb::TableDefinition` out of `aspen-storage-types`, then split/prove narrower `aspen-traits` KV capabilities.
++I4 resolved the `SM_KV_TABLE` / `redb::TableDefinition` storage-types boundary with evidence; next blocker is to split/prove narrower `aspen-traits` KV capabilities.
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt
+new file mode 100644
+index 000000000..a41d1bb49
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt
+@@ -0,0 +1,10 @@
++family: foundational-types
++task: I4
++status: pass
++
++Compatibility checked:
++- `aspen-core::storage::KvEntry` remains available to no-default portable consumers.
++- `aspen-core-shell` keeps the shell-facing compatibility alias: the `shell-alias-smoke` fixture depends on package `aspen-core-shell` as crate name `aspen-core` and compiles `aspen_core::storage::SM_KV_TABLE`.
++
++Evidence:
++- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json
+new file mode 100644
+index 000000000..5c2407295
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json
+@@ -0,0 +1,27 @@
++{
++  "family": "foundational-types",
++  "task": "I4",
++  "status": "pass",
++  "fixtures": [
++    {
++      "name": "aspen-storage-types-no-defaults",
++      "command": "cargo check -p aspen-storage-types --no-default-features",
++      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
++    },
++    {
++      "name": "aspen-core-no-defaults",
++      "command": "cargo check -p aspen-core --no-default-features",
++      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
++    },
++    {
++      "name": "aspen-core-no-std-smoke",
++      "command": "cargo check -p aspen-core-no-std-smoke --no-default-features",
++      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
++    },
++    {
++      "name": "shell-alias-smoke",
++      "command": "cargo check --manifest-path crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml",
++      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
++    }
++  ]
++}
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt
+new file mode 100644
+index 000000000..1c89612eb
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt
+@@ -0,0 +1,11 @@
++family: foundational-types
++task: I4
++status: pass
++
++Negative boundary checked:
++- `cargo tree -p aspen-storage-types --no-default-features -e normal` contains serde/bincode only and does not include redb.
++- `cargo check --manifest-path crates/aspen-core/tests/ui/storage-table-no-std/Cargo.toml --color never --quiet` fails with `no SM_KV_TABLE in storage`, proving alloc/no-default `aspen-core::storage` does not expose the Redb table definition.
++
++Evidence:
++- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
++- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.json
+new file mode 100644
+index 000000000..b71c1c3f6
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.json
+@@ -0,0 +1,11 @@
++{
++  "candidate_family": "foundational-types",
++  "passed": true,
++  "failures": [],
++  "warnings": [
++    "foundational_types: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "foundational_types"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.md
+new file mode 100644
+index 000000000..7003c09f6
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.md
+@@ -0,0 +1,13 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `foundational-types`
++- Passed: `true`
++- Checked candidates: 1
++
++## Failures
++
++- none
++
++## Warnings
++
++- foundational_types: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.stderr
+new file mode 100644
+index 000000000..c4ceddca9
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.stderr
+@@ -0,0 +1,32 @@
++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
++Aspen development environment
++
++Build caching:
++  incremental compilation enabled
++
++Common commands:
++  cargo build                          Build project
++  cargo nextest run                    Run all tests
++  cargo nextest run -P quick           Quick tests (~2-5 min)
++  cargo tigerstyle check               Run Tiger Style lints
++
++Nix apps:
++  nix run .#cluster                    3-node cluster
++  nix run .#bench                      Run benchmarks
++  nix run .#coverage [html|ci|update]  Code coverage
++  nix run .#fuzz-quick                 Fuzzing smoke test
++
++VM testing: aspen-vm-setup / aspen-vm-run <node-id>
++  nix run .#dogfood-vm                 Dogfood in isolated VMs
++
++CI worker setup (x86_64-linux only):
++  Status: ENABLED (kernel/initrd paths set)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt
+new file mode 100644
+index 000000000..0acc8de8e
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt
+@@ -0,0 +1,10 @@
++$ cargo check --manifest-path crates/aspen-core/tests/ui/storage-table-no-std/Cargo.toml --color never --quiet
++error[E0432]: unresolved import `aspen_core::storage::SM_KV_TABLE`
++ --> src/main.rs:1:5
++  |
++1 | use aspen_core::storage::SM_KV_TABLE;
++  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `SM_KV_TABLE` in `storage`
++
++For more information about this error, try `rustc --explain E0432`.
++error: could not compile `ui-storage-table-no-std` (bin "ui-storage-table-no-std") due to 1 previous error
++expected failure exit status: 101
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
+new file mode 100644
+index 000000000..e22c0d32a
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
+@@ -0,0 +1,252 @@
++$ cargo check -p aspen-storage-types --no-default-features
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
++$ cargo tree -p aspen-storage-types --no-default-features -e normal
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
++├── bincode v1.3.3
++│   └── serde v1.0.228
++│       ├── serde_core v1.0.228
++│       └── serde_derive v1.0.228 (proc-macro)
++│           ├── proc-macro2 v1.0.106
++│           │   └── unicode-ident v1.0.24
++│           ├── quote v1.0.45
++│           │   └── proc-macro2 v1.0.106 (*)
++│           └── syn v2.0.117
++│               ├── proc-macro2 v1.0.106 (*)
++│               ├── quote v1.0.45 (*)
++│               └── unicode-ident v1.0.24
++└── serde v1.0.228 (*)
++$ cargo check -p aspen-core --no-default-features
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.22s
++$ cargo check -p aspen-core-no-std-smoke --no-default-features
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
++    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
++    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
++    Checking aspen-core-no-std-smoke v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-no-std-smoke)
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.97s
++$ cargo check --manifest-path crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml
++   Compiling libc v0.2.185
++    Checking typenum v1.20.0
++    Checking itoa v1.0.18
++   Compiling semver v1.0.28
++    Checking litemap v0.8.2
++   Compiling cc v1.2.60
++    Checking writeable v0.6.3
++   Compiling icu_properties_data v2.2.0
++   Compiling icu_normalizer_data v2.2.0
++   Compiling zerocopy v0.8.48
++    Checking hashbrown v0.17.0
++   Compiling rustls v0.23.38
++   Compiling unicode-segmentation v1.13.2
++    Checking bitflags v2.11.1
++    Checking fastrand v2.4.1
++   Compiling tokio-macros v2.7.0
++   Compiling zerovec-derive v0.11.3
++   Compiling zerofrom-derive v0.1.7
++   Compiling yoke-derive v0.8.2
++   Compiling winnow v1.0.2
++    Checking spki v0.8.0
++   Compiling toml_datetime v1.1.1+spec-1.1.0
++   Compiling num-conv v0.2.1
++    Checking webpki-roots v1.0.7
++    Checking cpufeatures v0.3.0
++    Checking iri-string v0.7.12
++    Checking lru v0.16.4
++    Checking rustc-hash v2.1.2
++    Checking aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
++    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
++    Checking simple-dns v0.9.3
++    Checking http v1.4.0
++    Checking serde_urlencoded v0.7.1
++    Checking snafu v0.8.9
++    Checking aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
++    Checking pkcs8 v0.11.0-rc.11
++    Checking serde_json v1.0.149
++    Checking aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
++    Checking futures-lite v2.6.1
++    Checking time v0.3.47
++    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
++   Compiling rustc_version v0.4.1
++    Checking ed25519 v3.0.0-rc.4
++   Compiling convert_case v0.10.0
++   Compiling curve25519-dalek v5.0.0-pre.1
++   Compiling heapless v0.7.17
++   Compiling acto v0.8.0
++    Checking indexmap v2.14.0
++   Compiling derive_more-impl v2.1.1
++    Checking zerofrom v0.1.7
++    Checking http-body v1.0.1
++    Checking yoke v0.8.2
++    Checking http-body-util v0.1.3
++    Checking zerotrie v0.2.4
++    Checking zerovec v0.11.6
++   Compiling ring v0.17.14
++   Compiling blake3 v1.8.4
++    Checking generic-array v0.14.7
++    Checking hybrid-array v0.4.10
++    Checking postcard v1.1.3
++   Compiling toml_parser v1.1.2+spec-1.1.0
++    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
++    Checking socket2 v0.6.3
++    Checking mio v1.2.0
++    Checking getrandom v0.2.17
++    Checking getrandom v0.3.4
++    Checking parking_lot_core v0.9.12
++    Checking getrandom v0.4.2
++    Checking netlink-packet-route v0.29.0
++    Checking seize v0.5.1
++    Checking aspen-disk v0.1.0 (/home/brittonr/git/aspen/crates/aspen-disk)
++    Checking redb v2.6.3
++    Checking iroh-metrics v0.38.3
++    Checking tinystr v0.8.3
++    Checking potential_utf v0.1.5
++    Checking icu_collections v2.2.0
++    Checking rand_core v0.6.4
++    Checking ntimestamp v1.0.0
++    Checking uuid v1.23.1
++    Checking rand_core v0.9.5
++   Compiling toml_edit v0.25.11+spec-1.1.0
++    Checking crypto-common v0.1.7
++    Checking inout v0.1.4
++    Checking crypto-common v0.2.1
++    Checking block-buffer v0.11.0
++    Checking icu_locale_core v2.2.0
++    Checking papaya v0.2.4
++    Checking parking_lot v0.12.5
++    Checking universal-hash v0.5.1
++    Checking aead v0.5.2
++    Checking cipher v0.4.4
++    Checking rand v0.8.6
++    Checking noq-udp v0.9.0
++    Checking tokio v1.52.1
++    Checking polyval v0.6.2
++    Checking moka v0.12.15
++    Checking ctr v0.9.2
++    Checking aes v0.8.4
++    Checking ghash v0.5.1
++    Checking digest v0.11.0-rc.10
++    Checking uhlc v0.8.2
++    Checking aes-gcm v0.10.3
++   Compiling proc-macro-crate v3.5.0
++    Checking sha2 v0.11.0-rc.2
++    Checking icu_provider v2.2.0
++   Compiling num_enum_derive v0.7.6
++    Checking icu_normalizer v2.2.0
++    Checking icu_properties v2.2.0
++    Checking derive_more v2.1.1
++   Compiling vergen-gitcl v1.0.8
++    Checking num_enum v0.7.6
++    Checking aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
++    Checking ed25519-dalek v3.0.0-pre.1
++   Compiling iroh-relay v0.97.0
++    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
++    Checking mainline v6.0.1
++    Checking idna_adapter v1.2.1
++    Checking idna v1.1.0
++    Checking url v2.5.8
++    Checking ppv-lite86 v0.2.21
++    Checking attohttpc v0.30.1
++    Checking iroh-base v0.97.0
++    Checking rand_chacha v0.9.0
++    Checking rand v0.9.4
++    Checking fastbloom v0.14.1
++    Checking tokio-util v0.7.18
++    Checking tower v0.5.3
++    Checking netlink-sys v0.8.8
++    Checking async-compat v0.2.5
++    Checking backon v1.6.0
++    Checking netlink-proto v0.12.0
++    Checking netdev v0.40.1
++    Checking tower-http v0.6.8
++    Checking h2 v0.4.13
++    Checking n0-future v0.3.2
++    Checking tokio-stream v0.1.18
++    Checking n0-watcher v0.6.1
++    Checking netwatch v0.15.0
++    Checking rustls-webpki v0.103.13
++    Checking hyper v1.9.0
++    Checking tokio-rustls v0.26.4
++    Checking noq-proto v0.16.0
++    Checking hickory-proto v0.25.2
++    Checking tokio-websockets v0.12.3
++    Checking hyper-util v0.1.20
++    Checking hyper-rustls v0.27.9
++    Checking igd-next v0.16.2
++    Checking reqwest v0.12.28
++    Checking portmapper v0.15.0
++    Checking pkarr v5.0.2
++    Checking hickory-resolver v0.25.2
++    Checking swarm-discovery v0.5.0
++    Checking noq v0.17.0
++    Checking iroh v0.97.0
++    Checking aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-shell)
++    Checking shell-alias-smoke v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core/tests/fixtures/shell-alias-smoke)
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.99s
++$ cargo test -p aspen-core --test ui storage_table_no_std_is_rejected -- --nocapture
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
++     Running tests/ui.rs (target/debug/deps/ui-78def4adf31df3f5)
++
++running 0 tests
++
++test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
++
++$ cargo test -p aspen-core --test ui ui_fixtures_fail_for_missing_feature_gates -- --nocapture
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
++     Running tests/ui.rs (target/debug/deps/ui-78def4adf31df3f5)
++
++running 1 test
++fixture app-registry-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/app-registry-no-std/Cargo.toml --color never --quiet
++fixture network-transport-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/network-transport-no-std/Cargo.toml --color never --quiet
++fixture simulation-artifact-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/simulation-artifact-no-std/Cargo.toml --color never --quiet
++fixture content-discovery-std-without-global-discovery => cargo check --manifest-path crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/Cargo.toml --color never --quiet
++fixture directory-layer-std-without-layer => cargo check --manifest-path crates/aspen-core/tests/ui/directory-layer-std-without-layer/Cargo.toml --color never --quiet
++fixture storage-table-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/storage-table-no-std/Cargo.toml --color never --quiet
++
++thread 'ui_fixtures_fail_for_missing_feature_gates' (4038779) panicked at crates/aspen-core/tests/ui.rs:202:5:
++missing stderr snapshot; re-run after writing generated snapshot: app-registry-no-std, network-transport-no-std, simulation-artifact-no-std, content-discovery-std-without-global-discovery, directory-layer-std-without-layer, storage-table-no-std
++note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
++test ui_fixtures_fail_for_missing_feature_gates ... FAILED
++
++failures:
++
++failures:
++    ui_fixtures_fail_for_missing_feature_gates
++
++test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
++
++error: test failed, to rerun pass `-p aspen-core --test ui`
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i4.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i4.txt
+new file mode 100644
+index 000000000..858ee1baf
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i4.txt
+@@ -0,0 +1,4 @@
++OK: openspec/changes/decompose-next-five-crate-families-implementation
++  tasks: 15 total / 3 checked
++  changed files listed: 14
++  verification artifacts: 7
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i4.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i4.json
+new file mode 100644
+index 000000000..d02741d83
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i4.json
+@@ -0,0 +1,8 @@
++{
++  "decompose-next-five-crate-families-implementation": [
++    {
++      "severity": "warning",
++      "message": "tasks incomplete: {'done': 3, 'todo': 12, 'in_progress': 0}"
++    }
++  ]
++}
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+index 62410f918..7093f51d5 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+@@ -6,7 +6,7 @@
+ 
+ ## 2. Foundational types/helpers first slice
+ 
+-- [ ] I4 Move or gate `aspen-storage-types` Redb table-definition surface so reusable defaults keep portable storage types only, preserving shell-facing compatibility where needed. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++- [x] I4 Move or gate `aspen-storage-types` Redb table-definition surface so reusable defaults keep portable storage types only, preserving shell-facing compatibility where needed. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T20:31:00Z
+ 
+ - [ ] I5 Split/prove `aspen-traits` reusable KV capability traits and save downstream fixture, cargo tree, no-default/default, negative boundary, and representative consumer evidence. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+ 
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+index 0ccc5ed85..caf762532 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+@@ -2,26 +2,32 @@
+ 
+ ## Implementation Evidence
+ 
+-- Changed file: `docs/crate-extraction/policy.ncl`
+ - Changed file: `docs/crate-extraction/foundational-types.md`
+-- Changed file: `docs/crate-extraction/auth-ticket.md`
+-- Changed file: `docs/crate-extraction/jobs-ci-core.md`
+-- Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
+-- Changed file: `docs/crate-extraction/testing-harness.md`
+-- Changed file: `scripts/check-crate-extraction-readiness.rs`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/design.md`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.stderr`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-implementation-diff.patch`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i4.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i4.json`
+ 
+ ## Task Coverage
+ 
+ - [x] I3 Extend `docs/crate-extraction/policy.ncl` and `scripts/check-crate-extraction-readiness.rs` so `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness` are family-selectable, have policy entries, and enforce missing downstream fixture / missing compatibility evidence gates before readiness can be raised. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
+-  - Evidence: `docs/crate-extraction/policy.ncl`, `scripts/check-crate-extraction-readiness.rs`, `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction/jobs-ci-core.md`, `docs/crate-extraction/trust-crypto-secrets.md`, `docs/crate-extraction/testing-harness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch`
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch`
+ 
+ - [x] V1 Save checker transcripts and negative mutation evidence proving at least forbidden runtime dependency, missing owner, invalid readiness state, missing downstream fixture, and missing compatibility evidence failures are caught for the selected-wave checker path. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
+   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json`
+ 
++- [x] I4 Move or gate `aspen-storage-types` Redb table-definition surface so reusable defaults keep portable storage types only, preserving shell-facing compatibility where needed. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T20:31:00Z
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.json`
++
+ ## Oracle Checkpoints
+ 
+ None.
+@@ -35,7 +41,7 @@ None.
+ 
+ ## Verification Commands
+ 
+-### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`
++### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory Cargo.toml --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`
+ 
+ - Status: expected fail until family downstream/compatibility evidence is produced; confirmed selected-wave gates fire.
+ - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`
+@@ -50,3 +56,16 @@ None.
+ 
+ - Status: pass
+ - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt`
++
++
++### `cargo check -p aspen-storage-types --no-default-features` and storage boundary checks
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt`
++- Negative artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt`
++
++### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory Cargo.toml --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json .../i4-foundational-readiness.json --output-markdown .../i4-foundational-readiness.md`
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.md`
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-foundational-readiness.json`

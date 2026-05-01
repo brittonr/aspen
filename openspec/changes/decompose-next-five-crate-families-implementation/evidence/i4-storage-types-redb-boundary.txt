@@ -1,0 +1,252 @@
+$ cargo check -p aspen-storage-types --no-default-features
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
+$ cargo tree -p aspen-storage-types --no-default-features -e normal
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
+├── bincode v1.3.3
+│   └── serde v1.0.228
+│       ├── serde_core v1.0.228
+│       └── serde_derive v1.0.228 (proc-macro)
+│           ├── proc-macro2 v1.0.106
+│           │   └── unicode-ident v1.0.24
+│           ├── quote v1.0.45
+│           │   └── proc-macro2 v1.0.106 (*)
+│           └── syn v2.0.117
+│               ├── proc-macro2 v1.0.106 (*)
+│               ├── quote v1.0.45 (*)
+│               └── unicode-ident v1.0.24
+└── serde v1.0.228 (*)
+$ cargo check -p aspen-core --no-default-features
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.22s
+$ cargo check -p aspen-core-no-std-smoke --no-default-features
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+    Checking aspen-core-no-std-smoke v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-no-std-smoke)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.97s
+$ cargo check --manifest-path crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml
+   Compiling libc v0.2.185
+    Checking typenum v1.20.0
+    Checking itoa v1.0.18
+   Compiling semver v1.0.28
+    Checking litemap v0.8.2
+   Compiling cc v1.2.60
+    Checking writeable v0.6.3
+   Compiling icu_properties_data v2.2.0
+   Compiling icu_normalizer_data v2.2.0
+   Compiling zerocopy v0.8.48
+    Checking hashbrown v0.17.0
+   Compiling rustls v0.23.38
+   Compiling unicode-segmentation v1.13.2
+    Checking bitflags v2.11.1
+    Checking fastrand v2.4.1
+   Compiling tokio-macros v2.7.0
+   Compiling zerovec-derive v0.11.3
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling winnow v1.0.2
+    Checking spki v0.8.0
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling num-conv v0.2.1
+    Checking webpki-roots v1.0.7
+    Checking cpufeatures v0.3.0
+    Checking iri-string v0.7.12
+    Checking lru v0.16.4
+    Checking rustc-hash v2.1.2
+    Checking aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+    Checking simple-dns v0.9.3
+    Checking http v1.4.0
+    Checking serde_urlencoded v0.7.1
+    Checking snafu v0.8.9
+    Checking aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
+    Checking pkcs8 v0.11.0-rc.11
+    Checking serde_json v1.0.149
+    Checking aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
+    Checking futures-lite v2.6.1
+    Checking time v0.3.47
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+   Compiling rustc_version v0.4.1
+    Checking ed25519 v3.0.0-rc.4
+   Compiling convert_case v0.10.0
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling heapless v0.7.17
+   Compiling acto v0.8.0
+    Checking indexmap v2.14.0
+   Compiling derive_more-impl v2.1.1
+    Checking zerofrom v0.1.7
+    Checking http-body v1.0.1
+    Checking yoke v0.8.2
+    Checking http-body-util v0.1.3
+    Checking zerotrie v0.2.4
+    Checking zerovec v0.11.6
+   Compiling ring v0.17.14
+   Compiling blake3 v1.8.4
+    Checking generic-array v0.14.7
+    Checking hybrid-array v0.4.10
+    Checking postcard v1.1.3
+   Compiling toml_parser v1.1.2+spec-1.1.0
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    Checking socket2 v0.6.3
+    Checking mio v1.2.0
+    Checking getrandom v0.2.17
+    Checking getrandom v0.3.4
+    Checking parking_lot_core v0.9.12
+    Checking getrandom v0.4.2
+    Checking netlink-packet-route v0.29.0
+    Checking seize v0.5.1
+    Checking aspen-disk v0.1.0 (/home/brittonr/git/aspen/crates/aspen-disk)
+    Checking redb v2.6.3
+    Checking iroh-metrics v0.38.3
+    Checking tinystr v0.8.3
+    Checking potential_utf v0.1.5
+    Checking icu_collections v2.2.0
+    Checking rand_core v0.6.4
+    Checking ntimestamp v1.0.0
+    Checking uuid v1.23.1
+    Checking rand_core v0.9.5
+   Compiling toml_edit v0.25.11+spec-1.1.0
+    Checking crypto-common v0.1.7
+    Checking inout v0.1.4
+    Checking crypto-common v0.2.1
+    Checking block-buffer v0.11.0
+    Checking icu_locale_core v2.2.0
+    Checking papaya v0.2.4
+    Checking parking_lot v0.12.5
+    Checking universal-hash v0.5.1
+    Checking aead v0.5.2
+    Checking cipher v0.4.4
+    Checking rand v0.8.6
+    Checking noq-udp v0.9.0
+    Checking tokio v1.52.1
+    Checking polyval v0.6.2
+    Checking moka v0.12.15
+    Checking ctr v0.9.2
+    Checking aes v0.8.4
+    Checking ghash v0.5.1
+    Checking digest v0.11.0-rc.10
+    Checking uhlc v0.8.2
+    Checking aes-gcm v0.10.3
+   Compiling proc-macro-crate v3.5.0
+    Checking sha2 v0.11.0-rc.2
+    Checking icu_provider v2.2.0
+   Compiling num_enum_derive v0.7.6
+    Checking icu_normalizer v2.2.0
+    Checking icu_properties v2.2.0
+    Checking derive_more v2.1.1
+   Compiling vergen-gitcl v1.0.8
+    Checking num_enum v0.7.6
+    Checking aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
+    Checking ed25519-dalek v3.0.0-pre.1
+   Compiling iroh-relay v0.97.0
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+    Checking mainline v6.0.1
+    Checking idna_adapter v1.2.1
+    Checking idna v1.1.0
+    Checking url v2.5.8
+    Checking ppv-lite86 v0.2.21
+    Checking attohttpc v0.30.1
+    Checking iroh-base v0.97.0
+    Checking rand_chacha v0.9.0
+    Checking rand v0.9.4
+    Checking fastbloom v0.14.1
+    Checking tokio-util v0.7.18
+    Checking tower v0.5.3
+    Checking netlink-sys v0.8.8
+    Checking async-compat v0.2.5
+    Checking backon v1.6.0
+    Checking netlink-proto v0.12.0
+    Checking netdev v0.40.1
+    Checking tower-http v0.6.8
+    Checking h2 v0.4.13
+    Checking n0-future v0.3.2
+    Checking tokio-stream v0.1.18
+    Checking n0-watcher v0.6.1
+    Checking netwatch v0.15.0
+    Checking rustls-webpki v0.103.13
+    Checking hyper v1.9.0
+    Checking tokio-rustls v0.26.4
+    Checking noq-proto v0.16.0
+    Checking hickory-proto v0.25.2
+    Checking tokio-websockets v0.12.3
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking igd-next v0.16.2
+    Checking reqwest v0.12.28
+    Checking portmapper v0.15.0
+    Checking pkarr v5.0.2
+    Checking hickory-resolver v0.25.2
+    Checking swarm-discovery v0.5.0
+    Checking noq v0.17.0
+    Checking iroh v0.97.0
+    Checking aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-shell)
+    Checking shell-alias-smoke v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core/tests/fixtures/shell-alias-smoke)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.99s
+$ cargo test -p aspen-core --test ui storage_table_no_std_is_rejected -- --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running tests/ui.rs (target/debug/deps/ui-78def4adf31df3f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+$ cargo test -p aspen-core --test ui ui_fixtures_fail_for_missing_feature_gates -- --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running tests/ui.rs (target/debug/deps/ui-78def4adf31df3f5)
+
+running 1 test
+fixture app-registry-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/app-registry-no-std/Cargo.toml --color never --quiet
+fixture network-transport-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/network-transport-no-std/Cargo.toml --color never --quiet
+fixture simulation-artifact-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/simulation-artifact-no-std/Cargo.toml --color never --quiet
+fixture content-discovery-std-without-global-discovery => cargo check --manifest-path crates/aspen-core/tests/ui/content-discovery-std-without-global-discovery/Cargo.toml --color never --quiet
+fixture directory-layer-std-without-layer => cargo check --manifest-path crates/aspen-core/tests/ui/directory-layer-std-without-layer/Cargo.toml --color never --quiet
+fixture storage-table-no-std => cargo check --manifest-path crates/aspen-core/tests/ui/storage-table-no-std/Cargo.toml --color never --quiet
+
+thread 'ui_fixtures_fail_for_missing_feature_gates' (4038779) panicked at crates/aspen-core/tests/ui.rs:202:5:
+missing stderr snapshot; re-run after writing generated snapshot: app-registry-no-std, network-transport-no-std, simulation-artifact-no-std, content-discovery-std-without-global-discovery, directory-layer-std-without-layer, storage-table-no-std
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test ui_fixtures_fail_for_missing_feature_gates ... FAILED
+
+failures:
+
+failures:
+    ui_fixtures_fail_for_missing_feature_gates
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+
+error: test failed, to rerun pass `-p aspen-core --test ui`

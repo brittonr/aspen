@@ -1,0 +1,27 @@
+{
+  "family": "foundational-types",
+  "task": "I4",
+  "status": "pass",
+  "fixtures": [
+    {
+      "name": "aspen-storage-types-no-defaults",
+      "command": "cargo check -p aspen-storage-types --no-default-features",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
+    },
+    {
+      "name": "aspen-core-no-defaults",
+      "command": "cargo check -p aspen-core --no-default-features",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
+    },
+    {
+      "name": "aspen-core-no-std-smoke",
+      "command": "cargo check -p aspen-core-no-std-smoke --no-default-features",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
+    },
+    {
+      "name": "shell-alias-smoke",
+      "command": "cargo check --manifest-path crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
+    }
+  ]
+}

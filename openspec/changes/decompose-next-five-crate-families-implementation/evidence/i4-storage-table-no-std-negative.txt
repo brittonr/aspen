@@ -1,0 +1,10 @@
+$ cargo check --manifest-path crates/aspen-core/tests/ui/storage-table-no-std/Cargo.toml --color never --quiet
+error[E0432]: unresolved import `aspen_core::storage::SM_KV_TABLE`
+ --> src/main.rs:1:5
+  |
+1 | use aspen_core::storage::SM_KV_TABLE;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `SM_KV_TABLE` in `storage`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `ui-storage-table-no-std` (bin "ui-storage-table-no-std") due to 1 previous error
+expected failure exit status: 101

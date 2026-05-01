@@ -1,0 +1,10 @@
+family: foundational-types
+task: I4
+status: pass
+
+Compatibility checked:
+- `aspen-core::storage::KvEntry` remains available to no-default portable consumers.
+- `aspen-core-shell` keeps the shell-facing compatibility alias: the `shell-alias-smoke` fixture depends on package `aspen-core-shell` as crate name `aspen-core` and compiles `aspen_core::storage::SM_KV_TABLE`.
+
+Evidence:
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
