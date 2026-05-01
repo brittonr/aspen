@@ -2,17 +2,12 @@
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-trust/src/shamir.rs`
-- Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-implementation-diff.patch`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i12.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i12.json`
+- Changed file: `docs/crate-extraction/testing-harness.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-implementation-diff.patch`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i13.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i13.json`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
 
@@ -50,6 +45,9 @@
 
 - [x] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:00:00Z
   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
+
+- [x] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:13:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
 
 ## Oracle Checkpoints
 
@@ -162,6 +160,13 @@ None.
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`
 - Readiness: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
 - Metadata: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
+
+
+### `cargo check/tree` for testing harness reusable/adapters inventory
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`
+- Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
 
 ## I11 trust/crypto/secrets inventory and pure-boundary gate
 

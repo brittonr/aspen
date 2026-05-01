@@ -1,0 +1,84 @@
+diff --git a/docs/crate-extraction/testing-harness.md b/docs/crate-extraction/testing-harness.md
+index 92bf4eddb..c63bece59 100644
+--- a/docs/crate-extraction/testing-harness.md
++++ b/docs/crate-extraction/testing-harness.md
+@@ -6,7 +6,7 @@
+ - **Canonical class**: `service library`
+ - **Crates**: `aspen-testing-core`, `aspen-testing`, `aspen-testing-fixtures`, `aspen-testing-madsim`, `aspen-testing-network`, `aspen-testing-patchbay`
+ - **Intended audience**: Aspen and downstream extraction fixtures that need reusable deterministic mocks, workloads, assertions, fixtures, and simulation helpers without full Aspen cluster bootstrap.
+-- **Public API owner**: owner needed
++- **Public API owner**: architecture-modularity
+ - **Readiness state**: `workspace-internal`
+
+ ## Package metadata
+@@ -53,4 +53,4 @@
+
+ ## First blocker
+
+-Inventory helper ownership, then split reusable simulation/workload/assertion helpers from Aspen cluster bootstrap, node config, concrete transport, and binary shell helpers.
++I13 inventory identifies `aspen-testing-core` as the reusable default root for deterministic helpers, bounded assertions, retry/wait utilities, and generic mock state. Generic `aspen-testing-fixtures` builders can remain reusable; `aspen-testing` stays a compatibility facade, while madsim/network/patchbay crates remain explicit adapters for concrete simulation, namespace, transport, and cluster bootstrap behavior.
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+index 23f1dfed1..56e51d719 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+@@ -32,7 +32,7 @@
+
+ ## 6. Testing harness first slice
+
+-- [ ] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++- [x] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:13:00Z
+
+ - [ ] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+index b9a0ed14a..22fcb0858 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+@@ -2,17 +2,12 @@
+
+ ## Implementation Evidence
+
+-- Changed file: `crates/aspen-trust/src/shamir.rs`
+-- Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.json`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-implementation-diff.patch`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i12.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i12.json`
++- Changed file: `docs/crate-extraction/testing-harness.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-implementation-diff.patch`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i13.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i13.json`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
+
+@@ -51,6 +46,9 @@
+ - [x] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:00:00Z
+   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
+
++- [x] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:13:00Z
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
++
+ ## Oracle Checkpoints
+
+ None.
+@@ -163,6 +161,13 @@ None.
+ - Readiness: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
+ - Metadata: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
+
++
++### `cargo check/tree` for testing harness reusable/adapters inventory
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`
++- Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
++
+ ## I11 trust/crypto/secrets inventory and pure-boundary gate
+
+ Task: I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells.

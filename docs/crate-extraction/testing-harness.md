@@ -6,7 +6,7 @@
 - **Canonical class**: `service library`
 - **Crates**: `aspen-testing-core`, `aspen-testing`, `aspen-testing-fixtures`, `aspen-testing-madsim`, `aspen-testing-network`, `aspen-testing-patchbay`
 - **Intended audience**: Aspen and downstream extraction fixtures that need reusable deterministic mocks, workloads, assertions, fixtures, and simulation helpers without full Aspen cluster bootstrap.
-- **Public API owner**: owner needed
+- **Public API owner**: architecture-modularity
 - **Readiness state**: `workspace-internal`
 
 ## Package metadata
@@ -53,4 +53,4 @@
 
 ## First blocker
 
-Inventory helper ownership, then split reusable simulation/workload/assertion helpers from Aspen cluster bootstrap, node config, concrete transport, and binary shell helpers.
+I13 inventory identifies `aspen-testing-core` as the reusable default root for deterministic helpers, bounded assertions, retry/wait utilities, and generic mock state. Generic `aspen-testing-fixtures` builders can remain reusable; `aspen-testing` stays a compatibility facade, while madsim/network/patchbay crates remain explicit adapters for concrete simulation, namespace, transport, and cluster bootstrap behavior.

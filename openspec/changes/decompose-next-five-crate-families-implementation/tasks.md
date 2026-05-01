@@ -32,7 +32,7 @@
 
 ## 6. Testing harness first slice
 
-- [ ] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+- [x] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:13:00Z
 
 - [ ] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
 
