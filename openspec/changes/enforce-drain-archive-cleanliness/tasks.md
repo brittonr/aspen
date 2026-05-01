@@ -8,4 +8,4 @@
 
 - [x] V1 Add positive clean-drain and negative leftover-active fixtures. [covers=openspec-governance.drain-archive-cleanliness] ✅ 20m (started: 2026-05-01T01:45:00Z → completed: 2026-05-01T02:05:33Z)
 - [x] V2 Run the audit fixtures and save transcripts. [covers=openspec-governance.drain-archive-cleanliness] ✅ 20m (started: 2026-05-01T01:45:00Z → completed: 2026-05-01T02:05:33Z)
-- [ ] V3 Run `openspec validate enforce-drain-archive-cleanliness --type change --strict --no-interactive` and the relevant preflight after implementation; save transcripts. [covers=openspec-governance.drain-archive-cleanliness]
+- [x] V3 Run `openspec validate enforce-drain-archive-cleanliness --type change --strict --no-interactive` and the relevant preflight after implementation; save transcripts. [covers=openspec-governance.drain-archive-cleanliness] ✅ 5m (started: 2026-05-01T02:07:00Z → completed: 2026-05-01T02:12:04Z)
