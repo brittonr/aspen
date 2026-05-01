@@ -46,6 +46,7 @@ files you are claiming as complete.
 Record the commands actually run plus the durable artifacts that capture their output.
 Keep artifacts inside the change directory, usually under `evidence/`.
 If you claim preflight or syntax-check validation, save those transcripts too.
+For final drain-complete/archive claims, save `scripts/openspec-drain-audit.sh --archive openspec/changes/archive/<date>-<change>` output and verify it reports no active change directories, no `.drain-state.md`, present archive paths, and current archive-relative task/verification metadata paths.
 
 ### `cargo test -p example-crate`
 
@@ -70,5 +71,6 @@ If you claim preflight or syntax-check validation, save those transcripts too.
 ## Notes
 
 - Run `scripts/openspec-preflight.sh <change-dir-or-name>` before checking the final task box or requesting done review.
+- For drain completion, remove `.drain-state.md`, rewrite archived task/verification paths away from stale active `openspec/changes/<change>/...` references, then run and save `scripts/openspec-drain-audit.sh --archive openspec/changes/archive/<date>-<change>`.
 - The preflight script now fails if the repo still contains untracked files unless `OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1` is set.
 - Stage newly created source files before `nix build` / `nix run`; untracked files can be excluded by the flake source filter.

@@ -1,0 +1,10 @@
+# Drain Skill and Template Update Evidence
+
+Updated Hermes skill `openspec-drain` to require `scripts/openspec-drain-audit.sh --archive openspec/changes/archive/<date>-<change>` when claiming the drain queue is complete.
+
+Updated repo verification template `openspec/templates/verification.md` to require a saved drain audit transcript for final drain-complete/archive claims. The template now calls out the expected audit assertions:
+
+- no active change directories outside `archive/` or `_done/`
+- no `openspec/changes/.drain-state.md`
+- requested archive paths are present
+- archived `tasks.md` and `verification.md` metadata use current archive-relative paths rather than stale active `openspec/changes/<change>/...` paths
