@@ -1,0 +1,51 @@
+{
+  "family": "jobs-ci-core",
+  "status": "workspace-internal",
+  "slice": "I8/I9 reusable surface inventory and portable fixture boundary proof",
+  "reusable_defaults": [
+    {
+      "crate": "aspen-ci-core",
+      "surface": "CI schema/config/log chunk types and pure validation/timeout/resource/trigger helpers",
+      "evidence": "i8-jobs-ci-core-inventory.txt"
+    },
+    {
+      "crate": "aspen-jobs-protocol",
+      "surface": "alloc/no-std job/worker protocol DTOs",
+      "evidence": "i8-jobs-ci-core-inventory.txt"
+    }
+  ],
+  "runtime_shells": [
+    "aspen-jobs",
+    "aspen-jobs-worker-*",
+    "aspen-ci",
+    "aspen-ci-handler",
+    "aspen-job-handler",
+    "aspen-ci-executor-shell",
+    "aspen-ci-executor-vm",
+    "aspen-ci-executor-nix"
+  ],
+  "positive_downstream": [
+    {
+      "fixture": "jobs-ci-core-portable-smoke",
+      "command": "cargo test --manifest-path openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.toml",
+      "artifact": "i9-jobs-ci-fixtures.txt"
+    },
+    {
+      "crate": "aspen-ci-core",
+      "command": "cargo check -p aspen-ci-core",
+      "artifact": "i8-jobs-ci-core-inventory.txt"
+    },
+    {
+      "crate": "aspen-jobs-protocol",
+      "command": "cargo check -p aspen-jobs-protocol --no-default-features",
+      "artifact": "i8-jobs-ci-core-inventory.txt"
+    }
+  ],
+  "negative_boundary": [
+    {
+      "fixture": "jobs-ci-runtime-negative",
+      "expected": "unresolved imports for root app, handlers, shell/VM/Nix executors, and concrete worker crates",
+      "artifact": "i9-jobs-ci-fixtures.txt"
+    }
+  ]
+}

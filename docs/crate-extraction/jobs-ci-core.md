@@ -47,9 +47,24 @@
 ## Verification rails
 
 - Positive downstream: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
-- Negative boundary: checker mutation for root app/handler/executor/process-spawn dependency leaks.
+- Negative boundary: dependency-boundary checker mutation for root app/handler/executor/process-spawn dependency leaks.
 - Compatibility: focused `aspen-ci`, `aspen-jobs`, handler, CLI, and dogfood checks named by implementation tasks.
 
 ## First blocker
 
-Define reusable surface ownership for schema, scheduler, run-state, artifact metadata, and Nickel config contracts, then gate worker runtime/executor/process-spawning/node/handler shells.
+I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. Next blocker is I10 compatibility checks for affected jobs/CI consumers and runtime shells.
+
+## I8 surface inventory
+
+- Reusable default: `aspen-ci-core` for CI schema/config/log chunks and pure validation/timeout/resource/trigger helpers.
+- Reusable default: `aspen-jobs-protocol` for alloc/no-std job protocol DTOs.
+- Runtime shell: `aspen-jobs` remains a queue/worker/scheduler/storage/runtime integration crate until a later split extracts deterministic state helpers.
+- Runtime shells: `aspen-jobs-worker-*`, `aspen-ci`, `aspen-ci-handler`, `aspen-job-handler`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, and `aspen-ci-executor-nix` remain explicit adapters.
+- Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt` and `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`.
+
+
+## I9 fixture boundary
+
+- Positive fixture: `jobs-ci-core-portable-smoke` exercises `aspen-ci-core` pipeline config validation, pure dependency helpers, CI log chunk serialization, and `aspen-jobs-protocol` DTOs.
+- Negative fixture: `jobs-ci-runtime-negative` depends only on reusable defaults and proves runtime shells are unavailable by failing imports from `aspen-ci`, handlers, root jobs, shell worker, and shell/VM/Nix executors.
+- Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`.

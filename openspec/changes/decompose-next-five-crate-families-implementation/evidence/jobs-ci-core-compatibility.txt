@@ -1,0 +1,10 @@
+Jobs/CI core compatibility evidence (I8/I9)
+
+- `aspen-ci-core` compiles as the reusable CI schema/config/log/pure-helper surface.
+- `aspen-jobs-protocol --no-default-features` compiles as the reusable job/worker protocol DTO surface.
+- `jobs-ci-core-portable-smoke` exercises pipeline config validation, pure scheduler/dependency helpers, CI log chunk serialization, and job protocol DTO usage without runtime shells.
+- Runtime compatibility for `aspen-ci`, `aspen-jobs`, handlers, CLI/dogfood, and executor crates is deferred to I10.
+
+Primary artifacts:
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt

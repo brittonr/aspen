@@ -1,0 +1,184 @@
+diff --git a/docs/crate-extraction/jobs-ci-core.md b/docs/crate-extraction/jobs-ci-core.md
+index 498149140..18f0d171d 100644
+--- a/docs/crate-extraction/jobs-ci-core.md
++++ b/docs/crate-extraction/jobs-ci-core.md
+@@ -47,7 +47,7 @@
+ ## Verification rails
+
+ - Positive downstream: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
+-- Negative boundary: checker mutation for root app/handler/executor/process-spawn dependency leaks.
++- Negative boundary: dependency-boundary checker mutation for root app/handler/executor/process-spawn dependency leaks.
+ - Compatibility: focused `aspen-ci`, `aspen-jobs`, handler, CLI, and dogfood checks named by implementation tasks.
+
+ ## First blocker
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-i9-implementation-diff.patch b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-i9-implementation-diff.patch
+index 80fa5385c..e69de29bb 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-i9-implementation-diff.patch
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-i9-implementation-diff.patch
+@@ -1,122 +0,0 @@
+-diff --git a/docs/crate-extraction/jobs-ci-core.md b/docs/crate-extraction/jobs-ci-core.md
+-index cd1702e5e..498149140 100644
+---- a/docs/crate-extraction/jobs-ci-core.md
+-+++ b/docs/crate-extraction/jobs-ci-core.md
+-@@ -52,4 +52,19 @@
+-
+- ## First blocker
+-
+--Define reusable surface ownership for schema, scheduler, run-state, artifact metadata, and Nickel config contracts, then gate worker runtime/executor/process-spawning/node/handler shells.
+-+I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. Next blocker is I10 compatibility checks for affected jobs/CI consumers and runtime shells.
+-+
+-+## I8 surface inventory
+-+
+-+- Reusable default: `aspen-ci-core` for CI schema/config/log chunks and pure validation/timeout/resource/trigger helpers.
+-+- Reusable default: `aspen-jobs-protocol` for alloc/no-std job protocol DTOs.
+-+- Runtime shell: `aspen-jobs` remains a queue/worker/scheduler/storage/runtime integration crate until a later split extracts deterministic state helpers.
+-+- Runtime shells: `aspen-jobs-worker-*`, `aspen-ci`, `aspen-ci-handler`, `aspen-job-handler`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, and `aspen-ci-executor-nix` remain explicit adapters.
+-+- Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt` and `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`.
+-+
+-+
+-+## I9 fixture boundary
+-+
+-+- Positive fixture: `jobs-ci-core-portable-smoke` exercises `aspen-ci-core` pipeline config validation, pure dependency helpers, CI log chunk serialization, and `aspen-jobs-protocol` DTOs.
+-+- Negative fixture: `jobs-ci-runtime-negative` depends only on reusable defaults and proves runtime shells are unavailable by failing imports from `aspen-ci`, handlers, root jobs, shell worker, and shell/VM/Nix executors.
+-+- Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`.
+-diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+-index dd7eb54ee..a8c975579 100644
+---- a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+-+++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+-@@ -18,9 +18,9 @@
+-
+- ## 4. Jobs and CI core first slice
+-
+--- [ ] I8 Identify reusable scheduler/config/run-state/artifact surfaces and gate worker/executor/runtime shells behind adapter crates or named features. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+-+- [x] I8 Identify reusable scheduler/config/run-state/artifact surfaces and gate worker/executor/runtime shells behind adapter crates or named features. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+-
+--- [ ] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+-+- [x] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+-
+- - [ ] I10 Save compatibility checks for affected jobs/CI consumers, handlers, CLI/dogfood paths, and executor crates named in the manifest. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+-
+-diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+-index f37c2a4a0..3f052c509 100644
+---- a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+-+++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+-@@ -2,26 +2,25 @@
+-
+- ## Implementation Evidence
+-
+--- Changed file: `crates/aspen-auth-core/src/token.rs`
+--- Changed file: `crates/aspen-ticket/src/v2.rs`
+--- Changed file: `crates/aspen-hooks-ticket/src/lib.rs`
+--- Changed file: `docs/crate-extraction/auth-ticket.md`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.lock`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.toml`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/src/lib.rs`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.lock`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.toml`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/src/lib.rs`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.json`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.md`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.stderr`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-implementation-diff.patch`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i7.txt`
+--- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i7.json`
+-+- Changed file: `docs/crate-extraction/jobs-ci-core.md`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.lock`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.toml`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/src/lib.rs`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.lock`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.toml`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/src/lib.rs`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-downstream-metadata.json`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-forbidden-boundary.txt`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-i9-implementation-diff.patch`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.json`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.md`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.stderr`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i9.txt`
+-+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i9.json`
+- - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+- - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
+-
+-@@ -45,6 +44,12 @@
+- - [x] I7 Add token/ticket serialization goldens, malformed-input negative tests, downstream fixture metadata, and compatibility evidence for auth/ticket consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T21:36:00Z
+-   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
+-
+-+- [x] I8 Identify reusable scheduler/config/run-state/artifact surfaces and gate worker/executor/runtime shells behind adapter crates or named features. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+-+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`
+-+
+-+- [x] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+-+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
+-+
+- ## Oracle Checkpoints
+-
+- None.
+-@@ -120,3 +125,17 @@ None.
+- - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`
+- - Positive fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.toml`
+- - Negative fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.toml`
+-+
+-+
+-+### `cargo check/tree` for jobs/CI core reusable surface inventory
+-+
+-+- Status: pass
+-+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt`
+-+- Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`
+-+
+-+### `cargo test/check` for jobs/CI core portable and negative fixtures
+-+
+-+- Status: pass
+-+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`
+-+- Positive fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.toml`
+-+- Negative fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.toml`
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.json
+index c453091e9..314a7f5de 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.json
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.json
+@@ -1,9 +1,7 @@
+ {
+   "candidate_family": "jobs-ci-core",
+-  "passed": false,
+-  "failures": [
+-    "jobs_ci_core: manifest missing boundary rail phrase `dependency-boundary`"
+-  ],
++  "passed": true,
++  "failures": [],
+   "warnings": [
+     "jobs_ci_core: package does not exist yet; direct dependency check deferred"
+   ],
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.md
+index d76072e35..80874acba 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.md
+@@ -1,12 +1,12 @@
+ # Crate Extraction Readiness Report
+
+ - Candidate family: `jobs-ci-core`
+-- Passed: `false`
++- Passed: `true`
+ - Checked candidates: 1
+
+ ## Failures
+
+-- jobs_ci_core: manifest missing boundary rail phrase `dependency-boundary`
++- none
+
+ ## Warnings
+
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.stderr
+index 0c315af96..21a69fab6 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.stderr
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.stderr
+@@ -8,4 +8,3 @@ Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-set
+ Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+ Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+ Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+-Error: crate extraction readiness check failed with 1 failure(s)

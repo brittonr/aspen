@@ -1,0 +1,11 @@
+[package]
+name = "jobs-ci-runtime-negative"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-ci-core = { path = "../../../../../crates/aspen-ci-core" }
+aspen-jobs-protocol = { path = "../../../../../crates/aspen-jobs-protocol", default-features = false }

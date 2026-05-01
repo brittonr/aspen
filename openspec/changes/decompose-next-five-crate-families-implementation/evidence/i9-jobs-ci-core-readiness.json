@@ -1,0 +1,11 @@
+{
+  "candidate_family": "jobs-ci-core",
+  "passed": true,
+  "failures": [],
+  "warnings": [
+    "jobs_ci_core: package does not exist yet; direct dependency check deferred"
+  ],
+  "checked_candidates": [
+    "jobs_ci_core"
+  ]
+}

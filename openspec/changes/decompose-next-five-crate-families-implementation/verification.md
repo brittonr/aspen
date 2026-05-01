@@ -2,26 +2,25 @@
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-auth-core/src/token.rs`
-- Changed file: `crates/aspen-ticket/src/v2.rs`
-- Changed file: `crates/aspen-hooks-ticket/src/lib.rs`
-- Changed file: `docs/crate-extraction/auth-ticket.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.lock`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.toml`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/src/lib.rs`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.lock`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.toml`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/src/lib.rs`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.stderr`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-implementation-diff.patch`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i7.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i7.json`
+- Changed file: `docs/crate-extraction/jobs-ci-core.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.lock`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.toml`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/src/lib.rs`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.lock`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.toml`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/src/lib.rs`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-downstream-metadata.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-forbidden-boundary.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-i9-implementation-diff.patch`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.stderr`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i9.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i9.json`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
 
@@ -44,6 +43,12 @@
 
 - [x] I7 Add token/ticket serialization goldens, malformed-input negative tests, downstream fixture metadata, and compatibility evidence for auth/ticket consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T21:36:00Z
   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
+
+- [x] I8 Identify reusable scheduler/config/run-state/artifact surfaces and gate worker/executor/runtime shells behind adapter crates or named features. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`
+
+- [x] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
 
 ## Oracle Checkpoints
 
@@ -120,3 +125,17 @@ None.
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`
 - Positive fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.toml`
 - Negative fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.toml`
+
+
+### `cargo check/tree` for jobs/CI core reusable surface inventory
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt`
+- Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`
+
+### `cargo test/check` for jobs/CI core portable and negative fixtures
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`
+- Positive fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.toml`
+- Negative fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.toml`

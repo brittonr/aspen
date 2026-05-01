@@ -1,0 +1,6 @@
+Jobs/CI core forbidden-boundary evidence (I9)
+
+Negative fixture: openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative
+Expected result: cargo check fails with unresolved imports for `aspen_ci`, `aspen_ci_handler`, `aspen_job_handler`, `aspen_jobs`, `aspen_jobs_worker_shell`, `aspen_ci_executor_shell`, `aspen_ci_executor_vm`, and `aspen_ci_executor_nix`.
+Boundary proven: portable jobs/CI defaults expose only `aspen-ci-core` and `aspen-jobs-protocol`; root app, handler, process-spawn, shell, VM, Nix/SNIX executor, and concrete worker shells are unavailable unless explicitly added as runtime dependencies.
+Artifact: openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt

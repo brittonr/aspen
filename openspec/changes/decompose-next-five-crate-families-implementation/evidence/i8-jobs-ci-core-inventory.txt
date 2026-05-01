@@ -1,0 +1,65 @@
+$ cargo check -p aspen-ci-core
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking memchr v2.8.0
+    Checking serde_core v1.0.228
+   Compiling syn v2.0.117
+    Checking serde_json v1.0.149
+    Checking uuid v1.22.0
+   Compiling serde_derive_internals v0.29.1
+   Compiling serde_derive v1.0.228
+   Compiling snafu-derive v0.8.9
+   Compiling schemars_derive v0.8.22
+    Checking snafu v0.8.9
+    Checking serde v1.0.228
+    Checking schemars v0.8.22
+    Checking aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.15s
+$ cargo check -p aspen-jobs-protocol --no-default-features
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking serde v1.0.228
+    Checking aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.56s
+$ cargo tree -p aspen-ci-core -e normal --depth 2
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-core)
+├── chrono v0.4.44
+│   ├── iana-time-zone v0.1.65
+│   └── num-traits v0.2.19
+├── schemars v0.8.22
+│   ├── dyn-clone v1.0.20
+│   ├── schemars_derive v0.8.22 (proc-macro)
+│   ├── serde v1.0.228
+│   └── serde_json v1.0.149
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149 (*)
+├── snafu v0.8.9
+│   └── snafu-derive v0.8.9 (proc-macro)
+└── uuid v1.22.0
+    ├── getrandom v0.4.2
+    └── serde_core v1.0.228
+$ cargo tree -p aspen-jobs-protocol --no-default-features -e normal --depth 2
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
+└── serde v1.0.228
+    ├── serde_core v1.0.228
+    └── serde_derive v1.0.228 (proc-macro)
