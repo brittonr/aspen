@@ -8,3 +8,11 @@ Compatibility checked:
 
 Evidence:
 - openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
+
+I5 compatibility checked:
+- `cargo test -p aspen-traits` passes 11 trait capability tests.
+- `cargo check -p aspen-core --no-default-features` preserves the core re-export path.
+- `cargo check -p aspen-raft-kv` preserves a representative runtime consumer of the composite `KeyValueStore` compatibility trait.
+
+Evidence:
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt

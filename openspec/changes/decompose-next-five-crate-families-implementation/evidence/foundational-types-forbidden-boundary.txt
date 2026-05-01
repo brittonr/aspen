@@ -9,3 +9,9 @@ Negative boundary checked:
 Evidence:
 - openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt
 - openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-table-no-std-negative.txt
+
+I5 negative boundary checked:
+- `cargo check --manifest-path openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.toml --color never --quiet` fails with `no KvRead in the root`, proving no-default `aspen-traits` exposes portable type re-exports without async trait surface.
+
+Evidence:
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-negative.txt

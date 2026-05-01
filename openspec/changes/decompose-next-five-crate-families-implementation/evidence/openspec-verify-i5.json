@@ -1,0 +1,8 @@
+{
+  "decompose-next-five-crate-families-implementation": [
+    {
+      "severity": "warning",
+      "message": "tasks incomplete: {'done': 4, 'todo': 11, 'in_progress': 0}"
+    }
+  ]
+}

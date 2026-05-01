@@ -1,0 +1,11 @@
+[package]
+name = "aspen-traits-capability-smoke"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-traits = { path = "../../../../../crates/aspen-traits" }
+async-trait = "0.1"

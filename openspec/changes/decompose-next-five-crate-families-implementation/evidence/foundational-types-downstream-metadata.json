@@ -22,6 +22,21 @@
       "name": "shell-alias-smoke",
       "command": "cargo check --manifest-path crates/aspen-core/tests/fixtures/shell-alias-smoke/Cargo.toml",
       "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i4-storage-types-redb-boundary.txt"
+    },
+    {
+      "name": "aspen-traits-capability-smoke",
+      "command": "cargo check --manifest-path openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/Cargo.toml",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt"
+    },
+    {
+      "name": "aspen-traits-no-default-types-smoke",
+      "command": "cargo check --manifest-path openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/Cargo.toml",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt"
+    },
+    {
+      "name": "aspen-raft-kv-representative-consumer",
+      "command": "cargo check -p aspen-raft-kv",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt"
     }
   ]
 }

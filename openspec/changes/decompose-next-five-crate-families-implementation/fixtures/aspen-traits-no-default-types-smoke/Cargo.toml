@@ -1,0 +1,10 @@
+[package]
+name = "aspen-traits-no-default-types-smoke"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-traits = { path = "../../../../../crates/aspen-traits", default-features = false }

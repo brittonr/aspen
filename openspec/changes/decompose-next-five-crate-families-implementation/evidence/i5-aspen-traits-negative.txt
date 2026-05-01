@@ -1,0 +1,10 @@
+$ cargo check --manifest-path openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.toml --color never --quiet
+error[E0432]: unresolved import `aspen_traits::KvRead`
+ --> src/lib.rs:1:5
+  |
+1 | use aspen_traits::KvRead;
+  |     ^^^^^^^^^^^^^^^^^^^^ no `KvRead` in the root
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `aspen-traits-no-default-kvread-negative` (lib) due to 1 previous error
+expected failure exit status: 101
