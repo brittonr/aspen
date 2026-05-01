@@ -1,0 +1,4 @@
+OK: openspec/changes/require-drain-verification-cycle-evidence
+  tasks: 4 total / 4 checked
+  changed files listed: 10
+  verification artifacts: 3

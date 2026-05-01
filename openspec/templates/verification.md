@@ -41,6 +41,19 @@ files you are claiming as complete.
 - Status: captured
 - Artifact: `openspec/changes/active/<change>/evidence/implementation-diff.txt`
 
+## Drain Verification Matrix
+
+Use this matrix for implementation changes before checking final verification tasks. Record full rails, scoped alternatives, blockers, or explicit doc-only skips.
+
+| Rail | Command | Status | Artifact | Scope rationale | Next best check |
+| --- | --- | --- | --- | --- | --- |
+| build | `<cargo build or project equivalent>` | pass/scoped/blocked/doc-only | `<evidence path>` | `<why this scope is sufficient or blocked>` | `<broader follow-up or n/a>` |
+| test | `<cargo nextest run or project equivalent>` | pass/scoped/blocked/doc-only | `<evidence path>` | `<why this scope is sufficient or blocked>` | `<broader follow-up or n/a>` |
+| format | `<nix fmt or project equivalent>` | pass/scoped/blocked/doc-only | `<evidence path>` | `<why this scope is sufficient or blocked>` | `<broader follow-up or n/a>` |
+
+Doc-only status is only valid when changed files are documentation/OpenSpec artifacts and no source/tooling files changed.
+Scoped or blocked rails must name the command run, saved artifact, scope rationale, and next best check.
+
 ## Verification Commands
 
 Record the commands actually run plus the durable artifacts that capture their output.

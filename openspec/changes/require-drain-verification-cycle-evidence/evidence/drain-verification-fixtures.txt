@@ -1,0 +1,13 @@
+PASS: full cycle
+  OK: drain verification matrix is complete
+    source changes: yes
+PASS: scoped alternative
+  OK: drain verification matrix is complete
+    source changes: yes
+PASS: doc only bypass
+  OK: drain verification matrix is complete
+    source changes: no
+PASS: missing matrix
+  FAIL: verification.md must include ## Drain Verification Matrix before checked implementation/final verification tasks
+PASS: final before complete matrix
+  FAIL: Drain Verification Matrix missing required rails: format, test

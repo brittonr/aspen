@@ -1,0 +1,2 @@
+$ python3 -m py_compile scripts/check-openspec-drain-verification.py
+exit 0

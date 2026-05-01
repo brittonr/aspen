@@ -25,6 +25,14 @@ Full workspace checks may be too expensive for small changes, but skipping them 
 
 **More process for tiny changes** → Permit doc-only bypass with no source code changes.
 
+## Verification Strategy
+
+- `openspec-governance.drain-verification-cycle.full-cycle-recorded`: full-cycle fixture where build, test, and format rows are present with commands, pass status, and artifacts.
+- `openspec-governance.drain-verification-cycle.scoped-alternative-recorded`: scoped-alternative fixture where a rail records command, scoped status, artifact, scope rationale, and next best check.
+- `openspec-governance.drain-verification-cycle.doc-only-bypass-explicit`: doc-only fixture where no source files changed and build/test/format rails are explicitly marked doc-only with rationale.
+- `openspec-governance.drain-verification-cycle.missing-cycle-fails`: negative fixture with checked implementation work and no matrix.
+- `openspec-governance.drain-verification-cycle.final-verification-requires-matrix-first`: negative fixture with final verification checked before a complete matrix.
+
 ## Validation Plan
 
 Fixtures for full cycle, scoped replacement, and missing matrix.
