@@ -1,0 +1,582 @@
+$ CARGO_TARGET_DIR=/tmp/aspen-protocol-wire-client-test cargo test -p aspen-client-api
+exit_code: 0
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling stable_deref_trait v1.2.1
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling semver v1.0.27
+   Compiling typenum v1.19.0
+   Compiling litemap v0.8.1
+   Compiling writeable v0.6.2
+   Compiling cfg-if v1.0.4
+   Compiling icu_properties_data v2.1.2
+   Compiling icu_normalizer_data v2.1.1
+   Compiling smallvec v1.15.1
+   Compiling cpufeatures v0.2.17
+   Compiling const-oid v0.10.2
+   Compiling memchr v2.8.0
+   Compiling unicode-segmentation v1.12.0
+   Compiling scopeguard v1.2.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling libc v0.2.183
+   Compiling thiserror v2.0.18
+   Compiling unicode-xid v0.2.6
+   Compiling byteorder v1.5.0
+   Compiling utf8_iter v1.0.4
+   Compiling ucd-trie v0.1.7
+   Compiling subtle v2.6.1
+   Compiling rand_core v0.9.5
+   Compiling signature v3.0.0-rc.10
+   Compiling percent-encoding v2.3.2
+   Compiling getrandom v0.4.2
+   Compiling rustix v1.1.4
+   Compiling lock_api v0.4.14
+   Compiling regex-syntax v0.8.10
+   Compiling arrayvec v0.7.6
+   Compiling linux-raw-sys v0.12.1
+   Compiling constant_time_eq v0.4.2
+   Compiling bitflags v2.11.0
+   Compiling zmij v1.0.21
+   Compiling data-encoding v2.10.0
+   Compiling arrayref v0.3.9
+   Compiling serde_json v1.0.149
+   Compiling base64 v0.22.1
+   Compiling cc v1.2.57
+   Compiling form_urlencoded v1.2.2
+   Compiling rustc_version v0.4.1
+   Compiling hash32 v0.2.1
+   Compiling once_cell v1.21.4
+   Compiling fastrand v2.3.0
+   Compiling similar v2.7.0
+   Compiling itoa v1.0.17
+   Compiling pin-project-lite v0.2.17
+   Compiling spin v0.9.8
+   Compiling curve25519-dalek v5.0.0-pre.1
+   Compiling heapless v0.7.17
+   Compiling convert_case v0.10.0
+   Compiling pest v2.8.6
+   Compiling syn v2.0.117
+   Compiling hybrid-array v0.4.8
+   Compiling console v0.16.3
+   Compiling blake3 v1.8.3
+   Compiling crypto-common v0.2.1
+   Compiling block-buffer v0.11.0
+   Compiling pest_meta v2.8.6
+   Compiling tempfile v3.27.0
+   Compiling regex-automata v0.4.14
+   Compiling digest v0.11.0-rc.10
+   Compiling sha2 v0.11.0-rc.2
+   Compiling regex v1.12.3
+   Compiling synstructure v0.13.2
+   Compiling pest_generator v2.8.6
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling zerovec-derive v0.11.2
+   Compiling serde_derive v1.0.228
+   Compiling displaydoc v0.2.5
+   Compiling zeroize_derive v1.4.3
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling thiserror-impl v2.0.18
+   Compiling derive_more-impl v2.1.1
+   Compiling spez v0.1.2
+   Compiling n0-error-macros v0.1.3
+   Compiling tokio-macros v2.6.1
+   Compiling pest_derive v2.8.6
+   Compiling zeroize v1.8.2
+   Compiling tokio v1.50.0
+   Compiling zerofrom v0.1.6
+   Compiling n0-error v0.1.3
+   Compiling yoke v0.8.1
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling cobs v0.3.0
+   Compiling derive_more v2.1.1
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling icu_collections v2.1.1
+   Compiling icu_locale_core v2.1.1
+   Compiling icu_provider v2.1.1
+   Compiling icu_properties v2.1.2
+   Compiling icu_normalizer v2.1.1
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-protocol)
+   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
+   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination-protocol)
+   Compiling insta v1.47.2
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling postcard v1.1.3
+   Compiling url v2.5.8
+   Compiling ed25519-dalek v3.0.0-pre.1
+   Compiling iroh-base v0.97.0
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
+     |
+4299 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
+     |
+4306 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
+     |
+4313 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
+     |
+4320 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
+     |
+4327 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
+     |
+4334 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
+     |
+4341 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
+     |
+4348 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
+     |
+4388 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
+     |
+4395 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: `aspen-client-api` (lib test) generated 28 warnings (28 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.67s
+     Running unittests src/lib.rs (/tmp/aspen-protocol-wire-client-test/debug/deps/aspen_client_api-e32904f53dff3e26)
+
+running 50 tests
+test messages::coordination::tests::test_lockset_requests_use_canonical_operation_member ... ok
+test messages::to_operation::coordination_ops::tests::test_client_rpc_lockset_token_requests_use_canonical_operation_member ... ok
+test messages::to_operation::coordination_ops::tests::test_client_rpc_lockset_requests_use_canonical_operation_member ... ok
+test messages::coordination::tests::test_lockset_token_requests_use_canonical_operation_member ... ok
+test messages::to_operation::forge_ops::tests::jj_native_read_operations_require_forge_read_auth ... ok
+test messages::to_operation::forge_ops::tests::jj_native_write_operations_require_forge_write_auth ... ok
+test test_authenticated_request_with_proxy_hops ... ok
+test test_blob_operations_postcard_roundtrip ... ok
+test test_capability_unavailable_response ... ok
+test test_coordination_operations_postcard_roundtrip ... ok
+test test_batch_operations_postcard_roundtrip ... ok
+test test_error_response_creation_and_fields ... ok
+test test_lease_operations_postcard_roundtrip ... ok
+test test_required_app_returns_correct_domain ... ok
+test test_to_operation_cluster_admin ... ok
+test test_to_operation_kv_operations ... ok
+test test_to_operation_none_for_public_operations ... ok
+test test_variant_name_core_requests ... ok
+test tests::test_all_enum_layout_features_are_default ... ok
+test test_watch_operations_postcard_roundtrip ... ok
+test tests::test_authenticated_request_from ... ok
+test tests::test_authenticated_request_unauthenticated ... ok
+test tests::test_client_alpn_is_correct ... ok
+test tests::test_constants_are_bounded ... ok
+test tests::test_deploy_required_app ... ok
+test tests::test_deploy_request_discriminant_golden_table ... ok
+test tests::test_deploy_variant_names ... ok
+test tests::test_deploy_to_operation ... ok
+test tests::test_deploy_response_discriminant_golden_table ... ok
+test tests::test_error_response_discriminant_is_stable ... ok
+test tests::test_feature_gated_variants_are_grouped_by_feature ... ok
+test tests::test_feature_gated_response_variants_postcard_roundtrip ... ok
+test tests::test_get_health_domain ... ok
+test tests::test_get_health_variant_name ... ok
+test tests::test_first_and_last_response_variants_postcard_stable ... ok
+test tests::test_federation_git_clone_postcard_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_variant_name ... ok
+test tests::test_kv_read_variant_name ... ok
+test tests::test_get_health_roundtrip_json ... ok
+test tests::test_kv_write_variant_name ... ok
+test tests::test_git_bridge_probe_objects_request_roundtrip ... ok
+test tests::test_git_bridge_probe_objects_response_roundtrip ... ok
+test tests::test_request_discriminant_golden_table ... ok
+test tests::test_response_error_roundtrip ... ok
+test tests::test_response_leader_roundtrip ... ok
+test tests::test_response_discriminant_golden_table ... ok
+test tests::test_plugin_reload_result_before_feature_gated_variants ... ok
+test tests::test_response_pong_roundtrip ... ok
+test tests::test_request_required_app_metadata_is_unique_and_known ... ok
+test tests::test_request_metadata_lookup_matches_sample_requests ... ok
+
+test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/client_rpc_postcard_baseline.rs (/tmp/aspen-protocol-wire-client-test/debug/deps/client_rpc_postcard_baseline-acfffb8b519fd2fe)
+
+running 1 test
+test client_rpc_postcard_baseline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/serialization_snapshots.rs (/tmp/aspen-protocol-wire-client-test/debug/deps/serialization_snapshots-b82faf88acf53874)
+
+running 12 tests
+test snapshot_write_key_request ... ok
+test snapshot_write_result_response ... ok
+test snapshot_scan_keys_request ... ok
+test snapshot_read_result_response_found ... ok
+test snapshot_delete_key_request ... ok
+test snapshot_read_key_request ... ok
+test snapshot_get_health_request ... ok
+test snapshot_delete_result_response ... ok
+test snapshot_error_response ... ok
+test snapshot_read_result_response_not_found ... ok
+test snapshot_scan_result_response ... ok
+test snapshot_get_raft_metrics_request ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/snapshot_redaction.rs (/tmp/aspen-protocol-wire-client-test/debug/deps/snapshot_redaction-e06249cdd29d9a73)
+
+running 3 tests
+test snapshot_error_response_with_dynamic_node_id ... ok
+test snapshot_write_result_with_no_dynamic_fields ... ok
+test snapshot_error_response_with_uuid ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/wire_format_golden.rs (/tmp/aspen-protocol-wire-client-test/debug/deps/wire_format_golden-4d856b2a9c5a55f7)
+
+running 10 tests
+test test_error_response_discriminant_is_14 ... ok
+test test_get_health_request_discriminant_is_0 ... ok
+test test_pong_response_discriminant_is_12 ... ok
+test test_request_variant_count ... ok
+test test_golden_files_are_sequential ... ok
+test test_request_feature_gated_after_non_gated_sections ... ok
+test test_response_feature_gated_ordering ... ok
+test test_response_variant_count ... ok
+test test_request_discriminants_golden ... ok
+test test_response_discriminants_golden ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aspen_client_api
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
+     |
+1479 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
+     |
+1495 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
+     |
+1509 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
+     |
+1525 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
+     |
+1539 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
+     |
+1551 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
+     |
+1565 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
+     |
+1581 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
+     |
+4299 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
+     |
+4306 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
+     |
+4313 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
+     |
+4320 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
+     |
+4327 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
+     |
+4334 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
+     |
+4341 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
+     |
+4348 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
+     |
+4388 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
+     |
+4395 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: 28 warnings emitted
+
+
+running 1 test
+test crates/aspen-client-api/src/lib.rs - (line 27) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.41s; merged doctests compilation took 0.41s

@@ -1,0 +1,1 @@
+OK: git diff --cached --check completed without whitespace errors

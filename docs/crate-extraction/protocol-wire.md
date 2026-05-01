@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-client-api`, `crates/aspen-forge-protocol`, `crates/aspen-jobs-protocol`, `crates/aspen-coordination-protocol`
 - **Intended audience**: Rust clients, tools, fixtures, gateways, and protocol adapters that need Aspen request/response schemas and domain wire structs without handler registries, node bootstrap, concrete transports, UI/web binaries, or runtime auth shells.
 - **Public API owner**: Aspen protocol maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: reusable protocol/wire family
 
 ## Package and release metadata
@@ -103,4 +103,4 @@ No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets 
 
 ## First-slice status
 
-Current status is `workspace-internal`. This change records the family manifest, policy entries, existing postcard wire-contract rails, downstream serialization fixture, and deterministic boundary evidence. Do not raise any protocol crate above `extraction-ready-in-workspace` until human license/publication policy is resolved.
+Current status is `extraction-ready-in-workspace`. The family manifest, policy entries, postcard wire-contract rails, downstream serialization fixture, compatibility tests, and deterministic dependency-boundary evidence are current. Do not raise any protocol crate above `extraction-ready-in-workspace` until human license/publication policy is resolved.

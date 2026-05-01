@@ -1,0 +1,951 @@
+diff --git a/docs/crate-extraction.md b/docs/crate-extraction.md
+index 96d12814a..afaf6448d 100644
+--- a/docs/crate-extraction.md
++++ b/docs/crate-extraction.md
+@@ -136,7 +136,7 @@ No selected family may advance beyond `workspace-internal` or `extraction-ready-
+ | --- | --- | --- | --- | --- | --- | --- |
+ | Foundational types/helpers | `leaf type/helper` | `aspen-constants`, `aspen-hlc`, `aspen-kv-types`, `aspen-storage-types`, `aspen-cluster-types`, `aspen-traits`, `aspen-time` | Aspen foundational type maintainers | [`crate-extraction/foundational-types.md`](crate-extraction/foundational-types.md) | `workspace-internal` | First blockers resolved: Redb table definitions stay out of `aspen-storage-types` and narrow `aspen-traits` KV capability rails are proven; next action is family-wide owner/public API review before any readiness raise. |
+ | Auth and tickets | `leaf type/helper` | `aspen-auth-core`, `aspen-auth`, `aspen-ticket`, `aspen-hooks-ticket` | Aspen auth and ticket maintainers | [`crate-extraction/auth-ticket.md`](crate-extraction/auth-ticket.md) | `workspace-internal` | Token/ticket goldens, malformed-input rejection, portable fixture coverage, and runtime-verifier negative evidence are present; next action is owner/public API review before any readiness raise. |
+-| Protocol/wire | `protocol/wire` | `aspen-client-api`, `aspen-forge-protocol`, `aspen-jobs-protocol`, `aspen-coordination-protocol` | Aspen protocol maintainers | [`crate-extraction/protocol-wire.md`](crate-extraction/protocol-wire.md) | `workspace-internal` | Verify downstream fixture and compatibility rails before raising readiness. |
++| Protocol/wire | `protocol/wire` | `aspen-client-api`, `aspen-forge-protocol`, `aspen-jobs-protocol`, `aspen-coordination-protocol` | Aspen protocol maintainers | [`crate-extraction/protocol-wire.md`](crate-extraction/protocol-wire.md) | `extraction-ready-in-workspace` | Downstream serialization fixture, compatibility tests, and dependency-boundary rails pass; publishable/repo-split blocked on license policy. |
+ | Redb Raft KV | `storage/backend` + `service library` + `runtime adapter` | `aspen-kv-types`, `aspen-redb-storage`, `aspen-raft-kv-types`, `aspen-raft-kv`, `aspen-raft-network`, `aspen-raft` | owner needed | per-layer manifests | 4/6 `extraction-ready-in-workspace` | Type/storage/facade layers ready; adapter/compat remain `workspace-internal`; publishable/repo-split blocked on license policy. |
+ | Iroh transport/RPC | `runtime adapter` + `service library` | `aspen-transport`, `aspen-rpc-core`, `aspen-client` | Aspen transport/RPC maintainers | [`crate-extraction/transport-rpc.md`](crate-extraction/transport-rpc.md) | `workspace-internal` | Generic Iroh helpers and RPC dispatch now default without runtime service graph; finish downstream and compatibility evidence before raising readiness. |
+ | Coordination | `service library` | `aspen-coordination`, `aspen-coordination-protocol` | Aspen coordination maintainers | [`crate-extraction/coordination.md`](crate-extraction/coordination.md) | `extraction-ready-in-workspace` | `aspen-core` removed; depends only on `aspen-kv-types`, `aspen-traits`, `aspen-constants`, `aspen-time`; protocol crate standalone; publishable/repo-split blocked on license policy. |
+diff --git a/docs/crate-extraction/policy.ncl b/docs/crate-extraction/policy.ncl
+index a7c519274..171526aa2 100644
+--- a/docs/crate-extraction/policy.ncl
++++ b/docs/crate-extraction/policy.ncl
+@@ -396,7 +396,7 @@ let Candidate = {
+
+     aspen_client_api = {
+       class = "protocol/wire",
+-      readiness_state = "workspace-internal",
++      readiness_state = "extraction-ready-in-workspace",
+       manifest = "docs/crate-extraction/protocol-wire.md",
+       owner = "Aspen protocol maintainers",
+       default_feature_sets = ["default"],
+@@ -445,7 +445,7 @@ let Candidate = {
+
+     aspen_forge_protocol = {
+       class = "protocol/wire",
+-      readiness_state = "workspace-internal",
++      readiness_state = "extraction-ready-in-workspace",
+       manifest = "docs/crate-extraction/protocol-wire.md",
+       owner = "Aspen protocol maintainers",
+       default_feature_sets = ["default"],
+@@ -458,7 +458,7 @@ let Candidate = {
+
+     aspen_jobs_protocol = {
+       class = "protocol/wire",
+-      readiness_state = "workspace-internal",
++      readiness_state = "extraction-ready-in-workspace",
+       manifest = "docs/crate-extraction/protocol-wire.md",
+       owner = "Aspen protocol maintainers",
+       default_feature_sets = ["default"],
+diff --git a/docs/crate-extraction/protocol-wire.md b/docs/crate-extraction/protocol-wire.md
+index a77d1feac..4306b0ce9 100644
+--- a/docs/crate-extraction/protocol-wire.md
++++ b/docs/crate-extraction/protocol-wire.md
+@@ -7,7 +7,7 @@
+ - **Canonical crate/path**: `crates/aspen-client-api`, `crates/aspen-forge-protocol`, `crates/aspen-jobs-protocol`, `crates/aspen-coordination-protocol`
+ - **Intended audience**: Rust clients, tools, fixtures, gateways, and protocol adapters that need Aspen request/response schemas and domain wire structs without handler registries, node bootstrap, concrete transports, UI/web binaries, or runtime auth shells.
+ - **Public API owner**: Aspen protocol maintainers
+-- **Readiness state**: `workspace-internal`
++- **Readiness state**: `extraction-ready-in-workspace`
+ - **Dependency policy class**: reusable protocol/wire family
+
+ ## Package and release metadata
+@@ -103,4 +103,4 @@ No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets
+
+ ## First-slice status
+
+-Current status is `workspace-internal`. This change records the family manifest, policy entries, existing postcard wire-contract rails, downstream serialization fixture, and deterministic boundary evidence. Do not raise any protocol crate above `extraction-ready-in-workspace` until human license/publication policy is resolved.
++Current status is `extraction-ready-in-workspace`. The family manifest, policy entries, postcard wire-contract rails, downstream serialization fixture, compatibility tests, and deterministic dependency-boundary evidence are current. Do not raise any protocol crate above `extraction-ready-in-workspace` until human license/publication policy is resolved.
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/.openspec.yaml b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/.openspec.yaml
+new file mode 100644
+index 000000000..1f1f4c91c
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/.openspec.yaml
+@@ -0,0 +1,2 @@
++schema: spec-driven
++created: 2026-05-01T21:19:09Z
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/design.md b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/design.md
+new file mode 100644
+index 000000000..f43f54d11
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/design.md
+@@ -0,0 +1,52 @@
++## Context
++
++`docs/crate-extraction.md` now records the next decomposition wave. Protocol/wire remains listed as `workspace-internal` even though its manifest already points at completed downstream serialization fixture, negative runtime-boundary, and compatibility evidence. Policy is partially ahead of the manifest: `aspen-coordination-protocol` is already `extraction-ready-in-workspace`, while the sibling protocol crates still say `workspace-internal`.
++
++## Goals / Non-Goals
++
++**Goals:**
++
++- Make the protocol/wire family readiness state match its verified boundary evidence.
++- Re-run the evidence instead of relying only on archived outputs.
++- Keep runtime handlers and concrete transport crates out of this readiness raise.
++
++**Non-goals:**
++
++- No new wire variants or serialization shape changes.
++- No publication/repository split claim.
++- No owner reassignment; owner remains Aspen protocol maintainers.
++
++## Decisions
++
++### 1. Promote only protocol/wire crates
++
++**Choice:** Raise `aspen-client-api`, `aspen-forge-protocol`, `aspen-jobs-protocol`, and the family manifest/inventory to `extraction-ready-in-workspace`; leave runtime consumers as compatibility targets.
++
++**Rationale:** The protocol crates are direct schema crates with no handler registry, node bootstrap, concrete transport endpoint, UI/web binary, or runtime auth shell dependency in their reusable default surfaces. `aspen-coordination-protocol` is already policy-marked ready and is included for family consistency.
++
++**Alternative:** Leave the family `workspace-internal` until publication policy is decided. Rejected because the readiness contract explicitly allows `extraction-ready-in-workspace` before publication and blocks only publishable/repo-split states.
++
++### 2. Use existing checker evidence names
++
++**Choice:** Generate the fixed artifacts required by `scripts/check-crate-extraction-readiness.rs` for `protocol-wire`: downstream metadata, forbidden grep, and client compatibility evidence.
++
++**Rationale:** The checker enforces family-specific evidence names. Reusing them avoids weakening policy and makes the new readiness report deterministic.
++
++## Verification Strategy
++
++This strategy covers `architecture-modularity.protocol-wire-readiness`, `architecture-modularity.protocol-wire-readiness.no-publication-claim`, and `architecture-modularity.protocol-wire-readiness.runtime-boundary`.
++
++- Build/check protocol crates in default and no-default configurations where supported.
++- Run the downstream fixture against canonical protocol crates with a fresh target directory.
++- Capture cargo metadata for the fixture and negative boundary grep output proving forbidden runtime imports are absent.
++- Run `cargo test -p aspen-client-api` for wire compatibility tests.
++- Run the crate-extraction readiness checker with JSON and Markdown outputs under this change.
++- Validate, archive, preflight, and drain-audit the OpenSpec package before commit.
++
++## Risks / Trade-offs
++
++**Stale archived fixture path** → Run the existing archived downstream fixture in place and save fresh outputs under this change.
++
++**Overclaiming publication readiness** → Keep all docs at `extraction-ready-in-workspace` and retain publication blocks.
++
++**Runtime dependency leaks through feature defaults** → Let the checker and cargo tree/grep evidence fail the change if app/runtime crates appear in reusable protocol surfaces.
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/git-diff-check.txt b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/git-diff-check.txt
+new file mode 100644
+index 000000000..7a0085bbf
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/git-diff-check.txt
+@@ -0,0 +1 @@
++OK: git diff --cached --check completed without whitespace errors
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/helper-verify.json b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/helper-verify.json
+new file mode 100644
+index 000000000..ee86080f1
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/helper-verify.json
+@@ -0,0 +1,3 @@
++{
++  "promote-protocol-wire-readiness": []
++}
+\ No newline at end of file
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt
+new file mode 100644
+index 000000000..e2ffef34f
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt
+@@ -0,0 +1,582 @@
++$ CARGO_TARGET_DIR=/tmp/aspen-protocol-wire-client-test cargo test -p aspen-client-api
++exit_code: 0
++
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++   Compiling unicode-ident v1.0.24
++   Compiling proc-macro2 v1.0.106
++   Compiling quote v1.0.45
++   Compiling stable_deref_trait v1.2.1
++   Compiling serde_core v1.0.228
++   Compiling serde v1.0.228
++   Compiling semver v1.0.27
++   Compiling typenum v1.19.0
++   Compiling litemap v0.8.1
++   Compiling writeable v0.6.2
++   Compiling cfg-if v1.0.4
++   Compiling icu_properties_data v2.1.2
++   Compiling icu_normalizer_data v2.1.1
++   Compiling smallvec v1.15.1
++   Compiling cpufeatures v0.2.17
++   Compiling const-oid v0.10.2
++   Compiling memchr v2.8.0
++   Compiling unicode-segmentation v1.12.0
++   Compiling scopeguard v1.2.0
++   Compiling find-msvc-tools v0.1.9
++   Compiling shlex v1.3.0
++   Compiling libc v0.2.183
++   Compiling thiserror v2.0.18
++   Compiling unicode-xid v0.2.6
++   Compiling byteorder v1.5.0
++   Compiling utf8_iter v1.0.4
++   Compiling ucd-trie v0.1.7
++   Compiling subtle v2.6.1
++   Compiling rand_core v0.9.5
++   Compiling signature v3.0.0-rc.10
++   Compiling percent-encoding v2.3.2
++   Compiling getrandom v0.4.2
++   Compiling rustix v1.1.4
++   Compiling lock_api v0.4.14
++   Compiling regex-syntax v0.8.10
++   Compiling arrayvec v0.7.6
++   Compiling linux-raw-sys v0.12.1
++   Compiling constant_time_eq v0.4.2
++   Compiling bitflags v2.11.0
++   Compiling zmij v1.0.21
++   Compiling data-encoding v2.10.0
++   Compiling arrayref v0.3.9
++   Compiling serde_json v1.0.149
++   Compiling base64 v0.22.1
++   Compiling cc v1.2.57
++   Compiling form_urlencoded v1.2.2
++   Compiling rustc_version v0.4.1
++   Compiling hash32 v0.2.1
++   Compiling once_cell v1.21.4
++   Compiling fastrand v2.3.0
++   Compiling similar v2.7.0
++   Compiling itoa v1.0.17
++   Compiling pin-project-lite v0.2.17
++   Compiling spin v0.9.8
++   Compiling curve25519-dalek v5.0.0-pre.1
++   Compiling heapless v0.7.17
++   Compiling convert_case v0.10.0
++   Compiling pest v2.8.6
++   Compiling syn v2.0.117
++   Compiling hybrid-array v0.4.8
++   Compiling console v0.16.3
++   Compiling blake3 v1.8.3
++   Compiling crypto-common v0.2.1
++   Compiling block-buffer v0.11.0
++   Compiling pest_meta v2.8.6
++   Compiling tempfile v3.27.0
++   Compiling regex-automata v0.4.14
++   Compiling digest v0.11.0-rc.10
++   Compiling sha2 v0.11.0-rc.2
++   Compiling regex v1.12.3
++   Compiling synstructure v0.13.2
++   Compiling pest_generator v2.8.6
++   Compiling zerofrom-derive v0.1.6
++   Compiling yoke-derive v0.8.1
++   Compiling zerovec-derive v0.11.2
++   Compiling serde_derive v1.0.228
++   Compiling displaydoc v0.2.5
++   Compiling zeroize_derive v1.4.3
++   Compiling curve25519-dalek-derive v0.1.1
++   Compiling thiserror-impl v2.0.18
++   Compiling derive_more-impl v2.1.1
++   Compiling spez v0.1.2
++   Compiling n0-error-macros v0.1.3
++   Compiling tokio-macros v2.6.1
++   Compiling pest_derive v2.8.6
++   Compiling zeroize v1.8.2
++   Compiling tokio v1.50.0
++   Compiling zerofrom v0.1.6
++   Compiling n0-error v0.1.3
++   Compiling yoke v0.8.1
++   Compiling zerovec v0.11.5
++   Compiling zerotrie v0.2.3
++   Compiling cobs v0.3.0
++   Compiling derive_more v2.1.1
++   Compiling tinystr v0.8.2
++   Compiling potential_utf v0.1.4
++   Compiling icu_collections v2.1.1
++   Compiling icu_locale_core v2.1.1
++   Compiling icu_provider v2.1.1
++   Compiling icu_properties v2.1.2
++   Compiling icu_normalizer v2.1.1
++   Compiling ed25519 v3.0.0-rc.4
++   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-protocol)
++   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
++   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination-protocol)
++   Compiling insta v1.47.2
++   Compiling idna_adapter v1.2.1
++   Compiling idna v1.1.0
++   Compiling postcard v1.1.3
++   Compiling url v2.5.8
++   Compiling ed25519-dalek v3.0.0-pre.1
++   Compiling iroh-base v0.97.0
++   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
++   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
++    |
++201 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++    |
++    = note: `#[warn(unknown_lints)]` on by default
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
++    |
++212 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
++    |
++222 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
++    |
++233 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
++    |
++243 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
++    |
++249 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
++    |
++259 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
++    |
++270 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
++    |
++334 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
++    |
++340 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
++     |
++1479 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
++     |
++1495 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
++     |
++1509 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
++     |
++1525 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
++     |
++1539 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
++     |
++1551 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
++     |
++1565 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
++     |
++1581 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
++     |
++4299 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
++     |
++4306 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
++     |
++4313 |         acronym_style,
++     |         ^^^^^^^
+
+... [OUTPUT TRUNCATED - 162509 chars omitted out of 212509 total] ...
+
+es/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.json
+@@ -0,0 +1,12 @@
++{
++  "candidate_family": "protocol-wire",
++  "passed": true,
++  "failures": [],
++  "warnings": [],
++  "checked_candidates": [
++    "aspen_client_api",
++    "aspen_coordination_protocol",
++    "aspen_forge_protocol",
++    "aspen_jobs_protocol"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md
+new file mode 100644
+index 000000000..ffcb0ebd0
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md
+@@ -0,0 +1,13 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `protocol-wire`
++- Passed: `true`
++- Checked candidates: 4
++
++## Failures
++
++- none
++
++## Warnings
++
++- none
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.lock b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.lock
+new file mode 100644
+index 000000000..effe81589
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.lock
+@@ -0,0 +1,196 @@
++# This file is automatically @generated by Cargo.
++# It is not intended for manual editing.
++version = 4
++
++[[package]]
++name = "aspen-client-api"
++version = "0.1.0"
++dependencies = [
++ "aspen-coordination-protocol",
++ "aspen-forge-protocol",
++ "aspen-jobs-protocol",
++ "serde",
++ "thiserror",
++]
++
++[[package]]
++name = "aspen-coordination-protocol"
++version = "0.1.0"
++dependencies = [
++ "serde",
++]
++
++[[package]]
++name = "aspen-forge-protocol"
++version = "0.1.0"
++dependencies = [
++ "serde",
++]
++
++[[package]]
++name = "aspen-jobs-protocol"
++version = "0.1.0"
++dependencies = [
++ "serde",
++]
++
++[[package]]
++name = "cobs"
++version = "0.3.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
++dependencies = [
++ "thiserror",
++]
++
++[[package]]
++name = "downstream-protocol-wire"
++version = "0.1.0"
++dependencies = [
++ "aspen-client-api",
++ "aspen-coordination-protocol",
++ "aspen-forge-protocol",
++ "aspen-jobs-protocol",
++ "postcard",
++ "serde_json",
++]
++
++[[package]]
++name = "embedded-io"
++version = "0.4.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
++
++[[package]]
++name = "embedded-io"
++version = "0.6.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
++
++[[package]]
++name = "itoa"
++version = "1.0.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
++
++[[package]]
++name = "memchr"
++version = "2.8.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
++
++[[package]]
++name = "postcard"
++version = "1.1.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"
++dependencies = [
++ "cobs",
++ "embedded-io 0.4.0",
++ "embedded-io 0.6.1",
++ "serde",
++]
++
++[[package]]
++name = "proc-macro2"
++version = "1.0.106"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
++dependencies = [
++ "unicode-ident",
++]
++
++[[package]]
++name = "quote"
++version = "1.0.45"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
++dependencies = [
++ "proc-macro2",
++]
++
++[[package]]
++name = "serde"
++version = "1.0.228"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
++dependencies = [
++ "serde_core",
++ "serde_derive",
++]
++
++[[package]]
++name = "serde_core"
++version = "1.0.228"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
++dependencies = [
++ "serde_derive",
++]
++
++[[package]]
++name = "serde_derive"
++version = "1.0.228"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "serde_json"
++version = "1.0.149"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
++dependencies = [
++ "itoa",
++ "memchr",
++ "serde",
++ "serde_core",
++ "zmij",
++]
++
++[[package]]
++name = "syn"
++version = "2.0.117"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "unicode-ident",
++]
++
++[[package]]
++name = "thiserror"
++version = "2.0.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
++dependencies = [
++ "thiserror-impl",
++]
++
++[[package]]
++name = "thiserror-impl"
++version = "2.0.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "unicode-ident"
++version = "1.0.24"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
++
++[[package]]
++name = "zmij"
++version = "1.0.21"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml
+new file mode 100644
+index 000000000..45a4ec2d3
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml
+@@ -0,0 +1,15 @@
++[workspace]
++
++[package]
++name = "downstream-protocol-wire"
++version = "0.1.0"
++edition = "2024"
++license = "AGPL-3.0-or-later"
++
++[dependencies]
++aspen-client-api = { path = "../../../../../../crates/aspen-client-api", default-features = false }
++aspen-coordination-protocol = { path = "../../../../../../crates/aspen-coordination-protocol" }
++aspen-forge-protocol = { path = "../../../../../../crates/aspen-forge-protocol" }
++aspen-jobs-protocol = { path = "../../../../../../crates/aspen-jobs-protocol" }
++postcard = { version = "1", default-features = false, features = ["alloc"] }
++serde_json = "1"
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/src/lib.rs b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/src/lib.rs
+new file mode 100644
+index 000000000..697beab8c
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/src/lib.rs
+@@ -0,0 +1,66 @@
++use aspen_client_api::ClientRpcRequest;
++use aspen_client_api::ClientRpcResponse;
++use aspen_coordination_protocol::LockResultResponse;
++use aspen_forge_protocol::ForgeRepoBackend;
++use aspen_forge_protocol::ForgeRepoInfo;
++use aspen_jobs_protocol::JobSubmitResultResponse;
++
++const TEST_CREATED_AT_MS: u64 = 1_234;
++const TEST_THRESHOLD_DELEGATES: u32 = 1;
++const TEST_FENCING_TOKEN: u64 = 9;
++const TEST_DEADLINE_MS: u64 = 10_000;
++
++#[test]
++fn downstream_serializes_client_wire_types() {
++    let request = ClientRpcRequest::Ping;
++    let bytes = postcard::to_allocvec(&request).expect("serialize client request");
++    let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize client request");
++
++    assert!(matches!(decoded, ClientRpcRequest::Ping));
++
++    let response = ClientRpcResponse::Pong;
++    let bytes = postcard::to_allocvec(&response).expect("serialize client response");
++    let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize client response");
++
++    assert!(matches!(decoded, ClientRpcResponse::Pong));
++}
++
++#[test]
++fn downstream_serializes_domain_protocol_types() {
++    let repo = ForgeRepoInfo {
++        id: "repo-id".into(),
++        name: "repo".into(),
++        description: Some("fixture".into()),
++        default_branch: "main".into(),
++        delegates: vec!["delegate".into()],
++        threshold_delegates: TEST_THRESHOLD_DELEGATES,
++        created_at_ms: TEST_CREATED_AT_MS,
++        backends: vec![ForgeRepoBackend::Git],
++        backend_routes: Vec::new(),
++    };
++    let encoded = serde_json::to_string(&repo).expect("serialize forge repo");
++    let decoded: ForgeRepoInfo = serde_json::from_str(&encoded).expect("deserialize forge repo");
++    assert_eq!(decoded.name, "repo");
++    assert_eq!(decoded.threshold_delegates, TEST_THRESHOLD_DELEGATES);
++
++    let job = JobSubmitResultResponse {
++        is_success: true,
++        job_id: Some("job-id".into()),
++        error: None,
++    };
++    let encoded = serde_json::to_string(&job).expect("serialize job response");
++    let decoded: JobSubmitResultResponse = serde_json::from_str(&encoded).expect("deserialize job response");
++    assert_eq!(decoded.job_id.as_deref(), Some("job-id"));
++
++    let lock = LockResultResponse {
++        is_success: true,
++        fencing_token: Some(TEST_FENCING_TOKEN),
++        holder_id: Some("holder".into()),
++        deadline_ms: Some(TEST_DEADLINE_MS),
++        error: None,
++    };
++    let encoded = serde_json::to_string(&lock).expect("serialize lock response");
++    let decoded: LockResultResponse = serde_json::from_str(&encoded).expect("deserialize lock response");
++    assert_eq!(decoded.fencing_token, Some(TEST_FENCING_TOKEN));
++    assert_eq!(decoded.deadline_ms, Some(TEST_DEADLINE_MS));
++}
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/proposal.md b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/proposal.md
+new file mode 100644
+index 000000000..1b39834e5
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/proposal.md
+@@ -0,0 +1,28 @@
++## Why
++
++The protocol/wire family already has direct manifests, downstream fixture evidence, postcard/wire compatibility tests, and deterministic dependency-boundary checks from the earlier extraction work. The top-level inventory still reports the family as `workspace-internal`, which makes the next extraction queue repeat a completed verification step.
++
++## What Changes
++
++- Promote the protocol/wire family from `workspace-internal` to `extraction-ready-in-workspace` inside the crate-extraction inventory and manifest.
++- Align the policy entries for `aspen-client-api`, `aspen-forge-protocol`, and `aspen-jobs-protocol` with the already-ready `aspen-coordination-protocol` entry.
++- Re-run the downstream fixture, compatibility, and dependency-boundary rails with fresh evidence under this change.
++
++## Out of Scope
++
++- Publication, repository split, or license policy changes.
++- Runtime handler, transport, UI, CLI, or binary shell readiness changes.
++- Wire schema changes; this is verification and readiness bookkeeping over existing protocol APIs.
++
++## Verification Expectations
++
++- Cover `architecture-modularity.protocol-wire-readiness`, `architecture-modularity.protocol-wire-readiness.no-publication-claim`, and `architecture-modularity.protocol-wire-readiness.runtime-boundary`.
++- Save fresh downstream fixture metadata, negative boundary grep, client compatibility tests, checker reports, OpenSpec validation, preflight, and drain-audit evidence.
++- Keep readiness capped at `extraction-ready-in-workspace`; publishable states remain blocked until human license/publication policy is decided.
++
++## Impact
++
++- **Files**: `docs/crate-extraction.md`, `docs/crate-extraction/protocol-wire.md`, `docs/crate-extraction/policy.ncl`, OpenSpec artifacts/evidence.
++- **APIs**: none.
++- **Dependencies**: none.
++- **Testing**: protocol crate cargo checks/tests, downstream fixture, readiness checker, OpenSpec validate/preflight/audit.
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/specs/architecture-modularity/spec.md b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/specs/architecture-modularity/spec.md
+new file mode 100644
+index 000000000..8a54f944f
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/specs/architecture-modularity/spec.md
+@@ -0,0 +1,21 @@
++## ADDED Requirements
++
++### Requirement: Protocol wire readiness promotion [r[architecture-modularity.protocol-wire-readiness]]
++The crate extraction inventory MUST mark the protocol/wire family as `extraction-ready-in-workspace` only when its manifest, policy entries, downstream fixture evidence, compatibility evidence, and dependency-boundary evidence are current and linked from the change verification index.
++
++ID: architecture-modularity.protocol-wire-readiness
++
++#### Scenario: Protocol wire readiness remains below publication [r[architecture-modularity.protocol-wire-readiness.no-publication-claim]]
++- GIVEN the protocol/wire crates have reusable schema surfaces and fresh evidence
++- WHEN the inventory and policy readiness are updated
++- THEN the readiness state SHALL be `extraction-ready-in-workspace`
++- AND no protocol/wire entry SHALL claim `publishable from monorepo` or `future repository split candidate`
++
++ID: architecture-modularity.protocol-wire-readiness.no-publication-claim
++
++#### Scenario: Runtime shells stay out of reusable protocol surfaces [r[architecture-modularity.protocol-wire-readiness.runtime-boundary]]
++- GIVEN a downstream fixture imports canonical protocol crates directly
++- WHEN dependency-boundary and negative grep evidence are generated
++- THEN root app, handler, concrete transport, runtime auth, trust/secrets, SQL, UI, and binary shell crates MUST be absent from the reusable protocol default surfaces unless documented as explicit non-reusable consumers.
++
++ID: architecture-modularity.protocol-wire-readiness.runtime-boundary
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/tasks.md b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/tasks.md
+new file mode 100644
+index 000000000..d28008157
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/tasks.md
+@@ -0,0 +1,4 @@
++## Phase 1: Protocol/wire readiness
++
++- [x] V1 Promote protocol/wire readiness in inventory, manifest, and policy while preserving publication blocks. [covers=architecture-modularity.protocol-wire-readiness.no-publication-claim]
++- [x] V2 Generate fresh downstream, compatibility, and dependency-boundary evidence for protocol/wire. [covers=architecture-modularity.protocol-wire-readiness.runtime-boundary]
+diff --git a/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/verification.md b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/verification.md
+new file mode 100644
+index 000000000..46ff3338f
+--- /dev/null
++++ b/openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/verification.md
+@@ -0,0 +1,112 @@
++# Verification Evidence
++
++## Implementation Evidence
++
++- Changed file: `docs/crate-extraction.md`
++- Changed file: `docs/crate-extraction/protocol-wire.md`
++- Changed file: `docs/crate-extraction/policy.ncl`
++- Changed file: `openspec/specs/architecture-modularity/spec.md`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/.openspec.yaml`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/proposal.md`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/design.md`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/tasks.md`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/verification.md`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/specs/architecture-modularity/spec.md`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.lock`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/src/lib.rs`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-cargo-checks.txt`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-test.txt`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-metadata.json`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-forbidden-grep.txt`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.json`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness-command.txt`
++
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-validate.json`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/helper-verify.json`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/implementation-diff.patch`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-preflight.txt`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/git-diff-check.txt`
++- Changed file: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-drain-audit.txt`
++
++## Task Coverage
++
++- [x] V1 Promote protocol/wire readiness in inventory, manifest, and policy while preserving publication blocks. [covers=architecture-modularity.protocol-wire-readiness.no-publication-claim]
++  - Evidence: `docs/crate-extraction.md`, `docs/crate-extraction/protocol-wire.md`, `docs/crate-extraction/policy.ncl`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-cargo-checks.txt`
++- [x] V2 Generate fresh downstream, compatibility, and dependency-boundary evidence for protocol/wire. [covers=architecture-modularity.protocol-wire-readiness.runtime-boundary]
++  - Evidence: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.lock`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/src/lib.rs`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-test.txt`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-metadata.json`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-forbidden-grep.txt`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md`
++
++## Verification Commands
++
++### `CARGO_TARGET_DIR=/tmp/aspen-protocol-wire-checks cargo check -p aspen-client-api && ...`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-cargo-checks.txt`
++
++### `CARGO_TARGET_DIR=/tmp/aspen-protocol-wire-client-test cargo test -p aspen-client-api`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt`
++
++### `CARGO_TARGET_DIR=/tmp/aspen-protocol-wire-fixture cargo test --manifest-path openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-test.txt`
++
++### `cargo metadata --manifest-path openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml --format-version 1`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-metadata.json`
++
++### `fixture source and protocol cargo tree negative boundary scan`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-forbidden-grep.txt`
++
++### `scripts/check-crate-extraction-readiness.rs --candidate-family protocol-wire ...`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md`
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.json`
++
++### `openspec validate architecture-modularity --json`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-validate.json`
++
++### `python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify promote-protocol-wire-readiness --json`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/helper-verify.json`
++
++### `git diff --cached --check`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/git-diff-check.txt`
++
++### `scripts/openspec-preflight.sh openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-preflight.txt`
++
++## Drain Verification Matrix
++
++| Rail | Command | Status | Artifact | Scope rationale | Next best check |
++| --- | --- | --- | --- | --- | --- |
++| build | `openspec validate architecture-modularity --json` and protocol `cargo check` commands | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-validate.json`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-cargo-checks.txt` | Validates the active OpenSpec package and checks reusable protocol crate feature sets. | Re-run after archive as `openspec validate architecture-modularity --json`. |
++| test | `cargo test -p aspen-client-api` and downstream fixture `cargo test --manifest-path ...` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt`, `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-test.txt` | Exercises client wire compatibility and downstream canonical protocol imports. | Re-run tests if protocol schema files change. |
++| format | `git diff --cached --check` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/git-diff-check.txt` | This slice changes docs, Nickel policy, fixture code, and evidence; whitespace diff-check is the relevant formatting gate before commit. | Re-run before commit after final evidence regeneration. |
++| helper verify | `python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify promote-protocol-wire-readiness --json` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/helper-verify.json` | Confirms task/spec mechanics before archive. | Drain audit after archive. |
++| preflight | `scripts/openspec-preflight.sh openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-preflight.txt` | Ensures checked tasks have durable evidence and changed-file entries. | Re-run after staging final evidence. |
++
++## Verification Matrix
++
++| Rail | Command | Status | Artifact |
++| --- | --- | --- | --- |
++| protocol checks | `cargo check` default/no-default protocol crates | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-cargo-checks.txt` |
++| compatibility tests | `CARGO_TARGET_DIR=/tmp/aspen-protocol-wire-client-test cargo test -p aspen-client-api` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i3-client-api-compatibility-tests.txt` |
++| downstream fixture | `CARGO_TARGET_DIR=/tmp/aspen-protocol-wire-fixture cargo test --manifest-path openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-test.txt` |
++| metadata | `cargo metadata --manifest-path openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/fixtures/downstream-protocol-wire/Cargo.toml --format-version 1` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-metadata.json` |
++| negative boundary | fixture source and protocol `cargo tree -e normal` scan | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/i5-downstream-protocol-wire-forbidden-grep.txt` |
++| readiness checker | `scripts/check-crate-extraction-readiness.rs --candidate-family protocol-wire ...` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/protocol-wire-readiness.md` |
++
++| OpenSpec validate | `openspec validate architecture-modularity --json` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-validate.json` |
++| helper verify | `python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify promote-protocol-wire-readiness --json` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/helper-verify.json` |
++| implementation diff | `git diff --cached -- ...` | captured | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/implementation-diff.patch` |
++| preflight | `scripts/openspec-preflight.sh openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness` | pass | `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-preflight.txt` |
++
++### `scripts/openspec-drain-audit.sh --archive openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness`
++
++- Artifact: `openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/evidence/openspec-drain-audit.txt`
+diff --git a/openspec/specs/architecture-modularity/spec.md b/openspec/specs/architecture-modularity/spec.md
+index 3da60f841..f9900955a 100644
+--- a/openspec/specs/architecture-modularity/spec.md
++++ b/openspec/specs/architecture-modularity/spec.md
+@@ -765,3 +765,23 @@ ID: architecture-modularity.extraction-inventory-tracks-next-wave-evidence.manif
+ - AND it MUST NOT ask future contributors to redo completed first-blocker work.
+
+ ID: architecture-modularity.extraction-inventory-tracks-next-wave-evidence.current-next-actions
++
++### Requirement: Protocol wire readiness promotion [r[architecture-modularity.protocol-wire-readiness]]
++The crate extraction inventory MUST mark the protocol/wire family as `extraction-ready-in-workspace` only when its manifest, policy entries, downstream fixture evidence, compatibility evidence, and dependency-boundary evidence are current and linked from the change verification index.
++
++ID: architecture-modularity.protocol-wire-readiness
++
++#### Scenario: Protocol wire readiness remains below publication [r[architecture-modularity.protocol-wire-readiness.no-publication-claim]]
++- GIVEN the protocol/wire crates have reusable schema surfaces and fresh evidence
++- WHEN the inventory and policy readiness are updated
++- THEN the readiness state SHALL be `extraction-ready-in-workspace`
++- AND no protocol/wire entry SHALL claim `publishable from monorepo` or `future repository split candidate`
++
++ID: architecture-modularity.protocol-wire-readiness.no-publication-claim
++
++#### Scenario: Runtime shells stay out of reusable protocol surfaces [r[architecture-modularity.protocol-wire-readiness.runtime-boundary]]
++- GIVEN a downstream fixture imports canonical protocol crates directly
++- WHEN dependency-boundary and negative grep evidence are generated
++- THEN root app, handler, concrete transport, runtime auth, trust/secrets, SQL, UI, and binary shell crates MUST be absent from the reusable protocol default surfaces unless documented as explicit non-reusable consumers.
++
++ID: architecture-modularity.protocol-wire-readiness.runtime-boundary

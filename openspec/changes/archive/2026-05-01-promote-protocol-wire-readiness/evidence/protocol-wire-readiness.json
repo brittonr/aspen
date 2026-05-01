@@ -1,0 +1,12 @@
+{
+  "candidate_family": "protocol-wire",
+  "passed": true,
+  "failures": [],
+  "warnings": [],
+  "checked_candidates": [
+    "aspen_client_api",
+    "aspen_coordination_protocol",
+    "aspen_forge_protocol",
+    "aspen_jobs_protocol"
+  ]
+}

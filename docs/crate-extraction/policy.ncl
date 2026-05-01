@@ -396,7 +396,7 @@ let Candidate = {
 
     aspen_client_api = {
       class = "protocol/wire",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/protocol-wire.md",
       owner = "Aspen protocol maintainers",
       default_feature_sets = ["default"],
@@ -445,7 +445,7 @@ let Candidate = {
 
     aspen_forge_protocol = {
       class = "protocol/wire",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/protocol-wire.md",
       owner = "Aspen protocol maintainers",
       default_feature_sets = ["default"],
@@ -458,7 +458,7 @@ let Candidate = {
 
     aspen_jobs_protocol = {
       class = "protocol/wire",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/protocol-wire.md",
       owner = "Aspen protocol maintainers",
       default_feature_sets = ["default"],

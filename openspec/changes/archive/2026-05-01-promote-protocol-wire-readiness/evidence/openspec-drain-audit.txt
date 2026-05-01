@@ -1,0 +1,10 @@
+OpenSpec drain audit
+repo_root: /home/brittonr/git/aspen
+changes_root: openspec/changes
+drain_state: absent (openspec/changes/.drain-state.md)
+active_changes: none
+archives_checked: 1
+archive_path: present (openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness)
+archive_metadata_paths: current (openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/tasks.md)
+archive_metadata_paths: current (openspec/changes/archive/2026-05-01-promote-protocol-wire-readiness/verification.md)
+OK: OpenSpec drain archive cleanliness audit passed
