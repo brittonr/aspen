@@ -1,0 +1,13 @@
+PASS: clean-status claim has matching evidence
+PASS: checks-pass claim has matching evidence
+PASS: validated claim has matching evidence
+OK: completion claims are evidence-backed or uncertainty-scoped
+PASS: queue-empty claim has matching evidence
+PASS: archived claim has matching evidence
+OK: completion claims are evidence-backed or uncertainty-scoped
+FAIL: unsupported completion claim: clean-status
+FAIL: unsupported completion claim: queue-empty
+WARN: clean-status claim appears in an uncertainty-scoped response
+OK: completion claims are evidence-backed or uncertainty-scoped
+PASS: checks-pass claim has matching evidence
+OK: completion claims are evidence-backed or uncertainty-scoped
