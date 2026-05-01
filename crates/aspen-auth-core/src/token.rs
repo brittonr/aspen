@@ -186,3 +186,66 @@ mod signature_serde {
         Ok(sig)
     }
 }
+
+#[cfg(test)]
+mod i7_serialization_tests {
+    use super::*;
+    use crate::Capability;
+
+    fn golden_token() -> CapabilityToken {
+        let issuer = iroh_base::SecretKey::from([7u8; 32]).public();
+        CapabilityToken {
+            version: 1,
+            issuer,
+            audience: Audience::Bearer,
+            capabilities: vec![
+                Capability::Read {
+                    prefix: "cfg/".to_string(),
+                },
+                Capability::Write {
+                    prefix: "jobs/".to_string(),
+                },
+                Capability::Delegate,
+            ],
+            issued_at: 1_700_000_000,
+            expires_at: 1_700_003_600,
+            nonce: Some([0x11; 16]),
+            proof: Some([0x22; 32]),
+            delegation_depth: 2,
+            facts: vec![("scope".to_string(), b"i7-golden".to_vec())],
+            signature: [0xA5; 64],
+        }
+    }
+
+    #[test]
+    fn capability_token_golden_roundtrips_through_binary_and_base64() {
+        let token = golden_token();
+        let encoded = token.encode().expect("golden token encodes");
+        assert!(encoded.len() > 100, "golden token should cover the full portable token shape");
+
+        let decoded = CapabilityToken::decode(&encoded).expect("golden bytes decode");
+        assert_eq!(decoded.version, token.version);
+        assert_eq!(decoded.audience, token.audience);
+        assert_eq!(decoded.capabilities, token.capabilities);
+        assert_eq!(decoded.issued_at, token.issued_at);
+        assert_eq!(decoded.expires_at, token.expires_at);
+        assert_eq!(decoded.nonce, token.nonce);
+        assert_eq!(decoded.proof, token.proof);
+        assert_eq!(decoded.delegation_depth, token.delegation_depth);
+        assert_eq!(decoded.facts, token.facts);
+        assert_eq!(decoded.signature, token.signature);
+
+        let encoded_text = token.to_base64().expect("golden token base64 encodes");
+        let decoded_text = CapabilityToken::from_base64(&encoded_text).expect("golden token base64 decodes");
+        assert_eq!(decoded_text.capabilities, token.capabilities);
+        assert_eq!(decoded_text.facts, token.facts);
+    }
+
+    #[test]
+    fn malformed_token_inputs_are_rejected() {
+        assert!(matches!(CapabilityToken::from_base64("not valid base64!!!"), Err(AuthError::DecodingError(_))));
+        assert!(matches!(CapabilityToken::decode(&[0xff, 0x00, 0x01]), Err(AuthError::DecodingError(_))));
+        let oversized = vec![0u8; usize::try_from(MAX_TOKEN_SIZE).unwrap_or(4096).saturating_add(1)];
+        assert!(matches!(CapabilityToken::decode(&oversized), Err(AuthError::TokenTooLarge { .. })));
+    }
+}

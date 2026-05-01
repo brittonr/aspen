@@ -52,4 +52,12 @@
 
 ## First blocker
 
-I6 migrated `aspen-client-api` to canonical `aspen-auth-core` imports and documented retained runtime `aspen-auth` compatibility re-exports; next blocker is token/ticket serialization goldens and malformed-input rejection evidence.
+I7 added token/ticket serialization goldens, malformed-input rejection, portable downstream fixture coverage, and negative runtime-verifier boundary evidence. Next blocker is jobs/CI core inventory and gating (I8).
+
+
+## I7 status
+
+- `aspen-auth-core` now has deterministic capability token binary/base64 roundtrip coverage and malformed token/base64 rejection tests.
+- `aspen-ticket` and `aspen-hooks-ticket` pin deterministic ticket serialization goldens and roundtrip those goldens through deserializers.
+- `auth-ticket-portable-smoke` proves portable consumers can compile against portable auth/ticket crates without the runtime `aspen-auth` shell.
+- `auth-ticket-runtime-negative` proves verifier/revocation runtime APIs are unavailable from portable defaults unless `aspen-auth` is explicitly added.

@@ -1,0 +1,169 @@
+$ cargo test -p aspen-auth-core i7_serialization_tests -- --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running unittests src/lib.rs (target/debug/deps/aspen_auth_core-df66cb3d935a3198)
+
+running 2 tests
+test token::i7_serialization_tests::malformed_token_inputs_are_rejected ... ok
+test token::i7_serialization_tests::capability_token_golden_roundtrips_through_binary_and_base64 ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.00s
+
+$ cargo test -p aspen-ticket cluster_ticket_golden_stays_stable -- --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+warning: unknown lint: `unchecked_narrowing`
+  --> crates/aspen-ticket/src/lib.rs:63:9
+   |
+63 |         unchecked_narrowing,
+   |         ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `numeric_units`
+  --> crates/aspen-ticket/src/lib.rs:74:17
+   |
+74 |         #[allow(numeric_units, reason = "transport_addrs is a BTreeSet, not a numeric quantity")]
+   |                 ^^^^^^^^^^^^^
+
+warning: `aspen-ticket` (lib test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.01s
+     Running unittests src/lib.rs (target/debug/deps/aspen_ticket-abda7a8b3bdcb7fa)
+
+running 1 test
+test v2::tests::cluster_ticket_golden_stays_stable ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 0.00s
+
+     Running tests/errors.rs (target/debug/deps/errors-5e8cf7c1322b9a46)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/legacy.rs (target/debug/deps/legacy-6f4b17207a660a37)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/signed.rs (target/debug/deps/signed-d0e12fdb5c9abf6b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/std.rs (target/debug/deps/std-e3e0b9abd1021625)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/topic.rs (target/debug/deps/topic-98d65679d2d37e4d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/ui.rs (target/debug/deps/ui-623cff42be473e7d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+$ cargo test -p aspen-hooks-ticket hook_ticket_golden_stays_stable -- --nocapture
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks-ticket)
+warning: constant `MINUTES_PER_HOUR` is never used
+   --> crates/aspen-hooks-ticket/src/lib.rs:101:7
+    |
+101 | const MINUTES_PER_HOUR: u64 = 60;
+    |       ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `HOURS_PER_DAY` is never used
+   --> crates/aspen-hooks-ticket/src/lib.rs:104:7
+    |
+104 | const HOURS_PER_DAY: u64 = 24;
+    |       ^^^^^^^^^^^^^
+
+warning: `aspen-hooks-ticket` (lib) generated 2 warnings
+warning: `aspen-hooks-ticket` (lib test) generated 2 warnings (2 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.70s
+     Running unittests src/lib.rs (target/debug/deps/aspen_hooks_ticket-28ff081243184950)
+
+running 1 test
+test tests::hook_ticket_golden_stays_stable ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests/legacy.rs (target/debug/deps/legacy-fcafca668e3b93bc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/std.rs (target/debug/deps/std-1fe65d6dd1243e69)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ui.rs (target/debug/deps/ui-ad1a64fafbaa4f99)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+$ cargo check --manifest-path openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.toml
+    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+    Checking aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks-ticket)
+    Checking aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+warning: constant `MINUTES_PER_HOUR` is never used
+   --> /home/brittonr/git/aspen/crates/aspen-hooks-ticket/src/lib.rs:101:7
+    |
+101 | const MINUTES_PER_HOUR: u64 = 60;
+    |       ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `HOURS_PER_DAY` is never used
+   --> /home/brittonr/git/aspen/crates/aspen-hooks-ticket/src/lib.rs:104:7
+    |
+104 | const HOURS_PER_DAY: u64 = 24;
+    |       ^^^^^^^^^^^^^
+
+warning: `aspen-hooks-ticket` (lib) generated 2 warnings
+    Checking auth-ticket-portable-smoke v0.1.0 (/home/brittonr/git/aspen/openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
+$ cargo check --manifest-path openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.toml (expected failure)
+    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+    Checking auth-ticket-runtime-negative v0.1.0 (/home/brittonr/git/aspen/openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative)
+error[E0432]: unresolved import `aspen_auth`
+ --> src/lib.rs:4:5
+  |
+4 | use aspen_auth::TokenVerifier;
+  |     ^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_auth`
+  |
+  = help: if you wanted to use a crate named `aspen_auth`, use `cargo add aspen_auth` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `auth-ticket-runtime-negative` (lib) due to 1 previous error
+OK: negative runtime fixture failed as expected

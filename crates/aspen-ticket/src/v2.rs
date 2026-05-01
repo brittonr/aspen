@@ -1,7 +1,8 @@
 //! Aspen cluster tickets with alloc-safe bootstrap metadata.
 
 use alloc::format;
-use alloc::string::{String, ToString};
+use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt;
 use core::net::SocketAddr;
@@ -197,18 +198,14 @@ impl BootstrapPeer {
 
 impl Serialize for BootstrapPeer {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         self.to_node_address().serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for BootstrapPeer {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de> {
         let node_addr = NodeAddress::deserialize(deserializer)?;
         Ok(Self::from_node_address(node_addr))
     }
@@ -419,11 +416,9 @@ mod iroh_runtime {
     impl ClusterEndpointId {
         /// Convert to a runtime endpoint identifier.
         pub fn try_into_iroh(&self) -> ClusterTicketResult<PublicKey> {
-            self.as_str()
-                .parse()
-                .map_err(|_| ClusterTicketError::InvalidEndpointId {
-                    endpoint_id: self.as_str().to_string(),
-                })
+            self.as_str().parse().map_err(|_| ClusterTicketError::InvalidEndpointId {
+                endpoint_id: self.as_str().to_string(),
+            })
         }
     }
 
@@ -448,12 +443,7 @@ mod iroh_runtime {
         /// Convert this bootstrap peer into a runtime endpoint address.
         pub fn try_to_endpoint_addr(&self) -> ClusterTicketResult<EndpointAddr> {
             let endpoint_id = self.endpoint_id.try_into_iroh()?;
-            let addrs = self
-                .direct_addrs
-                .iter()
-                .copied()
-                .map(TransportAddr::Ip)
-                .collect::<BTreeSet<_>>();
+            let addrs = self.direct_addrs.iter().copied().map(TransportAddr::Ip).collect::<BTreeSet<_>>();
             Ok(EndpointAddr { id: endpoint_id, addrs })
         }
 
@@ -512,10 +502,7 @@ mod iroh_runtime {
 
         /// Get all runtime endpoint identifiers.
         pub fn try_endpoint_ids(&self) -> ClusterTicketResult<BTreeSet<PublicKey>> {
-            self.bootstrap
-                .iter()
-                .map(|peer| peer.endpoint_id.try_into_iroh())
-                .collect()
+            self.bootstrap.iter().map(|peer| peer.endpoint_id.try_into_iroh()).collect()
         }
 
         /// Get all runtime endpoint identifiers.
@@ -568,11 +555,9 @@ mod test_iroh_runtime {
 
     impl ClusterEndpointId {
         pub fn try_into_iroh(&self) -> ClusterTicketResult<EndpointId> {
-            self.as_str()
-                .parse()
-                .map_err(|_| ClusterTicketError::InvalidEndpointId {
-                    endpoint_id: self.as_str().to_string(),
-                })
+            self.as_str().parse().map_err(|_| ClusterTicketError::InvalidEndpointId {
+                endpoint_id: self.as_str().to_string(),
+            })
         }
     }
 
@@ -595,12 +580,7 @@ mod test_iroh_runtime {
 
         pub fn try_to_endpoint_addr(&self) -> ClusterTicketResult<EndpointAddr> {
             let endpoint_id = self.endpoint_id.try_into_iroh()?;
-            let addrs = self
-                .direct_addrs
-                .iter()
-                .copied()
-                .map(TransportAddr::Ip)
-                .collect::<BTreeSet<_>>();
+            let addrs = self.direct_addrs.iter().copied().map(TransportAddr::Ip).collect::<BTreeSet<_>>();
             Ok(EndpointAddr { id: endpoint_id, addrs })
         }
 
@@ -651,10 +631,7 @@ mod test_iroh_runtime {
         }
 
         pub fn try_endpoint_ids(&self) -> ClusterTicketResult<BTreeSet<EndpointId>> {
-            self.bootstrap
-                .iter()
-                .map(|peer| peer.endpoint_id.try_into_iroh())
-                .collect()
+            self.bootstrap.iter().map(|peer| peer.endpoint_id.try_into_iroh()).collect()
         }
 
         pub fn endpoint_ids(&self) -> ClusterTicketResult<BTreeSet<EndpointId>> {
@@ -667,14 +644,30 @@ mod test_iroh_runtime {
 mod tests {
     use core::net::SocketAddr;
 
+    use iroh_tickets::Ticket;
+
     use super::AspenClusterTicket;
     use super::ClusterTopicId;
-    use iroh_tickets::Ticket;
 
     fn make_test_ticket() -> AspenClusterTicket {
         let key = iroh::SecretKey::from([1u8; 32]);
         let addr = iroh::EndpointAddr::new(key.public());
-        AspenClusterTicket::with_bootstrap_addr(ClusterTopicId::from_bytes([42u8; 32]).to_topic_id(), "test-cluster".to_string(), &addr)
+        AspenClusterTicket::with_bootstrap_addr(
+            ClusterTopicId::from_bytes([42u8; 32]).to_topic_id(),
+            "test-cluster".to_string(),
+            &addr,
+        )
+    }
+
+    #[test]
+    fn cluster_ticket_golden_stays_stable() {
+        const GOLDEN: &str =
+            "aspenbeeqscijbeeqscijbeeqscijbeeqscijbeeqscijbeeqscijbeeqcc3jg4wwk3teobxws3tuaafgsnznmnwhk43umvza";
+        let mut ticket = AspenClusterTicket::new(ClusterTopicId::from_bytes([9u8; 32]), "i7-cluster".to_string());
+        let peer = super::BootstrapPeer::new(super::ClusterEndpointId::new("i7-endpoint"));
+        ticket.add_bootstrap_peer(peer).expect("golden bootstrap peer fits");
+        assert_eq!(ticket.serialize(), GOLDEN);
+        assert_eq!(AspenClusterTicket::deserialize(GOLDEN).expect("golden parses"), ticket);
     }
 
     #[test]

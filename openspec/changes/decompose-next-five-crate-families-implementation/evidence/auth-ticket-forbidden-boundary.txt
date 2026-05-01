@@ -1,9 +1,6 @@
-family: auth-ticket
-task: I6
-status: pass
+Auth-ticket negative boundary evidence (I7)
 
-Negative/runtime boundary checked:
-- `cargo tree -p aspen-client-api --no-default-features --features auth -e normal` shows `aspen-client-api` depends on `aspen-auth-core`, not runtime `aspen-auth`, after canonical import migration.
-
-Evidence:
-- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt
+Portable fixture: openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative
+Expected result: cargo check fails with unresolved import `aspen_auth` because the fixture depends only on `aspen-auth-core`.
+Boundary proven: portable defaults cannot reach runtime verifier/revocation APIs through `aspen-auth` unless the runtime shell is explicitly added.
+Artifact: openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt

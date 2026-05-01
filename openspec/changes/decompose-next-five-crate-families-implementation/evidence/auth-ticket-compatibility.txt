@@ -1,10 +1,9 @@
-family: auth-ticket
-task: I6
-status: pass
+Auth-ticket compatibility evidence (I7)
 
-Compatibility checked:
-- `aspen-auth` documents retained `aspen-auth-core` type re-exports for runtime consumers, with owner/removal criteria tied to the auth/ticket extraction track.
-- `cargo check -p aspen-client-api` passes after replacing `aspen_auth::` portable references with canonical `aspen_auth_core::` references.
+- `aspen-auth-core` capability token binary/base64 roundtrip and malformed-input tests pass.
+- `aspen-ticket` cluster ticket serialization golden is pinned and roundtrips.
+- `aspen-hooks-ticket` hook ticket URL serialization golden is pinned and roundtrips.
+- `auth-ticket-portable-smoke` fixture imports only portable auth/ticket crates and checks.
+- Runtime `aspen-auth` compatibility re-export documentation from I6 remains in place for existing shell consumers.
 
-Evidence:
-- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt
+Primary artifact: openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt

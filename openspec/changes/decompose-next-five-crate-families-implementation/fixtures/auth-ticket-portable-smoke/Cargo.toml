@@ -1,0 +1,14 @@
+[package]
+name = "auth-ticket-portable-smoke"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-auth-core = { path = "../../../../../crates/aspen-auth-core" }
+aspen-ticket = { path = "../../../../../crates/aspen-ticket", default-features = false }
+aspen-hooks-ticket = { path = "../../../../../crates/aspen-hooks-ticket", default-features = false }
+aspen-cluster-types = { path = "../../../../../crates/aspen-cluster-types", default-features = false }
+iroh-base = { version = "0.97.0", default-features = false, features = ["key"] }

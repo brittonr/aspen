@@ -2,61 +2,28 @@
 
 ## Implementation Evidence
 
-- Changed file: `crates/aspen-auth/src/lib.rs`
-- Changed file: `crates/aspen-client-api/Cargo.toml`
-- Changed file: `crates/aspen-client-api/src/lib.rs`
-- Changed file: `crates/aspen-client-api/src/messages/automerge.rs`
-- Changed file: `crates/aspen-client-api/src/messages/batch.rs`
-- Changed file: `crates/aspen-client-api/src/messages/blob.rs`
-- Changed file: `crates/aspen-client-api/src/messages/ci.rs`
-- Changed file: `crates/aspen-client-api/src/messages/cluster.rs`
-- Changed file: `crates/aspen-client-api/src/messages/coordination.rs`
-- Changed file: `crates/aspen-client-api/src/messages/docs.rs`
-- Changed file: `crates/aspen-client-api/src/messages/federation.rs`
-- Changed file: `crates/aspen-client-api/src/messages/forge.rs`
-- Changed file: `crates/aspen-client-api/src/messages/hooks.rs`
-- Changed file: `crates/aspen-client-api/src/messages/jobs.rs`
-- Changed file: `crates/aspen-client-api/src/messages/kv.rs`
-- Changed file: `crates/aspen-client-api/src/messages/lease.rs`
-- Changed file: `crates/aspen-client-api/src/messages/mod.rs`
-- Changed file: `crates/aspen-client-api/src/messages/secrets.rs`
-- Changed file: `crates/aspen-client-api/src/messages/sql.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/batch_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/ci_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/docs_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/lease_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/mod.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/net_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/sql_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/to_operation/watch_ops.rs`
-- Changed file: `crates/aspen-client-api/src/messages/watch.rs`
+- Changed file: `crates/aspen-auth-core/src/token.rs`
+- Changed file: `crates/aspen-ticket/src/v2.rs`
+- Changed file: `crates/aspen-hooks-ticket/src/lib.rs`
 - Changed file: `docs/crate-extraction/auth-ticket.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.lock`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.toml`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/src/lib.rs`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.lock`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.toml`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/src/lib.rs`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.stderr`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-readiness.stderr`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-implementation-diff.patch`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i7.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i7.json`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-implementation-diff.patch`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i6.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i6.json`
 
 ## Task Coverage
 
@@ -74,6 +41,9 @@
 
 - [x] I6 Migrate portable consumers to canonical `aspen-auth-core` / `aspen-hooks-ticket` imports or document retained `aspen-auth` compatibility re-exports with owner, tests, and removal criteria. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T21:02:00Z
   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
+
+- [x] I7 Add token/ticket serialization goldens, malformed-input negative tests, downstream fixture metadata, and compatibility evidence for auth/ticket consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T21:36:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
 
 ## Oracle Checkpoints
 
@@ -142,3 +112,11 @@ None.
 - Status: pass
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`
+
+
+### `cargo test/check` for auth-ticket serialization and boundary fixtures
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i7-auth-ticket-serialization-clean.txt`
+- Positive fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-portable-smoke/Cargo.toml`
+- Negative fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/auth-ticket-runtime-negative/Cargo.toml`

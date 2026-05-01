@@ -55,20 +55,20 @@
 extern crate alloc;
 
 use alloc::format;
-use alloc::string::{String, ToString};
+use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::result::Result as CoreResult;
+#[cfg(feature = "std")]
+use std::time::SystemTime;
+#[cfg(feature = "std")]
+use std::time::UNIX_EPOCH;
 
 use aspen_cluster_types::NodeAddress;
 use iroh_tickets::Ticket;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
-
-#[cfg(feature = "std")]
-use std::time::SystemTime;
-#[cfg(feature = "std")]
-use std::time::UNIX_EPOCH;
 
 /// Result alias for hook ticket operations.
 pub type HookTicketResult<T> = CoreResult<T, HookTicketError>;
@@ -438,7 +438,10 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
         });
     }
     debug_assert!(!ticket.bootstrap_peers.is_empty(), "validated ticket must have bootstrap peers");
-    debug_assert!(ticket.bootstrap_peers.len() <= MAX_BOOTSTRAP_PEERS, "validated bootstrap peer count must fit bounds");
+    debug_assert!(
+        ticket.bootstrap_peers.len() <= MAX_BOOTSTRAP_PEERS,
+        "validated bootstrap peer count must fit bounds"
+    );
 
     if ticket.event_type.is_empty() {
         return Err(HookTicketError::EmptyEventType);
@@ -459,8 +462,10 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
                 max_bytes: saturating_usize_to_u32(MAX_PAYLOAD_SIZE),
             });
         }
-        serde_json::from_str::<serde_json::Value>(payload).map_err(|error| HookTicketError::InvalidDefaultPayloadJson {
-            reason: error.to_string(),
+        serde_json::from_str::<serde_json::Value>(payload).map_err(|error| {
+            HookTicketError::InvalidDefaultPayloadJson {
+                reason: error.to_string(),
+            }
         })?;
         debug_assert!(payload.len() <= MAX_PAYLOAD_SIZE, "validated payload must fit bounds");
     }
@@ -495,24 +500,42 @@ fn saturating_usize_to_u32(value: usize) -> u32 {
 
 #[cfg(feature = "std")]
 #[allow(unknown_lints)]
-#[allow(ambient_clock, reason = "ticket std convenience wrappers need current wall-clock seconds")]
+#[allow(
+    ambient_clock,
+    reason = "ticket std convenience wrappers need current wall-clock seconds"
+)]
 fn unix_epoch_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_secs()).unwrap_or(0)
 }
 
 #[cfg(test)]
 mod tests {
-    use aspen_cluster_types::NodeTransportAddr;
     use core::net::SocketAddr;
+
+    use aspen_cluster_types::NodeTransportAddr;
 
     use super::*;
 
     fn create_test_node_address(seed: u8) -> NodeAddress {
         let endpoint_id = format!("{seed:02x}").repeat(32);
-        NodeAddress::from_parts(
-            endpoint_id,
-            [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7000u16.saturating_add(u16::from(seed)))))],
-        )
+        NodeAddress::from_parts(endpoint_id, [NodeTransportAddr::Ip(SocketAddr::from((
+            [127, 0, 0, 1],
+            7000u16.saturating_add(u16::from(seed)),
+        )))])
+    }
+
+    #[test]
+    fn hook_ticket_golden_stays_stable() {
+        const GOLDEN: &str = "aspenhookaeegsnznnbxw623tafadanzqg4ydombxga3tanzqg4ydombxga3tanzqg4ydombxga3tanzqg4ydombxga3tanzqg4ydombxga3tanzqg4ydombxga3tanzqg4aqcad7aaaadxzwb53xe2lumvpwg33nnvuxi5dfmqaq66zconxxk4tdmurduitjg4rh2ajtgmztgmztgmztgmztgmztgmztgmztgmztgmztgmztgmztgmztgoip5t5kayaag";
+        let addr = create_test_node_address(7);
+        let ticket = AspenHookTicket::new("i7-hooks", vec![addr])
+            .with_event_type("write_committed")
+            .with_default_payload(r#"{"source":"i7"}"#)
+            .with_auth_token([0x33; 32])
+            .with_expiry(1_700_003_600)
+            .with_priority(3);
+        assert_eq!(ticket.serialize(), GOLDEN);
+        assert_eq!(AspenHookTicket::deserialize_at(GOLDEN, 1_700_000_000).expect("golden parses"), ticket);
     }
 
     #[test]
@@ -592,9 +615,8 @@ mod tests {
         assert!(!ticket.is_expired_at(now_secs));
         assert_eq!(ticket.expiry_string_at(now_secs), "never");
 
-        let expired = AspenHookTicket::new("test", vec![addr.clone()])
-            .with_event_type("write_committed")
-            .with_expiry(1);
+        let expired =
+            AspenHookTicket::new("test", vec![addr.clone()]).with_event_type("write_committed").with_expiry(1);
         assert!(expired.is_expired_at(now_secs));
         assert_eq!(expired.expiry_string_at(now_secs), "expired");
 
@@ -631,10 +653,7 @@ mod tests {
         let ticket = AspenHookTicket::new("test", vec![addr])
             .with_event_type("write_committed")
             .with_default_payload("not valid json {{{");
-        assert!(matches!(
-            ticket.validate(),
-            Err(HookTicketError::InvalidDefaultPayloadJson { .. })
-        ));
+        assert!(matches!(ticket.validate(), Err(HookTicketError::InvalidDefaultPayloadJson { .. })));
     }
 
     #[test]
@@ -647,18 +666,12 @@ mod tests {
         }
 
         let extra = create_test_node_address(u8::MAX);
-        assert!(matches!(
-            ticket.add_bootstrap_peer(extra),
-            Err(HookTicketError::TooManyBootstrapPeers { .. })
-        ));
+        assert!(matches!(ticket.add_bootstrap_peer(extra), Err(HookTicketError::TooManyBootstrapPeers { .. })));
     }
 
     #[test]
     fn test_invalid_ticket_string() {
-        assert!(matches!(
-            AspenHookTicket::deserialize_at("invalid", 10),
-            Err(HookTicketError::Deserialize { .. })
-        ));
+        assert!(matches!(AspenHookTicket::deserialize_at("invalid", 10), Err(HookTicketError::Deserialize { .. })));
         assert!(matches!(
             AspenHookTicket::deserialize_at("aspenclient...", 10),
             Err(HookTicketError::Deserialize { .. })
@@ -667,18 +680,13 @@ mod tests {
             AspenHookTicket::deserialize_at("aspenhook!!!", 10),
             Err(HookTicketError::Deserialize { .. })
         ));
-        assert!(matches!(
-            AspenHookTicket::deserialize_at("", 10),
-            Err(HookTicketError::Deserialize { .. })
-        ));
+        assert!(matches!(AspenHookTicket::deserialize_at("", 10), Err(HookTicketError::Deserialize { .. })));
     }
 
     #[test]
     fn test_deserialize_expired_ticket() {
         let addr = create_test_node_address(1);
-        let ticket = AspenHookTicket::new("test", vec![addr])
-            .with_event_type("write_committed")
-            .with_expiry(1);
+        let ticket = AspenHookTicket::new("test", vec![addr]).with_event_type("write_committed").with_expiry(1);
 
         let serialized = ticket.serialize();
         let result = AspenHookTicket::deserialize_at(&serialized, 2);
@@ -696,5 +704,4 @@ mod tests {
         let parsed = AspenHookTicket::deserialize_at(&serialized, 10).expect("should parse");
         assert_eq!(parsed.bootstrap_peers.len(), 5);
     }
-
 }
