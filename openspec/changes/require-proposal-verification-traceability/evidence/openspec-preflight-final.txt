@@ -1,0 +1,4 @@
+OK: openspec/changes/require-proposal-verification-traceability
+  tasks: 6 total / 6 checked
+  changed files listed: 14
+  verification artifacts: 6

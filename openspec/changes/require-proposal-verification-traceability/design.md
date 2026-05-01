@@ -25,6 +25,13 @@ Proposal verification is currently free-form. Stronger structure will reduce lat
 
 **Proposal bloat** → Require concise mapping, not command transcripts.
 
+## Verification Strategy
+
+- `openspec-governance.proposal-verification-traceability`: positive fixture covers proposals whose `## Verification Expectations` section maps every changed requirement/scenario ID.
+- `openspec-governance.proposal-verification-traceability.cites-requirement-ids`: checker fixture covers complete ID citation and valid `defer to design` entries with requirement ID plus rationale.
+- `openspec-governance.proposal-verification-traceability.missing-positive-verification-fails`: negative fixture omits an added requirement/scenario ID and must fail with that ID.
+- `openspec-governance.proposal-verification-traceability.negative-behavior-needs-verification`: negative fixture includes rejection/failure behavior without a negative-path expectation and must fail.
+
 ## Validation Plan
 
-Fixture proposals for complete mapping, missing ID mapping, and missing negative path.
+Fixture proposals for complete mapping, missing ID mapping, missing negative path, valid deferral, and invalid deferral.

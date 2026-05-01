@@ -1,0 +1,6 @@
+PASS: complete-mapping
+PASS: missing-id rejected: example.fixture.traceability.happy
+PASS: missing-negative rejected: negative-path expectation
+PASS: valid-deferral
+PASS: invalid-deferral rejected: defer to design entries must cite a changed requirement/scenario ID and rationale
+proposal verification fixtures passed

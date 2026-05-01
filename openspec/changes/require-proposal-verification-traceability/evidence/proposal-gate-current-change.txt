@@ -1,0 +1,3 @@
+OK: proposal verification traceability is mapped
+  mapped ids: openspec-governance.proposal-verification-traceability, openspec-governance.proposal-verification-traceability.cites-requirement-ids, openspec-governance.proposal-verification-traceability.missing-positive-verification-fails, openspec-governance.proposal-verification-traceability.negative-behavior-needs-verification
+  deferred ids: openspec-governance.proposal-verification-traceability, openspec-governance.proposal-verification-traceability.cites-requirement-ids

@@ -13,6 +13,13 @@ Proposal reviews repeatedly find that verification sections omit required paths 
 ### New Capabilities
 - `openspec-governance.proposal-verification-traceability`: Proposals trace verification expectations to changed requirements.
 
+## Verification Expectations
+
+- `openspec-governance.proposal-verification-traceability`: positive proposal gate fixture covers requirement-ID verification mapping.
+- `openspec-governance.proposal-verification-traceability.cites-requirement-ids`: positive fixture cites all changed IDs; valid deferral fixture uses `defer to design` with requirement ID and rationale.
+- `openspec-governance.proposal-verification-traceability.missing-positive-verification-fails`: negative fixture omits an added requirement ID and must fail proposal gate checking.
+- `openspec-governance.proposal-verification-traceability.negative-behavior-needs-verification`: negative fixture mentions rejection/failure behavior without negative-path verification and must fail.
+
 ## Impact
 
 - **Files**: proposal template/instructions, proposal gate logic, fixtures.
