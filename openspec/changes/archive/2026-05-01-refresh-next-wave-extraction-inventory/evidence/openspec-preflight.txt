@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-05-01-refresh-next-wave-extraction-inventory
+  tasks: 2 total / 2 checked
+  changed files listed: 13
+  verification artifacts: 5
