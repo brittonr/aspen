@@ -1,0 +1,4 @@
+OK: openspec/changes/detect-delta-spec-consistency
+  tasks: 6 total / 2 checked
+  changed files listed: 4
+  verification artifacts: 2

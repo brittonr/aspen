@@ -1,7 +1,7 @@
 ## 1. Implementation
 
 - [x] I1 Add a delta-spec consistency checker for added requirement/scenario IDs, modified-target existence, and removed-target existence. [covers=openspec-governance.delta-spec-consistency.added-requirements-have-ids,openspec-governance.delta-spec-consistency.modified-requirement-exists,openspec-governance.delta-spec-consistency.missing-modified-target-fails,openspec-governance.delta-spec-consistency.removed-requirement-exists]
-- [ ] I2 Wire the checker into proposal/spec validation for active changes. [covers=openspec-governance.delta-spec-consistency.added-requirements-have-ids,openspec-governance.delta-spec-consistency.modified-requirement-exists,openspec-governance.delta-spec-consistency.missing-modified-target-fails,openspec-governance.delta-spec-consistency.removed-requirement-exists]
+- [x] I2 Wire the checker into proposal/spec validation for active changes. [covers=openspec-governance.delta-spec-consistency.added-requirements-have-ids,openspec-governance.delta-spec-consistency.modified-requirement-exists,openspec-governance.delta-spec-consistency.missing-modified-target-fails,openspec-governance.delta-spec-consistency.removed-requirement-exists]
 - [ ] I3 Add a `Migration note:` repair/migration exemption for modified requirements that intentionally repair missing or legacy main-spec entries. [covers=openspec-governance.delta-spec-consistency.migration-note-permits-repair]
 - [ ] I4 Add warning logic for conflicting feature-contract phrases across proposal, specs, and design. [covers=openspec-governance.delta-spec-consistency.conflicting-feature-contracts-warn]
 

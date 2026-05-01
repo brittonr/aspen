@@ -75,6 +75,10 @@ resolve_change_dir() {
 
 change_dir=$(resolve_change_dir "${1:-}")
 
+if [[ -x "$repo_root/scripts/check-openspec-delta-consistency.py" ]]; then
+  "$repo_root/scripts/check-openspec-delta-consistency.py" "$change_dir" --repo-root "$repo_root" >/dev/null
+fi
+
 python3 - "$repo_root" "$change_dir" <<'PY'
 import os
 import pathlib

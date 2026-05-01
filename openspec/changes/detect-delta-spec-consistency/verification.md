@@ -2,11 +2,15 @@
 
 ## Implementation Evidence
 
-- Changed file: `scripts/check-openspec-delta-consistency.py`
+- Changed file: `scripts/openspec-preflight.sh`
 - Changed file: `openspec/changes/detect-delta-spec-consistency/tasks.md`
 - Changed file: `openspec/changes/detect-delta-spec-consistency/verification.md`
+- Changed file: `openspec/changes/detect-delta-spec-consistency/specs/openspec-governance/spec.md`
 
 ## Task Coverage
+
+- [x] I2 Wire the checker into proposal/spec validation for active changes. [covers=openspec-governance.delta-spec-consistency.added-requirements-have-ids,openspec-governance.delta-spec-consistency.modified-requirement-exists,openspec-governance.delta-spec-consistency.missing-modified-target-fails,openspec-governance.delta-spec-consistency.removed-requirement-exists]
+  - Evidence: `openspec/changes/detect-delta-spec-consistency/evidence/i2-preflight-wiring.txt`
 
 - [x] I1 Add a delta-spec consistency checker for added requirement/scenario IDs, modified-target existence, and removed-target existence. [covers=openspec-governance.delta-spec-consistency.added-requirements-have-ids,openspec-governance.delta-spec-consistency.modified-requirement-exists,openspec-governance.delta-spec-consistency.missing-modified-target-fails,openspec-governance.delta-spec-consistency.removed-requirement-exists]
   - Evidence: `openspec/changes/detect-delta-spec-consistency/evidence/i1-delta-consistency-checker.txt`
@@ -17,3 +21,8 @@
 
 - Status: pass
 - Artifact: `openspec/changes/detect-delta-spec-consistency/evidence/i1-delta-consistency-checker.txt`
+
+### `scripts/openspec-preflight.sh detect-delta-spec-consistency` and `scripts/test-openspec-preflight-evidence.sh`
+
+- Status: pass
+- Artifact: `openspec/changes/detect-delta-spec-consistency/evidence/i2-preflight-wiring.txt`
