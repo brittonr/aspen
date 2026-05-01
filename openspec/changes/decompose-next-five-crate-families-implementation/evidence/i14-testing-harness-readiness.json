@@ -1,0 +1,11 @@
+{
+  "candidate_family": "testing-harness",
+  "passed": true,
+  "failures": [],
+  "warnings": [
+    "testing_harness: package does not exist yet; direct dependency check deferred"
+  ],
+  "checked_candidates": [
+    "testing_harness"
+  ]
+}

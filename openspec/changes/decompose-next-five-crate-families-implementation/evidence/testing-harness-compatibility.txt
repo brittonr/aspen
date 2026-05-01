@@ -1,0 +1,7 @@
+Compatibility evidence for testing-harness
+
+- `testing-harness-core-smoke` passes and exercises reusable `aspen-testing-core` helpers.
+- `testing-harness-bootstrap-negative` fails as expected without explicit adapter crates.
+- `cargo check -p aspen-testing-madsim -p aspen-testing-network -p aspen-testing-patchbay` passes, preserving adapter compatibility.
+
+See `i14-testing-harness-fixtures.txt`.

@@ -1,0 +1,5 @@
+Forbidden boundary evidence for testing-harness
+
+Reusable defaults must not pull root app/bootstrap, node bootstrap, handler registries, binary shells, concrete cluster runtime, patchbay namespaces, madsim setup, or network transport adapters.
+
+`testing-harness-bootstrap-negative` depends only on `aspen-testing-core` and intentionally imports madsim/network/patchbay adapter crates; the fixture fails as expected.

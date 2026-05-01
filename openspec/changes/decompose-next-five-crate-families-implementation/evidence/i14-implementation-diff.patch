@@ -1,0 +1,77 @@
+diff --git a/docs/crate-extraction/testing-harness.md b/docs/crate-extraction/testing-harness.md
+index c63bece59..4a565390c 100644
+--- a/docs/crate-extraction/testing-harness.md
++++ b/docs/crate-extraction/testing-harness.md
+@@ -53,4 +53,4 @@
+
+ ## First blocker
+
+-I13 inventory identifies `aspen-testing-core` as the reusable default root for deterministic helpers, bounded assertions, retry/wait utilities, and generic mock state. Generic `aspen-testing-fixtures` builders can remain reusable; `aspen-testing` stays a compatibility facade, while madsim/network/patchbay crates remain explicit adapters for concrete simulation, namespace, transport, and cluster bootstrap behavior.
++I14 adds reusable core smoke coverage, negative adapter-boundary coverage, downstream metadata, and compatibility checks. I13 inventory identifies `aspen-testing-core` as the reusable default root for deterministic helpers, bounded assertions, retry/wait utilities, and generic mock state. Generic `aspen-testing-fixtures` builders can remain reusable; `aspen-testing` stays a compatibility facade, while madsim/network/patchbay crates remain explicit adapters for concrete simulation, namespace, transport, and cluster bootstrap behavior.
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+index 56e51d719..32b424290 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+@@ -34,7 +34,7 @@
+
+ - [x] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:13:00Z
+
+-- [ ] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++- [x] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:28:00Z
+
+ ## 7. Verification discipline
+
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+index 22fcb0858..ef96e3098 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+@@ -3,11 +3,19 @@
+ ## Implementation Evidence
+
+ - Changed file: `docs/crate-extraction/testing-harness.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-implementation-diff.patch`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i13.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i13.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-core-smoke/Cargo.toml`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-core-smoke/src/lib.rs`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-bootstrap-negative/Cargo.toml`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-bootstrap-negative/src/lib.rs`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-fixtures.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-readiness.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-readiness.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-downstream-metadata.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-forbidden-boundary.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-compatibility.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-implementation-diff.patch`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i14.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i14.json`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
+
+@@ -49,6 +57,9 @@
+ - [x] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:13:00Z
+   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
+
++- [x] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:28:00Z
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-fixtures.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-compatibility.txt`
++
+ ## Oracle Checkpoints
+
+ None.
+@@ -168,6 +179,14 @@ None.
+ - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-inventory.txt`
+ - Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i13-testing-harness-surface-inventory.md`
+
++
++### `cargo test/check` and readiness for testing harness fixtures/adapters
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-fixtures.txt`
++- Readiness: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-readiness.md`
++- Metadata: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-downstream-metadata.json`
++
+ ## I11 trust/crypto/secrets inventory and pure-boundary gate
+
+ Task: I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells.

@@ -1,0 +1,29 @@
+{
+  "family": "testing-harness",
+  "owner": "architecture-modularity",
+  "positive_downstream": [
+    {
+      "name": "testing-harness-core-smoke",
+      "manifest": "fixtures/testing-harness-core-smoke/Cargo.toml",
+      "artifact": "i14-testing-harness-fixtures.txt",
+      "coverage": [
+        "DeterministicKeyValueStore",
+        "DeterministicClusterController",
+        "wait_until reusable helper"
+      ]
+    }
+  ],
+  "negative_boundary": [
+    {
+      "name": "testing-harness-bootstrap-negative",
+      "manifest": "fixtures/testing-harness-bootstrap-negative/Cargo.toml",
+      "artifact": "i14-testing-harness-fixtures.txt",
+      "expected": "fails without explicit madsim/network/patchbay adapter dependencies"
+    }
+  ],
+  "compatibility": [
+    "aspen-testing-madsim",
+    "aspen-testing-network",
+    "aspen-testing-patchbay"
+  ]
+}
