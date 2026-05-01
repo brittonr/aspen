@@ -1,67 +1,52 @@
-# openspec-governance Specification
-
 ## Purpose
 
-Defines governance requirements for OpenSpec-driven changes, including durable task evidence, validation guardrails, and archive-ready verification records.
+Govern OpenSpec authoring, validation, and archival workflows so active changes remain reviewable, traceable, and deterministic before implementation and archive.
+
 ## Requirements
-### Requirement: Checked tasks have durable evidence
-Every checked OpenSpec task SHALL cite durable evidence that exists in the repository and supports the task claim.
 
-ID: openspec-governance.task-evidence-coverage
+### Requirement: Delta specs are structurally consistent
+OpenSpec delta specs SHALL be deterministic, ID-bearing, and consistent with main specs for modifications.
 
-#### Scenario: Checked task cites valid evidence
-ID: openspec-governance.task-evidence-coverage.checked-task-cites-valid-evidence
+ID: openspec-governance.delta-spec-consistency
 
-- **GIVEN** a checked task appears in `tasks.md`
-- **WHEN** preflight reads `verification.md`
-- **THEN** the task SHALL appear verbatim under task coverage
-- **AND** at least one cited evidence path SHALL exist, be repo-relative, and be tracked
-- **AND** cited evidence SHALL be either under the current change directory or a currently changed source/documentation file listed as implementation evidence
+#### Scenario: Added requirements have IDs
+ID: openspec-governance.delta-spec-consistency.added-requirements-have-ids
 
-#### Scenario: Missing evidence fails
-ID: openspec-governance.task-evidence-coverage.missing-evidence-fails
+- **GIVEN** a delta spec adds a requirement or scenario
+- **WHEN** validation runs
+- **THEN** every added requirement and scenario SHALL include an `ID:` line
 
-- **GIVEN** a checked task has no matching evidence line
-- **WHEN** preflight runs
-- **THEN** it SHALL fail with the task text and missing coverage reason
-- **AND** the failure output SHALL include concrete remediation guidance
+#### Scenario: Modified requirement exists
+ID: openspec-governance.delta-spec-consistency.modified-requirement-exists
 
-#### Scenario: Invalid evidence output is actionable
-ID: openspec-governance.task-evidence-coverage.invalid-evidence-output-actionable
+- **GIVEN** a delta spec modifies a requirement
+- **WHEN** validation compares it with the main spec
+- **THEN** the target requirement SHALL exist by ID or heading
 
-- **GIVEN** a checked task cites an invalid evidence path or invalid evidence content
-- **WHEN** preflight runs
-- **THEN** it SHALL identify the task text, evidence path or reason, and concrete remediation guidance
+#### Scenario: Missing modified target fails
+ID: openspec-governance.delta-spec-consistency.missing-modified-target-fails
 
-#### Scenario: Placeholder evidence fails
-ID: openspec-governance.task-evidence-coverage.placeholder-evidence-fails
+- **GIVEN** a modified requirement has no matching main spec requirement
+- **WHEN** validation runs
+- **THEN** it SHALL fail with the missing requirement identifier
 
-- **GIVEN** a checked task cites an empty or placeholder evidence artifact
-- **WHEN** preflight runs
-- **THEN** it SHALL fail before archive or done-review can pass
+#### Scenario: Removed requirement exists
+ID: openspec-governance.delta-spec-consistency.removed-requirement-exists
 
-### Requirement: Ambiguous review states use oracle checkpoints
-When deterministic evidence cannot resolve a review-critical question, the workflow SHALL record an explicit checkpoint instead of claiming completion.
+- **GIVEN** a delta spec removes a requirement by ID or heading
+- **WHEN** validation compares it with the main spec
+- **THEN** the target requirement SHALL exist or validation SHALL fail with the missing removal target
 
-ID: openspec-governance.review-oracle-checkpoints
+#### Scenario: Migration note permits intentional repair
+ID: openspec-governance.delta-spec-consistency.migration-note-permits-repair
 
-#### Scenario: Checkpoint records ambiguity
-ID: openspec-governance.review-oracle-checkpoints.records-ambiguity
+- **GIVEN** a modified requirement repairs or migrates a legacy spec entry that is missing from the current main spec
+- **WHEN** the delta includes an explicit `Migration note:` with rationale
+- **THEN** validation MAY accept the modification while preserving the rationale in review output
 
-- **GIVEN** a reviewer cannot verify a design or task claim from supplied evidence
-- **WHEN** an oracle checkpoint is created
-- **THEN** it SHALL record the question, inspected evidence, decision, owner, and next action
+#### Scenario: Conflicting feature contracts warn
+ID: openspec-governance.delta-spec-consistency.conflicting-feature-contracts-warn
 
-#### Scenario: Missing checkpoint is flagged
-ID: openspec-governance.review-oracle-checkpoints.missing-checkpoint-flagged
-
-- **GIVEN** a completion claim depends on evidence that is not available
-- **WHEN** done-review runs
-- **THEN** it SHALL flag missing oracle checkpoint or require the claim to be withdrawn
-
-#### Scenario: Concrete blocker is acceptable
-ID: openspec-governance.review-oracle-checkpoints.concrete-blocker-acceptable
-
-- **GIVEN** no oracle decision exists
-- **WHEN** the agent reports a concrete blocker and stops without claiming completion
-- **THEN** review SHALL accept the stop condition as non-overclaiming
+- **GIVEN** proposal, design, and delta specs use conflicting feature-contract language for the same capability
+- **WHEN** validation runs
+- **THEN** it SHALL emit a warning naming the conflicting artifacts and phrases
