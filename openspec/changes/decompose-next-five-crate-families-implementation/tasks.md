@@ -38,6 +38,6 @@
 
 ## 7. Verification discipline
 
-- [ ] V2 Before checking any implementation task complete, update `verification.md` with exact task text, changed files, source diff artifact, and durable evidence paths. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+- [x] V2 Before checking any implementation task complete, update `verification.md` with exact task text, changed files, source diff artifact, and durable evidence paths. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:40:00Z
 
-- [ ] V3 Run `scripts/openspec-preflight.sh decompose-next-five-crate-families-implementation` and save output before claiming completion of any phase. [covers=architecture.modularity.next-decomposition-policy-covers-wave]
+- [x] V3 Run `scripts/openspec-preflight.sh decompose-next-five-crate-families-implementation` and save output before claiming completion of any phase. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T23:40:00Z

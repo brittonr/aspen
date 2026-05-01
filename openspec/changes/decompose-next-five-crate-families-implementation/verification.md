@@ -2,22 +2,11 @@
 
 ## Implementation Evidence
 
-- Changed file: `docs/crate-extraction/testing-harness.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-core-smoke/Cargo.toml`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-core-smoke/src/lib.rs`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-bootstrap-negative/Cargo.toml`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/testing-harness-bootstrap-negative/src/lib.rs`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-fixtures.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-readiness.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-readiness.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-downstream-metadata.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-forbidden-boundary.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-compatibility.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-implementation-diff.patch`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i14.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i14.json`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/final-implementation-diff.patch`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-final.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-final.json`
 
 ## Task Coverage
 
@@ -59,6 +48,12 @@
 
 - [x] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:28:00Z
   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-fixtures.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i14-testing-harness-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/testing-harness-compatibility.txt`
+
+- [x] V2 Before checking any implementation task complete, update `verification.md` with exact task text, changed files, source diff artifact, and durable evidence paths. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:40:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/final-implementation-diff.patch`
+
+- [x] V3 Run `scripts/openspec-preflight.sh decompose-next-five-crate-families-implementation` and save output before claiming completion of any phase. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T23:40:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-final.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-final.json`
 
 ## Oracle Checkpoints
 
