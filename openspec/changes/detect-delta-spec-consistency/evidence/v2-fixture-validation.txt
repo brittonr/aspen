@@ -1,0 +1,41 @@
+## valid-add (expect pass)
+OK: openspec/changes/case delta specs are consistent
+exit=0
+
+## missing-requirement-id (expect fail)
+ERROR: openspec/changes/case/specs/core/spec.md: missing ID after line 3: ### Requirement: New behavior
+exit=1
+
+## missing-scenario-id (expect fail)
+ERROR: openspec/changes/case/specs/core/spec.md: missing ID after line 8: #### Scenario: New path
+exit=1
+
+## valid-modify (expect pass)
+OK: openspec/changes/case delta specs are consistent
+exit=0
+
+## missing-modified-target (expect fail)
+ERROR: openspec/changes/case/specs/core/spec.md: modified requirement at line 3 has no target in /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/missing-modified-target/openspec/specs/core/spec.md: core.missing-behavior
+exit=1
+
+## valid-removal (expect pass)
+OK: openspec/changes/case delta specs are consistent
+exit=0
+
+## missing-removal-target (expect fail)
+ERROR: openspec/changes/case/specs/core/spec.md: removed requirement at line 3 has no target in /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/missing-removal-target/openspec/specs/core/spec.md: core.missing-removal
+exit=1
+
+## migration-note (expect pass)
+WARNING: openspec/changes/case/specs/core/spec.md: modified requirement at line 3 uses Migration note for missing target: core.legacy-repaired
+OK: openspec/changes/case delta specs are consistent
+exit=0
+
+## feature-conflict (expect pass)
+WARNING: openspec/changes/case: potentially conflicting feature-contract phrases across artifacts: /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/design.md, /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/proposal.md, /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/specs/core/spec.md
+OK: openspec/changes/case delta specs are consistent
+exit=0
+
+## feature-conflict (expect fail)
+WARNING: openspec/changes/case: potentially conflicting feature-contract phrases across artifacts: /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/design.md, /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/proposal.md, /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/specs/core/spec.md
+exit=1

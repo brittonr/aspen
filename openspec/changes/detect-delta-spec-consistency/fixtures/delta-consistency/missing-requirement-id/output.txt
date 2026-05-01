@@ -1,0 +1,1 @@
+ERROR: openspec/changes/case/specs/core/spec.md: missing ID after line 3: ### Requirement: Added behavior

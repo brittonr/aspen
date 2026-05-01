@@ -1,0 +1,1 @@
+OK: openspec/changes/case delta specs are consistent

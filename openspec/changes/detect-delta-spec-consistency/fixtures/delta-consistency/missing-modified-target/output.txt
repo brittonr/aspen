@@ -1,0 +1,1 @@
+ERROR: openspec/changes/case/specs/core/spec.md: modified requirement at line 3 has no target in /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/missing-modified-target/openspec/specs/core/spec.md: core.missing-behavior

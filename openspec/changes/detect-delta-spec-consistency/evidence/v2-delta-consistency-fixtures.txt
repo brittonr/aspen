@@ -1,0 +1,20 @@
+valid-add expected=0 actual=0
+  OK: openspec/changes/case delta specs are consistent
+missing-requirement-id expected=1 actual=1
+  ERROR: openspec/changes/case/specs/core/spec.md: missing ID after line 3: ### Requirement: Added behavior
+missing-scenario-id expected=1 actual=1
+  ERROR: openspec/changes/case/specs/core/spec.md: missing ID after line 8: #### Scenario: Added scenario
+valid-modify expected=0 actual=0
+  OK: openspec/changes/case delta specs are consistent
+missing-modified-target expected=1 actual=1
+  ERROR: openspec/changes/case/specs/core/spec.md: modified requirement at line 3 has no target in /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/missing-modified-target/openspec/specs/core/spec.md: core.missing-behavior
+valid-removal expected=0 actual=0
+  OK: openspec/changes/case delta specs are consistent
+missing-removal-target expected=1 actual=1
+  ERROR: openspec/changes/case/specs/core/spec.md: removed requirement at line 3 has no target in /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/missing-removal-target/openspec/specs/core/spec.md: core.missing-behavior
+migration-note expected=0 actual=0
+  WARNING: openspec/changes/case/specs/core/spec.md: modified requirement at line 3 uses Migration note for missing target: core.legacy-repaired-behavior
+  OK: openspec/changes/case delta specs are consistent
+feature-conflict expected=0 actual=0
+  WARNING: openspec/changes/case: potentially conflicting feature-contract phrases across artifacts: /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/design.md, /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/proposal.md, /home/brittonr/git/aspen/openspec/changes/detect-delta-spec-consistency/fixtures/delta-consistency/feature-conflict/openspec/changes/case/specs/core/spec.md
+  OK: openspec/changes/case delta specs are consistent

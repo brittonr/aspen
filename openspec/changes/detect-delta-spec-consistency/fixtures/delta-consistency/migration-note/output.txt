@@ -1,0 +1,2 @@
+WARNING: openspec/changes/case/specs/core/spec.md: modified requirement at line 3 uses Migration note for missing target: core.legacy-repaired-behavior
+OK: openspec/changes/case delta specs are consistent
