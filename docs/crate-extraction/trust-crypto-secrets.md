@@ -6,7 +6,7 @@
 - **Canonical class**: `leaf type/helper` plus `service library`
 - **Crates**: `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime consumer coverage for `aspen-secrets-handler`
 - **Intended audience**: systems that need deterministic trust/crypto/secrets state logic without Aspen Raft, Iroh, Redb, or secrets-service runtime shells.
-- **Public API owner**: owner needed
+- **Public API owner**: architecture-modularity
 - **Readiness state**: `workspace-internal`
 
 ## Package metadata
@@ -47,9 +47,9 @@
 ## Verification rails
 
 - Positive downstream: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
-- Negative boundary: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
+- Negative boundary: dependency-boundary malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
 - Compatibility: trust/secrets focused tests and VM evidence named by implementation tasks.
 
 ## First blocker
 
-I11 inventory has started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated, and `aspen-crypto` needs a narrower transport-free helper boundary because its current default crate also includes Iroh/tokio filesystem lifecycle utilities.
+I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated, and `aspen-crypto` needs a narrower transport-free helper boundary because its current default crate also includes Iroh/tokio filesystem lifecycle utilities.

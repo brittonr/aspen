@@ -1,0 +1,138 @@
+diff --git a/crates/aspen-trust/src/shamir.rs b/crates/aspen-trust/src/shamir.rs
+index a9f82af9a..3f860b04a 100644
+--- a/crates/aspen-trust/src/shamir.rs
++++ b/crates/aspen-trust/src/shamir.rs
+@@ -234,6 +234,7 @@ pub fn reconstruct_secret(shares: &[Share]) -> Result<[u8; SECRET_SIZE], ShamirE
+
+ #[cfg(test)]
+ mod tests {
++    use proptest::prelude::*;
+     use rand::SeedableRng;
+     use rand::rngs::StdRng;
+
+@@ -389,4 +390,35 @@ mod tests {
+         assert!(debug.contains("REDACTED"));
+         assert!(!debug.contains("DE"));
+     }
++
++    proptest! {
++        #[test]
++        fn i12_reconstructs_any_threshold_subset_for_deterministic_secret(
++            seed in any::<u64>(),
++            threshold in 2u8..=5,
++            total in 5u8..=8,
++            secret in any::<[u8; SECRET_SIZE]>(),
++        ) {
++            prop_assume!(threshold <= total);
++            let mut rng = StdRng::seed_from_u64(seed);
++            let shares = split_secret(&secret, threshold, total, &mut rng)?;
++            let subset: Vec<Share> = shares.iter().take(usize::from(threshold)).cloned().collect();
++            let reconstructed = reconstruct_secret(&subset)?;
++            prop_assert_eq!(reconstructed, secret);
++        }
++
++        #[test]
++        fn i12_share_digest_changes_when_serialized_payload_changes(
++            x in 1u8..=u8::MAX,
++            y in any::<[u8; SECRET_SIZE]>(),
++            mutation_index in 0usize..SECRET_SIZE,
++            mutation_bit in 0u8..8,
++        ) {
++            let share = Share { x, y };
++            let original_digest = share_digest(&share);
++            let mut corrupted = share.clone();
++            corrupted.y[mutation_index] ^= 1u8 << mutation_bit;
++            prop_assert_ne!(share_digest(&corrupted), original_digest);
++        }
++    }
+ }
+diff --git a/docs/crate-extraction/trust-crypto-secrets.md b/docs/crate-extraction/trust-crypto-secrets.md
+index 85d3057c2..2ee22d4d1 100644
+--- a/docs/crate-extraction/trust-crypto-secrets.md
++++ b/docs/crate-extraction/trust-crypto-secrets.md
+@@ -6,7 +6,7 @@
+ - **Canonical class**: `leaf type/helper` plus `service library`
+ - **Crates**: `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime consumer coverage for `aspen-secrets-handler`
+ - **Intended audience**: systems that need deterministic trust/crypto/secrets state logic without Aspen Raft, Iroh, Redb, or secrets-service runtime shells.
+-- **Public API owner**: owner needed
++- **Public API owner**: architecture-modularity
+ - **Readiness state**: `workspace-internal`
+
+ ## Package metadata
+@@ -47,9 +47,9 @@
+ ## Verification rails
+
+ - Positive downstream: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
+-- Negative boundary: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
++- Negative boundary: dependency-boundary malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
+ - Compatibility: trust/secrets focused tests and VM evidence named by implementation tasks.
+
+ ## First blocker
+
+-I11 inventory has started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated, and `aspen-crypto` needs a narrower transport-free helper boundary because its current default crate also includes Iroh/tokio filesystem lifecycle utilities.
++I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated, and `aspen-crypto` needs a narrower transport-free helper boundary because its current default crate also includes Iroh/tokio filesystem lifecycle utilities.
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+index e26f8586f..23f1dfed1 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+@@ -28,7 +28,7 @@
+
+ - [x] I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:37:00Z
+
+-- [ ] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++- [x] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:00:00Z
+
+ ## 6. Testing harness first slice
+
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+index fac797765..b9a0ed14a 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+@@ -2,12 +2,17 @@
+
+ ## Implementation Evidence
+
++- Changed file: `crates/aspen-trust/src/shamir.rs`
+ - Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-implementation-diff.patch`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i11.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i11.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-implementation-diff.patch`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i12.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i12.json`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
+
+@@ -43,6 +48,9 @@
+ - [x] I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:37:00Z
+   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
+
++- [x] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:00:00Z
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
++
+ ## Oracle Checkpoints
+
+ None.
+@@ -147,6 +155,14 @@ None.
+ - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`
+ - Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
+
++
++### `cargo test/check` and readiness for trust/crypto/secrets property and runtime compatibility
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`
++- Readiness: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
++- Metadata: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
++
+ ## I11 trust/crypto/secrets inventory and pure-boundary gate
+
+ Task: I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells.

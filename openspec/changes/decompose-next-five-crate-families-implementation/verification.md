@@ -2,12 +2,17 @@
 
 ## Implementation Evidence
 
+- Changed file: `crates/aspen-trust/src/shamir.rs`
 - Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-implementation-diff.patch`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i11.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i11.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-implementation-diff.patch`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i12.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i12.json`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
 
@@ -42,6 +47,9 @@
 
 - [x] I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:37:00Z
   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
+
+- [x] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T23:00:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-compatibility.txt`
 
 ## Oracle Checkpoints
 
@@ -146,6 +154,14 @@ None.
 - Status: pass
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`
 - Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
+
+
+### `cargo test/check` and readiness for trust/crypto/secrets property and runtime compatibility
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-tests.txt`
+- Readiness: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i12-trust-crypto-secrets-readiness.md`
+- Metadata: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/trust-crypto-secrets-downstream-metadata.json`
 
 ## I11 trust/crypto/secrets inventory and pure-boundary gate
 

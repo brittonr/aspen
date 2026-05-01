@@ -234,6 +234,7 @@ pub fn reconstruct_secret(shares: &[Share]) -> Result<[u8; SECRET_SIZE], ShamirE
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
@@ -388,5 +389,36 @@ mod tests {
         let debug = format!("{share:?}");
         assert!(debug.contains("REDACTED"));
         assert!(!debug.contains("DE"));
+    }
+
+    proptest! {
+        #[test]
+        fn i12_reconstructs_any_threshold_subset_for_deterministic_secret(
+            seed in any::<u64>(),
+            threshold in 2u8..=5,
+            total in 5u8..=8,
+            secret in any::<[u8; SECRET_SIZE]>(),
+        ) {
+            prop_assume!(threshold <= total);
+            let mut rng = StdRng::seed_from_u64(seed);
+            let shares = split_secret(&secret, threshold, total, &mut rng)?;
+            let subset: Vec<Share> = shares.iter().take(usize::from(threshold)).cloned().collect();
+            let reconstructed = reconstruct_secret(&subset)?;
+            prop_assert_eq!(reconstructed, secret);
+        }
+
+        #[test]
+        fn i12_share_digest_changes_when_serialized_payload_changes(
+            x in 1u8..=u8::MAX,
+            y in any::<[u8; SECRET_SIZE]>(),
+            mutation_index in 0usize..SECRET_SIZE,
+            mutation_bit in 0u8..8,
+        ) {
+            let share = Share { x, y };
+            let original_digest = share_digest(&share);
+            let mut corrupted = share.clone();
+            corrupted.y[mutation_index] ^= 1u8 << mutation_bit;
+            prop_assert_ne!(share_digest(&corrupted), original_digest);
+        }
     }
 }
