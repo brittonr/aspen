@@ -44,6 +44,8 @@ run_expect_failure() {
 
 clean_root="$TMP_DIR/clean/openspec/changes"
 mkdir -p "$clean_root/archive/2026-04-30-completed-change"
+printf '%s\n' '- [x] completed with `archive/2026-04-30-completed-change/evidence/proof.txt`' > "$clean_root/archive/2026-04-30-completed-change/tasks.md"
+printf '%s\n' '- Evidence: `archive/2026-04-30-completed-change/evidence/proof.txt`' > "$clean_root/archive/2026-04-30-completed-change/verification.md"
 run_expect_success clean-drain \
   --repo-root "$REPO_ROOT" \
   --changes-root "$clean_root" \
@@ -70,3 +72,13 @@ run_expect_failure archive-path 'archive path is not under' \
   --repo-root "$REPO_ROOT" \
   --changes-root "$bad_archive_root" \
   --archive "$TMP_DIR/not-under-archive"
+
+stale_metadata_root="$TMP_DIR/stale-metadata/openspec/changes"
+stale_archive="$stale_metadata_root/archive/2026-04-30-completed-change"
+mkdir -p "$stale_archive"
+printf '%s\n' '- [x] stale evidence `'/"$stale_metadata_root"'/completed-change/evidence/proof.txt`' > "$stale_archive/tasks.md"
+printf '%s\n' '- Evidence: `'/"$stale_metadata_root"'/completed-change/evidence/proof.txt`' > "$stale_archive/verification.md"
+run_expect_failure stale-archive-metadata 'archived metadata cites stale active change path' \
+  --repo-root "$REPO_ROOT" \
+  --changes-root "$stale_metadata_root" \
+  --archive "$stale_archive"

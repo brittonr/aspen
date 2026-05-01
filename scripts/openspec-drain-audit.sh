@@ -9,6 +9,7 @@ Audit OpenSpec drain completion postconditions:
   - no active change directories remain outside archive/ and _done/
   - openspec/changes/.drain-state.md is absent
   - each --archive path exists and is under openspec/changes/archive/
+  - archived tasks.md and verification.md do not cite stale active paths
 
 This command is intended for the final drain-complete evidence transcript after
 completed changes have been archived.
@@ -108,6 +109,26 @@ for archive in "${archives[@]}"; do
     exit 1
   fi
   printf 'archive_path: present (%s)\n' "$archive"
+
+  archive_base=$(basename "$archive")
+  change_name="$archive_base"
+  if [[ "$change_name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-(.+)$ ]]; then
+    change_name="${BASH_REMATCH[1]}"
+  fi
+  stale_prefix="$changes_root/$change_name/"
+  for metadata_file in "$archive/tasks.md" "$archive/verification.md"; do
+    if [[ ! -f "$metadata_file" ]]; then
+      continue
+    fi
+    if grep -nF "$stale_prefix" "$metadata_file" >/tmp/openspec-drain-audit-stale.$$; then
+      echo "FAIL: archived metadata cites stale active change path: $metadata_file" >&2
+      cat /tmp/openspec-drain-audit-stale.$$ >&2
+      rm -f /tmp/openspec-drain-audit-stale.$$
+      exit 1
+    fi
+    rm -f /tmp/openspec-drain-audit-stale.$$
+    printf 'archive_metadata_paths: current (%s)\n' "$metadata_file"
+  done
 done
 
 printf 'OK: OpenSpec drain archive cleanliness audit passed\n'
