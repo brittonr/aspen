@@ -1,0 +1,2 @@
+unexpected failure for openspec/changes/archive/2026-05-01-fresh-index
+openspec/changes/archive/2026-05-01-verify-verification-index-freshness/fixtures/verification-freshness/run-verification-freshness-fixtures.sh: line 35: /home/brittonr/git/aspen/openspec/scripts/check-openspec-verification-freshness.py: No such file or directory

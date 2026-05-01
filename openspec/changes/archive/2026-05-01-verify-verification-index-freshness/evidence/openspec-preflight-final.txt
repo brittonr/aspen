@@ -1,0 +1,4 @@
+OK: openspec/changes/archive/2026-05-01-verify-verification-index-freshness
+  tasks: 5 total / 5 checked
+  changed files listed: 14
+  verification artifacts: 7

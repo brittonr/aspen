@@ -1,0 +1,3 @@
+FAIL: verification index freshness checks failed:
+  - openspec/changes/archive/2026-05-01-verify-verification-index-freshness/evidence/openspec-preflight-final.txt: final evidence appears older than changed files; regenerate after final edits are staged
+  - openspec/changes/archive/2026-05-01-verify-verification-index-freshness/evidence/openspec-preflight-final.txt: final evidence appears older than changed files; regenerate after final edits are staged

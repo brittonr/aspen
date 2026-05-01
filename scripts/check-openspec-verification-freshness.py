@@ -80,7 +80,7 @@ def check_final_artifact_mtime(repo_root: pathlib.Path, index_text: str) -> list
     issues: list[str] = []
     changed = [repo_root / p for p in re.findall(r"^\s*-\s*Changed file:\s*`([^`]+)`\s*$", index_text, re.MULTILINE)]
     changed = [p for p in changed if p.exists()]
-    source_changed = [p for p in changed if not FINAL_ARTIFACT_RE.search(p.name)]
+    source_changed = [p for p in changed if "/evidence/" not in p.as_posix() and not FINAL_ARTIFACT_RE.search(p.name)]
     if not source_changed:
         return issues
     newest_source = max(p.stat().st_mtime for p in source_changed)

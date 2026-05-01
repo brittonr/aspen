@@ -1,11 +1,11 @@
 {
   "items": [
     {
-      "id": "verify-verification-index-freshness",
-      "type": "change",
+      "id": "openspec-governance",
+      "type": "spec",
       "valid": true,
       "issues": [],
-      "durationMs": 3
+      "durationMs": 2
     }
   ],
   "summary": {
@@ -15,7 +15,7 @@
       "failed": 0
     },
     "byType": {
-      "change": {
+      "spec": {
         "items": 1,
         "passed": 1,
         "failed": 0
