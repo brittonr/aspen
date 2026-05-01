@@ -1,0 +1,25 @@
+OpenSpec drain audit
+repo_root: /home/brittonr/git/aspen
+changes_root: /tmp/tmp.FA84loUyEl/clean/openspec/changes
+drain_state: absent (/tmp/tmp.FA84loUyEl/clean/openspec/changes/.drain-state.md)
+active_changes: none
+archives_checked: 1
+archive_path: present (/tmp/tmp.FA84loUyEl/clean/openspec/changes/archive/2026-04-30-completed-change)
+OK: OpenSpec drain archive cleanliness audit passed
+OpenSpec drain audit
+repo_root: /home/brittonr/git/aspen
+changes_root: /tmp/tmp.FA84loUyEl/leftover/openspec/changes
+drain_state: absent (/tmp/tmp.FA84loUyEl/leftover/openspec/changes/.drain-state.md)
+FAIL: active OpenSpec change directories remain:
+  /tmp/tmp.FA84loUyEl/leftover/openspec/changes/stale-active-change
+OpenSpec drain audit
+repo_root: /home/brittonr/git/aspen
+changes_root: /tmp/tmp.FA84loUyEl/state/openspec/changes
+FAIL: drain state file remains: /tmp/tmp.FA84loUyEl/state/openspec/changes/.drain-state.md
+OpenSpec drain audit
+repo_root: /home/brittonr/git/aspen
+changes_root: /tmp/tmp.FA84loUyEl/bad-archive/openspec/changes
+drain_state: absent (/tmp/tmp.FA84loUyEl/bad-archive/openspec/changes/.drain-state.md)
+active_changes: none
+archives_checked: 1
+FAIL: archive path is not under /tmp/tmp.FA84loUyEl/bad-archive/openspec/changes/archive/: /tmp/tmp.FA84loUyEl/not-under-archive

@@ -1,0 +1,4 @@
+OK: openspec/changes/enforce-drain-archive-cleanliness
+  tasks: 6 total / 3 checked
+  changed files listed: 6
+  verification artifacts: 2
