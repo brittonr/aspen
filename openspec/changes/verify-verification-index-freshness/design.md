@@ -25,6 +25,15 @@ Preflight already verifies tracked paths but not all freshness properties review
 
 **Historical archive noise** → Apply strict freshness only to active changes and newly archived changes touched in the current diff.
 
+## Verification Strategy
+
+- `openspec-governance.verification-index-freshness`: fixture suite covers fresh verification indexes, stale archived active paths, saved-diff exceptions, placeholder preflight artifacts, and generated-before-final-diff artifacts.
+- `openspec-governance.verification-index-freshness.fresh-index-passes`: fresh fixture with current archive paths and final `OK:` preflight transcript must pass.
+- `openspec-governance.verification-index-freshness.stale-active-path-fails`: archived index fixture citing `openspec/changes/<name>/` must fail with the stale path.
+- `openspec-governance.verification-index-freshness.saved-diff-may-contain-historical-paths`: saved diff artifact fixture may contain active-path strings while current `verification.md` remains archive-relative.
+- `openspec-governance.verification-index-freshness.placeholder-preflight-fails`: cited preflight artifact containing placeholder text must fail.
+- `openspec-governance.verification-index-freshness.generated-before-final-diff-fails`: final artifact timestamp older than changed files must fail.
+
 ## Validation Plan
 
 Fixture tests for archive path rewrite, stale active path failure, and placeholder transcript failure.

@@ -13,6 +13,15 @@ Review findings show verification indexes can become stale: artifacts are refere
 ### New Capabilities
 - `openspec-governance.verification-index-freshness`: Verification indexes and artifacts reflect the final reviewed state.
 
+## Verification Expectations
+
+- `openspec-governance.verification-index-freshness`: positive freshness fixture covers final verification indexes with current paths and non-placeholder transcripts.
+- `openspec-governance.verification-index-freshness.fresh-index-passes`: fresh active/archived index fixture must pass.
+- `openspec-governance.verification-index-freshness.stale-active-path-fails`: archived `verification.md` or `tasks.md` citing `openspec/changes/<name>/` must fail.
+- `openspec-governance.verification-index-freshness.saved-diff-may-contain-historical-paths`: stale active paths inside saved diff artifacts must remain allowed as historical context.
+- `openspec-governance.verification-index-freshness.placeholder-preflight-fails`: cited preflight artifact with placeholder text must fail.
+- `openspec-governance.verification-index-freshness.generated-before-final-diff-fails`: final evidence older than changed files must fail and require regeneration.
+
 ## Impact
 
 - **Files**: preflight/archive helper, verification template, fixtures.

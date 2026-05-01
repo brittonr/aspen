@@ -1,0 +1,3 @@
+FAIL: verification index freshness checks failed:
+  - openspec/changes/verify-verification-index-freshness/evidence/openspec-validate-final.json: final evidence appears older than changed files; regenerate after final edits are staged
+  - openspec/changes/verify-verification-index-freshness/evidence/openspec-validate-final.json: final evidence appears older than changed files; regenerate after final edits are staged

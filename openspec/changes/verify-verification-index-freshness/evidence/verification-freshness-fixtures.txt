@@ -1,0 +1,7 @@
+PASS: openspec/changes/archive/2026-05-01-fresh-index
+PASS: openspec/changes/archive/2026-05-01-stale-path rejected: stale active path
+PASS: openspec/changes/archive/2026-05-01-saved-diff
+PASS: openspec/changes/archive/2026-05-01-placeholder-preflight rejected: preflight artifact is placeholder
+PASS: openspec/changes/archive/2026-05-01-old-final rejected: final evidence appears older
+PASS: openspec/changes/archive/2026-05-01-old-other
+verification freshness fixtures passed
