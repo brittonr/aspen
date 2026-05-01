@@ -1,0 +1,62 @@
+# V5 final preflight
+
+## openspec validate extract-jobs-ci-core --json
+{
+  "items": [
+    {
+      "id": "extract-jobs-ci-core",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 0
+    }
+  ],
+  "summary": {
+    "totals": {
+      "items": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "byType": {
+      "change": {
+        "items": 1,
+        "passed": 1,
+        "failed": 0
+      }
+    }
+  },
+  "version": "1.0"
+}
+
+## openspec helper verify extract-jobs-ci-core --json
+{
+  "extract-jobs-ci-core": []
+}
+
+## crate extraction readiness report summary
+# Crate Extraction Readiness Report
+
+- Candidate family: `jobs-ci-core`
+- Passed: `true`
+- Checked candidates: 1
+
+## Failures
+
+- none
+
+## Warnings
+
+- none
+
+## git status --short --branch
+## main...origin/main [ahead 1]
+ M Cargo.lock
+ M Cargo.toml
+ M crates/aspen-jobs/Cargo.toml
+ M crates/aspen-jobs/src/lib.rs
+ M docs/crate-extraction.md
+ M docs/crate-extraction/jobs-ci-core.md
+ M docs/crate-extraction/policy.ncl
+ M scripts/check-crate-extraction-readiness.rs
+?? crates/aspen-jobs-core/
+?? openspec/changes/archive/2026-05-01-extract-jobs-ci-core/

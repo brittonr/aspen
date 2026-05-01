@@ -1,0 +1,134 @@
+== positive fixture: cargo check ==
+
+== positive fixture: dependency boundary ==
+jobs-ci-core-portable-smoke v0.1.0 (/home/brittonr/git/aspen/openspec/changes/archive/2026-05-01-extract-jobs-ci-core/fixtures/jobs-ci-core-portable-smoke)
+aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-core)
+chrono v0.4.44
+iana-time-zone v0.1.65
+num-traits v0.2.19
+serde v1.0.228
+serde_core v1.0.228
+serde_derive v1.0.228 (proc-macro)
+proc-macro2 v1.0.106
+unicode-ident v1.0.24
+quote v1.0.45
+proc-macro2 v1.0.106 (*)
+syn v2.0.117
+proc-macro2 v1.0.106 (*)
+quote v1.0.45 (*)
+unicode-ident v1.0.24
+schemars v0.8.22
+dyn-clone v1.0.20
+schemars_derive v0.8.22 (proc-macro)
+proc-macro2 v1.0.106 (*)
+quote v1.0.45 (*)
+serde_derive_internals v0.29.1
+proc-macro2 v1.0.106 (*)
+quote v1.0.45 (*)
+syn v2.0.117 (*)
+syn v2.0.117 (*)
+serde v1.0.228 (*)
+serde_json v1.0.149
+itoa v1.0.18
+memchr v2.8.0
+serde_core v1.0.228
+zmij v1.0.21
+serde v1.0.228 (*)
+serde_json v1.0.149 (*)
+snafu v0.8.9
+snafu-derive v0.8.9 (proc-macro)
+heck v0.5.0
+proc-macro2 v1.0.106 (*)
+quote v1.0.45 (*)
+syn v2.0.117 (*)
+uuid v1.23.1
+getrandom v0.4.2
+cfg-if v1.0.4
+libc v0.2.186
+serde_core v1.0.228
+aspen-jobs-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-core)
+chrono v0.4.44 (*)
+serde v1.0.228 (*)
+serde_json v1.0.149 (*)
+thiserror v2.0.18
+thiserror-impl v2.0.18 (proc-macro)
+proc-macro2 v1.0.106 (*)
+quote v1.0.45 (*)
+syn v2.0.117 (*)
+uuid v1.23.1 (*)
+aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
+serde v1.0.228 (*)
+serde_json v1.0.149 (*)
+no forbidden runtime dependencies found in positive fixture
+
+== negative fixture: runtime imports must fail ==
+    Updating crates.io index
+     Locking 82 packages to latest Rust 1.97.0-nightly compatible versions
+    Checking jobs-ci-runtime-negative v0.1.0 (/home/brittonr/git/aspen/openspec/changes/archive/2026-05-01-extract-jobs-ci-core/fixtures/jobs-ci-runtime-negative)
+error[E0432]: unresolved import `aspen_ci`
+ --> src/main.rs:4:5
+  |
+4 | use aspen_ci::PipelineExecutor;
+  |     ^^^^^^^^ use of unresolved module or unlinked crate `aspen_ci`
+  |
+  = help: if you wanted to use a crate named `aspen_ci`, use `cargo add aspen_ci` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `aspen_ci_executor_nix`
+ --> src/main.rs:5:5
+  |
+5 | use aspen_ci_executor_nix::NixExecutor;
+  |     ^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_ci_executor_nix`
+  |
+  = help: if you wanted to use a crate named `aspen_ci_executor_nix`, use `cargo add aspen_ci_executor_nix` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `aspen_ci_executor_shell`
+ --> src/main.rs:6:5
+  |
+6 | use aspen_ci_executor_shell::ShellExecutor;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_ci_executor_shell`
+  |
+  = help: if you wanted to use a crate named `aspen_ci_executor_shell`, use `cargo add aspen_ci_executor_shell` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `aspen_ci_executor_vm`
+ --> src/main.rs:7:5
+  |
+7 | use aspen_ci_executor_vm::VmExecutor;
+  |     ^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_ci_executor_vm`
+  |
+  = help: if you wanted to use a crate named `aspen_ci_executor_vm`, use `cargo add aspen_ci_executor_vm` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `aspen_ci_handler`
+ --> src/main.rs:8:5
+  |
+8 | use aspen_ci_handler::CiHandler;
+  |     ^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_ci_handler`
+  |
+  = help: if you wanted to use a crate named `aspen_ci_handler`, use `cargo add aspen_ci_handler` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `aspen_job_handler`
+ --> src/main.rs:9:5
+  |
+9 | use aspen_job_handler::JobHandler;
+  |     ^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_job_handler`
+  |
+  = help: if you wanted to use a crate named `aspen_job_handler`, use `cargo add aspen_job_handler` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `aspen_jobs`
+  --> src/main.rs:10:5
+   |
+10 | use aspen_jobs::JobManager;
+   |     ^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_jobs`
+   |
+   = help: if you wanted to use a crate named `aspen_jobs`, use `cargo add aspen_jobs` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `aspen_jobs_worker_shell`
+  --> src/main.rs:11:5
+   |
+11 | use aspen_jobs_worker_shell::ShellWorker;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `aspen_jobs_worker_shell`
+   |
+   = help: if you wanted to use a crate named `aspen_jobs_worker_shell`, use `cargo add aspen_jobs_worker_shell` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `jobs-ci-runtime-negative` (bin "jobs-ci-runtime-negative") due to 8 previous errors
+negative fixture failed for expected unresolved runtime imports

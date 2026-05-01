@@ -20,6 +20,7 @@ kv-branch = ["dep:aspen-kv-branch"]
 # Core dependencies
 aspen-core = { path = "../aspen-core" }
 aspen-coordination = { path = "../aspen-coordination" }
+aspen-jobs-core = { path = "../aspen-jobs-core" }
 
 # Extracted crates for lighter dependencies
 aspen-constants = { path = "../aspen-constants" }

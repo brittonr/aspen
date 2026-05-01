@@ -141,6 +141,7 @@ members = [
     "crates/aspen-fuse",
 
     # Jobs subsystem
+    "crates/aspen-jobs-core",
     "crates/aspen-jobs",
     # "crates/aspen-jobs-guest",  # no_std — build separately with --target x86_64-hyperlight-none
     "crates/aspen-jobs-worker-blob",

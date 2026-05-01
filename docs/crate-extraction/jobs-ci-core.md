@@ -4,7 +4,7 @@
 
 - **Family**: `jobs-ci-core`
 - **Canonical class**: `service library`
-- **Crates**: `aspen-jobs`, `aspen-jobs-protocol`, `aspen-jobs-guest`, `aspen-jobs-worker-blob`, `aspen-jobs-worker-maintenance`, `aspen-jobs-worker-replication`, `aspen-jobs-worker-shell`, `aspen-jobs-worker-sql`, `aspen-ci-core`, `aspen-ci`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, `aspen-ci-executor-nix`
+- **Crates**: `aspen-jobs-core`, `aspen-jobs`, `aspen-jobs-protocol`, `aspen-jobs-guest`, `aspen-jobs-worker-blob`, `aspen-jobs-worker-maintenance`, `aspen-jobs-worker-replication`, `aspen-jobs-worker-shell`, `aspen-jobs-worker-sql`, `aspen-ci-core`, `aspen-ci`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, `aspen-ci-executor-nix`
 - **Intended audience**: Aspen and downstream systems that need reusable scheduler/config/run-state/artifact contracts without concrete worker/executor runtime shells.
 - **Public API owner**: owner needed
 - **Readiness state**: `workspace-internal`
@@ -22,21 +22,28 @@
 | Surface | Reusable default | Runtime/adapter boundary |
 | --- | --- | --- |
 | CI schema/config | `aspen-ci-core` structs, Nickel config contract metadata, validation helpers. | Nickel evaluation, SNIX evaluation/build, node/forge integration. |
-| Job scheduler/run state | deterministic state transitions, IDs, artifact metadata, queue/run models. | workers, shell process execution, VM executor, Nix executor, Iroh/blob runtime. |
+| Job scheduler/run state | `aspen-jobs-core` deterministic state transitions, IDs, priority, retry policy, schedule descriptors, dependency state, job config/spec/result/status helpers, and queue/DLQ stats. | `aspen-jobs` worker pools, storage, schedulers, process execution, VM/Nix executors, Iroh/blob runtime. |
 | Job protocol | domain-schema compatibility only; generic wire extraction is governed by protocol/wire manifest. | handler registries and client/server runtime. |
 | Executors/workers | no reusable default. | adapter/runtime crates behind named features or crates. |
 
 ## Dependency decisions
 
-- `aspen-ci-core` is the current lightest schema surface and should absorb reusable config/run metadata before `aspen-ci` readiness changes.
-- `aspen-jobs` and `aspen-ci` currently pull root/runtime crates; reusable logic must move or be feature-gated before readiness.
+- `aspen-jobs-core` is the canonical reusable jobs scheduler/run-state contract surface for deterministic job IDs, specs, status transitions, retry policy, dependency state, and queue/DLQ stats.
+- `aspen-ci-core` is the current lightest CI schema surface and should absorb reusable config/run metadata before `aspen-ci` readiness changes.
+- `aspen-jobs` and `aspen-ci` currently pull runtime crates; reusable logic must move to `aspen-jobs-core` / `aspen-ci-core` or be feature-gated before readiness.
 - Worker/executor process spawning, shell, VM, Nix, SNIX, Forge, blob, Iroh, and node bootstrap dependencies are adapter/runtime purpose only.
 
 ## Compatibility plan
 
 - Keep existing `aspen-ci` and `aspen-jobs` public paths until consumers migrate.
+- `aspen-jobs` re-exports the portable jobs contract under `aspen_jobs::core::*` and provides named crate-root aliases for new deterministic helpers while preserving historical runtime root types.
 - Representative consumers: `aspen-ci`, `aspen-jobs`, `aspen-job-handler`, `aspen-ci-handler`, `aspen-dogfood`, `aspen-cli`, executor crates, Forge CI triggers.
 - Every retained runtime edge needs owner, feature/adapter name, test, and removal/retention criteria.
+
+## Representative consumers
+
+- Canonical portable fixture: `openspec/changes/extract-jobs-ci-core/fixtures/jobs-ci-core-portable-smoke` depends on `aspen-jobs-core`, `aspen-ci-core`, and `aspen-jobs-protocol` only.
+- Compatibility consumers: `aspen-jobs`, `aspen-ci`, `aspen-job-handler`, `aspen-ci-handler`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, `aspen-ci-executor-nix`, `aspen-cli`, and `aspen-dogfood`.
 
 ## Downstream fixture plan
 

@@ -1,0 +1,59 @@
+# Jobs/CI core compatibility checks
+
+
+## cargo check -p aspen-jobs-core
+```text
+```
+
+## cargo test -p aspen-jobs-core
+```text
+
+running 3 tests
+test tests::retry_transition_respects_policy ... ok
+test tests::status_helpers_match_runtime_contract ... ok
+test tests::job_spec_roundtrips_json ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+```
+
+## cargo check -p aspen-jobs-protocol
+```text
+```
+
+## cargo check -p aspen-ci-core
+```text
+```
+
+## cargo check -p aspen-jobs
+```text
+```
+
+## cargo check -p aspen-ci
+```text
+```
+
+## cargo check -p aspen-job-handler
+```text
+```
+
+## cargo check -p aspen-ci-handler
+```text
+```
+
+## cargo check -p aspen-ci-executor-shell
+```text
+```
+
+## cargo check -p aspen-ci-executor-vm
+```text
+```
+
+## cargo check -p aspen-ci-executor-nix
+```text
+```

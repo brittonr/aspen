@@ -2052,6 +2052,7 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-hlc",
+ "aspen-jobs-core",
  "aspen-kv-branch",
  "aspen-kv-types",
  "aspen-testing",
@@ -2089,6 +2090,17 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "zstd",
+]
+
+[[package]]
+name = "aspen-jobs-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]

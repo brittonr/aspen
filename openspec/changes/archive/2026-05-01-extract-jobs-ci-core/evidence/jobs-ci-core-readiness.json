@@ -1,0 +1,9 @@
+{
+  "candidate_family": "jobs-ci-core",
+  "passed": true,
+  "failures": [],
+  "warnings": [],
+  "checked_candidates": [
+    "jobs_ci_core"
+  ]
+}

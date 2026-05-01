@@ -1,0 +1,13 @@
+[package]
+name = "jobs-ci-core-portable-smoke"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-jobs-core = { path = "../../../../../crates/aspen-jobs-core" }
+aspen-ci-core = { path = "../../../../../crates/aspen-ci-core" }
+aspen-jobs-protocol = { path = "../../../../../crates/aspen-jobs-protocol" }
+serde_json = "1.0"

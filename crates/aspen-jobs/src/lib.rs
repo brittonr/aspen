@@ -82,6 +82,20 @@ mod workflow;
 #[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
 pub mod vm_executor;
 
+/// Reusable, dependency-light job contracts and deterministic helpers.
+///
+/// This module re-exports `aspen-jobs-core` through the runtime crate so
+/// consumers can migrate portable code incrementally while existing
+/// `aspen_jobs::*` runtime imports continue to resolve to the historical
+/// compatibility shell types below.
+pub mod core {
+    pub use aspen_jobs_core::*;
+}
+
+pub use core::JobEvent as CoreJobEvent;
+pub use core::JobsCoreError;
+pub use core::transition_status as transition_core_status;
+
 pub use affinity::AffinityJobManager;
 pub use affinity::AffinityStrategy;
 pub use affinity::JobAffinity;

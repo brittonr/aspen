@@ -118,6 +118,7 @@ let Candidate = {
     "aspen-hooks-ticket",
     "aspen-hooks-types",
     "aspen-coordination-protocol",
+    "aspen-jobs-core",
     "aspen-forge-protocol",
     "aspen-jobs-protocol",
     "aspen-client-api",

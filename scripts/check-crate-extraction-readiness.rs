@@ -207,6 +207,7 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_client_api" => Some("aspen-client-api"),
         "aspen_forge_protocol" => Some("aspen-forge-protocol"),
         "aspen_jobs_protocol" => Some("aspen-jobs-protocol"),
+        "jobs_ci_core" => Some("aspen-jobs-core"),
         "aspen_transport" => Some("aspen-transport"),
         "aspen_rpc_core" => Some("aspen-rpc-core"),
         "aspen_blob" => Some("aspen-blob"),
