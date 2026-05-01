@@ -19,7 +19,7 @@ mod secrets_ops;
 mod sql_ops;
 mod watch_ops;
 
-use aspen_auth::Operation;
+use aspen_auth_core::Operation;
 
 use super::ClientRpcRequest;
 

@@ -411,7 +411,7 @@ fn canonical_lockset_token_member(member_tokens: &[LockSetMemberTokenWire]) -> O
 #[cfg(feature = "auth")]
 impl CoordinationRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         self.to_operation_lock_counter()
             .or_else(|| self.to_operation_ratelimiter_barrier())
             .or_else(|| self.to_operation_semaphore_rwlock())
@@ -419,8 +419,8 @@ impl CoordinationRequest {
             .or_else(|| self.to_operation_service())
     }
 
-    fn to_operation_lock_counter(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_lock_counter(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::LockAcquire { key, .. }
             | Self::LockTryAcquire { key, .. }
@@ -464,8 +464,8 @@ impl CoordinationRequest {
         }
     }
 
-    fn to_operation_ratelimiter_barrier(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_ratelimiter_barrier(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::RateLimiterTryAcquire { key, .. }
             | Self::RateLimiterAcquire { key, .. }
@@ -489,8 +489,8 @@ impl CoordinationRequest {
         }
     }
 
-    fn to_operation_semaphore_rwlock(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_semaphore_rwlock(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::SemaphoreAcquire { name, .. }
             | Self::SemaphoreTryAcquire { name, .. }
@@ -520,8 +520,8 @@ impl CoordinationRequest {
         }
     }
 
-    fn to_operation_queue(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_queue(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::QueueCreate { queue_name, .. }
             | Self::QueueDelete { queue_name }
@@ -546,8 +546,8 @@ impl CoordinationRequest {
         }
     }
 
-    fn to_operation_service(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_service(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::ServiceRegister { service_name, .. }
             | Self::ServiceDeregister { service_name, .. }
@@ -573,7 +573,7 @@ impl CoordinationRequest {
 
 #[cfg(all(test, feature = "auth"))]
 mod tests {
-    use aspen_auth::Operation;
+    use aspen_auth_core::Operation;
 
     use super::*;
 

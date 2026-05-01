@@ -25,8 +25,8 @@ pub enum BatchRequest {
 #[cfg(feature = "auth")]
 impl BatchRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::BatchRead { keys } => keys.first().map(|key| Operation::Read { key: key.clone() }),
             Self::BatchWrite { operations } | Self::ConditionalBatchWrite { operations, .. } => {

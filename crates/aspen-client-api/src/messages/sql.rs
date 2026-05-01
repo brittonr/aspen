@@ -29,8 +29,8 @@ pub enum SqlRequest {
 #[cfg(feature = "auth")]
 impl SqlRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
-        Some(aspen_auth::Operation::Read {
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+        Some(aspen_auth_core::Operation::Read {
             key: "_sql:".to_string(),
         })
     }

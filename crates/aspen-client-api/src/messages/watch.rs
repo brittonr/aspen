@@ -26,8 +26,8 @@ pub enum WatchRequest {
 #[cfg(feature = "auth")]
 impl WatchRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::Create { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
             Self::Cancel { .. } | Self::Status { .. } => None,

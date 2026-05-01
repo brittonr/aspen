@@ -47,9 +47,9 @@
 ## Verification rails
 
 - Positive downstream: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
-- Negative boundary: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
+- Negative boundary: malformed token/ticket tests and dependency-boundary checker mutation for runtime `aspen-auth` dependency in portable consumers.
 - Compatibility: compile/test representative consumers and any documented re-export paths.
 
 ## First blocker
 
-Migrate portable consumers to canonical `aspen-auth-core` and `aspen-hooks-ticket` imports where possible, then document any retained runtime `aspen-auth` compatibility re-exports.
+I6 migrated `aspen-client-api` to canonical `aspen-auth-core` imports and documented retained runtime `aspen-auth` compatibility re-exports; next blocker is token/ticket serialization goldens and malformed-input rejection evidence.

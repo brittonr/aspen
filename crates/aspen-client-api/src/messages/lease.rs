@@ -28,8 +28,8 @@ pub enum LeaseRequest {
 #[cfg(feature = "auth")]
 impl LeaseRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::Grant { .. } | Self::Revoke { .. } | Self::Keepalive { .. } => Some(Operation::Write {
                 key: "_lease:".to_string(),

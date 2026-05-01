@@ -1,0 +1,17 @@
+{
+  "family": "auth-ticket",
+  "task": "I6",
+  "status": "pass",
+  "fixtures": [
+    {
+      "name": "aspen-client-api-auth-core",
+      "command": "cargo check -p aspen-client-api --no-default-features --features auth",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt"
+    },
+    {
+      "name": "aspen-client-api-default",
+      "command": "cargo check -p aspen-client-api",
+      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt"
+    }
+  ]
+}

@@ -471,7 +471,7 @@ pub struct AuthenticatedRequest {
     /// The actual RPC request.
     pub request: ClientRpcRequest,
     /// Capability token for authorization (optional during migration).
-    pub token: Option<aspen_auth::CapabilityToken>,
+    pub token: Option<aspen_auth_core::CapabilityToken>,
     /// Number of proxy hops this request has taken.
     ///
     /// Incremented each time the request is forwarded to another cluster.
@@ -483,7 +483,7 @@ pub struct AuthenticatedRequest {
 #[cfg(feature = "auth")]
 impl AuthenticatedRequest {
     /// Create an authenticated request with a token.
-    pub fn new(request: ClientRpcRequest, token: aspen_auth::CapabilityToken) -> Self {
+    pub fn new(request: ClientRpcRequest, token: aspen_auth_core::CapabilityToken) -> Self {
         Self {
             request,
             token: Some(token),
@@ -503,7 +503,7 @@ impl AuthenticatedRequest {
     /// Create a request with a specific hop count (used by proxy service).
     pub fn with_proxy_hops(
         request: ClientRpcRequest,
-        token: Option<aspen_auth::CapabilityToken>,
+        token: Option<aspen_auth_core::CapabilityToken>,
         proxy_hops: u8,
     ) -> Self {
         Self {
@@ -3990,7 +3990,7 @@ impl ClientRpcRequest {
     /// Convert the request to an authorization operation.
     ///
     /// Returns None for operations that don't require authorization.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         to_operation::to_operation(self)
     }
 }

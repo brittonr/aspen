@@ -593,7 +593,7 @@ mod tests {
     #[cfg(feature = "auth")]
     #[test]
     fn test_deploy_to_operation() {
-        use aspen_auth::Operation;
+        use aspen_auth_core::Operation;
 
         // Mutating deploy ops require cluster admin auth
         let deploy = ClientRpcRequest::ClusterDeploy {
@@ -961,7 +961,7 @@ fn test_required_app_returns_correct_domain() {
 #[cfg(feature = "auth")]
 #[test]
 fn test_to_operation_kv_operations() {
-    use aspen_auth::Operation;
+    use aspen_auth_core::Operation;
 
     let read = ClientRpcRequest::ReadKey { key: "mykey".into() };
     match read.to_operation() {
@@ -997,7 +997,7 @@ fn test_to_operation_kv_operations() {
 #[cfg(feature = "auth")]
 #[test]
 fn test_to_operation_cluster_admin() {
-    use aspen_auth::Operation;
+    use aspen_auth_core::Operation;
 
     let init = ClientRpcRequest::InitCluster;
     match init.to_operation() {

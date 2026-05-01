@@ -11,6 +11,15 @@
 //! 4. **Offline verification**: Works without contacting the cluster
 //! 5. **Tiger Style**: Fixed bounds on token size, delegation depth, capability count
 //!
+//! # Compatibility re-exports
+//!
+//! `aspen-auth` intentionally re-exports portable `aspen-auth-core` types
+//! (`Capability`, `Operation`, `CapabilityToken`, `Audience`, and `AuthError`) for
+//! existing runtime consumers. New portable crates should depend on
+//! `aspen-auth-core` directly. These re-exports are owned by the auth/ticket
+//! extraction track and remain until root/runtime consumers have been migrated
+//! or documented as shell-only.
+//!
 //! # Usage
 //!
 //! ```rust,ignore

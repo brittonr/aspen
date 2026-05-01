@@ -1,4 +1,4 @@
-use aspen_auth::Operation;
+use aspen_auth_core::Operation;
 
 use super::super::BatchWriteOperation;
 use super::super::ClientRpcRequest;

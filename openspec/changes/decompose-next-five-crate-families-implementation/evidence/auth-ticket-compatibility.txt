@@ -1,0 +1,10 @@
+family: auth-ticket
+task: I6
+status: pass
+
+Compatibility checked:
+- `aspen-auth` documents retained `aspen-auth-core` type re-exports for runtime consumers, with owner/removal criteria tied to the auth/ticket extraction track.
+- `cargo check -p aspen-client-api` passes after replacing `aspen_auth::` portable references with canonical `aspen_auth_core::` references.
+
+Evidence:
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt

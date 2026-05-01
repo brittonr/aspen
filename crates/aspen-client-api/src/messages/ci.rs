@@ -105,12 +105,12 @@ pub enum CiRequest {
 #[cfg(feature = "auth")]
 impl CiRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         self.to_operation_pipeline().or_else(|| self.to_operation_cache_snix())
     }
 
-    fn to_operation_pipeline(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_pipeline(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::CiGetStatus { run_id } => Some(Operation::Read {
                 key: format!("_ci:runs:{}", run_id),
@@ -148,8 +148,8 @@ impl CiRequest {
         }
     }
 
-    fn to_operation_cache_snix(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_cache_snix(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::Read {
                 key: format!("_cache:narinfo:{store_hash}"),

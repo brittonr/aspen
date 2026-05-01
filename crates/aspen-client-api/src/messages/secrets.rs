@@ -167,12 +167,12 @@ pub enum SecretsRequest {
 #[cfg(feature = "auth")]
 impl SecretsRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         self.to_operation_kv_transit().or_else(|| self.to_operation_pki_nix_cache())
     }
 
-    fn to_operation_kv_transit(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_kv_transit(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::SecretsKvRead { mount, path, .. }
             | Self::SecretsKvList { mount, path }
@@ -211,8 +211,8 @@ impl SecretsRequest {
         }
     }
 
-    fn to_operation_pki_nix_cache(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    fn to_operation_pki_nix_cache(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::SecretsPkiGetCrl { mount }
             | Self::SecretsPkiListCerts { mount }

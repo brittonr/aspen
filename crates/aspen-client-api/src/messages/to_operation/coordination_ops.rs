@@ -1,6 +1,6 @@
 use alloc::string::String;
 
-use aspen_auth::Operation;
+use aspen_auth_core::Operation;
 
 use super::super::ClientRpcRequest;
 use crate::coordination::LockSetMemberTokenWire;
@@ -176,7 +176,7 @@ fn to_operation_service(request: &ClientRpcRequest) -> Option<Option<Operation>>
 
 #[cfg(test)]
 mod tests {
-    use aspen_auth::Operation;
+    use aspen_auth_core::Operation;
 
     use super::*;
 

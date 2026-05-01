@@ -7,7 +7,7 @@ description = "Protocol definitions for Aspen client RPC communication"
 
 [dependencies]
 # Authentication types (optional for WASM guest targets)
-aspen-auth = { package = "aspen-auth-core", path = "../aspen-auth-core", optional = true }
+aspen-auth-core = { path = "../aspen-auth-core", optional = true }
 
 # Serialization
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
@@ -29,7 +29,7 @@ tokio = { version = "1.0", features = ["macros", "rt"] }
 
 [features]
 default = ["auth", "ci", "secrets", "automerge"]
-auth = ["dep:aspen-auth"]
+auth = ["dep:aspen-auth-core"]
 ci = []
 secrets = []
 automerge = []

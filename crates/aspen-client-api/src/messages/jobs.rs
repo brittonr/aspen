@@ -83,8 +83,8 @@ pub enum JobsRequest {
 #[cfg(feature = "auth")]
 impl JobsRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::JobSubmit { .. }
             | Self::JobCancel { .. }

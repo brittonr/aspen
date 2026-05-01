@@ -55,8 +55,8 @@ pub enum DocsRequest {
 #[cfg(feature = "auth")]
 impl DocsRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             Self::DocsSet { key, value } => Some(Operation::Write {
                 key: format!("_docs:{key}"),

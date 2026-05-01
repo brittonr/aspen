@@ -1,0 +1,1585 @@
+diff --git a/crates/aspen-auth/src/lib.rs b/crates/aspen-auth/src/lib.rs
+index 6a4469942..7957b9d0f 100644
+--- a/crates/aspen-auth/src/lib.rs
++++ b/crates/aspen-auth/src/lib.rs
+@@ -11,6 +11,15 @@
+ //! 4. **Offline verification**: Works without contacting the cluster
+ //! 5. **Tiger Style**: Fixed bounds on token size, delegation depth, capability count
+ //!
++//! # Compatibility re-exports
++//!
++//! `aspen-auth` intentionally re-exports portable `aspen-auth-core` types
++//! (`Capability`, `Operation`, `CapabilityToken`, `Audience`, and `AuthError`) for
++//! existing runtime consumers. New portable crates should depend on
++//! `aspen-auth-core` directly. These re-exports are owned by the auth/ticket
++//! extraction track and remain until root/runtime consumers have been migrated
++//! or documented as shell-only.
++//!
+ //! # Usage
+ //!
+ //! ```rust,ignore
+diff --git a/crates/aspen-client-api/Cargo.toml b/crates/aspen-client-api/Cargo.toml
+index a9f9660a2..dc985efb9 100644
+--- a/crates/aspen-client-api/Cargo.toml
++++ b/crates/aspen-client-api/Cargo.toml
+@@ -7,7 +7,7 @@ description = "Protocol definitions for Aspen client RPC communication"
+
+ [dependencies]
+ # Authentication types (optional for WASM guest targets)
+-aspen-auth = { package = "aspen-auth-core", path = "../aspen-auth-core", optional = true }
++aspen-auth-core = { path = "../aspen-auth-core", optional = true }
+
+ # Serialization
+ serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
+@@ -29,7 +29,7 @@ tokio = { version = "1.0", features = ["macros", "rt"] }
+
+ [features]
+ default = ["auth", "ci", "secrets", "automerge"]
+-auth = ["dep:aspen-auth"]
++auth = ["dep:aspen-auth-core"]
+ ci = []
+ secrets = []
+ automerge = []
+diff --git a/crates/aspen-client-api/src/lib.rs b/crates/aspen-client-api/src/lib.rs
+index 1dbbdab5c..2cfc8f92e 100644
+--- a/crates/aspen-client-api/src/lib.rs
++++ b/crates/aspen-client-api/src/lib.rs
+@@ -593,7 +593,7 @@ mod tests {
+     #[cfg(feature = "auth")]
+     #[test]
+     fn test_deploy_to_operation() {
+-        use aspen_auth::Operation;
++        use aspen_auth_core::Operation;
+
+         // Mutating deploy ops require cluster admin auth
+         let deploy = ClientRpcRequest::ClusterDeploy {
+@@ -961,7 +961,7 @@ fn test_required_app_returns_correct_domain() {
+ #[cfg(feature = "auth")]
+ #[test]
+ fn test_to_operation_kv_operations() {
+-    use aspen_auth::Operation;
++    use aspen_auth_core::Operation;
+
+     let read = ClientRpcRequest::ReadKey { key: "mykey".into() };
+     match read.to_operation() {
+@@ -997,7 +997,7 @@ fn test_to_operation_kv_operations() {
+ #[cfg(feature = "auth")]
+ #[test]
+ fn test_to_operation_cluster_admin() {
+-    use aspen_auth::Operation;
++    use aspen_auth_core::Operation;
+
+     let init = ClientRpcRequest::InitCluster;
+     match init.to_operation() {
+diff --git a/crates/aspen-client-api/src/messages/automerge.rs b/crates/aspen-client-api/src/messages/automerge.rs
+index 70e2227c9..50afb778b 100644
+--- a/crates/aspen-client-api/src/messages/automerge.rs
++++ b/crates/aspen-client-api/src/messages/automerge.rs
+@@ -67,8 +67,8 @@ pub enum AutomergeRequest {
+ #[cfg(feature = "auth")]
+ impl AutomergeRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::Create { .. }
+             | Self::Save { .. }
+diff --git a/crates/aspen-client-api/src/messages/batch.rs b/crates/aspen-client-api/src/messages/batch.rs
+index 0cd440eb7..fb7bad745 100644
+--- a/crates/aspen-client-api/src/messages/batch.rs
++++ b/crates/aspen-client-api/src/messages/batch.rs
+@@ -25,8 +25,8 @@ pub enum BatchRequest {
+ #[cfg(feature = "auth")]
+ impl BatchRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::BatchRead { keys } => keys.first().map(|key| Operation::Read { key: key.clone() }),
+             Self::BatchWrite { operations } | Self::ConditionalBatchWrite { operations, .. } => {
+diff --git a/crates/aspen-client-api/src/messages/blob.rs b/crates/aspen-client-api/src/messages/blob.rs
+index e64ecb071..785830cda 100644
+--- a/crates/aspen-client-api/src/messages/blob.rs
++++ b/crates/aspen-client-api/src/messages/blob.rs
+@@ -67,8 +67,8 @@ pub enum BlobRequest {
+ #[cfg(feature = "auth")]
+ impl BlobRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::AddBlob { .. }
+             | Self::ProtectBlob { .. }
+diff --git a/crates/aspen-client-api/src/messages/ci.rs b/crates/aspen-client-api/src/messages/ci.rs
+index 8d88823d7..6f02b219a 100644
+--- a/crates/aspen-client-api/src/messages/ci.rs
++++ b/crates/aspen-client-api/src/messages/ci.rs
+@@ -105,12 +105,12 @@ pub enum CiRequest {
+ #[cfg(feature = "auth")]
+ impl CiRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+         self.to_operation_pipeline().or_else(|| self.to_operation_cache_snix())
+     }
+
+-    fn to_operation_pipeline(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_pipeline(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::CiGetStatus { run_id } => Some(Operation::Read {
+                 key: format!("_ci:runs:{}", run_id),
+@@ -148,8 +148,8 @@ impl CiRequest {
+         }
+     }
+
+-    fn to_operation_cache_snix(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_cache_snix(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::Read {
+                 key: format!("_cache:narinfo:{store_hash}"),
+diff --git a/crates/aspen-client-api/src/messages/cluster.rs b/crates/aspen-client-api/src/messages/cluster.rs
+index 418841e26..5eaa7bf50 100644
+--- a/crates/aspen-client-api/src/messages/cluster.rs
++++ b/crates/aspen-client-api/src/messages/cluster.rs
+@@ -109,8 +109,8 @@ pub enum ClusterRequest {
+ #[cfg(feature = "auth")]
+ impl ClusterRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::InitCluster
+             | Self::InitClusterWithTrust { .. }
+diff --git a/crates/aspen-client-api/src/messages/coordination.rs b/crates/aspen-client-api/src/messages/coordination.rs
+index 59373fc92..25ad71a4d 100644
+--- a/crates/aspen-client-api/src/messages/coordination.rs
++++ b/crates/aspen-client-api/src/messages/coordination.rs
+@@ -411,7 +411,7 @@ fn canonical_lockset_token_member(member_tokens: &[LockSetMemberTokenWire]) -> O
+ #[cfg(feature = "auth")]
+ impl CoordinationRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+         self.to_operation_lock_counter()
+             .or_else(|| self.to_operation_ratelimiter_barrier())
+             .or_else(|| self.to_operation_semaphore_rwlock())
+@@ -419,8 +419,8 @@ impl CoordinationRequest {
+             .or_else(|| self.to_operation_service())
+     }
+
+-    fn to_operation_lock_counter(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_lock_counter(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::LockAcquire { key, .. }
+             | Self::LockTryAcquire { key, .. }
+@@ -464,8 +464,8 @@ impl CoordinationRequest {
+         }
+     }
+
+-    fn to_operation_ratelimiter_barrier(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_ratelimiter_barrier(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::RateLimiterTryAcquire { key, .. }
+             | Self::RateLimiterAcquire { key, .. }
+@@ -489,8 +489,8 @@ impl CoordinationRequest {
+         }
+     }
+
+-    fn to_operation_semaphore_rwlock(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_semaphore_rwlock(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::SemaphoreAcquire { name, .. }
+             | Self::SemaphoreTryAcquire { name, .. }
+@@ -520,8 +520,8 @@ impl CoordinationRequest {
+         }
+     }
+
+-    fn to_operation_queue(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_queue(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::QueueCreate { queue_name, .. }
+             | Self::QueueDelete { queue_name }
+@@ -546,8 +546,8 @@ impl CoordinationRequest {
+         }
+     }
+
+-    fn to_operation_service(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_service(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::ServiceRegister { service_name, .. }
+             | Self::ServiceDeregister { service_name, .. }
+@@ -573,7 +573,7 @@ impl CoordinationRequest {
+
+ #[cfg(all(test, feature = "auth"))]
+ mod tests {
+-    use aspen_auth::Operation;
++    use aspen_auth_core::Operation;
+
+     use super::*;
+
+diff --git a/crates/aspen-client-api/src/messages/docs.rs b/crates/aspen-client-api/src/messages/docs.rs
+index 774161142..b9559aed6 100644
+--- a/crates/aspen-client-api/src/messages/docs.rs
++++ b/crates/aspen-client-api/src/messages/docs.rs
+@@ -55,8 +55,8 @@ pub enum DocsRequest {
+ #[cfg(feature = "auth")]
+ impl DocsRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::DocsSet { key, value } => Some(Operation::Write {
+                 key: format!("_docs:{key}"),
+diff --git a/crates/aspen-client-api/src/messages/federation.rs b/crates/aspen-client-api/src/messages/federation.rs
+index b1d32d24e..eab5ef1ca 100644
+--- a/crates/aspen-client-api/src/messages/federation.rs
++++ b/crates/aspen-client-api/src/messages/federation.rs
+@@ -190,8 +190,8 @@ pub enum FederationRequest {
+ #[cfg(feature = "auth")]
+ impl FederationRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             // Read-only / no auth required
+             Self::GetFederationStatus
+diff --git a/crates/aspen-client-api/src/messages/forge.rs b/crates/aspen-client-api/src/messages/forge.rs
+index 4d51cb7f2..5220829cb 100644
+--- a/crates/aspen-client-api/src/messages/forge.rs
++++ b/crates/aspen-client-api/src/messages/forge.rs
+@@ -385,8 +385,8 @@ pub enum ForgeRequest {
+ #[cfg(feature = "auth")]
+ impl ForgeRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             // Write operations
+             Self::ForgeCreateRepo { .. }
+diff --git a/crates/aspen-client-api/src/messages/hooks.rs b/crates/aspen-client-api/src/messages/hooks.rs
+index 7ad45205e..5fca159a2 100644
+--- a/crates/aspen-client-api/src/messages/hooks.rs
++++ b/crates/aspen-client-api/src/messages/hooks.rs
+@@ -24,8 +24,8 @@ pub enum HooksRequest {
+ #[cfg(feature = "auth")]
+ impl HooksRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::List | Self::GetMetrics { .. } => Some(Operation::Read {
+                 key: "_hooks:".to_string(),
+diff --git a/crates/aspen-client-api/src/messages/jobs.rs b/crates/aspen-client-api/src/messages/jobs.rs
+index 75f3ebc83..792f5e6a7 100644
+--- a/crates/aspen-client-api/src/messages/jobs.rs
++++ b/crates/aspen-client-api/src/messages/jobs.rs
+@@ -83,8 +83,8 @@ pub enum JobsRequest {
+ #[cfg(feature = "auth")]
+ impl JobsRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::JobSubmit { .. }
+             | Self::JobCancel { .. }
+diff --git a/crates/aspen-client-api/src/messages/kv.rs b/crates/aspen-client-api/src/messages/kv.rs
+index 53364af2d..6d19e0dda 100644
+--- a/crates/aspen-client-api/src/messages/kv.rs
++++ b/crates/aspen-client-api/src/messages/kv.rs
+@@ -88,8 +88,8 @@ pub enum KvRequest {
+ #[cfg(feature = "auth")]
+ impl KvRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::ReadKey { key } | Self::ScanKeys { prefix: key, .. } | Self::GetVaultKeys { vault_name: key } => {
+                 Some(Operation::Read { key: key.clone() })
+diff --git a/crates/aspen-client-api/src/messages/lease.rs b/crates/aspen-client-api/src/messages/lease.rs
+index 08724398d..e3f2e02a9 100644
+--- a/crates/aspen-client-api/src/messages/lease.rs
++++ b/crates/aspen-client-api/src/messages/lease.rs
+@@ -28,8 +28,8 @@ pub enum LeaseRequest {
+ #[cfg(feature = "auth")]
+ impl LeaseRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::Grant { .. } | Self::Revoke { .. } | Self::Keepalive { .. } => Some(Operation::Write {
+                 key: "_lease:".to_string(),
+diff --git a/crates/aspen-client-api/src/messages/mod.rs b/crates/aspen-client-api/src/messages/mod.rs
+index 89db28e2b..faa11b1f2 100644
+--- a/crates/aspen-client-api/src/messages/mod.rs
++++ b/crates/aspen-client-api/src/messages/mod.rs
+@@ -471,7 +471,7 @@ pub struct AuthenticatedRequest {
+     /// The actual RPC request.
+     pub request: ClientRpcRequest,
+     /// Capability token for authorization (optional during migration).
+-    pub token: Option<aspen_auth::CapabilityToken>,
++    pub token: Option<aspen_auth_core::CapabilityToken>,
+     /// Number of proxy hops this request has taken.
+     ///
+     /// Incremented each time the request is forwarded to another cluster.
+@@ -483,7 +483,7 @@ pub struct AuthenticatedRequest {
+ #[cfg(feature = "auth")]
+ impl AuthenticatedRequest {
+     /// Create an authenticated request with a token.
+-    pub fn new(request: ClientRpcRequest, token: aspen_auth::CapabilityToken) -> Self {
++    pub fn new(request: ClientRpcRequest, token: aspen_auth_core::CapabilityToken) -> Self {
+         Self {
+             request,
+             token: Some(token),
+@@ -503,7 +503,7 @@ impl AuthenticatedRequest {
+     /// Create a request with a specific hop count (used by proxy service).
+     pub fn with_proxy_hops(
+         request: ClientRpcRequest,
+-        token: Option<aspen_auth::CapabilityToken>,
++        token: Option<aspen_auth_core::CapabilityToken>,
+         proxy_hops: u8,
+     ) -> Self {
+         Self {
+@@ -3990,7 +3990,7 @@ impl ClientRpcRequest {
+     /// Convert the request to an authorization operation.
+     ///
+     /// Returns None for operations that don't require authorization.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+         to_operation::to_operation(self)
+     }
+ }
+diff --git a/crates/aspen-client-api/src/messages/secrets.rs b/crates/aspen-client-api/src/messages/secrets.rs
+index a889e0902..5d23a5ea4 100644
+--- a/crates/aspen-client-api/src/messages/secrets.rs
++++ b/crates/aspen-client-api/src/messages/secrets.rs
+@@ -167,12 +167,12 @@ pub enum SecretsRequest {
+ #[cfg(feature = "auth")]
+ impl SecretsRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+         self.to_operation_kv_transit().or_else(|| self.to_operation_pki_nix_cache())
+     }
+
+-    fn to_operation_kv_transit(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_kv_transit(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::SecretsKvRead { mount, path, .. }
+             | Self::SecretsKvList { mount, path }
+@@ -211,8 +211,8 @@ impl SecretsRequest {
+         }
+     }
+
+-    fn to_operation_pki_nix_cache(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    fn to_operation_pki_nix_cache(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::SecretsPkiGetCrl { mount }
+             | Self::SecretsPkiListCerts { mount }
+diff --git a/crates/aspen-client-api/src/messages/sql.rs b/crates/aspen-client-api/src/messages/sql.rs
+index fedfe1e0f..62e59196c 100644
+--- a/crates/aspen-client-api/src/messages/sql.rs
++++ b/crates/aspen-client-api/src/messages/sql.rs
+@@ -29,8 +29,8 @@ pub enum SqlRequest {
+ #[cfg(feature = "auth")]
+ impl SqlRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        Some(aspen_auth::Operation::Read {
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        Some(aspen_auth_core::Operation::Read {
+             key: "_sql:".to_string(),
+         })
+     }
+diff --git a/crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs b/crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs
+index bb52e9d36..8daab0c4c 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/batch_ops.rs b/crates/aspen-client-api/src/messages/to_operation/batch_ops.rs
+index 77063b022..92dd53f59 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/batch_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/batch_ops.rs
+@@ -1,4 +1,4 @@
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::BatchWriteOperation;
+ use super::super::ClientRpcRequest;
+diff --git a/crates/aspen-client-api/src/messages/to_operation/blob_ops.rs b/crates/aspen-client-api/src/messages/to_operation/blob_ops.rs
+index 18cee79ed..32f290223 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/blob_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/blob_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs b/crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs
+index b6d2c51dc..bc45c1765 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/ci_ops.rs b/crates/aspen-client-api/src/messages/to_operation/ci_ops.rs
+index 239b7605d..4268cfcf0 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/ci_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/ci_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs b/crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs
+index 3ecbfc162..1f9a795bb 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs b/crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs
+index ac8f3b09d..5aaa9cbce 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs b/crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs
+index 317214c8e..194433e6a 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::String;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+ use crate::coordination::LockSetMemberTokenWire;
+@@ -176,7 +176,7 @@ fn to_operation_service(request: &ClientRpcRequest) -> Option<Option<Operation>>
+
+ #[cfg(test)]
+ mod tests {
+-    use aspen_auth::Operation;
++    use aspen_auth_core::Operation;
+
+     use super::*;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs b/crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs
+index 590bc826d..f39846c03 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/docs_ops.rs b/crates/aspen-client-api/src/messages/to_operation/docs_ops.rs
+index 4941426a1..eb0ab50c7 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/docs_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/docs_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/forge_ops.rs b/crates/aspen-client-api/src/messages/to_operation/forge_ops.rs
+index 85fecc7c3..ab32ec99b 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/forge_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/forge_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+ use super::super::forge::JjNativeOperation;
+diff --git a/crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs b/crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs
+index 88d241f4b..ca40fe724 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs b/crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs
+index a613e67a8..26f9fbf88 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/kv_ops.rs b/crates/aspen-client-api/src/messages/to_operation/kv_ops.rs
+index eae7a6471..8a48f1936 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/kv_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/kv_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/lease_ops.rs b/crates/aspen-client-api/src/messages/to_operation/lease_ops.rs
+index cc69bd2eb..9677a34e1 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/lease_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/lease_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/mod.rs b/crates/aspen-client-api/src/messages/to_operation/mod.rs
+index 405888fa3..749fac877 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/mod.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/mod.rs
+@@ -19,7 +19,7 @@ mod secrets_ops;
+ mod sql_ops;
+ mod watch_ops;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/net_ops.rs b/crates/aspen-client-api/src/messages/to_operation/net_ops.rs
+index cf76e5c86..cb399ff28 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/net_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/net_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/observability_ops.rs b/crates/aspen-client-api/src/messages/to_operation/observability_ops.rs
+index e3fde06cf..265e4e3e7 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/observability_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/observability_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs b/crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs
+index 472881d84..dc261a300 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs
+@@ -1,4 +1,4 @@
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/sql_ops.rs b/crates/aspen-client-api/src/messages/to_operation/sql_ops.rs
+index 6eab53c21..1a4d31806 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/sql_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/sql_ops.rs
+@@ -1,6 +1,6 @@
+ use alloc::string::ToString;
+
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/to_operation/watch_ops.rs b/crates/aspen-client-api/src/messages/to_operation/watch_ops.rs
+index 679e77994..1eb00da8b 100644
+--- a/crates/aspen-client-api/src/messages/to_operation/watch_ops.rs
++++ b/crates/aspen-client-api/src/messages/to_operation/watch_ops.rs
+@@ -1,4 +1,4 @@
+-use aspen_auth::Operation;
++use aspen_auth_core::Operation;
+
+ use super::super::ClientRpcRequest;
+
+diff --git a/crates/aspen-client-api/src/messages/watch.rs b/crates/aspen-client-api/src/messages/watch.rs
+index 04adbc69c..1f1b7ce8b 100644
+--- a/crates/aspen-client-api/src/messages/watch.rs
++++ b/crates/aspen-client-api/src/messages/watch.rs
+@@ -26,8 +26,8 @@ pub enum WatchRequest {
+ #[cfg(feature = "auth")]
+ impl WatchRequest {
+     /// Convert to an authorization operation.
+-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+-        use aspen_auth::Operation;
++    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
++        use aspen_auth_core::Operation;
+         match self {
+             Self::Create { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
+             Self::Cancel { .. } | Self::Status { .. } => None,
+diff --git a/docs/crate-extraction/auth-ticket.md b/docs/crate-extraction/auth-ticket.md
+index 526640d64..15c8b2941 100644
+--- a/docs/crate-extraction/auth-ticket.md
++++ b/docs/crate-extraction/auth-ticket.md
+@@ -47,9 +47,9 @@
+ ## Verification rails
+
+ - Positive downstream: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
+-- Negative boundary: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
++- Negative boundary: malformed token/ticket tests and dependency-boundary checker mutation for runtime `aspen-auth` dependency in portable consumers.
+ - Compatibility: compile/test representative consumers and any documented re-export paths.
+
+ ## First blocker
+
+-Migrate portable consumers to canonical `aspen-auth-core` and `aspen-hooks-ticket` imports where possible, then document any retained runtime `aspen-auth` compatibility re-exports.
++I6 migrated `aspen-client-api` to canonical `aspen-auth-core` imports and documented retained runtime `aspen-auth` compatibility re-exports; next blocker is token/ticket serialization goldens and malformed-input rejection evidence.
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt
+new file mode 100644
+index 000000000..cd677cd71
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt
+@@ -0,0 +1,10 @@
++family: auth-ticket
++task: I6
++status: pass
++
++Compatibility checked:
++- `aspen-auth` documents retained `aspen-auth-core` type re-exports for runtime consumers, with owner/removal criteria tied to the auth/ticket extraction track.
++- `cargo check -p aspen-client-api` passes after replacing `aspen_auth::` portable references with canonical `aspen_auth_core::` references.
++
++Evidence:
++- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json
+new file mode 100644
+index 000000000..1b806d09e
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json
+@@ -0,0 +1,17 @@
++{
++  "family": "auth-ticket",
++  "task": "I6",
++  "status": "pass",
++  "fixtures": [
++    {
++      "name": "aspen-client-api-auth-core",
++      "command": "cargo check -p aspen-client-api --no-default-features --features auth",
++      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt"
++    },
++    {
++      "name": "aspen-client-api-default",
++      "command": "cargo check -p aspen-client-api",
++      "evidence": "openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt"
++    }
++  ]
++}
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt
+new file mode 100644
+index 000000000..faa0a531c
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt
+@@ -0,0 +1,9 @@
++family: auth-ticket
++task: I6
++status: pass
++
++Negative/runtime boundary checked:
++- `cargo tree -p aspen-client-api --no-default-features --features auth -e normal` shows `aspen-client-api` depends on `aspen-auth-core`, not runtime `aspen-auth`, after canonical import migration.
++
++Evidence:
++- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json
+new file mode 100644
+index 000000000..c5c94d6f5
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json
+@@ -0,0 +1,11 @@
++{
++  "candidate_family": "auth-ticket",
++  "passed": true,
++  "failures": [],
++  "warnings": [
++    "auth_ticket: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "auth_ticket"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md
+new file mode 100644
+index 000000000..d449148a5
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md
+@@ -0,0 +1,13 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `auth-ticket`
++- Passed: `true`
++- Checked candidates: 1
++
++## Failures
++
++- none
++
++## Warnings
++
++- auth_ticket: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.stderr
+new file mode 100644
+index 000000000..c4ceddca9
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.stderr
+@@ -0,0 +1,32 @@
++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
++Aspen development environment
++
++Build caching:
++  incremental compilation enabled
++
++Common commands:
++  cargo build                          Build project
++  cargo nextest run                    Run all tests
++  cargo nextest run -P quick           Quick tests (~2-5 min)
++  cargo tigerstyle check               Run Tiger Style lints
++
++Nix apps:
++  nix run .#cluster                    3-node cluster
++  nix run .#bench                      Run benchmarks
++  nix run .#coverage [html|ci|update]  Code coverage
++  nix run .#fuzz-quick                 Fuzzing smoke test
++
++VM testing: aspen-vm-setup / aspen-vm-run <node-id>
++  nix run .#dogfood-vm                 Dogfood in isolated VMs
++
++CI worker setup (x86_64-linux only):
++  Status: ENABLED (kernel/initrd paths set)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt
+new file mode 100644
+index 000000000..a86767d69
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt
+@@ -0,0 +1,182 @@
++$ cargo tree -p aspen-client-api --no-default-features --features auth -e normal
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
++├── aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
++│   ├── base64 v0.22.1
++│   ├── blake3 v1.8.3
++│   │   ├── arrayref v0.3.9
++│   │   ├── arrayvec v0.7.6
++│   │   ├── cfg-if v1.0.4
++│   │   ├── constant_time_eq v0.4.2
++│   │   └── cpufeatures v0.2.17
++│   ├── iroh-base v0.97.0
++│   │   ├── curve25519-dalek v5.0.0-pre.1
++│   │   │   ├── cfg-if v1.0.4
++│   │   │   ├── cpufeatures v0.2.17
++│   │   │   ├── curve25519-dalek-derive v0.1.1 (proc-macro)
++│   │   │   │   ├── proc-macro2 v1.0.106
++│   │   │   │   │   └── unicode-ident v1.0.24
++│   │   │   │   ├── quote v1.0.45
++│   │   │   │   │   └── proc-macro2 v1.0.106 (*)
++│   │   │   │   └── syn v2.0.117
++│   │   │   │       ├── proc-macro2 v1.0.106 (*)
++│   │   │   │       ├── quote v1.0.45 (*)
++│   │   │   │       └── unicode-ident v1.0.24
++│   │   │   ├── digest v0.11.0-rc.10
++│   │   │   │   ├── block-buffer v0.11.0
++│   │   │   │   │   └── hybrid-array v0.4.8
++│   │   │   │   │       └── typenum v1.19.0
++│   │   │   │   ├── const-oid v0.10.2
++│   │   │   │   └── crypto-common v0.2.1
++│   │   │   │       └── hybrid-array v0.4.8 (*)
++│   │   │   ├── rand_core v0.9.5
++│   │   │   ├── serde v1.0.228
++│   │   │   │   ├── serde_core v1.0.228
++│   │   │   │   └── serde_derive v1.0.228 (proc-macro)
++│   │   │   │       ├── proc-macro2 v1.0.106 (*)
++│   │   │   │       ├── quote v1.0.45 (*)
++│   │   │   │       └── syn v2.0.117 (*)
++│   │   │   ├── subtle v2.6.1
++│   │   │   └── zeroize v1.8.2
++│   │   │       └── zeroize_derive v1.4.3 (proc-macro)
++│   │   │           ├── proc-macro2 v1.0.106 (*)
++│   │   │           ├── quote v1.0.45 (*)
++│   │   │           └── syn v2.0.117 (*)
++│   │   ├── data-encoding v2.10.0
++│   │   ├── derive_more v2.1.1
++│   │   │   └── derive_more-impl v2.1.1 (proc-macro)
++│   │   │       ├── convert_case v0.10.0
++│   │   │       │   └── unicode-segmentation v1.12.0
++│   │   │       ├── proc-macro2 v1.0.106 (*)
++│   │   │       ├── quote v1.0.45 (*)
++│   │   │       ├── syn v2.0.117 (*)
++│   │   │       └── unicode-xid v0.2.6
++│   │   ├── digest v0.11.0-rc.10 (*)
++│   │   ├── ed25519-dalek v3.0.0-pre.1
++│   │   │   ├── curve25519-dalek v5.0.0-pre.1 (*)
++│   │   │   ├── ed25519 v3.0.0-rc.4
++│   │   │   │   ├── serde v1.0.228 (*)
++│   │   │   │   └── signature v3.0.0-rc.10
++│   │   │   ├── rand_core v0.9.5
++│   │   │   ├── serde v1.0.228 (*)
++│   │   │   ├── sha2 v0.11.0-rc.2
++│   │   │   │   ├── cfg-if v1.0.4
++│   │   │   │   ├── cpufeatures v0.2.17
++│   │   │   │   └── digest v0.11.0-rc.10 (*)
++│   │   │   ├── subtle v2.6.1
++│   │   │   └── zeroize v1.8.2 (*)
++│   │   ├── n0-error v0.1.3
++│   │   │   ├── n0-error-macros v0.1.3 (proc-macro)
++│   │   │   │   ├── proc-macro2 v1.0.106 (*)
++│   │   │   │   ├── quote v1.0.45 (*)
++│   │   │   │   └── syn v2.0.117 (*)
++│   │   │   └── spez v0.1.2 (proc-macro)
++│   │   │       ├── proc-macro2 v1.0.106 (*)
++│   │   │       ├── quote v1.0.45 (*)
++│   │   │       └── syn v2.0.117 (*)
++│   │   ├── rand_core v0.9.5
++│   │   ├── serde v1.0.228 (*)
++│   │   ├── sha2 v0.11.0-rc.2 (*)
++│   │   ├── url v2.5.8
++│   │   │   ├── form_urlencoded v1.2.2
++│   │   │   │   └── percent-encoding v2.3.2
++│   │   │   ├── idna v1.1.0
++│   │   │   │   ├── idna_adapter v1.2.1
++│   │   │   │   │   ├── icu_normalizer v2.1.1
++│   │   │   │   │   │   ├── icu_collections v2.1.1
++│   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro)
++│   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
++│   │   │   │   │   │   │   │   ├── quote v1.0.45 (*)
++│   │   │   │   │   │   │   │   └── syn v2.0.117 (*)
++│   │   │   │   │   │   │   ├── potential_utf v0.1.4
++│   │   │   │   │   │   │   │   └── zerovec v0.11.5
++│   │   │   │   │   │   │   │       ├── yoke v0.8.1
++│   │   │   │   │   │   │   │       │   ├── stable_deref_trait v1.2.1
++│   │   │   │   │   │   │   │       │   ├── yoke-derive v0.8.1 (proc-macro)
++│   │   │   │   │   │   │   │       │   │   ├── proc-macro2 v1.0.106 (*)
++│   │   │   │   │   │   │   │       │   │   ├── quote v1.0.45 (*)
++│   │   │   │   │   │   │   │       │   │   ├── syn v2.0.117 (*)
++│   │   │   │   │   │   │   │       │   │   └── synstructure v0.13.2
++│   │   │   │   │   │   │   │       │   │       ├── proc-macro2 v1.0.106 (*)
++│   │   │   │   │   │   │   │       │   │       ├── quote v1.0.45 (*)
++│   │   │   │   │   │   │   │       │   │       └── syn v2.0.117 (*)
++│   │   │   │   │   │   │   │       │   └── zerofrom v0.1.6
++│   │   │   │   │   │   │   │       │       └── zerofrom-derive v0.1.6 (proc-macro)
++│   │   │   │   │   │   │   │       │           ├── proc-macro2 v1.0.106 (*)
++│   │   │   │   │   │   │   │       │           ├── quote v1.0.45 (*)
++│   │   │   │   │   │   │   │       │           ├── syn v2.0.117 (*)
++│   │   │   │   │   │   │   │       │           └── synstructure v0.13.2 (*)
++│   │   │   │   │   │   │   │       ├── zerofrom v0.1.6 (*)
++│   │   │   │   │   │   │   │       └── zerovec-derive v0.11.2 (proc-macro)
++│   │   │   │   │   │   │   │           ├── proc-macro2 v1.0.106 (*)
++│   │   │   │   │   │   │   │           ├── quote v1.0.45 (*)
++│   │   │   │   │   │   │   │           └── syn v2.0.117 (*)
++│   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
++│   │   │   │   │   │   │   ├── zerofrom v0.1.6 (*)
++│   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
++│   │   │   │   │   │   ├── icu_normalizer_data v2.1.1
++│   │   │   │   │   │   ├── icu_provider v2.1.1
++│   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
++│   │   │   │   │   │   │   ├── icu_locale_core v2.1.1
++│   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
++│   │   │   │   │   │   │   │   ├── litemap v0.8.1
++│   │   │   │   │   │   │   │   ├── tinystr v0.8.2
++│   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
++│   │   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
++│   │   │   │   │   │   │   │   ├── writeable v0.6.2
++│   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
++│   │   │   │   │   │   │   ├── writeable v0.6.2
++│   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
++│   │   │   │   │   │   │   ├── zerofrom v0.1.6 (*)
++│   │   │   │   │   │   │   ├── zerotrie v0.2.3
++│   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
++│   │   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
++│   │   │   │   │   │   │   │   └── zerofrom v0.1.6 (*)
++│   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
++│   │   │   │   │   │   ├── smallvec v1.15.1
++│   │   │   │   │   │   └── zerovec v0.11.5 (*)
++│   │   │   │   │   └── icu_properties v2.1.2
++│   │   │   │   │       ├── icu_collections v2.1.1 (*)
++│   │   │   │   │       ├── icu_locale_core v2.1.1 (*)
++│   │   │   │   │       ├── icu_properties_data v2.1.2
++│   │   │   │   │       ├── icu_provider v2.1.1 (*)
++│   │   │   │   │       ├── zerotrie v0.2.3 (*)
++│   │   │   │   │       └── zerovec v0.11.5 (*)
++│   │   │   │   ├── smallvec v1.15.1
++│   │   │   │   └── utf8_iter v1.0.4
++│   │   │   ├── percent-encoding v2.3.2
++│   │   │   ├── serde v1.0.228 (*)
++│   │   │   └── serde_derive v1.0.228 (proc-macro) (*)
++│   │   ├── zeroize v1.8.2 (*)
++│   │   └── zeroize_derive v1.4.3 (proc-macro) (*)
++│   ├── postcard v1.1.3
++│   │   ├── cobs v0.3.0
++│   │   │   └── thiserror v2.0.18
++│   │   │       └── thiserror-impl v2.0.18 (proc-macro)
++│   │   │           ├── proc-macro2 v1.0.106 (*)
++│   │   │           ├── quote v1.0.45 (*)
++│   │   │           └── syn v2.0.117 (*)
++│   │   ├── heapless v0.7.17
++│   │   │   ├── hash32 v0.2.1
++│   │   │   │   └── byteorder v1.5.0
++│   │   │   ├── serde v1.0.228 (*)
++│   │   │   ├── spin v0.9.8
++│   │   │   │   └── lock_api v0.4.14
++│   │   │   │       └── scopeguard v1.2.0
++│   │   │   └── stable_deref_trait v1.2.1
++│   │   └── serde v1.0.228 (*)
++│   ├── serde v1.0.228 (*)
++│   └── thiserror v2.0.18 (*)
++├── aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination-protocol)
++│   └── serde v1.0.228 (*)
++├── aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-protocol)
++│   └── serde v1.0.228 (*)
++├── aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
++│   └── serde v1.0.228 (*)
++├── serde v1.0.228 (*)
++└── thiserror v2.0.18 (*)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt
+new file mode 100644
+index 000000000..12915868f
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt
+@@ -0,0 +1,416 @@
++$ cargo check -p aspen-client-api --no-default-features --features auth
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Checking smallvec v1.15.1
++    Checking signature v3.0.0-rc.10
++    Checking percent-encoding v2.3.2
++    Checking rand_core v0.9.5
++   Compiling syn v2.0.117
++    Checking form_urlencoded v1.2.2
++   Compiling synstructure v0.13.2
++   Compiling zerofrom-derive v0.1.6
++   Compiling yoke-derive v0.8.1
++   Compiling zerovec-derive v0.11.2
++   Compiling serde_derive v1.0.228
++   Compiling displaydoc v0.2.5
++   Compiling zeroize_derive v1.4.3
++   Compiling curve25519-dalek-derive v0.1.1
++   Compiling thiserror-impl v2.0.18
++   Compiling derive_more-impl v2.1.1
++   Compiling n0-error-macros v0.1.3
++   Compiling spez v0.1.2
++    Checking zeroize v1.8.2
++    Checking n0-error v0.1.3
++    Checking zerofrom v0.1.6
++    Checking yoke v0.8.1
++    Checking thiserror v2.0.18
++    Checking cobs v0.3.0
++    Checking zerovec v0.11.5
++    Checking zerotrie v0.2.3
++    Checking derive_more v2.1.1
++    Checking tinystr v0.8.2
++    Checking potential_utf v0.1.4
++    Checking icu_collections v2.1.1
++    Checking icu_locale_core v2.1.1
++    Checking icu_provider v2.1.1
++    Checking serde v1.0.228
++    Checking icu_properties v2.1.2
++    Checking icu_normalizer v2.1.1
++    Checking curve25519-dalek v5.0.0-pre.1
++    Checking ed25519 v3.0.0-rc.4
++    Checking heapless v0.7.17
++    Checking aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination-protocol)
++    Checking aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-protocol)
++    Checking aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
++    Checking postcard v1.1.3
++    Checking idna_adapter v1.2.1
++    Checking idna v1.1.0
++    Checking ed25519-dalek v3.0.0-pre.1
++    Checking url v2.5.8
++    Checking iroh-base v0.97.0
++    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
++    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
++    |
++201 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++    |
++    = note: `#[warn(unknown_lints)]` on by default
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
++    |
++212 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
++    |
++222 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
++    |
++233 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
++    |
++243 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
++    |
++249 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
++    |
++259 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
++    |
++270 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
++    |
++334 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
++    |
++340 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unused import: `alloc::string::ToString`
++ --> crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs:1:5
++  |
++1 | use alloc::string::ToString;
++  |     ^^^^^^^^^^^^^^^^^^^^^^^
++  |
++  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
++     |
++1479 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
++     |
++1495 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
++     |
++1509 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
++     |
++1525 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
++     |
++1539 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
++     |
++1551 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
++     |
++1565 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
++     |
++1581 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
++     |
++4299 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
++     |
++4306 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
++     |
++4313 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
++     |
++4320 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
++     |
++4327 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
++     |
++4334 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
++     |
++4341 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
++     |
++4348 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
++     |
++4388 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
++     |
++4395 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: `aspen-client-api` (lib) generated 29 warnings (run `cargo fix --lib -p aspen-client-api` to apply 1 suggestion)
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.88s
++$ cargo check -p aspen-client-api
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
++package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
++workspace: /home/brittonr/git/aspen/Cargo.toml
++    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
++    |
++201 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++    |
++    = note: `#[warn(unknown_lints)]` on by default
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
++    |
++212 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
++    |
++222 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
++    |
++233 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
++    |
++243 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
++    |
++249 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
++    |
++259 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
++    |
++270 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
++    |
++334 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
++    |
++340 |         acronym_style,
++    |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1479:9
++     |
++1479 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1495:9
++     |
++1495 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1509:9
++     |
++1509 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1525:9
++     |
++1525 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1539:9
++     |
++1539 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1551:9
++     |
++1551 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1565:9
++     |
++1565 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:1581:9
++     |
++1581 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4299:9
++     |
++4299 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4306:9
++     |
++4306 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4313:9
++     |
++4313 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4320:9
++     |
++4320 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4327:9
++     |
++4327 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4334:9
++     |
++4334 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4341:9
++     |
++4341 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4348:9
++     |
++4348 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4388:9
++     |
++4388 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: unknown lint: `acronym_style`
++    --> crates/aspen-client-api/src/messages/mod.rs:4395:9
++     |
++4395 |         acronym_style,
++     |         ^^^^^^^^^^^^^
++
++warning: `aspen-client-api` (lib) generated 28 warnings
++    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.77s
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+index 9a9dab42f..aba0346c0 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+@@ -12,7 +12,7 @@
+
+ ## 3. Auth and tickets first slice
+
+-- [ ] I6 Migrate portable consumers to canonical `aspen-auth-core` / `aspen-hooks-ticket` imports or document retained `aspen-auth` compatibility re-exports with owner, tests, and removal criteria. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++- [x] I6 Migrate portable consumers to canonical `aspen-auth-core` / `aspen-hooks-ticket` imports or document retained `aspen-auth` compatibility re-exports with owner, tests, and removal criteria. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T21:02:00Z
+
+ - [ ] I7 Add token/ticket serialization goldens, malformed-input negative tests, downstream fixture metadata, and compatibility evidence for auth/ticket consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+index 315ef87a5..7e749dc50 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+@@ -2,29 +2,61 @@
+
+ ## Implementation Evidence
+
+-- Changed file: `docs/crate-extraction/foundational-types.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-negative.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.json`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.stderr`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/Cargo.lock`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/Cargo.toml`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/src/lib.rs`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.lock`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.toml`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/src/lib.rs`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/Cargo.lock`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/Cargo.toml`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/src/lib.rs`
++- Changed file: `crates/aspen-auth/src/lib.rs`
++- Changed file: `crates/aspen-client-api/Cargo.toml`
++- Changed file: `crates/aspen-client-api/src/lib.rs`
++- Changed file: `crates/aspen-client-api/src/messages/automerge.rs`
++- Changed file: `crates/aspen-client-api/src/messages/batch.rs`
++- Changed file: `crates/aspen-client-api/src/messages/blob.rs`
++- Changed file: `crates/aspen-client-api/src/messages/ci.rs`
++- Changed file: `crates/aspen-client-api/src/messages/cluster.rs`
++- Changed file: `crates/aspen-client-api/src/messages/coordination.rs`
++- Changed file: `crates/aspen-client-api/src/messages/docs.rs`
++- Changed file: `crates/aspen-client-api/src/messages/federation.rs`
++- Changed file: `crates/aspen-client-api/src/messages/forge.rs`
++- Changed file: `crates/aspen-client-api/src/messages/hooks.rs`
++- Changed file: `crates/aspen-client-api/src/messages/jobs.rs`
++- Changed file: `crates/aspen-client-api/src/messages/kv.rs`
++- Changed file: `crates/aspen-client-api/src/messages/lease.rs`
++- Changed file: `crates/aspen-client-api/src/messages/mod.rs`
++- Changed file: `crates/aspen-client-api/src/messages/secrets.rs`
++- Changed file: `crates/aspen-client-api/src/messages/sql.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/batch_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/ci_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/docs_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/lease_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/mod.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/net_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/sql_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/to_operation/watch_ops.rs`
++- Changed file: `crates/aspen-client-api/src/messages/watch.rs`
++- Changed file: `docs/crate-extraction/auth-ticket.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.stderr`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-implementation-diff.patch`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i5.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i5.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-implementation-diff.patch`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i6.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i6.json`
+
+ ## Task Coverage
+
+@@ -40,6 +72,9 @@
+ - [x] I5 Split/prove `aspen-traits` reusable KV capability traits and save downstream fixture, cargo tree, no-default/default, negative boundary, and representative consumer evidence. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T20:46:00Z
+   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-negative.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.json`, `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/Cargo.toml`, `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/Cargo.toml`, `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.toml`
+
++- [x] I6 Migrate portable consumers to canonical `aspen-auth-core` / `aspen-hooks-ticket` imports or document retained `aspen-auth` compatibility re-exports with owner, tests, and removal criteria. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T21:02:00Z
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
++
+ ## Oracle Checkpoints
+
+ None.
+@@ -94,3 +129,16 @@ None.
+ - Status: pass
+ - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.md`
+ - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.json`
++
++
++### `cargo check` for aspen-client-api auth-core migration
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`
++- Boundary artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`
++
++### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory Cargo.toml --manifest-dir docs/crate-extraction --candidate-family auth-ticket --output-json .../i6-auth-ticket-readiness.json --output-markdown .../i6-auth-ticket-readiness.md`
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`

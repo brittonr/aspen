@@ -190,8 +190,8 @@ pub enum FederationRequest {
 #[cfg(feature = "auth")]
 impl FederationRequest {
     /// Convert to an authorization operation.
-    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
-        use aspen_auth::Operation;
+    pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
+        use aspen_auth_core::Operation;
         match self {
             // Read-only / no auth required
             Self::GetFederationStatus

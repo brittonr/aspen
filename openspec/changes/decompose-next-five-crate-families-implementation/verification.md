@@ -2,29 +2,61 @@
 
 ## Implementation Evidence
 
-- Changed file: `docs/crate-extraction/foundational-types.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-negative.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.json`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.stderr`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/Cargo.lock`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/Cargo.toml`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/src/lib.rs`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.lock`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.toml`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/src/lib.rs`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/Cargo.lock`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/Cargo.toml`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/src/lib.rs`
+- Changed file: `crates/aspen-auth/src/lib.rs`
+- Changed file: `crates/aspen-client-api/Cargo.toml`
+- Changed file: `crates/aspen-client-api/src/lib.rs`
+- Changed file: `crates/aspen-client-api/src/messages/automerge.rs`
+- Changed file: `crates/aspen-client-api/src/messages/batch.rs`
+- Changed file: `crates/aspen-client-api/src/messages/blob.rs`
+- Changed file: `crates/aspen-client-api/src/messages/ci.rs`
+- Changed file: `crates/aspen-client-api/src/messages/cluster.rs`
+- Changed file: `crates/aspen-client-api/src/messages/coordination.rs`
+- Changed file: `crates/aspen-client-api/src/messages/docs.rs`
+- Changed file: `crates/aspen-client-api/src/messages/federation.rs`
+- Changed file: `crates/aspen-client-api/src/messages/forge.rs`
+- Changed file: `crates/aspen-client-api/src/messages/hooks.rs`
+- Changed file: `crates/aspen-client-api/src/messages/jobs.rs`
+- Changed file: `crates/aspen-client-api/src/messages/kv.rs`
+- Changed file: `crates/aspen-client-api/src/messages/lease.rs`
+- Changed file: `crates/aspen-client-api/src/messages/mod.rs`
+- Changed file: `crates/aspen-client-api/src/messages/secrets.rs`
+- Changed file: `crates/aspen-client-api/src/messages/sql.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/batch_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/ci_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/docs_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/forge_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/lease_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/mod.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/net_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/sql_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/to_operation/watch_ops.rs`
+- Changed file: `crates/aspen-client-api/src/messages/watch.rs`
+- Changed file: `docs/crate-extraction/auth-ticket.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.stderr`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-implementation-diff.patch`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i5.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i5.json`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-implementation-diff.patch`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i6.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i6.json`
 
 ## Task Coverage
 
@@ -39,6 +71,9 @@
 
 - [x] I5 Split/prove `aspen-traits` reusable KV capability traits and save downstream fixture, cargo tree, no-default/default, negative boundary, and representative consumer evidence. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T20:46:00Z
   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-positive.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-aspen-traits-negative.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.json`, `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-capability-smoke/Cargo.toml`, `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-types-smoke/Cargo.toml`, `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/aspen-traits-no-default-kvread-negative/Cargo.toml`
+
+- [x] I6 Migrate portable consumers to canonical `aspen-auth-core` / `aspen-hooks-ticket` imports or document retained `aspen-auth` compatibility re-exports with owner, tests, and removal criteria. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T21:02:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/auth-ticket-compatibility.txt`
 
 ## Oracle Checkpoints
 
@@ -94,3 +129,16 @@ None.
 - Status: pass
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.md`
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i5-foundational-readiness.json`
+
+
+### `cargo check` for aspen-client-api auth-core migration
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-migration.txt`
+- Boundary artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-client-api-auth-core-boundary.txt`
+
+### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory Cargo.toml --manifest-dir docs/crate-extraction --candidate-family auth-ticket --output-json .../i6-auth-ticket-readiness.json --output-markdown .../i6-auth-ticket-readiness.md`
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.md`
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i6-auth-ticket-readiness.json`
