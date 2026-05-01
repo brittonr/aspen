@@ -2,10 +2,9 @@
 
 ## Implementation Evidence
 
-- Changed file: `scripts/openspec-preflight.sh`
-- Changed file: `openspec/changes/detect-delta-spec-consistency/tasks.md`
+- Changed file: `scripts/test-openspec-preflight-evidence.sh`
+- Changed file: `openspec/changes/detect-delta-spec-consistency/evidence/i2-preflight-wiring.txt`
 - Changed file: `openspec/changes/detect-delta-spec-consistency/verification.md`
-- Changed file: `openspec/changes/detect-delta-spec-consistency/specs/openspec-governance/spec.md`
 
 ## Task Coverage
 

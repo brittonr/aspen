@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null && pwd)
+REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." >/dev/null && pwd)
 PREFLIGHT="$REPO_ROOT/scripts/openspec-preflight.sh"
 DETAIL_OUTPUT="${OPENSPEC_PREFLIGHT_SHOW_CASE_OUTPUT:-0}"
 

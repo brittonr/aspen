@@ -1,4 +1,25 @@
+$ scripts/openspec-preflight.sh detect-delta-spec-consistency
 OK: openspec/changes/detect-delta-spec-consistency
   tasks: 6 total / 2 checked
-  changed files listed: 4
+  changed files listed: 3
   verification artifacts: 2
+
+$ scripts/test-openspec-preflight-evidence.sh
+PASS active-change-local
+PASS active-changed-file
+PASS archived-change-local
+PASS archived-changed-file
+PASS active-missing-evidence
+PASS active-untracked-evidence
+PASS active-empty-evidence
+PASS active-pending-evidence
+PASS active-todo-evidence
+PASS active-placeholder-evidence
+PASS active-disallowed-external
+PASS archived-missing-evidence
+PASS archived-untracked-evidence
+PASS archived-empty-evidence
+PASS archived-pending-evidence
+PASS archived-todo-evidence
+PASS archived-placeholder-evidence
+PASS archived-disallowed-external
