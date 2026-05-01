@@ -52,4 +52,4 @@
 
 ## First blocker
 
-Isolate Shamir/GF/HKDF/share-chain helpers and trust reconfiguration/decryption-key-selection state machines behind deterministic inputs and outputs.
+I11 inventory has started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated, and `aspen-crypto` needs a narrower transport-free helper boundary because its current default crate also includes Iroh/tokio filesystem lifecycle utilities.

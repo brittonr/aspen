@@ -2,12 +2,12 @@
 
 ## Implementation Evidence
 
-- Changed file: `docs/crate-extraction/jobs-ci-core.md`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-implementation-diff.patch`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i10.txt`
-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i10.json`
+- Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-implementation-diff.patch`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i11.txt`
+- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i11.json`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
 - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
 
@@ -39,6 +39,9 @@
 
 - [x] I10 Save compatibility checks for affected jobs/CI consumers, handlers, CLI/dogfood paths, and executor crates named in the manifest. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:22:00Z
   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
+
+- [x] I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:37:00Z
+  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
 
 ## Oracle Checkpoints
 
@@ -136,3 +139,35 @@ None.
 - Status: pass
 - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`
 - Packages checked: `aspen-ci-core`, `aspen-jobs-protocol`, `aspen-ci`, `aspen-jobs`, `aspen-ci-handler`, `aspen-job-handler`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, `aspen-ci-executor-nix`
+
+
+### `cargo check/tree` for trust/crypto/secrets reusable surface inventory
+
+- Status: pass
+- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt`
+- Inventory: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md`
+
+## I11 trust/crypto/secrets inventory and pure-boundary gate
+
+Task: I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells.
+
+Changed files:
+
+- docs/crate-extraction/trust-crypto-secrets.md
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-inventory.txt
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-trust-crypto-secrets-surface-inventory.md
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/i11-implementation-diff.patch
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i11.txt
+- openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i11.json
+- openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+- openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+
+Durable evidence:
+
+- `evidence/i11-trust-crypto-secrets-inventory.txt`: successful cargo checks and dependency trees for `aspen-trust`, `aspen-secrets --no-default-features`, and `aspen-crypto`.
+- `evidence/i11-trust-crypto-secrets-surface-inventory.md`: boundary decision naming `aspen-trust` as the reusable pure trust surface, `aspen-secrets --no-default-features` as feature-gated runtime separation, and current `aspen-crypto` Iroh/tokio filesystem helpers as a boundary risk for the next slice.
+- `evidence/i11-implementation-diff.patch`: source/docs/evidence diff for this slice.
+- `evidence/openspec-preflight-i11.txt`: OpenSpec preflight output for this slice.
+- `evidence/openspec-verify-i11.json`: OpenSpec validation output for this slice.
+
+Result: I11 establishes the reusable trust/crypto/secrets boundary without moving code yet: pure Shamir/GF256/HKDF/share-chain/envelope/reconfiguration logic is centered in `aspen-trust`, runtime secrets-service/handler/SOPS/client transport remains outside reusable defaults, and `aspen-crypto` needs follow-up narrowing before it can be treated as wholly transport-free.
