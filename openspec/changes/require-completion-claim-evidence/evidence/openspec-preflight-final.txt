@@ -1,0 +1,4 @@
+OK: openspec/changes/require-completion-claim-evidence
+  tasks: 4 total / 4 checked
+  changed files listed: 5
+  verification artifacts: 2

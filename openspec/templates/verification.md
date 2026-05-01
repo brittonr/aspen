@@ -72,5 +72,6 @@ For final drain-complete/archive claims, save `scripts/openspec-drain-audit.sh -
 
 - Run `scripts/openspec-preflight.sh <change-dir-or-name>` before checking the final task box or requesting done review.
 - For drain completion, remove `.drain-state.md`, rewrite archived task/verification paths away from stale active `openspec/changes/<change>/...` references, then run and save `scripts/openspec-drain-audit.sh --archive openspec/changes/archive/<date>-<change>`.
+- Before a final summary claims clean status, empty queue, archived completion, successful validation, or passed checks, run `scripts/check-completion-claim-evidence.py --response <summary-file> --evidence <transcript-file>` or cite the exact command transcripts that back those claims.
 - The preflight script now fails if the repo still contains untracked files unless `OPENSPEC_PREFLIGHT_ALLOW_UNTRACKED=1` is set.
 - Stage newly created source files before `nix build` / `nix run`; untracked files can be excluded by the flake source filter.

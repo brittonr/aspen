@@ -1,7 +1,7 @@
 ## 1. Implementation
 
 - [x] I1 Add high-risk completion-claim detection to done-review, or to a checker that done-review invokes automatically. [covers=openspec-governance.completion-claim-evidence.evidence-backed-claim-passes,openspec-governance.completion-claim-evidence.unsupported-claim-fails] ✅ 15m (started: 2026-05-01T02:01:00Z → completed: 2026-05-01T02:16:13Z)
-- [ ] I2 Update prompt/checklist guidance to require status/list/check evidence before strong completion claims. [covers=openspec-governance.completion-claim-evidence]
+- [x] I2 Update prompt/checklist guidance to require status/list/check evidence before strong completion claims. [covers=openspec-governance.completion-claim-evidence] ✅ 5m (started: 2026-05-01T02:16:30Z → completed: 2026-05-01T02:21:55Z)
 
 ## 2. Verification
 

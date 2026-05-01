@@ -1,0 +1,5 @@
+I2 guidance update evidence
+
+Updated repo-local verification guidance in openspec/templates/verification.md so final summaries that claim clean status, empty OpenSpec queue, archived completion, successful validation, or passed checks must either run scripts/check-completion-claim-evidence.py with response/evidence files or cite exact supporting command transcripts.
+
+External Hermes done-review guidance was also updated outside this repository to invoke the same checker before strong final-response claims.
