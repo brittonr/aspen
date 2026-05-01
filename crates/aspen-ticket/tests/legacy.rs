@@ -1,10 +1,18 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+#![allow(
+    no_unwrap,
+    reason = "iroh_tickets::Ticket requires infallible serialization in legacy rejection fixture"
+)]
+
 use std::net::SocketAddr;
 
 use aspen_ticket::AspenClusterTicket;
 use iroh::EndpointId;
 use iroh_gossip::proto::TopicId;
 use iroh_tickets::Ticket;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct LegacyBootstrapPeer {

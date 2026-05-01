@@ -32,6 +32,14 @@
 //! ```
 
 #![cfg_attr(not(test), no_std)]
+#![cfg_attr(
+    test,
+    allow(
+        no_panic,
+        no_unwrap,
+        reason = "client-api tests use panic/expect assertions for concise protocol failure messages"
+    )
+)]
 
 #[macro_use]
 extern crate alloc;
@@ -43,6 +51,10 @@ pub use messages::*;
 
 #[cfg(test)]
 mod tests {
+    // Test assertions intentionally use panic/unwrap-style helpers for concise
+    // failure messages; production code remains covered by Tiger Style lints.
+    #![allow(no_panic, no_unwrap)]
+
     use super::*;
 
     fn decode_varint(bytes: &[u8]) -> u32 {
@@ -370,7 +382,7 @@ mod tests {
         // Verify deploy variants are consecutive (no gaps)
         let discs: Vec<u32> = deploy_variants.iter().map(|(v, _)| discriminant_of(v)).collect();
         for window in discs.windows(2) {
-            assert_eq!(window[1], window[0] + 1, "Deploy response variants must be consecutive");
+            assert_eq!(window[1], window[0].saturating_add(1), "Deploy response variants must be consecutive");
         }
 
         // Roundtrip test for each
@@ -428,7 +440,7 @@ mod tests {
         // Verify deploy requests are consecutive
         let discs: Vec<u32> = deploy_requests.iter().map(|(r, _)| discriminant_of(r)).collect();
         for window in discs.windows(2) {
-            assert_eq!(window[1], window[0] + 1, "Deploy request variants must be consecutive");
+            assert_eq!(window[1], window[0].saturating_add(1), "Deploy request variants must be consecutive");
         }
 
         // Roundtrip test for each
@@ -732,7 +744,7 @@ mod tests {
 
     #[test]
     fn test_constants_are_bounded() {
-        const MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES: usize = 16_usize * 1024 * 1024;
+        const MAX_REASONABLE_CLIENT_MESSAGE_SIZE_BYTES: usize = 16_777_216;
         const MAX_REASONABLE_CLUSTER_NODES: usize = 256;
 
         assert!(MAX_CLIENT_MESSAGE_SIZE > 0);

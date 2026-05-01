@@ -58,8 +58,12 @@ impl RaftKvMemberInfo {
 
     /// Count configured transport addresses.
     #[must_use]
-    pub fn transport_addr_count(&self) -> u32 {
-        u32::try_from(self.transport_addrs.len()).unwrap_or(u32::MAX)
+    #[allow(
+        sentinel_fallback,
+        reason = "usize-to-u64 overflow is unreachable on supported targets; keep infallible count API"
+    )]
+    pub fn transport_addr_count(&self) -> u64 {
+        u64::try_from(self.transport_addrs.len()).unwrap_or(u64::MAX)
     }
 }
 

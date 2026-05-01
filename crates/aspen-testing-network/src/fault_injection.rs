@@ -982,10 +982,10 @@ mod tests {
     #[test]
     #[ignore = "requires root privileges"]
     fn test_latency_injection_lifecycle() {
-        let mut latency_injection = LatencyInjection::create("lo", 100, 10).unwrap();
-        assert!(latency_injection.is_active());
-        latency_injection.heal().unwrap();
-        assert!(!latency_injection.is_active());
+        let mut latency_injection_ms = LatencyInjection::create("lo", 100, 10).unwrap();
+        assert!(latency_injection_ms.is_active());
+        latency_injection_ms.heal().unwrap();
+        assert!(!latency_injection_ms.is_active());
     }
 
     #[test]

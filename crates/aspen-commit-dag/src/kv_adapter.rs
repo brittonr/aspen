@@ -4,21 +4,24 @@
 //! from [`crate::persistence`], bridging the domain-level commit/branch-tip
 //! abstraction to the concrete KV key layout used by [`crate::store::CommitStore`].
 
-use async_trait::async_trait;
-
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::WriteCommand;
 use aspen_kv_types::WriteRequest;
 use aspen_traits::KvRead;
 use aspen_traits::KvWrite;
+use async_trait::async_trait;
 
 use crate::constants::COMMIT_KV_PREFIX;
 use crate::constants::COMMIT_TIP_PREFIX;
 use crate::error::CommitDagError;
-use crate::persistence::{BranchTipRead, BranchTipWrite, CommitRead, CommitWrite};
+use crate::persistence::BranchTipRead;
+use crate::persistence::BranchTipWrite;
+use crate::persistence::CommitRead;
+use crate::persistence::CommitWrite;
 use crate::types::Commit;
 use crate::types::CommitId;
-use crate::verified::hash::{hash_from_hex, hash_to_hex};
+use crate::verified::hash::hash_from_hex;
+use crate::verified::hash::hash_to_hex;
 
 /// Adapter that implements domain store traits over a generic KV store.
 ///
@@ -41,25 +44,19 @@ impl<S: KvRead> CommitRead for KvCommitAdapter<S> {
         let hex_id = hash_to_hex(id);
         let key = format!("{COMMIT_KV_PREFIX}{hex_id}");
 
-        let result = self
-            .kv
-            .read(ReadRequest::new(key))
-            .await
-            .map_err(|_| CommitDagError::CommitNotFound {
-                commit_id_hex: hex_id.clone(),
-            })?;
+        let result = self.kv.read(ReadRequest::new(key)).await.map_err(|_| CommitDagError::CommitNotFound {
+            commit_id_hex: hex_id.clone(),
+        })?;
 
-        let kv_entry =
-            result
-                .kv
-                .ok_or_else(|| CommitDagError::CommitNotFound { commit_id_hex: hex_id.clone() })?;
+        let kv_entry = result.kv.ok_or_else(|| CommitDagError::CommitNotFound {
+            commit_id_hex: hex_id.clone(),
+        })?;
 
         let bytes = hex::decode(&kv_entry.value).map_err(|e| CommitDagError::CommitSerializationError {
             reason: format!("hex decode: {e}"),
         })?;
 
-        postcard::from_bytes(&bytes)
-            .map_err(|e| CommitDagError::CommitSerializationError { reason: e.to_string() })
+        postcard::from_bytes(&bytes).map_err(|e| CommitDagError::CommitSerializationError { reason: e.to_string() })
     }
 }
 
@@ -72,7 +69,10 @@ impl<S: KvWrite> CommitWrite for KvCommitAdapter<S> {
             .map_err(|e| CommitDagError::CommitSerializationError { reason: e.to_string() })?;
 
         let request = WriteRequest {
-            command: WriteCommand::Set { key, value: hex::encode(&value) },
+            command: WriteCommand::Set {
+                key,
+                value: hex::encode(&value),
+            },
         };
 
         self.kv
@@ -93,11 +93,10 @@ impl<S: KvRead> BranchTipRead for KvCommitAdapter<S> {
         match result {
             Ok(r) => match r.kv {
                 Some(entry) => {
-                    let commit_id = hash_from_hex(&entry.value).ok_or_else(|| {
-                        CommitDagError::CommitSerializationError {
+                    let commit_id =
+                        hash_from_hex(&entry.value).ok_or_else(|| CommitDagError::CommitSerializationError {
                             reason: format!("invalid commit tip hex: {}", entry.value),
-                        }
-                    })?;
+                        })?;
                     Ok(Some(commit_id))
                 }
                 None => Ok(None),
@@ -109,11 +108,7 @@ impl<S: KvRead> BranchTipRead for KvCommitAdapter<S> {
 
 #[async_trait]
 impl<S: KvWrite> BranchTipWrite for KvCommitAdapter<S> {
-    async fn update_branch_tip(
-        &self,
-        branch_id: &str,
-        commit_id: &CommitId,
-    ) -> Result<(), CommitDagError> {
+    async fn update_branch_tip(&self, branch_id: &str, commit_id: &CommitId) -> Result<(), CommitDagError> {
         let hex_id = hash_to_hex(commit_id);
         let key = format!("{COMMIT_TIP_PREFIX}{branch_id}");
 
@@ -132,11 +127,15 @@ impl<S: KvWrite> BranchTipWrite for KvCommitAdapter<S> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(ambiguous_params, reason = "test fixture builder keeps commit construction compact")]
+
+    use aspen_testing_core::DeterministicKeyValueStore;
+
     use super::*;
     use crate::persistence::walk_chain;
     use crate::types::MutationType;
-    use crate::verified::commit_hash::{compute_commit_id, compute_mutations_hash};
-    use aspen_testing_core::DeterministicKeyValueStore;
+    use crate::verified::commit_hash::compute_commit_id;
+    use crate::verified::commit_hash::compute_mutations_hash;
 
     fn make_commit(
         branch_id: &str,
@@ -163,8 +162,7 @@ mod tests {
     async fn kv_adapter_store_and_load_roundtrip() {
         let kv = DeterministicKeyValueStore::new();
         let adapter = KvCommitAdapter::new(&kv);
-        let commit =
-            make_commit("br", None, vec![("k".into(), MutationType::Set("v".into()))], 1, 1000);
+        let commit = make_commit("br", None, vec![("k".into(), MutationType::Set("v".into()))], 1, 1000);
 
         adapter.store_commit(&commit).await.unwrap();
         let loaded = adapter.load_commit(&commit.id).await.unwrap();
@@ -199,10 +197,8 @@ mod tests {
         let adapter = KvCommitAdapter::new(&kv);
 
         let c1 = make_commit("br", None, vec![("a".into(), MutationType::Set("1".into()))], 1, 1000);
-        let c2 =
-            make_commit("br", Some(c1.id), vec![("b".into(), MutationType::Set("2".into()))], 2, 2000);
-        let c3 =
-            make_commit("br", Some(c2.id), vec![("c".into(), MutationType::Set("3".into()))], 3, 3000);
+        let c2 = make_commit("br", Some(c1.id), vec![("b".into(), MutationType::Set("2".into()))], 2, 2000);
+        let c3 = make_commit("br", Some(c2.id), vec![("c".into(), MutationType::Set("3".into()))], 3, 3000);
 
         adapter.store_commit(&c1).await.unwrap();
         adapter.store_commit(&c2).await.unwrap();

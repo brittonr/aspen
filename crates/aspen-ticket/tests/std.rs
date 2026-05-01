@@ -1,6 +1,14 @@
 #![cfg(feature = "std")]
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+#![allow(
+    no_unwrap,
+    reason = "std wrapper tests use expect to keep assertion failures concise"
+)]
 
-use aspen_ticket::{AspenClusterTicket, ClusterTopicId, SignedAspenClusterTicket};
+use aspen_ticket::AspenClusterTicket;
+use aspen_ticket::ClusterTopicId;
+use aspen_ticket::SignedAspenClusterTicket;
 
 const STD_SIGN_SECRET_BYTES: [u8; 32] = [5; 32];
 const STD_VALIDITY_SECRET_BYTES: [u8; 32] = [6; 32];
@@ -13,10 +21,8 @@ const STD_VALIDITY_CLUSTER_ID: &str = "std-validity";
 #[test]
 fn std_signed_wrappers_work() {
     let secret_key = iroh_base::SecretKey::from(STD_SIGN_SECRET_BYTES);
-    let ticket = AspenClusterTicket::new(
-        ClusterTopicId::from_bytes(STD_SIGN_TOPIC_BYTES),
-        STD_SIGN_CLUSTER_ID.to_string(),
-    );
+    let ticket =
+        AspenClusterTicket::new(ClusterTopicId::from_bytes(STD_SIGN_TOPIC_BYTES), STD_SIGN_CLUSTER_ID.to_string());
 
     let signed = SignedAspenClusterTicket::sign(ticket, &secret_key).expect("std sign should succeed");
     assert!(signed.verify().is_some(), "std verify should succeed");

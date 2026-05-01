@@ -1,5 +1,12 @@
 //! Integration tests for BranchOverlay using DeterministicKeyValueStore.
 
+#![allow(
+    compound_assertion,
+    explicit_defaults,
+    no_unwrap,
+    reason = "integration tests use unwrap/expect and explicit fixture defaults to keep assertion failures concise"
+)]
+
 use std::sync::Arc;
 
 use aspen_kv_branch::BranchOverlay;
@@ -8,7 +15,10 @@ use aspen_kv_types::ReadRequest;
 use aspen_kv_types::ScanRequest;
 use aspen_kv_types::WriteRequest;
 use aspen_testing_core::DeterministicKeyValueStore;
-use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite, KeyValueStore};
+use aspen_traits::KvDelete;
+use aspen_traits::KvRead;
+use aspen_traits::KvScan;
+use aspen_traits::KvWrite;
 
 fn make_store() -> Arc<DeterministicKeyValueStore> {
     DeterministicKeyValueStore::new()

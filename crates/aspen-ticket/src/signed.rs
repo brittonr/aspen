@@ -1,9 +1,16 @@
 //! Signed cluster tickets with explicit-time verification helpers.
 
-use alloc::string::{String, ToString};
+use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
+#[cfg(any(test, feature = "std"))]
+use std::time::SystemTime;
+#[cfg(any(test, feature = "std"))]
+use std::time::UNIX_EPOCH;
 
 use iroh_base::PublicKey;
+#[cfg(any(test, feature = "std"))]
+use iroh_base::SecretKey;
 use iroh_base::Signature;
 use iroh_tickets::Ticket;
 use serde::Deserialize;
@@ -16,13 +23,6 @@ use crate::constants::CLOCK_SKEW_TOLERANCE_SECS;
 #[cfg(any(test, feature = "std"))]
 use crate::constants::DEFAULT_TICKET_VALIDITY_SECS;
 use crate::constants::SIGNED_TICKET_VERSION;
-
-#[cfg(any(test, feature = "std"))]
-use iroh_base::SecretKey;
-#[cfg(any(test, feature = "std"))]
-use std::time::SystemTime;
-#[cfg(any(test, feature = "std"))]
-use std::time::UNIX_EPOCH;
 
 /// Signed cluster ticket with Ed25519 signature verification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,11 +255,13 @@ fn sign_with_material(input: SignMaterialInput<'_>) -> SignedAspenClusterTicket 
 
 #[cfg(any(test, feature = "std"))]
 #[allow(unknown_lints)]
-#[allow(ambient_clock, reason = "signed ticket helpers are the std shell boundary for wall-clock time")]
+#[allow(
+    ambient_clock,
+    reason = "signed ticket helpers are the std shell boundary for wall-clock time"
+)]
 fn current_unix_time_secs() -> ClusterTicketResult<u64> {
-    let elapsed_since_epoch = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| ClusterTicketError::Deserialize {
+    let elapsed_since_epoch =
+        SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error| ClusterTicketError::Deserialize {
             reason: error.to_string(),
         })?;
     Ok(elapsed_since_epoch.as_secs())

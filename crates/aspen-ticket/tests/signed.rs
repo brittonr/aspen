@@ -1,4 +1,12 @@
 #![cfg(feature = "signed")]
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+#![allow(
+    assertion_density,
+    no_panic,
+    no_unwrap,
+    reason = "signed-ticket tests use compact fixture builders and explicit panic messages"
+)]
 
 use aspen_ticket::AspenClusterTicket;
 use aspen_ticket::ClusterTicketError;
@@ -29,7 +37,14 @@ struct SignedPayload<'a> {
     nonce: [u8; 16],
 }
 
+#[allow(
+    assertion_density,
+    reason = "fixture builder constructs deterministic signed ticket without assertions"
+)]
 fn build_signed_ticket() -> SignedAspenClusterTicket {
+    assert_eq!(SIGNED_TEST_SECRET_BYTES.len(), 32);
+    assert_eq!(SIGNED_TEST_TOPIC_BYTES.len(), 32);
+
     let secret_key = SecretKey::from(SIGNED_TEST_SECRET_BYTES);
     let ticket = AspenClusterTicket::new(
         ClusterTopicId::from_bytes(SIGNED_TEST_TOPIC_BYTES),
@@ -44,8 +59,8 @@ fn build_signed_ticket() -> SignedAspenClusterTicket {
         expires_at_secs: SIGNED_TEST_EXPIRES_AT_SECS,
         nonce: SIGNED_TEST_NONCE,
     };
-    let payload_bytes = postcard::to_allocvec(&payload)
-        .expect("signed payload serialization should succeed for bounded fields");
+    let payload_bytes =
+        postcard::to_allocvec(&payload).expect("signed payload serialization should succeed for bounded fields");
     let signature = secret_key.sign(&payload_bytes);
     SignedAspenClusterTicket {
         version: SIGNED_TEST_VERSION,

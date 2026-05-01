@@ -1119,7 +1119,7 @@ mod tests {
 
     #[test]
     fn jj_transport_rejects_future_version() {
-        const FUTURE_VERSION: u16 = JJ_TRANSPORT_VERSION_CURRENT + 1;
+        const FUTURE_VERSION: u16 = JJ_TRANSPORT_VERSION_CURRENT.saturating_add(1);
         let range = JjTransportVersionRange::current();
 
         assert!(!range.accepts(FUTURE_VERSION));
@@ -1153,7 +1153,7 @@ mod tests {
 
     #[test]
     fn jj_native_admission_rejects_incompatible_transport_before_exchange() {
-        const FUTURE_VERSION: u16 = JJ_TRANSPORT_VERSION_CURRENT + 1;
+        const FUTURE_VERSION: u16 = JJ_TRANSPORT_VERSION_CURRENT.saturating_add(1);
         let request = JjNativeRequest {
             repo_id: "repo".into(),
             operation: JjNativeOperation::Fetch,

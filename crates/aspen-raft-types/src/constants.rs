@@ -21,7 +21,7 @@ use std::time::Duration;
 /// Used in:
 /// - `network.rs`: Message reading with `read_to_end(MAX_RPC_MESSAGE_SIZE)`
 /// - `server.rs`: RPC message deserialization from streams
-pub const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
+pub const MAX_RPC_MESSAGE_SIZE: u32 = 10_485_760;
 
 /// Timeout for Iroh connection establishment (5 seconds).
 ///
@@ -58,7 +58,7 @@ pub const IROH_READ_TIMEOUT: Duration = Duration::from_secs(10);
 ///
 /// Used in:
 /// - `network.rs`: Chunked snapshot reading with size validation
-pub const MAX_SNAPSHOT_SIZE: u64 = 1024 * 1024 * 1024;
+pub const MAX_SNAPSHOT_SIZE: u64 = 1_073_741_824;
 
 // ============================================================================
 // Peer and Connection Constants

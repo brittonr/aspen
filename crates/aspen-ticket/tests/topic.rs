@@ -1,3 +1,10 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+#![allow(
+    no_panic,
+    reason = "error-shape test uses panic for unexpected enum variant diagnostics"
+)]
+
 use aspen_ticket::ClusterTicketError;
 use aspen_ticket::ClusterTopicId;
 
@@ -15,10 +22,7 @@ fn cluster_topic_id_rejects_wrong_length() {
     let error = ClusterTopicId::try_from_slice(&bytes).expect_err("31-byte topic should fail");
     match error {
         ClusterTicketError::InvalidTopicId { reason } => {
-            assert!(
-                reason.contains(REQUIRED_TOPIC_LEN_BYTES_MESSAGE),
-                "unexpected reason: {reason}"
-            );
+            assert!(reason.contains(REQUIRED_TOPIC_LEN_BYTES_MESSAGE), "unexpected reason: {reason}");
         }
         other => panic!("unexpected error: {other:?}"),
     }

@@ -30,10 +30,7 @@ const TAG_DELETE: u8 = 0x02;
 /// Same sorted mutations always produce the same hash.
 #[inline]
 pub fn compute_mutations_hash(sorted_mutations: &[(String, MutationType)]) -> ChainHash {
-    debug_assert!(
-        sorted_mutations.windows(2).all(|w| w[0].0 <= w[1].0),
-        "mutations must be sorted by key"
-    );
+    debug_assert!(sorted_mutations.windows(2).all(|w| w[0].0 <= w[1].0), "mutations must be sorted by key");
     let mut hasher = blake3::Hasher::new();
 
     for (key, mutation) in sorted_mutations {
@@ -65,7 +62,7 @@ pub fn compute_mutations_hash(sorted_mutations: &[(String, MutationType)]) -> Ch
 ///
 /// Uses `GENESIS_HASH` ([0u8; 32]) when parent is None.
 #[inline]
-#[allow(tigerstyle::ambiguous_params)] // raft_revision and timestamp_ms are semantically distinct u64s with unit-suffixed names
+#[allow(ambiguous_params)] // raft_revision and timestamp_ms are semantically distinct u64s with unit-suffixed names
 pub fn compute_commit_id(
     parent: &Option<CommitId>,
     mutations_hash: &ChainHash,

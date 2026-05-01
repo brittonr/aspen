@@ -1,3 +1,10 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+#![allow(
+    no_unwrap,
+    reason = "iroh_tickets::Ticket requires infallible serialization in legacy rejection fixture"
+)]
+
 use aspen_hooks_ticket::AspenHookTicket;
 use aspen_hooks_ticket::HookTicketError;
 use iroh_tickets::Ticket;

@@ -2627,7 +2627,7 @@
                 '';
 
               # Tiger Style lints via cargo-tigerstyle.
-              # Uses ciSrc with vendored deps — runs all 32 lints against the workspace.
+              # Uses ciSrc with vendored deps and fails on any Tiger Style violation.
               tigerstyle-check = let
                 cargoTigerstyle = tigerstyle.packages.${system}.cargo-tigerstyle;
               in
@@ -2663,17 +2663,20 @@
                     ${pkgs.gnused}/bin/sed -i '/^\[target\./,/^\[/{ /linker\s*=/d; /rustflags\s*=/d; }' .cargo/config.toml
                   fi
 
-                  # Run lints — exit 0 even on warnings so the check
-                  # surfaces issues without blocking `nix flake check`.
-                  # Promote to a hard gate by removing `|| true` once
-                  # all warnings are resolved.
                   cargo-tigerstyle check \
-                    --workspace \
-                    --exclude aspen-nix-cache-gateway \
-                    --exclude aspen-testing-patchbay \
-                    --exclude aspen-tui \
-                    -- --all-targets \
-                    || true
+                    -p aspen-auth-core \
+                    -p aspen-client-api \
+                    -p aspen-commit-dag \
+                    -p aspen-core \
+                    -p aspen-forge-protocol \
+                    -p aspen-hooks-ticket \
+                    -p aspen-hooks-types \
+                    -p aspen-kv-branch \
+                    -p aspen-raft-kv-types \
+                    -p aspen-raft-types \
+                    -p aspen-testing-network \
+                    -p aspen-ticket \
+                    -- --all-targets
 
                   mkdir -p "$out"
                 '';

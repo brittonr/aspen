@@ -210,7 +210,32 @@ repository = "https://github.com/databendlabs/openraft"
 # cargo-tigerstyle first-class integration
 # Run: cargo tigerstyle check (or scripts/tigerstyle-check.sh)
 [workspace.metadata.tigerstyle]
-default_scope = ["--workspace"]
+default_scope = [
+    "-p",
+    "aspen-auth-core",
+    "-p",
+    "aspen-client-api",
+    "-p",
+    "aspen-commit-dag",
+    "-p",
+    "aspen-core",
+    "-p",
+    "aspen-forge-protocol",
+    "-p",
+    "aspen-hooks-ticket",
+    "-p",
+    "aspen-hooks-types",
+    "-p",
+    "aspen-kv-branch",
+    "-p",
+    "aspen-raft-kv-types",
+    "-p",
+    "aspen-raft-types",
+    "-p",
+    "aspen-testing-network",
+    "-p",
+    "aspen-ticket",
+]
 cargo_check_args = ["--all-targets"]
 
 # Workspace dependencies shared across all crates

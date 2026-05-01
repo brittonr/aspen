@@ -3,10 +3,9 @@
 //! Request/response types for Vault-compatible secrets management including
 //! KV secrets engine, Transit encryption, PKI certificates, and Nix cache signing.
 
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-
-use alloc::collections::BTreeMap;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -14,7 +13,10 @@ use serde::Serialize;
 /// Secrets domain request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // Secret wire variants intentionally stay domain-prefixed to preserve the established API surface.
-#[allow(clippy::enum_variant_names, reason = "secret wire variants stay domain-prefixed to preserve the established API surface")]
+#[allow(
+    clippy::enum_variant_names,
+    reason = "secret wire variants stay domain-prefixed to preserve the established API surface"
+)]
 pub enum SecretsRequest {
     // KV Secrets Engine
     /// Read a secret from the KV secrets engine.

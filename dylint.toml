@@ -1,21 +1,21 @@
-# Aspen Tiger Style configuration — full integration.
+# Aspen Tiger Style configuration — hard-gated integration.
 #
-# All 32 lints are enabled workspace-wide. Thresholds tightened to tigerstyle
-# defaults where possible. Violations now surface as errors during development
-# and fail CI via `nix flake check` (checks.tigerstyle).
+# All Tiger Style lints are enabled workspace-wide. Thresholds use Tiger Style
+# defaults where possible. Every lint is promoted to deny so violations fail
+# local `cargo-tigerstyle check` runs and CI via `nix flake check`.
 
 [tigerstyle]
-# Tigerstyle default: 70. Aspen targets this.
+# Tiger Style default: 70.
 function_length_max = 70
 
-# Tigerstyle default: 3. Aspen targets this.
+# Tiger Style default: 3.
 nesting_max_depth = 3
 
 # Assertion density: flag functions over 20 lines with fewer than 2 assertions.
 assertion_density_min_lines = 20
 assertion_density_min_assertions = 2
 
-# Tigerstyle default: 5.
+# Tiger Style default: 5.
 max_parameters = 5
 
 # Transport and storage code use `IO` pervasively.
@@ -23,13 +23,39 @@ acronym_allowlist = ["IO"]
 
 # All lints enabled — no disabled_lints.
 
-# Promote allow-by-default lints to deny for full coverage.
+# Hard enforcement: promote every lint to deny.
 [tigerstyle.lint_levels]
+compound_assertion = "deny"
+ignored_result = "deny"
+no_unwrap = "deny"
+no_panic = "deny"
+no_todo = "deny"
+unjustified_no_todo_allow = "deny"
+no_recursion = "deny"
+unchecked_narrowing = "deny"
+unchecked_division = "deny"
+unbounded_loop = "deny"
+catch_all_on_enum = "deny"
+explicit_defaults = "deny"
+unbounded_channel = "deny"
+unbounded_collection_growth = "deny"
+assertion_density = "deny"
+raw_arithmetic_overflow = "deny"
+sentinel_fallback = "deny"
+acronym_style = "deny"
+bool_naming = "deny"
+negated_predicate = "deny"
 numeric_units = "deny"
+float_for_currency = "deny"
+function_length = "deny"
+nested_conditionals = "deny"
+platform_dependent_cast = "deny"
+usize_in_public_api = "deny"
+too_many_parameters = "deny"
 compound_condition = "deny"
 unjustified_allow = "deny"
-assertion_density = "deny"
-multi_lock_ordering = "deny"
-float_for_currency = "deny"
 ambiguous_params = "deny"
-raw_arithmetic_overflow = "deny"
+ambient_clock = "deny"
+verified_purity = "deny"
+contradictory_time = "deny"
+multi_lock_ordering = "deny"

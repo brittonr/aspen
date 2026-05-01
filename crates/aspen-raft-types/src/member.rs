@@ -15,8 +15,7 @@ use serde::Serialize;
 /// default (`SecretKey::from([0u8; 32]).public()`). Keeping it parseable avoids
 /// surprising runtime behavior in watchers and relay/bootstrap helpers that
 /// still validate endpoint ids even for `Default` test helper nodes.
-const DEFAULT_MEMBER_ENDPOINT_ID: &str =
-    "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29";
+const DEFAULT_MEMBER_ENDPOINT_ID: &str = "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29";
 
 /// Raft membership metadata containing transport-neutral connection information.
 ///
@@ -60,8 +59,12 @@ impl RaftMemberInfo {
     }
 
     /// Count the stored transport addresses attached to this member.
-    pub fn transport_addr_count(&self) -> usize {
-        self.node_addr.transport_addrs().count()
+    #[allow(
+        sentinel_fallback,
+        reason = "usize-to-u64 overflow is unreachable on supported targets; keep infallible count API"
+    )]
+    pub fn transport_addr_count(&self) -> u64 {
+        u64::try_from(self.node_addr.transport_addrs().count()).unwrap_or(u64::MAX)
     }
 }
 

@@ -1,5 +1,10 @@
 //! Property-based tests for the scan merge function.
 
+#![allow(
+    sentinel_fallback,
+    reason = "proptest limit conversion fallback keeps generated fixture assertions total across target widths"
+)]
+
 use aspen_kv_branch::BranchEntry;
 use aspen_kv_branch::verified::scan_merge::merge_scan;
 use aspen_kv_types::KeyValueWithRevision;
@@ -113,7 +118,7 @@ proptest! {
     ) {
         let result = merge_scan(&dirty, &parent, "", limit);
         prop_assert!(
-            result.len() <= limit as usize,
+            result.len() <= usize::try_from(limit).unwrap_or(usize::MAX),
             "result has {} entries, limit was {}",
             result.len(),
             limit

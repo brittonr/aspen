@@ -113,6 +113,11 @@ fn is_tombstoned(key: &str, tombstones: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        ambiguous_params,
+        reason = "test helper mirrors compact key/value fixture construction"
+    )]
+
     use super::*;
 
     fn kv(key: &str, value: &str) -> KeyValueWithRevision {

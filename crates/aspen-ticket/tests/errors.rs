@@ -1,3 +1,10 @@
+#![feature(register_tool)]
+#![register_tool(tigerstyle)]
+#![allow(
+    no_panic,
+    reason = "error-shape test uses panic for unexpected enum variant diagnostics"
+)]
+
 use aspen_ticket::AspenClusterTicket;
 use aspen_ticket::ClusterTicketError;
 

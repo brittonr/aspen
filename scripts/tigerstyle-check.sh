@@ -20,7 +20,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Usage: scripts/tigerstyle-check.sh [cargo-tigerstyle check args]
 
-Runs all 32 Tiger Style lints. Configuration in dylint.toml.
+Runs all Tiger Style lints. Configuration in dylint.toml.
 
 Examples:
   scripts/tigerstyle-check.sh                           # full workspace

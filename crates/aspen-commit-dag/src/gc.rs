@@ -31,7 +31,7 @@ impl CommitGc {
     /// Run a single GC pass: scan commits, check TTL + reachability, delete expired.
     ///
     /// Returns the number of commits deleted.
-    #[allow(tigerstyle::platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+    #[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
     pub async fn run_gc(kv: &dyn KeyValueStore, now_ms: u64) -> Result<u64, CommitDagError> {
         // 1. Scan all branch tips to find protected commit IDs
         let tips = Self::collect_branch_tips(kv).await?;
@@ -101,7 +101,7 @@ impl CommitGc {
     /// as `spawn_alert_evaluator`).
     pub fn spawn_gc_task(kv: Arc<dyn KeyValueStore>, interval: Duration) -> JoinHandle<()> {
         tokio::spawn(async move {
-            #[allow(tigerstyle::unbounded_loop)] // background GC task runs for the lifetime of the node
+            #[allow(unbounded_loop)] // background GC task runs for the lifetime of the node
             loop {
                 tokio::time::sleep(interval).await;
 
@@ -169,6 +169,12 @@ impl CommitGc {
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        raw_arithmetic_overflow,
+        unbounded_collection_growth,
+        reason = "GC tests use tiny fixed ranges and arithmetic fixtures"
+    )]
+
     use aspen_testing_core::DeterministicKeyValueStore;
 
     use super::*;

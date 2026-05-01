@@ -24,11 +24,10 @@ pub fn parse_ticket_to_addrs(ticket_str: &str) -> ClusterTicketResult<(TopicId, 
 }
 
 #[cfg(all(test, not(feature = "iroh")))]
-pub fn parse_ticket_to_addrs(ticket_str: &str) -> crate::ClusterTicketResult<(
-    iroh_gossip::proto::TopicId,
-    alloc::string::String,
-    alloc::vec::Vec<iroh::EndpointAddr>,
-)> {
+pub fn parse_ticket_to_addrs(
+    ticket_str: &str,
+) -> crate::ClusterTicketResult<(iroh_gossip::proto::TopicId, alloc::string::String, alloc::vec::Vec<iroh::EndpointAddr>)>
+{
     if !ticket_str.starts_with("aspen") {
         return Err(crate::ClusterTicketError::Deserialize {
             reason: "invalid ticket format: must start with 'aspen'".to_string(),

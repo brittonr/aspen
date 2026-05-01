@@ -3,12 +3,11 @@
 //! Request/response types for CI pipeline management, execution, Nix binary cache,
 //! SNIX storage, and cache migration operations.
 
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 #[cfg(feature = "auth")]
 use alloc::string::ToString;
 use alloc::vec::Vec;
-
-use alloc::collections::BTreeMap;
 
 use serde::Deserialize;
 use serde::Serialize;

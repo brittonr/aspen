@@ -59,7 +59,10 @@ mod tests {
     }
 
     /// Create a test socket address from a port number.
-    #[allow(unchecked_narrowing, reason = "port values are controlled in tests, always fit in u8 range")]
+    #[allow(
+        unchecked_narrowing,
+        reason = "port values are controlled in tests, always fit in u8 range"
+    )]
     fn create_test_socket_addr(port: u16) -> SocketAddr {
         use std::net::IpAddr;
         use std::net::Ipv4Addr;
@@ -98,7 +101,7 @@ mod tests {
         let ticket = AspenClusterTicket::with_bootstrap(topic_id, "test-cluster".into(), peer_id);
 
         assert_eq!(ticket.bootstrap.len(), 1);
-        assert_eq!(ticket.bootstrap[0].endpoint_id, peer_id);
+        assert_eq!(ticket.bootstrap[0].endpoint_id, ClusterEndpointId::from(peer_id));
         assert!(ticket.bootstrap[0].direct_addrs.is_empty());
     }
 
@@ -111,7 +114,7 @@ mod tests {
         let ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, "test-cluster".into(), &endpoint_addr);
 
         assert_eq!(ticket.bootstrap.len(), 1);
-        assert_eq!(ticket.bootstrap[0].endpoint_id, endpoint_addr.id);
+        assert_eq!(ticket.bootstrap[0].endpoint_id, ClusterEndpointId::from(endpoint_addr.id));
         assert!(ticket.bootstrap[0].direct_addrs.contains(&addr));
     }
 
@@ -283,7 +286,7 @@ mod tests {
         let endpoint_id = create_test_endpoint_id(1);
         let peer = BootstrapPeer::new(endpoint_id);
 
-        assert_eq!(peer.endpoint_id, endpoint_id);
+        assert_eq!(peer.endpoint_id, ClusterEndpointId::from(endpoint_id));
         assert!(peer.direct_addrs.is_empty());
     }
 
@@ -295,7 +298,7 @@ mod tests {
 
         let peer = BootstrapPeer::from_endpoint_addr(&endpoint_addr);
 
-        assert_eq!(peer.endpoint_id, endpoint_addr.id);
+        assert_eq!(peer.endpoint_id, ClusterEndpointId::from(endpoint_addr.id));
         assert_eq!(peer.direct_addrs.len(), 2);
         assert!(peer.direct_addrs.contains(&addr1));
         assert!(peer.direct_addrs.contains(&addr2));
@@ -340,7 +343,7 @@ mod tests {
 
         let peer: BootstrapPeer = (&endpoint_addr).into();
 
-        assert_eq!(peer.endpoint_id, endpoint_addr.id);
+        assert_eq!(peer.endpoint_id, ClusterEndpointId::from(endpoint_addr.id));
         assert!(peer.direct_addrs.contains(&addr));
     }
 
@@ -350,7 +353,7 @@ mod tests {
 
         let peer: BootstrapPeer = endpoint_id.into();
 
-        assert_eq!(peer.endpoint_id, endpoint_id);
+        assert_eq!(peer.endpoint_id, ClusterEndpointId::from(endpoint_id));
         assert!(peer.direct_addrs.is_empty());
     }
 

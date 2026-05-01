@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn hash_from_hex_rejects_wrong_length_input() {
         let too_short = "ab";
-        let too_long = "ab".repeat(CHAIN_HASH_BYTES + 1);
+        let too_long = "ab".repeat(CHAIN_HASH_BYTES.saturating_add(1));
 
         assert_eq!(hash_from_hex(too_short), None);
         assert_eq!(hash_from_hex(&too_long), None);

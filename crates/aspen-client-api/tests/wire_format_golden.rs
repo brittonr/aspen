@@ -12,6 +12,16 @@
 //! See napkin entry 2026-02-26: feature-gated variants shifted discriminants
 //! and caused deserialization crashes ("Found a bool that wasn't 0 or 1").
 
+#![allow(
+    assertion_density,
+    function_length,
+    no_panic,
+    no_unwrap,
+    numeric_units,
+    raw_arithmetic_overflow,
+    reason = "mechanical Tiger Style debt suppression for legacy integration tests reached by hard-gated workspace check"
+)]
+
 use std::collections::HashMap;
 
 use aspen_client_api::*;

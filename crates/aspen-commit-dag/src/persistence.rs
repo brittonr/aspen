@@ -38,7 +38,7 @@ pub trait BranchTipWrite: Send + Sync {
 /// Walk the commit chain backwards from `start`, following parent links.
 ///
 /// This is a pure function over `CommitRead` — no KV or Redb dependency.
-#[allow(tigerstyle::platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+#[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
 pub async fn walk_chain(
     start: CommitId,
     store: &dyn CommitRead,
@@ -63,11 +63,19 @@ pub async fn walk_chain(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::types::MutationType;
-    use crate::verified::commit_hash::{compute_commit_id, compute_mutations_hash};
+    #![allow(
+        ambiguous_params,
+        multi_lock_ordering,
+        reason = "test-only in-memory store and fixture builder keep tests compact"
+    )]
+
     use std::collections::HashMap;
     use std::sync::Mutex;
+
+    use super::*;
+    use crate::types::MutationType;
+    use crate::verified::commit_hash::compute_commit_id;
+    use crate::verified::commit_hash::compute_mutations_hash;
 
     fn make_commit(
         branch_id: &str,
@@ -107,14 +115,9 @@ mod tests {
     #[async_trait]
     impl CommitRead for InMemoryCommitStore {
         async fn load_commit(&self, id: &CommitId) -> Result<Commit, CommitDagError> {
-            self.commits
-                .lock()
-                .unwrap()
-                .get(id)
-                .cloned()
-                .ok_or_else(|| CommitDagError::CommitNotFound {
-                    commit_id_hex: hex::encode(id),
-                })
+            self.commits.lock().unwrap().get(id).cloned().ok_or_else(|| CommitDagError::CommitNotFound {
+                commit_id_hex: hex::encode(id),
+            })
         }
     }
 

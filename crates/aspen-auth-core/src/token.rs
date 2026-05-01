@@ -194,7 +194,7 @@ mod i7_serialization_tests {
 
     fn golden_token() -> CapabilityToken {
         let issuer = iroh_base::SecretKey::from([7u8; 32]).public();
-        CapabilityToken {
+        let token = CapabilityToken {
             version: 1,
             issuer,
             audience: Audience::Bearer,
@@ -214,7 +214,10 @@ mod i7_serialization_tests {
             delegation_depth: 2,
             facts: vec![("scope".to_string(), b"i7-golden".to_vec())],
             signature: [0xA5; 64],
-        }
+        };
+        assert!(token.expires_at > token.issued_at);
+        assert!(!token.capabilities.is_empty());
+        token
     }
 
     #[test]
@@ -245,7 +248,7 @@ mod i7_serialization_tests {
     fn malformed_token_inputs_are_rejected() {
         assert!(matches!(CapabilityToken::from_base64("not valid base64!!!"), Err(AuthError::DecodingError(_))));
         assert!(matches!(CapabilityToken::decode(&[0xff, 0x00, 0x01]), Err(AuthError::DecodingError(_))));
-        let oversized = vec![0u8; usize::try_from(MAX_TOKEN_SIZE).unwrap_or(4096).saturating_add(1)];
-        assert!(matches!(CapabilityToken::decode(&oversized), Err(AuthError::TokenTooLarge { .. })));
+        let oversized_bytes = vec![0u8; usize::try_from(MAX_TOKEN_SIZE).unwrap_or(4096).saturating_add(1)];
+        assert!(matches!(CapabilityToken::decode(&oversized_bytes), Err(AuthError::TokenTooLarge { .. })));
     }
 }
