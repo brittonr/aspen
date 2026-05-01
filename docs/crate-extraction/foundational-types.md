@@ -49,8 +49,8 @@
 
 ## Verification rails
 
-- Positive: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
-- Negative: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
+- Positive downstream: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
+- Negative boundary: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
 - Compatibility: compile consumers named above after any moved path.
 
 ## First blocker

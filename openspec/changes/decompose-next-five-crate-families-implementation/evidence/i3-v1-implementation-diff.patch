@@ -1,0 +1,2571 @@
+diff --git a/docs/crate-extraction/auth-ticket.md b/docs/crate-extraction/auth-ticket.md
+index 849adf87a..526640d64 100644
+--- a/docs/crate-extraction/auth-ticket.md
++++ b/docs/crate-extraction/auth-ticket.md
+@@ -46,8 +46,8 @@
+ 
+ ## Verification rails
+ 
+-- Positive: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
+-- Negative: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
++- Positive downstream: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
++- Negative boundary: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
+ - Compatibility: compile/test representative consumers and any documented re-export paths.
+ 
+ ## First blocker
+diff --git a/docs/crate-extraction/foundational-types.md b/docs/crate-extraction/foundational-types.md
+index f0ed42b9f..24cf8f02b 100644
+--- a/docs/crate-extraction/foundational-types.md
++++ b/docs/crate-extraction/foundational-types.md
+@@ -49,8 +49,8 @@
+ 
+ ## Verification rails
+ 
+-- Positive: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
+-- Negative: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
++- Positive downstream: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
++- Negative boundary: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
+ - Compatibility: compile consumers named above after any moved path.
+ 
+ ## First blocker
+diff --git a/docs/crate-extraction/jobs-ci-core.md b/docs/crate-extraction/jobs-ci-core.md
+index ed0f0ec27..cd1702e5e 100644
+--- a/docs/crate-extraction/jobs-ci-core.md
++++ b/docs/crate-extraction/jobs-ci-core.md
+@@ -46,8 +46,8 @@
+ 
+ ## Verification rails
+ 
+-- Positive: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
+-- Negative: checker mutation for root app/handler/executor/process-spawn dependency leaks.
++- Positive downstream: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
++- Negative boundary: checker mutation for root app/handler/executor/process-spawn dependency leaks.
+ - Compatibility: focused `aspen-ci`, `aspen-jobs`, handler, CLI, and dogfood checks named by implementation tasks.
+ 
+ ## First blocker
+diff --git a/docs/crate-extraction/policy.ncl b/docs/crate-extraction/policy.ncl
+index a60378022..a7c519274 100644
+--- a/docs/crate-extraction/policy.ncl
++++ b/docs/crate-extraction/policy.ncl
+@@ -769,5 +769,71 @@ let Candidate = {
+         },
+       ],
+     },
++
++    foundational_types = {
++      class = "leaf type/helper",
++      readiness_state = "workspace-internal",
++      manifest = "docs/crate-extraction/foundational-types.md",
++      owner = "Aspen foundational type maintainers",
++      default_feature_sets = ["default", "no-default-features"],
++      named_reusable_feature_sets = ["alloc-safe", "iroh-adapter"],
++      representative_consumers = ["aspen-core", "aspen-core-shell", "aspen-coordination", "aspen-jobs", "aspen-testing-core"],
++      reexporters = ["aspen-core", "aspen-core-shell"],
++      forbidden_unless_feature = ["redb", "iroh", "iroh-base", "aspen-transport", "aspen-raft", "aspen-rpc-handlers", "aspen"],
++      exceptions = [],
++    },
++
++    auth_ticket = {
++      class = "leaf type/helper",
++      readiness_state = "workspace-internal",
++      manifest = "docs/crate-extraction/auth-ticket.md",
++      owner = "Aspen auth and ticket maintainers",
++      default_feature_sets = ["default", "no-default-features"],
++      named_reusable_feature_sets = ["signed", "std", "iroh"],
++      representative_consumers = ["aspen-client-api", "aspen-cli", "aspen-rpc-core", "aspen-hooks", "aspen-ci"],
++      reexporters = ["aspen-auth", "aspen-hooks"],
++      forbidden_unless_feature = ["aspen-auth", "iroh", "iroh-gossip", "rand", "anyhow", "aspen-rpc-handlers", "aspen"],
++      exceptions = [],
++    },
++
++    jobs_ci_core = {
++      class = "service library",
++      readiness_state = "workspace-internal",
++      manifest = "docs/crate-extraction/jobs-ci-core.md",
++      owner = "Aspen jobs and CI maintainers",
++      default_feature_sets = ["default"],
++      named_reusable_feature_sets = ["scheduler", "config", "executor-adapters"],
++      representative_consumers = ["aspen-jobs", "aspen-ci", "aspen-job-handler", "aspen-ci-handler", "aspen-cli"],
++      reexporters = ["aspen-jobs", "aspen-ci"],
++      forbidden_unless_feature = ["aspen", "aspen-rpc-handlers", "aspen-job-handler", "aspen-ci-handler", "aspen-dogfood", "aspen-ci-executor-shell", "aspen-ci-executor-vm", "aspen-ci-executor-nix", "aspen-jobs-worker-shell", "tokio", "iroh", "aspen-transport"],
++      exceptions = [],
++    },
++
++    trust_crypto_secrets = {
++      class = "service library",
++      readiness_state = "workspace-internal",
++      manifest = "docs/crate-extraction/trust-crypto-secrets.md",
++      owner = "Aspen trust/crypto/secrets maintainers",
++      default_feature_sets = ["default"],
++      named_reusable_feature_sets = ["pure-state", "runtime-adapters"],
++      representative_consumers = ["aspen-trust", "aspen-crypto", "aspen-secrets", "aspen-secrets-handler"],
++      reexporters = ["aspen-trust", "aspen-secrets"],
++      forbidden_unless_feature = ["aspen", "aspen-raft", "aspen-transport", "aspen-rpc-handlers", "aspen-secrets-handler", "iroh", "tokio", "redb"],
++      exceptions = [],
++    },
++
++    testing_harness = {
++      class = "service library",
++      readiness_state = "workspace-internal",
++      manifest = "docs/crate-extraction/testing-harness.md",
++      owner = "Aspen testing harness maintainers",
++      default_feature_sets = ["default"],
++      named_reusable_feature_sets = ["fixtures", "madsim", "network", "patchbay"],
++      representative_consumers = ["aspen-testing-core", "aspen-testing", "aspen-testing-fixtures", "aspen-testing-madsim", "aspen-testing-network", "aspen-testing-patchbay"],
++      reexporters = ["aspen-testing"],
++      forbidden_unless_feature = ["aspen", "aspen-cluster", "aspen-rpc-handlers", "aspen-transport", "aspen-raft", "iroh", "tokio", "patchbay"],
++      exceptions = [],
++    },
++
+   },
+ }
+diff --git a/docs/crate-extraction/testing-harness.md b/docs/crate-extraction/testing-harness.md
+index 12e975d68..92bf4eddb 100644
+--- a/docs/crate-extraction/testing-harness.md
++++ b/docs/crate-extraction/testing-harness.md
+@@ -47,8 +47,8 @@
+ 
+ ## Verification rails
+ 
+-- Positive: fixture `cargo metadata`, `cargo check`, and focused helper tests.
+-- Negative: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
++- Positive downstream: fixture `cargo metadata`, `cargo check`, and focused helper tests.
++- Negative boundary: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
+ - Compatibility: existing madsim/network/patchbay suites or generated harness inventory checks named by implementation tasks.
+ 
+ ## First blocker
+diff --git a/docs/crate-extraction/trust-crypto-secrets.md b/docs/crate-extraction/trust-crypto-secrets.md
+index e18d9861c..3761e9a91 100644
+--- a/docs/crate-extraction/trust-crypto-secrets.md
++++ b/docs/crate-extraction/trust-crypto-secrets.md
+@@ -46,8 +46,8 @@
+ 
+ ## Verification rails
+ 
+-- Positive: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
+-- Negative: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
++- Positive downstream: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
++- Negative boundary: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
+ - Compatibility: trust/secrets focused tests and VM evidence named by implementation tasks.
+ 
+ ## First blocker
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/design.md b/openspec/changes/decompose-next-five-crate-families-implementation/design.md
+new file mode 100644
+index 000000000..eb10bfb29
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/design.md
+@@ -0,0 +1,45 @@
++## Context
++
++The parent `decompose-next-five-crate-families` change selected the next decomposition wave and completed roadmap/manifest setup. This implementation change carries the deferred first-blocker work forward while preserving the existing extraction discipline: no publication/repository split, no readiness promotion without evidence, and compatibility rails for existing Aspen consumers.
++
++## Goals / Non-Goals
++
++**Goals:**
++
++- Make the readiness policy and checker understand the five selected families before any code movement.
++- Land bounded first-blocker slices in dependency order: foundational seams first, then auth/tickets, jobs/CI, trust/secrets, and testing harness.
++- Require downstream-style fixtures, negative boundary proofs, positive tests, compatibility checks, and verification index coverage before readiness changes.
++
++**Non-Goals:**
++
++- Do not publish crates, split repositories, or mark anything beyond `workspace-internal` / `extraction-ready-in-workspace`.
++- Do not redo archived generic protocol/wire, transport/RPC, blob/castore/cache, KV branch/commit-DAG, coordination, or Raft KV extraction work.
++- Do not make broad multi-family rewrites without completing the prior family evidence gate or recording an out-of-order guard.
++
++## Decisions
++
++### 1. Policy/checker first
++
++**Choice:** Start by extending `docs/crate-extraction/policy.ncl` and `scripts/check-crate-extraction-readiness.rs` with family-aware candidate selection and selected-wave evidence requirements.
++
++**Rationale:** The checker is the guardrail that prevents premature readiness promotion and gives each later first-blocker slice deterministic feedback.
++
++**Alternative:** Move code first and retrofit policy later. Rejected because the parent requirements explicitly require policy/checker coverage before readiness changes.
++
++### 2. Foundational seams remain the first implementation family
++
++**Choice:** Work `foundational-types` before dependent families unless a task records the bypassed prerequisite and temporary compatibility guard.
++
++**Rationale:** Jobs/CI, trust/secrets, and test harness slices consume storage/trait/type boundaries. Moving those first would hide dependency leaks behind compatibility paths.
++
++### 3. Evidence gates are per-family
++
++**Choice:** Each family must produce its own downstream metadata, forbidden-dependency proof, compatibility transcript, and positive/negative test evidence under this change directory before any checked completion claim.
++
++**Rationale:** The selected wave is intentionally five families; per-family evidence prevents a single broad summary from masking missing proofs.
++
++## Risks / Trade-offs
++
++- **Checker strictness may fail current families** -> Keep readiness at `workspace-internal` and treat missing evidence as expected until the corresponding family task lands.
++- **Large dependency graph churn** -> Keep compatibility re-exports/paths documented and tested before removing old imports.
++- **Security-sensitive auth/trust changes** -> Require positive and malformed-input negative tests before compatibility claims.
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch
+new file mode 100644
+index 000000000..f851076bc
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch
+@@ -0,0 +1,1467 @@
++diff --git a/docs/crate-extraction/auth-ticket.md b/docs/crate-extraction/auth-ticket.md
++index 849adf87a..526640d64 100644
++--- a/docs/crate-extraction/auth-ticket.md
+++++ b/docs/crate-extraction/auth-ticket.md
++@@ -46,8 +46,8 @@
++ 
++ ## Verification rails
++ 
++-- Positive: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
++-- Negative: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
+++- Positive downstream: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
+++- Negative boundary: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
++ - Compatibility: compile/test representative consumers and any documented re-export paths.
++ 
++ ## First blocker
++diff --git a/docs/crate-extraction/foundational-types.md b/docs/crate-extraction/foundational-types.md
++index f0ed42b9f..24cf8f02b 100644
++--- a/docs/crate-extraction/foundational-types.md
+++++ b/docs/crate-extraction/foundational-types.md
++@@ -49,8 +49,8 @@
++ 
++ ## Verification rails
++ 
++-- Positive: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
++-- Negative: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
+++- Positive downstream: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
+++- Negative boundary: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
++ - Compatibility: compile consumers named above after any moved path.
++ 
++ ## First blocker
++diff --git a/docs/crate-extraction/jobs-ci-core.md b/docs/crate-extraction/jobs-ci-core.md
++index ed0f0ec27..cd1702e5e 100644
++--- a/docs/crate-extraction/jobs-ci-core.md
+++++ b/docs/crate-extraction/jobs-ci-core.md
++@@ -46,8 +46,8 @@
++ 
++ ## Verification rails
++ 
++-- Positive: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
++-- Negative: checker mutation for root app/handler/executor/process-spawn dependency leaks.
+++- Positive downstream: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
+++- Negative boundary: checker mutation for root app/handler/executor/process-spawn dependency leaks.
++ - Compatibility: focused `aspen-ci`, `aspen-jobs`, handler, CLI, and dogfood checks named by implementation tasks.
++ 
++ ## First blocker
++diff --git a/docs/crate-extraction/policy.ncl b/docs/crate-extraction/policy.ncl
++index a60378022..a7c519274 100644
++--- a/docs/crate-extraction/policy.ncl
+++++ b/docs/crate-extraction/policy.ncl
++@@ -769,5 +769,71 @@ let Candidate = {
++         },
++       ],
++     },
+++
+++    foundational_types = {
+++      class = "leaf type/helper",
+++      readiness_state = "workspace-internal",
+++      manifest = "docs/crate-extraction/foundational-types.md",
+++      owner = "Aspen foundational type maintainers",
+++      default_feature_sets = ["default", "no-default-features"],
+++      named_reusable_feature_sets = ["alloc-safe", "iroh-adapter"],
+++      representative_consumers = ["aspen-core", "aspen-core-shell", "aspen-coordination", "aspen-jobs", "aspen-testing-core"],
+++      reexporters = ["aspen-core", "aspen-core-shell"],
+++      forbidden_unless_feature = ["redb", "iroh", "iroh-base", "aspen-transport", "aspen-raft", "aspen-rpc-handlers", "aspen"],
+++      exceptions = [],
+++    },
+++
+++    auth_ticket = {
+++      class = "leaf type/helper",
+++      readiness_state = "workspace-internal",
+++      manifest = "docs/crate-extraction/auth-ticket.md",
+++      owner = "Aspen auth and ticket maintainers",
+++      default_feature_sets = ["default", "no-default-features"],
+++      named_reusable_feature_sets = ["signed", "std", "iroh"],
+++      representative_consumers = ["aspen-client-api", "aspen-cli", "aspen-rpc-core", "aspen-hooks", "aspen-ci"],
+++      reexporters = ["aspen-auth", "aspen-hooks"],
+++      forbidden_unless_feature = ["aspen-auth", "iroh", "iroh-gossip", "rand", "anyhow", "aspen-rpc-handlers", "aspen"],
+++      exceptions = [],
+++    },
+++
+++    jobs_ci_core = {
+++      class = "service library",
+++      readiness_state = "workspace-internal",
+++      manifest = "docs/crate-extraction/jobs-ci-core.md",
+++      owner = "Aspen jobs and CI maintainers",
+++      default_feature_sets = ["default"],
+++      named_reusable_feature_sets = ["scheduler", "config", "executor-adapters"],
+++      representative_consumers = ["aspen-jobs", "aspen-ci", "aspen-job-handler", "aspen-ci-handler", "aspen-cli"],
+++      reexporters = ["aspen-jobs", "aspen-ci"],
+++      forbidden_unless_feature = ["aspen", "aspen-rpc-handlers", "aspen-job-handler", "aspen-ci-handler", "aspen-dogfood", "aspen-ci-executor-shell", "aspen-ci-executor-vm", "aspen-ci-executor-nix", "aspen-jobs-worker-shell", "tokio", "iroh", "aspen-transport"],
+++      exceptions = [],
+++    },
+++
+++    trust_crypto_secrets = {
+++      class = "service library",
+++      readiness_state = "workspace-internal",
+++      manifest = "docs/crate-extraction/trust-crypto-secrets.md",
+++      owner = "Aspen trust/crypto/secrets maintainers",
+++      default_feature_sets = ["default"],
+++      named_reusable_feature_sets = ["pure-state", "runtime-adapters"],
+++      representative_consumers = ["aspen-trust", "aspen-crypto", "aspen-secrets", "aspen-secrets-handler"],
+++      reexporters = ["aspen-trust", "aspen-secrets"],
+++      forbidden_unless_feature = ["aspen", "aspen-raft", "aspen-transport", "aspen-rpc-handlers", "aspen-secrets-handler", "iroh", "tokio", "redb"],
+++      exceptions = [],
+++    },
+++
+++    testing_harness = {
+++      class = "service library",
+++      readiness_state = "workspace-internal",
+++      manifest = "docs/crate-extraction/testing-harness.md",
+++      owner = "Aspen testing harness maintainers",
+++      default_feature_sets = ["default"],
+++      named_reusable_feature_sets = ["fixtures", "madsim", "network", "patchbay"],
+++      representative_consumers = ["aspen-testing-core", "aspen-testing", "aspen-testing-fixtures", "aspen-testing-madsim", "aspen-testing-network", "aspen-testing-patchbay"],
+++      reexporters = ["aspen-testing"],
+++      forbidden_unless_feature = ["aspen", "aspen-cluster", "aspen-rpc-handlers", "aspen-transport", "aspen-raft", "iroh", "tokio", "patchbay"],
+++      exceptions = [],
+++    },
+++
++   },
++ }
++diff --git a/docs/crate-extraction/testing-harness.md b/docs/crate-extraction/testing-harness.md
++index 12e975d68..92bf4eddb 100644
++--- a/docs/crate-extraction/testing-harness.md
+++++ b/docs/crate-extraction/testing-harness.md
++@@ -47,8 +47,8 @@
++ 
++ ## Verification rails
++ 
++-- Positive: fixture `cargo metadata`, `cargo check`, and focused helper tests.
++-- Negative: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
+++- Positive downstream: fixture `cargo metadata`, `cargo check`, and focused helper tests.
+++- Negative boundary: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
++ - Compatibility: existing madsim/network/patchbay suites or generated harness inventory checks named by implementation tasks.
++ 
++ ## First blocker
++diff --git a/docs/crate-extraction/trust-crypto-secrets.md b/docs/crate-extraction/trust-crypto-secrets.md
++index e18d9861c..3761e9a91 100644
++--- a/docs/crate-extraction/trust-crypto-secrets.md
+++++ b/docs/crate-extraction/trust-crypto-secrets.md
++@@ -46,8 +46,8 @@
++ 
++ ## Verification rails
++ 
++-- Positive: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
++-- Negative: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
+++- Positive downstream: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
+++- Negative boundary: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
++ - Compatibility: trust/secrets focused tests and VM evidence named by implementation tasks.
++ 
++ ## First blocker
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/design.md b/openspec/changes/decompose-next-five-crate-families-implementation/design.md
++new file mode 100644
++index 000000000..eb10bfb29
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/design.md
++@@ -0,0 +1,45 @@
+++## Context
+++
+++The parent `decompose-next-five-crate-families` change selected the next decomposition wave and completed roadmap/manifest setup. This implementation change carries the deferred first-blocker work forward while preserving the existing extraction discipline: no publication/repository split, no readiness promotion without evidence, and compatibility rails for existing Aspen consumers.
+++
+++## Goals / Non-Goals
+++
+++**Goals:**
+++
+++- Make the readiness policy and checker understand the five selected families before any code movement.
+++- Land bounded first-blocker slices in dependency order: foundational seams first, then auth/tickets, jobs/CI, trust/secrets, and testing harness.
+++- Require downstream-style fixtures, negative boundary proofs, positive tests, compatibility checks, and verification index coverage before readiness changes.
+++
+++**Non-Goals:**
+++
+++- Do not publish crates, split repositories, or mark anything beyond `workspace-internal` / `extraction-ready-in-workspace`.
+++- Do not redo archived generic protocol/wire, transport/RPC, blob/castore/cache, KV branch/commit-DAG, coordination, or Raft KV extraction work.
+++- Do not make broad multi-family rewrites without completing the prior family evidence gate or recording an out-of-order guard.
+++
+++## Decisions
+++
+++### 1. Policy/checker first
+++
+++**Choice:** Start by extending `docs/crate-extraction/policy.ncl` and `scripts/check-crate-extraction-readiness.rs` with family-aware candidate selection and selected-wave evidence requirements.
+++
+++**Rationale:** The checker is the guardrail that prevents premature readiness promotion and gives each later first-blocker slice deterministic feedback.
+++
+++**Alternative:** Move code first and retrofit policy later. Rejected because the parent requirements explicitly require policy/checker coverage before readiness changes.
+++
+++### 2. Foundational seams remain the first implementation family
+++
+++**Choice:** Work `foundational-types` before dependent families unless a task records the bypassed prerequisite and temporary compatibility guard.
+++
+++**Rationale:** Jobs/CI, trust/secrets, and test harness slices consume storage/trait/type boundaries. Moving those first would hide dependency leaks behind compatibility paths.
+++
+++### 3. Evidence gates are per-family
+++
+++**Choice:** Each family must produce its own downstream metadata, forbidden-dependency proof, compatibility transcript, and positive/negative test evidence under this change directory before any checked completion claim.
+++
+++**Rationale:** The selected wave is intentionally five families; per-family evidence prevents a single broad summary from masking missing proofs.
+++
+++## Risks / Trade-offs
+++
+++- **Checker strictness may fail current families** -> Keep readiness at `workspace-internal` and treat missing evidence as expected until the corresponding family task lands.
+++- **Large dependency graph churn** -> Keep compatibility re-exports/paths documented and tested before removing old imports.
+++- **Security-sensitive auth/trust changes** -> Require positive and malformed-input negative tests before compatibility claims.
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch
++new file mode 100644
++index 000000000..a35cbb2c3
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch
++@@ -0,0 +1,347 @@
+++diff --git a/docs/crate-extraction/auth-ticket.md b/docs/crate-extraction/auth-ticket.md
+++index 849adf87a..526640d64 100644
+++--- a/docs/crate-extraction/auth-ticket.md
++++++ b/docs/crate-extraction/auth-ticket.md
+++@@ -46,8 +46,8 @@
+++ 
+++ ## Verification rails
+++ 
+++-- Positive: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
+++-- Negative: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
++++- Positive downstream: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
++++- Negative boundary: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
+++ - Compatibility: compile/test representative consumers and any documented re-export paths.
+++ 
+++ ## First blocker
+++diff --git a/docs/crate-extraction/foundational-types.md b/docs/crate-extraction/foundational-types.md
+++index f0ed42b9f..24cf8f02b 100644
+++--- a/docs/crate-extraction/foundational-types.md
++++++ b/docs/crate-extraction/foundational-types.md
+++@@ -49,8 +49,8 @@
+++ 
+++ ## Verification rails
+++ 
+++-- Positive: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
+++-- Negative: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
++++- Positive downstream: `cargo check -p aspen-core --no-default-features`, `cargo check -p aspen-core-no-std-smoke`, family fixture `cargo metadata` and `cargo check`.
++++- Negative boundary: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
+++ - Compatibility: compile consumers named above after any moved path.
+++ 
+++ ## First blocker
+++diff --git a/docs/crate-extraction/jobs-ci-core.md b/docs/crate-extraction/jobs-ci-core.md
+++index ed0f0ec27..cd1702e5e 100644
+++--- a/docs/crate-extraction/jobs-ci-core.md
++++++ b/docs/crate-extraction/jobs-ci-core.md
+++@@ -46,8 +46,8 @@
+++ 
+++ ## Verification rails
+++ 
+++-- Positive: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
+++-- Negative: checker mutation for root app/handler/executor/process-spawn dependency leaks.
++++- Positive downstream: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
++++- Negative boundary: checker mutation for root app/handler/executor/process-spawn dependency leaks.
+++ - Compatibility: focused `aspen-ci`, `aspen-jobs`, handler, CLI, and dogfood checks named by implementation tasks.
+++ 
+++ ## First blocker
+++diff --git a/docs/crate-extraction/policy.ncl b/docs/crate-extraction/policy.ncl
+++index a60378022..a7c519274 100644
+++--- a/docs/crate-extraction/policy.ncl
++++++ b/docs/crate-extraction/policy.ncl
+++@@ -769,5 +769,71 @@ let Candidate = {
+++         },
+++       ],
+++     },
++++
++++    foundational_types = {
++++      class = "leaf type/helper",
++++      readiness_state = "workspace-internal",
++++      manifest = "docs/crate-extraction/foundational-types.md",
++++      owner = "Aspen foundational type maintainers",
++++      default_feature_sets = ["default", "no-default-features"],
++++      named_reusable_feature_sets = ["alloc-safe", "iroh-adapter"],
++++      representative_consumers = ["aspen-core", "aspen-core-shell", "aspen-coordination", "aspen-jobs", "aspen-testing-core"],
++++      reexporters = ["aspen-core", "aspen-core-shell"],
++++      forbidden_unless_feature = ["redb", "iroh", "iroh-base", "aspen-transport", "aspen-raft", "aspen-rpc-handlers", "aspen"],
++++      exceptions = [],
++++    },
++++
++++    auth_ticket = {
++++      class = "leaf type/helper",
++++      readiness_state = "workspace-internal",
++++      manifest = "docs/crate-extraction/auth-ticket.md",
++++      owner = "Aspen auth and ticket maintainers",
++++      default_feature_sets = ["default", "no-default-features"],
++++      named_reusable_feature_sets = ["signed", "std", "iroh"],
++++      representative_consumers = ["aspen-client-api", "aspen-cli", "aspen-rpc-core", "aspen-hooks", "aspen-ci"],
++++      reexporters = ["aspen-auth", "aspen-hooks"],
++++      forbidden_unless_feature = ["aspen-auth", "iroh", "iroh-gossip", "rand", "anyhow", "aspen-rpc-handlers", "aspen"],
++++      exceptions = [],
++++    },
++++
++++    jobs_ci_core = {
++++      class = "service library",
++++      readiness_state = "workspace-internal",
++++      manifest = "docs/crate-extraction/jobs-ci-core.md",
++++      owner = "Aspen jobs and CI maintainers",
++++      default_feature_sets = ["default"],
++++      named_reusable_feature_sets = ["scheduler", "config", "executor-adapters"],
++++      representative_consumers = ["aspen-jobs", "aspen-ci", "aspen-job-handler", "aspen-ci-handler", "aspen-cli"],
++++      reexporters = ["aspen-jobs", "aspen-ci"],
++++      forbidden_unless_feature = ["aspen", "aspen-rpc-handlers", "aspen-job-handler", "aspen-ci-handler", "aspen-dogfood", "aspen-ci-executor-shell", "aspen-ci-executor-vm", "aspen-ci-executor-nix", "aspen-jobs-worker-shell", "tokio", "iroh", "aspen-transport"],
++++      exceptions = [],
++++    },
++++
++++    trust_crypto_secrets = {
++++      class = "service library",
++++      readiness_state = "workspace-internal",
++++      manifest = "docs/crate-extraction/trust-crypto-secrets.md",
++++      owner = "Aspen trust/crypto/secrets maintainers",
++++      default_feature_sets = ["default"],
++++      named_reusable_feature_sets = ["pure-state", "runtime-adapters"],
++++      representative_consumers = ["aspen-trust", "aspen-crypto", "aspen-secrets", "aspen-secrets-handler"],
++++      reexporters = ["aspen-trust", "aspen-secrets"],
++++      forbidden_unless_feature = ["aspen", "aspen-raft", "aspen-transport", "aspen-rpc-handlers", "aspen-secrets-handler", "iroh", "tokio", "redb"],
++++      exceptions = [],
++++    },
++++
++++    testing_harness = {
++++      class = "service library",
++++      readiness_state = "workspace-internal",
++++      manifest = "docs/crate-extraction/testing-harness.md",
++++      owner = "Aspen testing harness maintainers",
++++      default_feature_sets = ["default"],
++++      named_reusable_feature_sets = ["fixtures", "madsim", "network", "patchbay"],
++++      representative_consumers = ["aspen-testing-core", "aspen-testing", "aspen-testing-fixtures", "aspen-testing-madsim", "aspen-testing-network", "aspen-testing-patchbay"],
++++      reexporters = ["aspen-testing"],
++++      forbidden_unless_feature = ["aspen", "aspen-cluster", "aspen-rpc-handlers", "aspen-transport", "aspen-raft", "iroh", "tokio", "patchbay"],
++++      exceptions = [],
++++    },
++++
+++   },
+++ }
+++diff --git a/docs/crate-extraction/testing-harness.md b/docs/crate-extraction/testing-harness.md
+++index 12e975d68..92bf4eddb 100644
+++--- a/docs/crate-extraction/testing-harness.md
++++++ b/docs/crate-extraction/testing-harness.md
+++@@ -47,8 +47,8 @@
+++ 
+++ ## Verification rails
+++ 
+++-- Positive: fixture `cargo metadata`, `cargo check`, and focused helper tests.
+++-- Negative: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
++++- Positive downstream: fixture `cargo metadata`, `cargo check`, and focused helper tests.
++++- Negative boundary: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
+++ - Compatibility: existing madsim/network/patchbay suites or generated harness inventory checks named by implementation tasks.
+++ 
+++ ## First blocker
+++diff --git a/docs/crate-extraction/trust-crypto-secrets.md b/docs/crate-extraction/trust-crypto-secrets.md
+++index e18d9861c..3761e9a91 100644
+++--- a/docs/crate-extraction/trust-crypto-secrets.md
++++++ b/docs/crate-extraction/trust-crypto-secrets.md
+++@@ -46,8 +46,8 @@
+++ 
+++ ## Verification rails
+++ 
+++-- Positive: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
+++-- Negative: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
++++- Positive downstream: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
++++- Negative boundary: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
+++ - Compatibility: trust/secrets focused tests and VM evidence named by implementation tasks.
+++ 
+++ ## First blocker
+++diff --git a/scripts/check-crate-extraction-readiness.rs b/scripts/check-crate-extraction-readiness.rs
+++index 3f9d5c88f..6f313b59e 100755
+++--- a/scripts/check-crate-extraction-readiness.rs
++++++ b/scripts/check-crate-extraction-readiness.rs
+++@@ -25,15 +25,15 @@ use serde::Serialize;
+++ 
+++ const OWNER_NEEDED: &str = "owner needed";
+++ const WORKSPACE_INTERNAL: &str = "workspace-internal";
+++-const MANIFEST_REQUIRED_SECTIONS: &[&str] = &[
+++-    "## Candidate",
+++-    "## Package and release metadata",
+++-    "## Feature contract",
+++-    "## Dependencies",
+++-    "## Compatibility and aliases",
+++-    "## Representative consumers",
+++-    "## Dependency exceptions",
+++-    "## Verification rails",
++++const MANIFEST_REQUIRED_SECTION_GROUPS: &[&[&str]] = &[
++++    &["## Candidate"],
++++    &["## Package and release metadata", "## Package metadata"],
++++    &["## Feature contract"],
++++    &["## Dependencies", "## Dependency decisions"],
++++    &["## Compatibility and aliases", "## Compatibility plan"],
++++    &["## Representative consumers", "Representative consumers:"],
++++    &["## Dependency exceptions", "## Dependency decisions"],
++++    &["## Verification rails"],
+++ ];
+++ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
+++     "positive downstream",
+++@@ -67,6 +67,36 @@ const TRANSPORT_RPC_DOWNSTREAM_EVIDENCE: &[&str] = &[
+++     "i7-downstream-rpc-forbidden-grep.txt",
+++     "v4-compatibility-summary.txt",
+++ ];
++++const FOUNDATIONAL_TYPES_FAMILY: &str = "foundational-types";
++++const AUTH_TICKET_FAMILY: &str = "auth-ticket";
++++const JOBS_CI_CORE_FAMILY: &str = "jobs-ci-core";
++++const TRUST_CRYPTO_SECRETS_FAMILY: &str = "trust-crypto-secrets";
++++const TESTING_HARNESS_FAMILY: &str = "testing-harness";
++++const FOUNDATIONAL_TYPES_EVIDENCE: &[&str] = &[
++++    "foundational-types-downstream-metadata.json",
++++    "foundational-types-forbidden-boundary.txt",
++++    "foundational-types-compatibility.txt",
++++];
++++const AUTH_TICKET_EVIDENCE: &[&str] = &[
++++    "auth-ticket-downstream-metadata.json",
++++    "auth-ticket-forbidden-boundary.txt",
++++    "auth-ticket-compatibility.txt",
++++];
++++const JOBS_CI_CORE_EVIDENCE: &[&str] = &[
++++    "jobs-ci-core-downstream-metadata.json",
++++    "jobs-ci-core-forbidden-boundary.txt",
++++    "jobs-ci-core-compatibility.txt",
++++];
++++const TRUST_CRYPTO_SECRETS_EVIDENCE: &[&str] = &[
++++    "trust-crypto-secrets-downstream-metadata.json",
++++    "trust-crypto-secrets-forbidden-boundary.txt",
++++    "trust-crypto-secrets-compatibility.txt",
++++];
++++const TESTING_HARNESS_EVIDENCE: &[&str] = &[
++++    "testing-harness-downstream-metadata.json",
++++    "testing-harness-forbidden-boundary.txt",
++++    "testing-harness-compatibility.txt",
++++];
+++ 
+++ #[derive(Debug, Parser)]
+++ struct Args {
+++@@ -188,6 +218,21 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
+++     }
+++ }
+++ 
++++fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
++++    match family {
++++        BLOB_CASTORE_CACHE_FAMILY => Some(&["aspen_blob", "aspen_castore", "aspen_cache"]),
++++        KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
++++        PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_coordination_protocol", "aspen_forge_protocol", "aspen_jobs_protocol"]),
++++        TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
++++        FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
++++        AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
++++        JOBS_CI_CORE_FAMILY => Some(&["jobs_ci_core"]),
++++        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["trust_crypto_secrets"]),
++++        TESTING_HARNESS_FAMILY => Some(&["testing_harness"]),
++++        _ => None,
++++    }
++++}
++++
+++ fn is_runtime_shell(candidate: &Candidate) -> bool {
+++     candidate.class == "runtime adapter" || candidate.manifest.contains("compat")
+++ }
+++@@ -242,9 +287,9 @@ fn check_manifest(candidate_key: &str, candidate: &Candidate, failures: &mut Vec
+++     let manifest_path = Path::new(&candidate.manifest);
+++     let text =
+++         fs::read_to_string(manifest_path).with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
+++-    for section in MANIFEST_REQUIRED_SECTIONS {
+++-        if !text.contains(section) {
+++-            failures.push(format!("{candidate_key}: manifest missing `{section}`"));
++++    for alternatives in MANIFEST_REQUIRED_SECTION_GROUPS {
++++        if !alternatives.iter().any(|section| text.contains(section)) {
++++            failures.push(format!("{candidate_key}: manifest missing one of `{}`", alternatives.join("` / `")));
+++         }
+++     }
+++     let lower = text.to_lowercase();
+++@@ -363,21 +408,65 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
+++         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
+++         PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
+++         TRANSPORT_RPC_FAMILY => TRANSPORT_RPC_DOWNSTREAM_EVIDENCE,
++++        FOUNDATIONAL_TYPES_FAMILY => FOUNDATIONAL_TYPES_EVIDENCE,
++++        AUTH_TICKET_FAMILY => AUTH_TICKET_EVIDENCE,
++++        JOBS_CI_CORE_FAMILY => JOBS_CI_CORE_EVIDENCE,
++++        TRUST_CRYPTO_SECRETS_FAMILY => TRUST_CRYPTO_SECRETS_EVIDENCE,
++++        TESTING_HARNESS_FAMILY => TESTING_HARNESS_EVIDENCE,
+++         _ => return,
+++     };
+++ 
+++     for file_name in required_files {
+++         let artifact = evidence_dir.join(file_name);
+++         if !artifact.exists() {
++++            let evidence_kind = if file_name.contains("compatibility") {
++++                "compatibility evidence"
++++            } else if file_name.contains("forbidden") || file_name.contains("boundary") {
++++                "negative boundary evidence"
++++            } else {
++++                "downstream fixture evidence"
++++            };
+++             failures.push(format!(
+++-                "{}: missing downstream fixture evidence `{}`",
++++                "{}: missing {} `{}`",
+++                 args.candidate_family,
++++                evidence_kind,
+++                 artifact.display()
+++             ));
+++         }
+++     }
+++ }
+++ 
++++fn selected_family_requires_strict_owner(family: &str) -> bool {
++++    matches!(
++++        family,
++++        FOUNDATIONAL_TYPES_FAMILY
++++            | AUTH_TICKET_FAMILY
++++            | JOBS_CI_CORE_FAMILY
++++            | TRUST_CRYPTO_SECRETS_FAMILY
++++            | TESTING_HARNESS_FAMILY
++++    )
++++}
++++
++++fn check_selected_family_policy_contract(
++++    family: &str,
++++    candidate_key: &str,
++++    candidate: &Candidate,
++++    failures: &mut Vec<String>,
++++) {
++++    if !selected_family_requires_strict_owner(family) {
++++        return;
++++    }
++++    if candidate.owner.trim().is_empty() || candidate.owner == OWNER_NEEDED {
++++        failures.push(format!("{candidate_key}: selected family has unassigned owner"));
++++    }
++++    if !candidate.forbidden_unless_feature.iter().any(|name| name == "aspen") {
++++        failures.push(format!("{candidate_key}: selected family does not forbid root `aspen` by default"));
++++    }
++++    if candidate.representative_consumers.is_empty() {
++++        failures.push(format!("{candidate_key}: selected family has no representative consumers"));
++++    }
++++}
++++
+++ fn build_report(args: &Args) -> Result<Report> {
+++     let policy = export_policy(&args.policy)?;
+++     let metadata = load_metadata()?;
+++@@ -394,9 +483,25 @@ fn build_report(args: &Args) -> Result<Report> {
+++         failures.push(format!("missing manifest dir `{}`", args.manifest_dir.display()));
+++     }
+++ 
+++-    for (candidate_key, candidate) in &policy.candidates {
+++-        checked_candidates.push(candidate_key.clone());
++++    let Some(family_keys) = candidate_keys_for_family(&args.candidate_family) else {
++++        failures.push(format!("unknown candidate family `{}`", args.candidate_family));
++++        return Ok(Report {
++++            candidate_family: args.candidate_family.clone(),
++++            passed: false,
++++            failures,
++++            warnings,
++++            checked_candidates,
++++        });
++++    };
++++
++++    for candidate_key in family_keys {
++++        let Some(candidate) = policy.candidates.get(*candidate_key) else {
++++            failures.push(format!("{}: missing policy candidate entry", candidate_key));
++++            continue;
++++        };
++++        checked_candidates.push((*candidate_key).to_string());
+++         check_readiness(candidate_key, candidate, &blocked, &mut failures);
++++        check_selected_family_policy_contract(&args.candidate_family, candidate_key, candidate, &mut failures);
+++         let manifest_text = check_manifest(candidate_key, candidate, &mut failures)?;
+++         if candidate.representative_consumers.is_empty() {
+++             failures.push(format!("{candidate_key}: no representative consumers"));
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt
++new file mode 100644
++index 000000000..589d5d693
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt
++@@ -0,0 +1,4 @@
+++OK: openspec/changes/decompose-next-five-crate-families-implementation
+++  tasks: 15 total / 2 checked
+++  changed files listed: 11
+++  verification artifacts: 4
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i3-v1.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i3-v1.json
++new file mode 100644
++index 000000000..a24b99bfd
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i3-v1.json
++@@ -0,0 +1,8 @@
+++{
+++  "decompose-next-five-crate-families-implementation": [
+++    {
+++      "severity": "warning",
+++      "message": "tasks incomplete: {'done': 2, 'todo': 13, 'in_progress': 0}"
+++    }
+++  ]
+++}
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json
++new file mode 100644
++index 000000000..57584fded
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json
++@@ -0,0 +1,18 @@
+++{
+++  "candidate_family": "foundational-types",
+++  "passed": false,
+++  "failures": [
+++    "foundational_types: manifest missing boundary rail phrase `positive downstream`",
+++    "foundational_types: manifest missing boundary rail phrase `negative boundary`",
+++    "verification index lacks task coverage evidence lines",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
+++  ],
+++  "warnings": [
+++    "foundational_types: package does not exist yet; direct dependency check deferred"
+++  ],
+++  "checked_candidates": [
+++    "foundational_types"
+++  ]
+++}
++\ No newline at end of file
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md
++new file mode 100644
++index 000000000..aa3b0ab37
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md
++@@ -0,0 +1,18 @@
+++# Crate Extraction Readiness Report
+++
+++- Candidate family: `foundational-types`
+++- Passed: `false`
+++- Checked candidates: 1
+++
+++## Failures
+++
+++- foundational_types: manifest missing boundary rail phrase `positive downstream`
+++- foundational_types: manifest missing boundary rail phrase `negative boundary`
+++- verification index lacks task coverage evidence lines
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+++
+++## Warnings
+++
+++- foundational_types: package does not exist yet; direct dependency check deferred
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt
++new file mode 100644
++index 000000000..35e87a41d
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt
++@@ -0,0 +1,4 @@
+++Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.hilHGk2eMC/missing-forbidden-root.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md
+++Exit status: 1
+++Expected substring: foundational_types: selected family does not forbid root `aspen` by default
+++- foundational_types: selected family does not forbid root `aspen` by default
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json
++new file mode 100644
++index 000000000..2a6cf2946
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json
++@@ -0,0 +1,17 @@
+++{
+++  "candidate_family": "foundational-types",
+++  "passed": false,
+++  "failures": [
+++    "foundational_types: selected family does not forbid root `aspen` by default",
+++    "verification index lacks task coverage evidence lines",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
+++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
+++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
+++  ],
+++  "warnings": [
+++    "foundational_types: package does not exist yet; direct dependency check deferred"
+++  ],
+++  "checked_candidates": [
+++    "foundational_types"
+++  ]
+++}
++\ No newline at end of file
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md
++new file mode 100644
++index 000000000..152c2177a
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md
++@@ -0,0 +1,17 @@
+++# Crate Extraction Readiness Report
+++
+++- Candidate family: `foundational-types`
+++- Passed: `false`
+++- Checked candidates: 1
+++
+++## Failures
+++
+++- foundational_types: selected family does not forbid root `aspen` by default
+++- verification index lacks task coverage evidence lines
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
+++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+++
+++## Warnings
+++
+++- foundational_types: package does not exist yet; direct dependency check deferred
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.stderr
++new file mode 100644
++index 000000000..b7d560480
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.stderr
++@@ -0,0 +1,11 @@
+++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+++Error: crate extraction readiness check failed with 5 failure(s)
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt
++new file mode 100644
++index 000000000..fff8ec7d0
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt
++@@ -0,0 +1,4 @@
+++Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.hilHGk2eMC/invalid-readiness.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md
+++Exit status: 1
+++Expected substring: foundational_types: forbidden readiness state `publishable from monorepo`
+++- foundational_types: forbidden readiness state `publishable from monorepo`
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json
++new file mode 100644
++index 000000000..923a91e6f
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json
++@@ -0,0 +1,17 @@
+++{
+++  "candidate_family": "foundational-types",
+++  "passed": false,
+++  "failures": [
+++    "foundational_types: forbidden readiness state `publishable from monorepo`",
+++    "verification index lacks task coverage evidence lines",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
+++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
+++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
+++  ],
+++  "warnings": [
+++    "foundational_types: package does not exist yet; direct dependency check deferred"
+++  ],
+++  "checked_candidates": [
+++    "foundational_types"
+++  ]
+++}
++\ No newline at end of file
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md
++new file mode 100644
++index 000000000..a89a6da2e
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md
++@@ -0,0 +1,17 @@
+++# Crate Extraction Readiness Report
+++
+++- Candidate family: `foundational-types`
+++- Passed: `false`
+++- Checked candidates: 1
+++
+++## Failures
+++
+++- foundational_types: forbidden readiness state `publishable from monorepo`
+++- verification index lacks task coverage evidence lines
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
+++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+++
+++## Warnings
+++
+++- foundational_types: package does not exist yet; direct dependency check deferred
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.stderr
++new file mode 100644
++index 000000000..b7d560480
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.stderr
++@@ -0,0 +1,11 @@
+++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+++Error: crate extraction readiness check failed with 5 failure(s)
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt
++new file mode 100644
++index 000000000..dd54a518c
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt
++@@ -0,0 +1,4 @@
+++Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md
+++Exit status: 1
+++Expected substring: foundational-types: missing compatibility evidence
+++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json
++new file mode 100644
++index 000000000..d6c5a09be
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json
++@@ -0,0 +1,16 @@
+++{
+++  "candidate_family": "foundational-types",
+++  "passed": false,
+++  "failures": [
+++    "verification index lacks task coverage evidence lines",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
+++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
+++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
+++  ],
+++  "warnings": [
+++    "foundational_types: package does not exist yet; direct dependency check deferred"
+++  ],
+++  "checked_candidates": [
+++    "foundational_types"
+++  ]
+++}
++\ No newline at end of file
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md
++new file mode 100644
++index 000000000..bd25a60f9
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md
++@@ -0,0 +1,16 @@
+++# Crate Extraction Readiness Report
+++
+++- Candidate family: `foundational-types`
+++- Passed: `false`
+++- Checked candidates: 1
+++
+++## Failures
+++
+++- verification index lacks task coverage evidence lines
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
+++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+++
+++## Warnings
+++
+++- foundational_types: package does not exist yet; direct dependency check deferred
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.stderr
++new file mode 100644
++index 000000000..a2db1030e
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.stderr
++@@ -0,0 +1,11 @@
+++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+++Error: crate extraction readiness check failed with 4 failure(s)
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt
++new file mode 100644
++index 000000000..b861d8163
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt
++@@ -0,0 +1,4 @@
+++Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md
+++Exit status: 1
+++Expected substring: foundational-types: missing downstream fixture evidence
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json
++new file mode 100644
++index 000000000..d6c5a09be
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json
++@@ -0,0 +1,16 @@
+++{
+++  "candidate_family": "foundational-types",
+++  "passed": false,
+++  "failures": [
+++    "verification index lacks task coverage evidence lines",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
+++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
+++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
+++  ],
+++  "warnings": [
+++    "foundational_types: package does not exist yet; direct dependency check deferred"
+++  ],
+++  "checked_candidates": [
+++    "foundational_types"
+++  ]
+++}
++\ No newline at end of file
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md
++new file mode 100644
++index 000000000..bd25a60f9
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md
++@@ -0,0 +1,16 @@
+++# Crate Extraction Readiness Report
+++
+++- Candidate family: `foundational-types`
+++- Passed: `false`
+++- Checked candidates: 1
+++
+++## Failures
+++
+++- verification index lacks task coverage evidence lines
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
+++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+++
+++## Warnings
+++
+++- foundational_types: package does not exist yet; direct dependency check deferred
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.stderr
++new file mode 100644
++index 000000000..a2db1030e
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.stderr
++@@ -0,0 +1,11 @@
+++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+++Error: crate extraction readiness check failed with 4 failure(s)
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt
++new file mode 100644
++index 000000000..aec73f944
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt
++@@ -0,0 +1,4 @@
+++Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.hilHGk2eMC/missing-owner.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md
+++Exit status: 1
+++Expected substring: foundational_types: selected family has unassigned owner
+++- foundational_types: selected family has unassigned owner
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json
++new file mode 100644
++index 000000000..1c088fd40
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json
++@@ -0,0 +1,17 @@
+++{
+++  "candidate_family": "foundational-types",
+++  "passed": false,
+++  "failures": [
+++    "foundational_types: selected family has unassigned owner",
+++    "verification index lacks task coverage evidence lines",
+++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
+++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
+++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
+++  ],
+++  "warnings": [
+++    "foundational_types: package does not exist yet; direct dependency check deferred"
+++  ],
+++  "checked_candidates": [
+++    "foundational_types"
+++  ]
+++}
++\ No newline at end of file
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md
++new file mode 100644
++index 000000000..6270e7f75
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md
++@@ -0,0 +1,17 @@
+++# Crate Extraction Readiness Report
+++
+++- Candidate family: `foundational-types`
+++- Passed: `false`
+++- Checked candidates: 1
+++
+++## Failures
+++
+++- foundational_types: selected family has unassigned owner
+++- verification index lacks task coverage evidence lines
+++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
+++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+++
+++## Warnings
+++
+++- foundational_types: package does not exist yet; direct dependency check deferred
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.stderr
++new file mode 100644
++index 000000000..b7d560480
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.stderr
++@@ -0,0 +1,11 @@
+++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
+++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
+++Error: crate extraction readiness check failed with 5 failure(s)
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt
++new file mode 100644
++index 000000000..5911a73fe
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt
++@@ -0,0 +1,5 @@
+++- missing owner failed selected-wave readiness checking
+++- invalid readiness state failed selected-wave readiness checking
+++- missing root runtime forbidden policy failed selected-wave readiness checking
+++- missing downstream fixture evidence failed selected-wave readiness checking
+++- missing compatibility evidence failed selected-wave readiness checking
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh
++new file mode 100755
++index 000000000..14bd36bc1
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh
++@@ -0,0 +1,122 @@
+++#!/usr/bin/env bash
+++set -euo pipefail
+++
+++change="openspec/changes/decompose-next-five-crate-families-implementation"
+++evidence="$change/evidence"
+++checker="scripts/check-crate-extraction-readiness.rs"
+++inventory="docs/crate-extraction.md"
+++manifest_dir="docs/crate-extraction"
+++family="foundational-types"
+++base_policy="docs/crate-extraction/policy.ncl"
+++
+++run_expect_failure() {
+++  local label="$1"
+++  local policy="$2"
+++  local workdir="$3"
+++  local expected="$4"
+++  mkdir -p "$workdir/evidence"
+++  if [ ! -f "$workdir/verification.md" ]; then
+++    cat > "$workdir/verification.md" <<'EOF'
+++# Verification Evidence
+++
+++## Task Coverage
+++- Evidence: negative-mutation-fixture
+++EOF
+++  fi
+++  local out_json="$evidence/v1-negative-${label}.json"
+++  local out_md="$evidence/v1-negative-${label}.md"
+++  local summary="$evidence/v1-negative-${label}-summary.txt"
+++  local stderr="$evidence/v1-negative-${label}.stderr"
+++  set +e
+++  "$checker" \
+++    --policy "$policy" \
+++    --inventory "$inventory" \
+++    --manifest-dir "$manifest_dir" \
+++    --candidate-family "$family" \
+++    --output-json "$out_json" \
+++    --output-markdown "$out_md" \
+++    2> "$stderr"
+++  local status=$?
+++  set -e
+++  if [ "$status" -eq 0 ]; then
+++    echo "expected failure but checker passed" > "$summary"
+++    exit 1
+++  fi
+++  if ! grep -F "$expected" "$out_md" >/dev/null; then
+++    {
+++      echo "Expected substring: $expected"
+++      echo "Actual report:"
+++      cat "$out_md"
+++    } > "$summary"
+++    exit 1
+++  fi
+++  {
+++    echo "Command: $checker --policy $policy --inventory $inventory --manifest-dir $manifest_dir --candidate-family $family --output-json $out_json --output-markdown $out_md"
+++    echo "Exit status: $status"
+++    echo "Expected substring: $expected"
+++    grep -F "$expected" "$out_md"
+++  } > "$summary"
+++}
+++
+++mutate_policy() {
+++  local kind="$1"
+++  local target="$2"
+++  python3 - "$kind" "$base_policy" "$target" <<'PY'
+++import re, sys
+++kind, src, dst = sys.argv[1:]
+++text = open(src).read()
+++block_pat = r'(foundational_types = \{.*?\n    \},)'
+++m = re.search(block_pat, text, flags=re.S)
+++if not m:
+++    raise SystemExit('missing foundational_types block')
+++block = m.group(1)
+++if kind == 'missing-owner':
+++    block2 = block.replace('owner = "Aspen foundational type maintainers"', 'owner = "owner needed"')
+++elif kind == 'invalid-readiness':
+++    block2 = block.replace('readiness_state = "workspace-internal"', 'readiness_state = "publishable from monorepo"')
+++elif kind == 'missing-forbidden-root':
+++    block2 = block.replace(', "aspen"', '')
+++else:
+++    raise SystemExit(kind)
+++if block2 == block:
+++    raise SystemExit(f'mutation had no effect: {kind}')
+++open(dst, 'w').write(text[:m.start(1)] + block2 + text[m.end(1):])
+++PY
+++}
+++
+++tmp_root=$(mktemp -d)
+++trap 'rm -rf "$tmp_root"' EXIT
+++
+++p_missing_owner="$tmp_root/missing-owner.ncl"
+++mutate_policy missing-owner "$p_missing_owner"
+++run_expect_failure missing-owner "$p_missing_owner" "$tmp_root/work-missing-owner" 'foundational_types: selected family has unassigned owner'
+++
+++p_invalid_readiness="$tmp_root/invalid-readiness.ncl"
+++mutate_policy invalid-readiness "$p_invalid_readiness"
+++run_expect_failure invalid-readiness "$p_invalid_readiness" "$tmp_root/work-invalid-readiness" 'foundational_types: forbidden readiness state `publishable from monorepo`'
+++
+++p_missing_forbidden="$tmp_root/missing-forbidden-root.ncl"
+++mutate_policy missing-forbidden-root "$p_missing_forbidden"
+++run_expect_failure forbidden-runtime "$p_missing_forbidden" "$tmp_root/work-forbidden-runtime" 'foundational_types: selected family does not forbid root `aspen` by default'
+++
+++run_expect_failure missing-downstream "$base_policy" "$tmp_root/work-missing-downstream" 'foundational-types: missing downstream fixture evidence'
+++
+++compat_work="$tmp_root/work-missing-compatibility"
+++mkdir -p "$compat_work/evidence"
+++cat > "$compat_work/verification.md" <<'EOF'
+++# Verification Evidence
+++
+++## Task Coverage
+++- Evidence: negative-mutation-fixture
+++EOF
+++: > "$compat_work/evidence/foundational-types-downstream-metadata.json"
+++: > "$compat_work/evidence/foundational-types-forbidden-boundary.txt"
+++run_expect_failure missing-compatibility "$base_policy" "$compat_work" 'foundational-types: missing compatibility evidence'
+++
+++cat > "$evidence/v1-negative-mutations-summary.txt" <<'EOF'
+++- missing owner failed selected-wave readiness checking
+++- invalid readiness state failed selected-wave readiness checking
+++- missing root runtime forbidden policy failed selected-wave readiness checking
+++- missing downstream fixture evidence failed selected-wave readiness checking
+++- missing compatibility evidence failed selected-wave readiness checking
+++EOF
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md b/openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md
++new file mode 100644
++index 000000000..065bea60c
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md
++@@ -0,0 +1,25 @@
+++## MODIFIED Requirements
+++
+++### Requirement: Policy and checker cover the next wave [r[architecture.modularity.next-decomposition-policy-covers-wave]]
+++The crate-extraction policy and deterministic readiness checker SHALL cover every selected target family with explicit forbidden categories, allowed backend/domain exceptions, tested feature sets, representative consumers, downstream fixture metadata requirements, compatibility evidence requirements, and negative mutation cases.
+++
+++#### Scenario: Policy contains selected family entries [r[architecture.modularity.next-decomposition-policy-covers-wave.policy-contains-selected-family-entries]]
+++- GIVEN `docs/crate-extraction/policy.ncl` is evaluated for the next decomposition wave
+++- WHEN the selected-wave policy entries are inspected
+++- THEN it SHALL define candidate-family coverage for `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness`
+++- AND each selected family SHALL include owner, canonical class, allowed dependency categories or exceptions, forbidden dependency categories, tested feature sets, and representative consumers
+++
+++#### Scenario: Checker validates selected family boundaries [r[architecture.modularity.next-decomposition-policy-covers-wave.checker-validates-selected-family-boundaries]]
+++- GIVEN `scripts/check-crate-extraction-readiness.rs --candidate-family <family>` is run for any selected family
+++- WHEN the family is one of `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, or `testing-harness`
+++- THEN the checker SHALL verify manifest completeness, readiness-state restrictions, direct dependency boundaries, transitive dependency boundaries, representative-consumer coverage, downstream fixture metadata evidence, and compatibility evidence
+++- AND negative mutations SHALL prove the checker fails on at least forbidden runtime dependency, missing owner, invalid readiness state, missing downstream fixture, and missing compatibility evidence cases for that family
+++
+++### Requirement: Each selected family proves standalone usage and compatibility [r[architecture.modularity.next-decomposition-standalone-and-compatibility-proof]]
+++Every selected family SHALL include both positive and negative verification before readiness is raised: positive standalone compile/usage evidence with canonical APIs, negative boundary tests or checker evidence for app/runtime leaks, and compatibility evidence for Aspen consumers that still depend on the family through runtime features or existing public paths.
+++
+++#### Scenario: Family evidence is stored under the implementation change [r[architecture.modularity.next-decomposition-standalone-and-compatibility-proof.family-evidence-stored-under-implementation-change]]
+++- GIVEN a selected family first-blocker slice is claimed complete
+++- WHEN evidence is saved for review
+++- THEN downstream fixture metadata, forbidden-dependency proof, compatibility transcripts, positive tests, and negative tests SHALL be stored under `openspec/changes/decompose-next-five-crate-families-implementation/evidence/`
+++- AND `openspec/changes/decompose-next-five-crate-families-implementation/verification.md` SHALL map the checked task text to those evidence paths
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++new file mode 100644
++index 000000000..62410f918
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++@@ -0,0 +1,43 @@
+++## 1. Policy and checker foundation
+++
+++- [x] I3 Extend `docs/crate-extraction/policy.ncl` and `scripts/check-crate-extraction-readiness.rs` so `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness` are family-selectable, have policy entries, and enforce missing downstream fixture / missing compatibility evidence gates before readiness can be raised. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
+++
+++- [x] V1 Save checker transcripts and negative mutation evidence proving at least forbidden runtime dependency, missing owner, invalid readiness state, missing downstream fixture, and missing compatibility evidence failures are caught for the selected-wave checker path. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
+++
+++## 2. Foundational types/helpers first slice
+++
+++- [ ] I4 Move or gate `aspen-storage-types` Redb table-definition surface so reusable defaults keep portable storage types only, preserving shell-facing compatibility where needed. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++- [ ] I5 Split/prove `aspen-traits` reusable KV capability traits and save downstream fixture, cargo tree, no-default/default, negative boundary, and representative consumer evidence. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++## 3. Auth and tickets first slice
+++
+++- [ ] I6 Migrate portable consumers to canonical `aspen-auth-core` / `aspen-hooks-ticket` imports or document retained `aspen-auth` compatibility re-exports with owner, tests, and removal criteria. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++- [ ] I7 Add token/ticket serialization goldens, malformed-input negative tests, downstream fixture metadata, and compatibility evidence for auth/ticket consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++## 4. Jobs and CI core first slice
+++
+++- [ ] I8 Identify reusable scheduler/config/run-state/artifact surfaces and gate worker/executor/runtime shells behind adapter crates or named features. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++- [ ] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++- [ ] I10 Save compatibility checks for affected jobs/CI consumers, handlers, CLI/dogfood paths, and executor crates named in the manifest. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++## 5. Trust, crypto, and secrets first slice
+++
+++- [ ] I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++- [ ] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++## 6. Testing harness first slice
+++
+++- [ ] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++- [ ] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++## 7. Verification discipline
+++
+++- [ ] V2 Before checking any implementation task complete, update `verification.md` with exact task text, changed files, source diff artifact, and durable evidence paths. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
+++
+++- [ ] V3 Run `scripts/openspec-preflight.sh decompose-next-five-crate-families-implementation` and save output before claiming completion of any phase. [covers=architecture.modularity.next-decomposition-policy-covers-wave]
++diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++new file mode 100644
++index 000000000..4ffb81549
++--- /dev/null
+++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++@@ -0,0 +1,52 @@
+++# Verification Evidence
+++
+++## Implementation Evidence
+++
+++- Changed file: `docs/crate-extraction/policy.ncl`
+++- Changed file: `docs/crate-extraction/foundational-types.md`
+++- Changed file: `docs/crate-extraction/auth-ticket.md`
+++- Changed file: `docs/crate-extraction/jobs-ci-core.md`
+++- Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
+++- Changed file: `docs/crate-extraction/testing-harness.md`
+++- Changed file: `scripts/check-crate-extraction-readiness.rs`
+++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/design.md`
+++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md`
+++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`
+++
+++## Task Coverage
+++
+++- [x] I3 Extend `docs/crate-extraction/policy.ncl` and `scripts/check-crate-extraction-readiness.rs` so `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness` are family-selectable, have policy entries, and enforce missing downstream fixture / missing compatibility evidence gates before readiness can be raised. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
+++  - Evidence: `docs/crate-extraction/policy.ncl`, `scripts/check-crate-extraction-readiness.rs`, `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction/jobs-ci-core.md`, `docs/crate-extraction/trust-crypto-secrets.md`, `docs/crate-extraction/testing-harness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch`
+++
+++- [x] V1 Save checker transcripts and negative mutation evidence proving at least forbidden runtime dependency, missing owner, invalid readiness state, missing downstream fixture, and missing compatibility evidence failures are caught for the selected-wave checker path. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
+++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json`
+++
+++## Oracle Checkpoints
+++
+++None.
+++
+++## Review Scope Snapshot
+++
+++### `git diff -- docs/crate-extraction/... scripts/check-crate-extraction-readiness.rs openspec/changes/decompose-next-five-crate-families-implementation`
+++
+++- Status: captured
+++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch`
+++
+++## Verification Commands
+++
+++### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`
+++
+++- Status: expected fail until family downstream/compatibility evidence is produced; confirmed selected-wave gates fire.
+++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`
+++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json`
+++
+++### `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`
+++
+++- Status: pass
+++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt`
+++
+++### `scripts/openspec-preflight.sh decompose-next-five-crate-families-implementation`
+++
+++- Status: pending rerun after checked tasks.
+++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt`
++diff --git a/scripts/check-crate-extraction-readiness.rs b/scripts/check-crate-extraction-readiness.rs
++index 3f9d5c88f..6f313b59e 100755
++--- a/scripts/check-crate-extraction-readiness.rs
+++++ b/scripts/check-crate-extraction-readiness.rs
++@@ -25,15 +25,15 @@ use serde::Serialize;
++ 
++ const OWNER_NEEDED: &str = "owner needed";
++ const WORKSPACE_INTERNAL: &str = "workspace-internal";
++-const MANIFEST_REQUIRED_SECTIONS: &[&str] = &[
++-    "## Candidate",
++-    "## Package and release metadata",
++-    "## Feature contract",
++-    "## Dependencies",
++-    "## Compatibility and aliases",
++-    "## Representative consumers",
++-    "## Dependency exceptions",
++-    "## Verification rails",
+++const MANIFEST_REQUIRED_SECTION_GROUPS: &[&[&str]] = &[
+++    &["## Candidate"],
+++    &["## Package and release metadata", "## Package metadata"],
+++    &["## Feature contract"],
+++    &["## Dependencies", "## Dependency decisions"],
+++    &["## Compatibility and aliases", "## Compatibility plan"],
+++    &["## Representative consumers", "Representative consumers:"],
+++    &["## Dependency exceptions", "## Dependency decisions"],
+++    &["## Verification rails"],
++ ];
++ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
++     "positive downstream",
++@@ -67,6 +67,36 @@ const TRANSPORT_RPC_DOWNSTREAM_EVIDENCE: &[&str] = &[
++     "i7-downstream-rpc-forbidden-grep.txt",
++     "v4-compatibility-summary.txt",
++ ];
+++const FOUNDATIONAL_TYPES_FAMILY: &str = "foundational-types";
+++const AUTH_TICKET_FAMILY: &str = "auth-ticket";
+++const JOBS_CI_CORE_FAMILY: &str = "jobs-ci-core";
+++const TRUST_CRYPTO_SECRETS_FAMILY: &str = "trust-crypto-secrets";
+++const TESTING_HARNESS_FAMILY: &str = "testing-harness";
+++const FOUNDATIONAL_TYPES_EVIDENCE: &[&str] = &[
+++    "foundational-types-downstream-metadata.json",
+++    "foundational-types-forbidden-boundary.txt",
+++    "foundational-types-compatibility.txt",
+++];
+++const AUTH_TICKET_EVIDENCE: &[&str] = &[
+++    "auth-ticket-downstream-metadata.json",
+++    "auth-ticket-forbidden-boundary.txt",
+++    "auth-ticket-compatibility.txt",
+++];
+++const JOBS_CI_CORE_EVIDENCE: &[&str] = &[
+++    "jobs-ci-core-downstream-metadata.json",
+++    "jobs-ci-core-forbidden-boundary.txt",
+++    "jobs-ci-core-compatibility.txt",
+++];
+++const TRUST_CRYPTO_SECRETS_EVIDENCE: &[&str] = &[
+++    "trust-crypto-secrets-downstream-metadata.json",
+++    "trust-crypto-secrets-forbidden-boundary.txt",
+++    "trust-crypto-secrets-compatibility.txt",
+++];
+++const TESTING_HARNESS_EVIDENCE: &[&str] = &[
+++    "testing-harness-downstream-metadata.json",
+++    "testing-harness-forbidden-boundary.txt",
+++    "testing-harness-compatibility.txt",
+++];
++ 
++ #[derive(Debug, Parser)]
++ struct Args {
++@@ -188,6 +218,21 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
++     }
++ }
++ 
+++fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
+++    match family {
+++        BLOB_CASTORE_CACHE_FAMILY => Some(&["aspen_blob", "aspen_castore", "aspen_cache"]),
+++        KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
+++        PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_coordination_protocol", "aspen_forge_protocol", "aspen_jobs_protocol"]),
+++        TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
+++        FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
+++        AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
+++        JOBS_CI_CORE_FAMILY => Some(&["jobs_ci_core"]),
+++        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["trust_crypto_secrets"]),
+++        TESTING_HARNESS_FAMILY => Some(&["testing_harness"]),
+++        _ => None,
+++    }
+++}
+++
++ fn is_runtime_shell(candidate: &Candidate) -> bool {
++     candidate.class == "runtime adapter" || candidate.manifest.contains("compat")
++ }
++@@ -242,9 +287,9 @@ fn check_manifest(candidate_key: &str, candidate: &Candidate, failures: &mut Vec
++     let manifest_path = Path::new(&candidate.manifest);
++     let text =
++         fs::read_to_string(manifest_path).with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
++-    for section in MANIFEST_REQUIRED_SECTIONS {
++-        if !text.contains(section) {
++-            failures.push(format!("{candidate_key}: manifest missing `{section}`"));
+++    for alternatives in MANIFEST_REQUIRED_SECTION_GROUPS {
+++        if !alternatives.iter().any(|section| text.contains(section)) {
+++            failures.push(format!("{candidate_key}: manifest missing one of `{}`", alternatives.join("` / `")));
++         }
++     }
++     let lower = text.to_lowercase();
++@@ -363,21 +408,65 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
++         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
++         PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
++         TRANSPORT_RPC_FAMILY => TRANSPORT_RPC_DOWNSTREAM_EVIDENCE,
+++        FOUNDATIONAL_TYPES_FAMILY => FOUNDATIONAL_TYPES_EVIDENCE,
+++        AUTH_TICKET_FAMILY => AUTH_TICKET_EVIDENCE,
+++        JOBS_CI_CORE_FAMILY => JOBS_CI_CORE_EVIDENCE,
+++        TRUST_CRYPTO_SECRETS_FAMILY => TRUST_CRYPTO_SECRETS_EVIDENCE,
+++        TESTING_HARNESS_FAMILY => TESTING_HARNESS_EVIDENCE,
++         _ => return,
++     };
++ 
++     for file_name in required_files {
++         let artifact = evidence_dir.join(file_name);
++         if !artifact.exists() {
+++            let evidence_kind = if file_name.contains("compatibility") {
+++                "compatibility evidence"
+++            } else if file_name.contains("forbidden") || file_name.contains("boundary") {
+++                "negative boundary evidence"
+++            } else {
+++                "downstream fixture evidence"
+++            };
++             failures.push(format!(
++-                "{}: missing downstream fixture evidence `{}`",
+++                "{}: missing {} `{}`",
++                 args.candidate_family,
+++                evidence_kind,
++                 artifact.display()
++             ));
++         }
++     }
++ }
++ 
+++fn selected_family_requires_strict_owner(family: &str) -> bool {
+++    matches!(
+++        family,
+++        FOUNDATIONAL_TYPES_FAMILY
+++            | AUTH_TICKET_FAMILY
+++            | JOBS_CI_CORE_FAMILY
+++            | TRUST_CRYPTO_SECRETS_FAMILY
+++            | TESTING_HARNESS_FAMILY
+++    )
+++}
+++
+++fn check_selected_family_policy_contract(
+++    family: &str,
+++    candidate_key: &str,
+++    candidate: &Candidate,
+++    failures: &mut Vec<String>,
+++) {
+++    if !selected_family_requires_strict_owner(family) {
+++        return;
+++    }
+++    if candidate.owner.trim().is_empty() || candidate.owner == OWNER_NEEDED {
+++        failures.push(format!("{candidate_key}: selected family has unassigned owner"));
+++    }
+++    if !candidate.forbidden_unless_feature.iter().any(|name| name == "aspen") {
+++        failures.push(format!("{candidate_key}: selected family does not forbid root `aspen` by default"));
+++    }
+++    if candidate.representative_consumers.is_empty() {
+++        failures.push(format!("{candidate_key}: selected family has no representative consumers"));
+++    }
+++}
+++
++ fn build_report(args: &Args) -> Result<Report> {
++     let policy = export_policy(&args.policy)?;
++     let metadata = load_metadata()?;
++@@ -394,9 +483,25 @@ fn build_report(args: &Args) -> Result<Report> {
++         failures.push(format!("missing manifest dir `{}`", args.manifest_dir.display()));
++     }
++ 
++-    for (candidate_key, candidate) in &policy.candidates {
++-        checked_candidates.push(candidate_key.clone());
+++    let Some(family_keys) = candidate_keys_for_family(&args.candidate_family) else {
+++        failures.push(format!("unknown candidate family `{}`", args.candidate_family));
+++        return Ok(Report {
+++            candidate_family: args.candidate_family.clone(),
+++            passed: false,
+++            failures,
+++            warnings,
+++            checked_candidates,
+++        });
+++    };
+++
+++    for candidate_key in family_keys {
+++        let Some(candidate) = policy.candidates.get(*candidate_key) else {
+++            failures.push(format!("{}: missing policy candidate entry", candidate_key));
+++            continue;
+++        };
+++        checked_candidates.push((*candidate_key).to_string());
++         check_readiness(candidate_key, candidate, &blocked, &mut failures);
+++        check_selected_family_policy_contract(&args.candidate_family, candidate_key, candidate, &mut failures);
++         let manifest_text = check_manifest(candidate_key, candidate, &mut failures)?;
++         if candidate.representative_consumers.is_empty() {
++             failures.push(format!("{candidate_key}: no representative consumers"));
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt
+new file mode 100644
+index 000000000..589d5d693
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt
+@@ -0,0 +1,4 @@
++OK: openspec/changes/decompose-next-five-crate-families-implementation
++  tasks: 15 total / 2 checked
++  changed files listed: 11
++  verification artifacts: 4
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i3-v1.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i3-v1.json
+new file mode 100644
+index 000000000..a24b99bfd
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i3-v1.json
+@@ -0,0 +1,8 @@
++{
++  "decompose-next-five-crate-families-implementation": [
++    {
++      "severity": "warning",
++      "message": "tasks incomplete: {'done': 2, 'todo': 13, 'in_progress': 0}"
++    }
++  ]
++}
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json
+new file mode 100644
+index 000000000..b063d4fad
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json
+@@ -0,0 +1,15 @@
++{
++  "candidate_family": "foundational-types",
++  "passed": false,
++  "failures": [
++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
++  ],
++  "warnings": [
++    "foundational_types: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "foundational_types"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md
+new file mode 100644
+index 000000000..69fb99c76
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md
+@@ -0,0 +1,15 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `foundational-types`
++- Passed: `false`
++- Checked candidates: 1
++
++## Failures
++
++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++
++## Warnings
++
++- foundational_types: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt
+new file mode 100644
+index 000000000..80db00f4f
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt
+@@ -0,0 +1,4 @@
++Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.JcoHpPThNq/missing-forbidden-root.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md
++Exit status: 1
++Expected substring: foundational_types: selected family does not forbid root `aspen` by default
++- foundational_types: selected family does not forbid root `aspen` by default
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json
+new file mode 100644
+index 000000000..fd8001c0a
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.json
+@@ -0,0 +1,16 @@
++{
++  "candidate_family": "foundational-types",
++  "passed": false,
++  "failures": [
++    "foundational_types: selected family does not forbid root `aspen` by default",
++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
++  ],
++  "warnings": [
++    "foundational_types: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "foundational_types"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md
+new file mode 100644
+index 000000000..8c04193be
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.md
+@@ -0,0 +1,16 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `foundational-types`
++- Passed: `false`
++- Checked candidates: 1
++
++## Failures
++
++- foundational_types: selected family does not forbid root `aspen` by default
++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++
++## Warnings
++
++- foundational_types: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.stderr
+new file mode 100644
+index 000000000..a2db1030e
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime.stderr
+@@ -0,0 +1,11 @@
++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
++Error: crate extraction readiness check failed with 4 failure(s)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt
+new file mode 100644
+index 000000000..ad69d6049
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt
+@@ -0,0 +1,4 @@
++Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.JcoHpPThNq/invalid-readiness.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md
++Exit status: 1
++Expected substring: foundational_types: forbidden readiness state `publishable from monorepo`
++- foundational_types: forbidden readiness state `publishable from monorepo`
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json
+new file mode 100644
+index 000000000..cd63daad0
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json
+@@ -0,0 +1,16 @@
++{
++  "candidate_family": "foundational-types",
++  "passed": false,
++  "failures": [
++    "foundational_types: forbidden readiness state `publishable from monorepo`",
++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
++  ],
++  "warnings": [
++    "foundational_types: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "foundational_types"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md
+new file mode 100644
+index 000000000..216e25d10
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md
+@@ -0,0 +1,16 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `foundational-types`
++- Passed: `false`
++- Checked candidates: 1
++
++## Failures
++
++- foundational_types: forbidden readiness state `publishable from monorepo`
++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++
++## Warnings
++
++- foundational_types: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.stderr
+new file mode 100644
+index 000000000..a2db1030e
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.stderr
+@@ -0,0 +1,11 @@
++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
++Error: crate extraction readiness check failed with 4 failure(s)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt
+new file mode 100644
+index 000000000..dd54a518c
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt
+@@ -0,0 +1,4 @@
++Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md
++Exit status: 1
++Expected substring: foundational-types: missing compatibility evidence
++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json
+new file mode 100644
+index 000000000..b063d4fad
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json
+@@ -0,0 +1,15 @@
++{
++  "candidate_family": "foundational-types",
++  "passed": false,
++  "failures": [
++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
++  ],
++  "warnings": [
++    "foundational_types: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "foundational_types"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md
+new file mode 100644
+index 000000000..69fb99c76
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md
+@@ -0,0 +1,15 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `foundational-types`
++- Passed: `false`
++- Checked candidates: 1
++
++## Failures
++
++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++
++## Warnings
++
++- foundational_types: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.stderr
+new file mode 100644
+index 000000000..fa5292046
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.stderr
+@@ -0,0 +1,11 @@
++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
++Error: crate extraction readiness check failed with 3 failure(s)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt
+new file mode 100644
+index 000000000..b861d8163
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt
+@@ -0,0 +1,4 @@
++Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md
++Exit status: 1
++Expected substring: foundational-types: missing downstream fixture evidence
++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json
+new file mode 100644
+index 000000000..b063d4fad
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.json
+@@ -0,0 +1,15 @@
++{
++  "candidate_family": "foundational-types",
++  "passed": false,
++  "failures": [
++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
++  ],
++  "warnings": [
++    "foundational_types: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "foundational_types"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md
+new file mode 100644
+index 000000000..69fb99c76
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.md
+@@ -0,0 +1,15 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `foundational-types`
++- Passed: `false`
++- Checked candidates: 1
++
++## Failures
++
++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++
++## Warnings
++
++- foundational_types: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.stderr
+new file mode 100644
+index 000000000..fa5292046
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream.stderr
+@@ -0,0 +1,11 @@
++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
++Error: crate extraction readiness check failed with 3 failure(s)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt
+new file mode 100644
+index 000000000..863d71790
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt
+@@ -0,0 +1,4 @@
++Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.JcoHpPThNq/missing-owner.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md
++Exit status: 1
++Expected substring: foundational_types: selected family has unassigned owner
++- foundational_types: selected family has unassigned owner
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json
+new file mode 100644
+index 000000000..9defe190d
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.json
+@@ -0,0 +1,16 @@
++{
++  "candidate_family": "foundational-types",
++  "passed": false,
++  "failures": [
++    "foundational_types: selected family has unassigned owner",
++    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
++    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
++    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
++  ],
++  "warnings": [
++    "foundational_types: package does not exist yet; direct dependency check deferred"
++  ],
++  "checked_candidates": [
++    "foundational_types"
++  ]
++}
+\ No newline at end of file
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md
+new file mode 100644
+index 000000000..0a6514f3d
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.md
+@@ -0,0 +1,16 @@
++# Crate Extraction Readiness Report
++
++- Candidate family: `foundational-types`
++- Passed: `false`
++- Checked candidates: 1
++
++## Failures
++
++- foundational_types: selected family has unassigned owner
++- foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`
++- foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`
++- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`
++
++## Warnings
++
++- foundational_types: package does not exist yet; direct dependency check deferred
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.stderr b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.stderr
+new file mode 100644
+index 000000000..a2db1030e
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner.stderr
+@@ -0,0 +1,11 @@
++Using saved setting for 'builders = ' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'connect-timeout = 30' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'download-attempts = 3' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-substituters = https://cache.nixos.org https://microvm.cachix.org' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'extra-trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys=' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'fallback = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'keepOutputs = true' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-free = 10737418240' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'max-jobs = auto' from ~/.local/share/nix/trusted-settings.json.
++Using saved setting for 'min-free = 5368709120' from ~/.local/share/nix/trusted-settings.json.
++Error: crate extraction readiness check failed with 4 failure(s)
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt
+new file mode 100644
+index 000000000..5911a73fe
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt
+@@ -0,0 +1,5 @@
++- missing owner failed selected-wave readiness checking
++- invalid readiness state failed selected-wave readiness checking
++- missing root runtime forbidden policy failed selected-wave readiness checking
++- missing downstream fixture evidence failed selected-wave readiness checking
++- missing compatibility evidence failed selected-wave readiness checking
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh
+new file mode 100755
+index 000000000..14bd36bc1
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh
+@@ -0,0 +1,122 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++change="openspec/changes/decompose-next-five-crate-families-implementation"
++evidence="$change/evidence"
++checker="scripts/check-crate-extraction-readiness.rs"
++inventory="docs/crate-extraction.md"
++manifest_dir="docs/crate-extraction"
++family="foundational-types"
++base_policy="docs/crate-extraction/policy.ncl"
++
++run_expect_failure() {
++  local label="$1"
++  local policy="$2"
++  local workdir="$3"
++  local expected="$4"
++  mkdir -p "$workdir/evidence"
++  if [ ! -f "$workdir/verification.md" ]; then
++    cat > "$workdir/verification.md" <<'EOF'
++# Verification Evidence
++
++## Task Coverage
++- Evidence: negative-mutation-fixture
++EOF
++  fi
++  local out_json="$evidence/v1-negative-${label}.json"
++  local out_md="$evidence/v1-negative-${label}.md"
++  local summary="$evidence/v1-negative-${label}-summary.txt"
++  local stderr="$evidence/v1-negative-${label}.stderr"
++  set +e
++  "$checker" \
++    --policy "$policy" \
++    --inventory "$inventory" \
++    --manifest-dir "$manifest_dir" \
++    --candidate-family "$family" \
++    --output-json "$out_json" \
++    --output-markdown "$out_md" \
++    2> "$stderr"
++  local status=$?
++  set -e
++  if [ "$status" -eq 0 ]; then
++    echo "expected failure but checker passed" > "$summary"
++    exit 1
++  fi
++  if ! grep -F "$expected" "$out_md" >/dev/null; then
++    {
++      echo "Expected substring: $expected"
++      echo "Actual report:"
++      cat "$out_md"
++    } > "$summary"
++    exit 1
++  fi
++  {
++    echo "Command: $checker --policy $policy --inventory $inventory --manifest-dir $manifest_dir --candidate-family $family --output-json $out_json --output-markdown $out_md"
++    echo "Exit status: $status"
++    echo "Expected substring: $expected"
++    grep -F "$expected" "$out_md"
++  } > "$summary"
++}
++
++mutate_policy() {
++  local kind="$1"
++  local target="$2"
++  python3 - "$kind" "$base_policy" "$target" <<'PY'
++import re, sys
++kind, src, dst = sys.argv[1:]
++text = open(src).read()
++block_pat = r'(foundational_types = \{.*?\n    \},)'
++m = re.search(block_pat, text, flags=re.S)
++if not m:
++    raise SystemExit('missing foundational_types block')
++block = m.group(1)
++if kind == 'missing-owner':
++    block2 = block.replace('owner = "Aspen foundational type maintainers"', 'owner = "owner needed"')
++elif kind == 'invalid-readiness':
++    block2 = block.replace('readiness_state = "workspace-internal"', 'readiness_state = "publishable from monorepo"')
++elif kind == 'missing-forbidden-root':
++    block2 = block.replace(', "aspen"', '')
++else:
++    raise SystemExit(kind)
++if block2 == block:
++    raise SystemExit(f'mutation had no effect: {kind}')
++open(dst, 'w').write(text[:m.start(1)] + block2 + text[m.end(1):])
++PY
++}
++
++tmp_root=$(mktemp -d)
++trap 'rm -rf "$tmp_root"' EXIT
++
++p_missing_owner="$tmp_root/missing-owner.ncl"
++mutate_policy missing-owner "$p_missing_owner"
++run_expect_failure missing-owner "$p_missing_owner" "$tmp_root/work-missing-owner" 'foundational_types: selected family has unassigned owner'
++
++p_invalid_readiness="$tmp_root/invalid-readiness.ncl"
++mutate_policy invalid-readiness "$p_invalid_readiness"
++run_expect_failure invalid-readiness "$p_invalid_readiness" "$tmp_root/work-invalid-readiness" 'foundational_types: forbidden readiness state `publishable from monorepo`'
++
++p_missing_forbidden="$tmp_root/missing-forbidden-root.ncl"
++mutate_policy missing-forbidden-root "$p_missing_forbidden"
++run_expect_failure forbidden-runtime "$p_missing_forbidden" "$tmp_root/work-forbidden-runtime" 'foundational_types: selected family does not forbid root `aspen` by default'
++
++run_expect_failure missing-downstream "$base_policy" "$tmp_root/work-missing-downstream" 'foundational-types: missing downstream fixture evidence'
++
++compat_work="$tmp_root/work-missing-compatibility"
++mkdir -p "$compat_work/evidence"
++cat > "$compat_work/verification.md" <<'EOF'
++# Verification Evidence
++
++## Task Coverage
++- Evidence: negative-mutation-fixture
++EOF
++: > "$compat_work/evidence/foundational-types-downstream-metadata.json"
++: > "$compat_work/evidence/foundational-types-forbidden-boundary.txt"
++run_expect_failure missing-compatibility "$base_policy" "$compat_work" 'foundational-types: missing compatibility evidence'
++
++cat > "$evidence/v1-negative-mutations-summary.txt" <<'EOF'
++- missing owner failed selected-wave readiness checking
++- invalid readiness state failed selected-wave readiness checking
++- missing root runtime forbidden policy failed selected-wave readiness checking
++- missing downstream fixture evidence failed selected-wave readiness checking
++- missing compatibility evidence failed selected-wave readiness checking
++EOF
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md b/openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md
+new file mode 100644
+index 000000000..065bea60c
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md
+@@ -0,0 +1,25 @@
++## MODIFIED Requirements
++
++### Requirement: Policy and checker cover the next wave [r[architecture.modularity.next-decomposition-policy-covers-wave]]
++The crate-extraction policy and deterministic readiness checker SHALL cover every selected target family with explicit forbidden categories, allowed backend/domain exceptions, tested feature sets, representative consumers, downstream fixture metadata requirements, compatibility evidence requirements, and negative mutation cases.
++
++#### Scenario: Policy contains selected family entries [r[architecture.modularity.next-decomposition-policy-covers-wave.policy-contains-selected-family-entries]]
++- GIVEN `docs/crate-extraction/policy.ncl` is evaluated for the next decomposition wave
++- WHEN the selected-wave policy entries are inspected
++- THEN it SHALL define candidate-family coverage for `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness`
++- AND each selected family SHALL include owner, canonical class, allowed dependency categories or exceptions, forbidden dependency categories, tested feature sets, and representative consumers
++
++#### Scenario: Checker validates selected family boundaries [r[architecture.modularity.next-decomposition-policy-covers-wave.checker-validates-selected-family-boundaries]]
++- GIVEN `scripts/check-crate-extraction-readiness.rs --candidate-family <family>` is run for any selected family
++- WHEN the family is one of `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, or `testing-harness`
++- THEN the checker SHALL verify manifest completeness, readiness-state restrictions, direct dependency boundaries, transitive dependency boundaries, representative-consumer coverage, downstream fixture metadata evidence, and compatibility evidence
++- AND negative mutations SHALL prove the checker fails on at least forbidden runtime dependency, missing owner, invalid readiness state, missing downstream fixture, and missing compatibility evidence cases for that family
++
++### Requirement: Each selected family proves standalone usage and compatibility [r[architecture.modularity.next-decomposition-standalone-and-compatibility-proof]]
++Every selected family SHALL include both positive and negative verification before readiness is raised: positive standalone compile/usage evidence with canonical APIs, negative boundary tests or checker evidence for app/runtime leaks, and compatibility evidence for Aspen consumers that still depend on the family through runtime features or existing public paths.
++
++#### Scenario: Family evidence is stored under the implementation change [r[architecture.modularity.next-decomposition-standalone-and-compatibility-proof.family-evidence-stored-under-implementation-change]]
++- GIVEN a selected family first-blocker slice is claimed complete
++- WHEN evidence is saved for review
++- THEN downstream fixture metadata, forbidden-dependency proof, compatibility transcripts, positive tests, and negative tests SHALL be stored under `openspec/changes/decompose-next-five-crate-families-implementation/evidence/`
++- AND `openspec/changes/decompose-next-five-crate-families-implementation/verification.md` SHALL map the checked task text to those evidence paths
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+new file mode 100644
+index 000000000..62410f918
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+@@ -0,0 +1,43 @@
++## 1. Policy and checker foundation
++
++- [x] I3 Extend `docs/crate-extraction/policy.ncl` and `scripts/check-crate-extraction-readiness.rs` so `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness` are family-selectable, have policy entries, and enforce missing downstream fixture / missing compatibility evidence gates before readiness can be raised. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
++
++- [x] V1 Save checker transcripts and negative mutation evidence proving at least forbidden runtime dependency, missing owner, invalid readiness state, missing downstream fixture, and missing compatibility evidence failures are caught for the selected-wave checker path. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
++
++## 2. Foundational types/helpers first slice
++
++- [ ] I4 Move or gate `aspen-storage-types` Redb table-definition surface so reusable defaults keep portable storage types only, preserving shell-facing compatibility where needed. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++- [ ] I5 Split/prove `aspen-traits` reusable KV capability traits and save downstream fixture, cargo tree, no-default/default, negative boundary, and representative consumer evidence. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++## 3. Auth and tickets first slice
++
++- [ ] I6 Migrate portable consumers to canonical `aspen-auth-core` / `aspen-hooks-ticket` imports or document retained `aspen-auth` compatibility re-exports with owner, tests, and removal criteria. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++- [ ] I7 Add token/ticket serialization goldens, malformed-input negative tests, downstream fixture metadata, and compatibility evidence for auth/ticket consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++## 4. Jobs and CI core first slice
++
++- [ ] I8 Identify reusable scheduler/config/run-state/artifact surfaces and gate worker/executor/runtime shells behind adapter crates or named features. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++- [ ] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++- [ ] I10 Save compatibility checks for affected jobs/CI consumers, handlers, CLI/dogfood paths, and executor crates named in the manifest. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++## 5. Trust, crypto, and secrets first slice
++
++- [ ] I11 Extract or gate pure Shamir/GF/HKDF/share-chain/reconfiguration state logic away from Raft/Iroh/secrets-service runtime shells. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++- [ ] I12 Add property-style pure tests, malformed share/key negative tests, downstream metadata, and compatibility checks for trust/secrets runtime consumers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++## 6. Testing harness first slice
++
++- [ ] I13 Inventory reusable simulation/workload/assertion/helper ownership and split reusable helpers from Aspen cluster bootstrap helpers. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++- [ ] I14 Add fixture self-tests, negative app-bootstrap dependency checks, and compatibility checks for existing madsim/network/patchbay suites. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++## 7. Verification discipline
++
++- [ ] V2 Before checking any implementation task complete, update `verification.md` with exact task text, changed files, source diff artifact, and durable evidence paths. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++
++- [ ] V3 Run `scripts/openspec-preflight.sh decompose-next-five-crate-families-implementation` and save output before claiming completion of any phase. [covers=architecture.modularity.next-decomposition-policy-covers-wave]
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+new file mode 100644
+index 000000000..0ccc5ed85
+--- /dev/null
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+@@ -0,0 +1,52 @@
++# Verification Evidence
++
++## Implementation Evidence
++
++- Changed file: `docs/crate-extraction/policy.ncl`
++- Changed file: `docs/crate-extraction/foundational-types.md`
++- Changed file: `docs/crate-extraction/auth-ticket.md`
++- Changed file: `docs/crate-extraction/jobs-ci-core.md`
++- Changed file: `docs/crate-extraction/trust-crypto-secrets.md`
++- Changed file: `docs/crate-extraction/testing-harness.md`
++- Changed file: `scripts/check-crate-extraction-readiness.rs`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/design.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/specs/architecture-modularity/spec.md`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`
++
++## Task Coverage
++
++- [x] I3 Extend `docs/crate-extraction/policy.ncl` and `scripts/check-crate-extraction-readiness.rs` so `foundational-types`, `auth-ticket`, `jobs-ci-core`, `trust-crypto-secrets`, and `testing-harness` are family-selectable, have policy entries, and enforce missing downstream fixture / missing compatibility evidence gates before readiness can be raised. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
++  - Evidence: `docs/crate-extraction/policy.ncl`, `scripts/check-crate-extraction-readiness.rs`, `docs/crate-extraction/foundational-types.md`, `docs/crate-extraction/auth-ticket.md`, `docs/crate-extraction/jobs-ci-core.md`, `docs/crate-extraction/trust-crypto-secrets.md`, `docs/crate-extraction/testing-harness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch`
++
++- [x] V1 Save checker transcripts and negative mutation evidence proving at least forbidden runtime dependency, missing owner, invalid readiness state, missing downstream fixture, and missing compatibility evidence failures are caught for the selected-wave checker path. [covers=architecture.modularity.next-decomposition-policy-covers-wave] ✅ completed: 2026-04-30T20:12:00Z
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-owner-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-forbidden-runtime-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-downstream-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility-summary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json`
++
++## Oracle Checkpoints
++
++None.
++
++## Review Scope Snapshot
++
++### `git diff -- docs/crate-extraction/... scripts/check-crate-extraction-readiness.rs openspec/changes/decompose-next-five-crate-families-implementation`
++
++- Status: captured
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i3-v1-implementation-diff.patch`
++
++## Verification Commands
++
++### `scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`
++
++- Status: expected fail until family downstream/compatibility evidence is produced; confirmed selected-wave gates fire.
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.md`
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-foundational-readiness.json`
++
++### `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-run-negative-mutations.sh`
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-mutations-summary.txt`
++
++### `scripts/openspec-preflight.sh decompose-next-five-crate-families-implementation`
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i3-v1.txt`
+diff --git a/scripts/check-crate-extraction-readiness.rs b/scripts/check-crate-extraction-readiness.rs
+index 3f9d5c88f..6f313b59e 100755
+--- a/scripts/check-crate-extraction-readiness.rs
++++ b/scripts/check-crate-extraction-readiness.rs
+@@ -25,15 +25,15 @@ use serde::Serialize;
+ 
+ const OWNER_NEEDED: &str = "owner needed";
+ const WORKSPACE_INTERNAL: &str = "workspace-internal";
+-const MANIFEST_REQUIRED_SECTIONS: &[&str] = &[
+-    "## Candidate",
+-    "## Package and release metadata",
+-    "## Feature contract",
+-    "## Dependencies",
+-    "## Compatibility and aliases",
+-    "## Representative consumers",
+-    "## Dependency exceptions",
+-    "## Verification rails",
++const MANIFEST_REQUIRED_SECTION_GROUPS: &[&[&str]] = &[
++    &["## Candidate"],
++    &["## Package and release metadata", "## Package metadata"],
++    &["## Feature contract"],
++    &["## Dependencies", "## Dependency decisions"],
++    &["## Compatibility and aliases", "## Compatibility plan"],
++    &["## Representative consumers", "Representative consumers:"],
++    &["## Dependency exceptions", "## Dependency decisions"],
++    &["## Verification rails"],
+ ];
+ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
+     "positive downstream",
+@@ -67,6 +67,36 @@ const TRANSPORT_RPC_DOWNSTREAM_EVIDENCE: &[&str] = &[
+     "i7-downstream-rpc-forbidden-grep.txt",
+     "v4-compatibility-summary.txt",
+ ];
++const FOUNDATIONAL_TYPES_FAMILY: &str = "foundational-types";
++const AUTH_TICKET_FAMILY: &str = "auth-ticket";
++const JOBS_CI_CORE_FAMILY: &str = "jobs-ci-core";
++const TRUST_CRYPTO_SECRETS_FAMILY: &str = "trust-crypto-secrets";
++const TESTING_HARNESS_FAMILY: &str = "testing-harness";
++const FOUNDATIONAL_TYPES_EVIDENCE: &[&str] = &[
++    "foundational-types-downstream-metadata.json",
++    "foundational-types-forbidden-boundary.txt",
++    "foundational-types-compatibility.txt",
++];
++const AUTH_TICKET_EVIDENCE: &[&str] = &[
++    "auth-ticket-downstream-metadata.json",
++    "auth-ticket-forbidden-boundary.txt",
++    "auth-ticket-compatibility.txt",
++];
++const JOBS_CI_CORE_EVIDENCE: &[&str] = &[
++    "jobs-ci-core-downstream-metadata.json",
++    "jobs-ci-core-forbidden-boundary.txt",
++    "jobs-ci-core-compatibility.txt",
++];
++const TRUST_CRYPTO_SECRETS_EVIDENCE: &[&str] = &[
++    "trust-crypto-secrets-downstream-metadata.json",
++    "trust-crypto-secrets-forbidden-boundary.txt",
++    "trust-crypto-secrets-compatibility.txt",
++];
++const TESTING_HARNESS_EVIDENCE: &[&str] = &[
++    "testing-harness-downstream-metadata.json",
++    "testing-harness-forbidden-boundary.txt",
++    "testing-harness-compatibility.txt",
++];
+ 
+ #[derive(Debug, Parser)]
+ struct Args {
+@@ -188,6 +218,21 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
+     }
+ }
+ 
++fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
++    match family {
++        BLOB_CASTORE_CACHE_FAMILY => Some(&["aspen_blob", "aspen_castore", "aspen_cache"]),
++        KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
++        PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_coordination_protocol", "aspen_forge_protocol", "aspen_jobs_protocol"]),
++        TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
++        FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
++        AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
++        JOBS_CI_CORE_FAMILY => Some(&["jobs_ci_core"]),
++        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["trust_crypto_secrets"]),
++        TESTING_HARNESS_FAMILY => Some(&["testing_harness"]),
++        _ => None,
++    }
++}
++
+ fn is_runtime_shell(candidate: &Candidate) -> bool {
+     candidate.class == "runtime adapter" || candidate.manifest.contains("compat")
+ }
+@@ -242,9 +287,9 @@ fn check_manifest(candidate_key: &str, candidate: &Candidate, failures: &mut Vec
+     let manifest_path = Path::new(&candidate.manifest);
+     let text =
+         fs::read_to_string(manifest_path).with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
+-    for section in MANIFEST_REQUIRED_SECTIONS {
+-        if !text.contains(section) {
+-            failures.push(format!("{candidate_key}: manifest missing `{section}`"));
++    for alternatives in MANIFEST_REQUIRED_SECTION_GROUPS {
++        if !alternatives.iter().any(|section| text.contains(section)) {
++            failures.push(format!("{candidate_key}: manifest missing one of `{}`", alternatives.join("` / `")));
+         }
+     }
+     let lower = text.to_lowercase();
+@@ -363,21 +408,65 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
+         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
+         PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
+         TRANSPORT_RPC_FAMILY => TRANSPORT_RPC_DOWNSTREAM_EVIDENCE,
++        FOUNDATIONAL_TYPES_FAMILY => FOUNDATIONAL_TYPES_EVIDENCE,
++        AUTH_TICKET_FAMILY => AUTH_TICKET_EVIDENCE,
++        JOBS_CI_CORE_FAMILY => JOBS_CI_CORE_EVIDENCE,
++        TRUST_CRYPTO_SECRETS_FAMILY => TRUST_CRYPTO_SECRETS_EVIDENCE,
++        TESTING_HARNESS_FAMILY => TESTING_HARNESS_EVIDENCE,
+         _ => return,
+     };
+ 
+     for file_name in required_files {
+         let artifact = evidence_dir.join(file_name);
+         if !artifact.exists() {
++            let evidence_kind = if file_name.contains("compatibility") {
++                "compatibility evidence"
++            } else if file_name.contains("forbidden") || file_name.contains("boundary") {
++                "negative boundary evidence"
++            } else {
++                "downstream fixture evidence"
++            };
+             failures.push(format!(
+-                "{}: missing downstream fixture evidence `{}`",
++                "{}: missing {} `{}`",
+                 args.candidate_family,
++                evidence_kind,
+                 artifact.display()
+             ));
+         }
+     }
+ }
+ 
++fn selected_family_requires_strict_owner(family: &str) -> bool {
++    matches!(
++        family,
++        FOUNDATIONAL_TYPES_FAMILY
++            | AUTH_TICKET_FAMILY
++            | JOBS_CI_CORE_FAMILY
++            | TRUST_CRYPTO_SECRETS_FAMILY
++            | TESTING_HARNESS_FAMILY
++    )
++}
++
++fn check_selected_family_policy_contract(
++    family: &str,
++    candidate_key: &str,
++    candidate: &Candidate,
++    failures: &mut Vec<String>,
++) {
++    if !selected_family_requires_strict_owner(family) {
++        return;
++    }
++    if candidate.owner.trim().is_empty() || candidate.owner == OWNER_NEEDED {
++        failures.push(format!("{candidate_key}: selected family has unassigned owner"));
++    }
++    if !candidate.forbidden_unless_feature.iter().any(|name| name == "aspen") {
++        failures.push(format!("{candidate_key}: selected family does not forbid root `aspen` by default"));
++    }
++    if candidate.representative_consumers.is_empty() {
++        failures.push(format!("{candidate_key}: selected family has no representative consumers"));
++    }
++}
++
+ fn build_report(args: &Args) -> Result<Report> {
+     let policy = export_policy(&args.policy)?;
+     let metadata = load_metadata()?;
+@@ -394,9 +483,25 @@ fn build_report(args: &Args) -> Result<Report> {
+         failures.push(format!("missing manifest dir `{}`", args.manifest_dir.display()));
+     }
+ 
+-    for (candidate_key, candidate) in &policy.candidates {
+-        checked_candidates.push(candidate_key.clone());
++    let Some(family_keys) = candidate_keys_for_family(&args.candidate_family) else {
++        failures.push(format!("unknown candidate family `{}`", args.candidate_family));
++        return Ok(Report {
++            candidate_family: args.candidate_family.clone(),
++            passed: false,
++            failures,
++            warnings,
++            checked_candidates,
++        });
++    };
++
++    for candidate_key in family_keys {
++        let Some(candidate) = policy.candidates.get(*candidate_key) else {
++            failures.push(format!("{}: missing policy candidate entry", candidate_key));
++            continue;
++        };
++        checked_candidates.push((*candidate_key).to_string());
+         check_readiness(candidate_key, candidate, &blocked, &mut failures);
++        check_selected_family_policy_contract(&args.candidate_family, candidate_key, candidate, &mut failures);
+         let manifest_text = check_manifest(candidate_key, candidate, &mut failures)?;
+         if candidate.representative_consumers.is_empty() {
+             failures.push(format!("{candidate_key}: no representative consumers"));

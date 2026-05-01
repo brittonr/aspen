@@ -1,0 +1,5 @@
+- missing owner failed selected-wave readiness checking
+- invalid readiness state failed selected-wave readiness checking
+- missing root runtime forbidden policy failed selected-wave readiness checking
+- missing downstream fixture evidence failed selected-wave readiness checking
+- missing compatibility evidence failed selected-wave readiness checking

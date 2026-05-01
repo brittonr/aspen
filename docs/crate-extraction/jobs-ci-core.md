@@ -46,8 +46,8 @@
 
 ## Verification rails
 
-- Positive: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
-- Negative: checker mutation for root app/handler/executor/process-spawn dependency leaks.
+- Positive downstream: schema/config/run-state fixture `cargo metadata`, `cargo check`, focused tests.
+- Negative boundary: checker mutation for root app/handler/executor/process-spawn dependency leaks.
 - Compatibility: focused `aspen-ci`, `aspen-jobs`, handler, CLI, and dogfood checks named by implementation tasks.
 
 ## First blocker

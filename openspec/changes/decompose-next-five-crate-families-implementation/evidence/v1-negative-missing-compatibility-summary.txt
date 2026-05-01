@@ -1,0 +1,4 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy docs/crate-extraction/policy.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-missing-compatibility.md
+Exit status: 1
+Expected substring: foundational-types: missing compatibility evidence
+- foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`

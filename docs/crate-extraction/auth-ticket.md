@@ -46,8 +46,8 @@
 
 ## Verification rails
 
-- Positive: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
-- Negative: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
+- Positive downstream: portable crate `cargo check`, serialization goldens, downstream fixture metadata/check/test.
+- Negative boundary: malformed token/ticket tests and checker mutation for runtime `aspen-auth` dependency in portable consumers.
 - Compatibility: compile/test representative consumers and any documented re-export paths.
 
 ## First blocker

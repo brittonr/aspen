@@ -1,0 +1,4 @@
+Command: scripts/check-crate-extraction-readiness.rs --policy /tmp/tmp.JcoHpPThNq/invalid-readiness.ncl --inventory docs/crate-extraction.md --manifest-dir docs/crate-extraction --candidate-family foundational-types --output-json openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.json --output-markdown openspec/changes/decompose-next-five-crate-families-implementation/evidence/v1-negative-invalid-readiness.md
+Exit status: 1
+Expected substring: foundational_types: forbidden readiness state `publishable from monorepo`
+- foundational_types: forbidden readiness state `publishable from monorepo`

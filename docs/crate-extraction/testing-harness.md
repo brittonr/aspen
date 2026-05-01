@@ -47,8 +47,8 @@
 
 ## Verification rails
 
-- Positive: fixture `cargo metadata`, `cargo check`, and focused helper tests.
-- Negative: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
+- Positive downstream: fixture `cargo metadata`, `cargo check`, and focused helper tests.
+- Negative boundary: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
 - Compatibility: existing madsim/network/patchbay suites or generated harness inventory checks named by implementation tasks.
 
 ## First blocker

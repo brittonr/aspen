@@ -1,0 +1,16 @@
+{
+  "candidate_family": "foundational-types",
+  "passed": false,
+  "failures": [
+    "foundational_types: forbidden readiness state `publishable from monorepo`",
+    "foundational-types: missing downstream fixture evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-downstream-metadata.json`",
+    "foundational-types: missing negative boundary evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-forbidden-boundary.txt`",
+    "foundational-types: missing compatibility evidence `openspec/changes/decompose-next-five-crate-families-implementation/evidence/foundational-types-compatibility.txt`"
+  ],
+  "warnings": [
+    "foundational_types: package does not exist yet; direct dependency check deferred"
+  ],
+  "checked_candidates": [
+    "foundational_types"
+  ]
+}

@@ -46,8 +46,8 @@
 
 ## Verification rails
 
-- Positive: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
-- Negative: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
+- Positive downstream: pure-core unit/property tests, downstream fixture metadata/check/test, runtime compatibility checks.
+- Negative boundary: malformed share/key/quorum/digest tests and checker mutation for Raft/Iroh/Redb/handler dependency leaks.
 - Compatibility: trust/secrets focused tests and VM evidence named by implementation tasks.
 
 ## First blocker

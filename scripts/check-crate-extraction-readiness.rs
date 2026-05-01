@@ -25,15 +25,15 @@ use serde::Serialize;
 
 const OWNER_NEEDED: &str = "owner needed";
 const WORKSPACE_INTERNAL: &str = "workspace-internal";
-const MANIFEST_REQUIRED_SECTIONS: &[&str] = &[
-    "## Candidate",
-    "## Package and release metadata",
-    "## Feature contract",
-    "## Dependencies",
-    "## Compatibility and aliases",
-    "## Representative consumers",
-    "## Dependency exceptions",
-    "## Verification rails",
+const MANIFEST_REQUIRED_SECTION_GROUPS: &[&[&str]] = &[
+    &["## Candidate"],
+    &["## Package and release metadata", "## Package metadata"],
+    &["## Feature contract"],
+    &["## Dependencies", "## Dependency decisions"],
+    &["## Compatibility and aliases", "## Compatibility plan"],
+    &["## Representative consumers", "Representative consumers:"],
+    &["## Dependency exceptions", "## Dependency decisions"],
+    &["## Verification rails"],
 ];
 const BOUNDARY_RAIL_PHRASES: &[&str] = &[
     "positive downstream",
@@ -66,6 +66,36 @@ const TRANSPORT_RPC_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i7-downstream-rpc-metadata.json",
     "i7-downstream-rpc-forbidden-grep.txt",
     "v4-compatibility-summary.txt",
+];
+const FOUNDATIONAL_TYPES_FAMILY: &str = "foundational-types";
+const AUTH_TICKET_FAMILY: &str = "auth-ticket";
+const JOBS_CI_CORE_FAMILY: &str = "jobs-ci-core";
+const TRUST_CRYPTO_SECRETS_FAMILY: &str = "trust-crypto-secrets";
+const TESTING_HARNESS_FAMILY: &str = "testing-harness";
+const FOUNDATIONAL_TYPES_EVIDENCE: &[&str] = &[
+    "foundational-types-downstream-metadata.json",
+    "foundational-types-forbidden-boundary.txt",
+    "foundational-types-compatibility.txt",
+];
+const AUTH_TICKET_EVIDENCE: &[&str] = &[
+    "auth-ticket-downstream-metadata.json",
+    "auth-ticket-forbidden-boundary.txt",
+    "auth-ticket-compatibility.txt",
+];
+const JOBS_CI_CORE_EVIDENCE: &[&str] = &[
+    "jobs-ci-core-downstream-metadata.json",
+    "jobs-ci-core-forbidden-boundary.txt",
+    "jobs-ci-core-compatibility.txt",
+];
+const TRUST_CRYPTO_SECRETS_EVIDENCE: &[&str] = &[
+    "trust-crypto-secrets-downstream-metadata.json",
+    "trust-crypto-secrets-forbidden-boundary.txt",
+    "trust-crypto-secrets-compatibility.txt",
+];
+const TESTING_HARNESS_EVIDENCE: &[&str] = &[
+    "testing-harness-downstream-metadata.json",
+    "testing-harness-forbidden-boundary.txt",
+    "testing-harness-compatibility.txt",
 ];
 
 #[derive(Debug, Parser)]
@@ -188,6 +218,21 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
     }
 }
 
+fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
+    match family {
+        BLOB_CASTORE_CACHE_FAMILY => Some(&["aspen_blob", "aspen_castore", "aspen_cache"]),
+        KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
+        PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_coordination_protocol", "aspen_forge_protocol", "aspen_jobs_protocol"]),
+        TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
+        FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
+        AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
+        JOBS_CI_CORE_FAMILY => Some(&["jobs_ci_core"]),
+        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["trust_crypto_secrets"]),
+        TESTING_HARNESS_FAMILY => Some(&["testing_harness"]),
+        _ => None,
+    }
+}
+
 fn is_runtime_shell(candidate: &Candidate) -> bool {
     candidate.class == "runtime adapter" || candidate.manifest.contains("compat")
 }
@@ -242,9 +287,9 @@ fn check_manifest(candidate_key: &str, candidate: &Candidate, failures: &mut Vec
     let manifest_path = Path::new(&candidate.manifest);
     let text =
         fs::read_to_string(manifest_path).with_context(|| format!("failed to read manifest {}", candidate.manifest))?;
-    for section in MANIFEST_REQUIRED_SECTIONS {
-        if !text.contains(section) {
-            failures.push(format!("{candidate_key}: manifest missing `{section}`"));
+    for alternatives in MANIFEST_REQUIRED_SECTION_GROUPS {
+        if !alternatives.iter().any(|section| text.contains(section)) {
+            failures.push(format!("{candidate_key}: manifest missing one of `{}`", alternatives.join("` / `")));
         }
     }
     let lower = text.to_lowercase();
@@ -363,18 +408,62 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
         PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
         TRANSPORT_RPC_FAMILY => TRANSPORT_RPC_DOWNSTREAM_EVIDENCE,
+        FOUNDATIONAL_TYPES_FAMILY => FOUNDATIONAL_TYPES_EVIDENCE,
+        AUTH_TICKET_FAMILY => AUTH_TICKET_EVIDENCE,
+        JOBS_CI_CORE_FAMILY => JOBS_CI_CORE_EVIDENCE,
+        TRUST_CRYPTO_SECRETS_FAMILY => TRUST_CRYPTO_SECRETS_EVIDENCE,
+        TESTING_HARNESS_FAMILY => TESTING_HARNESS_EVIDENCE,
         _ => return,
     };
 
     for file_name in required_files {
         let artifact = evidence_dir.join(file_name);
         if !artifact.exists() {
+            let evidence_kind = if file_name.contains("compatibility") {
+                "compatibility evidence"
+            } else if file_name.contains("forbidden") || file_name.contains("boundary") {
+                "negative boundary evidence"
+            } else {
+                "downstream fixture evidence"
+            };
             failures.push(format!(
-                "{}: missing downstream fixture evidence `{}`",
+                "{}: missing {} `{}`",
                 args.candidate_family,
+                evidence_kind,
                 artifact.display()
             ));
         }
+    }
+}
+
+fn selected_family_requires_strict_owner(family: &str) -> bool {
+    matches!(
+        family,
+        FOUNDATIONAL_TYPES_FAMILY
+            | AUTH_TICKET_FAMILY
+            | JOBS_CI_CORE_FAMILY
+            | TRUST_CRYPTO_SECRETS_FAMILY
+            | TESTING_HARNESS_FAMILY
+    )
+}
+
+fn check_selected_family_policy_contract(
+    family: &str,
+    candidate_key: &str,
+    candidate: &Candidate,
+    failures: &mut Vec<String>,
+) {
+    if !selected_family_requires_strict_owner(family) {
+        return;
+    }
+    if candidate.owner.trim().is_empty() || candidate.owner == OWNER_NEEDED {
+        failures.push(format!("{candidate_key}: selected family has unassigned owner"));
+    }
+    if !candidate.forbidden_unless_feature.iter().any(|name| name == "aspen") {
+        failures.push(format!("{candidate_key}: selected family does not forbid root `aspen` by default"));
+    }
+    if candidate.representative_consumers.is_empty() {
+        failures.push(format!("{candidate_key}: selected family has no representative consumers"));
     }
 }
 
@@ -394,9 +483,25 @@ fn build_report(args: &Args) -> Result<Report> {
         failures.push(format!("missing manifest dir `{}`", args.manifest_dir.display()));
     }
 
-    for (candidate_key, candidate) in &policy.candidates {
-        checked_candidates.push(candidate_key.clone());
+    let Some(family_keys) = candidate_keys_for_family(&args.candidate_family) else {
+        failures.push(format!("unknown candidate family `{}`", args.candidate_family));
+        return Ok(Report {
+            candidate_family: args.candidate_family.clone(),
+            passed: false,
+            failures,
+            warnings,
+            checked_candidates,
+        });
+    };
+
+    for candidate_key in family_keys {
+        let Some(candidate) = policy.candidates.get(*candidate_key) else {
+            failures.push(format!("{}: missing policy candidate entry", candidate_key));
+            continue;
+        };
+        checked_candidates.push((*candidate_key).to_string());
         check_readiness(candidate_key, candidate, &blocked, &mut failures);
+        check_selected_family_policy_contract(&args.candidate_family, candidate_key, candidate, &mut failures);
         let manifest_text = check_manifest(candidate_key, candidate, &mut failures)?;
         if candidate.representative_consumers.is_empty() {
             failures.push(format!("{candidate_key}: no representative consumers"));
