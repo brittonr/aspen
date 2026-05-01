@@ -52,7 +52,7 @@
 
 ## First blocker
 
-I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. Next blocker is I10 compatibility checks for affected jobs/CI consumers and runtime shells.
+I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. I10 compatibility checks passed for affected jobs/CI consumers and runtime shells. Next blocker is trust/crypto/secrets I11 extraction/gating.
 
 ## I8 surface inventory
 
@@ -68,3 +68,9 @@ I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as th
 - Positive fixture: `jobs-ci-core-portable-smoke` exercises `aspen-ci-core` pipeline config validation, pure dependency helpers, CI log chunk serialization, and `aspen-jobs-protocol` DTOs.
 - Negative fixture: `jobs-ci-runtime-negative` depends only on reusable defaults and proves runtime shells are unavailable by failing imports from `aspen-ci`, handlers, root jobs, shell worker, and shell/VM/Nix executors.
 - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`.
+
+
+## I10 compatibility
+
+- Compatibility command passed for reusable defaults plus `aspen-ci`, `aspen-jobs`, handlers, and shell/VM/Nix executor crates.
+- Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`.

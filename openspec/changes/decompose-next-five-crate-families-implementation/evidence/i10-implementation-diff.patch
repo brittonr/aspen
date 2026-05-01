@@ -1,0 +1,112 @@
+diff --git a/docs/crate-extraction/jobs-ci-core.md b/docs/crate-extraction/jobs-ci-core.md
+index 18f0d171d..4b5d037f8 100644
+--- a/docs/crate-extraction/jobs-ci-core.md
++++ b/docs/crate-extraction/jobs-ci-core.md
+@@ -52,7 +52,7 @@
+
+ ## First blocker
+
+-I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. Next blocker is I10 compatibility checks for affected jobs/CI consumers and runtime shells.
++I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. I10 compatibility checks passed for affected jobs/CI consumers and runtime shells. Next blocker is trust/crypto/secrets I11 extraction/gating.
+
+ ## I8 surface inventory
+
+@@ -68,3 +68,9 @@ I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as th
+ - Positive fixture: `jobs-ci-core-portable-smoke` exercises `aspen-ci-core` pipeline config validation, pure dependency helpers, CI log chunk serialization, and `aspen-jobs-protocol` DTOs.
+ - Negative fixture: `jobs-ci-runtime-negative` depends only on reusable defaults and proves runtime shells are unavailable by failing imports from `aspen-ci`, handlers, root jobs, shell worker, and shell/VM/Nix executors.
+ - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`.
++
++
++## I10 compatibility
++
++- Compatibility command passed for reusable defaults plus `aspen-ci`, `aspen-jobs`, handlers, and shell/VM/Nix executor crates.
++- Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`.
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt
+index 8768bfec5..64d62c124 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt
+@@ -3,8 +3,16 @@ Jobs/CI core compatibility evidence (I8/I9)
+ - `aspen-ci-core` compiles as the reusable CI schema/config/log/pure-helper surface.
+ - `aspen-jobs-protocol --no-default-features` compiles as the reusable job/worker protocol DTO surface.
+ - `jobs-ci-core-portable-smoke` exercises pipeline config validation, pure scheduler/dependency helpers, CI log chunk serialization, and job protocol DTO usage without runtime shells.
+-- Runtime compatibility for `aspen-ci`, `aspen-jobs`, handlers, CLI/dogfood, and executor crates is deferred to I10.
++- Runtime compatibility for `aspen-ci`, `aspen-jobs`, handlers, and shell/VM/Nix executor crates passed in I10.
+
+ Primary artifacts:
+ - openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt
+ - openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt
++
++
++I10 runtime compatibility command:
++
++`cargo check -p aspen-ci-core -p aspen-jobs-protocol -p aspen-ci -p aspen-jobs -p aspen-ci-handler -p aspen-job-handler -p aspen-ci-executor-shell -p aspen-ci-executor-vm -p aspen-ci-executor-nix`
++
++Status: pass
++Artifact: openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+index a8c975579..9f482e31f 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/tasks.md
+@@ -22,7 +22,7 @@
+
+ - [x] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+
+-- [ ] I10 Save compatibility checks for affected jobs/CI consumers, handlers, CLI/dogfood paths, and executor crates named in the manifest. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof]
++- [x] I10 Save compatibility checks for affected jobs/CI consumers, handlers, CLI/dogfood paths, and executor crates named in the manifest. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:22:00Z
+
+ ## 5. Trust, crypto, and secrets first slice
+
+diff --git a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+index 3f052c509..5ff9654c9 100644
+--- a/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
++++ b/openspec/changes/decompose-next-five-crate-families-implementation/verification.md
+@@ -3,24 +3,11 @@
+ ## Implementation Evidence
+
+ - Changed file: `docs/crate-extraction/jobs-ci-core.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.lock`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.toml`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/src/lib.rs`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.lock`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.toml`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/src/lib.rs`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-inventory.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-jobs-ci-core-surface-inventory.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-downstream-metadata.json`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-forbidden-boundary.txt`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i8-i9-implementation-diff.patch`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.json`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.md`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-core-readiness.stderr`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i9.txt`
+-- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i9.json`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-implementation-diff.patch`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-preflight-i10.txt`
++- Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/openspec-verify-i10.json`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/tasks.md`
+ - Changed file: `openspec/changes/decompose-next-five-crate-families-implementation/verification.md`
+
+@@ -50,6 +37,9 @@
+ - [x] I9 Add downstream scheduler/config fixture metadata and negative boundary evidence rejecting root app, handler, process-spawn, shell, VM, and Nix executor leaks from reusable defaults. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:05:00Z
+   - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-downstream-metadata.json`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-forbidden-boundary.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
+
++- [x] I10 Save compatibility checks for affected jobs/CI consumers, handlers, CLI/dogfood paths, and executor crates named in the manifest. [covers=architecture.modularity.next-decomposition-standalone-and-compatibility-proof] ✅ completed: 2026-04-30T22:22:00Z
++  - Evidence: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`, `openspec/changes/decompose-next-five-crate-families-implementation/evidence/jobs-ci-core-compatibility.txt`
++
+ ## Oracle Checkpoints
+
+ None.
+@@ -139,3 +129,10 @@ None.
+ - Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i9-jobs-ci-fixtures.txt`
+ - Positive fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-core-portable-smoke/Cargo.toml`
+ - Negative fixture: `openspec/changes/decompose-next-five-crate-families-implementation/fixtures/jobs-ci-runtime-negative/Cargo.toml`
++
++
++### `cargo check` for jobs/CI runtime compatibility
++
++- Status: pass
++- Artifact: `openspec/changes/decompose-next-five-crate-families-implementation/evidence/i10-jobs-ci-compatibility.txt`
++- Packages checked: `aspen-ci-core`, `aspen-jobs-protocol`, `aspen-ci`, `aspen-jobs`, `aspen-ci-handler`, `aspen-job-handler`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, `aspen-ci-executor-nix`
