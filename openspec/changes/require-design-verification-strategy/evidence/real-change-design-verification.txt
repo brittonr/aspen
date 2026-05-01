@@ -1,0 +1,3 @@
+OK: design verification strategy is mapped
+  cited ids: openspec-governance.design-verification-strategy, openspec-governance.design-verification-strategy.mapped-strategy-present, openspec-governance.design-verification-strategy.missing-strategy-fails, openspec-governance.design-verification-strategy.negative-paths-planned
+  negative behavior: covered

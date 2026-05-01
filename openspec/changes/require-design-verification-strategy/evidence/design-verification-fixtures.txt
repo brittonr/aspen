@@ -1,0 +1,13 @@
+PASS: valid mapped strategy
+  OK: design verification strategy is mapped
+    cited ids: openspec-governance.design-verification-strategy
+PASS: missing strategy
+  FAIL: design.md must include ## Verification Strategy for spec-changing changes
+PASS: missing requirement id
+  FAIL: Verification Strategy must cite at least one changed requirement or scenario ID from specs/**/*.md
+PASS: missing negative mapping
+  FAIL: Verification Strategy must name a negative/failure check or explicit defer-with-rationale entry because changed specs define negative behavior: specs/openspec-governance/spec.md
+PASS: negative defer rationale
+  OK: design verification strategy is mapped
+    cited ids: openspec-governance.design-verification-strategy, openspec-governance.design-verification-strategy.invalid-input-rejected
+    negative behavior: covered

@@ -1,0 +1,4 @@
+OK: openspec/changes/require-design-verification-strategy
+  tasks: 6 total / 6 checked
+  changed files listed: 8
+  verification artifacts: 3
