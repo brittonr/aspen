@@ -266,7 +266,7 @@ impl RetryPolicy {
 }
 
 /// Schedule descriptor for job execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Schedule {
     /// Execute once at a specific time.
     Once(DateTime<Utc>),
@@ -403,10 +403,71 @@ impl JobSpec {
         self
     }
 
+    /// Set the retry policy.
+    #[must_use]
+    pub fn retry_policy(mut self, policy: RetryPolicy) -> Self {
+        self.config.retry_policy = policy;
+        self
+    }
+
+    /// Set the job timeout.
+    #[must_use]
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.config.timeout = Some(timeout);
+        self
+    }
+
     /// Add a job dependency.
     #[must_use]
     pub fn depends_on(mut self, job_id: JobId) -> Self {
         self.config.dependencies.push(job_id);
+        self
+    }
+
+    /// Add a tag to the job.
+    #[must_use]
+    pub fn tag(mut self, tag: impl Into<String>) -> Self {
+        self.config.tags.push(tag.into());
+        self
+    }
+
+    /// Set the job schedule.
+    #[must_use]
+    pub fn schedule(mut self, schedule: Schedule) -> Self {
+        self.schedule = Some(schedule);
+        self
+    }
+
+    /// Set an idempotency key for deduplication.
+    #[must_use]
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+
+    /// Set whether the job requires isolation.
+    #[must_use]
+    pub fn with_isolation(mut self, required: bool) -> Self {
+        if required {
+            self.config.tags.push("requires_isolation".to_string());
+        }
+        self
+    }
+
+    /// Schedule the job at a specific time.
+    #[must_use]
+    pub fn schedule_at(mut self, time: DateTime<Utc>) -> Self {
+        self.schedule = Some(Schedule::Once(time));
+        self
+    }
+
+    /// Schedule the job after a delay from the current UTC time.
+    #[must_use]
+    #[allow(unknown_lints)]
+    #[allow(ambient_clock, reason = "job schedule helpers need an explicit UTC boundary")]
+    pub fn schedule_after(mut self, delay_duration: Duration) -> Self {
+        let delay = chrono::Duration::from_std(delay_duration).unwrap_or(chrono::Duration::MAX);
+        self.schedule = Some(Schedule::Once(Utc::now() + delay));
         self
     }
 }
@@ -584,5 +645,29 @@ mod tests {
         assert_eq!(decoded.job_type, "build");
         assert_eq!(decoded.config.priority, Priority::High);
         assert_eq!(decoded.config.dependencies[0].as_str(), "parent");
+    }
+
+    #[test]
+    fn job_spec_builder_helpers_match_runtime_contract() {
+        let dependency = JobId::from_string("parent".to_string());
+        let schedule_time = Utc::now();
+        let spec = JobSpec::new("build")
+            .payload(serde_json::json!({ "step": "compile" }))
+            .expect("payload serializes")
+            .priority(Priority::Critical)
+            .retry_policy(RetryPolicy::fixed(3, Duration::from_secs(2)))
+            .timeout(Duration::from_secs(60))
+            .depends_on(dependency)
+            .tag("ci")
+            .schedule_at(schedule_time)
+            .idempotency_key("build-main")
+            .with_isolation(true);
+
+        assert_eq!(spec.config.priority, Priority::Critical);
+        assert_eq!(spec.config.timeout, Some(Duration::from_secs(60)));
+        assert_eq!(spec.config.dependencies[0].as_str(), "parent");
+        assert_eq!(spec.config.tags, vec!["ci", "requires_isolation"]);
+        assert_eq!(spec.schedule, Some(Schedule::Once(schedule_time)));
+        assert_eq!(spec.idempotency_key.as_deref(), Some("build-main"));
     }
 }
