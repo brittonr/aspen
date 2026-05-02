@@ -15,6 +15,7 @@ use crate::error::Result;
 use crate::types::Priority;
 use crate::types::RetryPolicy;
 use crate::types::Schedule;
+use crate::types::ScheduleExt;
 
 #[allow(unknown_lints)]
 #[allow(ambient_clock, reason = "job timestamps need an explicit UTC boundary helper")]

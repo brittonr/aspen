@@ -266,7 +266,7 @@ impl RetryPolicy {
 }
 
 /// Schedule descriptor for job execution.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Schedule {
     /// Execute once at a specific time.
     Once(DateTime<Utc>),
@@ -279,6 +279,38 @@ pub enum Schedule {
         /// Optional start time.
         start_at: Option<DateTime<Utc>>,
     },
+    /// Rate-limited execution.
+    RateLimit {
+        /// Maximum executions per hour.
+        max_per_hour: u32,
+        /// Current hour's execution count.
+        #[serde(skip)]
+        current_hour_count: u32,
+        /// Current hour timestamp.
+        #[serde(skip)]
+        current_hour: Option<DateTime<Utc>>,
+    },
+    /// Business-hours execution.
+    BusinessHours {
+        /// Days of week to run, Monday = 1 and Sunday = 7.
+        days: Vec<u32>,
+        /// Start hour, 0-23.
+        start_hour: u8,
+        /// End hour, 0-23.
+        end_hour: u8,
+        /// Optional timezone name.
+        timezone: Option<String>,
+    },
+    /// Exponential backoff schedule.
+    Exponential {
+        /// Base delay between executions.
+        base_delay: Duration,
+        /// Maximum delay between executions.
+        max_delay: Duration,
+        /// Current multiplier.
+        #[serde(skip)]
+        current_multiplier: f64,
+    },
 }
 
 impl Schedule {
@@ -288,16 +320,98 @@ impl Schedule {
         Self::Once(time)
     }
 
+    /// Create a one-time schedule after a delay.
+    #[must_use]
+    #[allow(unknown_lints)]
+    #[allow(
+        ambient_clock,
+        reason = "relative schedule construction needs an explicit UTC boundary"
+    )]
+    pub fn after(delay: Duration) -> Self {
+        let chrono_delay = chrono::Duration::from_std(delay).unwrap_or(chrono::Duration::MAX);
+        Self::Once(Utc::now() + chrono_delay)
+    }
+
     /// Create a recurring schedule descriptor.
     #[must_use]
     pub fn cron(expression: impl Into<String>) -> Self {
         Self::Recurring(expression.into())
     }
 
+    /// Common schedule: every minute.
+    #[must_use]
+    pub fn every_minute() -> Self {
+        Self::cron("* * * * *")
+    }
+
+    /// Common schedule: every hour.
+    #[must_use]
+    pub fn every_hour() -> Self {
+        Self::cron("0 * * * *")
+    }
+
+    /// Common schedule: daily at midnight.
+    #[must_use]
+    pub fn daily() -> Self {
+        Self::cron("0 0 * * *")
+    }
+
+    /// Common schedule: weekly on Sunday at midnight.
+    #[must_use]
+    pub fn weekly() -> Self {
+        Self::cron("0 0 * * SUN")
+    }
+
+    /// Common schedule: monthly on the first day at midnight.
+    #[must_use]
+    pub fn monthly() -> Self {
+        Self::cron("0 0 1 * *")
+    }
+
     /// Create an interval schedule descriptor.
     #[must_use]
     pub fn interval(every: Duration) -> Self {
         Self::Interval { every, start_at: None }
+    }
+
+    /// Create an interval schedule with a specific start time.
+    #[must_use]
+    pub fn interval_starting_at(every: Duration, start: DateTime<Utc>) -> Self {
+        Self::Interval {
+            every,
+            start_at: Some(start),
+        }
+    }
+
+    /// Create a rate-limited schedule.
+    #[must_use]
+    pub fn rate_limited(max_per_hour: u32) -> Self {
+        Self::RateLimit {
+            max_per_hour,
+            current_hour_count: 0,
+            current_hour: None,
+        }
+    }
+
+    /// Create a business-hours schedule.
+    #[must_use]
+    pub fn business_hours(days: Vec<u32>, start_hour: u8, end_hour: u8) -> Self {
+        Self::BusinessHours {
+            days,
+            start_hour,
+            end_hour,
+            timezone: None,
+        }
+    }
+
+    /// Create an exponential backoff schedule.
+    #[must_use]
+    pub fn exponential_backoff(base_delay: Duration, max_delay: Duration) -> Self {
+        Self::Exponential {
+            base_delay,
+            max_delay,
+            current_multiplier: 1.0,
+        }
     }
 }
 

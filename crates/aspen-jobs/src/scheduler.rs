@@ -26,6 +26,7 @@ use crate::job::JobId;
 use crate::job::JobSpec;
 use crate::manager::JobManager;
 use crate::types::Schedule;
+use crate::types::ScheduleExt;
 
 /// Scheduling service configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]

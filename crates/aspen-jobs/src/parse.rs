@@ -240,7 +240,7 @@ fn parse_in_schedule(duration_str: &str) -> Result<Schedule> {
         });
     }
 
-    Schedule::after(relative_spec)
+    Ok(Schedule::after(relative_spec))
 }
 
 /// Parse interval schedule (every:DURATION).
