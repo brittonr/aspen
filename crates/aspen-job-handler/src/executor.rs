@@ -219,35 +219,12 @@ impl ServiceExecutor for JobServiceExecutor {
 // Helpers
 // =============================================================================
 
-fn job_status_to_string(status: &JobStatus) -> String {
-    match status {
-        JobStatus::Pending => "pending".to_string(),
-        JobStatus::Scheduled => "scheduled".to_string(),
-        JobStatus::Running => "running".to_string(),
-        JobStatus::Completed => "completed".to_string(),
-        JobStatus::Failed => "failed".to_string(),
-        JobStatus::Cancelled => "cancelled".to_string(),
-        JobStatus::Retrying => "retrying".to_string(),
-        JobStatus::DeadLetter => "dead_letter".to_string(),
-        JobStatus::Unknown => "unknown".to_string(),
-    }
-}
-
-fn priority_to_u8(p: &Priority) -> u8 {
-    match p {
-        Priority::Low => 0,
-        Priority::Normal => 1,
-        Priority::High => 2,
-        Priority::Critical => 3,
-    }
-}
-
 fn job_to_details(job: &aspen_jobs::Job) -> JobDetails {
     JobDetails {
         job_id: job.id.to_string(),
         job_type: job.spec.job_type.clone(),
-        status: job_status_to_string(&job.status),
-        priority: priority_to_u8(&job.spec.config.priority),
+        status: job.status.as_str().to_string(),
+        priority: job.spec.config.priority.as_u8(),
         progress: job.progress.unwrap_or(0),
         progress_message: job.progress_message.clone(),
         payload: serde_json::to_string(&job.spec.payload).unwrap_or_default(),
@@ -285,12 +262,7 @@ impl JobServiceExecutor {
         let payload: serde_json::Value =
             serde_json::from_str(&args.payload_str).map_err(|e| anyhow::anyhow!("invalid JSON payload: {e}"))?;
 
-        let priority = match args.priority_opt.unwrap_or(1) {
-            0 => Priority::Low,
-            2 => Priority::High,
-            3 => Priority::Critical,
-            _ => Priority::Normal,
-        };
+        let priority = Priority::from_u8_or_normal(args.priority_opt.unwrap_or(1));
 
         let retry_policy = match args.max_retries {
             Some(0) => RetryPolicy::none(),
@@ -377,15 +349,7 @@ impl JobServiceExecutor {
     ) -> Result<ClientRpcResponse> {
         let limit = limit_usize(limit_opt);
 
-        let status_filter = status_str.as_deref().and_then(|s| match s {
-            "pending" => Some(JobStatus::Pending),
-            "scheduled" => Some(JobStatus::Scheduled),
-            "running" => Some(JobStatus::Running),
-            "completed" => Some(JobStatus::Completed),
-            "failed" => Some(JobStatus::Failed),
-            "cancelled" => Some(JobStatus::Cancelled),
-            _ => None,
-        });
+        let status_filter = status_str.as_deref().and_then(JobStatus::from_wire_str);
 
         let prefix = "__jobs:";
         match self
@@ -452,7 +416,7 @@ impl JobServiceExecutor {
         let job_id = JobId::from_string(job_id_str);
 
         let previous_status =
-            self.job_manager.get_job(&job_id).await.ok().flatten().map(|j| job_status_to_string(&j.status));
+            self.job_manager.get_job(&job_id).await.ok().flatten().map(|j| j.status.as_str().to_string());
 
         match self.job_manager.cancel_job(&job_id).await {
             Ok(()) => Ok(ClientRpcResponse::JobCancelResult(JobCancelResultResponse {
@@ -509,7 +473,7 @@ impl JobServiceExecutor {
                     if let Some(job_id_str) = entry.key.strip_prefix(prefix) {
                         let job_id = JobId::from_string(job_id_str.to_string());
                         if let Ok(Some(job)) = self.job_manager.get_job(&job_id).await {
-                            let status = job_status_to_string(&job.status);
+                            let status = job.status.as_str().to_string();
                             *counts.entry(status).or_insert(0) += 1;
                         }
                     }

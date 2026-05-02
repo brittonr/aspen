@@ -1159,6 +1159,7 @@ dependencies = [
  "aspen-client-api",
  "aspen-constants",
  "aspen-core",
+ "aspen-jobs-core",
  "aspen-ticket",
  "aspen-transport",
  "async-trait",

@@ -14,74 +14,15 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 
 use crate::AspenClient;
 
 /// Priority levels for job execution.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Serialize,
-    Deserialize,
-    Default
-)]
-pub enum JobPriority {
-    /// Lowest priority.
-    Low = 0,
-    /// Normal priority (default).
-    #[default]
-    Normal = 1,
-    /// High priority.
-    High = 2,
-    /// Critical priority (highest).
-    Critical = 3,
-}
+pub type JobPriority = aspen_jobs_core::Priority;
 
 /// Job status enumeration for filtering and querying.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum JobStatus {
-    /// Job is waiting to be scheduled.
-    Pending,
-    /// Job is scheduled and waiting in queue.
-    Scheduled,
-    /// Job is currently being executed.
-    Running,
-    /// Job completed successfully.
-    Completed,
-    /// Job failed after all retry attempts.
-    Failed,
-    /// Job was cancelled.
-    Cancelled,
-    /// Job is being retried.
-    Retrying,
-    /// Job is in the dead letter queue.
-    DeadLetter,
-}
-
-impl JobStatus {
-    /// Convert to string for RPC calls.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Scheduled => "scheduled",
-            Self::Running => "running",
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-            Self::Cancelled => "cancelled",
-            Self::Retrying => "retrying",
-            Self::DeadLetter => "deadletter",
-        }
-    }
-}
+pub type JobStatus = aspen_jobs_core::JobStatus;
 
 // Import job types from aspen-client-rpc
 use aspen_client_api::ClientRpcRequest;
@@ -224,7 +165,7 @@ impl<'a> JobClient<'a> {
         let request = ClientRpcRequest::JobSubmit {
             job_type: builder.job_type,
             payload: payload_str,
-            priority: Some(builder.priority as u8),
+            priority: Some(builder.priority.as_u8()),
             timeout_ms: builder.timeout.map(|d| d.as_millis() as u64),
             max_retries: builder.max_retries,
             retry_delay_ms: Some(1000), // Default 1 second retry delay

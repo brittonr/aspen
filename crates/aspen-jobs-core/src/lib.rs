@@ -105,6 +105,25 @@ impl Priority {
         }
     }
 
+    /// Numeric wire representation used by client RPC job submission.
+    #[must_use]
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Decode the numeric wire representation used by client RPC job submission.
+    ///
+    /// Unknown values fall back to `Normal`, matching historical server behavior.
+    #[must_use]
+    pub const fn from_u8_or_normal(value: u8) -> Self {
+        match value {
+            0 => Self::Low,
+            2 => Self::High,
+            3 => Self::Critical,
+            _ => Self::Normal,
+        }
+    }
+
     /// Priorities ordered from highest to lowest.
     #[must_use]
     pub fn all_ordered() -> Vec<Self> {
@@ -153,6 +172,42 @@ impl JobStatus {
     pub fn needs_recovery(self) -> bool {
         matches!(self, Self::Unknown | Self::Running | Self::Retrying)
     }
+    /// Stable lowercase wire representation used by client RPC job APIs.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Scheduled => "scheduled",
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+            Self::Retrying => "retrying",
+            Self::DeadLetter => "dead_letter",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    /// Parse a stable lowercase wire representation used by client RPC job APIs.
+    ///
+    /// Accepts both `dead_letter` and the older `deadletter` spelling for
+    /// compatibility with historical clients.
+    #[must_use]
+    pub fn from_wire_str(value: &str) -> Option<Self> {
+        match value {
+            "pending" => Some(Self::Pending),
+            "scheduled" => Some(Self::Scheduled),
+            "running" => Some(Self::Running),
+            "completed" => Some(Self::Completed),
+            "failed" => Some(Self::Failed),
+            "cancelled" => Some(Self::Cancelled),
+            "retrying" => Some(Self::Retrying),
+            "dead_letter" | "deadletter" => Some(Self::DeadLetter),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
+
     /// Whether this status is unknown and needs investigation.
     #[must_use]
     pub fn is_unknown(self) -> bool {
@@ -877,6 +932,37 @@ mod tests {
         assert!(JobStatus::Completed.is_terminal());
         assert!(JobStatus::Running.is_active());
         assert!(JobStatus::Retrying.needs_recovery());
+    }
+
+    #[test]
+    fn priority_wire_helpers_match_client_contract() {
+        assert_eq!(Priority::Low.as_u8(), 0);
+        assert_eq!(Priority::Normal.as_u8(), 1);
+        assert_eq!(Priority::High.as_u8(), 2);
+        assert_eq!(Priority::Critical.as_u8(), 3);
+        assert_eq!(Priority::from_u8_or_normal(0), Priority::Low);
+        assert_eq!(Priority::from_u8_or_normal(1), Priority::Normal);
+        assert_eq!(Priority::from_u8_or_normal(2), Priority::High);
+        assert_eq!(Priority::from_u8_or_normal(3), Priority::Critical);
+        assert_eq!(Priority::from_u8_or_normal(99), Priority::Normal);
+    }
+
+    #[test]
+    fn job_status_wire_helpers_match_client_contract() {
+        assert_eq!(JobStatus::Pending.as_str(), "pending");
+        assert_eq!(JobStatus::Scheduled.as_str(), "scheduled");
+        assert_eq!(JobStatus::Running.as_str(), "running");
+        assert_eq!(JobStatus::Completed.as_str(), "completed");
+        assert_eq!(JobStatus::Failed.as_str(), "failed");
+        assert_eq!(JobStatus::Cancelled.as_str(), "cancelled");
+        assert_eq!(JobStatus::Retrying.as_str(), "retrying");
+        assert_eq!(JobStatus::DeadLetter.as_str(), "dead_letter");
+        assert_eq!(JobStatus::Unknown.as_str(), "unknown");
+
+        assert_eq!(JobStatus::from_wire_str("dead_letter"), Some(JobStatus::DeadLetter));
+        assert_eq!(JobStatus::from_wire_str("deadletter"), Some(JobStatus::DeadLetter));
+        assert_eq!(JobStatus::from_wire_str("unknown"), Some(JobStatus::Unknown));
+        assert_eq!(JobStatus::from_wire_str("bogus"), None);
     }
 
     #[test]
