@@ -584,6 +584,60 @@ impl JobSpec {
         self.schedule = Some(Schedule::Once(Utc::now() + delay));
         self
     }
+
+    /// Create a VM execution job for a blob-stored binary.
+    #[must_use]
+    pub fn with_blob_binary(hash: impl Into<String>, size: u64, format: impl Into<String>) -> Self {
+        Self::new("vm_execute")
+            .payload(serde_json::json!({
+                "type": "BlobBinary",
+                "hash": hash.into(),
+                "size": size,
+                "format": format.into(),
+            }))
+            .unwrap_or_else(|_| Self::new("vm_execute"))
+            .with_isolation(true)
+    }
+
+    /// Create a VM execution job for a Nix flake attribute.
+    #[must_use]
+    pub fn with_nix_flake(flake_url: impl Into<String>, attribute: impl Into<String>) -> Self {
+        Self::new("vm_execute")
+            .payload(serde_json::json!({
+                "type": "NixExpression",
+                "flake_url": flake_url.into(),
+                "attribute": attribute.into(),
+            }))
+            .unwrap_or_else(|_| Self::new("vm_execute"))
+            .with_isolation(true)
+    }
+
+    /// Create a VM execution job for an inline Nix derivation expression.
+    #[must_use]
+    pub fn with_nix_expr(nix_code: impl Into<String>) -> Self {
+        Self::new("vm_execute")
+            .payload(serde_json::json!({
+                "type": "NixDerivation",
+                "content": nix_code.into(),
+            }))
+            .unwrap_or_else(|_| Self::new("vm_execute"))
+            .with_isolation(true)
+    }
+
+    /// Create a WASM component job using a blob-stored component.
+    #[must_use]
+    pub fn with_wasm_component(hash: impl Into<String>, size: u64) -> Self {
+        Self::new("wasm_component")
+            .payload(serde_json::json!({
+                "type": "WasmComponent",
+                "hash": hash.into(),
+                "size": size,
+                "fuel_limit": null,
+                "memory_limit": null,
+            }))
+            .unwrap_or_else(|_| Self::new("wasm_component"))
+            .with_isolation(true)
+    }
 }
 
 /// Output from a successful job execution.

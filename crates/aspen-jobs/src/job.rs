@@ -1,6 +1,5 @@
 //! Core job types and structures.
 
-use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::DateTime;
@@ -11,10 +10,7 @@ use uuid::Uuid;
 
 use crate::dependency_tracker::DependencyFailurePolicy;
 use crate::dependency_tracker::DependencyState;
-use crate::error::Result;
-use crate::types::Priority;
 use crate::types::RetryPolicy;
-use crate::types::Schedule;
 use crate::types::ScheduleExt;
 
 #[allow(unknown_lints)]
@@ -36,155 +32,8 @@ pub use aspen_jobs_core::JobFailure;
 pub use aspen_jobs_core::JobId;
 pub use aspen_jobs_core::JobOutput;
 pub use aspen_jobs_core::JobResult;
+pub use aspen_jobs_core::JobSpec;
 pub use aspen_jobs_core::JobStatus;
-
-/// Specification for creating a new job.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JobSpec {
-    /// Type of job (used to route to correct worker).
-    pub job_type: String,
-    /// Payload for the job.
-    pub payload: serde_json::Value,
-    /// Job configuration.
-    pub config: JobConfig,
-    /// Optional schedule for the job.
-    pub schedule: Option<Schedule>,
-    /// Optional unique key for deduplication.
-    pub idempotency_key: Option<String>,
-    /// Metadata for the job (tracing, etc.)
-    pub metadata: HashMap<String, String>,
-}
-
-impl JobSpec {
-    /// Create a new job specification.
-    pub fn new<S: Into<String>>(job_type: S) -> Self {
-        Self {
-            job_type: job_type.into(),
-            payload: serde_json::Value::Null,
-            config: JobConfig::default(),
-            schedule: None,
-            idempotency_key: None,
-            metadata: HashMap::new(),
-        }
-    }
-
-    /// Set the job payload.
-    pub fn payload<T: Serialize>(mut self, payload: T) -> Result<Self> {
-        self.payload =
-            serde_json::to_value(payload).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
-        Ok(self)
-    }
-
-    /// Set the job priority.
-    pub fn priority(mut self, priority: Priority) -> Self {
-        self.config.priority = priority;
-        self
-    }
-
-    /// Set the retry policy.
-    pub fn retry_policy(mut self, policy: RetryPolicy) -> Self {
-        self.config.retry_policy = policy;
-        self
-    }
-
-    /// Set the job timeout.
-    pub fn timeout(mut self, timeout: Duration) -> Self {
-        self.config.timeout = Some(timeout);
-        self
-    }
-
-    /// Add a job dependency.
-    pub fn depends_on(mut self, job_id: JobId) -> Self {
-        self.config.dependencies.push(job_id);
-        self
-    }
-
-    /// Add a tag to the job.
-    pub fn tag<S: Into<String>>(mut self, tag: S) -> Self {
-        self.config.tags.push(tag.into());
-        self
-    }
-
-    /// Set the job schedule.
-    pub fn schedule(mut self, schedule: Schedule) -> Self {
-        self.schedule = Some(schedule);
-        self
-    }
-
-    /// Set an idempotency key for deduplication.
-    pub fn idempotency_key<S: Into<String>>(mut self, key: S) -> Self {
-        self.idempotency_key = Some(key.into());
-        self
-    }
-
-    /// Set whether the job requires isolation (VM execution).
-    pub fn with_isolation(mut self, required: bool) -> Self {
-        if required {
-            self.config.tags.push("requires_isolation".to_string());
-        }
-        self
-    }
-
-    /// Helper method to create a job with a blob-stored binary.
-    /// The binary MUST be uploaded to the blob store first.
-    #[cfg(feature = "plugins-vm")]
-    pub fn with_blob_binary(hash: impl Into<String>, size: u64, format: impl Into<String>) -> Self {
-        use crate::vm_executor::JobPayload;
-        let payload = JobPayload::blob_binary(hash, size, format);
-        Self::new("vm_execute")
-            .payload(payload)
-            .unwrap_or_else(|_| Self::new("vm_execute"))
-            .with_isolation(true)
-    }
-
-    /// Helper method to create a job with a Nix flake.
-    #[cfg(feature = "plugins-vm")]
-    pub fn with_nix_flake(flake_url: &str, attribute: &str) -> Self {
-        use crate::vm_executor::JobPayload;
-        let payload = JobPayload::nix_flake(flake_url, attribute);
-        Self::new("vm_execute")
-            .payload(payload)
-            .unwrap_or_else(|_| Self::new("vm_execute"))
-            .with_isolation(true)
-    }
-
-    /// Helper method to create a job with an inline Nix expression.
-    #[cfg(feature = "plugins-vm")]
-    pub fn with_nix_expr(nix_code: &str) -> Self {
-        use crate::vm_executor::JobPayload;
-        let payload = JobPayload::nix_derivation(nix_code);
-        Self::new("vm_execute")
-            .payload(payload)
-            .unwrap_or_else(|_| Self::new("vm_execute"))
-            .with_isolation(true)
-    }
-
-    /// Helper method to create a job with a WASM component from the blob store.
-    #[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
-    pub fn with_wasm_component(hash: impl Into<String>, size: u64) -> Self {
-        use crate::vm_executor::JobPayload;
-        let payload = JobPayload::wasm_component(hash, size);
-        Self::new("wasm_component")
-            .payload(payload)
-            .unwrap_or_else(|_| Self::new("wasm_component"))
-            .with_isolation(true)
-    }
-}
-
-impl JobSpec {
-    /// Schedule the job at a specific time.
-    pub fn schedule_at(mut self, time: DateTime<Utc>) -> Self {
-        self.schedule = Some(Schedule::Once(time));
-        self
-    }
-
-    /// Schedule the job after a delay.
-    pub fn schedule_after(mut self, delay_duration: Duration) -> Self {
-        let time = utc_now() + chrono_delay_from_duration(delay_duration);
-        self.schedule = Some(Schedule::Once(time));
-        self
-    }
-}
 
 /// A job in the system.
 #[derive(Debug, Clone, Serialize, Deserialize)]

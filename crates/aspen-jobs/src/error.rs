@@ -327,6 +327,14 @@ impl From<serde_json::Error> for JobError {
     }
 }
 
+impl From<aspen_jobs_core::JobsCoreError> for JobError {
+    fn from(err: aspen_jobs_core::JobsCoreError) -> Self {
+        match err {
+            aspen_jobs_core::JobsCoreError::SerializePayload { source } => Self::SerializationError { source },
+        }
+    }
+}
+
 impl From<aspen_core::KeyValueStoreError> for JobError {
     fn from(err: aspen_core::KeyValueStoreError) -> Self {
         Self::StorageError { source: err }

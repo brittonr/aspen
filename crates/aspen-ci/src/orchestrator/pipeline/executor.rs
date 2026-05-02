@@ -11,6 +11,7 @@ use aspen_ci_executor_nix::NixBuildPayload;
 #[cfg(feature = "plugins-vm")]
 use aspen_ci_executor_vm::CloudHypervisorPayload;
 use aspen_core::KeyValueStore;
+use aspen_jobs::AffinityJobSpecExt;
 use aspen_jobs::JobAffinity;
 use aspen_jobs::JobSpec;
 use aspen_jobs::TransitionCondition;

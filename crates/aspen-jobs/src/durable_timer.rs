@@ -438,6 +438,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> TimerService<S> {
 #[cfg(test)]
 mod tests {
     use aspen_testing::DeterministicKeyValueStore;
+    use aspen_traits::KvWrite;
 
     use super::*;
 

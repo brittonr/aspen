@@ -521,10 +521,23 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
     }
 }
 
-/// Extension trait for JobSpec to add affinity.
-impl JobSpec {
+/// Extension trait for adding affinity metadata to [`JobSpec`].
+pub trait AffinityJobSpecExt: Sized {
     /// Add affinity to this job specification.
-    pub fn with_affinity(mut self, affinity: JobAffinity) -> Result<Self> {
+    fn with_affinity(self, affinity: JobAffinity) -> Result<Self>;
+
+    /// Set job to prefer running near a specific node.
+    fn prefer_near_node(self, node_id: NodeId) -> Result<Self>;
+
+    /// Set job to run where specific data is located.
+    fn with_data_locality(self, blob_hash: String) -> Result<Self>;
+
+    /// Set job to run on least loaded worker.
+    fn prefer_least_loaded(self) -> Result<Self>;
+}
+
+impl AffinityJobSpecExt for JobSpec {
+    fn with_affinity(mut self, affinity: JobAffinity) -> Result<Self> {
         let affinity_json =
             serde_json::to_value(&affinity).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
@@ -535,18 +548,15 @@ impl JobSpec {
         Ok(self)
     }
 
-    /// Set job to prefer running near a specific node.
-    pub fn prefer_near_node(self, node_id: NodeId) -> Result<Self> {
+    fn prefer_near_node(self, node_id: NodeId) -> Result<Self> {
         self.with_affinity(JobAffinity::new(AffinityStrategy::ClosestTo(node_id)))
     }
 
-    /// Set job to run where specific data is located.
-    pub fn with_data_locality(self, blob_hash: String) -> Result<Self> {
+    fn with_data_locality(self, blob_hash: String) -> Result<Self> {
         self.with_affinity(JobAffinity::new(AffinityStrategy::DataLocality { blob_hash }))
     }
 
-    /// Set job to run on least loaded worker.
-    pub fn prefer_least_loaded(self) -> Result<Self> {
+    fn prefer_least_loaded(self) -> Result<Self> {
         self.with_affinity(JobAffinity::new(AffinityStrategy::LeastLoaded))
     }
 }

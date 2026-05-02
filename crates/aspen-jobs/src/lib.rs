@@ -97,6 +97,7 @@ pub use core::JobsCoreError;
 pub use core::transition_status as transition_core_status;
 
 pub use affinity::AffinityJobManager;
+pub use affinity::AffinityJobSpecExt;
 pub use affinity::AffinityStrategy;
 pub use affinity::JobAffinity;
 pub use affinity::WorkerMetadata;
