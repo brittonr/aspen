@@ -7,7 +7,6 @@ use aspen_client::ClientRpcResponse;
 use super::IrohClient;
 use crate::types::JobInfo;
 use crate::types::QueueStats;
-use crate::types::WorkerInfo;
 use crate::types::WorkerPoolInfo;
 
 impl IrohClient {
@@ -28,25 +27,7 @@ impl IrohClient {
                 if let Some(error) = result.error {
                     anyhow::bail!("Failed to list jobs: {}", error);
                 }
-                Ok(result
-                    .jobs
-                    .into_iter()
-                    .map(|j| JobInfo {
-                        job_id: j.job_id,
-                        job_type: j.job_type,
-                        status: j.status,
-                        priority: j.priority,
-                        progress: j.progress,
-                        progress_message: j.progress_message,
-                        tags: j.tags,
-                        submitted_at: j.submitted_at,
-                        started_at: j.started_at,
-                        completed_at: j.completed_at,
-                        worker_id: j.worker_id,
-                        attempts: j.attempts,
-                        error_message: j.error_message,
-                    })
-                    .collect())
+                Ok(result.jobs.into_iter().map(JobInfo::from).collect())
             }
             _ => anyhow::bail!("unexpected response type for JobList"),
         }
@@ -61,16 +42,7 @@ impl IrohClient {
                 if let Some(error) = result.error {
                     anyhow::bail!("Failed to get queue stats: {}", error);
                 }
-                Ok(QueueStats {
-                    pending_count: result.pending_count,
-                    scheduled_count: result.scheduled_count,
-                    running_count: result.running_count,
-                    completed_count: result.completed_count,
-                    failed_count: result.failed_count,
-                    cancelled_count: result.cancelled_count,
-                    priority_counts: result.priority_counts.into_iter().map(|pc| (pc.priority, pc.count)).collect(),
-                    type_counts: result.type_counts.into_iter().map(|tc| (tc.job_type, tc.count)).collect(),
-                })
+                Ok(QueueStats::from(result))
             }
             _ => anyhow::bail!("unexpected response type for JobQueueStats"),
         }
@@ -85,29 +57,7 @@ impl IrohClient {
                 if let Some(error) = result.error {
                     anyhow::bail!("Failed to get worker status: {}", error);
                 }
-                Ok(WorkerPoolInfo {
-                    workers: result
-                        .workers
-                        .into_iter()
-                        .map(|w| WorkerInfo {
-                            worker_id: w.worker_id,
-                            status: w.status,
-                            capabilities: w.capabilities,
-                            capacity_jobs: w.capacity_jobs,
-                            active_jobs: w.active_jobs,
-                            active_job_ids: w.active_job_ids,
-                            last_heartbeat: w.last_heartbeat,
-                            total_processed: w.total_processed,
-                            total_failed: w.total_failed,
-                        })
-                        .collect(),
-                    total_workers: result.total_workers,
-                    idle_workers: result.idle_workers,
-                    busy_workers: result.busy_workers,
-                    offline_workers: result.offline_workers,
-                    total_capacity_jobs: result.total_capacity_jobs,
-                    used_capacity_jobs: result.used_capacity_jobs,
-                })
+                Ok(WorkerPoolInfo::from(result))
             }
             _ => anyhow::bail!("unexpected response type for WorkerStatus"),
         }

@@ -432,6 +432,26 @@ pub struct JobInfo {
     pub error_message: Option<String>,
 }
 
+impl From<aspen_client_api::JobDetails> for JobInfo {
+    fn from(job: aspen_client_api::JobDetails) -> Self {
+        Self {
+            job_id: job.job_id,
+            job_type: job.job_type,
+            status: job.status,
+            priority: job.priority,
+            progress: job.progress,
+            progress_message: job.progress_message,
+            tags: job.tags,
+            submitted_at: job.submitted_at,
+            started_at: job.started_at,
+            completed_at: job.completed_at,
+            worker_id: job.worker_id,
+            attempts: job.attempts,
+            error_message: job.error_message,
+        }
+    }
+}
+
 impl JobInfo {
     /// Get priority display string.
     pub fn priority_str(&self) -> &'static str {
@@ -478,6 +498,21 @@ impl QueueStats {
     }
 }
 
+impl From<aspen_client_api::JobQueueStatsResultResponse> for QueueStats {
+    fn from(stats: aspen_client_api::JobQueueStatsResultResponse) -> Self {
+        Self {
+            pending_count: stats.pending_count,
+            scheduled_count: stats.scheduled_count,
+            running_count: stats.running_count,
+            completed_count: stats.completed_count,
+            failed_count: stats.failed_count,
+            cancelled_count: stats.cancelled_count,
+            priority_counts: stats.priority_counts.into_iter().map(|count| (count.priority, count.count)).collect(),
+            type_counts: stats.type_counts.into_iter().map(|count| (count.job_type, count.count)).collect(),
+        }
+    }
+}
+
 /// Worker pool information for the workers view.
 #[derive(Debug, Clone, Default)]
 pub struct WorkerPoolInfo {
@@ -518,6 +553,36 @@ pub struct WorkerInfo {
     pub total_processed: u64,
     /// Total jobs failed.
     pub total_failed: u64,
+}
+
+impl From<aspen_client_api::WorkerInfo> for WorkerInfo {
+    fn from(worker: aspen_client_api::WorkerInfo) -> Self {
+        Self {
+            worker_id: worker.worker_id,
+            status: worker.status,
+            capabilities: worker.capabilities,
+            capacity_jobs: worker.capacity_jobs,
+            active_jobs: worker.active_jobs,
+            active_job_ids: worker.active_job_ids,
+            last_heartbeat: worker.last_heartbeat,
+            total_processed: worker.total_processed,
+            total_failed: worker.total_failed,
+        }
+    }
+}
+
+impl From<aspen_client_api::WorkerStatusResultResponse> for WorkerPoolInfo {
+    fn from(pool: aspen_client_api::WorkerStatusResultResponse) -> Self {
+        Self {
+            workers: pool.workers.into_iter().map(WorkerInfo::from).collect(),
+            total_workers: pool.total_workers,
+            idle_workers: pool.idle_workers,
+            busy_workers: pool.busy_workers,
+            offline_workers: pool.offline_workers,
+            total_capacity_jobs: pool.total_capacity_jobs,
+            used_capacity_jobs: pool.used_capacity_jobs,
+        }
+    }
 }
 
 /// Jobs view state.
@@ -628,6 +693,18 @@ pub struct CiPipelineRunInfo {
     pub created_at_ms: u64,
 }
 
+impl From<aspen_client_api::CiRunInfo> for CiPipelineRunInfo {
+    fn from(run: aspen_client_api::CiRunInfo) -> Self {
+        Self {
+            run_id: run.run_id,
+            repo_id: run.repo_id,
+            ref_name: run.ref_name,
+            status: run.status,
+            created_at_ms: run.created_at_ms,
+        }
+    }
+}
+
 /// CI pipeline run detail with stages.
 #[derive(Debug, Clone)]
 pub struct CiPipelineDetail {
@@ -651,6 +728,22 @@ pub struct CiPipelineDetail {
     pub error: Option<String>,
 }
 
+impl From<aspen_client_api::CiGetStatusResponse> for CiPipelineDetail {
+    fn from(status: aspen_client_api::CiGetStatusResponse) -> Self {
+        Self {
+            run_id: status.run_id.unwrap_or_default(),
+            repo_id: status.repo_id.unwrap_or_default(),
+            ref_name: status.ref_name.unwrap_or_default(),
+            commit_hash: status.commit_hash.unwrap_or_default(),
+            status: status.status.unwrap_or_default(),
+            stages: status.stages.into_iter().map(CiStageInfo::from).collect(),
+            created_at_ms: status.created_at_ms.unwrap_or(0),
+            completed_at_ms: status.completed_at_ms,
+            error: status.error,
+        }
+    }
+}
+
 /// CI stage information.
 #[derive(Debug, Clone)]
 pub struct CiStageInfo {
@@ -660,6 +753,16 @@ pub struct CiStageInfo {
     pub status: String,
     /// Jobs in this stage.
     pub jobs: Vec<CiJobInfo>,
+}
+
+impl From<aspen_client_api::CiStageInfo> for CiStageInfo {
+    fn from(stage: aspen_client_api::CiStageInfo) -> Self {
+        Self {
+            name: stage.name,
+            status: stage.status,
+            jobs: stage.jobs.into_iter().map(CiJobInfo::from).collect(),
+        }
+    }
 }
 
 /// CI job information.
@@ -677,6 +780,19 @@ pub struct CiJobInfo {
     pub ended_at_ms: Option<u64>,
     /// Error message if failed.
     pub error: Option<String>,
+}
+
+impl From<aspen_client_api::CiJobInfo> for CiJobInfo {
+    fn from(job: aspen_client_api::CiJobInfo) -> Self {
+        Self {
+            id: job.id,
+            name: job.name,
+            status: job.status,
+            started_at_ms: job.started_at_ms,
+            ended_at_ms: job.ended_at_ms,
+            error: job.error,
+        }
+    }
 }
 
 /// CI view state.

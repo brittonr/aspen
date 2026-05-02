@@ -5,10 +5,8 @@ use aspen_client::ClientRpcRequest;
 use aspen_client::ClientRpcResponse;
 
 use super::IrohClient;
-use crate::types::CiJobInfo;
 use crate::types::CiPipelineDetail;
 use crate::types::CiPipelineRunInfo;
-use crate::types::CiStageInfo;
 
 impl IrohClient {
     /// List CI pipeline runs.
@@ -21,17 +19,9 @@ impl IrohClient {
         let response = self.send_rpc_with_retry(ClientRpcRequest::CiListRuns { repo_id, status, limit }).await?;
 
         match response {
-            ClientRpcResponse::CiListRunsResult(result) => Ok(result
-                .runs
-                .into_iter()
-                .map(|r| CiPipelineRunInfo {
-                    run_id: r.run_id,
-                    repo_id: r.repo_id,
-                    ref_name: r.ref_name,
-                    status: r.status,
-                    created_at_ms: r.created_at_ms,
-                })
-                .collect()),
+            ClientRpcResponse::CiListRunsResult(result) => {
+                Ok(result.runs.into_iter().map(CiPipelineRunInfo::from).collect())
+            }
             _ => anyhow::bail!("unexpected response type for CiListRuns"),
         }
     }
@@ -49,36 +39,7 @@ impl IrohClient {
                 if !result.was_found {
                     anyhow::bail!("Pipeline run not found: {}", run_id);
                 }
-                Ok(CiPipelineDetail {
-                    run_id: result.run_id.unwrap_or_default(),
-                    repo_id: result.repo_id.unwrap_or_default(),
-                    ref_name: result.ref_name.unwrap_or_default(),
-                    commit_hash: result.commit_hash.unwrap_or_default(),
-                    status: result.status.unwrap_or_default(),
-                    stages: result
-                        .stages
-                        .into_iter()
-                        .map(|s| CiStageInfo {
-                            name: s.name,
-                            status: s.status,
-                            jobs: s
-                                .jobs
-                                .into_iter()
-                                .map(|j| CiJobInfo {
-                                    id: j.id,
-                                    name: j.name,
-                                    status: j.status,
-                                    started_at_ms: j.started_at_ms,
-                                    ended_at_ms: j.ended_at_ms,
-                                    error: j.error,
-                                })
-                                .collect(),
-                        })
-                        .collect(),
-                    created_at_ms: result.created_at_ms.unwrap_or(0),
-                    completed_at_ms: result.completed_at_ms,
-                    error: result.error,
-                })
+                Ok(CiPipelineDetail::from(result))
             }
             _ => anyhow::bail!("unexpected response type for CiGetStatus"),
         }
