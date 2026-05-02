@@ -1,0 +1,150 @@
+commit 1691dc2b30cd1fed956cc4a6d3407a84846cfd40
+Author: brittonr <b@robitzs.ch>
+Date:   Sat May 2 18:31:24 2026 -0400
+
+    Decouple secrets handler mount provider
+---
+ crates/aspen-secrets-handler/src/handler/mod.rs | 28 +++++++++++---------
+ crates/aspen-secrets/src/lib.rs                 |  1 +
+ crates/aspen-secrets/src/mount_registry.rs      | 35 +++++++++++++++++++++++++
+ 3 files changed, 51 insertions(+), 13 deletions(-)
+
+diff --git a/crates/aspen-secrets-handler/src/handler/mod.rs b/crates/aspen-secrets-handler/src/handler/mod.rs
+index 33b8af27c..f8c8d8aa1 100644
+--- a/crates/aspen-secrets-handler/src/handler/mod.rs
++++ b/crates/aspen-secrets-handler/src/handler/mod.rs
+@@ -14,20 +14,22 @@ pub(crate) mod pki;
+ use std::sync::Arc;
+ 
+ use aspen_secrets::PkiStore;
++use aspen_secrets::SecretsMountProvider;
+ 
+ /// Secrets service with multi-mount support.
+ ///
+-/// Uses a `MountRegistry` to dynamically create and cache store instances
+-/// per mount point. Each mount has its own isolated storage.
++/// Uses a mount provider to dynamically resolve store instances per mount
++/// point. Each mount has its own isolated storage while this service remains
++/// decoupled from the concrete registry/cache implementation.
+ pub struct SecretsService {
+-    /// Mount registry for dynamic store management.
+-    pub mount_registry: Arc<aspen_secrets::MountRegistry>,
++    /// Mount provider for dynamic store management.
++    mounts: Arc<dyn SecretsMountProvider>,
+ }
+ 
+ impl SecretsService {
+-    /// Create a new secrets service with the given mount registry.
+-    pub fn new(mount_registry: Arc<aspen_secrets::MountRegistry>) -> Self {
+-        Self { mount_registry }
++    /// Create a new secrets service with the given mount provider.
++    pub fn new(mounts: Arc<dyn SecretsMountProvider>) -> Self {
++        Self { mounts }
+     }
+ 
+     /// Get or create a PKI store for the given mount point.
+@@ -36,8 +38,8 @@ impl SecretsService {
+     ///
+     /// Returns an error if the mount name is invalid or too many mounts exist.
+     pub async fn get_pki_store(&self, mount: &str) -> anyhow::Result<Arc<dyn PkiStore>> {
+-        self.mount_registry
+-            .get_or_create_pki_store(mount)
++        self.mounts
++            .pki_store(mount)
+             .await
+             .map_err(|e| anyhow::anyhow!("failed to get PKI store for mount '{}': {}", mount, e))
+     }
+@@ -50,8 +52,8 @@ impl SecretsService {
+     ///
+     /// Returns an error if the mount name is invalid or too many mounts exist.
+     pub async fn get_kv_store(&self, mount: &str) -> anyhow::Result<Arc<dyn aspen_secrets::KvStore>> {
+-        self.mount_registry
+-            .get_or_create_kv_store(mount)
++        self.mounts
++            .kv_store(mount)
+             .await
+             .map_err(|e| anyhow::anyhow!("failed to get KV store for mount '{}': {}", mount, e))
+     }
+@@ -64,8 +66,8 @@ impl SecretsService {
+     ///
+     /// Returns an error if the mount name is invalid or too many mounts exist.
+     pub async fn get_transit_store(&self, mount: &str) -> anyhow::Result<Arc<dyn aspen_secrets::TransitStore>> {
+-        self.mount_registry
+-            .get_or_create_transit_store(mount)
++        self.mounts
++            .transit_store(mount)
+             .await
+             .map_err(|e| anyhow::anyhow!("failed to get Transit store for mount '{}': {}", mount, e))
+     }
+diff --git a/crates/aspen-secrets/src/lib.rs b/crates/aspen-secrets/src/lib.rs
+index 348a57411..82b9adde7 100644
+--- a/crates/aspen-secrets/src/lib.rs
++++ b/crates/aspen-secrets/src/lib.rs
+@@ -94,6 +94,7 @@ pub use kv::SecretData;
+ pub use kv::SecretMetadata;
+ // Re-export Mount Registry
+ pub use mount_registry::MountRegistry;
++pub use mount_registry::SecretsMountProvider;
+ // Re-export PKI types
+ pub use pki::DefaultPkiStore;
+ pub use pki::PkiKeyType;
+diff --git a/crates/aspen-secrets/src/mount_registry.rs b/crates/aspen-secrets/src/mount_registry.rs
+index 4b080888d..89b9ac073 100644
+--- a/crates/aspen-secrets/src/mount_registry.rs
++++ b/crates/aspen-secrets/src/mount_registry.rs
+@@ -23,6 +23,7 @@ use std::sync::Arc;
+ #[cfg(feature = "trust")]
+ use std::sync::RwLock as StdRwLock;
+ 
++use async_trait::async_trait;
+ use tokio::sync::RwLock;
+ 
+ use crate::backend::AspenSecretsBackend;
+@@ -39,6 +40,25 @@ use crate::pki::PkiStore;
+ use crate::transit::DefaultTransitStore;
+ use crate::transit::TransitStore;
+ 
++/// Store-provider boundary for resolving secrets engine stores by mount.
++///
++/// This trait keeps handler and adapter crates coupled to the reusable service
++/// contract instead of the concrete [`MountRegistry`] cache/runtime storage
++/// implementation. Implementations may cache, lazily create, or delegate stores
++/// as long as each method enforces the same mount validation and resource
++/// bounds as the concrete registry.
++#[async_trait]
++pub trait SecretsMountProvider: Send + Sync {
++    /// Get or create a PKI store for the given mount point.
++    async fn pki_store(&self, mount: &str) -> Result<Arc<dyn PkiStore>>;
++
++    /// Get or create a Transit store for the given mount point.
++    async fn transit_store(&self, mount: &str) -> Result<Arc<dyn TransitStore>>;
++
++    /// Get or create a KV store for the given mount point.
++    async fn kv_store(&self, mount: &str) -> Result<Arc<dyn KvStore>>;
++}
++
+ /// Multi-mount registry for secrets engines.
+ ///
+ /// Manages dynamic creation and caching of store instances per mount point.
+@@ -331,6 +351,21 @@ impl MountRegistry {
+     }
+ }
+ 
++#[async_trait]
++impl SecretsMountProvider for MountRegistry {
++    async fn pki_store(&self, mount: &str) -> Result<Arc<dyn PkiStore>> {
++        self.get_or_create_pki_store(mount).await
++    }
++
++    async fn transit_store(&self, mount: &str) -> Result<Arc<dyn TransitStore>> {
++        self.get_or_create_transit_store(mount).await
++    }
++
++    async fn kv_store(&self, mount: &str) -> Result<Arc<dyn KvStore>> {
++        self.get_or_create_kv_store(mount).await
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;

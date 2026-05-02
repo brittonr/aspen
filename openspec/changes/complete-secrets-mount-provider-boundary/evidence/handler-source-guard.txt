@@ -1,0 +1,2 @@
+crates/aspen-secrets-handler/src/handler/mod.rs:156:        let mount_registry = Arc::new(aspen_secrets::MountRegistry::new(kv_store));
+crates/aspen-secrets-handler/src/handler/mod.rs:157:        SecretsService::new(mount_registry)

@@ -70,3 +70,7 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 ## Secrets core type boundary
 
 `2b3571242 Extract secrets core type contracts` adds `aspen-secrets-core` as the owner of dependency-light secrets constants plus KV, Transit, and PKI DTO/state contracts. `aspen-secrets` now depends on that core crate and preserves historical `constants`, `kv::types`, `transit::types`, `pki::types`, and root exports through compatibility re-export shims. Runtime stores, cryptographic execution, SOPS file IO, auth runtime helpers, trust integration, and handler adapters remain outside the core crate. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-secrets-core-type-boundary/evidence/`.
+
+## Secrets mount provider boundary
+
+`1691dc2b3 Decouple secrets handler mount provider` adds `aspen_secrets::SecretsMountProvider` as the mounted-store resolution contract for PKI, KV, and Transit stores. `MountRegistry` implements the provider by delegating to its existing bounded `get_or_create_*` methods, while `aspen-secrets-handler::SecretsService` now stores `Arc<dyn SecretsMountProvider>` instead of concrete `Arc<MountRegistry>`. Runtime/node call sites continue passing `Arc<MountRegistry>` for compatibility, but the handler service boundary no longer depends on the concrete registry/cache implementation. Evidence is recorded under `openspec/changes/complete-secrets-mount-provider-boundary/evidence/`.
