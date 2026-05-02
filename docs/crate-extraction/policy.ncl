@@ -799,7 +799,7 @@ let Candidate = {
 
     jobs_ci_core = {
       class = "service library",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/jobs-ci-core.md",
       owner = "Aspen jobs and CI maintainers",
       default_feature_sets = ["default"],

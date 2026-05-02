@@ -1,0 +1,227 @@
+# Jobs/CI compatibility evidence
+
+Focused commands to run for this review:
+- cargo test -p aspen-jobs-core --no-fail-fast
+- cargo test -p aspen-ci-core --no-fail-fast
+- cargo test -p aspen-client-api request_metadata --no-fail-fast
+- cargo test -p aspen-ci-handler --lib --features forge,blob --no-fail-fast
+- cargo check -p aspen-ci-handler --features blob
+
+## Results
+
+### `cargo test -p aspen-jobs-core --no-fail-fast`
+
+
+running 9 tests
+test tests::job_payload_helpers_match_runtime_schema ... ok
+test tests::job_spec_builder_helpers_match_runtime_contract ... ok
+test tests::job_status_wire_helpers_match_client_contract ... ok
+test tests::keyspace_helpers_match_runtime_contract ... ok
+test tests::job_spec_vm_builders_emit_typed_payloads ... ok
+test tests::priority_wire_helpers_match_client_contract ... ok
+test tests::job_spec_roundtrips_json ... ok
+test tests::retry_transition_respects_policy ... ok
+test tests::status_helpers_match_runtime_contract ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+Result: pass
+
+### `cargo test -p aspen-ci-core --no-fail-fast`
+
+
+running 86 tests
+test config::types::tests::test_deploy_job_requires_artifact_from ... ok
+test config::types::tests::test_deploy_job_valid_with_artifact_from ... ok
+test config::types::tests::test_job_type_route ... ok
+test config::types::tests::test_job_type_default ... ok
+test config::types::tests::test_pipeline_deploy_artifact_from_same_stage ... ok
+test config::types::tests::test_pipeline_deploy_artifact_from_unknown_job ... ok
+test config::types::tests::test_pipeline_deploy_artifact_from_valid ... ok
+test config::types::tests::test_priority_conversion_to_jobs_core ... ok
+test config::types::tests::test_pipeline_validate_rejects_stage_cycle ... ok
+test config::types::tests::test_retry_count_to_jobs_policy ... ok
+test config::types::tests::test_stage_should_run ... ok
+test config::types::tests::test_trigger_should_trigger ... ok
+test log_writer::tests::test_ci_log_chunk_from_watch_event_value ... ok
+test log_writer::tests::test_ci_log_chunk_serialization ... ok
+test log_writer::tests::test_completion_marker_serialization ... ok
+test verified::pipeline::tests::test_after_build ... ok
+test verified::pipeline::tests::test_count_empty ... ok
+test verified::pipeline::tests::test_count_jobs ... ok
+test verified::pipeline::tests::test_cycle_detection ... ok
+test verified::pipeline::tests::test_deps_met ... ok
+test verified::pipeline::tests::test_deps_not_met ... ok
+test verified::pipeline::tests::test_empty_pipeline ... ok
+test verified::pipeline::tests::test_has_missing ... ok
+test verified::pipeline::tests::test_initial_ready ... ok
+test verified::pipeline::tests::test_linear_order ... ok
+test verified::pipeline::tests::test_no_deps ... ok
+test verified::pipeline::tests::test_no_missing ... ok
+test verified::pipeline::tests::test_parallel_stages ... ok
+test verified::pipeline::tests::test_self_dependency_empty ... ok
+test verified::pipeline::tests::test_self_dependency_false ... ok
+test verified::pipeline::tests::test_self_dependency_true ... ok
+test verified::pipeline::tests::test_stage_order_parallel ... ok
+test verified::pipeline::tests::test_too_many_jobs ... ok
+test verified::pipeline::tests::test_too_many_stages ... ok
+test verified::pipeline::tests::test_within_limits ... ok
+test verified::resource::tests::test_cpu_default ... ok
+test verified::resource::tests::test_cpu_exceeds_max ... ok
+test verified::resource::tests::test_cpu_within_limits ... ok
+test verified::resource::tests::test_format_bytes ... ok
+test verified::resource::tests::test_memory_default ... ok
+test verified::resource::tests::test_memory_exceeds_max ... ok
+test verified::resource::tests::test_memory_too_high ... ok
+test verified::resource::tests::test_memory_too_low ... ok
+test verified::resource::tests::test_memory_within_limits ... ok
+test verified::resource::tests::test_pids_exceeds_max ... ok
+test verified::timeout::tests::test_deadline_basic ... ok
+test verified::timeout::tests::test_ms_to_secs ... ok
+test verified::timeout::tests::test_remaining_positive ... ok
+test verified::timeout::tests::test_secs_to_ms ... ok
+test verified::timeout::tests::test_sequential_sum ... ok
+test verified::timeout::tests::test_remaining_zero_passed ... ok
+test verified::timeout::tests::test_user_timeout_exceeds_max ... ok
+test verified::timeout::tests::test_user_timeout_within_limits ... ok
+test verified::trigger::tests::test_exact_match ... ok
+test verified::trigger::tests::test_any_path_matches ... ok
+test verified::trigger::tests::test_extract_branch ... ok
+test verified::trigger::tests::test_extract_branch_not_branch ... ok
+test verified::trigger::tests::test_extract_tag ... ok
+test verified::trigger::tests::test_extract_tag_not_tag ... ok
+test verified::resource::tests::test_pids_default ... ok
+test verified::resource::tests::test_pids_within_limits ... ok
+test verified::resource::tests::test_pids_too_high ... ok
+test verified::resource::tests::test_valid_limits ... ok
+test verified::trigger::tests::test_is_branch ... ok
+test verified::trigger::tests::test_is_tag ... ok
+test verified::resource::tests::test_watermark_100_percent ... ok
+test verified::trigger::tests::test_no_match ... ok
+test verified::trigger::tests::test_no_path_matches ... ok
+test verified::trigger::tests::test_path_exact ... ok
+test verified::trigger::tests::test_path_prefix ... ok
+test verified::trigger::tests::test_path_suffix ... ok
+test verified::trigger::tests::test_specific_prefix ... ok
+test verified::trigger::tests::test_wildcard_suffix ... ok
+test verified::timeout::tests::test_empty ... ok
+test verified::timeout::tests::test_deadline_overflow ... ok
+test verified::timeout::tests::test_deadline_zero_timeout ... ok
+test verified::timeout::tests::test_exact_match ... ok
+test verified::timeout::tests::test_parallel_max ... ok
+test verified::timeout::tests::test_no_user_timeout ... ok
+test verified::timeout::tests::test_not_exceeded ... ok
+test verified::timeout::tests::test_exceeded ... ok
+test verified::timeout::tests::test_remaining_zero_exact ... ok
+test verified::trigger::tests::test_matches_any ... ok
+test verified::resource::tests::test_watermark_75_percent ... ok
+test verified::trigger::tests::test_matches_none ... ok
+test verified::resource::tests::test_watermark_over_100 ... ok
+
+test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 28 tests
+test crates/aspen-ci-core/src/verified/pipeline.rs - verified::pipeline::compute_stage_order (line 279) ... ok
+test crates/aspen-ci-core/src/verified/pipeline.rs - verified::pipeline::find_missing_dependency (line 86) ... ok
+test crates/aspen-ci-core/src/verified/pipeline.rs - verified::pipeline::check_pipeline_limits (line 230) ... ok
+test crates/aspen-ci-core/src/verified/pipeline.rs - verified::pipeline::are_dependencies_met (line 114) ... ok
+test crates/aspen-ci-core/src/verified/pipeline.rs - verified::pipeline::count_total_jobs (line 196) ... ok
+test crates/aspen-ci-core/src/verified/pipeline.rs - verified::pipeline::find_ready_stages (line 146) ... ok
+test crates/aspen-ci-core/src/verified/resource.rs - verified::resource::are_resource_limits_valid (line 196) ... ok
+test crates/aspen-ci-core/src/verified/pipeline.rs - verified::pipeline::has_self_dependency (line 61) ... ok
+test crates/aspen-ci-core/src/verified/resource.rs - verified::resource::compute_effective_cpu_weight (line 77) ... ok
+test crates/aspen-ci-core/src/verified/resource.rs - verified::resource::compute_memory_high_watermark (line 159) ... ok
+test crates/aspen-ci-core/src/verified/resource.rs - verified::resource::compute_effective_memory_limit (line 32) ... ok
+test crates/aspen-ci-core/src/verified/resource.rs - verified::resource::compute_effective_pid_limit (line 117) ... ok
+test crates/aspen-ci-core/src/verified/resource.rs - verified::resource::format_bytes_for_cgroup (line 240) ... ok
+test crates/aspen-ci-core/src/verified/timeout.rs - verified::timeout::compute_deadline_ms (line 29) ... ok
+test crates/aspen-ci-core/src/verified/timeout.rs - verified::timeout::compute_effective_timeout_secs (line 114) ... ok
+test crates/aspen-ci-core/src/verified/timeout.rs - verified::timeout::compute_pipeline_timeout_secs (line 160) ... ok
+test crates/aspen-ci-core/src/verified/timeout.rs - verified::timeout::is_deadline_exceeded (line 57) ... ok
+test crates/aspen-ci-core/src/verified/timeout.rs - verified::timeout::remaining_time_ms (line 82) ... ok
+test crates/aspen-ci-core/src/verified/timeout.rs - verified::timeout::ms_to_secs (line 220) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::any_path_matches (line 157) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::is_branch_ref (line 229) ... ok
+test crates/aspen-ci-core/src/verified/timeout.rs - verified::timeout::secs_to_ms (line 197) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::extract_tag_name (line 207) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::extract_branch_name (line 184) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::is_tag_ref (line 252) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::path_matches_pattern (line 104) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::ref_matches_pattern (line 30) ... ok
+test crates/aspen-ci-core/src/verified/trigger.rs - verified::trigger::ref_matches_any_pattern (line 76) ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.42s; merged doctests compilation took 0.42s
+
+Result: pass
+
+### `cargo test -p aspen-client-api request_metadata --no-fail-fast`
+
+
+running 1 test
+test tests::test_request_metadata_lookup_matches_sample_requests ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+
+Result: pass
+
+### `cargo test -p aspen-ci-handler --lib --features forge,blob --no-fail-fast`
+
+
+running 17 tests
+test handler::deploy::tests::test_extract_deploy_stages_empty ... ok
+test handler::deploy::tests::test_extract_deploy_stages_mixed_stage_excluded ... ok
+test handler::deploy::tests::test_extract_deploy_stages_with_deploy ... ok
+test handler::deploy::tests::test_extract_deploy_stages_no_deploys ... ok
+test handler::pipeline::tests::normalize_trigger_ref_name_handles_short_and_full_refs ... ok
+test handler::pipeline::tests::build_trigger_context_sets_checkout_env_and_empty_run_id ... ok
+test handler::pipeline::tests::parse_requested_commit_hash_rejects_wrong_length ... ok
+test handler::pipeline::tests::parse_trigger_repo_id_rejects_invalid_hex ... ok
+test tests::test_factory_app_id ... ok
+test tests::test_factory_name ... ok
+test tests::test_factory_priority ... ok
+test tests::test_handles_artifact_ops ... ok
+test tests::test_handles_count ... ok
+test tests::test_handles_log_ops ... ok
+test tests::test_handles_pipeline_ops ... ok
+test tests::test_handles_watch_ops ... ok
+test tests::test_no_duplicate_handles ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+Result: pass
+
+### `cargo check -p aspen-ci-handler --features blob`
+
+
+Result: pass

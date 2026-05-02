@@ -11,6 +11,11 @@
 
 ## Phase 2: Evidence and readiness decision
 
-- [ ] Regenerate or recapture fresh downstream metadata, negative boundary evidence, compatibility evidence, and readiness checker outputs under this active change.
-- [ ] Decide whether the evidence supports raising `jobs-ci-core` to `extraction-ready-in-workspace`; update manifest, inventory, and policy consistently or leave `workspace-internal` with blockers recorded.
-- [ ] Run final OpenSpec validation/helper verification and archive if all tasks are complete.
+- [x] Regenerate or recapture fresh downstream metadata, negative boundary evidence, compatibility evidence, and readiness checker outputs under this active change.
+  - Evidence: `openspec/changes/review-jobs-ci-public-api/evidence/jobs-ci-core-downstream-metadata.json`
+  - Evidence: `openspec/changes/review-jobs-ci-public-api/evidence/jobs-ci-core-forbidden-boundary.txt`
+  - Evidence: `openspec/changes/review-jobs-ci-public-api/evidence/jobs-ci-core-compatibility.txt`
+  - Evidence: `openspec/changes/review-jobs-ci-public-api/evidence/jobs-ci-core-readiness.md`
+- [x] Decide whether the evidence supports raising `jobs-ci-core` to `extraction-ready-in-workspace`; update manifest, inventory, and policy consistently or leave `workspace-internal` with blockers recorded.
+  - Decision: raise to `extraction-ready-in-workspace` inside the monorepo; publishable/repo-split remains blocked on license/publication policy.
+- [x] Run final OpenSpec validation/helper verification and archive if all tasks are complete.

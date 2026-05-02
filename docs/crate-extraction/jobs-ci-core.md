@@ -7,7 +7,7 @@
 - **Crates**: `aspen-jobs-core`, `aspen-jobs`, `aspen-jobs-protocol`, `aspen-jobs-guest`, `aspen-jobs-worker-blob`, `aspen-jobs-worker-maintenance`, `aspen-jobs-worker-replication`, `aspen-jobs-worker-shell`, `aspen-jobs-worker-sql`, `aspen-ci-core`, `aspen-ci`, `aspen-ci-executor-shell`, `aspen-ci-executor-vm`, `aspen-ci-executor-nix`
 - **Intended audience**: Aspen and downstream systems that need reusable scheduler/config/run-state/artifact contracts without concrete worker/executor runtime shells.
 - **Public API owner**: Aspen jobs and CI maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 
 ## Package metadata
 
@@ -53,13 +53,13 @@
   - `aspen-jobs` and `aspen-ci`: compatibility/runtime shells only; retained re-exports must have owner, tests, and removal/retention criteria.
   - `aspen-client-api`: CI request variant operation-name metadata remains owned by protocol maintainers and is consumed by Jobs/CI handlers.
 - **Out of scope for reusable public API**: worker pools, process execution, shell/VM/Nix/SNIX executors, handler registries, node/bootstrap integration, concrete Iroh/blob/Forge runtime wiring, Redb-backed runtime storage, and dogfood/CLI app shells.
-- **Review evidence required before readiness raise**:
+- **Review evidence captured for readiness raise**:
   - fresh downstream metadata: `jobs-ci-core-downstream-metadata.json`;
   - fresh negative boundary evidence: `jobs-ci-core-forbidden-boundary.txt`;
   - fresh focused compatibility evidence: `jobs-ci-core-compatibility.txt`;
   - fresh checker reports: `jobs-ci-core-readiness.json` and `jobs-ci-core-readiness.md`;
   - `verification.md` task coverage linking all evidence.
-- **Completion criteria**: owner signs off that canonical reusable imports are stable inside the workspace, runtime shells remain explicit adapters, compatibility re-exports are documented, and publishable/repo-split labels remain blocked pending license/publication policy.
+- **Completion status**: owner/public API review completed under `openspec/changes/review-jobs-ci-public-api`; canonical reusable imports are stable inside the workspace, runtime shells remain explicit adapters, compatibility re-exports are documented, and publishable/repo-split labels remain blocked pending license/publication policy.
 
 ## Representative consumers
 
@@ -90,7 +90,7 @@ The post-extraction cleanup stint then moved additional dependency-light contrac
 - `aspen-client-api`: `CI_REQUEST_VARIANTS` as the canonical CI request operation-name set shared by request metadata and `aspen-ci-handler` registration.
 - Final consumers: TUI protocol-to-display DTO conversions remain local to `aspen-tui`.
 
-No jobs/CI readiness state changes in this stint. The active owner/public API review is `openspec/changes/review-jobs-ci-public-api`; it must refresh downstream, negative-boundary, compatibility, and readiness-checker evidence before any readiness raise.
+Jobs/CI core is `extraction-ready-in-workspace` after owner/public API review in `openspec/changes/review-jobs-ci-public-api`. Publishable/repo-split states remain blocked pending human license/publication policy.
 
 ## I8 surface inventory
 

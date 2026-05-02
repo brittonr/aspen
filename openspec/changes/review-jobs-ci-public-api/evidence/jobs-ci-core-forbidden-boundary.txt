@@ -1,0 +1,120 @@
+# Jobs/CI forbidden boundary audit
+
+Reusable crates checked with normal dependency trees:
+- cargo tree -p aspen-jobs-core -e normal --no-default-features
+- cargo tree -p aspen-ci-core -e normal --no-default-features
+- cargo tree -p aspen-jobs-protocol -e normal --no-default-features
+
+## aspen-jobs-core
+aspen-jobs-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-core)
+├── chrono v0.4.44
+│   ├── iana-time-zone v0.1.65
+│   ├── num-traits v0.2.19
+│   └── serde v1.0.228
+│       ├── serde_core v1.0.228
+│       └── serde_derive v1.0.228 (proc-macro)
+│           ├── proc-macro2 v1.0.106
+│           │   └── unicode-ident v1.0.24
+│           ├── quote v1.0.45
+│           │   └── proc-macro2 v1.0.106 (*)
+│           └── syn v2.0.117
+│               ├── proc-macro2 v1.0.106 (*)
+│               ├── quote v1.0.45 (*)
+│               └── unicode-ident v1.0.24
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149
+│   ├── itoa v1.0.17
+│   ├── memchr v2.8.0
+│   ├── serde_core v1.0.228
+│   └── zmij v1.0.21
+├── thiserror v2.0.18
+│   └── thiserror-impl v2.0.18 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+└── uuid v1.22.0
+    ├── getrandom v0.4.2
+    │   ├── cfg-if v1.0.4
+    │   └── libc v0.2.183
+    └── serde_core v1.0.228
+
+Forbidden runtime shell packages in tree:
+none
+
+## aspen-ci-core
+aspen-ci-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ci-core)
+├── aspen-jobs-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-core)
+│   ├── chrono v0.4.44
+│   │   ├── iana-time-zone v0.1.65
+│   │   ├── num-traits v0.2.19
+│   │   └── serde v1.0.228
+│   │       ├── serde_core v1.0.228
+│   │       └── serde_derive v1.0.228 (proc-macro)
+│   │           ├── proc-macro2 v1.0.106
+│   │           │   └── unicode-ident v1.0.24
+│   │           ├── quote v1.0.45
+│   │           │   └── proc-macro2 v1.0.106 (*)
+│   │           └── syn v2.0.117
+│   │               ├── proc-macro2 v1.0.106 (*)
+│   │               ├── quote v1.0.45 (*)
+│   │               └── unicode-ident v1.0.24
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149
+│   │   ├── itoa v1.0.17
+│   │   ├── memchr v2.8.0
+│   │   ├── serde_core v1.0.228
+│   │   └── zmij v1.0.21
+│   ├── thiserror v2.0.18
+│   │   └── thiserror-impl v2.0.18 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   └── uuid v1.22.0
+│       ├── getrandom v0.4.2
+│       │   ├── cfg-if v1.0.4
+│       │   └── libc v0.2.183
+│       └── serde_core v1.0.228
+├── chrono v0.4.44 (*)
+├── schemars v0.8.22
+│   ├── dyn-clone v1.0.20
+│   ├── schemars_derive v0.8.22 (proc-macro)
+│   │   ├── proc-macro2 v1.0.106 (*)
+│   │   ├── quote v1.0.45 (*)
+│   │   ├── serde_derive_internals v0.29.1
+│   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   ├── quote v1.0.45 (*)
+│   │   │   └── syn v2.0.117 (*)
+│   │   └── syn v2.0.117 (*)
+│   ├── serde v1.0.228 (*)
+│   └── serde_json v1.0.149 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149 (*)
+├── snafu v0.8.9
+│   └── snafu-derive v0.8.9 (proc-macro)
+│       ├── heck v0.5.0
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+└── uuid v1.22.0 (*)
+
+Forbidden runtime shell packages in tree:
+none
+
+## aspen-jobs-protocol
+aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
+└── serde v1.0.228
+    ├── serde_core v1.0.228
+    └── serde_derive v1.0.228 (proc-macro)
+        ├── proc-macro2 v1.0.106
+        │   └── unicode-ident v1.0.24
+        ├── quote v1.0.45
+        │   └── proc-macro2 v1.0.106 (*)
+        └── syn v2.0.117
+            ├── proc-macro2 v1.0.106 (*)
+            ├── quote v1.0.45 (*)
+            └── unicode-ident v1.0.24
+
+Forbidden runtime shell packages in tree:
+none
+
+Result: no forbidden runtime shell packages in reusable default dependency trees.
