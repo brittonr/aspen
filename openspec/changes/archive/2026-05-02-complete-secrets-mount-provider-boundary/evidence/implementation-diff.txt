@@ -15,10 +15,10 @@ index 33b8af27c..f8c8d8aa1 100644
 +++ b/crates/aspen-secrets-handler/src/handler/mod.rs
 @@ -14,20 +14,22 @@ pub(crate) mod pki;
  use std::sync::Arc;
- 
+
  use aspen_secrets::PkiStore;
 +use aspen_secrets::SecretsMountProvider;
- 
+
  /// Secrets service with multi-mount support.
  ///
 -/// Uses a `MountRegistry` to dynamically create and cache store instances
@@ -32,7 +32,7 @@ index 33b8af27c..f8c8d8aa1 100644
 +    /// Mount provider for dynamic store management.
 +    mounts: Arc<dyn SecretsMountProvider>,
  }
- 
+
  impl SecretsService {
 -    /// Create a new secrets service with the given mount registry.
 -    pub fn new(mount_registry: Arc<aspen_secrets::MountRegistry>) -> Self {
@@ -41,7 +41,7 @@ index 33b8af27c..f8c8d8aa1 100644
 +    pub fn new(mounts: Arc<dyn SecretsMountProvider>) -> Self {
 +        Self { mounts }
      }
- 
+
      /// Get or create a PKI store for the given mount point.
 @@ -36,8 +38,8 @@ impl SecretsService {
      ///
@@ -95,15 +95,15 @@ index 4b080888d..89b9ac073 100644
 @@ -23,6 +23,7 @@ use std::sync::Arc;
  #[cfg(feature = "trust")]
  use std::sync::RwLock as StdRwLock;
- 
+
 +use async_trait::async_trait;
  use tokio::sync::RwLock;
- 
+
  use crate::backend::AspenSecretsBackend;
 @@ -39,6 +40,25 @@ use crate::pki::PkiStore;
  use crate::transit::DefaultTransitStore;
  use crate::transit::TransitStore;
- 
+
 +/// Store-provider boundary for resolving secrets engine stores by mount.
 +///
 +/// This trait keeps handler and adapter crates coupled to the reusable service
@@ -129,7 +129,7 @@ index 4b080888d..89b9ac073 100644
 @@ -331,6 +351,21 @@ impl MountRegistry {
      }
  }
- 
+
 +#[async_trait]
 +impl SecretsMountProvider for MountRegistry {
 +    async fn pki_store(&self, mount: &str) -> Result<Arc<dyn PkiStore>> {
