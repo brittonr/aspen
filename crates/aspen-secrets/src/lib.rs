@@ -61,6 +61,8 @@
 //! let api_key = manager.get_string("api_key").await?;
 //! ```
 
+pub use aspen_secrets_core as core;
+
 pub mod backend;
 pub mod constants;
 pub mod cookie;

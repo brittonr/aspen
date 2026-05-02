@@ -124,6 +124,7 @@ members = [
     "crates/aspen-hooks",
     "crates/aspen-crypto",
     "crates/aspen-trust",
+    "crates/aspen-secrets-core",
     "crates/aspen-secrets",
     "crates/aspen-automerge",
     "crates/aspen-federation",

@@ -2652,6 +2652,7 @@ dependencies = [
  "aspen-client-api",
  "aspen-crypto",
  "aspen-kv-types",
+ "aspen-secrets-core",
  "aspen-testing",
  "aspen-traits",
  "aspen-transport",
@@ -2687,6 +2688,14 @@ dependencies = [
  "tracing",
  "x509-cert",
  "zeroize",
+]
+
+[[package]]
+name = "aspen-secrets-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
