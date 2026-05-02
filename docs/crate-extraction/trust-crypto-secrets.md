@@ -23,12 +23,13 @@
 | --- | --- | --- |
 | Trust crypto | Shamir/GF/HKDF/share-chain helpers with explicit randomness/time inputs. | Iroh trust-share exchange, peer probing, cluster bootstrap. |
 | Reconfiguration state | deterministic membership/share/decryption-key-selection state machine inputs and outputs. | Raft log application, storage transactions, node shutdown/expungement effects. |
-| Secrets crypto | pure encryption/decryption/key-selection helpers and migration planning. | Redb storage, secrets service, handler/client runtime, SOPS file IO. |
+| Secrets crypto | pure encryption/decryption/key-selection helpers, migration planning, and token data parsing via `aspen-auth-core`. | Redb storage, secrets service, handler/client runtime, SOPS file IO, `aspen-auth` verifier/builder helpers behind `aspen-secrets/auth-runtime`. |
 | General crypto | BLAKE3/hash helpers and key utilities where transport-free; `aspen-crypto` defaults to this surface. | node identity lifecycle helpers behind `aspen-crypto/identity`; concrete Iroh endpoint/runtime helpers stay outside reusable defaults. |
 
 ## Dependency decisions
 
 - Pure logic must not depend on Raft, Iroh endpoint construction, Redb storage, handler registries, node bootstrap, or ambient wall-clock/randomness.
+- `aspen-secrets` default token parsing depends on `aspen-auth-core`; `aspen-auth` runtime verifier/builder helpers require the explicit `auth-runtime` feature.
 - Cryptographic dependencies such as HKDF, AEADs, zeroize, secrecy, and BLAKE3 are allowed when they are the crate purpose.
 - Runtime `aspen-secrets-handler` remains a compatibility consumer, not reusable core.
 
@@ -53,3 +54,7 @@
 ## First blocker
 
 I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated. The first blocker is now complete: `aspen-crypto` defaults to the transport-free cookie/hash helper surface, and node identity lifecycle utilities live behind the explicit `identity` feature using `iroh-base` key types rather than concrete `iroh` endpoint/runtime dependencies. The aggregate family remains `workspace-internal` until trust/secrets split policy, publication policy, and any remaining runtime-adapter ownership reviews are resolved. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-trust-crypto-first-blocker/evidence/`.
+
+## Auth runtime boundary
+
+`d2a4d4ba1 Keep secrets auth runtime optional` removes the `aspen-auth` runtime shell from the `aspen-secrets` default token parsing path. `SecretsProvider::get_token` and config token parsing now use `aspen-auth-core::CapabilityToken`, while `SecretsManager::build_token_verifier` and `SecretsManager::build_token_builder` require `aspen-secrets/auth-runtime`. The root node `secrets` feature enables that runtime feature to preserve bootstrap compatibility. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-secrets-auth-runtime-boundary/evidence/`.
