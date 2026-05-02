@@ -26,6 +26,46 @@ pub enum JobType {
     Deploy,
 }
 
+/// Job queue route for shell CI jobs.
+pub const CI_JOB_TYPE_SHELL: &str = "shell_command";
+/// Job queue route for Nix build CI jobs.
+pub const CI_JOB_TYPE_NIX: &str = "ci_nix_build";
+/// Job queue route for VM CI jobs.
+pub const CI_JOB_TYPE_VM: &str = "ci_vm";
+/// Job queue route for deploy jobs intercepted by the CI runtime.
+pub const CI_JOB_TYPE_DEPLOY: &str = "ci_deploy";
+
+/// Return the queue route used when a CI job type is converted into an Aspen job.
+#[must_use]
+pub const fn job_type_route(job_type: JobType) -> &'static str {
+    match job_type {
+        JobType::Shell => CI_JOB_TYPE_SHELL,
+        JobType::Nix => CI_JOB_TYPE_NIX,
+        JobType::Vm => CI_JOB_TYPE_VM,
+        JobType::Deploy => CI_JOB_TYPE_DEPLOY,
+    }
+}
+
+/// Convert a CI priority into the canonical Aspen jobs priority.
+#[must_use]
+pub const fn to_jobs_priority(priority: Priority) -> aspen_jobs_core::Priority {
+    match priority {
+        Priority::High => aspen_jobs_core::Priority::High,
+        Priority::Normal => aspen_jobs_core::Priority::Normal,
+        Priority::Low => aspen_jobs_core::Priority::Low,
+    }
+}
+
+/// Convert a CI retry count into the canonical Aspen jobs retry policy.
+#[must_use]
+pub fn retry_count_to_jobs_policy(retry_count: u32) -> aspen_jobs_core::RetryPolicy {
+    if retry_count > 0 {
+        aspen_jobs_core::RetryPolicy::exponential(retry_count)
+    } else {
+        aspen_jobs_core::RetryPolicy::none()
+    }
+}
+
 /// Job isolation mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -682,6 +722,46 @@ mod tests {
     fn test_job_type_default() {
         let job_type: JobType = Default::default();
         assert_eq!(job_type, JobType::Shell);
+    }
+
+    #[test]
+    fn test_job_type_route() {
+        assert_eq!(job_type_route(JobType::Shell), CI_JOB_TYPE_SHELL);
+        assert_eq!(job_type_route(JobType::Shell), "shell_command");
+        assert_eq!(job_type_route(JobType::Nix), CI_JOB_TYPE_NIX);
+        assert_eq!(job_type_route(JobType::Nix), "ci_nix_build");
+        assert_eq!(job_type_route(JobType::Vm), CI_JOB_TYPE_VM);
+        assert_eq!(job_type_route(JobType::Vm), "ci_vm");
+        assert_eq!(job_type_route(JobType::Deploy), CI_JOB_TYPE_DEPLOY);
+        assert_eq!(job_type_route(JobType::Deploy), "ci_deploy");
+    }
+
+    #[test]
+    fn test_priority_conversion_to_jobs_core() {
+        assert!(matches!(to_jobs_priority(Priority::High), aspen_jobs_core::Priority::High));
+        assert!(matches!(to_jobs_priority(Priority::Normal), aspen_jobs_core::Priority::Normal));
+        assert!(matches!(to_jobs_priority(Priority::Low), aspen_jobs_core::Priority::Low));
+    }
+
+    #[test]
+    fn test_retry_count_to_jobs_policy() {
+        assert!(matches!(retry_count_to_jobs_policy(0), aspen_jobs_core::RetryPolicy::None));
+        assert_eq!(retry_count_to_jobs_policy(0).max_attempts(), 1);
+
+        match retry_count_to_jobs_policy(3) {
+            aspen_jobs_core::RetryPolicy::Exponential {
+                max_attempts,
+                initial_delay,
+                multiplier,
+                max_delay,
+            } => {
+                assert_eq!(max_attempts, 3);
+                assert_eq!(initial_delay.as_secs(), 1);
+                assert_eq!(multiplier, 2.0);
+                assert_eq!(max_delay.map(|duration| duration.as_secs()), Some(300));
+            }
+            other => panic!("unexpected retry policy: {other:?}"),
+        }
     }
 
     #[test]

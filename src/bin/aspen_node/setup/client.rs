@@ -864,7 +864,7 @@ async fn initialize_job_system(
                     nix_worker.init_native_build_service().await;
 
                     worker_service
-                        .register_handler("ci_nix_build", nix_worker)
+                        .register_handler(aspen_ci::CI_JOB_TYPE_NIX, nix_worker)
                         .await
                         .context("failed to register Nix build worker")?;
                     info!(
@@ -916,7 +916,7 @@ async fn initialize_job_system(
                     };
 
                     worker_service
-                        .register_handler("ci_vm", local_worker)
+                        .register_handler(aspen_ci::CI_JOB_TYPE_VM, local_worker)
                         .await
                         .context("failed to register Local Executor worker")?;
                     info!(
@@ -1085,7 +1085,7 @@ async fn initialize_job_system(
             );
             let shell_worker = ShellCommandWorker::new(shell_config);
             worker_service
-                .register_handler("shell_command", shell_worker)
+                .register_handler(aspen_ci::CI_JOB_TYPE_SHELL, shell_worker)
                 .await
                 .context("failed to register shell command worker")?;
             if has_auth {

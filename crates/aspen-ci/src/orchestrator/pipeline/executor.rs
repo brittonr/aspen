@@ -166,18 +166,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
         let payload = build_job_payload(job, context, &env, self.kv_store.as_ref()).await?;
 
-        let job_type = match job.job_type {
-            JobType::Shell => "shell_command",
-            JobType::Nix => "ci_nix_build",
-            JobType::Vm => "ci_vm",         // Maps to CloudHypervisorWorker
-            JobType::Deploy => "ci_deploy", // Handled in-process, not via worker queue
-        };
+        let job_type = crate::config::types::job_type_route(job.job_type);
 
-        let retry_policy = if job.retry_count > 0 {
-            aspen_jobs::RetryPolicy::exponential(job.retry_count)
-        } else {
-            aspen_jobs::RetryPolicy::none()
-        };
+        let retry_policy = crate::config::types::retry_count_to_jobs_policy(job.retry_count);
 
         let mut spec = JobSpec::new(job_type)
             .payload(payload)

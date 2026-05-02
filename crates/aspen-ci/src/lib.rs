@@ -91,6 +91,10 @@ pub use adapters::ForgeConfigFetcher;
 pub use adapters::OrchestratorPipelineStarter;
 pub use aspen_ci_core::ArtifactConfig;
 pub use aspen_ci_core::ArtifactStorage;
+pub use aspen_ci_core::CI_JOB_TYPE_DEPLOY;
+pub use aspen_ci_core::CI_JOB_TYPE_NIX;
+pub use aspen_ci_core::CI_JOB_TYPE_SHELL;
+pub use aspen_ci_core::CI_JOB_TYPE_VM;
 pub use aspen_ci_core::CiCoreError;
 // Re-export log chunk types from core
 pub use aspen_ci_core::CiLogChunk;
@@ -127,12 +131,15 @@ pub use aspen_ci_core::has_self_dependency;
 pub use aspen_ci_core::is_branch_ref;
 pub use aspen_ci_core::is_deadline_exceeded;
 pub use aspen_ci_core::is_tag_ref;
+pub use aspen_ci_core::job_type_route;
 pub use aspen_ci_core::ms_to_secs;
 pub use aspen_ci_core::path_matches_pattern;
 pub use aspen_ci_core::ref_matches_any_pattern;
 pub use aspen_ci_core::ref_matches_pattern;
 pub use aspen_ci_core::remaining_time_ms;
+pub use aspen_ci_core::retry_count_to_jobs_policy;
 pub use aspen_ci_core::secs_to_ms;
+pub use aspen_ci_core::to_jobs_priority;
 // ============================================================================
 // Re-exports from aspen-ci-executor-nix (nix-executor feature)
 // ============================================================================
@@ -236,8 +243,6 @@ pub use config::loader::load_pipeline_config;
 pub use config::loader::load_pipeline_config_str;
 #[cfg(feature = "nickel")]
 pub use config::loader::load_pipeline_config_str_async;
-// Re-export priority conversion function
-pub use config::types::to_jobs_priority;
 pub use error::CiError;
 pub use forge_reporter::ForgeStatusReporter;
 // Re-export log writer types (the actual writer implementation, not just types)

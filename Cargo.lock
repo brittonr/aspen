@@ -929,6 +929,7 @@ dependencies = [
 name = "aspen-ci-core"
 version = "0.1.0"
 dependencies = [
+ "aspen-jobs-core",
  "chrono",
  "proptest",
  "schemars 0.8.22",

@@ -6,6 +6,10 @@
 // Re-export all types from aspen-ci-core
 pub use aspen_ci_core::config::ArtifactConfig;
 pub use aspen_ci_core::config::ArtifactStorage;
+pub use aspen_ci_core::config::CI_JOB_TYPE_DEPLOY;
+pub use aspen_ci_core::config::CI_JOB_TYPE_NIX;
+pub use aspen_ci_core::config::CI_JOB_TYPE_SHELL;
+pub use aspen_ci_core::config::CI_JOB_TYPE_VM;
 pub use aspen_ci_core::config::IsolationMode;
 pub use aspen_ci_core::config::JobConfig;
 pub use aspen_ci_core::config::JobType;
@@ -13,18 +17,9 @@ pub use aspen_ci_core::config::PipelineConfig;
 pub use aspen_ci_core::config::Priority;
 pub use aspen_ci_core::config::StageConfig;
 pub use aspen_ci_core::config::TriggerConfig;
-
-/// Convert a CI Priority to an aspen-jobs Priority.
-///
-/// This is a free function instead of a From impl to avoid the orphan rule
-/// since both types are defined in external crates.
-pub fn to_jobs_priority(p: Priority) -> aspen_jobs::Priority {
-    match p {
-        Priority::High => aspen_jobs::Priority::High,
-        Priority::Normal => aspen_jobs::Priority::Normal,
-        Priority::Low => aspen_jobs::Priority::Low,
-    }
-}
+pub use aspen_ci_core::config::job_type_route;
+pub use aspen_ci_core::config::retry_count_to_jobs_policy;
+pub use aspen_ci_core::config::to_jobs_priority;
 
 #[cfg(test)]
 mod tests {
@@ -76,8 +71,12 @@ mod tests {
 
     #[test]
     fn test_priority_conversion() {
-        assert!(matches!(to_jobs_priority(Priority::High), aspen_jobs::Priority::High));
-        assert!(matches!(to_jobs_priority(Priority::Normal), aspen_jobs::Priority::Normal));
-        assert!(matches!(to_jobs_priority(Priority::Low), aspen_jobs::Priority::Low));
+        let high: aspen_jobs::Priority = to_jobs_priority(Priority::High);
+        let normal: aspen_jobs::Priority = to_jobs_priority(Priority::Normal);
+        let low: aspen_jobs::Priority = to_jobs_priority(Priority::Low);
+
+        assert!(matches!(high, aspen_jobs::Priority::High));
+        assert!(matches!(normal, aspen_jobs::Priority::Normal));
+        assert!(matches!(low, aspen_jobs::Priority::Low));
     }
 }
