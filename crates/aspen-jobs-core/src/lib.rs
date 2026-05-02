@@ -420,6 +420,17 @@ pub struct JobOutput {
     pub metadata: HashMap<String, String>,
 }
 
+impl JobOutput {
+    /// Create a simple success output with a message field.
+    #[must_use]
+    pub fn success(message: impl Into<String>) -> Self {
+        Self {
+            data: serde_json::json!({ "message": message.into() }),
+            metadata: HashMap::new(),
+        }
+    }
+}
+
 /// Details about a job failure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobFailure {
@@ -440,6 +451,33 @@ pub enum JobResult {
     Failure(JobFailure),
     /// Job was cancelled.
     Cancelled,
+}
+
+impl JobResult {
+    /// Create a success result from JSON-convertible output.
+    #[must_use]
+    pub fn success(output: impl Into<serde_json::Value>) -> Self {
+        Self::Success(JobOutput {
+            data: output.into(),
+            metadata: HashMap::new(),
+        })
+    }
+
+    /// Create a retryable failure result.
+    #[must_use]
+    pub fn failure(reason: impl Into<String>) -> Self {
+        Self::Failure(JobFailure {
+            reason: reason.into(),
+            is_retryable: true,
+            error_code: None,
+        })
+    }
+
+    /// Whether the result is successful.
+    #[must_use]
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success(_))
+    }
 }
 
 /// Deterministic state transition input.

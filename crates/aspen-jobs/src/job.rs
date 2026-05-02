@@ -30,106 +30,12 @@ fn u32_to_usize(value: u32) -> Option<usize> {
     usize::try_from(value).ok()
 }
 
+pub use aspen_jobs_core::JobConfig;
+pub use aspen_jobs_core::JobFailure;
 pub use aspen_jobs_core::JobId;
+pub use aspen_jobs_core::JobOutput;
+pub use aspen_jobs_core::JobResult;
 pub use aspen_jobs_core::JobStatus;
-
-/// Result of a job execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum JobResult {
-    /// Job completed successfully.
-    Success(JobOutput),
-    /// Job failed with an error.
-    Failure(JobFailure),
-    /// Job was cancelled.
-    Cancelled,
-}
-
-impl JobResult {
-    /// Create a success result.
-    pub fn success<T: Into<serde_json::Value>>(output: T) -> Self {
-        Self::Success(JobOutput {
-            data: output.into(),
-            metadata: HashMap::new(),
-        })
-    }
-
-    /// Create a failure result.
-    pub fn failure<S: Into<String>>(reason: S) -> Self {
-        Self::Failure(JobFailure {
-            reason: reason.into(),
-            is_retryable: true,
-            error_code: None,
-        })
-    }
-
-    /// Check if the result is successful.
-    pub fn is_success(&self) -> bool {
-        matches!(self, Self::Success(_))
-    }
-}
-
-/// Output from a successful job execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JobOutput {
-    /// Output data from the job.
-    pub data: serde_json::Value,
-    /// Additional metadata about the execution.
-    pub metadata: HashMap<String, String>,
-}
-
-impl JobOutput {
-    /// Create a simple success output.
-    pub fn success<S: Into<String>>(message: S) -> Self {
-        Self {
-            data: serde_json::json!({ "message": message.into() }),
-            metadata: HashMap::new(),
-        }
-    }
-}
-
-/// Details about a job failure.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JobFailure {
-    /// Reason for the failure.
-    pub reason: String,
-    /// Whether the job can be retried.
-    pub is_retryable: bool,
-    /// Optional error code.
-    pub error_code: Option<String>,
-}
-
-/// Configuration for a job.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JobConfig {
-    /// Priority of the job.
-    pub priority: Priority,
-    /// Retry policy for failures.
-    pub retry_policy: RetryPolicy,
-    /// Maximum execution time.
-    pub timeout: Option<Duration>,
-    /// Dependencies on other jobs.
-    pub dependencies: Vec<JobId>,
-    /// Tags for categorization.
-    pub tags: Vec<String>,
-    /// Whether to save result after completion.
-    pub save_result: bool,
-    /// Time-to-live for the job record after completion.
-    pub ttl_after_completion: Option<Duration>,
-}
-
-impl Default for JobConfig {
-    fn default() -> Self {
-        Self {
-            priority: Priority::Normal,
-            retry_policy: RetryPolicy::default(),
-            timeout: Some(Duration::from_secs(300)), // 5 minutes default
-            dependencies: Vec::new(),
-            tags: Vec::new(),
-            save_result: true,
-            ttl_after_completion: Some(Duration::from_secs(86400)), // 24 hours
-        }
-    }
-}
 
 /// Specification for creating a new job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
