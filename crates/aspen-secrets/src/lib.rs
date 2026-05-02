@@ -30,6 +30,7 @@
 //!
 //! - `sops`: Native SOPS encrypt/decrypt/edit/rotate using Transit (pulls in `aspen-client`,
 //!   `toml_edit`, `serde_yaml`, etc.)
+//! - `auth-runtime`: TokenBuilder/TokenVerifier convenience helpers backed by `aspen-auth`
 //! - `full`: All features enabled
 //!
 //! ## Quick Start
@@ -53,7 +54,7 @@
 //! let config = SecretsConfig::with_secrets_file("/etc/aspen/secrets.sops.toml");
 //! let manager = SecretsManager::new(config, secrets)?;
 //!
-//! // Build token verifier with trusted roots
+//! // With the `auth-runtime` feature, build a token verifier with trusted roots
 //! let verifier = manager.build_token_verifier();
 //!
 //! // Access secrets

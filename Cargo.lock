@@ -2647,6 +2647,7 @@ dependencies = [
  "age",
  "anyhow",
  "aspen-auth",
+ "aspen-auth-core",
  "aspen-client",
  "aspen-client-api",
  "aspen-core",

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use aspen_auth::CapabilityToken;
+use aspen_auth_core::CapabilityToken;
 use aspen_core::kv::ReadRequest;
 use async_trait::async_trait;
 use iroh_base::PublicKey;
@@ -203,6 +203,10 @@ impl SecretsManager {
     }
 
     /// Build a TokenVerifier with trusted roots from secrets.
+    ///
+    /// Requires the `auth-runtime` feature because `TokenVerifier` lives in the
+    /// runtime `aspen-auth` shell.
+    #[cfg(feature = "auth-runtime")]
     pub fn build_token_verifier(&self) -> aspen_auth::TokenVerifier {
         let mut verifier = aspen_auth::TokenVerifier::new();
         for root in &self.trusted_roots {
@@ -212,6 +216,10 @@ impl SecretsManager {
     }
 
     /// Build a TokenBuilder with signing key from secrets.
+    ///
+    /// Requires the `auth-runtime` feature because `TokenBuilder` lives in the
+    /// runtime `aspen-auth` shell.
+    #[cfg(feature = "auth-runtime")]
     pub fn build_token_builder(&self) -> Result<aspen_auth::TokenBuilder> {
         let signing_key = self.signing_key.clone().ok_or_else(|| SecretsError::SecretNotFound {
             key: "signing_key".into(),

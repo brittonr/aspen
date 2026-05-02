@@ -8,7 +8,8 @@ description = "SOPS-based secrets management and Vault-like secrets engine for A
 [dependencies]
 # Core Aspen crates
 aspen-core = { path = "../aspen-core" }
-aspen-auth = { path = "../aspen-auth" }
+aspen-auth-core = { path = "../aspen-auth-core" }
+aspen-auth = { path = "../aspen-auth", optional = true }
 aspen-crypto = { path = "../aspen-crypto", features = ["identity"] }
 
 # Age encryption (SOPS-compatible)
@@ -73,6 +74,7 @@ aspen-trust = { path = "../aspen-trust", optional = true }
 [features]
 default = []
 trust = ["dep:aspen-trust"]
+auth-runtime = ["dep:aspen-auth"]
 sops = [
     "dep:aspen-client",
     "dep:aspen-client-api",
@@ -85,7 +87,7 @@ sops = [
     "dep:hmac",
     "dep:sha2",
 ]
-full = ["sops", "trust"]
+full = ["sops", "trust", "auth-runtime"]
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time"] }
