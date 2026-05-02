@@ -16,8 +16,6 @@ use tracing::info;
 #[cfg(all(feature = "forge", feature = "blob"))]
 use tracing::warn;
 
-use super::helpers::pipeline_status_to_string;
-
 /// Type alias for forge node to match executor.
 #[cfg(all(feature = "forge", feature = "blob"))]
 pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
@@ -346,21 +344,21 @@ pub async fn handle_get_status(
     };
 
     // Convert internal types to RPC response types
-    let status_str = pipeline_status_to_string(&run.status);
+    let status_str = run.status.as_str().to_string();
 
     let stages: Vec<CiStageInfo> = run
         .stages
         .iter()
         .map(|s| CiStageInfo {
             name: s.name.clone(),
-            status: pipeline_status_to_string(&s.status),
+            status: s.status.as_str().to_string(),
             jobs: s
                 .jobs
                 .iter()
                 .map(|(name, job)| CiJobInfo {
                     id: job.job_id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
                     name: name.clone(),
-                    status: pipeline_status_to_string(&job.status),
+                    status: job.status.as_str().to_string(),
                     started_at_ms: job.started_at.map(|t| t.timestamp_millis() as u64),
                     ended_at_ms: job.completed_at.map(|t| t.timestamp_millis() as u64),
                     error: job.error.clone(),
@@ -436,14 +434,14 @@ pub async fn handle_get_ref_status(
                 .iter()
                 .map(|s| CiStageInfo {
                     name: s.name.clone(),
-                    status: pipeline_status_to_string(&s.status),
+                    status: s.status.as_str().to_string(),
                     jobs: s
                         .jobs
                         .iter()
                         .map(|(name, job)| CiJobInfo {
                             id: job.job_id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
                             name: name.clone(),
-                            status: pipeline_status_to_string(&job.status),
+                            status: job.status.as_str().to_string(),
                             started_at_ms: job.started_at.map(|t| t.timestamp_millis() as u64),
                             ended_at_ms: job.completed_at.map(|t| t.timestamp_millis() as u64),
                             error: job.error.clone(),
@@ -458,7 +456,7 @@ pub async fn handle_get_ref_status(
                 repo_id: Some(run.context.repo_id.to_hex()),
                 ref_name: Some(run.context.ref_name.clone()),
                 commit_hash: Some(hex::encode(run.context.commit_hash)),
-                status: Some(pipeline_status_to_string(&run.status)),
+                status: Some(run.status.as_str().to_string()),
                 stages,
                 created_at_ms: Some(run.created_at.timestamp_millis() as u64),
                 completed_at_ms: run.completed_at.map(|t| t.timestamp_millis() as u64),
@@ -535,7 +533,7 @@ pub async fn handle_list_runs(
             run_id: run.id,
             repo_id: run.context.repo_id.to_hex(),
             ref_name: run.context.ref_name,
-            status: pipeline_status_to_string(&run.status),
+            status: run.status.as_str().to_string(),
             created_at_ms: run.created_at.timestamp_millis() as u64,
             completed_at_ms: run.completed_at.map(|t| t.timestamp_millis() as u64),
         })
