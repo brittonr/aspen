@@ -9,6 +9,7 @@ mod automerge;
 mod calendar;
 #[path = "request_metadata_apps/ci.rs"]
 mod ci;
+pub use ci::CI_REQUEST_VARIANTS;
 #[path = "request_metadata_apps/contacts.rs"]
 mod contacts;
 #[path = "request_metadata_apps/deploy.rs"]

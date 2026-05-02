@@ -8,6 +8,9 @@ mod request_metadata_apps;
 
 use super::ClientRpcRequest;
 
+/// CI request variant names owned by the `ci` optional app.
+pub const CI_REQUEST_VARIANTS: &[&str] = request_metadata_apps::CI_REQUEST_VARIANTS;
+
 macro_rules! define_request_variant_name {
     ($( $(#[$cfg:meta])? $pattern:pat => $name:literal, )*) => {
         #[cfg(test)]

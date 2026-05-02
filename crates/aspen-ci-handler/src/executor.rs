@@ -35,20 +35,7 @@ use crate::handler::watch::handle_watch_repo;
 pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
 /// CI operation handles registered by this service executor.
-pub(crate) const CI_HANDLES: &[&str] = &[
-    "CiTriggerPipeline",
-    "CiGetStatus",
-    "CiGetRefStatus",
-    "CiListRuns",
-    "CiCancelRun",
-    "CiWatchRepo",
-    "CiUnwatchRepo",
-    "CiListArtifacts",
-    "CiGetArtifact",
-    "CiGetJobLogs",
-    "CiSubscribeLogs",
-    "CiGetJobOutput",
-];
+pub(crate) const CI_HANDLES: &[&str] = aspen_client_api::CI_REQUEST_VARIANTS;
 
 /// Service executor for CI/CD operations.
 ///

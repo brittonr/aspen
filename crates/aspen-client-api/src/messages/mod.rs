@@ -47,6 +47,7 @@ pub mod lease;
 pub mod net;
 pub mod observability;
 pub mod request_metadata;
+pub use request_metadata::CI_REQUEST_VARIANTS;
 pub mod secrets;
 pub mod sql;
 #[cfg(feature = "auth")]
