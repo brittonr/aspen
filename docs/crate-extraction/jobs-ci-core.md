@@ -22,14 +22,16 @@
 | Surface | Reusable default | Runtime/adapter boundary |
 | --- | --- | --- |
 | CI schema/config | `aspen-ci-core` structs, Nickel config contract metadata, validation helpers. | Nickel evaluation, SNIX evaluation/build, node/forge integration. |
-| Job scheduler/run state | `aspen-jobs-core` deterministic state transitions, IDs, priority, retry policy, schedule descriptors, dependency state, job config/spec/result/status helpers, and queue/DLQ stats. | `aspen-jobs` worker pools, storage, schedulers, process execution, VM/Nix executors, Iroh/blob runtime. |
+| Job scheduler/run state | `aspen-jobs-core` deterministic state transitions, IDs, priority, retry policy, schedule descriptors, dependency state, job config/spec/result/status helpers, VM payload schema helpers, keyspace helpers, wire priority/status helpers, and queue/DLQ stats. | `aspen-jobs` worker pools, storage, schedulers, process execution, VM/Nix executors, Iroh/blob runtime. |
+| CI/job routing contracts | `aspen-ci-core` job route constants plus priority/retry conversion helpers; `aspen-client-api` CI request variant handles for protocol metadata and handler registration. | `aspen-ci`, `aspen-ci-handler`, executor implementation, Forge/blob/node runtime wiring. |
 | Job protocol | domain-schema compatibility only; generic wire extraction is governed by protocol/wire manifest. | handler registries and client/server runtime. |
 | Executors/workers | no reusable default. | adapter/runtime crates behind named features or crates. |
 
 ## Dependency decisions
 
-- `aspen-jobs-core` is the canonical reusable jobs scheduler/run-state contract surface for deterministic job IDs, specs, status transitions, retry policy, dependency state, and queue/DLQ stats.
-- `aspen-ci-core` is the current lightest CI schema surface and should absorb reusable config/run metadata before `aspen-ci` readiness changes.
+- `aspen-jobs-core` is the canonical reusable jobs scheduler/run-state contract surface for deterministic job IDs, specs, status transitions, retry policy, dependency state, queue/DLQ stats, VM payload schema helpers, and jobs keyspace/wire helpers.
+- `aspen-ci-core` is the current lightest CI schema surface and owns reusable config/run metadata plus CI job route and retry/priority mapping helpers before `aspen-ci` readiness changes.
+- `aspen-client-api` owns CI request variant handle metadata when protocol metadata and handler registration require the same stable operation-name set.
 - `aspen-jobs` and `aspen-ci` currently pull runtime crates; reusable logic must move to `aspen-jobs-core` / `aspen-ci-core` or be feature-gated before readiness.
 - Worker/executor process spawning, shell, VM, Nix, SNIX, Forge, blob, Iroh, and node bootstrap dependencies are adapter/runtime purpose only.
 
@@ -38,6 +40,7 @@
 - Keep existing `aspen-ci` and `aspen-jobs` public paths until consumers migrate.
 - `aspen-jobs` re-exports the portable jobs contract under `aspen_jobs::core::*` and provides named crate-root aliases for new deterministic helpers while preserving historical runtime root types.
 - Representative consumers: `aspen-ci`, `aspen-jobs`, `aspen-job-handler`, `aspen-ci-handler`, `aspen-dogfood`, `aspen-cli`, executor crates, Forge CI triggers.
+- Cross-crate compatibility shims should be removed once call sites can use the owning model/helper directly; CI pipeline status strings now use `PipelineStatus::as_str()` instead of a handler-local compatibility wrapper.
 - Every retained runtime edge needs owner, feature/adapter name, test, and removal/retention criteria.
 
 ## Representative consumers
@@ -59,7 +62,17 @@
 
 ## First blocker
 
-I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. I10 compatibility checks passed for affected jobs/CI consumers and runtime shells. Next blocker is trust/crypto/secrets I11 extraction/gating.
+I8 inventory started by treating `aspen-ci-core` and `aspen-jobs-protocol` as the first reusable default surfaces, with `aspen-jobs`, worker crates, CI handlers, shell/VM/Nix executors, and node/runtime integrations retained as adapter shells. I9 added portable fixture metadata plus negative boundary checks rejecting root app, handler, process-spawn, VM, Nix/SNIX executor, and concrete worker imports from reusable defaults. I10 compatibility checks passed for affected jobs/CI consumers and runtime shells.
+
+The post-extraction cleanup stint then moved additional dependency-light contracts and drift-prone string mappings to their owning surfaces:
+
+- `aspen-jobs-core`: `JobPayload`, priority/status wire helpers, jobs keyspace helpers.
+- `aspen-ci-core`: CI job route constants and retry/priority conversion helpers.
+- `aspen-ci`: `PipelineStatus::as_str()` as the canonical pipeline status string mapping.
+- `aspen-client-api`: `CI_REQUEST_VARIANTS` as the canonical CI request operation-name set shared by request metadata and `aspen-ci-handler` registration.
+- Final consumers: TUI protocol-to-display DTO conversions remain local to `aspen-tui`.
+
+No jobs/CI readiness state changes in this stint; next blocker remains trust/crypto/secrets I11 extraction/gating or a fresh jobs/CI owner/public API review.
 
 ## I8 surface inventory
 
