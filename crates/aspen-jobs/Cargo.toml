@@ -37,7 +37,7 @@ iroh = "0.97.0"
 iroh-blobs = { version = "0.99.0", optional = true }
 
 # Async runtime
-tokio = { version = "1.41", features = ["rt-multi-thread", "sync", "time", "macros", "fs"] }
+tokio = { version = "1.41", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "process"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 async-trait = "0.1"
 

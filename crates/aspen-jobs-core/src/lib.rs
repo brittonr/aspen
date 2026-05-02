@@ -473,6 +473,106 @@ impl Default for JobConfig {
     }
 }
 
+/// Payload types for VM-executed jobs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum JobPayload {
+    /// Blob-stored binary (ELF, WASM, or other executable format).
+    /// All VM binaries MUST be stored in iroh-blobs first.
+    BlobBinary {
+        /// BLAKE3 hash of the binary (hex string).
+        hash: String,
+        /// Size of the binary in bytes (for validation).
+        size: u64,
+        /// Binary format hint (e.g., "elf", "wasm", "unknown").
+        format: String,
+    },
+
+    /// Build from a Nix flake.
+    NixExpression {
+        /// Flake URL (e.g., "github:user/repo#package").
+        flake_url: String,
+        /// Attribute path within the flake (e.g., "jobs.dataProcessor").
+        attribute: String,
+    },
+
+    /// Build from an inline Nix derivation.
+    NixDerivation {
+        /// Nix expression as a string.
+        content: String,
+    },
+
+    /// WASM Component stored in blob store.
+    WasmComponent {
+        /// BLAKE3 hash of the .wasm component (hex string).
+        hash: String,
+        /// Size of the component in bytes (for validation).
+        size: u64,
+        /// Fuel limit for execution (None = default).
+        fuel_limit: Option<u64>,
+        /// Memory limit in bytes (None = default).
+        memory_limit: Option<u64>,
+    },
+}
+
+impl JobPayload {
+    /// Create a blob-stored binary payload.
+    /// The binary must already be uploaded to the blob store.
+    #[must_use]
+    pub fn blob_binary(hash: impl Into<String>, size: u64, format: impl Into<String>) -> Self {
+        Self::BlobBinary {
+            hash: hash.into(),
+            size,
+            format: format.into(),
+        }
+    }
+
+    /// Create a Nix flake payload.
+    #[must_use]
+    pub fn nix_flake(flake_url: impl Into<String>, attribute: impl Into<String>) -> Self {
+        Self::NixExpression {
+            flake_url: flake_url.into(),
+            attribute: attribute.into(),
+        }
+    }
+
+    /// Create an inline Nix derivation payload.
+    #[must_use]
+    pub fn nix_derivation(content: impl Into<String>) -> Self {
+        Self::NixDerivation {
+            content: content.into(),
+        }
+    }
+
+    /// Create a WASM component payload.
+    /// The component must already be uploaded to the blob store.
+    #[must_use]
+    pub fn wasm_component(hash: impl Into<String>, size: u64) -> Self {
+        Self::WasmComponent {
+            hash: hash.into(),
+            size,
+            fuel_limit: None,
+            memory_limit: None,
+        }
+    }
+
+    /// Create a WASM component payload with resource limits.
+    #[must_use]
+    pub fn wasm_component_with_limits(
+        hash: impl Into<String>,
+        size: u64,
+        fuel_limit: Option<u64>,
+        memory_limit: Option<u64>,
+    ) -> Self {
+        Self::WasmComponent {
+            hash: hash.into(),
+            size,
+            fuel_limit,
+            memory_limit,
+        }
+    }
+}
+
 /// Specification for creating a new job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobSpec {
@@ -589,12 +689,7 @@ impl JobSpec {
     #[must_use]
     pub fn with_blob_binary(hash: impl Into<String>, size: u64, format: impl Into<String>) -> Self {
         Self::new("vm_execute")
-            .payload(serde_json::json!({
-                "type": "BlobBinary",
-                "hash": hash.into(),
-                "size": size,
-                "format": format.into(),
-            }))
+            .payload(JobPayload::blob_binary(hash, size, format))
             .unwrap_or_else(|_| Self::new("vm_execute"))
             .with_isolation(true)
     }
@@ -603,11 +698,7 @@ impl JobSpec {
     #[must_use]
     pub fn with_nix_flake(flake_url: impl Into<String>, attribute: impl Into<String>) -> Self {
         Self::new("vm_execute")
-            .payload(serde_json::json!({
-                "type": "NixExpression",
-                "flake_url": flake_url.into(),
-                "attribute": attribute.into(),
-            }))
+            .payload(JobPayload::nix_flake(flake_url, attribute))
             .unwrap_or_else(|_| Self::new("vm_execute"))
             .with_isolation(true)
     }
@@ -616,10 +707,7 @@ impl JobSpec {
     #[must_use]
     pub fn with_nix_expr(nix_code: impl Into<String>) -> Self {
         Self::new("vm_execute")
-            .payload(serde_json::json!({
-                "type": "NixDerivation",
-                "content": nix_code.into(),
-            }))
+            .payload(JobPayload::nix_derivation(nix_code))
             .unwrap_or_else(|_| Self::new("vm_execute"))
             .with_isolation(true)
     }
@@ -628,13 +716,7 @@ impl JobSpec {
     #[must_use]
     pub fn with_wasm_component(hash: impl Into<String>, size: u64) -> Self {
         Self::new("wasm_component")
-            .payload(serde_json::json!({
-                "type": "WasmComponent",
-                "hash": hash.into(),
-                "size": size,
-                "fuel_limit": null,
-                "memory_limit": null,
-            }))
+            .payload(JobPayload::wasm_component(hash, size))
             .unwrap_or_else(|_| Self::new("wasm_component"))
             .with_isolation(true)
     }
@@ -813,6 +895,64 @@ mod tests {
         assert_eq!(decoded.job_type, "build");
         assert_eq!(decoded.config.priority, Priority::High);
         assert_eq!(decoded.config.dependencies[0].as_str(), "parent");
+    }
+
+    #[test]
+    fn job_payload_helpers_match_runtime_schema() {
+        let blob = JobPayload::blob_binary("abc123", 42, "elf");
+        let encoded = serde_json::to_value(&blob).expect("serialize blob payload");
+        assert_eq!(encoded["type"], "BlobBinary");
+        assert_eq!(encoded["hash"], "abc123");
+        assert_eq!(encoded["size"], 42);
+        assert_eq!(encoded["format"], "elf");
+
+        let wasm = JobPayload::wasm_component_with_limits("def456", 128, Some(10_000), Some(64 * 1024));
+        let encoded = serde_json::to_value(&wasm).expect("serialize wasm payload");
+        assert_eq!(encoded["type"], "WasmComponent");
+        assert_eq!(encoded["hash"], "def456");
+        assert_eq!(encoded["fuel_limit"], 10_000);
+        assert_eq!(encoded["memory_limit"], 64 * 1024);
+    }
+
+    #[test]
+    fn job_spec_vm_builders_emit_typed_payloads() {
+        let blob_spec = JobSpec::with_blob_binary("abc123", 42, "elf");
+        let blob: JobPayload = serde_json::from_value(blob_spec.payload).expect("deserialize blob payload");
+        match blob {
+            JobPayload::BlobBinary { hash, size, format } => {
+                assert_eq!(hash, "abc123");
+                assert_eq!(size, 42);
+                assert_eq!(format, "elf");
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        let nix_spec = JobSpec::with_nix_flake("github:example/repo", "packages.x86_64-linux.default");
+        let nix: JobPayload = serde_json::from_value(nix_spec.payload).expect("deserialize nix payload");
+        match nix {
+            JobPayload::NixExpression { flake_url, attribute } => {
+                assert_eq!(flake_url, "github:example/repo");
+                assert_eq!(attribute, "packages.x86_64-linux.default");
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
+
+        let wasm_spec = JobSpec::with_wasm_component("def456", 128);
+        let wasm: JobPayload = serde_json::from_value(wasm_spec.payload).expect("deserialize wasm payload");
+        match wasm {
+            JobPayload::WasmComponent {
+                hash,
+                size,
+                fuel_limit,
+                memory_limit,
+            } => {
+                assert_eq!(hash, "def456");
+                assert_eq!(size, 128);
+                assert_eq!(fuel_limit, None);
+                assert_eq!(memory_limit, None);
+            }
+            other => panic!("unexpected payload: {other:?}"),
+        }
     }
 
     #[test]
