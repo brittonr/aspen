@@ -188,6 +188,20 @@ impl PipelineStatus {
     pub fn is_terminal(&self) -> bool {
         matches!(self, Self::Success | Self::Failed | Self::Cancelled | Self::CheckoutFailed)
     }
+
+    /// Return the stable lowercase string representation used by RPC/filter APIs.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Initializing => "initializing",
+            Self::CheckingOut => "checking_out",
+            Self::CheckoutFailed => "checkout_failed",
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Success => "success",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
 }
 
 /// Status of a stage within a pipeline.
@@ -592,7 +606,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
             // Apply status filter if specified
             if let Some(status_filter) = status {
-                if pipeline_status_str(run.status) != status_filter {
+                if run.status.as_str() != status_filter {
                     continue;
                 }
             }
@@ -1115,20 +1129,6 @@ fn build_workflow_data(
     })
 }
 
-/// Convert a pipeline status to its string representation.
-fn pipeline_status_str(status: PipelineStatus) -> &'static str {
-    match status {
-        PipelineStatus::Initializing => "initializing",
-        PipelineStatus::CheckingOut => "checking_out",
-        PipelineStatus::CheckoutFailed => "checkout_failed",
-        PipelineStatus::Pending => "pending",
-        PipelineStatus::Running => "running",
-        PipelineStatus::Success => "success",
-        PipelineStatus::Failed => "failed",
-        PipelineStatus::Cancelled => "cancelled",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1166,6 +1166,18 @@ mod tests {
         assert!(PipelineStatus::Success.is_terminal());
         assert!(PipelineStatus::Failed.is_terminal());
         assert!(PipelineStatus::Cancelled.is_terminal());
+    }
+
+    #[test]
+    fn test_pipeline_status_as_str() {
+        assert_eq!(PipelineStatus::Initializing.as_str(), "initializing");
+        assert_eq!(PipelineStatus::CheckingOut.as_str(), "checking_out");
+        assert_eq!(PipelineStatus::CheckoutFailed.as_str(), "checkout_failed");
+        assert_eq!(PipelineStatus::Pending.as_str(), "pending");
+        assert_eq!(PipelineStatus::Running.as_str(), "running");
+        assert_eq!(PipelineStatus::Success.as_str(), "success");
+        assert_eq!(PipelineStatus::Failed.as_str(), "failed");
+        assert_eq!(PipelineStatus::Cancelled.as_str(), "cancelled");
     }
 
     #[test]

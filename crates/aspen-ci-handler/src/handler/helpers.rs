@@ -126,14 +126,18 @@ pub fn parse_commit_hash(hex_str: &str) -> Result<[u8; 32], anyhow::Error> {
 
 /// Convert PipelineStatus to string representation.
 pub fn pipeline_status_to_string(status: &aspen_ci::orchestrator::PipelineStatus) -> String {
-    match status {
-        aspen_ci::orchestrator::PipelineStatus::Initializing => "initializing".to_string(),
-        aspen_ci::orchestrator::PipelineStatus::CheckingOut => "checking_out".to_string(),
-        aspen_ci::orchestrator::PipelineStatus::CheckoutFailed => "checkout_failed".to_string(),
-        aspen_ci::orchestrator::PipelineStatus::Pending => "pending".to_string(),
-        aspen_ci::orchestrator::PipelineStatus::Running => "running".to_string(),
-        aspen_ci::orchestrator::PipelineStatus::Success => "success".to_string(),
-        aspen_ci::orchestrator::PipelineStatus::Failed => "failed".to_string(),
-        aspen_ci::orchestrator::PipelineStatus::Cancelled => "cancelled".to_string(),
+    status.as_str().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_ci::orchestrator::PipelineStatus;
+
+    use super::pipeline_status_to_string;
+
+    #[test]
+    fn pipeline_status_to_string_delegates_to_ci_status() {
+        assert_eq!(pipeline_status_to_string(&PipelineStatus::CheckoutFailed), "checkout_failed");
+        assert_eq!(pipeline_status_to_string(&PipelineStatus::Success), "success");
     }
 }
