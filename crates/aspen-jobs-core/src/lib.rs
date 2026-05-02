@@ -43,6 +43,11 @@ impl JobId {
         Self(id)
     }
 
+    /// Parse a job ID from a string.
+    pub fn parse(id: &str) -> Result<Self, std::string::ParseError> {
+        Ok(Self(id.to_string()))
+    }
+
     /// Borrow the string representation.
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -147,6 +152,11 @@ impl JobStatus {
     #[must_use]
     pub fn needs_recovery(self) -> bool {
         matches!(self, Self::Unknown | Self::Running | Self::Retrying)
+    }
+    /// Whether this status is unknown and needs investigation.
+    #[must_use]
+    pub fn is_unknown(self) -> bool {
+        matches!(self, Self::Unknown)
     }
 }
 
