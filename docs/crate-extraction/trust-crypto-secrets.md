@@ -66,3 +66,7 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 ## Secrets handler runtime adapter boundary
 
 `ada266bb7 Gate secrets handler runtime adapter` makes `aspen-secrets-handler --no-default-features` compile against the reusable RPC executor surface plus `aspen-traits`/`aspen-kv-types` instead of `aspen-core` and the full `aspen-rpc-core/runtime-context` graph. `SecretsHandlerFactory` and the runtime-context re-exports are now behind `aspen-secrets-handler/runtime-adapter`; `aspen-rpc-handlers/secrets` enables that adapter to preserve node registration compatibility. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-secrets-handler-runtime-adapter-boundary/evidence/`.
+
+## Secrets core type boundary
+
+`2b3571242 Extract secrets core type contracts` adds `aspen-secrets-core` as the owner of dependency-light secrets constants plus KV, Transit, and PKI DTO/state contracts. `aspen-secrets` now depends on that core crate and preserves historical `constants`, `kv::types`, `transit::types`, `pki::types`, and root exports through compatibility re-export shims. Runtime stores, cryptographic execution, SOPS file IO, auth runtime helpers, trust integration, and handler adapters remain outside the core crate. Evidence is recorded under `openspec/changes/complete-secrets-core-type-boundary/evidence/`.

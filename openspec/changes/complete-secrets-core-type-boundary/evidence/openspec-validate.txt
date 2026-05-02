@@ -1,0 +1,27 @@
+## openspec validate
+{
+  "items": [
+    {
+      "id": "complete-secrets-core-type-boundary",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 0
+    }
+  ],
+  "summary": {
+    "totals": {
+      "items": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "byType": {
+      "change": {
+        "items": 1,
+        "passed": 1,
+        "failed": 0
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -1,0 +1,4 @@
+## openspec helper verify
+{
+  "complete-secrets-core-type-boundary": []
+}
