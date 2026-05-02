@@ -1,0 +1,3 @@
+{
+  "complete-secrets-handler-runtime-adapter-boundary": []
+}

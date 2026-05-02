@@ -31,7 +31,7 @@
 - Pure logic must not depend on Raft, Iroh endpoint construction, Redb storage, handler registries, node bootstrap, or ambient wall-clock/randomness.
 - `aspen-secrets` default token parsing depends on `aspen-auth-core`; `aspen-auth` runtime verifier/builder helpers require the explicit `auth-runtime` feature.
 - Cryptographic dependencies such as HKDF, AEADs, zeroize, secrecy, and BLAKE3 are allowed when they are the crate purpose.
-- Runtime `aspen-secrets-handler` remains a compatibility consumer, not reusable core.
+- Runtime `aspen-secrets-handler` is a compatibility consumer; its default executor surface stays portable, while factory registration requires the explicit `runtime-adapter` feature.
 
 ## Compatibility plan
 
@@ -61,4 +61,8 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 
 ## KV traits boundary
 
-`97f0518e6 Use lightweight KV traits in secrets storage` removes direct `aspen-core` usage from `crates/aspen-secrets`. `AspenSecretsBackend`, `MountRegistry`, and the SOPS runtime KV manager now expose `aspen_traits::KeyValueStore` and import request/result/error contracts from `aspen-kv-types`; existing runtime stores continue to compile through the compatibility re-exported trait. The active evidence package is `openspec/changes/archive/2026-05-02-complete-secrets-kv-traits-boundary/evidence/` until archive.
+`97f0518e6 Use lightweight KV traits in secrets storage` removes direct `aspen-core` usage from `crates/aspen-secrets`. `AspenSecretsBackend`, `MountRegistry`, and the SOPS runtime KV manager now expose `aspen_traits::KeyValueStore` and import request/result/error contracts from `aspen-kv-types`; existing runtime stores continue to compile through the compatibility re-exported trait. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-secrets-kv-traits-boundary/evidence/`.
+
+## Secrets handler runtime adapter boundary
+
+`ada266bb7 Gate secrets handler runtime adapter` makes `aspen-secrets-handler --no-default-features` compile against the reusable RPC executor surface plus `aspen-traits`/`aspen-kv-types` instead of `aspen-core` and the full `aspen-rpc-core/runtime-context` graph. `SecretsHandlerFactory` and the runtime-context re-exports are now behind `aspen-secrets-handler/runtime-adapter`; `aspen-rpc-handlers/secrets` enables that adapter to preserve node registration compatibility. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-secrets-handler-runtime-adapter-boundary/evidence/`.
