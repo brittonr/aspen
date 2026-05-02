@@ -59,7 +59,7 @@
   - fresh focused compatibility evidence: `jobs-ci-core-compatibility.txt`;
   - fresh checker reports: `jobs-ci-core-readiness.json` and `jobs-ci-core-readiness.md`;
   - `verification.md` task coverage linking all evidence.
-- **Completion status**: owner/public API review completed under `openspec/changes/review-jobs-ci-public-api`; canonical reusable imports are stable inside the workspace, runtime shells remain explicit adapters, compatibility re-exports are documented, and publishable/repo-split labels remain blocked pending license/publication policy.
+- **Completion status**: owner/public API review completed under `openspec/changes/archive/2026-05-02-review-jobs-ci-public-api`; canonical reusable imports are stable inside the workspace, runtime shells remain explicit adapters, compatibility re-exports are documented, and publishable/repo-split labels remain blocked pending license/publication policy.
 
 ## Representative consumers
 
@@ -90,7 +90,7 @@ The post-extraction cleanup stint then moved additional dependency-light contrac
 - `aspen-client-api`: `CI_REQUEST_VARIANTS` as the canonical CI request operation-name set shared by request metadata and `aspen-ci-handler` registration.
 - Final consumers: TUI protocol-to-display DTO conversions remain local to `aspen-tui`.
 
-Jobs/CI core is `extraction-ready-in-workspace` after owner/public API review in `openspec/changes/review-jobs-ci-public-api`. Publishable/repo-split states remain blocked pending human license/publication policy.
+Jobs/CI core is `extraction-ready-in-workspace` after owner/public API review in `openspec/changes/archive/2026-05-02-review-jobs-ci-public-api`. Publishable/repo-split states remain blocked pending human license/publication policy.
 
 ## I8 surface inventory
 
