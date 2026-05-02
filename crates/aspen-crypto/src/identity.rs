@@ -1,7 +1,7 @@
 //! Node identity key lifecycle management.
 //!
 //! Centralizes the generation, loading, and derivation of a node's
-//! `iroh::SecretKey` — the root identity for all Aspen operations.
+//! `iroh_base::SecretKey` — the root identity for all Aspen operations.
 //!
 //! # Usage
 //!
@@ -25,8 +25,8 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use iroh::PublicKey;
-use iroh::SecretKey;
+use iroh_base::PublicKey;
+use iroh_base::SecretKey;
 
 /// Required length for a hex-encoded Ed25519 secret key (32 bytes = 64 hex chars).
 pub const SECRET_KEY_HEX_LENGTH: usize = 64;
@@ -45,7 +45,7 @@ pub enum IdentityError {
 
 /// Manages the node's root identity key.
 ///
-/// The node identity key is an Ed25519 keypair (via `iroh::SecretKey`) used for:
+/// The node identity key is an Ed25519 keypair (via `iroh_base::SecretKey`) used for:
 /// - QUIC endpoint identity (peer authentication)
 /// - Gossip protocol participation
 /// - DHT announcements (when global-discovery is enabled)

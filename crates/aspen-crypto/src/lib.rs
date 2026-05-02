@@ -6,7 +6,7 @@
 //! ## Modules
 //!
 //! - **`cookie`**: Cluster cookie validation, HMAC key derivation, gossip topic derivation
-//! - **`identity`**: Node identity key lifecycle (generate, parse, load/save)
+//! - **`identity`**: Node identity key lifecycle (generate, parse, load/save; feature `identity`)
 //!
 //! ## Design
 //!
@@ -17,4 +17,5 @@
 //! which re-exports these modules and adds the full secrets engine.
 
 pub mod cookie;
+#[cfg(feature = "identity")]
 pub mod identity;
