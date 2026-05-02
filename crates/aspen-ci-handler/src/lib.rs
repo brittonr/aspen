@@ -122,6 +122,7 @@ impl HandlerFactory for CiHandlerFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::executor::CI_HANDLES;
 
     #[test]
     fn test_factory_name() {
@@ -140,22 +141,6 @@ mod tests {
         let factory = CiHandlerFactory;
         assert_eq!(factory.app_id(), Some("ci"));
     }
-
-    /// Expected CI handles (must stay in sync with executor.rs).
-    const CI_HANDLES: &[&str] = &[
-        "CiTriggerPipeline",
-        "CiGetStatus",
-        "CiGetRefStatus",
-        "CiListRuns",
-        "CiCancelRun",
-        "CiWatchRepo",
-        "CiUnwatchRepo",
-        "CiListArtifacts",
-        "CiGetArtifact",
-        "CiGetJobLogs",
-        "CiSubscribeLogs",
-        "CiGetJobOutput",
-    ];
 
     #[test]
     fn test_handles_count() {

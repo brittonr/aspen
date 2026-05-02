@@ -34,6 +34,22 @@ use crate::handler::watch::handle_watch_repo;
 #[cfg(all(feature = "forge", feature = "blob"))]
 pub type ForgeNodeRef = Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
+/// CI operation handles registered by this service executor.
+pub(crate) const CI_HANDLES: &[&str] = &[
+    "CiTriggerPipeline",
+    "CiGetStatus",
+    "CiGetRefStatus",
+    "CiListRuns",
+    "CiCancelRun",
+    "CiWatchRepo",
+    "CiUnwatchRepo",
+    "CiListArtifacts",
+    "CiGetArtifact",
+    "CiGetJobLogs",
+    "CiSubscribeLogs",
+    "CiGetJobOutput",
+];
+
 /// Service executor for CI/CD operations.
 ///
 /// Captures dependencies at construction time rather than receiving
@@ -78,20 +94,7 @@ impl ServiceExecutor for CiServiceExecutor {
     }
 
     fn handles(&self) -> &'static [&'static str] {
-        &[
-            "CiTriggerPipeline",
-            "CiGetStatus",
-            "CiGetRefStatus",
-            "CiListRuns",
-            "CiCancelRun",
-            "CiWatchRepo",
-            "CiUnwatchRepo",
-            "CiListArtifacts",
-            "CiGetArtifact",
-            "CiGetJobLogs",
-            "CiSubscribeLogs",
-            "CiGetJobOutput",
-        ]
+        CI_HANDLES
     }
 
     fn priority(&self) -> u32 {
