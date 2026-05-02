@@ -14,6 +14,12 @@ surface and `aspen-secrets --no-default-features` as buildable. The remaining fi
 blocker was `aspen-crypto`: its default crate mixed transport-free cookie helpers with
 Iroh/tokio identity lifecycle utilities.
 
+## What Changes
+
+- `aspen-crypto` default features now keep identity lifecycle dependencies out of the reusable cookie/hash helper boundary.
+- `aspen-crypto/identity` owns node identity lifecycle support with `iroh-base` key types.
+- `aspen-secrets` opts into the identity feature for compatibility re-exports and test evidence covers no-default behavior.
+
 ## Scope
 
 - `aspen-crypto` default features expose transport-free cookie/hash helpers only.
