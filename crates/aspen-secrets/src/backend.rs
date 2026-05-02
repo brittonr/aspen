@@ -73,7 +73,7 @@ pub trait SecretsBackend: Send + Sync {
 /// secrets isolated from regular KV data.
 pub struct AspenSecretsBackend {
     /// Underlying KV store.
-    kv: Arc<dyn aspen_core::KeyValueStore>,
+    kv: Arc<dyn aspen_traits::KeyValueStore>,
     /// Prefix for all secrets storage paths.
     prefix: String,
     /// Optional at-rest encryption (enabled with `trust` feature).
@@ -86,7 +86,7 @@ pub struct AspenSecretsBackend {
 
 impl AspenSecretsBackend {
     /// Create a new secrets backend wrapping the given KV store.
-    pub fn new(kv: Arc<dyn aspen_core::KeyValueStore>, mount: &str) -> Self {
+    pub fn new(kv: Arc<dyn aspen_traits::KeyValueStore>, mount: &str) -> Self {
         Self {
             kv,
             prefix: format!("{}{}/", crate::constants::SECRETS_SYSTEM_PREFIX, mount),
@@ -100,7 +100,7 @@ impl AspenSecretsBackend {
     /// Create a new secrets backend with at-rest encryption enabled.
     #[cfg(feature = "trust")]
     pub fn with_encryption(
-        kv: Arc<dyn aspen_core::KeyValueStore>,
+        kv: Arc<dyn aspen_traits::KeyValueStore>,
         mount: &str,
         encryption: Arc<aspen_trust::encryption::SecretsEncryption>,
     ) -> Self {
@@ -115,7 +115,7 @@ impl AspenSecretsBackend {
     /// Create a new secrets backend with a lazy encryption provider.
     #[cfg(feature = "trust")]
     pub fn with_encryption_provider(
-        kv: Arc<dyn aspen_core::KeyValueStore>,
+        kv: Arc<dyn aspen_traits::KeyValueStore>,
         mount: &str,
         encryption_provider: Arc<dyn SecretsEncryptionProvider>,
     ) -> Self {
@@ -194,8 +194,8 @@ impl AspenSecretsBackend {
 #[async_trait]
 impl SecretsBackend for AspenSecretsBackend {
     async fn put(&self, path: &str, value: &[u8]) -> Result<()> {
-        use aspen_core::WriteCommand;
-        use aspen_core::WriteRequest;
+        use aspen_kv_types::WriteCommand;
+        use aspen_kv_types::WriteRequest;
         use base64::Engine;
 
         let full_path = self.full_path(path);
@@ -224,8 +224,8 @@ impl SecretsBackend for AspenSecretsBackend {
     }
 
     async fn get(&self, path: &str) -> Result<Option<Vec<u8>>> {
-        use aspen_core::KeyValueStoreError;
-        use aspen_core::ReadRequest;
+        use aspen_kv_types::KeyValueStoreError;
+        use aspen_kv_types::ReadRequest;
         use base64::Engine;
 
         let full_path = self.full_path(path);
@@ -260,7 +260,7 @@ impl SecretsBackend for AspenSecretsBackend {
     }
 
     async fn delete(&self, path: &str) -> Result<bool> {
-        use aspen_core::DeleteRequest;
+        use aspen_kv_types::DeleteRequest;
 
         let full_path = self.full_path(path);
         let request = DeleteRequest { key: full_path };
@@ -273,7 +273,7 @@ impl SecretsBackend for AspenSecretsBackend {
     async fn list(&self, prefix: &str) -> Result<Vec<String>> {
         use std::collections::HashSet;
 
-        use aspen_core::ScanRequest;
+        use aspen_kv_types::ScanRequest;
 
         let full_prefix = self.full_path(prefix);
         let request = ScanRequest {
@@ -306,8 +306,8 @@ impl SecretsBackend for AspenSecretsBackend {
     }
 
     async fn put_cas(&self, path: &str, value: &[u8], expected_version: Option<u64>) -> Result<bool> {
-        use aspen_core::WriteCommand;
-        use aspen_core::WriteRequest;
+        use aspen_kv_types::WriteCommand;
+        use aspen_kv_types::WriteRequest;
         use base64::Engine;
 
         let full_path = self.full_path(path);
@@ -336,8 +336,8 @@ impl SecretsBackend for AspenSecretsBackend {
     }
 
     async fn get_with_version(&self, path: &str) -> Result<Option<(Vec<u8>, u64)>> {
-        use aspen_core::KeyValueStoreError;
-        use aspen_core::ReadRequest;
+        use aspen_kv_types::KeyValueStoreError;
+        use aspen_kv_types::ReadRequest;
         use base64::Engine;
 
         let full_path = self.full_path(path);
@@ -567,8 +567,8 @@ mod tests {
 
         #[tokio::test]
         async fn test_stored_value_is_ciphertext_not_plaintext() {
-            use aspen_core::KeyValueStore;
-            use aspen_core::ReadRequest;
+            use aspen_kv_types::ReadRequest;
+            use aspen_traits::KeyValueStore;
             use base64::Engine;
 
             let kv = aspen_testing::DeterministicKeyValueStore::new();
@@ -606,10 +606,10 @@ mod tests {
 
         #[tokio::test]
         async fn test_tampered_envelope_returns_error_not_plaintext() {
-            use aspen_core::KeyValueStore;
-            use aspen_core::ReadRequest;
-            use aspen_core::WriteCommand;
-            use aspen_core::WriteRequest;
+            use aspen_kv_types::ReadRequest;
+            use aspen_kv_types::WriteCommand;
+            use aspen_kv_types::WriteRequest;
+            use aspen_traits::KeyValueStore;
             use base64::Engine;
 
             let kv = aspen_testing::DeterministicKeyValueStore::new();

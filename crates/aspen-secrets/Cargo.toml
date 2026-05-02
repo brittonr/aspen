@@ -7,7 +7,8 @@ description = "SOPS-based secrets management and Vault-like secrets engine for A
 
 [dependencies]
 # Core Aspen crates
-aspen-core = { path = "../aspen-core" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-traits = { path = "../aspen-traits" }
 aspen-auth-core = { path = "../aspen-auth-core" }
 aspen-auth = { path = "../aspen-auth", optional = true }
 aspen-crypto = { path = "../aspen-crypto", features = ["identity"] }

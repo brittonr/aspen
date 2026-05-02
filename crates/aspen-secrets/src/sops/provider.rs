@@ -10,7 +10,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use aspen_auth_core::CapabilityToken;
-use aspen_core::kv::ReadRequest;
+use aspen_kv_types::ReadRequest;
 use async_trait::async_trait;
 use iroh_base::PublicKey;
 use iroh_base::SecretKey;
@@ -71,7 +71,7 @@ pub struct SecretsManager {
     /// In-memory cache for runtime secrets.
     cache: RwLock<SecretCache>,
     /// Optional KV store for runtime secrets.
-    kv_store: Option<Arc<dyn aspen_core::KeyValueStore>>,
+    kv_store: Option<Arc<dyn aspen_traits::KeyValueStore>>,
 }
 
 /// Cache entry for decrypted secrets.
@@ -188,7 +188,7 @@ impl SecretsManager {
     }
 
     /// Attach a KV store for runtime secrets.
-    pub fn with_kv_store(mut self, store: Arc<dyn aspen_core::KeyValueStore>) -> Self {
+    pub fn with_kv_store(mut self, store: Arc<dyn aspen_traits::KeyValueStore>) -> Self {
         self.kv_store = Some(store);
         self
     }
