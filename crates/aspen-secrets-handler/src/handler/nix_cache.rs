@@ -10,8 +10,9 @@ use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::SecretsNixCacheDeleteResultResponse;
 use aspen_client_api::SecretsNixCacheKeyResultResponse;
 use aspen_client_api::SecretsNixCacheListResultResponse;
-use aspen_core::ReadRequest;
+use aspen_kv_types::ReadRequest;
 use aspen_secrets::nix_cache::NixCacheKeyManager;
+use aspen_traits::KeyValueStore;
 use tracing::debug;
 use tracing::warn;
 
@@ -37,7 +38,7 @@ impl NixCacheSecretsHandler {
         &self,
         request: ClientRpcRequest,
         service: &SecretsService,
-        kv_store: &Arc<dyn aspen_core::KeyValueStore>,
+        kv_store: &Arc<dyn KeyValueStore>,
     ) -> anyhow::Result<ClientRpcResponse> {
         if let ClientRpcRequest::SecretsNixCacheCreateKey { mount, cache_name } = request {
             return handle_nix_cache_create_key(service, &mount, cache_name).await;
@@ -100,7 +101,7 @@ async fn handle_nix_cache_get_public_key(
     service: &SecretsService,
     mount: &str,
     cache_name: String,
-    kv_store: &Arc<dyn aspen_core::KeyValueStore>,
+    kv_store: &Arc<dyn KeyValueStore>,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, cache_name = %cache_name, "Nix cache get public key request");
 

@@ -150,7 +150,7 @@ mod tests {
 
     use super::*;
 
-    fn make_secrets_service(kv_store: Arc<dyn aspen_core::KeyValueStore>) -> SecretsService {
+    fn make_secrets_service(kv_store: Arc<dyn aspen_traits::KeyValueStore>) -> SecretsService {
         let mount_registry = Arc::new(aspen_secrets::MountRegistry::new(kv_store));
         SecretsService::new(mount_registry)
     }
@@ -158,7 +158,7 @@ mod tests {
     async fn setup_test_executor() -> crate::SecretsServiceExecutor {
         use aspen_testing::DeterministicKeyValueStore;
 
-        let kv_store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
+        let kv_store: Arc<dyn aspen_traits::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
         let secrets_service = Arc::new(make_secrets_service(Arc::clone(&kv_store)));
 
         crate::SecretsServiceExecutor::new(secrets_service, kv_store)
@@ -944,6 +944,7 @@ mod tests {
     // Factory Tests
     // =========================================================================
 
+    #[cfg(feature = "runtime-adapter")]
     #[test]
     fn test_factory_name_and_priority() {
         use aspen_rpc_core::HandlerFactory;

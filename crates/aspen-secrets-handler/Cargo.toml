@@ -7,12 +7,13 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 # RPC core abstractions (RequestHandler trait, ClientProtocolContext)
-aspen-rpc-core = { path = "../aspen-rpc-core", features = ["runtime-context"] }
+aspen-rpc-core = { path = "../aspen-rpc-core" }
 
 # Local crates
 aspen-client-api = { workspace = true }
-aspen-core = { path = "../aspen-core" }
+aspen-kv-types = { workspace = true }
 aspen-secrets = { path = "../aspen-secrets" }
+aspen-traits = { workspace = true }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["macros"] }
@@ -25,6 +26,7 @@ base64 = "0.22"
 
 [features]
 default = []
+runtime-adapter = ["aspen-rpc-core/runtime-context"]
 
 [dev-dependencies]
 aspen-testing = { workspace = true }

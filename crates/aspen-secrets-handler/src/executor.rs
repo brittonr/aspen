@@ -9,6 +9,7 @@ use anyhow::Result;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_rpc_core::ServiceExecutor;
+use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 
 use crate::handler::SecretsService;
@@ -24,12 +25,12 @@ use crate::handler::pki::PkiSecretsHandler;
 /// KV and Transit operations are handled by the WASM secrets plugin.
 pub struct SecretsServiceExecutor {
     secrets_service: Arc<SecretsService>,
-    kv_store: Arc<dyn aspen_core::KeyValueStore>,
+    kv_store: Arc<dyn KeyValueStore>,
 }
 
 impl SecretsServiceExecutor {
     /// Create a new secrets service executor.
-    pub fn new(secrets_service: Arc<SecretsService>, kv_store: Arc<dyn aspen_core::KeyValueStore>) -> Self {
+    pub fn new(secrets_service: Arc<SecretsService>, kv_store: Arc<dyn KeyValueStore>) -> Self {
         Self {
             secrets_service,
             kv_store,

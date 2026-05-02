@@ -2695,10 +2695,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-client-api",
- "aspen-core",
+ "aspen-kv-types",
  "aspen-rpc-core",
  "aspen-secrets",
  "aspen-testing",
+ "aspen-traits",
  "async-trait",
  "base64 0.22.1",
  "iroh",

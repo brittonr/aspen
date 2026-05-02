@@ -10,12 +10,16 @@
 pub mod executor;
 mod handler;
 
+#[cfg(feature = "runtime-adapter")]
 use std::sync::Arc;
 
-// Re-export core types for convenience
+#[cfg(feature = "runtime-adapter")]
 pub use aspen_rpc_core::ClientProtocolContext;
+#[cfg(feature = "runtime-adapter")]
 pub use aspen_rpc_core::HandlerFactory;
+#[cfg(feature = "runtime-adapter")]
 pub use aspen_rpc_core::RequestHandler;
+#[cfg(feature = "runtime-adapter")]
 pub use aspen_rpc_core::ServiceHandler;
 pub use executor::SecretsServiceExecutor;
 pub use handler::SecretsService;
@@ -32,8 +36,10 @@ pub use handler::SecretsService;
 /// # Priority
 ///
 /// Priority 580 (feature handler range: 500-599).
+#[cfg(feature = "runtime-adapter")]
 pub struct SecretsHandlerFactory;
 
+#[cfg(feature = "runtime-adapter")]
 impl SecretsHandlerFactory {
     /// Create a new factory instance.
     pub const fn new() -> Self {
@@ -41,12 +47,14 @@ impl SecretsHandlerFactory {
     }
 }
 
+#[cfg(feature = "runtime-adapter")]
 impl Default for SecretsHandlerFactory {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "runtime-adapter")]
 impl HandlerFactory for SecretsHandlerFactory {
     fn create(&self, ctx: &ClientProtocolContext) -> anyhow::Result<Arc<dyn RequestHandler>> {
         let secrets_service = ctx.required_typed_service::<SecretsService>("secrets_service")?;
