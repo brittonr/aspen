@@ -101,7 +101,7 @@ cargo build --features full    # everything
 
 ```bash
 # run a node
-cargo run --features jobs,docs,blob,hooks,automerge \
+cargo run --features node-runtime-apps,blob,automerge \
   --bin aspen-node -- --node-id 1 --cookie my-cluster
 
 # CLI

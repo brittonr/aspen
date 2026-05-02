@@ -63,38 +63,76 @@ aspen/
 ├── crates/
 │   ├── aspen-constants/          # Tiger Style limits shared across crates
 │   ├── aspen-kv-types/           # alloc-safe KV key/value types
+│   ├── aspen-storage-types/      # portable storage DTOs
 │   ├── aspen-hlc/                # hybrid logical clock types
 │   ├── aspen-time/               # wall-clock boundary
 │   ├── aspen-traits/             # core trait contracts
 │   ├── aspen-core/               # alloc-focused core types and verified helpers
 │   ├── aspen-core-shell/         # std/runtime helpers exported as aspen-core for shells
+│   ├── aspen-auth-core/          # alloc-safe capabilities and token types
+│   ├── aspen-ticket/             # portable ticket model
+│   ├── aspen-hooks-types/        # hook config/event schema
+│   ├── aspen-hooks-ticket/       # hook trigger ticket type
+│   │
+│   ├── aspen-client-api/         # postcard client request/response enums
+│   ├── aspen-forge-protocol/     # Forge protocol/wire DTOs
+│   ├── aspen-jobs-protocol/      # alloc/no-std jobs protocol DTOs
+│   ├── aspen-coordination-protocol/ # coordination protocol DTOs
+│   ├── aspen-dht-discovery/      # DHT discovery DTOs/helpers
+│   ├── aspen-dag/                # DAG helper types
 │   │
 │   ├── aspen-raft-types/         # shared OpenRaft app config and Raft types
 │   ├── aspen-raft-kv-types/      # Raft KV command/result wire types
 │   ├── aspen-raft-kv/            # KV state machine logic
 │   ├── aspen-redb-storage/       # redb tables, log, state machine persistence
-│   ├── aspen-raft/               # RaftNode, storage adapter, Raft network plumbing
 │   ├── aspen-raft-network/       # node-to-node Raft transport over Iroh
+│   ├── aspen-raft/               # RaftNode, storage adapter, Raft network plumbing
 │   │
 │   ├── aspen-transport/          # ALPN constants and transport helpers
 │   ├── aspen-cluster-types/      # cluster node/address types
 │   ├── aspen-cluster/            # endpoint manager, bootstrap, gossip, discovery
 │   ├── aspen-rpc-core/           # protocol context and handler registry core
 │   ├── aspen-rpc-handlers/       # central client RPC dispatch
-│   ├── aspen-client-api/         # postcard client request/response enums
 │   ├── aspen-client/             # typed client transport
+│   ├── aspen-core-essentials-handler/ # core client RPC handlers
+│   ├── aspen-cluster-handler/    # cluster client RPC handlers
 │   │
 │   ├── aspen-coordination/       # locks, queues, barriers, semaphores, elections
 │   ├── aspen-blob/               # iroh-blobs-backed content store
+│   ├── aspen-blob-handler/       # blob client RPC handlers
 │   ├── aspen-docs/               # iroh-docs CRDT integration
+│   ├── aspen-docs-handler/       # docs client RPC handlers
 │   ├── aspen-forge/              # Git hosting, refs, COBs, gossip, sync
-│   ├── aspen-ci/                 # orchestrator, trigger service, config loading
+│   ├── aspen-forge-handler/      # Forge client RPC handlers
+│   ├── aspen-commit-dag/         # commit DAG service
+│   ├── aspen-kv-branch/          # branch state over KV
+│   │
+│   ├── aspen-jobs-core/          # portable jobs model, payload, wire, keyspace helpers
 │   ├── aspen-jobs/               # Raft-backed job queue and worker coordination
+│   ├── aspen-jobs-guest/         # guest-side job helper crate
+│   ├── aspen-jobs-worker-*/      # worker adapters for blob/maintenance/replication/shell/sql
+│   ├── aspen-job-handler/        # jobs client RPC handlers
+│   ├── aspen-ci-core/            # portable CI config/log/route helpers
+│   ├── aspen-ci/                 # orchestrator, trigger service, config loading
+│   ├── aspen-ci-handler/         # CI client RPC handlers
+│   ├── aspen-ci-executor-*/      # shell, VM, and Nix CI executors
+│   │
 │   ├── aspen-snix/               # snix BlobService/DirectoryService/PathInfoService
+│   ├── aspen-snix-bridge/        # nix-daemon bridge
+│   ├── aspen-nix-cache-gateway/  # Nix binary cache gateway
+│   ├── aspen-castore/            # content-addressed store helpers
+│   ├── aspen-cache/              # cache service helpers
+│   ├── aspen-exec-cache/         # execution cache helpers
+│   │
+│   ├── aspen-disk/               # disk/runtime storage helpers
+│   ├── aspen-layer/              # layering abstractions
+│   ├── aspen-sharding/           # sharding helpers
+│   ├── aspen-proxy/              # reverse proxy support
+│   ├── aspen-net/                # network utility crate
 │   ├── aspen-federation/         # cross-cluster sync abstractions
 │   ├── aspen-trust/              # Shamir trust quorum and epoch state
 │   ├── aspen-secrets/            # encrypted secrets at rest and rotation support
-│   ├── aspen-auth-core/          # alloc-safe capabilities and token types
+│   ├── aspen-secrets-handler/    # secrets client RPC handlers
 │   ├── aspen-auth/               # runtime token verifier/builder shell
 │   │
 │   ├── aspen-cli/                # command-line client
@@ -102,6 +140,8 @@ aspen/
 │   ├── aspen-dogfood/            # self-hosted Forge + CI + Nix pipeline driver
 │   ├── aspen-forge-web/          # web UI for Forge and CI views
 │   ├── aspen-fuse/               # POSIX mount over KV namespace
+│   ├── aspen-testing-core/       # reusable test helpers
+│   ├── aspen-testing/            # test support facade
 │   └── aspen-testing-*/          # fixtures, madsim, network, patchbay test support
 │
 ├── openraft/                     # vendored openraft and macros
@@ -257,7 +297,7 @@ Aspen CI loads Nickel pipeline config, triggers runs from Forge refs, schedules 
 
 Jobs are a general distributed work substrate. CI is one application on top.
 
-→ [`crates/aspen-ci/`](../../crates/aspen-ci), [`crates/aspen-jobs/`](../../crates/aspen-jobs), [`crates/aspen-ci-executor-nix/`](../../crates/aspen-ci-executor-nix), [ADR 007](../adr/007-nickel-ci-configuration.md)
+→ [`crates/aspen-ci-core/`](../../crates/aspen-ci-core), [`crates/aspen-ci/`](../../crates/aspen-ci), [`crates/aspen-jobs-core/`](../../crates/aspen-jobs-core), [`crates/aspen-jobs-protocol/`](../../crates/aspen-jobs-protocol), [`crates/aspen-jobs/`](../../crates/aspen-jobs), [`crates/aspen-ci-handler/`](../../crates/aspen-ci-handler), [`crates/aspen-job-handler/`](../../crates/aspen-job-handler), [`crates/aspen-ci-executor-shell/`](../../crates/aspen-ci-executor-shell), [`crates/aspen-ci-executor-vm/`](../../crates/aspen-ci-executor-vm), [`crates/aspen-ci-executor-nix/`](../../crates/aspen-ci-executor-nix), [ADR 007](../adr/007-nickel-ci-configuration.md)
 
 ### Nix and snix
 
