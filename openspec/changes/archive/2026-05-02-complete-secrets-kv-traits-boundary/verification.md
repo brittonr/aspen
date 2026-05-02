@@ -1,6 +1,6 @@
 # Verification
 
-Evidence captured under `openspec/changes/complete-secrets-kv-traits-boundary/evidence/` before archive.
+Evidence captured under `openspec/changes/archive/2026-05-02-complete-secrets-kv-traits-boundary/evidence/` before archive.
 
 - `cargo check -p aspen-secrets --no-default-features`
   - Evidence: `evidence/aspen-secrets-no-default-check.txt`

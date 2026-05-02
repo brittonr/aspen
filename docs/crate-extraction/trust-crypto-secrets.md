@@ -61,4 +61,4 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 
 ## KV traits boundary
 
-`97f0518e6 Use lightweight KV traits in secrets storage` removes direct `aspen-core` usage from `crates/aspen-secrets`. `AspenSecretsBackend`, `MountRegistry`, and the SOPS runtime KV manager now expose `aspen_traits::KeyValueStore` and import request/result/error contracts from `aspen-kv-types`; existing runtime stores continue to compile through the compatibility re-exported trait. The active evidence package is `openspec/changes/complete-secrets-kv-traits-boundary/evidence/` until archive.
+`97f0518e6 Use lightweight KV traits in secrets storage` removes direct `aspen-core` usage from `crates/aspen-secrets`. `AspenSecretsBackend`, `MountRegistry`, and the SOPS runtime KV manager now expose `aspen_traits::KeyValueStore` and import request/result/error contracts from `aspen-kv-types`; existing runtime stores continue to compile through the compatibility re-exported trait. The active evidence package is `openspec/changes/archive/2026-05-02-complete-secrets-kv-traits-boundary/evidence/` until archive.
