@@ -6,7 +6,6 @@ use aspen_traits::KeyValueStore;
 use tracing::info;
 use tracing::warn;
 
-use super::JOB_PREFIX;
 use super::JobManager;
 use crate::error::JobError;
 use crate::error::Result;
@@ -38,7 +37,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                 break;
             }
 
-            let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+            let queue_name = aspen_jobs_core::priority_queue_key(priority);
             if let Some(queue_manager) = self.queue_managers.get(&priority) {
                 let remaining_limit = (limit as usize - dlq_jobs.len()) as u32;
 
@@ -91,7 +90,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
         // Find the DLQ item in the queue system and redrive it
         let priority = job.spec.config.priority;
-        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+        let queue_name = aspen_jobs_core::priority_queue_key(priority);
 
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
             // Get the numeric item ID from the job ID
@@ -171,7 +170,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         }
 
         // Delete the job from storage
-        let key = format!("{}{}", JOB_PREFIX, job_id.as_str());
+        let key = aspen_jobs_core::job_kv_key(job_id.as_str());
         self.store
             .write(WriteRequest {
                 command: WriteCommand::Delete { key },

@@ -15,6 +15,54 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
+/// KV prefix for persisted job records.
+pub const JOB_KV_PREFIX: &str = "__jobs:";
+
+/// KV prefix for persisted job schedule index records.
+pub const JOB_SCHEDULE_KV_PREFIX: &str = "__jobs:schedule:";
+
+/// KV prefix for persisted job heartbeat records.
+pub const JOB_HEARTBEAT_KV_PREFIX: &str = "_jobs:heartbeat:";
+
+/// Authorization key prefix for jobs client RPC operations.
+pub const JOB_AUTH_KEY_PREFIX: &str = "_jobs:";
+
+/// Build a persisted job record key.
+#[must_use]
+pub fn job_kv_key(job_id: impl AsRef<str>) -> String {
+    format!("{JOB_KV_PREFIX}{}", job_id.as_ref())
+}
+
+/// Build a persisted job schedule index key.
+#[must_use]
+pub fn job_schedule_key(timestamp_seconds: i64, job_id: impl AsRef<str>) -> String {
+    format!("{JOB_SCHEDULE_KV_PREFIX}{timestamp_seconds}:{}", job_id.as_ref())
+}
+
+/// Build a persisted job heartbeat key.
+#[must_use]
+pub fn job_heartbeat_key(job_id: impl AsRef<str>) -> String {
+    format!("{JOB_HEARTBEAT_KV_PREFIX}{}", job_id.as_ref())
+}
+
+/// Build a priority queue key as used by the distributed jobs queue.
+#[must_use]
+pub fn priority_queue_key(priority: Priority) -> String {
+    format!("{JOB_KV_PREFIX}:{}", priority.queue_name())
+}
+
+/// Build a worker poll authorization key.
+#[must_use]
+pub fn worker_jobs_auth_key(worker_id: impl AsRef<str>) -> String {
+    format!("__worker:{}:jobs", worker_id.as_ref())
+}
+
+/// Build a worker completion authorization key.
+#[must_use]
+pub fn worker_complete_auth_key(worker_id: impl AsRef<str>) -> String {
+    format!("__worker:{}:complete", worker_id.as_ref())
+}
+
 /// Errors returned by pure jobs-core helpers.
 #[derive(Debug, thiserror::Error)]
 pub enum JobsCoreError {
@@ -932,6 +980,20 @@ mod tests {
         assert!(JobStatus::Completed.is_terminal());
         assert!(JobStatus::Running.is_active());
         assert!(JobStatus::Retrying.needs_recovery());
+    }
+
+    #[test]
+    fn keyspace_helpers_match_runtime_contract() {
+        assert_eq!(JOB_KV_PREFIX, "__jobs:");
+        assert_eq!(JOB_SCHEDULE_KV_PREFIX, "__jobs:schedule:");
+        assert_eq!(JOB_HEARTBEAT_KV_PREFIX, "_jobs:heartbeat:");
+        assert_eq!(JOB_AUTH_KEY_PREFIX, "_jobs:");
+        assert_eq!(job_kv_key("job-1"), "__jobs:job-1");
+        assert_eq!(job_schedule_key(1_700_000_000, "job-1"), "__jobs:schedule:1700000000:job-1");
+        assert_eq!(job_heartbeat_key("job-1"), "_jobs:heartbeat:job-1");
+        assert_eq!(priority_queue_key(Priority::High), "__jobs::high");
+        assert_eq!(worker_jobs_auth_key("worker-1"), "__worker:worker-1:jobs");
+        assert_eq!(worker_complete_auth_key("worker-1"), "__worker:worker-1:complete");
     }
 
     #[test]

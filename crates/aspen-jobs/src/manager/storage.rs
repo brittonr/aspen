@@ -25,7 +25,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         // Tiger Style: job ID must not be empty
         assert!(!job.id.as_str().is_empty(), "cannot store job with empty ID");
 
-        let key = format!("{}{}", JOB_PREFIX, job.id.as_str());
+        let key = aspen_jobs_core::job_kv_key(job.id.as_str());
         let value = serde_json::to_string(job).map_err(|e| JobError::SerializationError { source: e })?;
 
         self.store
@@ -40,7 +40,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Check if a job exists in storage.
     pub(crate) async fn job_exists(&self, job_id: &JobId) -> Result<bool> {
-        let key = format!("{}{}", JOB_PREFIX, job_id.as_str());
+        let key = aspen_jobs_core::job_kv_key(job_id.as_str());
         match self.store.read(ReadRequest::new(key)).await {
             Ok(result) => Ok(result.kv.is_some()),
             Err(_) => Ok(false),
@@ -80,7 +80,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             update_fn(&mut job)?;
 
             // Try to store with CAS
-            let key = format!("{}{}", JOB_PREFIX, id.as_str());
+            let key = aspen_jobs_core::job_kv_key(id.as_str());
             let new_value = serde_json::to_string(&job).map_err(|e| JobError::SerializationError { source: e })?;
 
             // Read current value to check version
@@ -199,7 +199,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         }
 
         let priority = job.spec.config.priority;
-        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+        let queue_name = aspen_jobs_core::priority_queue_key(priority);
 
         let queue_manager = self.queue_managers.get(&priority).ok_or_else(|| JobError::InvalidJobSpec {
             reason: format!("invalid priority: {:?}", priority),

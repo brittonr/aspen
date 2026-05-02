@@ -409,7 +409,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DeployExecutor<S> {
 
         debug!(artifact_from = artifact_from, job_id = %job_id, "Resolved job ID for artifact");
 
-        let kv_key = format!("__jobs:{job_id}");
+        let kv_key = aspen_jobs::core::job_kv_key(&job_id);
         let read_result =
             self.kv_store.read(ReadRequest::new(kv_key.clone())).await.map_err(|e| CiError::ExecutionFailed {
                 reason: format!("Failed to read job result from KV key '{kv_key}': {e}"),

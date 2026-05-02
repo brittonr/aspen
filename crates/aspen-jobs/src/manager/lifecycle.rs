@@ -10,7 +10,6 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use super::JOB_PREFIX;
 use super::JobCompletionCallback;
 use super::JobManager;
 use crate::error::JobError;
@@ -161,7 +160,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                 break;
             }
 
-            let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+            let queue_name = aspen_jobs_core::priority_queue_key(priority);
             let Some(queue_manager) = self.queue_managers.get(&priority) else {
                 continue;
             };
@@ -261,7 +260,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         }
 
         let priority = job.spec.config.priority;
-        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+        let queue_name = aspen_jobs_core::priority_queue_key(priority);
 
         // Acknowledge the queue item. If this fails (e.g., receipt handle expired
         // because the job ran longer than the visibility timeout), we still proceed
@@ -394,7 +393,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             .await?;
 
         let priority = job.spec.config.priority;
-        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+        let queue_name = aspen_jobs_core::priority_queue_key(priority);
 
         // Check the final status to determine queue action
         let move_to_dlq = job.status == JobStatus::DeadLetter;
@@ -525,7 +524,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// the job is still being processed. This is used by recovery mechanisms
     /// to detect orphaned jobs after leader failover.
     pub async fn update_heartbeat(&self, id: &JobId) -> Result<()> {
-        let heartbeat_key = format!("_jobs:heartbeat:{}", id.as_str());
+        let heartbeat_key = aspen_jobs_core::job_heartbeat_key(id.as_str());
         let timestamp = Utc::now().timestamp_millis().to_string();
 
         let write_request = WriteRequest {
@@ -544,7 +543,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// Called when a job completes or fails to clean up the heartbeat entry.
     pub async fn remove_heartbeat(&self, id: &JobId) -> Result<()> {
-        let heartbeat_key = format!("_jobs:heartbeat:{}", id.as_str());
+        let heartbeat_key = aspen_jobs_core::job_heartbeat_key(id.as_str());
 
         let write_request = WriteRequest {
             command: WriteCommand::Delete { key: heartbeat_key },
@@ -646,7 +645,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Use when the job is already running on another worker — the queue item
     /// should be consumed (not released) to prevent infinite redelivery.
     pub async fn ack_queue_item_by_priority(&self, receipt_handle: &str, priority: Priority) -> Result<()> {
-        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+        let queue_name = aspen_jobs_core::priority_queue_key(priority);
 
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
             queue_manager
@@ -669,7 +668,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         priority: Priority,
         reason: &str,
     ) -> Result<()> {
-        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+        let queue_name = aspen_jobs_core::priority_queue_key(priority);
 
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
             queue_manager
@@ -700,7 +699,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         }
 
         let priority = job.spec.config.priority;
-        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+        let queue_name = aspen_jobs_core::priority_queue_key(priority);
 
         // Release the queue item back without counting against delivery attempts.
         // This is important for job type filtering - a worker that can't handle a job

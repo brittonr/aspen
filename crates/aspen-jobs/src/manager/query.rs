@@ -3,7 +3,6 @@
 use aspen_kv_types::ReadRequest;
 use aspen_traits::KeyValueStore;
 
-use super::JOB_PREFIX;
 use super::JobManager;
 use crate::error::JobError;
 use crate::error::Result;
@@ -20,7 +19,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         // Tiger Style: job ID must not be empty
         debug_assert!(!id.as_str().is_empty(), "job ID must not be empty");
 
-        let key = format!("{}{}", JOB_PREFIX, id.as_str());
+        let key = aspen_jobs_core::job_kv_key(id.as_str());
 
         match self.store.read(ReadRequest::new(key)).await {
             Ok(result) => {
@@ -56,7 +55,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         let mut dlq_stats = DLQStats::default();
 
         for (priority, queue_manager) in &self.queue_managers {
-            let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+            let queue_name = aspen_jobs_core::priority_queue_key(*priority);
             let queue_status =
                 queue_manager.status(&queue_name).await.map_err(|e| JobError::QueueError { source: e })?;
 

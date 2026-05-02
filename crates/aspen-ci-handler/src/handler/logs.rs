@@ -274,13 +274,10 @@ pub async fn handle_get_job_output(
     use aspen_blob::prelude::*;
     use aspen_jobs_worker_shell::OutputRef;
 
-    // Job queue prefix (from aspen-jobs/src/manager.rs)
-    const JOB_PREFIX: &str = "__jobs:";
-
     debug!(%job_id, "getting CI job output from job queue");
 
     // Look up the job directly from the job queue
-    let job_key = format!("{}{}", JOB_PREFIX, job_id);
+    let job_key = aspen_jobs::core::job_kv_key(&job_id);
     let job_result = kv_store.read(aspen_core::ReadRequest::new(job_key)).await;
 
     let job_data_str = match job_result {
@@ -453,11 +450,9 @@ pub async fn handle_get_job_output(
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_jobs_worker_shell::OutputRef;
 
-    const JOB_PREFIX: &str = "__jobs:";
-
     debug!(%job_id, "getting CI job output from job queue (no blob)");
 
-    let job_key = format!("{}{}", JOB_PREFIX, job_id);
+    let job_key = aspen_jobs::core::job_kv_key(&job_id);
     let job_result = kv_store.read(aspen_core::ReadRequest::new(job_key)).await;
 
     let job_data_str = match job_result {

@@ -32,9 +32,9 @@ pub type JobCompletionCallback = Arc<
 >;
 
 /// Job storage key prefix.
-const JOB_PREFIX: &str = "__jobs:";
+const JOB_PREFIX: &str = aspen_jobs_core::JOB_KV_PREFIX;
 /// Job schedule prefix.
-const JOB_SCHEDULE_PREFIX: &str = "__jobs:schedule:";
+const JOB_SCHEDULE_PREFIX: &str = aspen_jobs_core::JOB_SCHEDULE_KV_PREFIX;
 
 /// Maximum retries when we hit NotLeader errors during Raft operations.
 /// Leadership gaps during elections are typically brief, so we retry aggressively.
@@ -124,7 +124,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     async fn initialize_internal(&self) -> Result<()> {
         // Create a queue for each priority level
         for priority in Priority::all_ordered() {
-            let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+            let queue_name = aspen_jobs_core::priority_queue_key(priority);
             let queue_config = QueueConfig {
                 default_visibility_timeout_ms: Some(self.config.default_visibility_timeout.as_millis() as u64),
                 default_ttl_ms: None,

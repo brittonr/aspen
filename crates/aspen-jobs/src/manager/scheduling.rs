@@ -72,7 +72,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         // Tiger Style: job_id must not be empty
         debug_assert!(!job_id.as_str().is_empty(), "job_id must not be empty");
 
-        let key = format!("{}{}:{}", JOB_SCHEDULE_PREFIX, scheduled_at.timestamp(), job_id.as_str());
+        let key = aspen_jobs_core::job_schedule_key(scheduled_at.timestamp(), job_id.as_str());
         let value = job_id.to_string();
 
         self.store
@@ -90,7 +90,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         // Tiger Style: job_id must not be empty
         debug_assert!(!job_id.as_str().is_empty(), "job_id must not be empty");
 
-        let key = format!("{}{}:{}", JOB_SCHEDULE_PREFIX, scheduled_at.timestamp(), job_id.as_str());
+        let key = aspen_jobs_core::job_schedule_key(scheduled_at.timestamp(), job_id.as_str());
 
         self.store
             .write(WriteRequest {

@@ -40,7 +40,7 @@ use crate::error::Result;
 /// KV prefix for job heartbeats.
 /// Key format: `{KV_PREFIX_JOB_HEARTBEAT}{job_id}`
 /// Value: Timestamp in milliseconds since Unix epoch.
-const KV_PREFIX_JOB_HEARTBEAT: &str = "_jobs:heartbeat:";
+const KV_PREFIX_JOB_HEARTBEAT: &str = aspen_jobs::core::JOB_HEARTBEAT_KV_PREFIX;
 
 /// KV prefix for CI runs (must match pipeline.rs).
 const KV_PREFIX_CI_RUNS: &str = "_ci:runs:";

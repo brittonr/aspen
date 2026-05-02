@@ -351,7 +351,7 @@ impl JobServiceExecutor {
 
         let status_filter = status_str.as_deref().and_then(JobStatus::from_wire_str);
 
-        let prefix = "__jobs:";
+        let prefix = aspen_jobs::core::JOB_KV_PREFIX;
         match self
             .kv_store
             .scan(aspen_core::ScanRequest {
@@ -456,7 +456,7 @@ impl JobServiceExecutor {
     }
 
     async fn handle_queue_stats(&self) -> Result<ClientRpcResponse> {
-        let prefix = "__jobs:";
+        let prefix = aspen_jobs::core::JOB_KV_PREFIX;
         let mut counts: HashMap<String, u64> = HashMap::new();
 
         match self
