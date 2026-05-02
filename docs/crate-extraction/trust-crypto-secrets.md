@@ -7,7 +7,7 @@
 - **Crates**: `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime consumer coverage for `aspen-secrets-handler`
 - **Intended audience**: systems that need deterministic trust/crypto/secrets state logic without Aspen Raft, Iroh, Redb, or secrets-service runtime shells.
 - **Public API owner**: architecture-modularity
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `workspace-internal`; first blocker complete as of `complete-trust-crypto-first-blocker`.
 
 ## Package metadata
 
@@ -24,7 +24,7 @@
 | Trust crypto | Shamir/GF/HKDF/share-chain helpers with explicit randomness/time inputs. | Iroh trust-share exchange, peer probing, cluster bootstrap. |
 | Reconfiguration state | deterministic membership/share/decryption-key-selection state machine inputs and outputs. | Raft log application, storage transactions, node shutdown/expungement effects. |
 | Secrets crypto | pure encryption/decryption/key-selection helpers and migration planning. | Redb storage, secrets service, handler/client runtime, SOPS file IO. |
-| General crypto | BLAKE3/hash helpers and key utilities where transport-free. | concrete Iroh identity/runtime helpers. |
+| General crypto | BLAKE3/hash helpers and key utilities where transport-free; `aspen-crypto` defaults to this surface. | node identity lifecycle helpers behind `aspen-crypto/identity`; concrete Iroh endpoint/runtime helpers stay outside reusable defaults. |
 
 ## Dependency decisions
 
@@ -52,4 +52,4 @@
 
 ## First blocker
 
-I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated, and `aspen-crypto` needs a narrower transport-free helper boundary because its current default crate also includes Iroh/tokio filesystem lifecycle utilities.
+I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated. The first blocker is now complete: `aspen-crypto` defaults to the transport-free cookie/hash helper surface, and node identity lifecycle utilities live behind the explicit `identity` feature using `iroh-base` key types rather than concrete `iroh` endpoint/runtime dependencies. The aggregate family remains `workspace-internal` until trust/secrets split policy, publication policy, and any remaining runtime-adapter ownership reviews are resolved. Evidence is recorded under `openspec/changes/complete-trust-crypto-first-blocker/evidence/`.
