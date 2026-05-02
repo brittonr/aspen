@@ -14,20 +14,22 @@ pub(crate) mod pki;
 use std::sync::Arc;
 
 use aspen_secrets::PkiStore;
+use aspen_secrets::SecretsMountProvider;
 
 /// Secrets service with multi-mount support.
 ///
-/// Uses a `MountRegistry` to dynamically create and cache store instances
-/// per mount point. Each mount has its own isolated storage.
+/// Uses a mount provider to dynamically resolve store instances per mount
+/// point. Each mount has its own isolated storage while this service remains
+/// decoupled from the concrete registry/cache implementation.
 pub struct SecretsService {
-    /// Mount registry for dynamic store management.
-    pub mount_registry: Arc<aspen_secrets::MountRegistry>,
+    /// Mount provider for dynamic store management.
+    mounts: Arc<dyn SecretsMountProvider>,
 }
 
 impl SecretsService {
-    /// Create a new secrets service with the given mount registry.
-    pub fn new(mount_registry: Arc<aspen_secrets::MountRegistry>) -> Self {
-        Self { mount_registry }
+    /// Create a new secrets service with the given mount provider.
+    pub fn new(mounts: Arc<dyn SecretsMountProvider>) -> Self {
+        Self { mounts }
     }
 
     /// Get or create a PKI store for the given mount point.
@@ -36,8 +38,8 @@ impl SecretsService {
     ///
     /// Returns an error if the mount name is invalid or too many mounts exist.
     pub async fn get_pki_store(&self, mount: &str) -> anyhow::Result<Arc<dyn PkiStore>> {
-        self.mount_registry
-            .get_or_create_pki_store(mount)
+        self.mounts
+            .pki_store(mount)
             .await
             .map_err(|e| anyhow::anyhow!("failed to get PKI store for mount '{}': {}", mount, e))
     }
@@ -50,8 +52,8 @@ impl SecretsService {
     ///
     /// Returns an error if the mount name is invalid or too many mounts exist.
     pub async fn get_kv_store(&self, mount: &str) -> anyhow::Result<Arc<dyn aspen_secrets::KvStore>> {
-        self.mount_registry
-            .get_or_create_kv_store(mount)
+        self.mounts
+            .kv_store(mount)
             .await
             .map_err(|e| anyhow::anyhow!("failed to get KV store for mount '{}': {}", mount, e))
     }
@@ -64,8 +66,8 @@ impl SecretsService {
     ///
     /// Returns an error if the mount name is invalid or too many mounts exist.
     pub async fn get_transit_store(&self, mount: &str) -> anyhow::Result<Arc<dyn aspen_secrets::TransitStore>> {
-        self.mount_registry
-            .get_or_create_transit_store(mount)
+        self.mounts
+            .transit_store(mount)
             .await
             .map_err(|e| anyhow::anyhow!("failed to get Transit store for mount '{}': {}", mount, e))
     }

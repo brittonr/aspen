@@ -23,6 +23,7 @@ use std::sync::Arc;
 #[cfg(feature = "trust")]
 use std::sync::RwLock as StdRwLock;
 
+use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use crate::backend::AspenSecretsBackend;
@@ -38,6 +39,25 @@ use crate::pki::DefaultPkiStore;
 use crate::pki::PkiStore;
 use crate::transit::DefaultTransitStore;
 use crate::transit::TransitStore;
+
+/// Store-provider boundary for resolving secrets engine stores by mount.
+///
+/// This trait keeps handler and adapter crates coupled to the reusable service
+/// contract instead of the concrete [`MountRegistry`] cache/runtime storage
+/// implementation. Implementations may cache, lazily create, or delegate stores
+/// as long as each method enforces the same mount validation and resource
+/// bounds as the concrete registry.
+#[async_trait]
+pub trait SecretsMountProvider: Send + Sync {
+    /// Get or create a PKI store for the given mount point.
+    async fn pki_store(&self, mount: &str) -> Result<Arc<dyn PkiStore>>;
+
+    /// Get or create a Transit store for the given mount point.
+    async fn transit_store(&self, mount: &str) -> Result<Arc<dyn TransitStore>>;
+
+    /// Get or create a KV store for the given mount point.
+    async fn kv_store(&self, mount: &str) -> Result<Arc<dyn KvStore>>;
+}
 
 /// Multi-mount registry for secrets engines.
 ///
@@ -328,6 +348,21 @@ impl MountRegistry {
     /// List all KV mount names.
     pub async fn list_kv_mounts(&self) -> Vec<String> {
         self.kv_stores.read().await.keys().cloned().collect()
+    }
+}
+
+#[async_trait]
+impl SecretsMountProvider for MountRegistry {
+    async fn pki_store(&self, mount: &str) -> Result<Arc<dyn PkiStore>> {
+        self.get_or_create_pki_store(mount).await
+    }
+
+    async fn transit_store(&self, mount: &str) -> Result<Arc<dyn TransitStore>> {
+        self.get_or_create_transit_store(mount).await
+    }
+
+    async fn kv_store(&self, mount: &str) -> Result<Arc<dyn KvStore>> {
+        self.get_or_create_kv_store(mount).await
     }
 }
 

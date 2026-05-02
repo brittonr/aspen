@@ -94,6 +94,7 @@ pub use kv::SecretData;
 pub use kv::SecretMetadata;
 // Re-export Mount Registry
 pub use mount_registry::MountRegistry;
+pub use mount_registry::SecretsMountProvider;
 // Re-export PKI types
 pub use pki::DefaultPkiStore;
 pub use pki::PkiKeyType;
