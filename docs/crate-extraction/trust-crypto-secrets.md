@@ -58,3 +58,7 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 ## Auth runtime boundary
 
 `d2a4d4ba1 Keep secrets auth runtime optional` removes the `aspen-auth` runtime shell from the `aspen-secrets` default token parsing path. `SecretsProvider::get_token` and config token parsing now use `aspen-auth-core::CapabilityToken`, while `SecretsManager::build_token_verifier` and `SecretsManager::build_token_builder` require `aspen-secrets/auth-runtime`. The root node `secrets` feature enables that runtime feature to preserve bootstrap compatibility. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-secrets-auth-runtime-boundary/evidence/`.
+
+## KV traits boundary
+
+`97f0518e6 Use lightweight KV traits in secrets storage` removes direct `aspen-core` usage from `crates/aspen-secrets`. `AspenSecretsBackend`, `MountRegistry`, and the SOPS runtime KV manager now expose `aspen_traits::KeyValueStore` and import request/result/error contracts from `aspen-kv-types`; existing runtime stores continue to compile through the compatibility re-exported trait. The active evidence package is `openspec/changes/complete-secrets-kv-traits-boundary/evidence/` until archive.

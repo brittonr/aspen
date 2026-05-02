@@ -1,0 +1,6 @@
+Command:
+
+cargo tree -p aspen-secrets --no-default-features -e normal | tee /tmp/secrets-kv-traits-tree.txt
+if grep -E '\b(aspen-core|aspen-auth |aspen-core-shell|redb|aspen-raft|aspen-transport|aspen-rpc-handlers|aspen-secrets-handler|iroh ) v' /tmp/secrets-kv-traits-tree.txt; then echo 'unexpected runtime dependency in no-default aspen-secrets tree'; exit 1; fi
+
+Result: passed; grep returned no forbidden normal dependency lines.
