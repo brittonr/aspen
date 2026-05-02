@@ -349,12 +349,12 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl aspen_core::KeyValueStore for InMemoryKvStore {
+    impl aspen_core::KvRead for InMemoryKvStore {
         async fn read(
             &self,
             request: aspen_core::ReadRequest,
         ) -> std::result::Result<aspen_core::ReadResult, aspen_core::KeyValueStoreError> {
-            let data = self.data.blocking_read();
+            let data = self.data.read().await;
             let kv = data.get(&request.key).map(|v| aspen_core::KeyValueWithRevision {
                 key: request.key.clone(),
                 value: String::from_utf8_lossy(v).to_string(),
@@ -364,14 +364,17 @@ mod tests {
             });
             Ok(aspen_core::ReadResult { kv })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl aspen_core::KvWrite for InMemoryKvStore {
         async fn write(
             &self,
             request: aspen_core::WriteRequest,
         ) -> std::result::Result<aspen_core::WriteResult, aspen_core::KeyValueStoreError> {
             use aspen_core::WriteCommand;
             let cmd = request.command;
-            let mut data = self.data.blocking_write();
+            let mut data = self.data.write().await;
             match &cmd {
                 WriteCommand::Set { key, value } => {
                     data.insert(key.clone(), value.clone().into_bytes());
@@ -408,23 +411,29 @@ mod tests {
                 conflict_actual_version: None,
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl aspen_core::KvDelete for InMemoryKvStore {
         async fn delete(
             &self,
             request: aspen_core::DeleteRequest,
         ) -> std::result::Result<aspen_core::DeleteResult, aspen_core::KeyValueStoreError> {
-            let existed = self.data.blocking_write().remove(&request.key).is_some();
+            let existed = self.data.write().await.remove(&request.key).is_some();
             Ok(aspen_core::DeleteResult {
                 key: request.key,
                 is_deleted: existed,
             })
         }
+    }
 
+    #[async_trait::async_trait]
+    impl aspen_core::KvScan for InMemoryKvStore {
         async fn scan(
             &self,
             request: aspen_core::ScanRequest,
         ) -> std::result::Result<aspen_core::ScanResult, aspen_core::KeyValueStoreError> {
-            let data = self.data.blocking_read();
+            let data = self.data.read().await;
             let limit = request.limit_results.unwrap_or(u32::MAX) as usize;
             let entries: Vec<_> = data
                 .iter()
@@ -447,6 +456,8 @@ mod tests {
             })
         }
     }
+
+    impl aspen_core::KeyValueStore for InMemoryKvStore {}
 
     #[tokio::test]
     async fn test_pki_store_on_demand_creation() {
