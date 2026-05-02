@@ -131,4 +131,3 @@ The jobs/CI core extraction SHALL require owner/public API review before raising
 - THEN fresh downstream metadata, negative boundary evidence, compatibility evidence, readiness checker output, and verification task coverage SHALL be checked in under the active change
 
 - AND publishable or repo-split states SHALL remain blocked pending human license/publication policy
-
