@@ -2,6 +2,8 @@
 //!
 //! Data structures for encryption-as-a-service operations.
 
+use std::fmt;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -39,7 +41,7 @@ impl KeyType {
 }
 
 /// A version of a transit key.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyVersion {
     /// Version number (1-indexed).
     pub version: u32,
@@ -52,8 +54,19 @@ pub struct KeyVersion {
     pub public_key: Option<Vec<u8>>,
 }
 
+impl fmt::Debug for KeyVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KeyVersion")
+            .field("version", &self.version)
+            .field("created_time_unix_ms", &self.created_time_unix_ms)
+            .field("key_material", &format_args!("<redacted: {} bytes>", self.key_material.len()))
+            .field("public_key", &self.public_key)
+            .finish()
+    }
+}
+
 /// Transit key metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TransitKey {
     /// Key name.
     pub name: String,
@@ -79,6 +92,25 @@ pub struct TransitKey {
     pub supports_convergent_encryption: bool,
     /// Key versions.
     pub versions: std::collections::HashMap<u32, KeyVersion>,
+}
+
+impl fmt::Debug for TransitKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TransitKey")
+            .field("name", &self.name)
+            .field("key_type", &self.key_type)
+            .field("current_version", &self.current_version)
+            .field("min_decryption_version", &self.min_decryption_version)
+            .field("min_encryption_version", &self.min_encryption_version)
+            .field("deletion_allowed", &self.deletion_allowed)
+            .field("exportable", &self.exportable)
+            .field("allow_plaintext_backup", &self.allow_plaintext_backup)
+            .field("created_time_unix_ms", &self.created_time_unix_ms)
+            .field("latest_version_time_unix_ms", &self.latest_version_time_unix_ms)
+            .field("supports_convergent_encryption", &self.supports_convergent_encryption)
+            .field("versions", &format_args!("<redacted: {} versions>", self.versions.len()))
+            .finish()
+    }
 }
 
 impl TransitKey {
@@ -198,7 +230,7 @@ impl CreateKeyRequest {
 }
 
 /// Request to encrypt data.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EncryptRequest {
     /// Key name.
     pub key_name: String,
@@ -208,6 +240,20 @@ pub struct EncryptRequest {
     pub context: Option<Vec<u8>>,
     /// Key version to use (0 = latest).
     pub key_version: Option<u32>,
+}
+
+impl fmt::Debug for EncryptRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EncryptRequest")
+            .field("key_name", &self.key_name)
+            .field("plaintext", &format_args!("<redacted: {} bytes>", self.plaintext.len()))
+            .field(
+                "context",
+                &self.context.as_ref().map(|context| format_args!("<redacted: {} bytes>", context.len()).to_string()),
+            )
+            .field("key_version", &self.key_version)
+            .finish()
+    }
 }
 
 impl EncryptRequest {
@@ -260,10 +306,18 @@ impl DecryptRequest {
 }
 
 /// Response from decryption.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DecryptResponse {
     /// Decrypted plaintext.
     pub plaintext: Vec<u8>,
+}
+
+impl fmt::Debug for DecryptResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DecryptResponse")
+            .field("plaintext", &format_args!("<redacted: {} bytes>", self.plaintext.len()))
+            .finish()
+    }
 }
 
 /// Request to sign data.
@@ -392,7 +446,7 @@ impl DataKeyRequest {
 }
 
 /// Response with generated data key.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DataKeyResponse {
     /// Plaintext data key (for use).
     pub plaintext: Vec<u8>,
@@ -400,6 +454,16 @@ pub struct DataKeyResponse {
     pub ciphertext: String,
     /// Key version used for wrapping.
     pub key_version: u32,
+}
+
+impl fmt::Debug for DataKeyResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DataKeyResponse")
+            .field("plaintext", &format_args!("<redacted: {} bytes>", self.plaintext.len()))
+            .field("ciphertext", &self.ciphertext)
+            .field("key_version", &self.key_version)
+            .finish()
+    }
 }
 
 /// Request to update key configuration.
@@ -443,12 +507,24 @@ impl UpdateKeyConfigRequest {
 }
 
 /// Batch encryption input.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BatchEncryptInput {
     /// Plaintext to encrypt.
     pub plaintext: Vec<u8>,
     /// Context for convergent encryption.
     pub context: Option<Vec<u8>>,
+}
+
+impl fmt::Debug for BatchEncryptInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BatchEncryptInput")
+            .field("plaintext", &format_args!("<redacted: {} bytes>", self.plaintext.len()))
+            .field(
+                "context",
+                &self.context.as_ref().map(|context| format_args!("<redacted: {} bytes>", context.len()).to_string()),
+            )
+            .finish()
+    }
 }
 
 /// Batch decryption input.
@@ -624,6 +700,59 @@ mod tests {
         assert_eq!(back.name, "test");
         assert_eq!(back.current_version, 1);
         assert_eq!(back.created_time_unix_ms, 5000);
+    }
+
+    #[test]
+    fn test_transit_key_debug_redacts_key_material() {
+        let key = TransitKey::new("test".into(), KeyType::Aes256Gcm, 5000, b"top-secret-key-material".to_vec(), None);
+
+        let debug = format!("{key:?}");
+
+        assert!(debug.contains("test"));
+        assert!(debug.contains("<redacted: 1 versions>"));
+        assert!(!debug.contains("top-secret-key-material"));
+    }
+
+    #[test]
+    fn test_key_version_debug_redacts_key_material() {
+        let version = KeyVersion {
+            version: 1,
+            created_time_unix_ms: 5000,
+            key_material: b"top-secret-key-material".to_vec(),
+            public_key: None,
+        };
+
+        let debug = format!("{version:?}");
+
+        assert!(debug.contains("<redacted: 23 bytes>"));
+        assert!(!debug.contains("top-secret-key-material"));
+    }
+
+    #[test]
+    fn test_transit_plaintext_debug_redacts_payloads() {
+        let encrypt = EncryptRequest::new("k", b"plaintext-secret".to_vec()).with_context(b"context-secret".to_vec());
+        let decrypt = DecryptResponse {
+            plaintext: b"decrypted-secret".to_vec(),
+        };
+        let data_key = DataKeyResponse {
+            plaintext: b"data-key-secret".to_vec(),
+            ciphertext: "aspen:v1:ciphertext".into(),
+            key_version: 1,
+        };
+        let batch = BatchEncryptInput {
+            plaintext: b"batch-secret".to_vec(),
+            context: Some(b"batch-context".to_vec()),
+        };
+
+        let debug = format!("{encrypt:?} {decrypt:?} {data_key:?} {batch:?}");
+
+        assert!(debug.contains("<redacted"));
+        assert!(!debug.contains("plaintext-secret"));
+        assert!(!debug.contains("context-secret"));
+        assert!(!debug.contains("decrypted-secret"));
+        assert!(!debug.contains("data-key-secret"));
+        assert!(!debug.contains("batch-secret"));
+        assert!(!debug.contains("batch-context"));
     }
 
     // =========================================================================

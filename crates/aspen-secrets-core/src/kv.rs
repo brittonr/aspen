@@ -3,6 +3,7 @@
 //! Data structures for versioned secret storage, following HashiCorp Vault patterns.
 
 use std::collections::HashMap;
+use std::fmt;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -10,10 +11,18 @@ use serde::Serialize;
 /// Secret data stored in KV.
 ///
 /// This is the actual secret content stored at each version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SecretData {
     /// Key-value pairs making up the secret.
     pub data: HashMap<String, String>,
+}
+
+impl fmt::Debug for SecretData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SecretData")
+            .field("data", &format_args!("<redacted: {} keys>", self.data.len()))
+            .finish()
+    }
 }
 
 impl SecretData {
@@ -233,7 +242,7 @@ impl ReadSecretRequest {
 }
 
 /// Response from reading a secret.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ReadSecretResponse {
     /// The secret data.
     pub data: SecretData,
@@ -241,8 +250,17 @@ pub struct ReadSecretResponse {
     pub metadata: VersionMetadata,
 }
 
+impl fmt::Debug for ReadSecretResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ReadSecretResponse")
+            .field("data", &self.data)
+            .field("metadata", &self.metadata)
+            .finish()
+    }
+}
+
 /// Request to write a secret.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WriteSecretRequest {
     /// Secret path.
     pub path: String,
@@ -250,6 +268,16 @@ pub struct WriteSecretRequest {
     pub data: SecretData,
     /// Check-and-set version (None = no CAS).
     pub cas: Option<u64>,
+}
+
+impl fmt::Debug for WriteSecretRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WriteSecretRequest")
+            .field("path", &self.path)
+            .field("data", &self.data)
+            .field("cas", &self.cas)
+            .finish()
+    }
 }
 
 impl WriteSecretRequest {
@@ -480,6 +508,33 @@ mod tests {
         let json = serde_json::to_string(&sd).expect("serialize");
         let back: SecretData = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.get("password"), Some("hunter2"));
+    }
+
+    #[test]
+    fn test_secret_data_debug_redacts_values() {
+        let sd = SecretData::new(HashMap::from([("password".into(), "hunter2".into())]));
+
+        let debug = format!("{sd:?}");
+
+        assert!(debug.contains("SecretData"));
+        assert!(debug.contains("<redacted: 1 keys>"));
+        assert!(!debug.contains("password"));
+        assert!(!debug.contains("hunter2"));
+    }
+
+    #[test]
+    fn test_write_secret_request_debug_redacts_data() {
+        let req = WriteSecretRequest::new(
+            "secret/path",
+            SecretData::new(HashMap::from([("password".into(), "hunter2".into())])),
+        );
+
+        let debug = format!("{req:?}");
+
+        assert!(debug.contains("secret/path"));
+        assert!(debug.contains("<redacted: 1 keys>"));
+        assert!(!debug.contains("password"));
+        assert!(!debug.contains("hunter2"));
     }
 
     // =========================================================================
