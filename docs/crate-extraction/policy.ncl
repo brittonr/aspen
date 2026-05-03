@@ -812,7 +812,7 @@ let Candidate = {
 
     aspen_crypto = {
       class = "leaf type/helper",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/trust-crypto-secrets.md",
       owner = "Aspen trust/crypto/secrets maintainers",
       default_feature_sets = ["default", "no-default-features"],
@@ -825,7 +825,7 @@ let Candidate = {
 
     aspen_trust = {
       class = "leaf type/helper",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/trust-crypto-secrets.md",
       owner = "Aspen trust/crypto/secrets maintainers",
       default_feature_sets = ["default", "no-default-features"],
@@ -838,7 +838,7 @@ let Candidate = {
 
     aspen_secrets_core = {
       class = "leaf type/helper",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/trust-crypto-secrets.md",
       owner = "Aspen trust/crypto/secrets maintainers",
       default_feature_sets = ["default", "no-default-features"],
