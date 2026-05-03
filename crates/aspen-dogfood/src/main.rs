@@ -14,6 +14,7 @@ mod node;
 mod receipt;
 mod state;
 
+use std::fmt::Write as _;
 use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
@@ -81,6 +82,8 @@ enum ReceiptsCommand {
     List,
     /// Show one receipt by run id or explicit path.
     Show(ShowReceiptArgs),
+    /// Diagnose one receipt and print first-response triage guidance.
+    Diagnose(DiagnoseReceiptArgs),
 }
 
 #[derive(Args)]
@@ -91,6 +94,12 @@ struct ShowReceiptArgs {
     /// Emit validated canonical JSON instead of a text summary.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Args)]
+struct DiagnoseReceiptArgs {
+    /// Run id in the configured receipts directory, or an explicit receipt JSON path.
+    run_id_or_path: String,
 }
 
 fn main() {
@@ -394,6 +403,7 @@ fn cmd_receipts(config: &RunConfig, command: ReceiptsCommand) -> DogfoodResult<(
     match command {
         ReceiptsCommand::List => cmd_receipts_list(config),
         ReceiptsCommand::Show(args) => cmd_receipts_show(config, &args),
+        ReceiptsCommand::Diagnose(args) => cmd_receipts_diagnose(config, &args),
     }
 }
 
@@ -433,6 +443,13 @@ fn cmd_receipts_show(config: &RunConfig, args: &ShowReceiptArgs) -> DogfoodResul
     } else {
         print_receipt_summary(&receipt, &path);
     }
+    Ok(())
+}
+
+fn cmd_receipts_diagnose(config: &RunConfig, args: &DiagnoseReceiptArgs) -> DogfoodResult<()> {
+    let path = resolve_receipt_selector(config, &args.run_id_or_path);
+    let receipt = load_receipt_file(&path)?;
+    print!("{}", diagnose_receipt(&receipt, &path));
     Ok(())
 }
 
@@ -545,6 +562,101 @@ fn print_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) {
         if let Some(failure) = &stage.failure {
             println!("        failure {} [{}]: {}", failure.operation, failure.category, failure.message);
         }
+    }
+}
+
+fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String {
+    let mut output = String::new();
+    let _ = writeln!(output, "Dogfood receipt diagnosis: {}", receipt.run_id);
+    let _ = writeln!(output, "  path: {}", path.display());
+    let _ = writeln!(output, "  command: {}", receipt.command);
+    let _ = writeln!(output, "  created_at: {}", receipt.created_at);
+
+    let Some(stage) = receipt.stages.iter().find(|stage| stage.status == receipt::DogfoodStageStatus::Failed) else {
+        let succeeded =
+            receipt.stages.iter().filter(|stage| stage.status == receipt::DogfoodStageStatus::Succeeded).count();
+        let _ = writeln!(
+            output,
+            "  status: no failed stage found ({}/{}) stages succeeded",
+            succeeded,
+            receipt.stages.len()
+        );
+        let _ = writeln!(
+            output,
+            "  next: use `receipts show {}` for archival details or rerun `full` for fresh acceptance evidence",
+            receipt.run_id
+        );
+        return output;
+    };
+
+    let _ = writeln!(output, "  status: failed");
+    let _ = writeln!(output, "  failed_stage: {}", stage.stage.as_str());
+    if let Some(failure) = &stage.failure {
+        let _ = writeln!(output, "  failure_category: {}", failure.category);
+        let _ = writeln!(output, "  failure_operation: {}", failure.operation);
+        let _ = writeln!(output, "  failure_message: {}", failure.message);
+        let _ = writeln!(output, "  first_checks:");
+        for check in dogfood_diagnosis_checks(stage.stage, &failure.category) {
+            let _ = writeln!(output, "    - {check}");
+        }
+    } else {
+        let _ = writeln!(output, "  failure_category: missing_failure_summary");
+        let _ = writeln!(output, "  first_checks:");
+        let _ = writeln!(
+            output,
+            "    - Treat the receipt as structurally suspicious and inspect it with `receipts show {}`",
+            receipt.run_id
+        );
+    }
+    output
+}
+
+fn dogfood_diagnosis_checks(stage: receipt::DogfoodStageKind, category: &str) -> &'static [&'static str] {
+    match (stage, category) {
+        (receipt::DogfoodStageKind::Start, "process_spawn") => &[
+            "Check that the dogfood aspen-node binary path exists and is executable.",
+            "Inspect node logs under the cluster directory; do not copy or preserve cluster-ticket.txt.",
+        ],
+        (receipt::DogfoodStageKind::Start, "node_crash") => &[
+            "Inspect node stderr/logs under the cluster directory for the crash cause.",
+            "Verify local ports, data directory ownership, and feature flags before rerunning.",
+        ],
+        (receipt::DogfoodStageKind::Start, "health_check") => &[
+            "Inspect node logs and confirm the cluster can elect a healthy node.",
+            "Check for startup retries before changing source code.",
+        ],
+        (receipt::DogfoodStageKind::Push, "git_push") => &[
+            "Read the captured git stdout/stderr in the receipt failure message.",
+            "Check Forge reachability and whether the pushed tree exceeded protocol message limits.",
+        ],
+        (receipt::DogfoodStageKind::Push, "forge" | "client_rpc") => &[
+            "Check Forge RPC reachability through the cluster ticket without preserving ticket contents.",
+            "Inspect git-remote-aspen diagnostics for protocol or batching errors.",
+        ],
+        (receipt::DogfoodStageKind::Build, "ci_pipeline") => &[
+            "Use the CI run artifact from the receipt, then inspect CI status and logs for that exact run id.",
+            "Check failed job output before rerunning or changing source.",
+        ],
+        (receipt::DogfoodStageKind::Build, "timeout") => &[
+            "Use CI status/logs to distinguish a still-running local Nix build from a stuck worker.",
+            "If the build is still making progress, consider increasing ASPEN_DOGFOOD_CI_TIMEOUT_SECS before changing source.",
+        ],
+        (receipt::DogfoodStageKind::Deploy, "deploy_failed" | "client_rpc" | "timeout") => &[
+            "Check deployment status and confirm the receipt's CI run artifact is the one being deployed.",
+            "Confirm quorum is intact and the built store path or artifact is available to the target node.",
+        ],
+        (receipt::DogfoodStageKind::Verify, "health_check" | "client_rpc") => &[
+            "Treat this as a post-deploy health failure and inspect cluster health plus recent node logs.",
+            "Check node uptime and deployment status before rerunning full dogfood.",
+        ],
+        (receipt::DogfoodStageKind::Stop, "stop_node" | "state_file") => &[
+            "Inspect local process state and cluster directory ownership.",
+            "Do not manually delete cluster files until process cleanup state is understood.",
+        ],
+        _ => &[
+            "Use the failure message as the primary clue and preserve the JSON receipt as evidence.",
+            "Run `receipts show <run-id>` for full stage and artifact context.",
+        ],
     }
 }
 
@@ -910,6 +1022,36 @@ mod tests {
             timeout_secs: 600,
         };
         assert_eq!(dogfood_error_category(&error), "timeout");
+    }
+
+    #[test]
+    fn diagnose_receipt_reports_success_without_live_cluster() {
+        let receipt = sample_receipt("dogfood-ok", "2026-05-03T02:00:00Z", receipt::DogfoodStageStatus::Succeeded);
+
+        let output = diagnose_receipt(&receipt, Path::new("/tmp/dogfood-ok.json"));
+
+        assert!(output.contains("Dogfood receipt diagnosis: dogfood-ok"));
+        assert!(output.contains("status: no failed stage found (1/1) stages succeeded"));
+        assert!(output.contains("receipts show dogfood-ok"));
+    }
+
+    #[test]
+    fn diagnose_receipt_reports_failed_stage_and_checks() {
+        let receipt = sample_receipt("dogfood-failed", "2026-05-03T01:00:00Z", receipt::DogfoodStageStatus::Failed);
+
+        let output = diagnose_receipt(&receipt, Path::new("/tmp/dogfood-failed.json"));
+
+        assert!(output.contains("status: failed"));
+        assert!(output.contains("failed_stage: build"));
+        assert!(output.contains("failure_category: ci_pipeline"));
+        assert!(output.contains("Use the CI run artifact from the receipt"));
+    }
+
+    #[test]
+    fn diagnosis_checks_fall_back_for_unknown_category() {
+        let checks = dogfood_diagnosis_checks(receipt::DogfoodStageKind::Build, "unexpected");
+
+        assert!(checks[0].contains("failure message"));
     }
 
     #[test]

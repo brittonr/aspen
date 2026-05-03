@@ -152,6 +152,9 @@ nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts list
 # Show a human-readable summary for a run ID from the list.
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id>
 
+# Diagnose the first failed stage and print first-response checks.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts diagnose <run-id>
+
 # Emit the validated canonical JSON receipt for machine checks or evidence archival.
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id> --json
 ```
@@ -170,6 +173,9 @@ nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts list
 
 # Read the operator summary.
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id>
+
+# Print deterministic first-response guidance for the failed stage/category.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts diagnose <run-id>
 
 # Export validated JSON for incident evidence or scripts.
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id> --json > dogfood-receipt.json
