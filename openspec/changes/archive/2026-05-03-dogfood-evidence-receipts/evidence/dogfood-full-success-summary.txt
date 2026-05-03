@@ -1,0 +1,14 @@
+command: nix run .#dogfood-local -- full
+receipt: openspec/changes/archive/2026-05-03-dogfood-evidence-receipts/evidence/dogfood-full-success-receipt.json
+schema: aspen.dogfood.run-receipt.v1
+run_id: dogfood-20260503T170949Z
+status: success
+stages:
+- start: succeeded (2026-05-03T17:09:49Z -> 2026-05-03T17:10:04Z)
+- push: succeeded (2026-05-03T17:10:04Z -> 2026-05-03T17:11:48Z)
+- build: succeeded (2026-05-03T17:11:48Z -> 2026-05-03T17:21:14Z)
+  artifact ci-run kind=ci_run store_id=01c5c1bf-5ec8-4920-81f8-13d13fa2f54f
+- deploy: succeeded (2026-05-03T17:21:14Z -> 2026-05-03T17:21:17Z)
+- verify: succeeded (2026-05-03T17:21:17Z -> 2026-05-03T17:21:18Z)
+- stop: succeeded (2026-05-03T17:21:18Z -> 2026-05-03T17:21:20Z)
+failures: 0
