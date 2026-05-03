@@ -3,6 +3,7 @@ name = "aspen-ticket"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Aspen cluster ticket types for peer discovery and bootstrap"
 
 [features]

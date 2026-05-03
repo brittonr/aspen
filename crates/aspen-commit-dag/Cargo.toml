@@ -3,6 +3,7 @@ name = "aspen-commit-dag"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Chain-hashed commit DAG for Aspen KV branch history and federation integrity"
 
 [dependencies]

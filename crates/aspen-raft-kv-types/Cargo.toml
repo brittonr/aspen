@@ -3,6 +3,7 @@ name = "aspen-raft-kv-types"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Reusable OpenRaft KV app types for Aspen's Redb Raft KV stack"
 authors = ["Aspen Contributors"]
 

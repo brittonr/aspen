@@ -5,6 +5,7 @@ edition = "2024"
 authors = ["Aspen Contributors"]
 description = "Guest binary support for Aspen VM-based job execution"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 
 [lib]
 # The #[panic_handler] and #[global_allocator] are gated behind cfg(not(test))

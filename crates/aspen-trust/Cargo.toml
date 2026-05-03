@@ -3,6 +3,7 @@ name = "aspen-trust"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Shamir secret sharing and cluster trust primitives for Aspen"
 publish = false
 

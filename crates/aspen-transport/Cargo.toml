@@ -3,6 +3,7 @@ name = "aspen-transport"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Network transport layer for Aspen distributed systems - protocol handlers and connection management"
 
 [dependencies]

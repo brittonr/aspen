@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Shared types for Aspen WASM plugin system"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

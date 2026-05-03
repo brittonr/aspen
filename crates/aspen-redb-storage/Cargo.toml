@@ -3,6 +3,7 @@ name = "aspen-redb-storage"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Redb-based storage backend for Aspen Raft consensus"
 authors = ["Aspen Contributors"]
 

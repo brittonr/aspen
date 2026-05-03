@@ -7,6 +7,7 @@ name = "aspen-docs"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "CRDT-based document synchronization for Aspen using iroh-docs"
 authors = ["Aspen Contributors"]
 

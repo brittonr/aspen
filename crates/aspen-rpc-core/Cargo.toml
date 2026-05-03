@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Core RPC abstractions for Aspen distributed cluster handlers"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 
 [dependencies]
 # Reusable RPC request/response and dispatch surface.

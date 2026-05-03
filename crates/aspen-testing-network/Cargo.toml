@@ -3,6 +3,7 @@ name = "aspen-testing-network"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Network testing utilities including fault injection and VM management for Aspen"
 authors = ["Aspen Contributors"]
 

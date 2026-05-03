@@ -3,6 +3,7 @@ name = "aspen-client"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Pure client library for Aspen distributed systems - no raft/cluster dependencies"
 
 [dependencies]

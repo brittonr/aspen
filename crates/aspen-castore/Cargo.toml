@@ -3,6 +3,7 @@ name = "aspen-castore"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Nix content-addressed store using snix traits, iroh-blobs backend, and irpc transport"
 
 [dependencies]

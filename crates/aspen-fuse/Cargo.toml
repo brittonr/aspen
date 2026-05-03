@@ -3,6 +3,7 @@ name = "aspen-fuse"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "FUSE filesystem for mounting Aspen KV clusters as POSIX filesystems"
 keywords = ["fuse", "filesystem", "distributed", "kv"]
 categories = ["filesystem"]

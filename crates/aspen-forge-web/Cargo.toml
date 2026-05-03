@@ -3,6 +3,7 @@ name = "aspen-forge-web"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Web frontend for Aspen Forge served over HTTP/3 via iroh-h3"
 
 [dependencies]

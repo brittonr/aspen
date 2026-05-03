@@ -3,6 +3,7 @@ name = "aspen-constants"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Tiger Style resource limits and constants for Aspen distributed systems"
 
 [dependencies]

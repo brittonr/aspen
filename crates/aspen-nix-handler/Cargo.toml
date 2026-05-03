@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Nix binary cache and SNIX RPC handlers for Aspen distributed cluster"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 
 [dependencies]
 # RPC core abstractions (RequestHandler trait, ClientProtocolContext)

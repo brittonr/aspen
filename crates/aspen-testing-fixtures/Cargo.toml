@@ -3,6 +3,7 @@ name = "aspen-testing-fixtures"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Reusable test fixtures and builders for Aspen testing"
 authors = ["Aspen Contributors"]
 

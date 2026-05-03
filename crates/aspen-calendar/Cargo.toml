@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Calendar domain logic for Aspen distributed cluster"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 
 [dependencies]
 aspen-client-api = { path = "../aspen-client-api" }

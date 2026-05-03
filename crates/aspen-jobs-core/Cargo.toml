@@ -3,6 +3,7 @@ name = "aspen-jobs-core"
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
+repository = "https://github.com/brittonr/aspen"
 description = "Reusable job contracts and deterministic helpers for Aspen jobs and CI"
 
 [dependencies]
