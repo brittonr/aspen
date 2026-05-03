@@ -1,0 +1,3 @@
+{
+  "complete-trust-crypto-secrets-serialization-contracts": []
+}

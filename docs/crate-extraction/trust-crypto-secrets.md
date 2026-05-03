@@ -4,17 +4,17 @@
 
 - **Family**: `trust-crypto-secrets`
 - **Canonical class**: `leaf type/helper` plus `service library`
-- **Crates**: `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime consumer coverage for `aspen-secrets-handler`
+- **Crates**: `aspen-trust`, `aspen-crypto`, `aspen-secrets-core`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime consumer coverage for `aspen-secrets-handler`
 - **Intended audience**: systems that need deterministic trust/crypto/secrets state logic without Aspen Raft, Iroh, Redb, or secrets-service runtime shells.
 - **Public API owner**: architecture-modularity
-- **Readiness state**: `workspace-internal`; owner/public API review complete and promotion deferred pending trust/secrets serialization-contract evidence; checker coverage and the `aspen-trust` async/default policy are now documented and enforced.
+- **Readiness state**: `workspace-internal`; owner/public API review complete; checker coverage, the `aspen-trust` async/default policy, and trust/secrets serialization-contract evidence are now documented and enforced. A fresh readiness review is required before any promotion.
 
 ## Package metadata
 
 - **Documentation entrypoint**: trust/secrets Rustdoc, `docs/trust-quorum.md`, and this manifest.
 - **License policy**: AGPL-3.0-or-later until human license strategy changes.
 - **Repository/homepage policy**: Aspen monorepo path until publication policy is decided.
-- **Semver policy**: no external semver guarantee; serialized/share formats become compatibility contracts after tests/goldens land.
+- **Semver policy**: no external semver guarantee; selected serialized/share formats are internal compatibility contracts covered by golden/roundtrip tests, but external semver is still deferred until publication policy changes.
 - **Publication policy**: no publishable/repo-split state in this change.
 
 ## Feature contract
@@ -82,8 +82,12 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 
 Compatibility re-exports: none for `aspen-crypto`; `aspen-secrets` preserves compatibility re-exports for `aspen-secrets-core`.
 
-Canonical reusable surfaces are `aspen-crypto` default/no-default helpers, `aspen-secrets-core` type/state contracts, and the default/no-default `aspen-trust` pure helper/state/wire surface. `aspen-trust` async/Tokio service APIs are explicitly opt-in through `aspen-trust/async`; trust/secrets serialization contracts still need evidence before readiness promotion. `aspen-secrets` remains a service/runtime implementation crate for now, and `aspen-secrets-handler` remains a compatibility/runtime consumer. Evidence is recorded under `openspec/changes/archive/2026-05-03-review-trust-crypto-secrets-public-api/evidence/` and `openspec/changes/archive/2026-05-03-complete-trust-crypto-secrets-checker-coverage/evidence/`.
+Canonical reusable surfaces are `aspen-crypto` default/no-default helpers, `aspen-secrets-core` type/state contracts, and the default/no-default `aspen-trust` pure helper/state/wire surface. `aspen-trust` async/Tokio service APIs are explicitly opt-in through `aspen-trust/async`. `aspen-secrets` remains a service/runtime implementation crate for now, and `aspen-secrets-handler` remains a compatibility/runtime consumer. Evidence is recorded under `openspec/changes/archive/2026-05-03-review-trust-crypto-secrets-public-api/evidence/` and `openspec/changes/archive/2026-05-03-complete-trust-crypto-secrets-checker-coverage/evidence/`.
 
 ## Aspen trust async/default policy
 
 `aspen-trust` default and no-default builds now expose the reusable pure helper/state/wire surface without normal `tokio` or `async-trait` dependency edges. The async service modules `key_manager` and `reencrypt` require `aspen-trust/async`, and `aspen-raft/trust` enables that feature for runtime compatibility. Evidence is recorded under `openspec/changes/archive/2026-05-03-complete-aspen-trust-async-default-policy/evidence/`.
+
+## Serialization contract evidence
+
+`complete-trust-crypto-secrets-serialization-contracts` pins deterministic serialization contracts for the currently classified reusable trust/secrets surfaces. `aspen-trust` now has golden/roundtrip tests for share bytes, encrypted envelope bytes, trust protocol postcard bytes, `Threshold` JSON, and encrypted chain JSON state. `aspen-secrets-core` now has JSON contract tests for KV, Transit, and PKI persisted state/config types. Request/response DTOs in `aspen-secrets-core` that do not derive serde remain service implementation convenience types rather than serialization compatibility contracts. Evidence is recorded under `openspec/changes/archive/2026-05-03-complete-trust-crypto-secrets-serialization-contracts/evidence/` after archive; until a fresh readiness review lands, the aggregate family remains `workspace-internal`.

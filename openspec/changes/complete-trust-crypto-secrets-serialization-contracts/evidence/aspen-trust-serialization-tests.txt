@@ -1,0 +1,36 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running tests/serialization_contract.rs (target/debug/deps/serialization_contract-3dc1b9c56d33e8c9)
+
+running 4 tests
+test encrypted_value_bytes_pin_magic_version_epoch_nonce_and_payload ... ok
+test share_bytes_are_a_stable_contract ... ok
+test trust_protocol_postcard_bytes_pin_enum_order ... ok
+test trust_json_contracts_cover_scalar_and_chain_state ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.82s
+     Running tests/serialization_contract.rs (target/debug/deps/serialization_contract-095921e236d93541)
+
+running 4 tests
+test share_bytes_are_a_stable_contract ... ok
+test encrypted_value_bytes_pin_magic_version_epoch_nonce_and_payload ... ok
+test trust_protocol_postcard_bytes_pin_enum_order ... ok
+test trust_json_contracts_cover_scalar_and_chain_state ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
