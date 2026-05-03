@@ -7,6 +7,7 @@ use anyhow::Result;
 use aspen_ci_core::log_writer::CiLogChunk;
 use aspen_client::watch::WatchEvent;
 use aspen_client::watch::WatchSession;
+use aspen_client_api::CiRunReceipt;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use clap::Args;
@@ -26,6 +27,9 @@ pub enum CiCommand {
 
     /// Get the status of a pipeline run.
     Status(StatusArgs),
+
+    /// Get a schema-versioned native CI run receipt.
+    Receipt(ReceiptArgs),
 
     /// List pipeline runs.
     List(ListArgs),
@@ -71,6 +75,12 @@ pub struct StatusArgs {
     /// Follow status updates (poll every second until completion).
     #[arg(short, long)]
     pub follow: bool,
+}
+
+#[derive(Args)]
+pub struct ReceiptArgs {
+    /// Pipeline run ID.
+    pub run_id: String,
 }
 
 #[derive(Args)]
@@ -433,12 +443,58 @@ impl Outputable for CiOutputOutput {
     }
 }
 
+/// Native CI run receipt output.
+pub struct CiRunReceiptOutput {
+    pub was_found: bool,
+    pub receipt: Option<CiRunReceipt>,
+    pub error: Option<String>,
+}
+
+impl Outputable for CiRunReceiptOutput {
+    fn to_json(&self) -> serde_json::Value {
+        json!({
+            "was_found": self.was_found,
+            "receipt": self.receipt,
+            "error": self.error,
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let Some(receipt) = &self.receipt else {
+            return format!("CI receipt not found: {}", self.error.as_deref().unwrap_or("unknown error"));
+        };
+        let succeeded = receipt.stages.iter().filter(|stage| stage.status == "success").count();
+        let total_jobs: usize = receipt.stages.iter().map(|stage| stage.jobs.len()).sum();
+        let jobs_with_ids =
+            receipt.stages.iter().flat_map(|stage| stage.jobs.iter()).filter(|job| job.job_id.is_some()).count();
+        let mut output = format!(
+            "CI receipt: {}\nSchema: {}\nPipeline: {}\nRepository: {}\nRef: {}\nCommit: {}\nStatus: {}\nStages: {}/{} succeeded\nJobs: {} ({} with log handles)",
+            receipt.run_id,
+            receipt.schema,
+            receipt.pipeline_name,
+            receipt.repo_id,
+            receipt.ref_name,
+            receipt.commit_hash,
+            receipt.status,
+            succeeded,
+            receipt.stages.len(),
+            total_jobs,
+            jobs_with_ids,
+        );
+        if let Some(error) = &receipt.error {
+            output.push_str(&format!("\nError: {error}"));
+        }
+        output
+    }
+}
+
 impl CiCommand {
     /// Execute the CI command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
         match self {
             CiCommand::Run(args) => ci_run(client, args, json).await,
             CiCommand::Status(args) => ci_status(client, args, json).await,
+            CiCommand::Receipt(args) => ci_receipt(client, args, json).await,
             CiCommand::List(args) => ci_list(client, args, json).await,
             CiCommand::Cancel(args) => ci_cancel(client, args, json).await,
             CiCommand::Watch(args) => ci_watch(client, args, json).await,
@@ -468,6 +524,28 @@ async fn ci_run(client: &AspenClient, args: RunArgs, json: bool) -> Result<()> {
             };
             print_output(&output, json);
             if !result.is_success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn ci_receipt(client: &AspenClient, args: ReceiptArgs, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::CiGetRunReceipt { run_id: args.run_id }).await?;
+
+    match response {
+        ClientRpcResponse::CiGetRunReceiptResult(result) => {
+            let was_found = result.was_found;
+            let output = CiRunReceiptOutput {
+                was_found,
+                receipt: result.receipt,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !was_found {
                 std::process::exit(1);
             }
             Ok(())

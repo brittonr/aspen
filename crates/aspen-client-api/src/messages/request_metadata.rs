@@ -97,6 +97,7 @@ define_request_variant_name! {
     ClientRpcRequest::CiGetArtifact { .. } => "CiGetArtifact",
     ClientRpcRequest::CiGetJobLogs { .. } => "CiGetJobLogs",
     ClientRpcRequest::CiGetJobOutput { .. } => "CiGetJobOutput",
+    ClientRpcRequest::CiGetRunReceipt { .. } => "CiGetRunReceipt",
     ClientRpcRequest::CiGetStatus { .. } => "CiGetStatus",
     ClientRpcRequest::CiGetRefStatus { .. } => "CiGetRefStatus",
     ClientRpcRequest::CiListArtifacts { .. } => "CiListArtifacts",

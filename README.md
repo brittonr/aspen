@@ -67,7 +67,7 @@ Pipelines auto-trigger on Forge pushes. Three executor backends:
 - **Nix** -- sandbox, reproducible flake builds, artifacts to iroh-blobs + binary cache
 - **VM** -- Cloud Hypervisor microVM for untrusted workloads
 
-Pipelines defined in [Nickel](https://nickel-lang.org/) (`.aspen/ci.ncl`). Jobs distributed across the cluster via the Raft-backed job queue.
+Pipelines defined in [Nickel](https://nickel-lang.org/) (`.aspen/ci.ncl`). Jobs distributed across the cluster via the Raft-backed job queue. Operators can query native CI/deploy evidence with `aspen-cli ci receipt <run-id>` or `aspen-cli --json ci receipt <run-id>`; receipts use schema `aspen.ci.run-receipt.v1` and include deterministic stage/job summaries with job IDs for log follow-up.
 
 ## Federation
 

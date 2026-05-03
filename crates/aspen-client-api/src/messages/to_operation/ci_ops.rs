@@ -10,9 +10,11 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
 
 fn to_operation_ci_pipeline(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     match request {
-        ClientRpcRequest::CiGetStatus { run_id } => Some(Some(Operation::Read {
-            key: format!("_ci:runs:{}", run_id),
-        })),
+        ClientRpcRequest::CiGetStatus { run_id } | ClientRpcRequest::CiGetRunReceipt { run_id } => {
+            Some(Some(Operation::Read {
+                key: format!("_ci:runs:{}", run_id),
+            }))
+        }
         ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => Some(Some(Operation::Read {
             key: format!("_ci:ref-status:{}:{}", repo_id, ref_name),
         })),

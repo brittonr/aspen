@@ -20,6 +20,7 @@ use crate::handler::logs::handle_get_job_output;
 use crate::handler::logs::handle_subscribe_logs;
 use crate::handler::pipeline::handle_cancel_run;
 use crate::handler::pipeline::handle_get_ref_status;
+use crate::handler::pipeline::handle_get_run_receipt;
 use crate::handler::pipeline::handle_get_status;
 #[cfg(feature = "forge")]
 use crate::handler::pipeline::handle_list_runs;
@@ -116,6 +117,10 @@ impl ServiceExecutor for CiServiceExecutor {
             }
 
             ClientRpcRequest::CiGetStatus { run_id } => handle_get_status(self.ci_orchestrator.as_ref(), run_id).await,
+
+            ClientRpcRequest::CiGetRunReceipt { run_id } => {
+                handle_get_run_receipt(self.ci_orchestrator.as_ref(), run_id).await
+            }
 
             ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => {
                 handle_get_ref_status(self.ci_orchestrator.as_ref(), repo_id, ref_name).await

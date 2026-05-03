@@ -27,6 +27,8 @@ pub enum CiRequest {
     },
     /// Get pipeline run status and details.
     CiGetStatus { run_id: String },
+    /// Get a schema-versioned CI run receipt.
+    CiGetRunReceipt { run_id: String },
     /// List pipeline runs with optional filtering.
     CiListRuns {
         repo_id: Option<String>,
@@ -111,7 +113,7 @@ impl CiRequest {
     fn to_operation_pipeline(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::CiGetStatus { run_id } => Some(Operation::Read {
+            Self::CiGetStatus { run_id } | Self::CiGetRunReceipt { run_id } => Some(Operation::Read {
                 key: format!("_ci:runs:{}", run_id),
             }),
             Self::CiListRuns { repo_id, .. } => Some(Operation::Read {
@@ -250,6 +252,78 @@ pub struct CiGetStatusResponse {
     /// Completion time (Unix timestamp in milliseconds).
     pub completed_at_ms: Option<u64>,
     /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// A job entry in a schema-versioned CI run receipt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiRunReceiptJob {
+    /// Job name from the pipeline configuration.
+    pub name: String,
+    /// Aspen job ID when the job has been scheduled.
+    pub job_id: Option<String>,
+    /// Stable lowercase status.
+    pub status: String,
+    /// Job start time (Unix timestamp in milliseconds).
+    pub started_at_ms: Option<u64>,
+    /// Job completion time (Unix timestamp in milliseconds).
+    pub completed_at_ms: Option<u64>,
+    /// Error message if the job failed.
+    pub error: Option<String>,
+}
+
+/// A stage entry in a schema-versioned CI run receipt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiRunReceiptStage {
+    /// Stage name from the pipeline configuration.
+    pub name: String,
+    /// Stable lowercase status.
+    pub status: String,
+    /// Stage start time (Unix timestamp in milliseconds).
+    pub started_at_ms: Option<u64>,
+    /// Stage completion time (Unix timestamp in milliseconds).
+    pub completed_at_ms: Option<u64>,
+    /// Jobs in deterministic name order.
+    pub jobs: Vec<CiRunReceiptJob>,
+}
+
+/// Schema-versioned operator receipt for a CI pipeline run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiRunReceipt {
+    /// Receipt schema identifier.
+    pub schema: String,
+    /// Pipeline run ID.
+    pub run_id: String,
+    /// Pipeline name.
+    pub pipeline_name: String,
+    /// Repository ID.
+    pub repo_id: String,
+    /// Git reference.
+    pub ref_name: String,
+    /// Commit hash.
+    pub commit_hash: String,
+    /// Stable lowercase status.
+    pub status: String,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_at_ms: u64,
+    /// Start time (Unix timestamp in milliseconds).
+    pub started_at_ms: Option<u64>,
+    /// Completion time (Unix timestamp in milliseconds).
+    pub completed_at_ms: Option<u64>,
+    /// Error message if the pipeline failed during initialization or checkout.
+    pub error: Option<String>,
+    /// Stage receipts in pipeline order.
+    pub stages: Vec<CiRunReceiptStage>,
+}
+
+/// CI get run receipt response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiGetRunReceiptResponse {
+    /// Whether the pipeline run was found.
+    pub was_found: bool,
+    /// Receipt if found.
+    pub receipt: Option<CiRunReceipt>,
+    /// Error message if not found or unavailable.
     pub error: Option<String>,
 }
 

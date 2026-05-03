@@ -128,6 +128,20 @@ Deploy jobs emit per-node progress as CI log lines with the `[deploy]` prefix:
 
 Use `aspen-cli ci logs --follow <run_id> <deploy_job_id>` to watch in real time.
 
+## Native CI Run Receipts
+
+Aspen exposes the persisted CI run as a schema-versioned operator receipt. This is the native CI/deploy evidence plane behind dogfood receipts: it is projected from the Raft-backed `PipelineRun` record and keeps job IDs as handles for follow-up `ci logs` / `ci output` inspection.
+
+```bash
+# Human summary for a CI run.
+aspen-cli ci receipt <run-id>
+
+# Machine-parseable receipt JSON.
+aspen-cli --json ci receipt <run-id>
+```
+
+The receipt schema is `aspen.ci.run-receipt.v1`. It includes run ID, repository ID, ref, commit hash, pipeline name, terminal/current status, timestamps, stages, and deterministically ordered jobs. Missing run IDs fail explicitly instead of fabricating evidence. This first slice is a projection of existing run state rather than a separate immutable receipt row.
+
 ## Dogfood Script
 
 The self-hosted build pipeline is Aspen's operator acceptance path: source is pushed to Aspen Forge, built by Aspen CI, deployed to an Aspen cluster, verified through cluster health, and then stopped with a durable run receipt. Treat a successful `full` run plus `receipts list/show` output as the canonical evidence that the self-hosted path works under the current tree.

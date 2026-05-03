@@ -5,8 +5,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use aspen_client_api::CiCancelRunResponse;
+use aspen_client_api::CiGetRunReceiptResponse;
 use aspen_client_api::CiGetStatusResponse;
 use aspen_client_api::CiJobInfo;
+use aspen_client_api::CiRunReceipt;
+use aspen_client_api::CiRunReceiptJob;
+use aspen_client_api::CiRunReceiptStage;
 use aspen_client_api::CiStageInfo;
 #[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_client_api::CiTriggerPipelineResponse;
@@ -300,6 +304,58 @@ pub async fn handle_trigger_pipeline(
     Ok(ci_trigger_success_response(run.id))
 }
 
+fn timestamp_ms(time: chrono::DateTime<chrono::Utc>) -> u64 {
+    time.timestamp_millis() as u64
+}
+
+fn optional_timestamp_ms(time: Option<chrono::DateTime<chrono::Utc>>) -> Option<u64> {
+    time.map(timestamp_ms)
+}
+
+fn pipeline_run_to_receipt(run: &aspen_ci::orchestrator::PipelineRun) -> CiRunReceipt {
+    let stages = run
+        .stages
+        .iter()
+        .map(|stage| {
+            let mut jobs: Vec<CiRunReceiptJob> = stage
+                .jobs
+                .iter()
+                .map(|(name, job)| CiRunReceiptJob {
+                    name: name.clone(),
+                    job_id: job.job_id.as_ref().map(|id| id.to_string()),
+                    status: job.status.as_str().to_string(),
+                    started_at_ms: optional_timestamp_ms(job.started_at),
+                    completed_at_ms: optional_timestamp_ms(job.completed_at),
+                    error: job.error.clone(),
+                })
+                .collect();
+            jobs.sort_by(|left, right| left.name.cmp(&right.name));
+            CiRunReceiptStage {
+                name: stage.name.clone(),
+                status: stage.status.as_str().to_string(),
+                started_at_ms: optional_timestamp_ms(stage.started_at),
+                completed_at_ms: optional_timestamp_ms(stage.completed_at),
+                jobs,
+            }
+        })
+        .collect();
+
+    CiRunReceipt {
+        schema: "aspen.ci.run-receipt.v1".to_string(),
+        run_id: run.id.clone(),
+        pipeline_name: run.pipeline_name.clone(),
+        repo_id: run.context.repo_id.to_hex(),
+        ref_name: run.context.ref_name.clone(),
+        commit_hash: hex::encode(run.context.commit_hash),
+        status: run.status.as_str().to_string(),
+        created_at_ms: timestamp_ms(run.created_at),
+        started_at_ms: optional_timestamp_ms(run.started_at),
+        completed_at_ms: optional_timestamp_ms(run.completed_at),
+        error: run.error_message.clone(),
+        stages,
+    }
+}
+
 /// Handle CiGetStatus request.
 ///
 /// Returns the current status of a pipeline run.
@@ -377,6 +433,35 @@ pub async fn handle_get_status(
         stages,
         created_at_ms: Some(run.created_at.timestamp_millis() as u64),
         completed_at_ms: run.completed_at.map(|t| t.timestamp_millis() as u64),
+        error: None,
+    }))
+}
+
+/// Handle CiGetRunReceipt request.
+pub async fn handle_get_run_receipt(
+    orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    run_id: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    let Some(orchestrator) = orchestrator else {
+        return Ok(ClientRpcResponse::CiGetRunReceiptResult(CiGetRunReceiptResponse {
+            was_found: false,
+            receipt: None,
+            error: Some("CI orchestrator not available".to_string()),
+        }));
+    };
+
+    debug!(run_id = %run_id, "getting CI pipeline receipt");
+    let Some(run) = orchestrator.get_run(&run_id).await else {
+        return Ok(ClientRpcResponse::CiGetRunReceiptResult(CiGetRunReceiptResponse {
+            was_found: false,
+            receipt: None,
+            error: Some("Pipeline run not found".to_string()),
+        }));
+    };
+
+    Ok(ClientRpcResponse::CiGetRunReceiptResult(CiGetRunReceiptResponse {
+        was_found: true,
+        receipt: Some(pipeline_run_to_receipt(&run)),
         error: None,
     }))
 }
@@ -573,10 +658,18 @@ pub async fn handle_cancel_run(
 
 #[cfg(all(test, feature = "forge", feature = "blob"))]
 mod tests {
+    use std::collections::HashMap;
     use std::path::Path;
 
+    use aspen_ci::orchestrator::JobStatus;
+    use aspen_ci::orchestrator::PipelineContext;
+    use aspen_ci::orchestrator::PipelineRun;
+    use aspen_ci::orchestrator::PipelineStatus;
+    use aspen_ci::orchestrator::StageStatus;
     use aspen_client_api::CiTriggerPipelineResponse;
     use aspen_forge::identity::RepoId;
+    use chrono::TimeZone;
+    use chrono::Utc;
 
     use super::*;
 
@@ -629,5 +722,69 @@ mod tests {
         assert_eq!(context.env.get("CI_CHECKOUT_DIR").map(String::as_str), Some("/tmp/aspen-checkout/test-run"));
         assert_eq!(context.checkout_dir.as_deref(), Some(checkout_dir));
         assert!(context.source_hash.is_none());
+    }
+
+    #[test]
+    fn pipeline_run_to_receipt_is_schema_versioned_and_sorts_jobs() {
+        let repo_id = RepoId([7u8; 32]);
+        let created_at = Utc.with_ymd_and_hms(2026, 5, 3, 20, 0, 0).single().expect("valid time");
+        let started_at = Utc.with_ymd_and_hms(2026, 5, 3, 20, 1, 0).single().expect("valid time");
+        let completed_at = Utc.with_ymd_and_hms(2026, 5, 3, 20, 2, 0).single().expect("valid time");
+        let mut jobs = HashMap::new();
+        jobs.insert("zeta".to_string(), JobStatus {
+            job_id: None,
+            status: PipelineStatus::Success,
+            started_at: Some(started_at),
+            completed_at: Some(completed_at),
+            output: None,
+            error: None,
+        });
+        jobs.insert("alpha".to_string(), JobStatus {
+            job_id: None,
+            status: PipelineStatus::Failed,
+            started_at: Some(started_at),
+            completed_at: Some(completed_at),
+            output: None,
+            error: Some("boom".to_string()),
+        });
+        let run = PipelineRun {
+            id: "run-1".to_string(),
+            pipeline_name: "dogfood".to_string(),
+            context: PipelineContext {
+                repo_id,
+                commit_hash: [9u8; 32],
+                ref_name: "refs/heads/main".to_string(),
+                triggered_by: "test".to_string(),
+                run_id: "run-1".to_string(),
+                env: HashMap::new(),
+                checkout_dir: None,
+                source_hash: None,
+            },
+            status: PipelineStatus::Failed,
+            created_at,
+            started_at: Some(started_at),
+            completed_at: Some(completed_at),
+            stages: vec![StageStatus {
+                name: "build".to_string(),
+                status: PipelineStatus::Failed,
+                started_at: Some(started_at),
+                completed_at: Some(completed_at),
+                jobs,
+            }],
+            workflow_id: None,
+            error_message: Some("pipeline failed".to_string()),
+            has_pending_deploys: false,
+        };
+
+        let receipt = pipeline_run_to_receipt(&run);
+
+        assert_eq!(receipt.schema, "aspen.ci.run-receipt.v1");
+        assert_eq!(receipt.run_id, "run-1");
+        assert_eq!(receipt.repo_id, repo_id.to_hex());
+        assert_eq!(receipt.commit_hash, hex::encode([9u8; 32]));
+        assert_eq!(receipt.created_at_ms, created_at.timestamp_millis() as u64);
+        assert_eq!(receipt.stages[0].jobs[0].name, "alpha");
+        assert_eq!(receipt.stages[0].jobs[1].name, "zeta");
+        assert_eq!(receipt.stages[0].jobs[0].error.as_deref(), Some("boom"));
     }
 }

@@ -385,7 +385,7 @@ async fn test_spawned_writer_channel_close_without_complete() {
 #[tokio::test]
 async fn test_log_chunks_scannable_by_watch_prefix_in_order() {
     use aspen_core::kv::ScanRequest;
-    use aspen_traits::KeyValueStore;
+    use aspen_traits::KvScan;
 
     let kv = DeterministicKeyValueStore::new();
 

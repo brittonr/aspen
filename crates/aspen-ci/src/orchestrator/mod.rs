@@ -33,6 +33,7 @@ pub use nix_build_supervisor::BuildLog;
 pub use nix_build_supervisor::BuildRequest;
 pub use nix_build_supervisor::BuildResult;
 pub use nix_build_supervisor::NixBuildSupervisor;
+pub use pipeline::JobStatus;
 pub use pipeline::PipelineContext;
 pub use pipeline::PipelineOrchestrator;
 pub use pipeline::PipelineOrchestratorConfig;

@@ -135,6 +135,7 @@ pub use ci::CiCancelRunResponse;
 pub use ci::CiGetArtifactResponse;
 pub use ci::CiGetJobLogsResponse;
 pub use ci::CiGetJobOutputResponse;
+pub use ci::CiGetRunReceiptResponse;
 pub use ci::CiGetStatusResponse;
 pub use ci::CiJobInfo;
 pub use ci::CiListArtifactsResponse;
@@ -142,6 +143,9 @@ pub use ci::CiListRunsResponse;
 pub use ci::CiLogChunkInfo;
 pub use ci::CiRequest;
 pub use ci::CiRunInfo;
+pub use ci::CiRunReceipt;
+pub use ci::CiRunReceiptJob;
+pub use ci::CiRunReceiptStage;
 pub use ci::CiStageInfo;
 pub use ci::CiSubscribeLogsResponse;
 pub use ci::CiTriggerPipelineResponse;
@@ -3984,6 +3988,14 @@ pub enum ClientRpcRequest {
         /// Repository ID (hex-encoded BLAKE3 hash).
         repo_id: String,
     },
+
+    /// Get a schema-versioned native CI run receipt.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    CiGetRunReceipt {
+        /// Pipeline run ID.
+        run_id: String,
+    },
 }
 
 #[cfg(feature = "auth")]
@@ -4950,6 +4962,11 @@ pub enum ClientRpcResponse {
     ///
     /// Appended to preserve postcard discriminants for older clients.
     ForgeJjNative(forge::JjNativeResponse),
+
+    /// Native CI run receipt response.
+    ///
+    /// Appended to preserve postcard discriminants for older clients.
+    CiGetRunReceiptResult(CiGetRunReceiptResponse),
 }
 
 /// Result of a plugin reload operation.
