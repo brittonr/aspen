@@ -96,13 +96,11 @@ const RETRY_DELAY: Duration = Duration::from_millis(500);
 
 /// Maximum bytes per push batch.
 ///
-/// We've configured the QUIC transport to support 64MB stream receive windows,
-/// so we can use larger batches. Larger batches mean fewer cross-batch
-/// dependencies, which simplifies the topological ordering requirements.
-/// Objects are sent in batches, with ref updates only on the final batch.
+/// Keep individual RPC requests comfortably below `MAX_CLIENT_MESSAGE_SIZE`.
+/// The server reassembles all chunks before importing, so per-type chunks can
+/// be split by size without breaking final import ordering.
 ///
-/// Note: 4MB batches balance cross-batch dependencies vs. per-batch processing time.
-/// Too large and the server times out; too small and tree dependencies span batches.
+/// Note: 4MB batches leave headroom for postcard framing and object metadata.
 const MAX_BATCH_BYTES: usize = 4 * 1024 * 1024; // 4MB
 
 /// Maximum objects per push batch.
@@ -225,8 +223,11 @@ impl RpcClient {
                 })
             });
 
-        let builder = if has_direct_addrs && all_local {
-            eprintln!("git-remote-aspen: using direct local connection (discovery disabled)");
+        let force_direct = std::env::var("ASPEN_RELAY_DISABLED").as_deref() == Ok("1")
+            || std::env::var("ASPEN_DISCOVERY_DISABLED").as_deref() == Ok("1");
+
+        let builder = if has_direct_addrs && (all_local || force_direct) {
+            eprintln!("git-remote-aspen: using direct connection (discovery disabled)");
             iroh::Endpoint::empty_builder()
         } else {
             if !has_direct_addrs {
@@ -1115,10 +1116,11 @@ impl RemoteHelper {
         writer.write_end()
     }
 
-    /// Build ordered object batches: blobs → trees (single batch) → commits → tags.
+    /// Build ordered object batches: blobs → trees → commits → tags.
     ///
-    /// Trees are kept in a single batch because they have complex interdependencies
-    /// (subdirectories) that the server resolves via topological sorting within a batch.
+    /// Each type group is split by byte/object limits so every RPC request stays
+    /// under the server's bounded client-message reader. The server reassembles all
+    /// chunks and imports the full object set only at push completion.
     fn build_object_batches(
         &self,
         objects: Vec<aspen::client_rpc::GitBridgeObject>,
@@ -1182,12 +1184,12 @@ fn build_object_batches_inner(
         if verbosity > 0 {
             let tree_bytes: usize = trees.iter().map(|t| t.data.len()).sum();
             eprintln!(
-                "git-remote-aspen: sending all {} trees together ({:.2} MB)",
+                "git-remote-aspen: batching {} trees ({:.2} MB)",
                 trees.len(),
                 tree_bytes as f64 / (1024.0 * 1024.0)
             );
         }
-        batches.push(trees);
+        add_batched(trees, &mut batches);
     }
 
     if verbosity > 0 && !commits.is_empty() {
@@ -1688,7 +1690,11 @@ async fn main() -> io::Result<()> {
     let url = &args[2];
 
     let mut helper = RemoteHelper::new(remote_name.clone(), url)?;
-    helper.run().await
+    if let Err(error) = helper.run().await {
+        eprintln!("git-remote-aspen: fatal error: {error}");
+        return Err(error);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1748,15 +1754,17 @@ mod tests {
     }
 
     #[test]
-    fn test_batch_trees_single_batch() {
-        // All trees should go in one batch regardless of count
-        let objects: Vec<_> = (0..100).map(|i| make_obj(&format!("t{}", i), "tree", 100)).collect();
+    fn test_batch_trees_split_by_size() {
+        // Tree batches must stay under the client-message reader limit just like blobs.
+        let objects: Vec<_> = (0..10).map(|i| make_obj(&format!("t{}", i), "tree", 1_000_000)).collect();
         let batches = build_object_batches_inner(objects, 0);
 
-        // Find the tree batch
-        let tree_batch = batches.iter().find(|b| b[0].object_type == "tree");
-        assert!(tree_batch.is_some(), "should have a tree batch");
-        assert_eq!(tree_batch.unwrap().len(), 100, "all trees should be in one batch");
+        assert!(batches.len() >= 3, "10x1MB trees should split into at least 3 batches, got {}", batches.len());
+        for batch in &batches {
+            for obj in batch {
+                assert_eq!(obj.object_type, "tree");
+            }
+        }
     }
 
     #[test]

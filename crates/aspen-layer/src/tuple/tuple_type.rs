@@ -61,10 +61,7 @@ impl Tuple {
 
     /// Get the number of elements in the tuple.
     pub fn len(&self) -> u32 {
-        match u32::try_from(self.elements.len()) {
-            Ok(count) => count,
-            Err(_) => u32::MAX,
-        }
+        u32::try_from(self.elements.len()).unwrap_or(u32::MAX)
     }
 
     /// Check if the tuple is empty.
@@ -110,9 +107,7 @@ impl Tuple {
         let consumed = match usize::try_from(consumed_bytes) {
             Ok(value) => value,
             Err(_) => {
-                return Err(TupleError::IntegerOverflow {
-                    offset: data.len(),
-                });
+                return Err(TupleError::IntegerOverflow { offset: data.len() });
             }
         };
         if consumed != data.len() {
@@ -137,9 +132,7 @@ impl Tuple {
         let consumed_bytes = match u32::try_from(offset_bytes) {
             Ok(value) => value,
             Err(_) => {
-                return Err(TupleError::IntegerOverflow {
-                    offset: offset_bytes,
-                });
+                return Err(TupleError::IntegerOverflow { offset: offset_bytes });
             }
         };
         Ok((tuple, consumed_bytes))

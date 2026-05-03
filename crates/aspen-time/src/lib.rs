@@ -20,7 +20,6 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![allow(clippy::module_name_repetitions)]
-
 // Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
 // crates while suppressing noisier families until Aspen has cleanup bandwidth.
 #![allow(unknown_lints)]
@@ -77,12 +76,9 @@ use std::time::UNIX_EPOCH;
     reason = "aspen-time owns the wall-clock boundary for unix timestamp helpers"
 )]
 pub fn current_time_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |duration| {
-        match u64::try_from(duration.as_millis()) {
-            Ok(duration_ms) => duration_ms,
-            Err(_) => u64::MAX,
-        }
-    })
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
 }
 
 /// Get current Unix timestamp in seconds.
@@ -324,10 +320,7 @@ mod tests {
         let ms2 = provider.now_unix_ms();
         // Should be within 10ms of each other
         assert!(ms2 >= ms1, "SystemTimeProvider should not lag current_time_ms");
-        assert!(
-            ms2 <= ms1.saturating_add(10),
-            "SystemTimeProvider should stay within 10ms of current_time_ms"
-        );
+        assert!(ms2 <= ms1.saturating_add(10), "SystemTimeProvider should stay within 10ms of current_time_ms");
     }
 
     #[test]

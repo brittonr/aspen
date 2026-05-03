@@ -7,7 +7,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_testing_core::DeterministicKeyValueStore;
-use aspen_traits::{KvDelete, KvRead, KvWrite};
+use aspen_traits::KvDelete;
+use aspen_traits::KvRead;
+use aspen_traits::KvWrite;
 
 /// Helper for testing coordination primitives.
 ///
@@ -93,10 +95,7 @@ impl CoordinationTestHelper {
 
     /// Advance simulated time by the given duration.
     pub fn advance_time(&mut self, duration: Duration) {
-        let duration_ms = match u64::try_from(duration.as_millis()) {
-            Ok(duration_ms) => duration_ms,
-            Err(_) => u64::MAX,
-        };
+        let duration_ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
         self.current_time_ms = self.current_time_ms.saturating_add(duration_ms);
     }
 
@@ -139,10 +138,7 @@ impl CoordinationTestHelper {
         let value = self.get_value(lock_key).await;
         let holder = match value {
             Some(holder) => holder,
-            None => {
-                assert!(false, "Lock at {} should be held", lock_key);
-                return;
-            }
+            None => panic!("Lock at {} should be held", lock_key),
         };
         assert!(
             holder.contains(expected_holder),

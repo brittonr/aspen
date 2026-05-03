@@ -105,9 +105,7 @@ impl ShardMetrics {
 
     /// Get queries per second based on current window.
     pub fn qps(&self, current_time_ms: u64) -> u32 {
-        let Some(elapsed_secs) = current_time_ms
-            .saturating_sub(self.window_start_ms)
-            .checked_div(MILLIS_PER_SECOND)
+        let Some(elapsed_secs) = current_time_ms.saturating_sub(self.window_start_ms).checked_div(MILLIS_PER_SECOND)
         else {
             return 0;
         };
@@ -118,10 +116,7 @@ impl ShardMetrics {
         let Some(qps_u64) = total_ops.checked_div(elapsed_secs) else {
             return 0;
         };
-        match u32::try_from(qps_u64) {
-            Ok(qps) => qps,
-            Err(_) => u32::MAX,
-        }
+        u32::try_from(qps_u64).unwrap_or(u32::MAX)
     }
 
     /// Check if this shard should be split based on thresholds.

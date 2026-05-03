@@ -72,7 +72,7 @@ impl NodeManager {
             .arg("--enable-ci")
             .arg("--ci-auto-trigger")
             .arg("--relay-mode")
-            .arg("default");
+            .arg("disabled");
 
         if let Some(ref gw_bin) = config.nix_cache_gateway_bin {
             // Only add gateway URL if the binary is available

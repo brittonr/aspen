@@ -11,7 +11,6 @@ use tracing::warn;
 
 use crate::error::CiPipelineSnafu;
 use crate::error::DogfoodResult;
-use crate::error::TimeoutSnafu;
 
 #[derive(Copy, Clone)]
 pub struct WaitPipelineTarget<'a> {
@@ -247,11 +246,39 @@ async fn poll_pipeline(client: &AspenClient, target: PipelineRunTarget<'_>, time
         poll_backoff = (poll_backoff * 2).min(max_backoff);
     }
 
-    TimeoutSnafu {
-        operation: format!("CI pipeline {}", target.run_id),
-        timeout_secs,
+    let timeout_detail = match fetch_pipeline_status_summary(client, target).await {
+        Some(summary) => summary,
+        None => "pipeline status unavailable at timeout".to_string(),
+    };
+
+    CiPipelineSnafu {
+        run_id: target.run_id,
+        status: "timeout",
+        detail: format!("timed out after {timeout_secs}s\n{timeout_detail}"),
     }
     .fail()
+}
+
+async fn fetch_pipeline_status_summary(client: &AspenClient, target: PipelineRunTarget<'_>) -> Option<String> {
+    let resp = send(
+        client,
+        ClientRpcRequest::CiGetStatus {
+            run_id: target.run_id.to_string(),
+        },
+        RpcContext {
+            operation: "CiGetStatus",
+            ticket: target.ticket,
+        },
+    )
+    .await
+    .ok()?;
+
+    if let ClientRpcResponse::CiGetStatusResult(status) = resp {
+        print_pipeline_summary(&status);
+        return Some(format_pipeline_summary(&status));
+    }
+
+    None
 }
 
 /// Fetch logs from failed jobs for error reporting.
@@ -354,6 +381,24 @@ fn print_pipeline_summary(status: &CiGetStatusResponse) {
             }
         }
     }
+}
+
+fn format_pipeline_summary(status: &CiGetStatusResponse) -> String {
+    let mut summary = String::new();
+    if let Some(ref pipeline_status) = status.status {
+        summary.push_str(&format!("pipeline status: {pipeline_status}\n"));
+    }
+    for stage in &status.stages {
+        summary.push_str(&format!("stage {}: {}\n", stage.name, stage.status));
+        for job in &stage.jobs {
+            if let Some(ref error) = job.error {
+                summary.push_str(&format!("  job {}: {} — {}\n", job.name, job.status, error));
+            } else {
+                summary.push_str(&format!("  job {}: {}\n", job.name, job.status));
+            }
+        }
+    }
+    summary
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

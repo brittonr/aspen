@@ -24,6 +24,9 @@ use aspen_jobs::DurableWorkflowStatus;
 use aspen_jobs::durable_executor::WorkflowHandle;
 use aspen_jobs::durable_timer::TimerService;
 use aspen_testing::DeterministicKeyValueStore;
+use aspen_traits::KvRead;
+use aspen_traits::KvScan;
+use aspen_traits::KvWrite;
 use clap::Parser;
 use serde_json::json;
 
@@ -440,7 +443,6 @@ async fn test_concurrent() -> TestResult {
 // ── Test: failover simulation ──────────────────────────────────────
 
 async fn test_failover_simulation() -> TestResult {
-    use aspen_traits::KeyValueStore;
     println!("=== test_failover: leader transition simulation ===");
     let store = Arc::new(DeterministicKeyValueStore::default());
 
@@ -583,7 +585,6 @@ async fn assert_status(
 }
 
 async fn count_kv_prefix(store: &DeterministicKeyValueStore, prefix: &str) -> usize {
-    use aspen_traits::KeyValueStore;
     match store
         .scan(aspen_kv_types::ScanRequest {
             prefix: prefix.to_string(),

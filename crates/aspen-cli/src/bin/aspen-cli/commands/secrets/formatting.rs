@@ -2,7 +2,7 @@
 //!
 //! Each struct implements `Outputable` for JSON and human-readable display.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde_json::json;
 
@@ -10,7 +10,7 @@ use crate::output::Outputable;
 
 pub(crate) struct KvReadOutput {
     pub(crate) is_success: bool,
-    pub(crate) data: Option<HashMap<String, String>>,
+    pub(crate) data: Option<BTreeMap<String, String>>,
     pub(crate) version: Option<u64>,
     pub(crate) error: Option<String>,
 }

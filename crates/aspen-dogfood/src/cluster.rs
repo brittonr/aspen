@@ -112,7 +112,7 @@ pub async fn start_single_node(manager: &mut NodeManager, config: &RunConfig) ->
     let vm_ci_env: Vec<(&str, &str)> = if config.vm_ci {
         vec![("ASPEN_CI_EXECUTOR", "vm")]
     } else {
-        vec![]
+        vec![("ASPEN_CI_LOCAL_EXECUTOR", "1")]
     };
 
     let pid = manager.spawn_node(config, 1, "node1", &data_dir, &iroh_key, &cookie, &vm_ci_env).await?;

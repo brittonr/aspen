@@ -176,6 +176,10 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
         .args(["push", "aspen-dogfood", "HEAD:refs/heads/main", "--force"])
         .current_dir(&config.project_dir)
         .env("PATH", augmented_path(&config.git_remote_aspen_bin))
+        .env("ASPEN_RELAY_DISABLED", "1")
+        .env("ASPEN_DISCOVERY_DISABLED", "1")
+        .env("GIT_TRANSPORT_HELPER_DEBUG", "1")
+        .env("GIT_TRACE", "1")
         .output()
         .await
         .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
@@ -184,10 +188,11 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
         })?;
 
     if !push_output.status.success() {
-        let stderr = String::from_utf8_lossy(&push_output.stderr).to_string();
+        let stderr = String::from_utf8_lossy(&push_output.stderr);
+        let stdout = String::from_utf8_lossy(&push_output.stdout);
         return GitPushSnafu {
             exit_code: push_output.status.code().unwrap_or(-1),
-            stderr,
+            stderr: format!("stderr:\n{stderr}\nstdout:\n{stdout}"),
         }
         .fail();
     }

@@ -97,12 +97,6 @@ pub const DEFAULT_EXPIRY_HOURS: u64 = 24;
 /// Number of seconds in one minute.
 const SECONDS_PER_MINUTE: u64 = 60;
 
-/// Number of minutes in one hour.
-const MINUTES_PER_HOUR: u64 = 60;
-
-/// Number of hours in one day.
-const HOURS_PER_DAY: u64 = 24;
-
 /// Number of seconds in one hour.
 const SECONDS_PER_HOUR: u64 = 3_600;
 
@@ -492,10 +486,7 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
 }
 
 fn saturating_usize_to_u32(value: usize) -> u32 {
-    match u32::try_from(value) {
-        Ok(count) => count,
-        Err(_) => u32::MAX,
-    }
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 #[cfg(feature = "std")]

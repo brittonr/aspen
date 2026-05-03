@@ -122,10 +122,7 @@ impl ShardMetricsAtomic {
     /// Calculate queries per second based on current window.
     pub fn qps(&self, current_time_ms: u64) -> u32 {
         let window_start_ms = self.window_start_ms.load(Ordering::Relaxed);
-        let Some(elapsed_secs) = current_time_ms
-            .saturating_sub(window_start_ms)
-            .checked_div(MILLIS_PER_SECOND)
-        else {
+        let Some(elapsed_secs) = current_time_ms.saturating_sub(window_start_ms).checked_div(MILLIS_PER_SECOND) else {
             return 0;
         };
         if elapsed_secs == 0 {
@@ -135,10 +132,7 @@ impl ShardMetricsAtomic {
         let Some(qps_u64) = total_ops.checked_div(elapsed_secs) else {
             return 0;
         };
-        match u32::try_from(qps_u64) {
-            Ok(qps) => qps,
-            Err(_) => u32::MAX,
-        }
+        u32::try_from(qps_u64).unwrap_or(u32::MAX)
     }
 
     /// Reset the measurement window.
@@ -202,7 +196,10 @@ pub struct ShardMetricsCollector {
 impl ShardMetricsCollector {
     /// Create a new metrics collector.
     #[allow(unknown_lints)]
-    #[allow(ambient_clock, reason = "Shard metrics own the local monotonic timing boundary for window accounting")]
+    #[allow(
+        ambient_clock,
+        reason = "Shard metrics own the local monotonic timing boundary for window accounting"
+    )]
     pub fn new() -> Self {
         Self {
             shards: RwLock::new(HashMap::new()),
@@ -265,10 +262,7 @@ impl ShardMetricsCollector {
 
     /// Get current time in milliseconds since collector creation.
     fn current_time_ms(&self) -> u64 {
-        match u64::try_from(self.created_at.elapsed().as_millis()) {
-            Ok(elapsed_ms) => elapsed_ms,
-            Err(_) => u64::MAX,
-        }
+        u64::try_from(self.created_at.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 }
 

@@ -97,6 +97,11 @@ fn build_env_filter() -> tracing_subscriber::EnvFilter {
 }
 
 fn build_run_config(cli: &Cli) -> RunConfig {
+    let ci_timeout_secs = std::env::var("ASPEN_DOGFOOD_CI_TIMEOUT_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(7200);
+
     RunConfig {
         cluster_dir: cli.cluster_dir.clone(),
         federation: cli.federation,
@@ -105,7 +110,7 @@ fn build_run_config(cli: &Cli) -> RunConfig {
         git_remote_aspen_bin: std::env::var("GIT_REMOTE_ASPEN_BIN").unwrap_or_else(|_| "git-remote-aspen".to_string()),
         project_dir: std::env::var("PROJECT_DIR").unwrap_or_else(|_| ".".to_string()),
         nix_cache_gateway_bin: std::env::var("ASPEN_NIX_CACHE_GATEWAY_BIN").ok(),
-        ci_timeout_secs: 600,
+        ci_timeout_secs,
     }
 }
 
@@ -328,12 +333,16 @@ async fn build_wait_pipeline_parts(config: &RunConfig, state: &DogfoodState) -> 
 }
 
 async fn cmd_deploy(config: &RunConfig) -> DogfoodResult<()> {
+    cmd_deploy_run(config, None).await
+}
+
+async fn cmd_deploy_run(config: &RunConfig, run_id: Option<&str>) -> DogfoodResult<()> {
     info!("🚢 Deploying artifact...");
 
     let state = state::read_state(&config.state_file_path())?;
     let ticket = state.primary_ticket();
 
-    deploy::trigger_and_wait(ticket).await?;
+    deploy::trigger_and_wait(ticket, run_id).await?;
 
     info!("✅ Deployment complete");
     Ok(())
@@ -405,13 +414,15 @@ async fn run_full_pipeline_with_receipts(
     recorder: &mut DogfoodReceiptRecorder,
 ) -> DogfoodResult<()> {
     recorder.run_stage(receipt::DogfoodStageKind::Push, || cmd_push(config)).await?;
-    recorder
+    let build_run_id = recorder
         .run_stage_with_artifacts(receipt::DogfoodStageKind::Build, || async {
             let run_id = build_ci_pipeline(config).await?;
-            Ok(vec![ci_run_artifact(run_id)])
+            Ok((run_id.clone(), vec![ci_run_artifact(run_id)]))
         })
         .await?;
-    recorder.run_stage(receipt::DogfoodStageKind::Deploy, || cmd_deploy(config)).await?;
+    recorder
+        .run_stage(receipt::DogfoodStageKind::Deploy, || cmd_deploy_run(config, Some(&build_run_id)))
+        .await?;
     recorder.run_stage(receipt::DogfoodStageKind::Verify, || cmd_verify(config)).await?;
     Ok(())
 }
@@ -449,23 +460,23 @@ impl DogfoodReceiptRecorder {
     {
         self.run_stage_with_artifacts(stage, || async {
             operation().await?;
-            Ok(Vec::new())
+            Ok(((), Vec::new()))
         })
         .await
     }
 
-    async fn run_stage_with_artifacts<F, Fut>(
+    async fn run_stage_with_artifacts<F, Fut, T>(
         &mut self,
         stage: receipt::DogfoodStageKind,
         operation: F,
-    ) -> DogfoodResult<()>
+    ) -> DogfoodResult<T>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = DogfoodResult<Vec<receipt::DogfoodArtifactReceipt>>>,
+        Fut: Future<Output = DogfoodResult<(T, Vec<receipt::DogfoodArtifactReceipt>)>>,
     {
         let started_at = current_timestamp_utc();
         match operation().await {
-            Ok(artifacts) => {
+            Ok((value, artifacts)) => {
                 self.receipt.stages.push(receipt::DogfoodStageReceipt {
                     stage,
                     status: receipt::DogfoodStageStatus::Succeeded,
@@ -474,7 +485,8 @@ impl DogfoodReceiptRecorder {
                     failure: None,
                     artifacts,
                 });
-                self.write()
+                self.write()?;
+                Ok(value)
             }
             Err(error) => {
                 let failure = dogfood_failure_summary(stage, &error);

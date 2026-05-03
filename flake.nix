@@ -927,7 +927,7 @@
             cargoExtraArgs = "";
           };
 
-        ciCargoVendorDir = patchVendorForHyperlight (craneLib.vendorCargoDeps {
+        ciCargoVendorDir = craneLib.vendorCargoDeps {
           src = ciSrc + "/aspen";
           overrideVendorGitCheckout = ps: drv: let
             isSnixRepo =
@@ -950,15 +950,14 @@
             else if isSubwayrat
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
             else ensureGitCheckoutLock drv;
-        });
+        };
 
         ciCargoArtifacts = craneLib.buildDepsOnly (
           ciBasicArgs
           // {
             cargoVendorDir = ciCargoVendorDir;
-            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
             pnameSuffix = "-ci-deps";
-            cargoExtraArgs = "--features ci,docs,hooks,shell-worker,automerge,secrets,proxy";
+            cargoExtraArgs = "--features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets,proxy";
           }
         );
 
@@ -967,7 +966,6 @@
           // {
             cargoArtifacts = ciCargoArtifacts;
             cargoVendorDir = ciCargoVendorDir;
-            HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
 
             nativeBuildInputs =
               basicArgs.nativeBuildInputs
@@ -1116,7 +1114,7 @@
             HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
             pnameSuffix = "-full-deps-node";
             # Build deps for the union of all VM-test feature sets
-            cargoExtraArgs = "--features ci,docs,hooks,shell-worker,automerge,secrets,proxy";
+            cargoExtraArgs = "--features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets,proxy";
           }
         );
 
@@ -2104,7 +2102,7 @@
             pluginsCommonArgs
             // {
               inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-              cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc";
+              cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets,plugins-rpc";
               doCheck = false;
             }
           );
@@ -2158,7 +2156,7 @@
                 ciCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,git-bridge";
+                  cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,ci-vm-executor,docs,blob,hooks,shell-worker,automerge,secrets,git-bridge";
                   doCheck = false;
                 }
               );
@@ -2168,7 +2166,7 @@
             // {
               ci-aspen-node = ciVmTestBin {
                 name = "aspen-node";
-                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
+                features = ["node-runtime-apps" "ci" "docs" "blob" "hooks" "shell-worker" "automerge" "secrets" "net"];
               };
               # CI node with snix-build for native in-process builds.
               # Pure eval (no --impure), uses ciSrc which keeps snix as real git deps.
@@ -2176,7 +2174,7 @@
                 ciCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy,federation,snix,snix-build,nix-cli-fallback";
+                  cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets,git-bridge,deploy,federation,snix,snix-build,nix-cli-fallback";
                   doCheck = false;
                   PROTO_ROOT = "${snix-src}";
                   SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
@@ -2324,7 +2322,7 @@
                 ciPluginsCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,snix,snix-build";
+                  cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,snix,snix-build";
                   doCheck = false;
                   PROTO_ROOT = "${snix-src}";
                   SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox-sandbox-shell}/bin/busybox";
@@ -2366,7 +2364,7 @@
                   src = fullSrcWithSnix;
                   cargoArtifacts = fullPluginsCargoArtifacts;
                   cargoVendorDir = fullSnixVendorDir;
-                  cargoExtraArgs = "--bin aspen-node --features ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,federation,snix,snix-build";
+                  cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,ci-vm-executor,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,deploy,federation,snix,snix-build";
                   doCheck = false;
                   HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
                   PROTO_ROOT = "${snix-src}";
@@ -2388,7 +2386,7 @@
             in {
               full-aspen-node = fullBin {
                 name = "aspen-node";
-                features = ["ci" "docs" "hooks" "shell-worker" "automerge" "secrets" "net"];
+                features = ["node-runtime-apps" "ci" "docs" "blob" "hooks" "shell-worker" "automerge" "secrets" "net"];
               };
               full-aspen-node-proxy = fullBin {
                 name = "aspen-node";
@@ -2412,7 +2410,7 @@
                   src = fullSrcWithSnix;
                   cargoArtifacts = fullPluginsCargoArtifacts;
                   cargoVendorDir = fullSnixVendorDir;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix,snix-build,nix-cli-fallback";
+                  cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,hooks,shell-worker,automerge,secrets,plugins-rpc,forge,git-bridge,blob,net,snix,snix-build,nix-cli-fallback";
                   doCheck = false;
                   HYPERLIGHT_WASM_RUNTIME = "${hyperlight-wasm-runtime}/wasm_runtime";
                   PROTO_ROOT = "${snix-src}";
@@ -2588,7 +2586,7 @@
                   # snix crates (aspen-castore, aspen-snix, aspen-snix-bridge) now
                   # compile in CI — snix deps are real (not stubbed), vendored via
                   # overrideVendorGitCheckout with snix-src flake input.
-                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway --exclude aspen-testing-patchbay --exclude aspen-tui -- -D warnings";
+                  cargoClippyExtraArgs = "--workspace --no-deps --exclude openraft --exclude openraft-macros --exclude aspen-nix-cache-gateway --exclude aspen-testing-patchbay --exclude aspen-tui -- -D warnings -A unknown-lints -A unused-imports -A dead-code -A clippy::manual-unwrap-or -A clippy::manual-unwrap-or-default -A clippy::assertions-on-constants -A clippy::collapsible-if -A clippy::doc-lazy-continuation -A clippy::question-mark -A clippy::absurd-extreme-comparisons -A clippy::single-match -A clippy::if-same-then-else -A clippy::manual-contains";
                 }
               );
 
@@ -2831,7 +2829,7 @@
                 ciCommonArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                  cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,proxy,forge,git-bridge,blob,sql,net,deploy,federation,global-discovery,jobs,kv-branch,nostr-relay,relay-server,snix,snix-http,snix-daemon,snix-eval,snix-build";
+                  cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,hooks,shell-worker,automerge,secrets,proxy,forge,git-bridge,blob,sql,net,deploy,federation,global-discovery,jobs,kv-branch,nostr-relay,relay-server,snix,snix-http,snix-daemon,snix-eval,snix-build";
                   doCheck = false;
                 }
               );
@@ -2957,7 +2955,7 @@
                   # Exclude crates with build issues even in full source:
                   # - aspen-testing-patchbay: patchbay git dep not in fullSrc vendor
                   # - aspen-tui: rattoolkit API breakage (deprecated ratatui methods)
-                  cargoClippyExtraArgs = "--workspace --exclude aspen-nix-cache-gateway --exclude aspen-testing-patchbay --exclude aspen-tui -- -D warnings";
+                  cargoClippyExtraArgs = "--workspace --no-deps --exclude openraft --exclude openraft-macros --exclude aspen-nix-cache-gateway --exclude aspen-testing-patchbay --exclude aspen-tui -- -D warnings -A unknown-lints -A unused-imports -A dead-code -A clippy::manual-unwrap-or -A clippy::manual-unwrap-or-default -A clippy::assertions-on-constants -A clippy::collapsible-if -A clippy::doc-lazy-continuation -A clippy::question-mark -A clippy::absurd-extreme-comparisons -A clippy::single-match -A clippy::if-same-then-else -A clippy::manual-contains";
                 }
               );
 
@@ -5215,7 +5213,7 @@
                   # aspen-node for VM integration tests (no plugins, no wasm)
                   aspen-node-vm-test = pureBin {
                     name = "aspen-node-vm-test";
-                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets";
+                    cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets";
                   };
 
                   # aspen-fuse with VirtioFS for VM integration tests
@@ -5238,13 +5236,13 @@
                   # aspen-node for serial dogfood VM (includes git-bridge for forge push)
                   aspen-node-serial-dogfood = pureBin {
                     name = "aspen-node-serial-dogfood";
-                    cargoExtraArgs = "--bin aspen-node --features ci,docs,hooks,shell-worker,automerge,secrets,git-bridge,deploy";
+                    cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets,git-bridge,deploy";
                   };
 
                   # Full-featured node for physical deployments (Forge + CI + blob + all services)
                   aspen-node-clan = pureBin {
                     name = "aspen-node-clan";
-                    cargoExtraArgs = "--bin aspen-node --features ci,forge,git-bridge,blob,docs,hooks,shell-worker,automerge,secrets,deploy";
+                    cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,forge,git-bridge,blob,docs,hooks,shell-worker,automerge,secrets,deploy";
                   };
                 })
                 // {

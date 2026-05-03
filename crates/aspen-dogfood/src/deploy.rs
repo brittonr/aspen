@@ -16,11 +16,13 @@ use crate::error::TimeoutSnafu;
 ///
 /// Finds the latest successful CI pipeline, extracts the Nix store path
 /// from the build-node job result, and issues `ClusterDeploy`.
-pub async fn trigger_and_wait(ticket: &str) -> DogfoodResult<()> {
+pub async fn trigger_and_wait(ticket: &str, run_id: Option<&str>) -> DogfoodResult<()> {
     let client = connect(ticket).await?;
     let result = async {
-        // Find the store path from the latest successful build
-        let store_path = find_build_artifact(&client, ticket).await?;
+        // Find the store path from the build run dogfood just observed. Falling
+        // back to the latest successful run keeps the standalone `deploy`
+        // subcommand usable, but the full path should not race status indexes.
+        let store_path = find_build_artifact(&client, ticket, run_id).await?;
         info!("  artifact: {store_path}");
 
         // Trigger deploy
@@ -119,35 +121,10 @@ pub async fn verify_deployment(ticket: &str) -> DogfoodResult<()> {
 // ── Internals ────────────────────────────────────────────────────────
 
 /// Find the Nix store path from the latest successful CI build.
-async fn find_build_artifact(client: &AspenClient, ticket: &str) -> DogfoodResult<String> {
-    // List recent runs, find latest successful one
-    let resp = send(
-        client,
-        ClientRpcRequest::CiListRuns {
-            repo_id: None,
-            status: Some("succeeded".to_string()),
-            limit: Some(1),
-        },
-        "CiListRuns",
-        ticket,
-    )
-    .await?;
-
-    let run_id = match resp {
-        ClientRpcResponse::CiListRunsResult(list) => {
-            list.runs
-                .first()
-                .map(|r| r.run_id.clone())
-                .ok_or_else(|| crate::error::DogfoodError::DeployFailed {
-                    reason: "no successful pipeline runs found".to_string(),
-                })?
-        }
-        other => {
-            return DeployFailedSnafu {
-                reason: format!("unexpected CiListRuns response: {other:?}"),
-            }
-            .fail();
-        }
+async fn find_build_artifact(client: &AspenClient, ticket: &str, run_id: Option<&str>) -> DogfoodResult<String> {
+    let run_id = match run_id {
+        Some(run_id) => run_id.to_string(),
+        None => find_latest_successful_run_id(client, ticket).await?,
     };
 
     // Get pipeline status to find the build-node job
@@ -197,6 +174,32 @@ async fn find_build_artifact(client: &AspenClient, ticket: &str) -> DogfoodResul
     };
 
     Ok(store_path)
+}
+
+async fn find_latest_successful_run_id(client: &AspenClient, ticket: &str) -> DogfoodResult<String> {
+    let resp = send(
+        client,
+        ClientRpcRequest::CiListRuns {
+            repo_id: None,
+            status: Some("succeeded".to_string()),
+            limit: Some(1),
+        },
+        "CiListRuns",
+        ticket,
+    )
+    .await?;
+
+    match resp {
+        ClientRpcResponse::CiListRunsResult(list) => {
+            list.runs.first().map(|r| r.run_id.clone()).ok_or_else(|| crate::error::DogfoodError::DeployFailed {
+                reason: "no successful pipeline runs found".to_string(),
+            })
+        }
+        other => DeployFailedSnafu {
+            reason: format!("unexpected CiListRuns response: {other:?}"),
+        }
+        .fail(),
+    }
 }
 
 /// Extract the build-node job ID from pipeline stages.

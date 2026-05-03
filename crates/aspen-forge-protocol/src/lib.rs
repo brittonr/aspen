@@ -205,7 +205,7 @@ impl ForgeRepoBackendManifest {
     /// Return true when this manifest enables the given backend.
     #[must_use]
     pub fn supports(&self, backend: ForgeRepoBackend) -> bool {
-        self.backends.iter().any(|candidate| *candidate == backend)
+        self.backends.contains(&backend)
     }
 }
 

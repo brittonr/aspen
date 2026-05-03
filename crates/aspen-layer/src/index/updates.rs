@@ -29,10 +29,7 @@ impl IndexUpdate {
     /// Get total number of operations.
     pub fn operation_count(&self) -> u32 {
         let total_operations = self.inserts.len().saturating_add(self.deletes.len());
-        match u32::try_from(total_operations) {
-            Ok(count) => count,
-            Err(_) => u32::MAX,
-        }
+        u32::try_from(total_operations).unwrap_or(u32::MAX)
     }
 }
 
