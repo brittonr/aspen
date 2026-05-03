@@ -548,6 +548,8 @@ mod tests {
         ];
         #[cfg(feature = "ci")]
         cases.push((ClientRpcRequest::CacheMigrationStatus, "CacheMigrationStatus", Some("snix")));
+        #[cfg(feature = "ci")]
+        cases.push((ClientRpcRequest::CiGetRunReceipt { run_id: "run-1".into() }, "CiGetRunReceipt", Some("ci")));
         #[cfg(feature = "automerge")]
         cases.push((
             ClientRpcRequest::AutomergeCreate {

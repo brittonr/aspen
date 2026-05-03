@@ -7,6 +7,7 @@ pub const CI_REQUEST_VARIANTS: &[&str] = &[
     "CiGetArtifact",
     "CiGetJobLogs",
     "CiGetJobOutput",
+    "CiGetRunReceipt",
     "CiGetStatus",
     "CiGetRefStatus",
     "CiListArtifacts",
