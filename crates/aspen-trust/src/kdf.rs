@@ -4,7 +4,8 @@
 //! Each derived key is bound to a context string, cluster ID, and epoch,
 //! preventing cross-purpose key reuse (confused deputy).
 //!
-//! Pattern from Oxide's trust-quorum: `b"aspen-v1-<purpose>"` + cluster_id + epoch.
+//! Pattern from Oxide's trust-quorum: `b"aspen-v1-<purpose>"` + cluster_id + epoch,
+//! encoded with explicit field lengths so variable-width fields cannot collide.
 
 use hkdf::Hkdf;
 use sha3::Sha3_256;
@@ -23,12 +24,39 @@ pub const CONTEXT_TRANSIT_KEYS: &[u8] = b"aspen-v1-transit-keys";
 /// Context for deriving rack-level secrets (physical topology isolation).
 pub const CONTEXT_RACK_SECRETS: &[u8] = b"aspen-v1-rack-secrets";
 
+const INFO_DOMAIN: &[u8] = b"aspen-hkdf-info-v1";
+
+fn append_len_prefixed(info: &mut Vec<u8>, value: &[u8]) {
+    let len = u64::try_from(value.len()).expect("slice length must fit in u64");
+    info.extend_from_slice(&len.to_be_bytes());
+    info.extend_from_slice(value);
+}
+
+fn encoded_info(context: &[u8], cluster_id: &[u8], epoch: u64) -> Vec<u8> {
+    let len_prefix_bytes = 8usize;
+    let epoch_bytes = epoch.to_be_bytes();
+    let info_len = INFO_DOMAIN
+        .len()
+        .saturating_add(len_prefix_bytes)
+        .saturating_add(context.len())
+        .saturating_add(len_prefix_bytes)
+        .saturating_add(cluster_id.len())
+        .saturating_add(epoch_bytes.len());
+    let mut info = Vec::with_capacity(info_len);
+    info.extend_from_slice(INFO_DOMAIN);
+    append_len_prefixed(&mut info, context);
+    append_len_prefixed(&mut info, cluster_id);
+    info.extend_from_slice(&epoch_bytes);
+    info
+}
+
 /// Derive a 32-byte key from the cluster secret using HKDF-SHA3-256.
 ///
-/// The `info` parameter is constructed from:
-/// - `context`: purpose string (e.g., `CONTEXT_SECRETS_AT_REST`)
-/// - `cluster_id`: unique cluster identifier
-/// - `epoch`: key rotation epoch (monotonically increasing)
+/// The `info` parameter is structurally encoded from:
+/// - a fixed Aspen HKDF info-domain tag
+/// - `context`: purpose string (e.g., `CONTEXT_SECRETS_AT_REST`), length-prefixed
+/// - `cluster_id`: unique cluster identifier, length-prefixed
+/// - `epoch`: key rotation epoch (monotonically increasing), fixed-width big-endian
 ///
 /// The cluster secret is used as the HKDF input keying material (IKM).
 /// No salt is used (HKDF extracts from IKM directly).
@@ -36,13 +64,7 @@ pub const CONTEXT_RACK_SECRETS: &[u8] = b"aspen-v1-rack-secrets";
 /// # Panics
 /// Panics if the derived key is all zeros (HKDF implementation bug).
 pub fn derive_key(secret: &[u8; 32], context: &[u8], cluster_id: &[u8], epoch: u64) -> [u8; 32] {
-    // Build the info parameter: context || cluster_id || epoch (big-endian)
-    let epoch_bytes = epoch.to_be_bytes();
-    let info_len = context.len().saturating_add(cluster_id.len()).saturating_add(epoch_bytes.len());
-    let mut info = Vec::with_capacity(info_len);
-    info.extend_from_slice(context);
-    info.extend_from_slice(cluster_id);
-    info.extend_from_slice(&epoch_bytes);
+    let mut info = encoded_info(context, cluster_id, epoch);
 
     // HKDF-SHA3-256: extract then expand
     let hk = Hkdf::<Sha3_256>::new(None, secret);
@@ -106,6 +128,24 @@ mod tests {
         let k1 = derive_key(&secret, CONTEXT_SECRETS_AT_REST, b"cluster-1", 0);
         let k2 = derive_key(&secret, CONTEXT_SECRETS_AT_REST, b"cluster-1", 1);
         assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn test_ambiguous_context_cluster_splits_produce_different_keys() {
+        let secret = test_secret();
+        let k1 = derive_key(&secret, b"ab", b"c", 0);
+        let k2 = derive_key(&secret, b"a", b"bc", 0);
+        assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn test_encoded_info_includes_length_boundaries() {
+        let i1 = encoded_info(b"ab", b"c", 0);
+        let i2 = encoded_info(b"a", b"bc", 0);
+
+        assert_ne!(i1, i2);
+        assert!(i1.starts_with(INFO_DOMAIN));
+        assert!(i2.starts_with(INFO_DOMAIN));
     }
 
     #[test]
