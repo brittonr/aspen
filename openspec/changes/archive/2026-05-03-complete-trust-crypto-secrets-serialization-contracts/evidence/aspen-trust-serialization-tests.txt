@@ -33,4 +33,3 @@ test trust_protocol_postcard_bytes_pin_enum_order ... ok
 test trust_json_contracts_cover_scalar_and_chain_state ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-
