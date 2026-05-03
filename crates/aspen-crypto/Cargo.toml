@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/brittonr/aspen"
-description = "Lightweight cryptographic primitives for Aspen (cookie validation, identity key lifecycle, key derivation)"
-publish = false
+description = "Dependency-light cryptographic primitives for Aspen reusable crates"
+readme = "README.md"
 
 [dependencies]
 blake3 = "1.5"
