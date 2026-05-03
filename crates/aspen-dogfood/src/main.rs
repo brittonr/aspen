@@ -482,6 +482,7 @@ fn cmd_receipts_diagnose(config: &RunConfig, args: &DiagnoseReceiptArgs) -> Dogf
 async fn cmd_receipts_publish(config: &RunConfig, args: &PublishReceiptArgs) -> DogfoodResult<()> {
     let path = resolve_receipt_selector(config, &args.run_id_or_path);
     let receipt = load_receipt_file(&path)?;
+    validate_cluster_receipt_run_id(&receipt.run_id, "publish")?;
     let bytes = receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
         operation: "serialize".to_string(),
         reason: error.to_string(),
@@ -494,12 +495,7 @@ async fn cmd_receipts_publish(config: &RunConfig, args: &PublishReceiptArgs) -> 
 }
 
 async fn cmd_receipts_cluster_show(config: &RunConfig, args: &ClusterShowReceiptArgs) -> DogfoodResult<()> {
-    if args.run_id.contains('/') || args.run_id.contains('\\') || args.run_id.ends_with(".json") {
-        return Err(DogfoodError::Receipt {
-            operation: "cluster-show".to_string(),
-            reason: "cluster-show expects a run id, not a path".to_string(),
-        });
-    }
+    validate_cluster_receipt_run_id(&args.run_id, "cluster-show")?;
 
     let key = receipt_cluster_key(&args.run_id);
     let state = state::read_state(&config.state_file_path())?;
@@ -523,6 +519,16 @@ async fn cmd_receipts_cluster_show(config: &RunConfig, args: &ClusterShowReceipt
 
 fn receipt_cluster_key(run_id: &str) -> String {
     format!("dogfood/receipts/{run_id}.json")
+}
+
+fn validate_cluster_receipt_run_id(run_id: &str, operation: &str) -> DogfoodResult<()> {
+    if run_id.contains('/') || run_id.contains('\\') || run_id.ends_with(".json") {
+        return Err(DogfoodError::Receipt {
+            operation: operation.to_string(),
+            reason: "cluster receipt commands require a run id, not a path".to_string(),
+        });
+    }
+    Ok(())
 }
 
 async fn connect_receipt_cluster(ticket: &str) -> DogfoodResult<AspenClient> {
@@ -1189,6 +1195,18 @@ mod tests {
     #[test]
     fn receipt_cluster_key_is_deterministic() {
         assert_eq!(receipt_cluster_key("dogfood-20260503T180335Z"), "dogfood/receipts/dogfood-20260503T180335Z.json");
+    }
+
+    #[test]
+    fn cluster_receipt_run_id_validator_matches_publish_and_cluster_show_domain() {
+        assert!(validate_cluster_receipt_run_id("dogfood-20260503T180335Z", "publish").is_ok());
+
+        for run_id in ["nested/run", "nested\\run", "dogfood-20260503T180335Z.json"] {
+            let publish = validate_cluster_receipt_run_id(run_id, "publish").unwrap_err().to_string();
+            let cluster_show = validate_cluster_receipt_run_id(run_id, "cluster-show").unwrap_err().to_string();
+            assert!(publish.contains("run id, not a path"));
+            assert!(cluster_show.contains("run id, not a path"));
+        }
     }
 
     #[test]
