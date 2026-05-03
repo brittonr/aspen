@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Network layer for Raft consensus in Aspen distributed systems"
-repository = "https://github.com/blixard/blixard"
+repository = "https://github.com/brittonr/aspen"
 keywords = ["raft", "consensus", "distributed-systems", "network"]
 categories = ["network-programming"]
 

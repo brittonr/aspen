@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Terminal UI for monitoring and managing Aspen distributed clusters"
-repository = "https://github.com/blixard/blixard"
+repository = "https://github.com/brittonr/aspen"
 keywords = ["tui", "terminal", "distributed", "cluster", "monitoring"]
 categories = ["command-line-utilities"]
 

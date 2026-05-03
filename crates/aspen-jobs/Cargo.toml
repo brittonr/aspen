@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["Aspen Contributors"]
 description = "Distributed job queue system for Aspen"
 license = "AGPL-3.0-or-later"
-repository = "https://github.com/yourusername/blixard"
+repository = "https://github.com/brittonr/aspen"
 keywords = ["jobs", "queue", "distributed", "workers", "scheduling"]
 categories = ["asynchronous", "concurrency", "network-programming"]
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Raft consensus type definitions for Aspen distributed systems"
-repository = "https://github.com/blixard/blixard"
+repository = "https://github.com/brittonr/aspen"
 keywords = ["raft", "consensus", "distributed-systems"]
 categories = ["network-programming"]
 
