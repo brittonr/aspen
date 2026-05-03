@@ -130,7 +130,7 @@ Use `aspen-cli ci logs --follow <run_id> <deploy_job_id>` to watch in real time.
 
 ## Dogfood Script
 
-The self-hosted build pipeline script supports deployment:
+The self-hosted build pipeline is Aspen's operator acceptance path: source is pushed to Aspen Forge, built by Aspen CI, deployed to an Aspen cluster, verified through cluster health, and then stopped with a durable run receipt. Treat a successful `full` run plus `receipts list/show` output as the canonical evidence that the self-hosted path works under the current tree.
 
 ```bash
 # Full pipeline: start → push → build → deploy → verify → stop
@@ -142,6 +142,21 @@ nix run .#dogfood-local -- full-loop
 # Deploy only (after a successful build)
 nix run .#dogfood-local -- deploy
 ```
+
+Each `full` run writes a JSON receipt under the sibling receipts directory for the cluster directory, for example `/tmp/aspen-dogfood-receipts/` when using the default `/tmp/aspen-dogfood` cluster directory. Operators should inspect receipts through the dogfood CLI instead of manually opening `/tmp` JSON:
+
+```bash
+# List validated receipts, newest first. Missing receipt directories are shown as empty history.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts list
+
+# Show a human-readable summary for a run ID from the list.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id>
+
+# Emit the validated canonical JSON receipt for machine checks or evidence archival.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id> --json
+```
+
+A successful acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, and `stop`. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback.
 
 ## Troubleshooting
 
