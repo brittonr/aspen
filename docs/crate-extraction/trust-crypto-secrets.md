@@ -21,14 +21,14 @@
 
 | Surface | Reusable default | Runtime/adapter boundary |
 | --- | --- | --- |
-| Trust crypto | Shamir/GF/HKDF/share-chain helpers with explicit randomness/time inputs; default/no-default `aspen-trust` excludes async service APIs. | `aspen-trust/async` gates key-manager and reencryption service APIs; Iroh trust-share exchange, peer probing, and cluster bootstrap stay in runtime consumers. |
+| Trust crypto | Shamir/GF/HKDF/share-chain helpers without Aspen runtime dependencies; `split_secret` accepts caller-provided RNGs, while convenience cluster-secret, share-chain salt, and reconfiguration helpers use the process CSPRNG (`OsRng`/`rand::rng`). Default/no-default `aspen-trust` excludes async service APIs. | `aspen-trust/async` gates key-manager and reencryption service APIs; Iroh trust-share exchange, peer probing, and cluster bootstrap stay in runtime consumers. |
 | Reconfiguration state | deterministic membership/share/decryption-key-selection state machine inputs and outputs. | Raft log application, storage transactions, node shutdown/expungement effects. |
 | Secrets crypto | pure encryption/decryption/key-selection helpers, migration planning, and token data parsing via `aspen-auth-core`. | Redb storage, secrets service, handler/client runtime, SOPS file IO, `aspen-auth` verifier/builder helpers behind `aspen-secrets/auth-runtime`. |
 | General crypto | BLAKE3/hash helpers and key utilities where transport-free; `aspen-crypto` defaults to this surface. | node identity lifecycle helpers behind `aspen-crypto/identity`; concrete Iroh endpoint/runtime helpers stay outside reusable defaults. |
 
 ## Dependency decisions
 
-- Pure logic must not depend on Raft, Iroh endpoint construction, Redb storage, handler registries, node bootstrap, or ambient wall-clock/randomness.
+- Pure logic must not depend on Raft, Iroh endpoint construction, Redb storage, handler registries, node bootstrap, or ambient wall-clock inputs. Deterministic helper seams should keep accepting explicit RNGs, but `aspen-trust` also exposes convenience cryptographic helpers that draw fresh entropy from the process CSPRNG for secret generation, share-chain salts, and reconfiguration share splits.
 - `aspen-secrets` default token parsing depends on `aspen-auth-core`; `aspen-auth` runtime verifier/builder helpers require the explicit `auth-runtime` feature.
 - Cryptographic dependencies such as HKDF, AEADs, zeroize, secrecy, and BLAKE3 are allowed when they are the crate purpose.
 - Runtime `aspen-secrets-handler` is a compatibility consumer; its default executor surface stays portable, while factory registration requires the explicit `runtime-adapter` feature.
