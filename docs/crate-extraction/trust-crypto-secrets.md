@@ -7,7 +7,7 @@
 - **Crates**: `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime consumer coverage for `aspen-secrets-handler`
 - **Intended audience**: systems that need deterministic trust/crypto/secrets state logic without Aspen Raft, Iroh, Redb, or secrets-service runtime shells.
 - **Public API owner**: architecture-modularity
-- **Readiness state**: `workspace-internal`; first blocker complete as of `complete-trust-crypto-first-blocker`.
+- **Readiness state**: `workspace-internal`; owner/public API review complete and promotion deferred pending real checker coverage plus trust/secrets stability-policy blockers.
 
 ## Package metadata
 
@@ -53,7 +53,7 @@
 
 ## First blocker
 
-I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated. The first blocker is now complete: `aspen-crypto` defaults to the transport-free cookie/hash helper surface, and node identity lifecycle utilities live behind the explicit `identity` feature using `iroh-base` key types rather than concrete `iroh` endpoint/runtime dependencies. The aggregate family remains `workspace-internal` until trust/secrets split policy, publication policy, and any remaining runtime-adapter ownership reviews are resolved. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-trust-crypto-first-blocker/evidence/`.
+I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated. The first blocker is now complete: `aspen-crypto` defaults to the transport-free cookie/hash helper surface, and node identity lifecycle utilities live behind the explicit `identity` feature using `iroh-base` key types rather than concrete `iroh` endpoint/runtime dependencies. The aggregate family remains `workspace-internal`; the first blocker is complete, but the owner/public API review requires real crate-level checker coverage, explicit `aspen-trust` async/default dependency policy, and trust/secrets serialization-contract evidence before promotion. First-blocker evidence is recorded under `openspec/changes/archive/2026-05-02-complete-trust-crypto-first-blocker/evidence/`.
 
 ## Auth runtime boundary
 
@@ -74,3 +74,9 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 ## Secrets mount provider boundary
 
 `1691dc2b3 Decouple secrets handler mount provider` adds `aspen_secrets::SecretsMountProvider` as the mounted-store resolution contract for PKI, KV, and Transit stores. `MountRegistry` implements the provider by delegating to its existing bounded `get_or_create_*` methods, while `aspen-secrets-handler::SecretsService` now stores `Arc<dyn SecretsMountProvider>` instead of concrete `Arc<MountRegistry>`. Runtime/node call sites continue passing `Arc<MountRegistry>` for compatibility, but the handler service boundary no longer depends on the concrete registry/cache implementation. Evidence is recorded under `openspec/changes/archive/2026-05-02-complete-secrets-mount-provider-boundary/evidence/`.
+
+## Owner/public API review
+
+`review-trust-crypto-secrets-public-api` records the aggregate readiness decision after the transport-free crypto, auth-runtime, KV traits, handler runtime-adapter, secrets-core type, and mount-provider boundary slices. The review keeps the family at `workspace-internal` because the current readiness checker still maps the family to an aggregate pseudo-candidate and warns that direct package dependency checks are deferred.
+
+Canonical reusable surfaces are `aspen-crypto` default/no-default helpers and `aspen-secrets-core` type/state contracts. Selected `aspen-trust` pure helper/state surfaces remain candidates, but default async/Tokio service APIs and trust serialization contracts need explicit policy before readiness promotion. `aspen-secrets` remains a service/runtime implementation crate for now, and `aspen-secrets-handler` remains a compatibility/runtime consumer. Evidence is recorded under `openspec/changes/review-trust-crypto-secrets-public-api/evidence/` while active.
