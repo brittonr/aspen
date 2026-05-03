@@ -71,6 +71,12 @@ The dogfood orchestrator MUST provide a read-only CLI command that lists valid d
 - **WHEN** an operator runs `aspen-dogfood receipts list`
 - **THEN** the command prints each valid run id with created timestamp, command, aggregate final status, stage count, and receipt path
 
+#### Scenario: List handles missing receipts directory [r[dogfood-evidence.receipt-inspection.list.missing-directory]]
+
+- **GIVEN** no receipts directory exists for the configured cluster directory
+- **WHEN** an operator runs `aspen-dogfood receipts list`
+- **THEN** the command succeeds with an empty result rather than requiring a running cluster
+
 #### Scenario: List surfaces failed acceptance despite cleanup [r[dogfood-evidence.receipt-inspection.list.failed-before-stop]]
 
 - **GIVEN** a receipt with a failed build, deploy, or verify stage followed by a succeeded stop stage
