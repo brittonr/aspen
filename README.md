@@ -6,7 +6,7 @@
 
 Distributed systems primitives in Rust, built on [iroh](https://github.com/n0-computer/iroh) P2P QUIC. Ordered transactional KV at the bottom (Raft consensus), everything else built on top as key reads and writes.
 
-Aspen's source lives in its own Git forge, built by its own CI, deployed to its own cluster. `nix run .#dogfood-local -- full` runs this end-to-end and writes an operator-visible receipt that can be inspected later with `receipts list/show`.
+Aspen's source lives in its own Git forge, built by its own CI, deployed to its own cluster. `nix run .#dogfood-local -- full` runs this end-to-end, writes an operator-visible receipt, and publishes the final success receipt into Aspen KV before cleanup; inspect local evidence later with `receipts list/show`, or use `full --leave-running` plus `receipts cluster-show` for live cluster-backed readback.
 
 ## Architecture
 
@@ -113,9 +113,15 @@ nix run .#cluster
 # self-hosted build pipeline
 nix run .#dogfood-local -- full
 
+# leave the verified dogfood cluster running for live Aspen KV receipt readback
+nix run .#dogfood-local -- full --leave-running
+
 # inspect durable self-hosting evidence from the latest local run
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts list
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id>
+
+# inspect live cluster-backed receipt evidence while the cluster is still running
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts cluster-show <run-id> --json
 ```
 
 ## Testing

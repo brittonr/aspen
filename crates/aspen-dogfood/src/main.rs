@@ -71,8 +71,8 @@ enum Command {
     Verify,
     /// Run build → deploy → verify in sequence.
     FullLoop,
-    /// Run the full pipeline: start → push → build → deploy → verify → stop.
-    Full,
+    /// Run the full pipeline: start → push → build → deploy → verify → publish receipt → stop.
+    Full(FullArgs),
     /// Inspect durable dogfood run receipts.
     Receipts {
         #[command(subcommand)]
@@ -124,6 +124,13 @@ struct ClusterShowReceiptArgs {
     /// Emit validated canonical JSON instead of a text summary.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Args)]
+struct FullArgs {
+    /// Leave the verified cluster running after publishing the final receipt for operator readback.
+    #[arg(long)]
+    leave_running: bool,
 }
 
 fn main() {
@@ -187,7 +194,7 @@ async fn dispatch_command(config: &RunConfig, command: Command) -> DogfoodResult
         Command::Deploy => cmd_deploy(config).await,
         Command::Verify => cmd_verify(config).await,
         Command::FullLoop => cmd_full_loop(config).await,
-        Command::Full => cmd_full(config).await,
+        Command::Full(args) => cmd_full(config, &args).await,
         Command::Receipts { command } => cmd_receipts(config, command).await,
     }
 }
@@ -822,6 +829,10 @@ fn dogfood_diagnosis_checks(stage: receipt::DogfoodStageKind, category: &str) ->
             "Treat this as a post-deploy health failure and inspect cluster health plus recent node logs.",
             "Check node uptime and deployment status before rerunning full dogfood.",
         ],
+        (receipt::DogfoodStageKind::PublishReceipt, "receipt" | "client_rpc" | "state_file") => &[
+            "Check that the dogfood cluster was still running when receipt publication was attempted.",
+            "Use the local receipt file as fallback evidence, then rerun with `full --leave-running` if cluster-backed readback is needed.",
+        ],
         (receipt::DogfoodStageKind::Stop, "stop_node" | "state_file") => &[
             "Inspect local process state and cluster directory ownership.",
             "Do not manually delete cluster files until process cleanup state is understood.",
@@ -840,14 +851,27 @@ async fn cmd_full_loop(config: &RunConfig) -> DogfoodResult<()> {
     Ok(())
 }
 
-async fn cmd_full(config: &RunConfig) -> DogfoodResult<()> {
+async fn cmd_full(config: &RunConfig, args: &FullArgs) -> DogfoodResult<()> {
     let mut recorder = DogfoodReceiptRecorder::new(config, "full")?;
     if let Err(error) = recorder.run_stage(receipt::DogfoodStageKind::Start, || cmd_start(config)).await {
         recorder.log_path();
         return Err(error);
     }
     install_ctrl_c_shutdown(config);
-    let result = run_full_pipeline_with_receipts(config, &mut recorder).await;
+    let result = match run_full_pipeline_with_receipts(config, &mut recorder).await {
+        Ok(()) => recorder.publish_final_receipt_to_cluster(config).await,
+        Err(error) => Err(error),
+    };
+
+    if args.leave_running && result.is_ok() {
+        recorder.log_path();
+        info!(
+            "📌 Dogfood cluster left running for evidence inspection; run `aspen-dogfood --cluster-dir {} stop` when done",
+            config.cluster_dir
+        );
+        return Ok(());
+    }
+
     let stop_result = recorder.run_stage(receipt::DogfoodStageKind::Stop, || cmd_stop(config)).await;
     recorder.log_path();
     result?;
@@ -986,6 +1010,51 @@ impl DogfoodReceiptRecorder {
         })
     }
 
+    async fn publish_final_receipt_to_cluster(&mut self, config: &RunConfig) -> DogfoodResult<()> {
+        let stage = receipt::DogfoodStageKind::PublishReceipt;
+        let started_at = current_timestamp_utc();
+        let key = receipt_cluster_key(&self.receipt.run_id);
+        validate_cluster_receipt_run_id(&self.receipt.run_id, "auto-publish")?;
+
+        let mut published_receipt = self.receipt.clone();
+        published_receipt.stages.push(receipt::DogfoodStageReceipt {
+            stage,
+            status: receipt::DogfoodStageStatus::Succeeded,
+            started_at: started_at.clone(),
+            finished_at: Some(current_timestamp_utc()),
+            failure: None,
+            artifacts: vec![cluster_receipt_artifact(&key)],
+        });
+        let bytes = published_receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
+            operation: "auto-publish serialize".to_string(),
+            reason: error.to_string(),
+        })?;
+        let state = state::read_state(&config.state_file_path())?;
+
+        match publish_receipt_to_cluster(state.primary_ticket(), &key, bytes).await {
+            Ok(()) => {
+                self.receipt = published_receipt;
+                self.write()?;
+                info!("🧾 Published final dogfood receipt to cluster key {key}");
+                Ok(())
+            }
+            Err(error) => {
+                self.receipt.stages.push(receipt::DogfoodStageReceipt {
+                    stage,
+                    status: receipt::DogfoodStageStatus::Failed,
+                    started_at,
+                    finished_at: Some(current_timestamp_utc()),
+                    failure: Some(dogfood_failure_summary(stage, &error)),
+                    artifacts: vec![cluster_receipt_artifact(&key)],
+                });
+                if let Err(write_error) = self.write() {
+                    tracing::warn!("failed to write dogfood receipt after auto-publication failure: {write_error}");
+                }
+                Err(error)
+            }
+        }
+    }
+
     fn log_path(&self) {
         info!("🧾 Dogfood receipt: {}", self.path.display());
     }
@@ -1004,6 +1073,18 @@ fn ci_run_artifact(run_id: String) -> receipt::DogfoodArtifactReceipt {
         name: "ci-run".to_string(),
         kind: receipt::DogfoodArtifactKind::CiRun,
         store_id: Some(run_id),
+        blob_id: None,
+        digest: None,
+        size_bytes: None,
+        relative_path: None,
+    }
+}
+
+fn cluster_receipt_artifact(key: &str) -> receipt::DogfoodArtifactReceipt {
+    receipt::DogfoodArtifactReceipt {
+        name: "cluster-receipt".to_string(),
+        kind: receipt::DogfoodArtifactKind::Receipt,
+        store_id: Some(key.to_string()),
         blob_id: None,
         digest: None,
         size_bytes: None,
@@ -1195,6 +1276,24 @@ mod tests {
     #[test]
     fn receipt_cluster_key_is_deterministic() {
         assert_eq!(receipt_cluster_key("dogfood-20260503T180335Z"), "dogfood/receipts/dogfood-20260503T180335Z.json");
+    }
+
+    #[test]
+    fn publish_receipt_stage_and_artifact_are_operator_named() {
+        assert_eq!(receipt::DogfoodStageKind::PublishReceipt.as_str(), "publish_receipt");
+        let artifact = cluster_receipt_artifact("dogfood/receipts/run.json");
+        assert_eq!(artifact.name, "cluster-receipt");
+        assert_eq!(artifact.kind, receipt::DogfoodArtifactKind::Receipt);
+        assert_eq!(artifact.store_id.as_deref(), Some("dogfood/receipts/run.json"));
+    }
+
+    #[test]
+    fn full_leave_running_flag_is_explicit() {
+        let parsed = Cli::try_parse_from(["aspen-dogfood", "full", "--leave-running"]).unwrap();
+        match parsed.command {
+            Command::Full(args) => assert!(args.leave_running),
+            _ => panic!("expected full command"),
+        }
     }
 
     #[test]

@@ -133,8 +133,12 @@ Use `aspen-cli ci logs --follow <run_id> <deploy_job_id>` to watch in real time.
 The self-hosted build pipeline is Aspen's operator acceptance path: source is pushed to Aspen Forge, built by Aspen CI, deployed to an Aspen cluster, verified through cluster health, and then stopped with a durable run receipt. Treat a successful `full` run plus `receipts list/show` output as the canonical evidence that the self-hosted path works under the current tree.
 
 ```bash
-# Full pipeline: start → push → build → deploy → verify → stop
+# Full pipeline: start → push → build → deploy → verify → publish receipt → stop
 nix run .#dogfood-local -- full
+
+# Full pipeline, but leave the verified cluster running after receipt publication
+# so cluster-backed evidence can be inspected before cleanup.
+nix run .#dogfood-local -- full --leave-running
 
 # Build → deploy → verify (cluster already running)
 nix run .#dogfood-local -- full-loop
@@ -158,13 +162,17 @@ nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts diagnose <r
 # Emit the validated canonical JSON receipt for machine checks or evidence archival.
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id> --json
 
-# While the dogfood cluster is still running, publish a validated local receipt
-# into Aspen's own Raft-backed KV path and read it back from the cluster.
-nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts publish <run-id>
+# While the dogfood cluster is still running, read back a receipt from Aspen's
+# own Raft-backed KV path. A normal successful `full` run auto-publishes before
+# cleanup; use `full --leave-running` when you want this readback after `full` exits.
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts cluster-show <run-id> --json
+
+# Manual publication remains available for a validated local receipt while a
+# matching dogfood cluster is running.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts publish <run-id>
 ```
 
-A successful acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, aggregate final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, and `stop`. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback; in `receipts list`, any failed stage makes the aggregate final status `failed` even if cleanup later records a successful `stop` stage. In-cluster publication stores the same canonical receipt JSON at `dogfood/receipts/<run-id>.json`; it is live cluster evidence and does not replace the local receipt archive for ephemeral `full` runs that stop and remove the cluster.
+A successful default acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, aggregate final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, `publish_receipt`, and `stop`. A successful `full --leave-running` receipt omits the `stop` stage because the cluster is intentionally left running for readback; run `nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood stop` after inspection. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback; in `receipts list`, any failed stage makes the aggregate final status `failed` even if cleanup later records a successful `stop` stage. In-cluster publication stores the same canonical receipt JSON at `dogfood/receipts/<run-id>.json`; it is live cluster evidence and does not replace the local receipt archive for ephemeral `full` runs that stop and remove the cluster.
 
 ## Troubleshooting
 
@@ -195,6 +203,7 @@ Read the first stage whose status is `failed`; later stages are either absent or
 | `build` | `ci_pipeline`, `timeout`, `client_rpc` | Use the CI run/artifact fields from the receipt, then inspect `aspen-cli ci status`/logs for the exact run ID. If the category is `timeout`, distinguish a still-running local Nix build from a stuck worker before changing source. |
 | `deploy` | `deploy_failed`, `client_rpc`, `timeout` | Check deployment status and whether the receipt's CI run artifact is the one being deployed. Confirm the target node still has quorum and the built store path/artifact is available. |
 | `verify` | `health_check`, `client_rpc` | Treat this as a post-deploy health failure: inspect cluster health, node uptime, and recent node logs before rerunning. |
+| `publish_receipt` | `receipt`, `client_rpc`, `state_file` | The workload verified but self-hosted evidence publication failed. Use the local receipt as fallback evidence, confirm the cluster was still running, and rerun with `full --leave-running` if cluster-backed readback is required. |
 | `stop` | `stop_node`, `state_file` | The acceptance result is incomplete because cleanup failed. Inspect local process state and cluster directory ownership before deleting files manually. |
 
 For categories not listed above, use the receipt message as the primary clue and preserve the JSON receipt as evidence. If a run emitted public relay or DNS warnings but the receipt is `succeeded`, those warnings are not acceptance blockers; only a failed receipt should drive incident triage.

@@ -149,6 +149,7 @@ pub enum DogfoodStageKind {
     Build,
     Deploy,
     Verify,
+    PublishReceipt,
     Stop,
 }
 
@@ -160,6 +161,7 @@ impl DogfoodStageKind {
             Self::Build => "build",
             Self::Deploy => "deploy",
             Self::Verify => "verify",
+            Self::PublishReceipt => "publish_receipt",
             Self::Stop => "stop",
         }
     }
@@ -233,6 +235,7 @@ pub enum DogfoodArtifactKind {
     CiArtifact,
     Deployment,
     VerificationReport,
+    Receipt,
     LogExcerpt,
 }
 
@@ -246,6 +249,7 @@ impl DogfoodArtifactKind {
             Self::CiArtifact => "ci_artifact",
             Self::Deployment => "deployment",
             Self::VerificationReport => "verification_report",
+            Self::Receipt => "receipt",
             Self::LogExcerpt => "log_excerpt",
         }
     }
