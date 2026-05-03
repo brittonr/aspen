@@ -1,0 +1,3 @@
+{
+  "complete-trust-crypto-secrets-checker-coverage": []
+}

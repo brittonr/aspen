@@ -208,6 +208,8 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_forge_protocol" => Some("aspen-forge-protocol"),
         "aspen_jobs_protocol" => Some("aspen-jobs-protocol"),
         "jobs_ci_core" => Some("aspen-jobs-core"),
+        "aspen_crypto" => Some("aspen-crypto"),
+        "aspen_secrets_core" => Some("aspen-secrets-core"),
         "aspen_transport" => Some("aspen-transport"),
         "aspen_rpc_core" => Some("aspen-rpc-core"),
         "aspen_blob" => Some("aspen-blob"),
@@ -223,12 +225,17 @@ fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
     match family {
         BLOB_CASTORE_CACHE_FAMILY => Some(&["aspen_blob", "aspen_castore", "aspen_cache"]),
         KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
-        PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_coordination_protocol", "aspen_forge_protocol", "aspen_jobs_protocol"]),
+        PROTOCOL_WIRE_FAMILY => Some(&[
+            "aspen_client_api",
+            "aspen_coordination_protocol",
+            "aspen_forge_protocol",
+            "aspen_jobs_protocol",
+        ]),
         TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
         FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
         AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
         JOBS_CI_CORE_FAMILY => Some(&["jobs_ci_core"]),
-        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["trust_crypto_secrets"]),
+        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["aspen_crypto", "aspen_secrets_core"]),
         TESTING_HARNESS_FAMILY => Some(&["testing_harness"]),
         _ => None,
     }
@@ -427,12 +434,7 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
             } else {
                 "downstream fixture evidence"
             };
-            failures.push(format!(
-                "{}: missing {} `{}`",
-                args.candidate_family,
-                evidence_kind,
-                artifact.display()
-            ));
+            failures.push(format!("{}: missing {} `{}`", args.candidate_family, evidence_kind, artifact.display()));
         }
     }
 }
