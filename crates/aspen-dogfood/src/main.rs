@@ -497,11 +497,7 @@ fn summarize_receipt(receipt: receipt::DogfoodRunReceipt, path: PathBuf) -> Rece
     let total_stages = receipt.stages.len();
     let succeeded_stages =
         receipt.stages.iter().filter(|stage| stage.status == receipt::DogfoodStageStatus::Succeeded).count();
-    let final_status = receipt
-        .stages
-        .last()
-        .map(|stage| stage.status.as_str().to_string())
-        .unwrap_or_else(|| "empty".to_string());
+    let final_status = aggregate_receipt_status(&receipt.stages).to_string();
 
     ReceiptSummary {
         run_id: receipt.run_id,
@@ -512,6 +508,25 @@ fn summarize_receipt(receipt: receipt::DogfoodRunReceipt, path: PathBuf) -> Rece
         total_stages,
         path,
     }
+}
+
+fn aggregate_receipt_status(stages: &[receipt::DogfoodStageReceipt]) -> &'static str {
+    if stages.is_empty() {
+        return "empty";
+    }
+    if stages.iter().any(|stage| stage.status == receipt::DogfoodStageStatus::Failed) {
+        return "failed";
+    }
+    if stages.iter().any(|stage| stage.status == receipt::DogfoodStageStatus::Running) {
+        return "running";
+    }
+    if stages.iter().any(|stage| stage.status == receipt::DogfoodStageStatus::Pending) {
+        return "pending";
+    }
+    if stages.iter().any(|stage| stage.status == receipt::DogfoodStageStatus::Skipped) {
+        return "skipped";
+    }
+    "succeeded"
 }
 
 fn resolve_receipt_selector(config: &RunConfig, selector: &str) -> PathBuf {
@@ -980,6 +995,43 @@ mod tests {
         assert_eq!(summaries[1].run_id, "dogfood-2");
         assert_eq!(summaries[1].final_status, "succeeded");
         assert_eq!(summaries[1].succeeded_stages, 1);
+    }
+
+    #[test]
+    fn list_receipt_summary_failed_stage_overrides_successful_stop() {
+        let mut receipt =
+            sample_receipt("dogfood-failed-clean", "2026-05-03T03:00:00Z", receipt::DogfoodStageStatus::Failed);
+        receipt.stages.push(receipt::DogfoodStageReceipt {
+            stage: receipt::DogfoodStageKind::Stop,
+            status: receipt::DogfoodStageStatus::Succeeded,
+            started_at: "2026-05-03T01:02:00Z".to_string(),
+            finished_at: Some("2026-05-03T01:03:00Z".to_string()),
+            failure: None,
+            artifacts: Vec::new(),
+        });
+
+        let summary = summarize_receipt(receipt, PathBuf::from("/tmp/dogfood-failed-clean.json"));
+
+        assert_eq!(summary.final_status, "failed");
+        assert_eq!(summary.succeeded_stages, 1);
+        assert_eq!(summary.total_stages, 2);
+    }
+
+    #[test]
+    fn aggregate_receipt_status_uses_operator_precedence() {
+        assert_eq!(aggregate_receipt_status(&[]), "empty");
+        let mut receipt =
+            sample_receipt("dogfood-running", "2026-05-03T04:00:00Z", receipt::DogfoodStageStatus::Succeeded);
+        receipt.stages.push(receipt::DogfoodStageReceipt {
+            stage: receipt::DogfoodStageKind::Deploy,
+            status: receipt::DogfoodStageStatus::Running,
+            started_at: "2026-05-03T01:02:00Z".to_string(),
+            finished_at: None,
+            failure: None,
+            artifacts: Vec::new(),
+        });
+
+        assert_eq!(aggregate_receipt_status(&receipt.stages), "running");
     }
 
     #[test]

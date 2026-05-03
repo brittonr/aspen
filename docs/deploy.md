@@ -159,7 +159,7 @@ nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts diagnose <r
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id> --json
 ```
 
-A successful acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, and `stop`. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback.
+A successful acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, aggregate final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, and `stop`. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback; in `receipts list`, any failed stage makes the aggregate final status `failed` even if cleanup later records a successful `stop` stage.
 
 ## Troubleshooting
 
