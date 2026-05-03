@@ -18,7 +18,11 @@ use std::fmt::Write as _;
 use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 
+use aspen_client::AspenClient;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
@@ -84,6 +88,10 @@ enum ReceiptsCommand {
     Show(ShowReceiptArgs),
     /// Diagnose one receipt and print first-response triage guidance.
     Diagnose(DiagnoseReceiptArgs),
+    /// Publish a validated local receipt into the running Aspen cluster KV store.
+    Publish(PublishReceiptArgs),
+    /// Show one receipt that was published into the running Aspen cluster KV store.
+    ClusterShow(ClusterShowReceiptArgs),
 }
 
 #[derive(Args)]
@@ -102,6 +110,22 @@ struct DiagnoseReceiptArgs {
     run_id_or_path: String,
 }
 
+#[derive(Args)]
+struct PublishReceiptArgs {
+    /// Run id in the configured receipts directory, or an explicit receipt JSON path.
+    run_id_or_path: String,
+}
+
+#[derive(Args)]
+struct ClusterShowReceiptArgs {
+    /// Run id published under dogfood/receipts/<run-id>.json in cluster KV.
+    run_id: String,
+
+    /// Emit validated canonical JSON instead of a text summary.
+    #[arg(long)]
+    json: bool,
+}
+
 fn main() {
     if let Err(error) = run_main() {
         tracing::error!("❌ {error}");
@@ -113,7 +137,7 @@ fn run_main() -> DogfoodResult<()> {
     // Note: ASPEN_RELAY_DISABLED is set on spawned node processes only (in spawn_node),
     // NOT globally. The client endpoint needs relay enabled for QUIC signaling even
     // when connecting to local nodes.
-    tracing_subscriber::fmt().with_env_filter(build_env_filter()).init();
+    tracing_subscriber::fmt().with_env_filter(build_env_filter()).with_writer(std::io::stderr).init();
     let cli = Cli::parse();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -164,7 +188,7 @@ async fn dispatch_command(config: &RunConfig, command: Command) -> DogfoodResult
         Command::Verify => cmd_verify(config).await,
         Command::FullLoop => cmd_full_loop(config).await,
         Command::Full => cmd_full(config).await,
-        Command::Receipts { command } => cmd_receipts(config, command),
+        Command::Receipts { command } => cmd_receipts(config, command).await,
     }
 }
 
@@ -399,11 +423,13 @@ async fn cmd_verify(config: &RunConfig) -> DogfoodResult<()> {
     Ok(())
 }
 
-fn cmd_receipts(config: &RunConfig, command: ReceiptsCommand) -> DogfoodResult<()> {
+async fn cmd_receipts(config: &RunConfig, command: ReceiptsCommand) -> DogfoodResult<()> {
     match command {
         ReceiptsCommand::List => cmd_receipts_list(config),
         ReceiptsCommand::Show(args) => cmd_receipts_show(config, &args),
         ReceiptsCommand::Diagnose(args) => cmd_receipts_diagnose(config, &args),
+        ReceiptsCommand::Publish(args) => cmd_receipts_publish(config, &args).await,
+        ReceiptsCommand::ClusterShow(args) => cmd_receipts_cluster_show(config, &args).await,
     }
 }
 
@@ -451,6 +477,132 @@ fn cmd_receipts_diagnose(config: &RunConfig, args: &DiagnoseReceiptArgs) -> Dogf
     let receipt = load_receipt_file(&path)?;
     print!("{}", diagnose_receipt(&receipt, &path));
     Ok(())
+}
+
+async fn cmd_receipts_publish(config: &RunConfig, args: &PublishReceiptArgs) -> DogfoodResult<()> {
+    let path = resolve_receipt_selector(config, &args.run_id_or_path);
+    let receipt = load_receipt_file(&path)?;
+    let bytes = receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
+        operation: "serialize".to_string(),
+        reason: error.to_string(),
+    })?;
+    let key = receipt_cluster_key(&receipt.run_id);
+    let state = state::read_state(&config.state_file_path())?;
+    publish_receipt_to_cluster(state.primary_ticket(), &key, bytes).await?;
+    println!("Published dogfood receipt {} to cluster key {}", receipt.run_id, key);
+    Ok(())
+}
+
+async fn cmd_receipts_cluster_show(config: &RunConfig, args: &ClusterShowReceiptArgs) -> DogfoodResult<()> {
+    if args.run_id.contains('/') || args.run_id.contains('\\') || args.run_id.ends_with(".json") {
+        return Err(DogfoodError::Receipt {
+            operation: "cluster-show".to_string(),
+            reason: "cluster-show expects a run id, not a path".to_string(),
+        });
+    }
+
+    let key = receipt_cluster_key(&args.run_id);
+    let state = state::read_state(&config.state_file_path())?;
+    let bytes = read_receipt_from_cluster(state.primary_ticket(), &key).await?;
+    let receipt =
+        receipt::DogfoodRunReceipt::from_canonical_json_bytes(&bytes).map_err(|error| DogfoodError::Receipt {
+            operation: "cluster-show".to_string(),
+            reason: format!("cluster key {key}: {error}"),
+        })?;
+    if args.json {
+        let bytes = receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
+            operation: "serialize".to_string(),
+            reason: error.to_string(),
+        })?;
+        println!("{}", String::from_utf8_lossy(&bytes));
+    } else {
+        print_receipt_summary(&receipt, Path::new(&key));
+    }
+    Ok(())
+}
+
+fn receipt_cluster_key(run_id: &str) -> String {
+    format!("dogfood/receipts/{run_id}.json")
+}
+
+async fn connect_receipt_cluster(ticket: &str) -> DogfoodResult<AspenClient> {
+    AspenClient::connect(ticket, Duration::from_secs(30), None)
+        .await
+        .map_err(|source| DogfoodError::ClientRpc {
+            operation: "connect receipt cluster".to_string(),
+            target: cluster::ticket_preview(ticket),
+            source,
+        })
+}
+
+async fn publish_receipt_to_cluster(ticket: &str, key: &str, value: Vec<u8>) -> DogfoodResult<()> {
+    let client = connect_receipt_cluster(ticket).await?;
+    let response = client
+        .send(ClientRpcRequest::WriteKey {
+            key: key.to_string(),
+            value,
+        })
+        .await;
+    client.shutdown().await;
+    let response = response.map_err(|source| DogfoodError::ClientRpc {
+        operation: "WriteKey receipt".to_string(),
+        target: cluster::ticket_preview(ticket),
+        source,
+    })?;
+    interpret_receipt_write_response(response, key)
+}
+
+fn interpret_receipt_write_response(response: ClientRpcResponse, key: &str) -> DogfoodResult<()> {
+    match response {
+        ClientRpcResponse::WriteResult(result) if result.is_success => Ok(()),
+        ClientRpcResponse::WriteResult(result) => Err(DogfoodError::Receipt {
+            operation: "publish".to_string(),
+            reason: format!("cluster key {key}: {}", result.error.unwrap_or_else(|| "write failed".to_string())),
+        }),
+        ClientRpcResponse::Error(error) => Err(DogfoodError::Receipt {
+            operation: "publish".to_string(),
+            reason: format!("cluster key {key}: {}: {}", error.code, error.message),
+        }),
+        other => Err(DogfoodError::Receipt {
+            operation: "publish".to_string(),
+            reason: format!("cluster key {key}: unexpected response {other:?}"),
+        }),
+    }
+}
+
+async fn read_receipt_from_cluster(ticket: &str, key: &str) -> DogfoodResult<Vec<u8>> {
+    let client = connect_receipt_cluster(ticket).await?;
+    let response = client.send(ClientRpcRequest::ReadKey { key: key.to_string() }).await;
+    client.shutdown().await;
+    let response = response.map_err(|source| DogfoodError::ClientRpc {
+        operation: "ReadKey receipt".to_string(),
+        target: cluster::ticket_preview(ticket),
+        source,
+    })?;
+    interpret_receipt_read_response(response, key)
+}
+
+fn interpret_receipt_read_response(response: ClientRpcResponse, key: &str) -> DogfoodResult<Vec<u8>> {
+    match response {
+        ClientRpcResponse::ReadResult(result) if result.was_found => {
+            result.value.ok_or_else(|| DogfoodError::Receipt {
+                operation: "cluster-show".to_string(),
+                reason: format!("cluster key {key}: read response had no value"),
+            })
+        }
+        ClientRpcResponse::ReadResult(result) => Err(DogfoodError::Receipt {
+            operation: "cluster-show".to_string(),
+            reason: format!("cluster key {key}: {}", result.error.unwrap_or_else(|| "not found".to_string())),
+        }),
+        ClientRpcResponse::Error(error) => Err(DogfoodError::Receipt {
+            operation: "cluster-show".to_string(),
+            reason: format!("cluster key {key}: {}: {}", error.code, error.message),
+        }),
+        other => Err(DogfoodError::Receipt {
+            operation: "cluster-show".to_string(),
+            reason: format!("cluster key {key}: unexpected response {other:?}"),
+        }),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1032,6 +1184,45 @@ mod tests {
         });
 
         assert_eq!(aggregate_receipt_status(&receipt.stages), "running");
+    }
+
+    #[test]
+    fn receipt_cluster_key_is_deterministic() {
+        assert_eq!(receipt_cluster_key("dogfood-20260503T180335Z"), "dogfood/receipts/dogfood-20260503T180335Z.json");
+    }
+
+    #[test]
+    fn interpret_receipt_write_response_accepts_success_only() {
+        let ok = ClientRpcResponse::WriteResult(aspen_client_api::WriteResultResponse {
+            is_success: true,
+            error: None,
+        });
+        assert!(interpret_receipt_write_response(ok, "dogfood/receipts/run.json").is_ok());
+
+        let failed = ClientRpcResponse::WriteResult(aspen_client_api::WriteResultResponse {
+            is_success: false,
+            error: Some("raft unavailable".to_string()),
+        });
+        let error = interpret_receipt_write_response(failed, "dogfood/receipts/run.json").unwrap_err();
+        assert!(error.to_string().contains("raft unavailable"));
+    }
+
+    #[test]
+    fn interpret_receipt_read_response_returns_value_or_not_found() {
+        let found = ClientRpcResponse::ReadResult(aspen_client_api::ReadResultResponse {
+            value: Some(b"receipt".to_vec()),
+            was_found: true,
+            error: None,
+        });
+        assert_eq!(interpret_receipt_read_response(found, "dogfood/receipts/run.json").unwrap(), b"receipt".to_vec());
+
+        let missing = ClientRpcResponse::ReadResult(aspen_client_api::ReadResultResponse {
+            value: None,
+            was_found: false,
+            error: None,
+        });
+        let error = interpret_receipt_read_response(missing, "dogfood/receipts/run.json").unwrap_err();
+        assert!(error.to_string().contains("not found"));
     }
 
     #[test]

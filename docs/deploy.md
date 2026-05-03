@@ -157,9 +157,14 @@ nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts diagnose <r
 
 # Emit the validated canonical JSON receipt for machine checks or evidence archival.
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id> --json
+
+# While the dogfood cluster is still running, publish a validated local receipt
+# into Aspen's own Raft-backed KV path and read it back from the cluster.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts publish <run-id>
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts cluster-show <run-id> --json
 ```
 
-A successful acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, aggregate final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, and `stop`. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback; in `receipts list`, any failed stage makes the aggregate final status `failed` even if cleanup later records a successful `stop` stage.
+A successful acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, aggregate final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, and `stop`. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback; in `receipts list`, any failed stage makes the aggregate final status `failed` even if cleanup later records a successful `stop` stage. In-cluster publication stores the same canonical receipt JSON at `dogfood/receipts/<run-id>.json`; it is live cluster evidence and does not replace the local receipt archive for ephemeral `full` runs that stop and remove the cluster.
 
 ## Troubleshooting
 
