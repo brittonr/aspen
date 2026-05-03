@@ -200,20 +200,27 @@ pub enum DecryptOutcome {
 /// Try to parse and decrypt stored bytes as an encrypted envelope.
 ///
 /// Two-phase detection:
-/// 1. **Parse**: Try `EncryptedValue::from_bytes()`. If this fails (wrong magic, too short, bad
-///    version), the bytes are NOT an envelope → `NotAnEnvelope`.
+/// 1. **Parse**: Try `EncryptedValue::from_bytes()`. If this fails after the Aspen envelope magic
+///    is present, the bytes are a malformed envelope → `AuthenticationFailed`. If the magic is not
+///    present, the bytes are legacy plaintext → `NotAnEnvelope`.
 /// 2. **Decrypt**: If parsing succeeds, the bytes ARE an envelope. Try to decrypt. If decryption
 ///    fails (tampered, wrong key, unknown epoch), that's an authentication error →
 ///    `AuthenticationFailed`.
 ///
 /// This preserves both properties:
-/// - Legacy plaintext is never misclassified (parse fails → fallback)
-/// - Tampered encrypted values are detected (parse succeeds, decrypt fails → error)
+/// - Legacy plaintext is never misclassified (no Aspen magic → fallback)
+/// - Malformed or tampered encrypted values are detected (Aspen magic or parse success → error)
 pub fn try_decrypt(enc: &SecretsEncryption, stored: &[u8]) -> DecryptOutcome {
-    // Phase 1: try to parse as an envelope
+    // Phase 1: try to parse as an envelope. A full Aspen magic prefix commits the value to the
+    // encrypted-envelope format; malformed values must not fall back to plaintext.
     let encrypted = match envelope::EncryptedValue::from_bytes(stored) {
         Ok(ev) => ev,
-        Err(_) => return DecryptOutcome::NotAnEnvelope,
+        Err(err) => {
+            if has_envelope_magic(stored) {
+                return DecryptOutcome::AuthenticationFailed(err);
+            }
+            return DecryptOutcome::NotAnEnvelope;
+        }
     };
 
     // Phase 2: we have a structurally valid envelope — decrypt it
@@ -231,6 +238,12 @@ pub fn try_decrypt(enc: &SecretsEncryption, stored: &[u8]) -> DecryptOutcome {
         Ok(plaintext) => DecryptOutcome::Decrypted(plaintext),
         Err(e) => DecryptOutcome::AuthenticationFailed(e),
     }
+}
+
+fn has_envelope_magic(stored: &[u8]) -> bool {
+    stored
+        .get(..envelope::ENVELOPE_MAGIC.len())
+        .is_some_and(|prefix| prefix == envelope::ENVELOPE_MAGIC)
 }
 
 /// Errors when the secrets encryption layer is unavailable.
@@ -390,15 +403,32 @@ mod tests {
     }
 
     #[test]
-    fn test_try_decrypt_not_envelope_for_bad_version() {
+    fn test_try_decrypt_auth_failure_for_bad_version() {
         let secret = test_secret();
         let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
 
-        // AENC magic + unsupported version byte → parse failure → NotAnEnvelope
+        // AENC magic + unsupported version byte is a malformed Aspen envelope,
+        // not legacy plaintext. It must not fall back to plaintext.
         let mut fake = vec![0u8; 100];
         fake[0..4].copy_from_slice(&envelope::ENVELOPE_MAGIC);
         fake[4] = 99;
-        assert!(matches!(try_decrypt(&enc, &fake), DecryptOutcome::NotAnEnvelope));
+        assert!(matches!(
+            try_decrypt(&enc, &fake),
+            DecryptOutcome::AuthenticationFailed(EnvelopeError::UnsupportedVersion { version: 99 })
+        ));
+    }
+
+    #[test]
+    fn test_try_decrypt_auth_failure_for_truncated_magic_envelope() {
+        let secret = test_secret();
+        let enc = SecretsEncryption::new(&secret, b"cluster", 1, 1, 0);
+
+        let mut fake = Vec::from(envelope::ENVELOPE_MAGIC);
+        fake.push(1);
+        assert!(matches!(
+            try_decrypt(&enc, &fake),
+            DecryptOutcome::AuthenticationFailed(EnvelopeError::TooShort { .. })
+        ));
     }
 
     #[test]
