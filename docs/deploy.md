@@ -160,6 +160,34 @@ A successful acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, comma
 
 ## Troubleshooting
 
+### Interpreting failed dogfood receipts
+
+Use receipts first when a `full` dogfood run fails. They preserve the failed stage, normalized category, and error message even after terminal scrollback is gone:
+
+```bash
+# Find the newest failed run.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts list
+
+# Read the operator summary.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id>
+
+# Export validated JSON for incident evidence or scripts.
+nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts show <run-id> --json > dogfood-receipt.json
+```
+
+Read the first stage whose status is `failed`; later stages are either absent or skipped because the orchestrator stops at the first blocking failure. The stage gives the subsystem boundary, and `failure.category` gives the first triage path:
+
+| Failed stage | Common categories | First checks |
+| --- | --- | --- |
+| `start` | `process_spawn`, `node_crash`, `health_check`, `state_file` | Check that the dogfood binaries exist, inspect node logs under the cluster directory, and verify the cluster can elect a healthy node. Do not copy or preserve `cluster-ticket.txt`; it is credential material. |
+| `push` | `git_push`, `forge`, `client_rpc` | Inspect the receipt message for captured git stdout/stderr, then check Forge RPC reachability and whether the pushed tree exceeded protocol/message limits. |
+| `build` | `ci_pipeline`, `timeout`, `client_rpc` | Use the CI run/artifact fields from the receipt, then inspect `aspen-cli ci status`/logs for the exact run ID. If the category is `timeout`, distinguish a still-running local Nix build from a stuck worker before changing source. |
+| `deploy` | `deploy_failed`, `client_rpc`, `timeout` | Check deployment status and whether the receipt's CI run artifact is the one being deployed. Confirm the target node still has quorum and the built store path/artifact is available. |
+| `verify` | `health_check`, `client_rpc` | Treat this as a post-deploy health failure: inspect cluster health, node uptime, and recent node logs before rerunning. |
+| `stop` | `stop_node`, `state_file` | The acceptance result is incomplete because cleanup failed. Inspect local process state and cluster directory ownership before deleting files manually. |
+
+For categories not listed above, use the receipt message as the primary clue and preserve the JSON receipt as evidence. If a run emitted public relay or DNS warnings but the receipt is `succeeded`, those warnings are not acceptance blockers; only a failed receipt should drive incident triage.
+
 ### Wire format incompatibility
 
 Postcard serialization uses enum discriminant positions. If the new binary adds or reorders enum variants in `ClientRpcRequest`/`ClientRpcResponse`, existing nodes will misinterpret messages. There is no version negotiation — ensure wire compatibility before deploying.
