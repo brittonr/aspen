@@ -15,8 +15,10 @@ mod receipt;
 mod state;
 
 use std::future::Future;
+use std::path::Path;
 use std::path::PathBuf;
 
+use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use tracing::info;
@@ -66,6 +68,29 @@ enum Command {
     FullLoop,
     /// Run the full pipeline: start → push → build → deploy → verify → stop.
     Full,
+    /// Inspect durable dogfood run receipts.
+    Receipts {
+        #[command(subcommand)]
+        command: ReceiptsCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReceiptsCommand {
+    /// List receipts in the configured receipts directory.
+    List,
+    /// Show one receipt by run id or explicit path.
+    Show(ShowReceiptArgs),
+}
+
+#[derive(Args)]
+struct ShowReceiptArgs {
+    /// Run id in the configured receipts directory, or an explicit receipt JSON path.
+    run_id_or_path: String,
+
+    /// Emit validated canonical JSON instead of a text summary.
+    #[arg(long)]
+    json: bool,
 }
 
 fn main() {
@@ -130,6 +155,7 @@ async fn dispatch_command(config: &RunConfig, command: Command) -> DogfoodResult
         Command::Verify => cmd_verify(config).await,
         Command::FullLoop => cmd_full_loop(config).await,
         Command::Full => cmd_full(config).await,
+        Command::Receipts { command } => cmd_receipts(config, command),
     }
 }
 
@@ -151,7 +177,11 @@ impl RunConfig {
     }
 
     fn receipt_file_path(&self, run_id: &str) -> PathBuf {
-        PathBuf::from(format!("{}-receipts/{run_id}.json", self.cluster_dir.trim_end_matches('/')))
+        self.receipt_dir_path().join(format!("{run_id}.json"))
+    }
+
+    fn receipt_dir_path(&self) -> PathBuf {
+        PathBuf::from(format!("{}-receipts", self.cluster_dir.trim_end_matches('/')))
     }
 
     /// Cookie for the primary (or only) cluster.
@@ -358,6 +388,164 @@ async fn cmd_verify(config: &RunConfig) -> DogfoodResult<()> {
 
     info!("✅ Verification passed");
     Ok(())
+}
+
+fn cmd_receipts(config: &RunConfig, command: ReceiptsCommand) -> DogfoodResult<()> {
+    match command {
+        ReceiptsCommand::List => cmd_receipts_list(config),
+        ReceiptsCommand::Show(args) => cmd_receipts_show(config, &args),
+    }
+}
+
+fn cmd_receipts_list(config: &RunConfig) -> DogfoodResult<()> {
+    let receipt_dir = config.receipt_dir_path();
+    let summaries = list_receipt_summaries(&receipt_dir)?;
+    if summaries.is_empty() {
+        println!("No dogfood receipts found in {}", receipt_dir.display());
+        return Ok(());
+    }
+
+    println!("RUN ID                         CREATED AT            COMMAND  FINAL      STAGES  PATH");
+    for summary in summaries {
+        println!(
+            "{:<30} {:<21} {:<8} {:<10} {:>2}/{}    {}",
+            summary.run_id,
+            summary.created_at,
+            summary.command,
+            summary.final_status,
+            summary.succeeded_stages,
+            summary.total_stages,
+            summary.path.display()
+        );
+    }
+    Ok(())
+}
+
+fn cmd_receipts_show(config: &RunConfig, args: &ShowReceiptArgs) -> DogfoodResult<()> {
+    let path = resolve_receipt_selector(config, &args.run_id_or_path);
+    let receipt = load_receipt_file(&path)?;
+    if args.json {
+        let bytes = receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
+            operation: "serialize".to_string(),
+            reason: error.to_string(),
+        })?;
+        println!("{}", String::from_utf8_lossy(&bytes));
+    } else {
+        print_receipt_summary(&receipt, &path);
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReceiptSummary {
+    run_id: String,
+    created_at: String,
+    command: String,
+    final_status: String,
+    succeeded_stages: usize,
+    total_stages: usize,
+    path: PathBuf,
+}
+
+fn list_receipt_summaries(receipt_dir: &Path) -> DogfoodResult<Vec<ReceiptSummary>> {
+    if !receipt_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let entries = std::fs::read_dir(receipt_dir).map_err(|source| DogfoodError::Receipt {
+        operation: "list".to_string(),
+        reason: format!("reading {}: {source}", receipt_dir.display()),
+    })?;
+
+    let mut summaries = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|source| DogfoodError::Receipt {
+            operation: "list".to_string(),
+            reason: format!("reading {} entry: {source}", receipt_dir.display()),
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+            continue;
+        }
+        match load_receipt_file(&path).map(|receipt| summarize_receipt(receipt, path.clone())) {
+            Ok(summary) => summaries.push(summary),
+            Err(error) => eprintln!("warning: skipping invalid dogfood receipt {}: {error}", path.display()),
+        }
+    }
+    summaries
+        .sort_by(|left, right| left.created_at.cmp(&right.created_at).then_with(|| left.run_id.cmp(&right.run_id)));
+    Ok(summaries)
+}
+
+fn summarize_receipt(receipt: receipt::DogfoodRunReceipt, path: PathBuf) -> ReceiptSummary {
+    let total_stages = receipt.stages.len();
+    let succeeded_stages =
+        receipt.stages.iter().filter(|stage| stage.status == receipt::DogfoodStageStatus::Succeeded).count();
+    let final_status = receipt
+        .stages
+        .last()
+        .map(|stage| stage.status.as_str().to_string())
+        .unwrap_or_else(|| "empty".to_string());
+
+    ReceiptSummary {
+        run_id: receipt.run_id,
+        created_at: receipt.created_at,
+        command: receipt.command,
+        final_status,
+        succeeded_stages,
+        total_stages,
+        path,
+    }
+}
+
+fn resolve_receipt_selector(config: &RunConfig, selector: &str) -> PathBuf {
+    let path = PathBuf::from(selector);
+    if path.is_absolute() || path.components().count() > 1 || path.extension().is_some() {
+        path
+    } else {
+        config.receipt_file_path(selector)
+    }
+}
+
+fn load_receipt_file(path: &Path) -> DogfoodResult<receipt::DogfoodRunReceipt> {
+    let bytes = std::fs::read(path).map_err(|source| DogfoodError::Receipt {
+        operation: "read".to_string(),
+        reason: format!("{}: {source}", path.display()),
+    })?;
+    receipt::DogfoodRunReceipt::from_canonical_json_bytes(&bytes).map_err(|error| DogfoodError::Receipt {
+        operation: "parse".to_string(),
+        reason: format!("{}: {error}", path.display()),
+    })
+}
+
+fn print_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) {
+    println!("Dogfood receipt: {}", receipt.run_id);
+    println!("  schema: {}", receipt.schema);
+    println!("  command: {}", receipt.command);
+    println!("  created_at: {}", receipt.created_at);
+    println!("  mode: federation={}, vm_ci={}", receipt.mode.federation, receipt.mode.vm_ci);
+    println!("  project_dir: {}", receipt.project_dir);
+    println!("  cluster_dir: {}", receipt.cluster_dir);
+    println!("  path: {}", path.display());
+    println!("  stages:");
+    for stage in &receipt.stages {
+        let finished_at = stage.finished_at.as_deref().unwrap_or("-");
+        println!("    - {}: {} ({} → {})", stage.stage.as_str(), stage.status.as_str(), stage.started_at, finished_at);
+        for artifact in &stage.artifacts {
+            println!(
+                "        artifact {} [{}] store_id={} blob_id={} digest={} size={} path={}",
+                artifact.name,
+                artifact.kind.as_str(),
+                artifact.store_id.as_deref().unwrap_or("-"),
+                artifact.blob_id.as_deref().unwrap_or("-"),
+                artifact.digest.as_deref().unwrap_or("-"),
+                artifact.size_bytes.map(|size| size.to_string()).unwrap_or_else(|| "-".to_string()),
+                artifact.relative_path.as_deref().unwrap_or("-")
+            );
+        }
+        if let Some(failure) = &stage.failure {
+            println!("        failure {} [{}]: {}", failure.operation, failure.category, failure.message);
+        }
+    }
 }
 
 async fn cmd_full_loop(config: &RunConfig) -> DogfoodResult<()> {
@@ -589,6 +777,40 @@ mod tests {
         }
     }
 
+    fn sample_receipt(
+        run_id: &str,
+        created_at: &str,
+        status: receipt::DogfoodStageStatus,
+    ) -> receipt::DogfoodRunReceipt {
+        receipt::DogfoodRunReceipt::new(receipt::DogfoodRunReceiptInit {
+            run_id: run_id.to_string(),
+            command: "full".to_string(),
+            created_at: created_at.to_string(),
+            mode: receipt::DogfoodRunMode {
+                federation: false,
+                vm_ci: false,
+            },
+            project_dir: "/repo".to_string(),
+            cluster_dir: "/tmp/test-dogfood".to_string(),
+            stages: vec![receipt::DogfoodStageReceipt {
+                stage: receipt::DogfoodStageKind::Build,
+                status,
+                started_at: "2026-05-03T01:00:00Z".to_string(),
+                finished_at: Some("2026-05-03T01:01:00Z".to_string()),
+                failure: if status == receipt::DogfoodStageStatus::Failed {
+                    Some(receipt::DogfoodFailureSummary {
+                        operation: "Build".to_string(),
+                        category: "ci_pipeline".to_string(),
+                        message: "failed".to_string(),
+                    })
+                } else {
+                    None
+                },
+                artifacts: vec![ci_run_artifact("run-123".to_string())],
+            }],
+        })
+    }
+
     #[test]
     fn cookies_are_distinct_across_modes() {
         let config = test_config(true);
@@ -624,6 +846,61 @@ mod tests {
     fn receipt_file_path_uses_sibling_receipts_dir() {
         let config = test_config(false);
         assert_eq!(config.receipt_file_path("run-1"), PathBuf::from("/tmp/test-dogfood-receipts/run-1.json"));
+        assert_eq!(config.receipt_dir_path(), PathBuf::from("/tmp/test-dogfood-receipts"));
+    }
+
+    #[test]
+    fn list_receipt_summaries_reads_valid_receipts_sorted_by_created_at() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let first = sample_receipt("dogfood-2", "2026-05-03T02:00:00Z", receipt::DogfoodStageStatus::Succeeded);
+        let second = sample_receipt("dogfood-1", "2026-05-03T01:00:00Z", receipt::DogfoodStageStatus::Failed);
+        first.write_canonical_json_file(&tempdir.path().join("dogfood-2.json")).unwrap();
+        second.write_canonical_json_file(&tempdir.path().join("dogfood-1.json")).unwrap();
+        std::fs::write(tempdir.path().join("not-a-receipt.json"), b"{}").unwrap();
+        std::fs::write(tempdir.path().join("notes.txt"), b"ignore me").unwrap();
+
+        let summaries = list_receipt_summaries(tempdir.path()).unwrap();
+
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(summaries[0].run_id, "dogfood-1");
+        assert_eq!(summaries[0].final_status, "failed");
+        assert_eq!(summaries[0].succeeded_stages, 0);
+        assert_eq!(summaries[1].run_id, "dogfood-2");
+        assert_eq!(summaries[1].final_status, "succeeded");
+        assert_eq!(summaries[1].succeeded_stages, 1);
+    }
+
+    #[test]
+    fn list_receipt_summaries_missing_directory_is_empty() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let missing = tempdir.path().join("missing");
+
+        let summaries = list_receipt_summaries(&missing).unwrap();
+
+        assert!(summaries.is_empty());
+    }
+
+    #[test]
+    fn resolve_receipt_selector_uses_run_id_or_explicit_path() {
+        let config = test_config(false);
+
+        assert_eq!(
+            resolve_receipt_selector(&config, "dogfood-run"),
+            PathBuf::from("/tmp/test-dogfood-receipts/dogfood-run.json")
+        );
+        assert_eq!(resolve_receipt_selector(&config, "./receipt.json"), PathBuf::from("./receipt.json"));
+        assert_eq!(resolve_receipt_selector(&config, "/tmp/receipt.json"), PathBuf::from("/tmp/receipt.json"));
+    }
+
+    #[test]
+    fn load_receipt_file_rejects_invalid_json() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = tempdir.path().join("bad.json");
+        std::fs::write(&path, b"{}").unwrap();
+
+        let error = load_receipt_file(&path).unwrap_err();
+
+        assert!(error.to_string().contains("receipt parse"));
     }
 
     #[test]

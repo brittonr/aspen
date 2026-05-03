@@ -152,6 +152,19 @@ pub enum DogfoodStageKind {
     Stop,
 }
 
+impl DogfoodStageKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Push => "push",
+            Self::Build => "build",
+            Self::Deploy => "deploy",
+            Self::Verify => "verify",
+            Self::Stop => "stop",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DogfoodStageStatus {
@@ -160,6 +173,18 @@ pub enum DogfoodStageStatus {
     Succeeded,
     Failed,
     Skipped,
+}
+
+impl DogfoodStageStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+            Self::Skipped => "skipped",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -209,6 +234,21 @@ pub enum DogfoodArtifactKind {
     Deployment,
     VerificationReport,
     LogExcerpt,
+}
+
+impl DogfoodArtifactKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ClusterTicket => "cluster_ticket",
+            Self::ForgeRepository => "forge_repository",
+            Self::GitCommit => "git_commit",
+            Self::CiRun => "ci_run",
+            Self::CiArtifact => "ci_artifact",
+            Self::Deployment => "deployment",
+            Self::VerificationReport => "verification_report",
+            Self::LogExcerpt => "log_excerpt",
+        }
+    }
 }
 
 #[derive(Debug)]
