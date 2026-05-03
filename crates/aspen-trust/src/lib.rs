@@ -4,8 +4,7 @@
 //! 32-byte cluster root secret across N nodes with a K-of-N reconstruction
 //! threshold. Inspired by Oxide's trust-quorum and `gfss` crate.
 
-#![feature(register_tool)]
-#![register_tool(tigerstyle)]
+#![allow(unknown_lints)]
 
 //! ## Modules
 //!

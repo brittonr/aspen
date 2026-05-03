@@ -27,6 +27,10 @@ use std::path::PathBuf;
 
 use iroh_base::PublicKey;
 use iroh_base::SecretKey;
+#[cfg(unix)]
+use tokio::fs::OpenOptions;
+#[cfg(unix)]
+use tokio::io::AsyncWriteExt;
 
 /// Required length for a hex-encoded Ed25519 secret key (32 bytes = 64 hex chars).
 pub const SECRET_KEY_HEX_LENGTH: usize = 64;
@@ -133,10 +137,7 @@ impl NodeIdentityProvider {
 
         // Write hex-encoded key
         let hex_key = hex::encode(provider.secret_key.to_bytes());
-        tokio::fs::write(path, hex_key.as_bytes()).await.map_err(|e| IdentityError::KeyFile {
-            path: path.to_path_buf(),
-            reason: format!("failed to write identity file: {e}"),
-        })?;
+        write_secret_key_file(path, hex_key.as_bytes()).await?;
 
         Ok(provider)
     }
@@ -162,6 +163,34 @@ impl NodeIdentityProvider {
     pub fn to_hex(&self) -> String {
         hex::encode(self.secret_key.to_bytes())
     }
+}
+
+#[cfg(unix)]
+async fn write_secret_key_file(path: &Path, contents: &[u8]) -> Result<(), IdentityError> {
+    let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(path).await.map_err(|e| {
+        IdentityError::KeyFile {
+            path: path.to_path_buf(),
+            reason: format!("failed to create identity file: {e}"),
+        }
+    })?;
+
+    file.write_all(contents).await.map_err(|e| IdentityError::KeyFile {
+        path: path.to_path_buf(),
+        reason: format!("failed to write identity file: {e}"),
+    })?;
+
+    file.flush().await.map_err(|e| IdentityError::KeyFile {
+        path: path.to_path_buf(),
+        reason: format!("failed to flush identity file: {e}"),
+    })
+}
+
+#[cfg(not(unix))]
+async fn write_secret_key_file(path: &Path, contents: &[u8]) -> Result<(), IdentityError> {
+    tokio::fs::write(path, contents).await.map_err(|e| IdentityError::KeyFile {
+        path: path.to_path_buf(),
+        reason: format!("failed to write identity file: {e}"),
+    })
 }
 
 #[cfg(test)]
@@ -242,6 +271,21 @@ mod tests {
         // Loading again should give the same key
         let loaded = NodeIdentityProvider::load_or_generate(&path).await.unwrap();
         assert_eq!(provider.public_key(), loaded.public_key());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_load_or_generate_creates_file_with_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("identity.key");
+
+        NodeIdentityProvider::load_or_generate(&path).await.unwrap();
+
+        let metadata = tokio::fs::metadata(&path).await.unwrap();
+        let mode = metadata.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[tokio::test]

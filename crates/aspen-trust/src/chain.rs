@@ -65,7 +65,10 @@ pub enum ChainError {
 /// bound to the cluster ID and epoch. A random salt ensures the derived key
 /// is unique even if the same secret is reused (which shouldn't happen, but
 /// defense in depth).
-#[allow(tigerstyle::sentinel_fallback, reason = "map count can't realistically exceed u32::MAX; unwrap_or is safe sentinel")]
+#[allow(
+    sentinel_fallback,
+    reason = "map count can't realistically exceed u32::MAX; unwrap_or is safe sentinel"
+)]
 pub fn encrypt_chain(
     prior_secrets: &BTreeMap<u64, [u8; 32]>,
     new_secret: &[u8; 32],

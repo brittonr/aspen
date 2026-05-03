@@ -15,8 +15,11 @@ const MODULUS: u16 = 0x11B;
 /// This is the core operation. Addition in GF(2^8) is XOR.
 /// Multiplication uses shift-and-XOR with reduction by the irreducible polynomial.
 #[inline]
-#[allow(tigerstyle::ambiguous_params, reason = "GF(2^8) multiplication — both args are field elements, commutative operation")]
-#[allow(tigerstyle::sentinel_fallback, reason = "masked to u8 by AND with u8::MAX; sentinel unreachable")]
+#[allow(
+    ambiguous_params,
+    reason = "GF(2^8) multiplication — both args are field elements, commutative operation"
+)]
+#[allow(sentinel_fallback, reason = "masked to u8 by AND with u8::MAX; sentinel unreachable")]
 pub fn mul(lhs: u8, rhs: u8) -> u8 {
     let mut result: u8 = 0;
     let mut a = u16::from(lhs);
@@ -96,25 +99,25 @@ pub fn eval_polynomial(coeffs: &[u8], x: u8) -> u8 {
 #[inline]
 pub fn lagrange_basis_at_zero(xs: &[u8], share_index: u32) -> u8 {
     assert!(!xs.is_empty(), "Lagrange basis requires at least one x-coordinate");
-    assert!(
-        usize::try_from(share_index).is_ok(),
-        "share_index {} must fit in usize",
-        share_index
-    );
-    #[allow(tigerstyle::platform_dependent_cast, tigerstyle::numeric_units, reason = "share_index validated above fits in usize; safe cast")]
+    assert!(usize::try_from(share_index).is_ok(), "share_index {} must fit in usize", share_index);
+    #[allow(
+        platform_dependent_cast,
+        numeric_units,
+        reason = "share_index validated above fits in usize; safe cast"
+    )]
     let share_index_usize = share_index as usize;
     assert!(share_index_usize < xs.len(), "share_index {} must be < xs.len() {}", share_index, xs.len());
     let mut result: u8 = 1;
-    #[allow(tigerstyle::sentinel_fallback, reason = "share_index validated above; index would panic anyway")]
+    #[allow(sentinel_fallback, reason = "share_index validated above; index would panic anyway")]
     let share_slot = usize::try_from(share_index).unwrap_or(usize::MAX);
     let xi = xs[share_slot];
 
     let mut current_slot = 0u32;
     let xs_len = xs.len();
-    #[allow(tigerstyle::sentinel_fallback, reason = "iteration bounded by xs.len(); sentinel unreachable")]
+    #[allow(sentinel_fallback, reason = "iteration bounded by xs.len(); sentinel unreachable")]
     while usize::try_from(current_slot).unwrap_or(usize::MAX) < xs_len {
         if current_slot != share_index {
-            #[allow(tigerstyle::sentinel_fallback, reason = "slot bounded by xs.len(); sentinel unreachable")]
+            #[allow(sentinel_fallback, reason = "slot bounded by xs.len(); sentinel unreachable")]
             let slot = usize::try_from(current_slot).unwrap_or(usize::MAX);
             let xj = xs[slot];
             // numerator: xj, denominator: xj XOR xi (subtraction = addition in GF(2^8))

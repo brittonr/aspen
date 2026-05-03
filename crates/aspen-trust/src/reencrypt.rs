@@ -163,7 +163,10 @@ mod tests {
     /// In-memory store for testing re-encryption.
     ///
     /// Lock order: `data` first, `checkpoints` second.
-    #[allow(tigerstyle::multi_lock_ordering, reason = "in-memory test store — locks acquired sequentially, never held together")]
+    #[allow(
+        multi_lock_ordering,
+        reason = "in-memory test store — locks acquired sequentially, never held together"
+    )]
     struct TestStore {
         data: Mutex<BTreeMap<String, Vec<u8>>>,
         checkpoints: Mutex<BTreeMap<String, String>>,
@@ -188,7 +191,7 @@ mod tests {
 
     #[async_trait]
     impl ReencryptionStore for TestStore {
-        #[allow(tigerstyle::numeric_units)]
+        #[allow(numeric_units)]
         async fn scan_secrets(
             &self,
             prefix: &str,

@@ -36,7 +36,10 @@ pub fn is_valid_threshold(config: ThresholdConfig) -> bool {
 /// Returns `(n / 2) + 1`. For n=0, returns 1 (minimum valid threshold).
 /// Uses saturating arithmetic to prevent overflow.
 #[inline]
-#[allow(tigerstyle::sentinel_fallback, reason = "clamped_majority guaranteed ≤ u8::MAX by min clamp above")]
+#[allow(
+    sentinel_fallback,
+    reason = "clamped_majority guaranteed ≤ u8::MAX by min clamp above"
+)]
 pub fn default_threshold_for_size(n: u32) -> u8 {
     let majority = (n / 2).saturating_add(1);
     let clamped_majority = majority.min(u32::from(u8::MAX));

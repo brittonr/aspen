@@ -13,7 +13,7 @@ hex = "0.4"
 iroh-base = { version = "0.97.0", features = ["key"], optional = true }
 rand = { version = "0.9", optional = true }
 thiserror = "2.0"
-tokio = { version = "1.48.0", features = ["fs"], optional = true }
+tokio = { version = "1.48.0", features = ["fs", "io-util"], optional = true }
 
 [features]
 default = []

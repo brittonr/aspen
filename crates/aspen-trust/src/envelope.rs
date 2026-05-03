@@ -67,6 +67,10 @@ pub enum EnvelopeError {
     /// No key available for the requested epoch.
     #[snafu(display("no key for epoch {epoch}"))]
     MissingEpochKey { epoch: u64 },
+
+    /// Nonce counter space for this node/key has been exhausted.
+    #[snafu(display("nonce counter exhausted for node {node_id}"))]
+    NonceExhausted { node_id: u32 },
 }
 
 /// Encrypt plaintext under the given key and epoch.

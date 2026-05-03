@@ -93,6 +93,10 @@ pub enum ReconfigError {
     /// Invalid share received (digest mismatch).
     #[snafu(display("invalid share from node {node_id}: digest mismatch"))]
     InvalidShare { node_id: u64 },
+
+    /// New configuration has too many members for one-byte Shamir share indexes.
+    #[snafu(display("new configuration has {member_count} members; maximum is {max_members}"))]
+    TooManyNewMembers { member_count: u32, max_members: u32 },
 }
 
 /// Reconfiguration coordinator (sans-IO state machine).
@@ -253,7 +257,14 @@ impl ReconfigCoordinator {
             .map_err(|e| ReconfigError::ChainFailed { source: e })?;
 
         // 5. Split new secret into shares for new members
-        let n = self.new_members.len() as u8;
+        let member_count = self.new_members.len();
+        if member_count > u8::MAX as usize {
+            return Err(ReconfigError::TooManyNewMembers {
+                member_count: member_count as u32,
+                max_members: u8::MAX as u32,
+            });
+        }
+        let n = member_count as u8;
         let mut rng = rand::rng();
         let shares = shamir::split_secret(new_secret.as_bytes(), self.new_threshold, n, &mut rng)
             .map_err(|e| ReconfigError::SplitFailed { reason: e.to_string() })?;
@@ -286,12 +297,7 @@ pub struct TestReconfigCtx {
 }
 
 #[cfg(test)]
-type ReconfigProposalRecord = (
-    BTreeMap<u64, Share>,
-    BTreeMap<u64, ShareDigest>,
-    EncryptedSecretChain,
-    u64,
-);
+type ReconfigProposalRecord = (BTreeMap<u64, Share>, BTreeMap<u64, ShareDigest>, EncryptedSecretChain, u64);
 
 #[cfg(test)]
 impl TestReconfigCtx {
@@ -482,6 +488,37 @@ mod tests {
             needed: 2
         }));
         assert!(matches!(coordinator.state(), ReconfigState::Failed { .. }));
+    }
+
+    #[test]
+    fn test_too_many_new_members_is_rejected() {
+        let (shares, digests, _) = setup_3node();
+
+        let old_members: BTreeSet<u64> = [1, 2, 3].into();
+        let new_members: BTreeSet<u64> = (1..=256).collect();
+
+        let mut coordinator = ReconfigCoordinator::new(ReconfigParams {
+            old_epoch: 1,
+            new_epoch: 2,
+            old_threshold: 2,
+            new_threshold: 2,
+            old_members,
+            new_members,
+            expected_digests: digests,
+            cluster_id: b"cluster".to_vec(),
+            prior_secrets: BTreeMap::new(),
+        });
+
+        coordinator.on_share_received(1, shares[0].clone()).unwrap();
+        let result = coordinator.on_share_received(2, shares[1].clone());
+
+        assert!(matches!(
+            result,
+            Err(ReconfigError::TooManyNewMembers {
+                member_count: 256,
+                max_members: 255
+            })
+        ));
     }
 
     #[test]

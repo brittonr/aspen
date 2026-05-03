@@ -65,7 +65,9 @@ impl SecretsEncryption {
     /// The nonce counter value is returned for persistence.
     pub fn wrap_write(&self, plaintext: &[u8]) -> Result<(Vec<u8>, u64), EnvelopeError> {
         let key = self.keys.get(&self.epoch).ok_or(EnvelopeError::MissingEpochKey { epoch: self.epoch })?;
-        let (nonce, counter) = self.nonce_gen.next_nonce();
+        let (nonce, counter) = self.nonce_gen.next_nonce().map_err(|e| match e {
+            crate::nonce::NonceError::Exhausted { node_id } => EnvelopeError::NonceExhausted { node_id },
+        })?;
         let encrypted = envelope::encrypt_value(key, self.epoch, &nonce, plaintext)?;
         Ok((encrypted.to_bytes(), counter))
     }
@@ -161,7 +163,10 @@ impl SecretsEncryption {
     }
 
     /// How many epoch keys are currently held.
-    #[allow(tigerstyle::sentinel_fallback, reason = "key count can't realistically exceed u32::MAX; unwrap_or is safe sentinel")]
+    #[allow(
+        sentinel_fallback,
+        reason = "key count can't realistically exceed u32::MAX; unwrap_or is safe sentinel"
+    )]
     pub fn epoch_key_count(&self) -> u32 {
         u32::try_from(self.keys.len()).unwrap_or(u32::MAX)
     }
