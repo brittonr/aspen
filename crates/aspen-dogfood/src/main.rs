@@ -11,12 +11,17 @@ mod error;
 mod federation;
 mod forge;
 mod node;
+mod receipt;
 mod state;
+
+use std::future::Future;
+use std::path::PathBuf;
 
 use clap::Parser;
 use clap::Subcommand;
 use tracing::info;
 
+use crate::error::DogfoodError;
 use crate::error::DogfoodResult;
 use crate::node::NodeManager;
 use crate::state::DogfoodState;
@@ -138,6 +143,10 @@ pub struct RunConfig {
 impl RunConfig {
     fn state_file_path(&self) -> String {
         format!("{}/dogfood-state.json", self.cluster_dir)
+    }
+
+    fn receipt_file_path(&self, run_id: &str) -> PathBuf {
+        PathBuf::from(format!("{}-receipts/{run_id}.json", self.cluster_dir.trim_end_matches('/')))
     }
 
     /// Cookie for the primary (or only) cluster.
@@ -289,6 +298,10 @@ async fn cmd_push(config: &RunConfig) -> DogfoodResult<()> {
 }
 
 async fn cmd_build(config: &RunConfig) -> DogfoodResult<()> {
+    build_ci_pipeline(config).await.map(|_run_id| ())
+}
+
+async fn build_ci_pipeline(config: &RunConfig) -> DogfoodResult<String> {
     info!("🔨 Waiting for CI build...");
 
     let state = state::read_state(&config.state_file_path())?;
@@ -303,7 +316,7 @@ async fn cmd_build(config: &RunConfig) -> DogfoodResult<()> {
     .await?;
 
     info!("✅ CI build completed (run_id: {run_id})");
-    Ok(())
+    Ok(run_id)
 }
 
 async fn build_wait_pipeline_parts(config: &RunConfig, state: &DogfoodState) -> DogfoodResult<(String, String)> {
@@ -346,10 +359,15 @@ async fn cmd_full_loop(config: &RunConfig) -> DogfoodResult<()> {
 }
 
 async fn cmd_full(config: &RunConfig) -> DogfoodResult<()> {
-    cmd_start(config).await?;
+    let mut recorder = DogfoodReceiptRecorder::new(config, "full")?;
+    if let Err(error) = recorder.run_stage(receipt::DogfoodStageKind::Start, || cmd_start(config)).await {
+        recorder.log_path();
+        return Err(error);
+    }
     install_ctrl_c_shutdown(config);
-    let result = run_full_pipeline(config).await;
-    let stop_result = cmd_stop(config).await;
+    let result = run_full_pipeline_with_receipts(config, &mut recorder).await;
+    let stop_result = recorder.run_stage(receipt::DogfoodStageKind::Stop, || cmd_stop(config)).await;
+    recorder.log_path();
     result?;
     stop_result
 }
@@ -382,12 +400,164 @@ async fn handle_ctrl_c_shutdown(config_dir: String, state_path: String) {
     std::process::exit(130);
 }
 
-async fn run_full_pipeline(config: &RunConfig) -> DogfoodResult<()> {
-    cmd_push(config).await?;
-    cmd_build(config).await?;
-    cmd_deploy(config).await?;
-    cmd_verify(config).await?;
+async fn run_full_pipeline_with_receipts(
+    config: &RunConfig,
+    recorder: &mut DogfoodReceiptRecorder,
+) -> DogfoodResult<()> {
+    recorder.run_stage(receipt::DogfoodStageKind::Push, || cmd_push(config)).await?;
+    recorder
+        .run_stage_with_artifacts(receipt::DogfoodStageKind::Build, || async {
+            let run_id = build_ci_pipeline(config).await?;
+            Ok(vec![ci_run_artifact(run_id)])
+        })
+        .await?;
+    recorder.run_stage(receipt::DogfoodStageKind::Deploy, || cmd_deploy(config)).await?;
+    recorder.run_stage(receipt::DogfoodStageKind::Verify, || cmd_verify(config)).await?;
     Ok(())
+}
+
+struct DogfoodReceiptRecorder {
+    receipt: receipt::DogfoodRunReceipt,
+    path: PathBuf,
+}
+
+impl DogfoodReceiptRecorder {
+    fn new(config: &RunConfig, command: &str) -> DogfoodResult<Self> {
+        let run_id = dogfood_run_id();
+        let path = config.receipt_file_path(&run_id);
+        let receipt = receipt::DogfoodRunReceipt::new(receipt::DogfoodRunReceiptInit {
+            run_id,
+            command: command.to_string(),
+            created_at: current_timestamp_utc(),
+            mode: receipt::DogfoodRunMode {
+                federation: config.federation,
+                vm_ci: config.vm_ci,
+            },
+            project_dir: config.project_dir.clone(),
+            cluster_dir: config.cluster_dir.clone(),
+            stages: Vec::new(),
+        });
+        let recorder = Self { receipt, path };
+        recorder.write()?;
+        Ok(recorder)
+    }
+
+    async fn run_stage<F, Fut>(&mut self, stage: receipt::DogfoodStageKind, operation: F) -> DogfoodResult<()>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = DogfoodResult<()>>,
+    {
+        self.run_stage_with_artifacts(stage, || async {
+            operation().await?;
+            Ok(Vec::new())
+        })
+        .await
+    }
+
+    async fn run_stage_with_artifacts<F, Fut>(
+        &mut self,
+        stage: receipt::DogfoodStageKind,
+        operation: F,
+    ) -> DogfoodResult<()>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = DogfoodResult<Vec<receipt::DogfoodArtifactReceipt>>>,
+    {
+        let started_at = current_timestamp_utc();
+        match operation().await {
+            Ok(artifacts) => {
+                self.receipt.stages.push(receipt::DogfoodStageReceipt {
+                    stage,
+                    status: receipt::DogfoodStageStatus::Succeeded,
+                    started_at,
+                    finished_at: Some(current_timestamp_utc()),
+                    failure: None,
+                    artifacts,
+                });
+                self.write()
+            }
+            Err(error) => {
+                let failure = dogfood_failure_summary(stage, &error);
+                self.receipt.stages.push(receipt::DogfoodStageReceipt {
+                    stage,
+                    status: receipt::DogfoodStageStatus::Failed,
+                    started_at,
+                    finished_at: Some(current_timestamp_utc()),
+                    failure: Some(failure),
+                    artifacts: Vec::new(),
+                });
+                if let Err(write_error) = self.write() {
+                    tracing::warn!("failed to write dogfood receipt after stage failure: {write_error}");
+                }
+                Err(error)
+            }
+        }
+    }
+
+    fn write(&self) -> DogfoodResult<()> {
+        self.receipt.write_canonical_json_file(&self.path).map_err(|error| DogfoodError::Receipt {
+            operation: "write".to_string(),
+            reason: error.to_string(),
+        })
+    }
+
+    fn log_path(&self) {
+        info!("🧾 Dogfood receipt: {}", self.path.display());
+    }
+}
+
+fn dogfood_failure_summary(stage: receipt::DogfoodStageKind, error: &DogfoodError) -> receipt::DogfoodFailureSummary {
+    receipt::DogfoodFailureSummary {
+        operation: format!("{stage:?}"),
+        category: dogfood_error_category(error).to_string(),
+        message: error.to_string(),
+    }
+}
+
+fn ci_run_artifact(run_id: String) -> receipt::DogfoodArtifactReceipt {
+    receipt::DogfoodArtifactReceipt {
+        name: "ci-run".to_string(),
+        kind: receipt::DogfoodArtifactKind::CiRun,
+        store_id: Some(run_id),
+        blob_id: None,
+        digest: None,
+        size_bytes: None,
+        relative_path: None,
+    }
+}
+
+fn dogfood_error_category(error: &DogfoodError) -> &'static str {
+    match error {
+        DogfoodError::ClientRpc { .. } => "client_rpc",
+        DogfoodError::ProcessSpawn { .. } => "process_spawn",
+        DogfoodError::NodeCrash { .. } => "node_crash",
+        DogfoodError::StateFile { .. } => "state_file",
+        DogfoodError::StateDeserialize { .. } => "state_deserialize",
+        DogfoodError::StateSerialize { .. } => "state_serialize",
+        DogfoodError::Timeout { .. } => "timeout",
+        DogfoodError::HealthCheck { .. } => "health_check",
+        DogfoodError::CiPipeline { .. } => "ci_pipeline",
+        DogfoodError::DeployFailed { .. } => "deploy_failed",
+        DogfoodError::Forge { .. } => "forge",
+        DogfoodError::Receipt { .. } => "receipt",
+        DogfoodError::Federation { .. } => "federation",
+        DogfoodError::GitPush { .. } => "git_push",
+        DogfoodError::NoCluster => "no_cluster",
+        DogfoodError::StopNode { .. } => "stop_node",
+    }
+}
+
+fn dogfood_run_id() -> String {
+    format!("dogfood-{}", current_timestamp_utc().replace([':', '-'], ""))
+}
+
+#[allow(unknown_lints)]
+#[allow(
+    ambient_clock,
+    reason = "dogfood receipts intentionally record wall-clock run timestamps"
+)]
+fn current_timestamp_utc() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
 #[cfg(test)]
@@ -436,6 +606,29 @@ mod tests {
     fn state_file_path_uses_cluster_dir() {
         let config = test_config(false);
         assert_eq!(config.state_file_path(), "/tmp/test-dogfood/dogfood-state.json");
+    }
+
+    #[test]
+    fn receipt_file_path_uses_sibling_receipts_dir() {
+        let config = test_config(false);
+        assert_eq!(config.receipt_file_path("run-1"), PathBuf::from("/tmp/test-dogfood-receipts/run-1.json"));
+    }
+
+    #[test]
+    fn dogfood_error_category_is_stable_for_receipts() {
+        let error = DogfoodError::Timeout {
+            operation: "CI pipeline abc123".to_string(),
+            timeout_secs: 600,
+        };
+        assert_eq!(dogfood_error_category(&error), "timeout");
+    }
+
+    #[test]
+    fn ci_run_artifact_records_pipeline_run_id() {
+        let artifact = ci_run_artifact("run-123".to_string());
+        assert_eq!(artifact.name, "ci-run");
+        assert_eq!(artifact.kind, receipt::DogfoodArtifactKind::CiRun);
+        assert_eq!(artifact.store_id.as_deref(), Some("run-123"));
     }
 
     #[test]

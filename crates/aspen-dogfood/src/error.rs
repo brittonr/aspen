@@ -63,6 +63,10 @@ pub enum DogfoodError {
     #[snafu(display("forge {operation}: {reason}"))]
     Forge { operation: String, reason: String },
 
+    /// Dogfood receipt operation failed.
+    #[snafu(display("receipt {operation}: {reason}"))]
+    Receipt { operation: String, reason: String },
+
     /// Federation orchestration failed.
     #[snafu(display("federation {operation}: {reason}"))]
     Federation { operation: String, reason: String },

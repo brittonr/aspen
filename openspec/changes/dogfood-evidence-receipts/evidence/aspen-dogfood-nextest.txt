@@ -1,0 +1,283 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+warning: unknown lint: `sentinel_fallback`
+  --> crates/aspen-raft-kv-types/src/lib.rs:62:9
+   |
+62 |         sentinel_fallback,
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: `aspen-raft-kv-types` (lib) generated 1 warning
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1480:9
+     |
+1480 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1496:9
+     |
+1496 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1526:9
+     |
+1526 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1552:9
+     |
+1552 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1582:9
+     |
+1582 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4300:9
+     |
+4300 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4307:9
+     |
+4307 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4314:9
+     |
+4314 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4321:9
+     |
+4321 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4328:9
+     |
+4328 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4335:9
+     |
+4335 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4342:9
+     |
+4342 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4349:9
+     |
+4349 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4389:9
+     |
+4389 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4396:9
+     |
+4396 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: unknown lint: `sentinel_fallback`
+  --> crates/aspen-raft-types/src/member.rs:63:9
+   |
+63 |         sentinel_fallback,
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: `aspen-raft-types` (lib) generated 1 warning
+   Compiling aspen-dogfood v0.1.0 (/home/brittonr/git/aspen/crates/aspen-dogfood)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
+────────────
+ Nextest run ID 881773a3-eb49-4449-aa23-fe470ae226c5 with nextest profile: default
+    Starting 43 tests across 1 binary
+        PASS [   0.002s] ( 1/43) aspen-dogfood::bin/aspen-dogfood cluster::tests::check_health_with_client_shutdowns_on_rpc_error
+        PASS [   0.002s] ( 2/43) aspen-dogfood::bin/aspen-dogfood cluster::tests::federation_env_alice_has_required_vars
+        PASS [   0.002s] ( 3/43) aspen-dogfood::bin/aspen-dogfood cluster::tests::federation_env_bob_has_ci_enabled
+        PASS [   0.002s] ( 4/43) aspen-dogfood::bin/aspen-dogfood cluster::tests::federation_env_key_matches_input
+        PASS [   0.002s] ( 5/43) aspen-dogfood::bin/aspen-dogfood cluster::tests::federation_env_vm_ci_adds_executor
+        PASS [   0.002s] ( 6/43) aspen-dogfood::bin/aspen-dogfood cluster::tests::ticket_preview_short
+        PASS [   0.002s] ( 7/43) aspen-dogfood::bin/aspen-dogfood cluster::tests::ticket_preview_truncates
+        PASS [   0.002s] ( 8/43) aspen-dogfood::bin/aspen-dogfood error::tests::error_display_client_rpc
+        PASS [   0.002s] ( 9/43) aspen-dogfood::bin/aspen-dogfood error::tests::error_display_health_check
+        PASS [   0.002s] (10/43) aspen-dogfood::bin/aspen-dogfood error::tests::error_display_no_cluster
+        PASS [   0.002s] (11/43) aspen-dogfood::bin/aspen-dogfood error::tests::error_display_process_spawn
+        PASS [   0.002s] (12/43) aspen-dogfood::bin/aspen-dogfood error::tests::error_display_timeout
+        PASS [   0.002s] (13/43) aspen-dogfood::bin/aspen-dogfood federation::tests::federated_clone_url_uses_bob_ticket_and_origin
+        PASS [   0.002s] (14/43) aspen-dogfood::bin/aspen-dogfood federation::tests::interpret_federate_response_accepts_already_federated_errors
+        PASS [   0.002s] (15/43) aspen-dogfood::bin/aspen-dogfood federation::tests::interpret_federate_response_rejects_other_errors
+        PASS [   0.002s] (16/43) aspen-dogfood::bin/aspen-dogfood federation::tests::mirror_repo_name_adds_suffix
+        PASS [   0.002s] (17/43) aspen-dogfood::bin/aspen-dogfood federation::tests::select_addr_hint_prefers_ipv4
+        PASS [   0.002s] (18/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::failed_stage_requires_failure_summary
+        PASS [   0.002s] (19/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::receipt_json_round_trips
+        PASS [   0.002s] (20/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::receipt_rejects_empty_run_id
+        PASS [   0.002s] (21/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::receipt_rejects_too_many_stages
+        PASS [   0.002s] (22/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::receipt_rejects_unexpected_schema
+        PASS [   0.002s] (23/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::receipt_serializes_with_stable_schema_and_fields
+        PASS [   0.002s] (24/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::stage_rejects_too_many_artifacts
+        PASS [   0.002s] (25/43) aspen-dogfood::bin/aspen-dogfood receipt::tests::succeeded_stage_rejects_failure_summary
+        PASS [   0.002s] (26/43) aspen-dogfood::bin/aspen-dogfood state::tests::bob_ticket_federation
+        PASS [   0.002s] (27/43) aspen-dogfood::bin/aspen-dogfood state::tests::bob_ticket_single_falls_back
+        PASS [   0.002s] (28/43) aspen-dogfood::bin/aspen-dogfood state::tests::delete_state_nonexistent_is_ok
+        PASS [   0.001s] (29/43) aspen-dogfood::bin/aspen-dogfood state::tests::new_federation_is_federation
+        PASS [   0.002s] (30/43) aspen-dogfood::bin/aspen-dogfood state::tests::new_single_is_not_federation
+        PASS [   0.002s] (31/43) aspen-dogfood::bin/aspen-dogfood state::tests::node_pids_and_tickets
+        PASS [   0.002s] (32/43) aspen-dogfood::bin/aspen-dogfood state::tests::read_state_corrupt_returns_deserialize_error
+        PASS [   0.002s] (33/43) aspen-dogfood::bin/aspen-dogfood state::tests::read_state_missing_returns_no_cluster
+        PASS [   0.002s] (34/43) aspen-dogfood::bin/aspen-dogfood state::tests::state_file_write_read_delete
+        PASS [   0.002s] (35/43) aspen-dogfood::bin/aspen-dogfood state::tests::state_roundtrip_federation
+        PASS [   0.002s] (36/43) aspen-dogfood::bin/aspen-dogfood state::tests::state_roundtrip_single
+        PASS [   0.002s] (37/43) aspen-dogfood::bin/aspen-dogfood tests::ci_run_artifact_records_pipeline_run_id
+        PASS [   0.002s] (38/43) aspen-dogfood::bin/aspen-dogfood tests::cookie_contains_date
+        PASS [   0.002s] (39/43) aspen-dogfood::bin/aspen-dogfood tests::cookies_are_distinct_across_modes
+        PASS [   0.002s] (40/43) aspen-dogfood::bin/aspen-dogfood tests::dogfood_error_category_is_stable_for_receipts
+        PASS [   0.002s] (41/43) aspen-dogfood::bin/aspen-dogfood tests::node_count_flag_rejected
+        PASS [   0.002s] (42/43) aspen-dogfood::bin/aspen-dogfood tests::receipt_file_path_uses_sibling_receipts_dir
+        PASS [   0.001s] (43/43) aspen-dogfood::bin/aspen-dogfood tests::state_file_path_uses_cluster_dir
+────────────
+     Summary [   0.076s] 43 tests run: 43 passed, 0 skipped
