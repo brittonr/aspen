@@ -1,0 +1,24 @@
+$ cargo check -p aspen-transport --features trust-handler
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking tokio-rustls v0.26.4
+    Checking noq v0.17.0
+    Checking netwatch v0.15.0
+    Checking aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+    Checking iroh-base v0.97.0
+    Checking hyper-rustls v0.27.7
+    Checking hickory-proto v0.25.2
+    Checking tokio-websockets v0.12.3
+    Checking reqwest v0.12.28
+    Checking portmapper v0.15.0
+    Checking pkarr v5.0.2
+    Checking hickory-resolver v0.25.2
+    Checking swarm-discovery v0.5.0
+    Checking iroh-relay v0.97.0
+    Checking iroh v0.97.0
+    Checking aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.56s

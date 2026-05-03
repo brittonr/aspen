@@ -7,7 +7,7 @@
 - **Crates**: `aspen-trust`, `aspen-crypto`, reusable pure/state-machine surfaces in `aspen-secrets`, runtime consumer coverage for `aspen-secrets-handler`
 - **Intended audience**: systems that need deterministic trust/crypto/secrets state logic without Aspen Raft, Iroh, Redb, or secrets-service runtime shells.
 - **Public API owner**: architecture-modularity
-- **Readiness state**: `workspace-internal`; owner/public API review complete and promotion deferred pending real checker coverage plus trust/secrets stability-policy blockers.
+- **Readiness state**: `workspace-internal`; owner/public API review complete and promotion deferred pending trust/secrets serialization-contract evidence; checker coverage and the `aspen-trust` async/default policy are now documented and enforced.
 
 ## Package metadata
 
@@ -21,7 +21,7 @@
 
 | Surface | Reusable default | Runtime/adapter boundary |
 | --- | --- | --- |
-| Trust crypto | Shamir/GF/HKDF/share-chain helpers with explicit randomness/time inputs. | Iroh trust-share exchange, peer probing, cluster bootstrap. |
+| Trust crypto | Shamir/GF/HKDF/share-chain helpers with explicit randomness/time inputs; default/no-default `aspen-trust` excludes async service APIs. | `aspen-trust/async` gates key-manager and reencryption service APIs; Iroh trust-share exchange, peer probing, and cluster bootstrap stay in runtime consumers. |
 | Reconfiguration state | deterministic membership/share/decryption-key-selection state machine inputs and outputs. | Raft log application, storage transactions, node shutdown/expungement effects. |
 | Secrets crypto | pure encryption/decryption/key-selection helpers, migration planning, and token data parsing via `aspen-auth-core`. | Redb storage, secrets service, handler/client runtime, SOPS file IO, `aspen-auth` verifier/builder helpers behind `aspen-secrets/auth-runtime`. |
 | General crypto | BLAKE3/hash helpers and key utilities where transport-free; `aspen-crypto` defaults to this surface. | node identity lifecycle helpers behind `aspen-crypto/identity`; concrete Iroh endpoint/runtime helpers stay outside reusable defaults. |
@@ -32,6 +32,7 @@
 - `aspen-secrets` default token parsing depends on `aspen-auth-core`; `aspen-auth` runtime verifier/builder helpers require the explicit `auth-runtime` feature.
 - Cryptographic dependencies such as HKDF, AEADs, zeroize, secrecy, and BLAKE3 are allowed when they are the crate purpose.
 - Runtime `aspen-secrets-handler` is a compatibility consumer; its default executor surface stays portable, while factory registration requires the explicit `runtime-adapter` feature.
+- `aspen-trust` default/no-default builds are the reusable trust helper/state/wire surface; async service modules `key_manager` and `reencrypt` require `aspen-trust/async`.
 
 ## Compatibility plan
 
@@ -53,7 +54,7 @@
 
 ## First blocker
 
-I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated. The first blocker is now complete: `aspen-crypto` defaults to the transport-free cookie/hash helper surface, and node identity lifecycle utilities live behind the explicit `identity` feature using `iroh-base` key types rather than concrete `iroh` endpoint/runtime dependencies. The aggregate family remains `workspace-internal`; the first blocker is complete, but the owner/public API review requires real crate-level checker coverage, explicit `aspen-trust` async/default dependency policy, and trust/secrets serialization-contract evidence before promotion. First-blocker evidence is recorded under `openspec/changes/archive/2026-05-02-complete-trust-crypto-first-blocker/evidence/`.
+I12 adds property-style pure trust tests, malformed share/digest negative coverage, downstream metadata, and runtime handler compatibility evidence. I11 inventory started the isolation decision. `aspen-trust` is the first reusable pure trust surface for Shamir/GF256/HKDF/share-chain/envelope/reconfiguration helpers; it checks cleanly without Aspen Raft, Redb, handler registry, or node bootstrap shells. `aspen-secrets --no-default-features` remains buildable with SOPS/client/transport/trust integrations feature-gated. The first blocker is now complete: `aspen-crypto` defaults to the transport-free cookie/hash helper surface, and node identity lifecycle utilities live behind the explicit `identity` feature using `iroh-base` key types rather than concrete `iroh` endpoint/runtime dependencies. The aggregate family remains `workspace-internal`; the first blocker is complete, but the owner/public API review requires trust/secrets serialization-contract evidence before promotion; real crate-level checker coverage and explicit `aspen-trust` async/default dependency policy are complete. First-blocker evidence is recorded under `openspec/changes/archive/2026-05-02-complete-trust-crypto-first-blocker/evidence/`.
 
 ## Auth runtime boundary
 
@@ -77,8 +78,12 @@ I12 adds property-style pure trust tests, malformed share/digest negative covera
 
 ## Owner/public API review
 
-`review-trust-crypto-secrets-public-api` records the aggregate readiness decision after the transport-free crypto, auth-runtime, KV traits, handler runtime-adapter, secrets-core type, and mount-provider boundary slices. The review keeps the family at `workspace-internal`; `complete-trust-crypto-secrets-checker-coverage` now makes the readiness checker validate `aspen-crypto` and `aspen-secrets-core` as real reusable crate candidates instead of deferring direct package checks through an aggregate pseudo-candidate.
+`review-trust-crypto-secrets-public-api` records the aggregate readiness decision after the transport-free crypto, auth-runtime, KV traits, handler runtime-adapter, secrets-core type, and mount-provider boundary slices. The review keeps the family at `workspace-internal`; `complete-trust-crypto-secrets-checker-coverage` made the readiness checker validate `aspen-crypto` and `aspen-secrets-core` as real reusable crate candidates instead of deferring direct package checks through an aggregate pseudo-candidate. `complete-aspen-trust-async-default-policy` adds `aspen-trust` to that real package coverage and gates async service APIs behind `aspen-trust/async`.
 
 Compatibility re-exports: none for `aspen-crypto`; `aspen-secrets` preserves compatibility re-exports for `aspen-secrets-core`.
 
-Canonical reusable surfaces are `aspen-crypto` default/no-default helpers and `aspen-secrets-core` type/state contracts. Selected `aspen-trust` pure helper/state surfaces remain candidates, but default async/Tokio service APIs and trust serialization contracts need explicit policy before readiness promotion. `aspen-secrets` remains a service/runtime implementation crate for now, and `aspen-secrets-handler` remains a compatibility/runtime consumer. Evidence is recorded under `openspec/changes/archive/2026-05-03-review-trust-crypto-secrets-public-api/evidence/` and `openspec/changes/archive/2026-05-03-complete-trust-crypto-secrets-checker-coverage/evidence/`.
+Canonical reusable surfaces are `aspen-crypto` default/no-default helpers, `aspen-secrets-core` type/state contracts, and the default/no-default `aspen-trust` pure helper/state/wire surface. `aspen-trust` async/Tokio service APIs are explicitly opt-in through `aspen-trust/async`; trust/secrets serialization contracts still need evidence before readiness promotion. `aspen-secrets` remains a service/runtime implementation crate for now, and `aspen-secrets-handler` remains a compatibility/runtime consumer. Evidence is recorded under `openspec/changes/archive/2026-05-03-review-trust-crypto-secrets-public-api/evidence/` and `openspec/changes/archive/2026-05-03-complete-trust-crypto-secrets-checker-coverage/evidence/`.
+
+## Aspen trust async/default policy
+
+`aspen-trust` default and no-default builds now expose the reusable pure helper/state/wire surface without normal `tokio` or `async-trait` dependency edges. The async service modules `key_manager` and `reencrypt` require `aspen-trust/async`, and `aspen-raft/trust` enables that feature for runtime compatibility. Evidence is recorded under `openspec/changes/archive/2026-05-03-complete-aspen-trust-async-default-policy/evidence/`.

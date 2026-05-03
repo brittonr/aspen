@@ -127,3 +127,26 @@ The trust/crypto/secrets extraction SHALL complete an owner/public API review be
 - GIVEN trust and secrets types expose serialized state, custom binary formats, or service DTOs
 - WHEN the owner/public API review completes
 - THEN it SHALL identify which formats are compatibility contracts and which remain internal implementation details before promotion.
+
+### Requirement: Aspen Trust Async Default Policy
+
+`aspen-trust` SHALL keep async runtime service APIs behind an explicit feature so its default/no-default reusable helper/state/wire surface has a documented dependency policy.
+
+#### Scenario: Default trust surface excludes async runtime service dependencies
+
+- GIVEN a consumer depends on `aspen-trust` with default or no default features
+- WHEN dependency evidence is captured for trust/crypto/secrets readiness
+- THEN the normal dependency graph SHALL NOT include `tokio` or `async-trait` through `aspen-trust`
+- AND `key_manager` and `reencrypt` SHALL require the explicit `async` feature.
+
+#### Scenario: Runtime trust consumers opt into async service APIs
+
+- GIVEN a runtime consumer needs trust key-manager or reencryption service APIs
+- WHEN it enables its trust runtime feature
+- THEN it SHALL enable `aspen-trust/async` explicitly and continue to compile.
+
+#### Scenario: Trust checker validates real trust package coverage
+
+- GIVEN the trust/crypto/secrets family readiness checker runs
+- WHEN selected pure trust helper/state surfaces are considered reusable candidates
+- THEN it SHALL validate `aspen-trust` as a real package candidate with the documented default dependency policy.

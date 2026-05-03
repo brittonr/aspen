@@ -29,10 +29,12 @@ pub mod encryption;
 pub mod envelope;
 pub mod gf256;
 pub mod kdf;
+#[cfg(feature = "async")]
 pub mod key_manager;
 pub mod nonce;
 pub mod protocol;
 pub mod reconfig;
+#[cfg(feature = "async")]
 pub mod reencrypt;
 pub mod secret;
 pub mod shamir;

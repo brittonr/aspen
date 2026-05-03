@@ -1,0 +1,142 @@
+$ cargo test -p aspen-trust --no-default-features --no-fail-fast
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling thiserror-impl v2.0.18
+   Compiling tokio-macros v2.6.1
+   Compiling zeroize v1.8.2
+   Compiling serde v1.0.228
+   Compiling snafu v0.8.9
+   Compiling cipher v0.4.4
+   Compiling chacha20 v0.9.1
+   Compiling tokio v1.50.0
+   Compiling chacha20poly1305 v0.10.1
+   Compiling secrecy v0.10.3
+   Compiling heapless v0.7.17
+   Compiling aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+   Compiling thiserror v2.0.18
+   Compiling cobs v0.3.0
+   Compiling postcard v1.1.3
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.89s
+     Running unittests src/lib.rs (target/debug/deps/aspen_trust-0a547a5d501708b4)
+
+running 85 tests
+test encryption::tests::test_debug_redacts_key ... ok
+test chain::tests::test_empty_chain ... ok
+test encryption::tests::test_multiple_wraps_produce_different_ciphertext ... ok
+test encryption::tests::test_peek_epoch ... ok
+test chain::tests::test_tampered_ciphertext_fails ... ok
+test chain::tests::test_encrypt_decrypt_roundtrip ... ok
+test chain::tests::test_wrong_cluster_id_fails ... ok
+test chain::tests::test_multi_epoch_chain ... ok
+test chain::tests::test_wrong_secret_fails ... ok
+test encryption::tests::test_remove_current_epoch_key_panics - should panic ... ok
+test encryption::tests::test_try_decrypt_auth_failure_for_tampered_envelope ... ok
+test encryption::tests::test_try_decrypt_auth_failure_for_real_tampered_value ... ok
+test encryption::tests::test_mixed_epoch_reads_after_rotate ... ok
+test encryption::tests::test_try_decrypt_not_envelope_for_bad_version ... ok
+test envelope::tests::test_from_bytes_bad_magic ... ok
+test encryption::tests::test_try_decrypt_not_envelope_for_plaintext ... ok
+test encryption::tests::test_rotate_reencrypt_and_drop_old_key ... ok
+test envelope::tests::test_empty_plaintext ... ok
+test envelope::tests::test_from_bytes_bad_version ... ok
+test envelope::tests::test_different_nonces_produce_different_ciphertext ... ok
+test envelope::tests::test_from_bytes_too_short ... ok
+test encryption::tests::test_try_decrypt_auth_failure_for_unknown_epoch ... ok
+test encryption::tests::test_try_decrypt_on_encrypted_value ... ok
+test encryption::tests::test_wrap_unwrap_roundtrip ... ok
+test envelope::tests::test_unknown_version_fails ... ok
+test envelope::tests::test_roundtrip_encrypt_decrypt ... ok
+test envelope::tests::test_serialization_roundtrip ... ok
+test encryption::tests::test_unknown_epoch_returns_epoch_mismatch ... ok
+test gf256::tests::test_eval_constant_polynomial ... ok
+test envelope::tests::test_tampered_ciphertext_fails ... ok
+test gf256::tests::test_eval_polynomial_at_zero_returns_constant ... ok
+test envelope::tests::test_wrong_key_fails ... ok
+test gf256::tests::test_lagrange_interpolation_two_points ... ok
+test gf256::tests::test_eval_linear_polynomial ... ok
+test gf256::tests::test_mul_identity ... ok
+test gf256::tests::test_mul_zero ... ok
+test nonce::tests::test_counter_saturates ... ok
+test nonce::tests::test_counter_survives_restart_simulation ... ok
+test nonce::tests::test_different_node_ids_produce_different_nonces ... ok
+test nonce::tests::test_nonce_structure ... ok
+test protocol::tests::test_expunged_request_serde ... ok
+test protocol::tests::test_expunged_response_serde ... ok
+test protocol::tests::test_get_share_request_serde ... ok
+test protocol::tests::test_share_roundtrip_message_serde ... ok
+test gf256::tests::test_inverse ... ok
+test kdf::tests::test_deterministic_derivation ... ok
+test kdf::tests::test_different_cluster_ids_produce_different_keys ... ok
+test secret::tests::test_debug_redacts ... ok
+test secret::tests::test_from_bytes_rejects_all_zeros ... ok
+test kdf::tests::test_different_secrets_produce_different_keys ... ok
+test kdf::tests::test_different_epochs_produce_different_keys ... ok
+test reconfig::tests::test_reconfig_ctx_records_actions ... ok
+test secret::tests::test_threshold_default_for_cluster_size ... ok
+test reconfig::tests::test_timeout_during_collection ... ok
+test reconfig::tests::test_invalid_share_rejected ... ok
+test secret::tests::test_threshold_new_rejects_zero ... ok
+test secret::tests::test_generate_not_all_zeros ... ok
+test shamir::tests::test_reconstruct_rejects_duplicate_x ... ok
+test shamir::tests::test_share_debug_redacts_y ... ok
+test kdf::tests::test_different_contexts_produce_different_keys ... ok
+test shamir::tests::test_share_digest_deterministic ... ok
+test shamir::tests::test_fewer_than_threshold_produces_wrong_value ... ok
+test nonce::tests::test_sequential_nonces_are_unique ... ok
+test secret::tests::test_constant_time_equality ... ok
+test secret::tests::test_from_bytes_accepts_nonzero ... ok
+test shamir::tests::test_share_from_bytes_rejects_zero_x ... ok
+test shamir::tests::test_share_roundtrip_bytes ... ok
+test shamir::tests::test_split_validation_errors ... ok
+test verified::tests::test_default_threshold ... ok
+test verified::tests::test_invalid_threshold ... ok
+test verified::tests::test_valid_threshold ... ok
+test reconfig::tests::test_duplicate_share_ignored ... ok
+test shamir::tests::test_threshold_1_trivial ... ok
+test shamir::tests::test_share_digest_detects_corruption ... ok
+test shamir::tests::test_split_reconstruct_basic ... ok
+test reconfig::tests::test_full_reconfig_flow ... ok
+test shamir::tests::test_split_reconstruct_all_shares ... ok
+test reconfig::tests::test_reconfig_state_machine_driven_by_test_ctx_commits ... ok
+test shamir::tests::test_split_reconstruct_any_k_subset ... ok
+test gf256::tests::test_mul_commutative ... ok
+test kdf::tests::test_derived_key_not_all_zeros ... ok
+test shamir::tests::i12_share_digest_changes_when_serialized_payload_changes ... ok
+test shamir::tests::i12_reconstructs_any_threshold_subset_for_deterministic_secret ... ok
+test chain::tests::prop_chain_at_epoch_n_contains_n_minus_1_decodable_secrets ... ok
+test reconfig::tests::prop_reconfiguration_produces_reconstructible_new_shares ... ok
+
+test result: ok. 85 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/cluster_trust_integration.rs (target/debug/deps/cluster_trust_integration-312b8510911a4263)
+
+running 5 tests
+test test_single_node_trust ... ok
+test test_corrupted_share_detected_by_digest ... ok
+test test_custom_threshold ... ok
+test test_three_node_trust_init_and_reconstruct ... ok
+test test_five_node_trust_any_three_reconstruct ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/shamir_proptest.rs (target/debug/deps/shamir_proptest-d46a5ecc62e10c94)
+
+running 5 tests
+test digest_detects_any_bit_flip ... ok
+test fewer_than_k_shares_produces_different_value ... ok
+test split_reconstruct_with_k_shares ... ok
+test any_k_subset_reconstructs ... ok
+test all_shares_reconstruct ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+
+   Doc-tests aspen_trust
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

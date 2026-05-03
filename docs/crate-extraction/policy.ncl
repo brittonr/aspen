@@ -823,6 +823,19 @@ let Candidate = {
       exceptions = [],
     },
 
+    aspen_trust = {
+      class = "leaf type/helper",
+      readiness_state = "workspace-internal",
+      manifest = "docs/crate-extraction/trust-crypto-secrets.md",
+      owner = "Aspen trust/crypto/secrets maintainers",
+      default_feature_sets = ["default", "no-default-features"],
+      named_reusable_feature_sets = ["default", "async"],
+      representative_consumers = ["aspen-raft-types", "aspen-secrets", "aspen-raft"],
+      reexporters = [],
+      forbidden_unless_feature = ["aspen", "aspen-raft", "aspen-transport", "aspen-rpc-handlers", "aspen-secrets-handler", "iroh", "tokio", "async-trait", "redb"],
+      exceptions = [],
+    },
+
     aspen_secrets_core = {
       class = "leaf type/helper",
       readiness_state = "workspace-internal",

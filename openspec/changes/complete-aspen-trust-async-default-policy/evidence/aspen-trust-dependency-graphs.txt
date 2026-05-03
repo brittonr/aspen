@@ -1,0 +1,276 @@
+$ cargo tree -p aspen-trust -e normal --no-default-features
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+├── chacha20poly1305 v0.10.1
+│   ├── aead v0.5.2
+│   │   ├── crypto-common v0.1.7
+│   │   │   ├── generic-array v0.14.7
+│   │   │   │   └── typenum v1.19.0
+│   │   │   ├── rand_core v0.6.4
+│   │   │   │   └── getrandom v0.2.17
+│   │   │   │       ├── cfg-if v1.0.4
+│   │   │   │       └── libc v0.2.183
+│   │   │   └── typenum v1.19.0
+│   │   └── generic-array v0.14.7 (*)
+│   ├── chacha20 v0.9.1
+│   │   ├── cfg-if v1.0.4
+│   │   ├── cipher v0.4.4
+│   │   │   ├── crypto-common v0.1.7 (*)
+│   │   │   ├── inout v0.1.4
+│   │   │   │   └── generic-array v0.14.7 (*)
+│   │   │   └── zeroize v1.8.2
+│   │   │       └── zeroize_derive v1.4.3 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.106
+│   │   │           │   └── unicode-ident v1.0.24
+│   │   │           ├── quote v1.0.45
+│   │   │           │   └── proc-macro2 v1.0.106 (*)
+│   │   │           └── syn v2.0.117
+│   │   │               ├── proc-macro2 v1.0.106 (*)
+│   │   │               ├── quote v1.0.45 (*)
+│   │   │               └── unicode-ident v1.0.24
+│   │   └── cpufeatures v0.2.17
+│   ├── cipher v0.4.4 (*)
+│   ├── poly1305 v0.8.0
+│   │   ├── cpufeatures v0.2.17
+│   │   ├── opaque-debug v0.3.1
+│   │   └── universal-hash v0.5.1
+│   │       ├── crypto-common v0.1.7 (*)
+│   │       └── subtle v2.6.1
+│   └── zeroize v1.8.2 (*)
+├── hkdf v0.12.4
+│   └── hmac v0.12.1
+│       └── digest v0.10.7
+│           ├── block-buffer v0.10.4
+│           │   └── generic-array v0.14.7 (*)
+│           ├── crypto-common v0.1.7 (*)
+│           └── subtle v2.6.1
+├── rand v0.9.2
+│   ├── rand_chacha v0.9.0
+│   │   ├── ppv-lite86 v0.2.21
+│   │   │   └── zerocopy v0.8.42
+│   │   └── rand_core v0.9.5
+│   │       └── getrandom v0.3.4
+│   │           ├── cfg-if v1.0.4
+│   │           └── libc v0.2.183
+│   └── rand_core v0.9.5 (*)
+├── secrecy v0.10.3
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   └── zeroize v1.8.2 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149
+│   ├── itoa v1.0.17
+│   ├── memchr v2.8.0
+│   ├── serde_core v1.0.228
+│   └── zmij v1.0.21
+├── sha3 v0.10.8
+│   ├── digest v0.10.7 (*)
+│   └── keccak v0.1.6
+├── snafu v0.8.9
+│   └── snafu-derive v0.8.9 (proc-macro)
+│       ├── heck v0.5.0
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── subtle v2.6.1
+└── zeroize v1.8.2 (*)
+
+$ cargo tree -p aspen-trust -e normal
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Blocking waiting for file lock on package cache
+aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+├── chacha20poly1305 v0.10.1
+│   ├── aead v0.5.2
+│   │   ├── crypto-common v0.1.7
+│   │   │   ├── generic-array v0.14.7
+│   │   │   │   └── typenum v1.19.0
+│   │   │   ├── rand_core v0.6.4
+│   │   │   │   └── getrandom v0.2.17
+│   │   │   │       ├── cfg-if v1.0.4
+│   │   │   │       └── libc v0.2.183
+│   │   │   └── typenum v1.19.0
+│   │   └── generic-array v0.14.7 (*)
+│   ├── chacha20 v0.9.1
+│   │   ├── cfg-if v1.0.4
+│   │   ├── cipher v0.4.4
+│   │   │   ├── crypto-common v0.1.7 (*)
+│   │   │   ├── inout v0.1.4
+│   │   │   │   └── generic-array v0.14.7 (*)
+│   │   │   └── zeroize v1.8.2
+│   │   │       └── zeroize_derive v1.4.3 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.106
+│   │   │           │   └── unicode-ident v1.0.24
+│   │   │           ├── quote v1.0.45
+│   │   │           │   └── proc-macro2 v1.0.106 (*)
+│   │   │           └── syn v2.0.117
+│   │   │               ├── proc-macro2 v1.0.106 (*)
+│   │   │               ├── quote v1.0.45 (*)
+│   │   │               └── unicode-ident v1.0.24
+│   │   └── cpufeatures v0.2.17
+│   ├── cipher v0.4.4 (*)
+│   ├── poly1305 v0.8.0
+│   │   ├── cpufeatures v0.2.17
+│   │   ├── opaque-debug v0.3.1
+│   │   └── universal-hash v0.5.1
+│   │       ├── crypto-common v0.1.7 (*)
+│   │       └── subtle v2.6.1
+│   └── zeroize v1.8.2 (*)
+├── hkdf v0.12.4
+│   └── hmac v0.12.1
+│       └── digest v0.10.7
+│           ├── block-buffer v0.10.4
+│           │   └── generic-array v0.14.7 (*)
+│           ├── crypto-common v0.1.7 (*)
+│           └── subtle v2.6.1
+├── rand v0.9.2
+│   ├── rand_chacha v0.9.0
+│   │   ├── ppv-lite86 v0.2.21
+│   │   │   └── zerocopy v0.8.42
+│   │   └── rand_core v0.9.5
+│   │       └── getrandom v0.3.4
+│   │           ├── cfg-if v1.0.4
+│   │           └── libc v0.2.183
+│   └── rand_core v0.9.5 (*)
+├── secrecy v0.10.3
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   └── zeroize v1.8.2 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149
+│   ├── itoa v1.0.17
+│   ├── memchr v2.8.0
+│   ├── serde_core v1.0.228
+│   └── zmij v1.0.21
+├── sha3 v0.10.8
+│   ├── digest v0.10.7 (*)
+│   └── keccak v0.1.6
+├── snafu v0.8.9
+│   └── snafu-derive v0.8.9 (proc-macro)
+│       ├── heck v0.5.0
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── subtle v2.6.1
+└── zeroize v1.8.2 (*)
+
+$ cargo tree -p aspen-trust -e normal --features async
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+├── async-trait v0.1.89 (proc-macro)
+│   ├── proc-macro2 v1.0.106
+│   │   └── unicode-ident v1.0.24
+│   ├── quote v1.0.45
+│   │   └── proc-macro2 v1.0.106 (*)
+│   └── syn v2.0.117
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── unicode-ident v1.0.24
+├── chacha20poly1305 v0.10.1
+│   ├── aead v0.5.2
+│   │   ├── crypto-common v0.1.7
+│   │   │   ├── generic-array v0.14.7
+│   │   │   │   └── typenum v1.19.0
+│   │   │   ├── rand_core v0.6.4
+│   │   │   │   └── getrandom v0.2.17
+│   │   │   │       ├── cfg-if v1.0.4
+│   │   │   │       └── libc v0.2.183
+│   │   │   └── typenum v1.19.0
+│   │   └── generic-array v0.14.7 (*)
+│   ├── chacha20 v0.9.1
+│   │   ├── cfg-if v1.0.4
+│   │   ├── cipher v0.4.4
+│   │   │   ├── crypto-common v0.1.7 (*)
+│   │   │   ├── inout v0.1.4
+│   │   │   │   └── generic-array v0.14.7 (*)
+│   │   │   └── zeroize v1.8.2
+│   │   │       └── zeroize_derive v1.4.3 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── syn v2.0.117 (*)
+│   │   └── cpufeatures v0.2.17
+│   ├── cipher v0.4.4 (*)
+│   ├── poly1305 v0.8.0
+│   │   ├── cpufeatures v0.2.17
+│   │   ├── opaque-debug v0.3.1
+│   │   └── universal-hash v0.5.1
+│   │       ├── crypto-common v0.1.7 (*)
+│   │       └── subtle v2.6.1
+│   └── zeroize v1.8.2 (*)
+├── hkdf v0.12.4
+│   └── hmac v0.12.1
+│       └── digest v0.10.7
+│           ├── block-buffer v0.10.4
+│           │   └── generic-array v0.14.7 (*)
+│           ├── crypto-common v0.1.7 (*)
+│           └── subtle v2.6.1
+├── rand v0.9.2
+│   ├── rand_chacha v0.9.0
+│   │   ├── ppv-lite86 v0.2.21
+│   │   │   └── zerocopy v0.8.42
+│   │   └── rand_core v0.9.5
+│   │       └── getrandom v0.3.4
+│   │           ├── cfg-if v1.0.4
+│   │           └── libc v0.2.183
+│   └── rand_core v0.9.5 (*)
+├── secrecy v0.10.3
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   └── zeroize v1.8.2 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149
+│   ├── itoa v1.0.17
+│   ├── memchr v2.8.0
+│   ├── serde_core v1.0.228
+│   └── zmij v1.0.21
+├── sha3 v0.10.8
+│   ├── digest v0.10.7 (*)
+│   └── keccak v0.1.6
+├── snafu v0.8.9
+│   └── snafu-derive v0.8.9 (proc-macro)
+│       ├── heck v0.5.0
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── subtle v2.6.1
+├── tokio v1.50.0
+│   ├── bytes v1.11.1
+│   ├── libc v0.2.183
+│   ├── mio v1.1.1
+│   │   └── libc v0.2.183
+│   ├── pin-project-lite v0.2.17
+│   ├── signal-hook-registry v1.4.8
+│   │   ├── errno v0.3.14
+│   │   │   └── libc v0.2.183
+│   │   └── libc v0.2.183
+│   └── tokio-macros v2.6.1 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+└── zeroize v1.8.2 (*)

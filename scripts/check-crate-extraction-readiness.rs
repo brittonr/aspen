@@ -209,6 +209,7 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_jobs_protocol" => Some("aspen-jobs-protocol"),
         "jobs_ci_core" => Some("aspen-jobs-core"),
         "aspen_crypto" => Some("aspen-crypto"),
+        "aspen_trust" => Some("aspen-trust"),
         "aspen_secrets_core" => Some("aspen-secrets-core"),
         "aspen_transport" => Some("aspen-transport"),
         "aspen_rpc_core" => Some("aspen-rpc-core"),
@@ -235,7 +236,7 @@ fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
         FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
         AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
         JOBS_CI_CORE_FAMILY => Some(&["jobs_ci_core"]),
-        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["aspen_crypto", "aspen_secrets_core"]),
+        TRUST_CRYPTO_SECRETS_FAMILY => Some(&["aspen_crypto", "aspen_trust", "aspen_secrets_core"]),
         TESTING_HARNESS_FAMILY => Some(&["testing_harness"]),
         _ => None,
     }
@@ -379,6 +380,9 @@ fn check_transitive_deps(
     }
     let tree = String::from_utf8_lossy(&output.stdout);
     for forbidden_name in forbidden {
+        if forbidden_name == package_name {
+            continue;
+        }
         let needle = format!("{forbidden_name} v");
         if tree.contains(&needle) && !exception_allows_dependency(candidate, forbidden_name) {
             failures.push(format!("{candidate_key}: transitive forbidden dependency `{forbidden_name}`"));

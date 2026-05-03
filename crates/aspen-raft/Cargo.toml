@@ -100,7 +100,7 @@ tracing-subscriber = { workspace = true }
 default = []
 sql = ["dep:datafusion", "dep:arrow", "dep:aspen-sql"]
 coordination = ["dep:aspen-coordination"]
-trust = ["dep:aspen-trust"]
+trust = ["dep:aspen-trust", "aspen-trust/async"]
 secrets = ["dep:aspen-secrets", "trust"]
 sharding = []
 testing = ["dep:madsim", "dep:ractor"]
