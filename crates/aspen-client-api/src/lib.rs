@@ -503,37 +503,37 @@ mod tests {
         }
     }
 
+    const APP_REQUEST_PREFIX_CONTRACTS: &[(&str, &[&str])] = &[
+        ("automerge", &["Automerge"]),
+        ("calendar", &["Calendar"]),
+        ("ci", &["Ci"]),
+        ("contacts", &["Contacts", "Net"]),
+        ("deploy", &["ClusterDeploy", "ClusterRollback", "NodeRollback", "NodeUpgrade"]),
+        ("forge", &[
+            "FederateRepository",
+            "Federation",
+            "Forge",
+            "GetDiscoveredCluster",
+            "GetFederationStatus",
+            "GitBridge",
+            "Gossip",
+            "ListDiscoveredClusters",
+            "ListFederatedRepositories",
+            "StartGossip",
+            "StopGossip",
+            "TrustCluster",
+            "UntrustCluster",
+        ]),
+        ("hooks", &["Hook"]),
+        ("jobs", &["Job", "Worker"]),
+        ("secrets", &["Secrets"]),
+        ("snix", &["Cache", "NixCache", "Snix"]),
+        ("sql", &["ExecuteSql"]),
+    ];
+
     #[test]
     fn test_app_request_routing_tables_match_prefix_contracts() {
-        let app_prefix_contracts: &[(&str, &[&str])] = &[
-            ("automerge", &["Automerge"]),
-            ("calendar", &["Calendar"]),
-            ("ci", &["Ci"]),
-            ("contacts", &["Contacts", "Net"]),
-            ("deploy", &["ClusterDeploy", "ClusterRollback", "NodeRollback", "NodeUpgrade"]),
-            ("forge", &[
-                "FederateRepository",
-                "Federation",
-                "Forge",
-                "GetDiscoveredCluster",
-                "GetFederationStatus",
-                "GitBridge",
-                "Gossip",
-                "ListDiscoveredClusters",
-                "ListFederatedRepositories",
-                "StartGossip",
-                "StopGossip",
-                "TrustCluster",
-                "UntrustCluster",
-            ]),
-            ("hooks", &["Hook"]),
-            ("jobs", &["Job", "Worker"]),
-            ("secrets", &["Secrets"]),
-            ("snix", &["Cache", "NixCache", "Snix"]),
-            ("sql", &["ExecuteSql"]),
-        ];
-
-        for &(app, prefixes) in app_prefix_contracts {
+        for &(app, prefixes) in APP_REQUEST_PREFIX_CONTRACTS {
             let expected: std::collections::BTreeSet<&'static str> = messages::request_metadata::REQUEST_VARIANT_NAMES
                 .iter()
                 .copied()
@@ -562,23 +562,18 @@ mod tests {
         assert!(architecture_doc.contains("request_metadata_apps/"));
         assert!(architecture_doc.contains("test_app_request_routing_tables_match_prefix_contracts"));
 
-        for app in [
-            "automerge",
-            "calendar",
-            "ci",
-            "contacts",
-            "deploy",
-            "forge",
-            "hooks",
-            "jobs",
-            "secrets",
-            "snix",
-            "sql",
-        ] {
-            assert!(
-                architecture_doc.contains(&format!("`{app}`")),
-                "architecture doc must describe routing metadata prefix contract for app `{app}`"
-            );
+        for &(app, prefixes) in APP_REQUEST_PREFIX_CONTRACTS {
+            let table_row =
+                architecture_doc.lines().find(|line| line.starts_with(&format!("| `{app}` |"))).unwrap_or_else(|| {
+                    panic!("architecture doc must describe routing metadata prefix contract for app `{app}`")
+                });
+
+            for prefix in prefixes {
+                assert!(
+                    table_row.contains(&format!("`{prefix}*`")),
+                    "architecture doc must list `{prefix}*` in the routing metadata prefix row for app `{app}`"
+                );
+            }
         }
     }
 
