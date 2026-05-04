@@ -267,6 +267,22 @@ There is no REST control plane. Any HTTP-facing crate exists as a compatibility 
 
 Compatibility rule: existing enum discriminants are stable. New non-gated variants are appended, not inserted into domain sections.
 
+Routing metadata rule: every app-owned `ClientRpcRequest` variant must have an explicit required-app route in `crates/aspen-client-api/src/messages/request_metadata_apps/`. The source of truth is the request variant name prefix contract enforced by `test_app_request_routing_tables_match_prefix_contracts` in `crates/aspen-client-api/src/lib.rs`. When adding an app RPC, update both the request metadata and the matching app routing table in the same change; otherwise the request can compile at the API layer but route as a core/internal request at runtime. Current app prefixes are:
+
+| App | Request variant prefixes |
+|-----|--------------------------|
+| `automerge` | `Automerge*` |
+| `calendar` | `Calendar*` |
+| `ci` | `Ci*` |
+| `contacts` | `Contacts*`, `Net*` |
+| `deploy` | `ClusterDeploy*`, `ClusterRollback*`, `NodeRollback*`, `NodeUpgrade*` |
+| `forge` | `FederateRepository*`, `Federation*`, `Forge*`, `GetDiscoveredCluster*`, `GetFederationStatus*`, `GitBridge*`, `Gossip*`, `ListDiscoveredClusters*`, `ListFederatedRepositories*`, `StartGossip*`, `StopGossip*`, `TrustCluster*`, `UntrustCluster*` |
+| `hooks` | `Hook*` |
+| `jobs` | `Job*`, `Worker*` |
+| `secrets` | `Secrets*` |
+| `snix` | `Cache*`, `NixCache*`, `Snix*` |
+| `sql` | `ExecuteSql*` |
+
 → [`crates/aspen-client-api/`](../../crates/aspen-client-api), [`crates/aspen-rpc-core/`](../../crates/aspen-rpc-core), [`crates/aspen-rpc-handlers/`](../../crates/aspen-rpc-handlers)
 
 ### Coordination Primitives
@@ -406,6 +422,7 @@ Applications own their domain state and sync semantics, but they should not crea
 - Put deterministic decisions in a pure helper first; call it from async shell code.
 - Pass time, randomness, node identity, and limits as explicit inputs to pure logic.
 - Route network traffic through Iroh and add an ALPN or client RPC variant when needed.
+- When adding an app-owned `ClientRpcRequest`, preserve the app prefix contract and update `request_metadata_apps/<app>.rs` so `required_app` routing cannot fall through to core handling.
 - Store authoritative mutable state through Raft; store large immutable bytes in blobs.
 - Keep public feature gates honest: if a public type names an optional crate, the feature must pull it in.
 - Add positive and negative tests for new behavior, including malformed input and bound violations.

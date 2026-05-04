@@ -555,6 +555,34 @@ mod tests {
     }
 
     #[test]
+    fn test_app_request_routing_contract_is_documented() {
+        let architecture_doc = include_str!("../../../docs/developer-guide/architecture.md");
+
+        assert!(architecture_doc.contains("Routing metadata rule"));
+        assert!(architecture_doc.contains("request_metadata_apps/"));
+        assert!(architecture_doc.contains("test_app_request_routing_tables_match_prefix_contracts"));
+
+        for app in [
+            "automerge",
+            "calendar",
+            "ci",
+            "contacts",
+            "deploy",
+            "forge",
+            "hooks",
+            "jobs",
+            "secrets",
+            "snix",
+            "sql",
+        ] {
+            assert!(
+                architecture_doc.contains(&format!("`{app}`")),
+                "architecture doc must describe routing metadata prefix contract for app `{app}`"
+            );
+        }
+    }
+
+    #[test]
     fn test_request_metadata_lookup_matches_sample_requests() {
         let mut cases = vec![
             (ClientRpcRequest::GetHealth, "GetHealth", None),
