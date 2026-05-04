@@ -82,6 +82,10 @@ Add a deploy stage to `.aspen/ci.ncl`:
 
 ## Manual Deployment via CLI
 
+Deployment RPCs, including `cluster deploy-status`, require cluster-admin
+authorization. Status output exposes rollout history and per-node upgrade state,
+so it is intentionally not a public health endpoint.
+
 ```bash
 # Deploy a specific Nix store path
 aspen-cli cluster deploy /nix/store/...-aspen-node

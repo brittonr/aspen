@@ -688,8 +688,13 @@ mod tests {
             other => panic!("Expected ClusterAdmin for ClusterRollback, got {other:?}"),
         }
 
-        // Status is read-only, no auth required
-        assert!(ClientRpcRequest::ClusterDeployStatus.to_operation().is_none());
+        // Status exposes rollout/per-node state and requires cluster admin.
+        match ClientRpcRequest::ClusterDeployStatus.to_operation() {
+            Some(Operation::ClusterAdmin { action }) => {
+                assert_eq!(action, "cluster_operation");
+            }
+            other => panic!("Expected ClusterAdmin for ClusterDeployStatus, got {other:?}"),
+        }
     }
 
     /// Pin the postcard discriminant of critical request variants.
