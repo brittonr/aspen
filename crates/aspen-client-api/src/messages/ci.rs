@@ -165,6 +165,9 @@ impl CiRequest {
             Self::CiGetJobOutput { run_id, job_id } => Some(Operation::Read {
                 key: format!("_ci:runs:{}:{}", run_id, job_id),
             }),
+            Self::CiGetRefStatus { repo_id, ref_name } => Some(Operation::Read {
+                key: format!("_ci:ref-status:{}:{}", repo_id, ref_name),
+            }),
 
             _ => None,
         }
@@ -727,6 +730,79 @@ pub struct CacheMigrationValidateResultResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const CI_SOURCE: &str = include_str!("ci.rs");
+    const MAX_CI_REQUEST_VARIANTS: usize = 64;
+
+    #[cfg(feature = "auth")]
+    fn ci_request_variant_names() -> Vec<&'static str> {
+        let mut is_in_request_enum = false;
+        let mut variants = Vec::with_capacity(MAX_CI_REQUEST_VARIANTS);
+
+        for line in CI_SOURCE.lines() {
+            if line.trim() == "pub enum CiRequest {" {
+                is_in_request_enum = true;
+                continue;
+            }
+            if is_in_request_enum && line == "}" {
+                break;
+            }
+            if !is_in_request_enum || !line.starts_with("    ") || line.starts_with("        ") {
+                continue;
+            }
+
+            let trimmed = line.trim_start();
+            let Some(first) = trimmed.chars().next() else {
+                continue;
+            };
+            if !first.is_ascii_uppercase() {
+                continue;
+            }
+            let name_len = trimmed.bytes().take_while(|byte| byte.is_ascii_alphanumeric() || *byte == b'_').count();
+            if name_len == 0 {
+                continue;
+            }
+            let name = &trimmed[..name_len];
+            if !variants.contains(&name) {
+                assert!(variants.len() < MAX_CI_REQUEST_VARIANTS);
+                variants.push(name);
+            }
+        }
+
+        assert!(is_in_request_enum);
+        assert!(!variants.is_empty());
+        variants
+    }
+
+    #[cfg(feature = "auth")]
+    #[test]
+    fn every_ci_request_variant_has_authorization_classification() {
+        let missing: Vec<_> = ci_request_variant_names()
+            .into_iter()
+            .filter(|variant| {
+                let needle = format!("Self::{variant}");
+                !CI_SOURCE.contains(&needle)
+            })
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "CiRequest variants must be explicitly classified by CiRequest::to_operation; missing: {missing:?}"
+        );
+    }
+
+    #[cfg(feature = "auth")]
+    #[test]
+    fn ci_ref_status_requires_read_authorization() {
+        let operation = CiRequest::CiGetRefStatus {
+            repo_id: "repo".to_string(),
+            ref_name: "main".to_string(),
+        }
+        .to_operation()
+        .expect("CI ref status should require auth");
+
+        assert!(matches!(operation, aspen_auth_core::Operation::Read { key } if key == "_ci:ref-status:repo:main"));
+    }
 
     #[test]
     fn ci_receipt_schema_and_status_labels_are_documented() {

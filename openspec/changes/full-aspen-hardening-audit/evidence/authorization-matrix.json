@@ -1,0 +1,5837 @@
+{
+  "summary": {
+    "schema": "aspen.full-hardening-audit.authorization-matrix.v1",
+    "generated_on": "2026-05-04",
+    "source_policy": "static source classification plus focused cargo tests; no credential values read",
+    "client_rpc": {
+      "variant_count": 350,
+      "classified_count": 350,
+      "missing": [],
+      "public_no_auth_count": 25,
+      "public_no_auth_variants": [
+        "Ping",
+        "GetHealth",
+        "GetNodeInfo",
+        "GetRaftMetrics",
+        "GetLeader",
+        "GetClusterTicket",
+        "GetClusterState",
+        "GetClusterTicketCombined",
+        "GetMetrics",
+        "GetNetworkMetrics",
+        "ListVaults",
+        "GetFederationStatus",
+        "ListDiscoveredClusters",
+        "GetDiscoveredCluster",
+        "ListFederatedRepositories",
+        "GetTopology",
+        "ListPeerClusters",
+        "GetPeerClusterStatus",
+        "GetKeyOrigin",
+        "GetClientTicket",
+        "GetDocsTicket",
+        "WatchCancel",
+        "WatchStatus",
+        "NostrAuthChallenge",
+        "NostrAuthVerify"
+      ]
+    },
+    "ci_request": {
+      "variant_count": 25,
+      "classified_count": 25,
+      "missing": []
+    },
+    "remediated_findings": [
+      {
+        "finding": "CiRequest::CiGetRefStatus existed but CiRequest::to_operation omitted it, while ClientRpcRequest already mapped the equivalent request to _ci:ref-status:<repo>:<ref> read authority.",
+        "fix": "Added CiRequest::CiGetRefStatus -> Operation::Read and regression test ci_ref_status_requires_read_authorization.",
+        "source": "crates/aspen-client-api/src/messages/ci.rs"
+      },
+      {
+        "finding": "ClientRpcRequest classification drift test stopped at MAX_CLIENT_REQUEST_VARIANTS=256 while the enum has 350 variants.",
+        "fix": "Raised MAX_CLIENT_REQUEST_VARIANTS to 512 and reran every_client_request_variant_has_authorization_classification.",
+        "source": "crates/aspen-client-api/src/messages/to_operation/mod.rs"
+      }
+    ]
+  },
+  "client_rpc_matrix": [
+    {
+      "variant": "GetHealth",
+      "line": 573,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 28,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetRaftMetrics",
+      "line": 576,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 30,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetLeader",
+      "line": 579,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 31,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetNodeInfo",
+      "line": 582,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 29,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetClusterTicket",
+      "line": 585,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 32,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "InitCluster",
+      "line": 588,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 13,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "InitClusterWithTrust",
+      "line": 591,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "ClusterA"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ReadKey",
+      "line": 597,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 60,
+          "operation_families_nearby": [
+            "SnixRead"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WriteKey",
+      "line": 603,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 24,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 81,
+          "operation_families_nearby": [
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CompareAndSwapKey",
+      "line": 614,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 28,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CompareAndDeleteKey",
+      "line": 624,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 29,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "TriggerSnapshot",
+      "line": 632,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 18,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AddLearner",
+      "line": 635,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 15,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ChangeMembership",
+      "line": 643,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "Ping",
+      "line": 649,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 27,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetClusterState",
+      "line": 655,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 33,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "DeleteKey",
+      "line": 661,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 27,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 87,
+          "operation_families_nearby": [
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ScanKeys",
+      "line": 667,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 19,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 65,
+          "operation_families_nearby": [
+            "SnixRead"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 105,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 119,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetMetrics",
+      "line": 677,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 35,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetNetworkMetrics",
+      "line": 681,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 36,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "PromoteLearner",
+      "line": 684,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 19,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CheckpointWal",
+      "line": 694,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 22,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ListVaults",
+      "line": 697,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 37,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetVaultKeys",
+      "line": 700,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 20,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AddPeer",
+      "line": 706,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 20,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetClusterTicketCombined",
+      "line": 714,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 34,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetClientTicket",
+      "line": 723,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 32,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetDocsTicket",
+      "line": 734,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 33,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "AddBlob",
+      "line": 747,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetBlob",
+      "line": 757,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 22,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "HasBlob",
+      "line": 763,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 23,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetBlobTicket",
+      "line": 771,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 24,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ListBlobs",
+      "line": 777,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 29,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ProtectBlob",
+      "line": 785,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 11,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "UnprotectBlob",
+      "line": 793,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 12,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DeleteBlob",
+      "line": 802,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DownloadBlob",
+      "line": 812,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DownloadBlobByHash",
+      "line": 824,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 15,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DownloadBlobByProvider",
+      "line": 836,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetBlobStatus",
+      "line": 848,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 25,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "BlobReplicatePull",
+      "line": 864,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 34,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetBlobReplicationStatus",
+      "line": 880,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 26,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "TriggerBlobReplication",
+      "line": 889,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 38,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RunBlobRepairCycle",
+      "line": 907,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
+          "line": 44,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DocsSet",
+      "line": 915,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DocsGet",
+      "line": 925,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DocsDelete",
+      "line": 933,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DocsList",
+      "line": 941,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 17,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "DocsStatus",
+      "line": 949,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 17,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AddPeerCluster",
+      "line": 958,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 22,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RemovePeerCluster",
+      "line": 964,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 23,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ListPeerClusters",
+      "line": 970,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 29,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetPeerClusterStatus",
+      "line": 973,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 30,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "UpdatePeerClusterFilter",
+      "line": 979,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 24,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "UpdatePeerClusterPriority",
+      "line": 989,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 25,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SetPeerClusterEnabled",
+      "line": 997,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 26,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetKeyOrigin",
+      "line": 1009,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
+          "line": 31,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ExecuteSql",
+      "line": 1021,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/sql_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LockAcquire",
+      "line": 1041,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 26,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LockTryAcquire",
+      "line": 1055,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 27,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LockRelease",
+      "line": 1067,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 28,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LockRenew",
+      "line": 1079,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 29,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LockSetAcquire",
+      "line": 1091,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 33,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LockSetTryAcquire",
+      "line": 1103,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 33,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 196,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 201,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "LockSetRelease",
+      "line": 1113,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 41,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 238,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 242,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "LockSetRenew",
+      "line": 1121,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 42,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 248,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 253,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "CounterGet",
+      "line": 1134,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 51,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CounterIncrement",
+      "line": 1140,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 57,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "CounterDecrement",
+      "line": 1146,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 58,
+          "operation_families_nearby": [
+            "Wr"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CounterAdd",
+      "line": 1152,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 59,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CounterSubtract",
+      "line": 1160,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 60,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CounterSet",
+      "line": 1168,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 61,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CounterCompareAndSet",
+      "line": 1178,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 62,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SignedCounterGet",
+      "line": 1191,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 52,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SignedCounterAdd",
+      "line": 1197,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 63,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SequenceNext",
+      "line": 1208,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 64,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SequenceReserve",
+      "line": 1216,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 65,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SequenceCurrent",
+      "line": 1224,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 53,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RateLimiterTryAcquire",
+      "line": 1235,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 76,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RateLimiterAcquire",
+      "line": 1249,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 77,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RateLimiterAvailable",
+      "line": 1263,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 82,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RateLimiterReset",
+      "line": 1273,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 78,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "BatchRead",
+      "line": 1289,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 65,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 83,
+          "operation_families_nearby": [
+            "BatchRead"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 166,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "BatchWrite",
+      "line": 1298,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 66,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 96,
+          "operation_families_nearby": [
+            "BatchWrite",
+            "Delete",
+            "Set"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 177,
+          "operation_families_nearby": [
+            "Clust",
+            "Set"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ConditionalBatchWrite",
+      "line": 1308,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 69,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 117,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 150,
+          "operation_families_nearby": [
+            "BatchWrite"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+          "line": 194,
+          "operation_families_nearby": [
+            "Delete"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WatchCreate",
+      "line": 1323,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs",
+          "line": 9,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs",
+          "line": 24,
+          "operation_families_nearby": [
+            "SnixRead"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs",
+          "line": 51,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WatchCancel",
+      "line": 1334,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs",
+          "line": 10,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "WatchStatus",
+      "line": 1340,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs",
+          "line": 10,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "LeaseGrant",
+      "line": 1352,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LeaseRevoke",
+      "line": 1363,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
+          "line": 11,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LeaseKeepalive",
+      "line": 1372,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
+          "line": 12,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LeaseTimeToLive",
+      "line": 1380,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "LeaseList",
+      "line": 1390,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WriteKeyWithLease",
+      "line": 1395,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 24,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "BarrierEnter",
+      "line": 1411,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 86,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "BarrierLeave",
+      "line": 1425,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 86,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "BarrierStatus",
+      "line": 1435,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 92,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SemaphoreAcquire",
+      "line": 1444,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 102,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SemaphoreTryAcquire",
+      "line": 1460,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 103,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SemaphoreRelease",
+      "line": 1474,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 104,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SemaphoreStatus",
+      "line": 1484,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 108,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockAcquireRead",
+      "line": 1497,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 112,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockTryAcquireRead",
+      "line": 1513,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 113,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockAcquireWrite",
+      "line": 1527,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 114,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockTryAcquireWrite",
+      "line": 1543,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 115,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockReleaseRead",
+      "line": 1557,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 116,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockReleaseWrite",
+      "line": 1569,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 117,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockDowngrade",
+      "line": 1583,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 118,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "RWLockStatus",
+      "line": 1599,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 122,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueCreate",
+      "line": 1608,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 132,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "QueueDelete",
+      "line": 1620,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 133,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "QueueEnqueue",
+      "line": 1626,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 134,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "QueueEnqueueBatch",
+      "line": 1640,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 135,
+          "operation_families_nearby": [
+            "Wr"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueDequeue",
+      "line": 1648,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 136,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueDequeueWait",
+      "line": 1660,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 137,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueuePeek",
+      "line": 1674,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 145,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueAck",
+      "line": 1682,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 138,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueNack",
+      "line": 1690,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 139,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueExtendVisibility",
+      "line": 1702,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 140,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueStatus",
+      "line": 1712,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 146,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueGetDLQ",
+      "line": 1718,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 147,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "QueueRedriveDLQ",
+      "line": 1726,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 141,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceRegister",
+      "line": 1737,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 157,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceDeregister",
+      "line": 1759,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 158,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceDiscover",
+      "line": 1769,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 165,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceList",
+      "line": 1783,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 169,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceGetInstance",
+      "line": 1791,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 166,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceHeartbeat",
+      "line": 1799,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 159,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceUpdateHealth",
+      "line": 1809,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 160,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ServiceUpdateMetadata",
+      "line": 1821,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+          "line": 161,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GetTopology",
+      "line": 1849,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 44,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCreateRepo",
+      "line": 1858,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 68,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetRepo",
+      "line": 1868,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 142,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeListRepos",
+      "line": 1874,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 143,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeStoreBlob",
+      "line": 1882,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 71,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetBlob",
+      "line": 1890,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 144,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCreateTree",
+      "line": 1896,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 72,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetTree",
+      "line": 1904,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 145,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCommit",
+      "line": 1910,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 73,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetCommit",
+      "line": 1922,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 146,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeLog",
+      "line": 1928,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 147,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetRef",
+      "line": 1938,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 148,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeSetRef",
+      "line": 1946,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 74,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeDeleteRef",
+      "line": 1962,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 75,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCasRef",
+      "line": 1970,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 76,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeListBranches",
+      "line": 1988,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 149,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeListTags",
+      "line": 1994,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 150,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCreateIssue",
+      "line": 2000,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 77,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeListIssues",
+      "line": 2012,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 151,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetIssue",
+      "line": 2022,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 152,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCommentIssue",
+      "line": 2030,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 78,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCloseIssue",
+      "line": 2040,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 79,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeReopenIssue",
+      "line": 2050,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 80,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCreatePatch",
+      "line": 2058,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 81,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeListPatches",
+      "line": 2072,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 153,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetPatch",
+      "line": 2082,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 154,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeUpdatePatch",
+      "line": 2090,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 82,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeApprovePatch",
+      "line": 2102,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 83,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeMergePatch",
+      "line": 2114,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 84,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCheckMerge",
+      "line": 2126,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 155,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeClosePatch",
+      "line": 2134,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 85,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCreateDiscussion",
+      "line": 2144,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 86,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeListDiscussions",
+      "line": 2150,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 156,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetDiscussion",
+      "line": 2155,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 157,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeReplyDiscussion",
+      "line": 2159,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 87,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeLockDiscussion",
+      "line": 2165,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 88,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeUnlockDiscussion",
+      "line": 2169,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 89,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCloseDiscussion",
+      "line": 2173,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 90,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeReopenDiscussion",
+      "line": 2178,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 91,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeForkRepo",
+      "line": 2183,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 92,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeSetMirror",
+      "line": 2190,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 93,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeDisableMirror",
+      "line": 2195,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 94,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetMirrorStatus",
+      "line": 2198,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 158,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeGetDelegateKey",
+      "line": 2206,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 161,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetFederationStatus",
+      "line": 2215,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 38,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ListDiscoveredClusters",
+      "line": 2218,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 39,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GetDiscoveredCluster",
+      "line": 2221,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 40,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "TrustCluster",
+      "line": 2227,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 95,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "UntrustCluster",
+      "line": 2233,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 96,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "FederateRepository",
+      "line": 2239,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 97,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ListFederatedRepositories",
+      "line": 2247,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 41,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "FederationSyncPeer",
+      "line": 2251,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 109,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 256,
+          "operation_families_nearby": [
+            "FederationPull"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "FederationFetchRefs",
+      "line": 2258,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 112,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 225,
+          "operation_families_nearby": [
+            "FederationPull"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "FederationPull",
+      "line": 2267,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 122,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 248,
+          "operation_families_nearby": [
+            "FederationPull"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "FederationPush",
+      "line": 2282,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 129,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 271,
+          "operation_families_nearby": [
+            "FederationPush"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "FederationBidiSync",
+      "line": 2291,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 129,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 278,
+          "operation_families_nearby": [
+            "FederationPush"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ForgeFetchFederated",
+      "line": 2302,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 132,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 262,
+          "operation_families_nearby": [
+            "FederationPull"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "FederationGrant",
+      "line": 2310,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 98,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "FederationListTokens",
+      "line": 2321,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 168,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "FederationGitListRefs",
+      "line": 2328,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 113,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 232,
+          "operation_families_nearby": [
+            "FederationPull"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "FederationGitFetch",
+      "line": 2341,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 116,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 239,
+          "operation_families_nearby": [
+            "FederationPull"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgeListRefs",
+      "line": 2358,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 162,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgeFetch",
+      "line": 2366,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 163,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgePush",
+      "line": 2382,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 99,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgePushStart",
+      "line": 2395,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 100,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgePushChunk",
+      "line": 2412,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 101,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgePushComplete",
+      "line": 2429,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 102,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgeProbeObjects",
+      "line": 2444,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 167,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeDiffCommits",
+      "line": 2453,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 159,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeDiffRefs",
+      "line": 2467,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 160,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "JobSubmit",
+      "line": 2484,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "JobGet",
+      "line": 2503,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 21,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "JobList",
+      "line": 2508,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 22,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "JobCancel",
+      "line": 2521,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 11,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "JobUpdateProgress",
+      "line": 2528,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 12,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "JobQueueStats",
+      "line": 2537,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 23,
+          "operation_families_nearby": [
+            "Read",
+            "Wri"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WorkerStatus",
+      "line": 2539,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 24,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WorkerRegister",
+      "line": 2541,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WorkerHeartbeat",
+      "line": 2550,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WorkerDeregister",
+      "line": 2557,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 15,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "HookList",
+      "line": 2569,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "HookGetMetrics",
+      "line": 2575,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "HookTrigger",
+      "line": 2588,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiTriggerPipeline",
+      "line": 2602,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 24,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetStatus",
+      "line": 2615,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetRefStatus",
+      "line": 2624,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 18,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiListRuns",
+      "line": 2634,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 21,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiCancelRun",
+      "line": 2647,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 30,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiWatchRepo",
+      "line": 2658,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 25,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiUnwatchRepo",
+      "line": 2666,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 26,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiListArtifacts",
+      "line": 2675,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 34,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetArtifact",
+      "line": 2686,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 37,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetJobLogs",
+      "line": 2696,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 40,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiSubscribeLogs",
+      "line": 2711,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 43,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetJobOutput",
+      "line": 2726,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 46,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvRead",
+      "line": 2741,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 11,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvWrite",
+      "line": 2754,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 17,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvDelete",
+      "line": 2769,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 18,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvDestroy",
+      "line": 2781,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 19,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvUndelete",
+      "line": 2793,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 20,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvList",
+      "line": 2805,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 12,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvMetadata",
+      "line": 2815,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvUpdateMetadata",
+      "line": 2825,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 21,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsKvDeleteMetadata",
+      "line": 2841,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 22,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitCreateKey",
+      "line": 2852,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 30,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitEncrypt",
+      "line": 2864,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 35,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitDecrypt",
+      "line": 2878,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 36,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitSign",
+      "line": 2892,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 37,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitVerify",
+      "line": 2904,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 38,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitRotateKey",
+      "line": 2918,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 31,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitListKeys",
+      "line": 2926,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 27,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitRewrap",
+      "line": 2934,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 39,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsTransitDatakey",
+      "line": 2948,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 40,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiGenerateRoot",
+      "line": 2961,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 58,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiGenerateIntermediate",
+      "line": 2973,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 59,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiSetSignedIntermediate",
+      "line": 2983,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 60,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiCreateRole",
+      "line": 2993,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 61,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiIssue",
+      "line": 3013,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 62,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiRevoke",
+      "line": 3029,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 63,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiGetCrl",
+      "line": 3039,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 50,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiListCerts",
+      "line": 3047,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 51,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiGetRole",
+      "line": 3053,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 55,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsPkiListRoles",
+      "line": 3061,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 52,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsNixCacheCreateKey",
+      "line": 3073,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 74,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsNixCacheGetPublicKey",
+      "line": 3084,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 68,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsNixCacheRotateKey",
+      "line": 3095,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 75,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsNixCacheDeleteKey",
+      "line": 3106,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 76,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SecretsNixCacheListKeys",
+      "line": 3116,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
+          "line": 71,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeCreate",
+      "line": 3130,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 11,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeGet",
+      "line": 3145,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 23,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeSave",
+      "line": 3152,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 12,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeDelete",
+      "line": 3161,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeApplyChanges",
+      "line": 3168,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeMerge",
+      "line": 3177,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 15,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeList",
+      "line": 3186,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 24,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeGetMetadata",
+      "line": 3199,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 25,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeExists",
+      "line": 3206,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 26,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeGenerateSyncMessage",
+      "line": 3213,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 27,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AutomergeReceiveSyncMessage",
+      "line": 3224,
+      "cfg": "#[cfg(feature = \"automerge\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheQuery",
+      "line": 3241,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 56,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheStats",
+      "line": 3249,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 61,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheDownload",
+      "line": 3255,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 56,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "NixCacheGetPublicKey",
+      "line": 3263,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 64,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationStart",
+      "line": 3274,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 69,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationStatus",
+      "line": 3288,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 75,
+          "operation_families_nearby": [
+            "Read",
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationCancel",
+      "line": 3295,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 69,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationValidate",
+      "line": 3302,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 75,
+          "operation_families_nearby": [
+            "Read",
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SnixDirectoryGet",
+      "line": 3313,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 81,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 110,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SnixDirectoryPut",
+      "line": 3321,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 84,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 115,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 143,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "SnixPathInfoGet",
+      "line": 3329,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 87,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 120,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SnixPathInfoPut",
+      "line": 3337,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 90,
+          "operation_families_nearby": [
+            "SnixWrite"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 125,
+          "operation_families_nearby": [
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WorkerPollJobs",
+      "line": 3345,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 29,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "WorkerCompleteJob",
+      "line": 3359,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+          "line": 32,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "TraceIngest",
+      "line": 3386,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "TraceList",
+      "line": 3395,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 15,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "TraceGet",
+      "line": 3409,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "TraceSearch",
+      "line": 3418,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 17,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "MetricIngest",
+      "line": 3439,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 21,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "MetricList",
+      "line": 3449,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 26,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "MetricQuery",
+      "line": 3459,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 26,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AlertCreate",
+      "line": 3483,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 30,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AlertDelete",
+      "line": 3489,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 30,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AlertList",
+      "line": 3495,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 40,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AlertGet",
+      "line": 3498,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 40,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "AlertEvaluate",
+      "line": 3507,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
+          "line": 35,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "IndexCreate",
+      "line": 3521,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 37,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "IndexDrop",
+      "line": 3537,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 37,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "IndexScan",
+      "line": 3545,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 32,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "IndexList",
+      "line": 3559,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 32,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "NetPublish",
+      "line": 3565,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
+          "line": 9,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "NetUnpublish",
+      "line": 3579,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "NetLookup",
+      "line": 3585,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
+          "line": 17,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "NetList",
+      "line": 3591,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
+          "line": 20,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsCreateBook",
+      "line": 3600,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsDeleteBook",
+      "line": 3608,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsListBooks",
+      "line": 3614,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 18,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsCreateContact",
+      "line": 3620,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 23,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsGetContact",
+      "line": 3628,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 27,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsUpdateContact",
+      "line": 3634,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 30,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsDeleteContact",
+      "line": 3642,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 34,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsListContacts",
+      "line": 3648,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 38,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsSearchContacts",
+      "line": 3658,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 41,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsImportVcard",
+      "line": 3668,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 46,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsExportVcard",
+      "line": 3676,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 50,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsCreateGroup",
+      "line": 3682,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 55,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsDeleteGroup",
+      "line": 3692,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 59,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsListGroups",
+      "line": 3698,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 63,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsAddToGroup",
+      "line": 3704,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 66,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ContactsRemoveFromGroup",
+      "line": 3712,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/contacts_ops.rs",
+          "line": 70,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarCreate",
+      "line": 3723,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarDelete",
+      "line": 3735,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarList",
+      "line": 3741,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 18,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarGetEvent",
+      "line": 3747,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 27,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarCreateEvent",
+      "line": 3753,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 23,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarUpdateEvent",
+      "line": 3761,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 30,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarDeleteEvent",
+      "line": 3769,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 34,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarListEvents",
+      "line": 3775,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 38,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarSearchEvents",
+      "line": 3789,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 41,
+          "operation_families_nearby": [
+            "Rea",
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarImportIcal",
+      "line": 3799,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 46,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarExportIcal",
+      "line": 3807,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 50,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarFreeBusy",
+      "line": 3813,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 55,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CalendarExpandRecurrence",
+      "line": 3823,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/calendar_ops.rs",
+          "line": 58,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ClusterDeploy",
+      "line": 3841,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 10,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 35,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ClusterDeployStatus",
+      "line": 3858,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 14,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 42,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ClusterRollback",
+      "line": 3863,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 11,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 43,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "NodeUpgrade",
+      "line": 3868,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 12,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 44,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "NodeRollback",
+      "line": 3879,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
+          "line": 49,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "PluginReload",
+      "line": 3892,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 21,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "NostrAuthChallenge",
+      "line": 3901,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 58,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "NostrGetProfile",
+      "line": 3907,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 141,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "NostrAuthVerify",
+      "line": 3913,
+      "cfg": null,
+      "classification": "public-no-auth",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 58,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "HashCheck",
+      "line": 3929,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 16,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+          "line": 72,
+          "operation_families_nearby": [
+            "SnixRead"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgeFetchStart",
+      "line": 3941,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 164,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgeFetchChunk",
+      "line": 3951,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 165,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "GitBridgeFetchComplete",
+      "line": 3959,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 166,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ExpungeNode",
+      "line": 3967,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/cluster_ops.rs",
+          "line": 17,
+          "operation_families_nearby": [
+            "ClusterAdmin"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "ForgeJjNative",
+      "line": 3975,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 59,
+          "operation_families_nearby": []
+        },
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 181,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeCreateRepoWithBackends",
+      "line": 3983,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 69,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "ForgeDeleteRepo",
+      "line": 3997,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
+          "line": 70,
+          "operation_families_nearby": []
+        }
+      ]
+    },
+    {
+      "variant": "CiGetRunReceipt",
+      "line": 4005,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+          "line": 13,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    }
+  ],
+  "ci_request_matrix": [
+    {
+      "variant": "CiTriggerPipeline",
+      "line": 44,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 143,
+          "operation_families_nearby": [
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetStatus",
+      "line": 50,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 137,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetRunReceipt",
+      "line": 52,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 137,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiListRuns",
+      "line": 54,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 140,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiCancelRun",
+      "line": 60,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 149,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiWatchRepo",
+      "line": 62,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 144,
+          "operation_families_nearby": [
+            "R",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiUnwatchRepo",
+      "line": 64,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 145,
+          "operation_families_nearby": [
+            "Read",
+            "Write"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiListArtifacts",
+      "line": 66,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 153,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetArtifact",
+      "line": 68,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 156,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetJobLogs",
+      "line": 70,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 159,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiSubscribeLogs",
+      "line": 77,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 162,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetJobOutput",
+      "line": 83,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 165,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CiGetRefStatus",
+      "line": 86,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 168,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheQuery",
+      "line": 90,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 179,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheStats",
+      "line": 92,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 182,
+          "operation_families_nearby": [
+            "Read",
+            "SnixRead"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheDownload",
+      "line": 94,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 179,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "NixCacheGetPublicKey",
+      "line": 96,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 185,
+          "operation_families_nearby": [
+            "Read",
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SnixDirectoryGet",
+      "line": 100,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 189,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SnixDirectoryPut",
+      "line": 102,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 192,
+          "operation_families_nearby": [
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SnixPathInfoGet",
+      "line": 104,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 195,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "SnixRead",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "SnixPathInfoPut",
+      "line": 106,
+      "cfg": null,
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 198,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "SnixWrite"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationStart",
+      "line": 111,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 203,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationStatus",
+      "line": 118,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 207,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationCancel",
+      "line": 121,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 203,
+          "operation_families_nearby": [
+            "ClusterAdmin",
+            "Read"
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "CacheMigrationValidate",
+      "line": 124,
+      "cfg": "#[cfg(feature = \"ci\")]",
+      "classification": "protected",
+      "hits": [
+        {
+          "source": "crates/aspen-client-api/src/messages/ci.rs",
+          "line": 207,
+          "operation_families_nearby": [
+            "Read"
+          ]
+        }
+      ]
+    }
+  ]
+}

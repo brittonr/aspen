@@ -134,7 +134,7 @@ mod tests {
         include_str!("watch_ops.rs"),
     ];
 
-    const MAX_CLIENT_REQUEST_VARIANTS: usize = 256;
+    const MAX_CLIENT_REQUEST_VARIANTS: usize = 512;
 
     fn request_variant_names() -> Vec<&'static str> {
         let mut is_in_request_enum = false;

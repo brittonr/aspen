@@ -11,7 +11,7 @@
 
 ## Phase 3: Authorization and Authority Boundary Audit
 
-- [ ] Verify every non-public `ClientRpcRequest` and `CiRequest` variant classifies to the intended `Operation` or fails closed.
+- [x] Verify every non-public `ClientRpcRequest` and `CiRequest` variant classifies to the intended `Operation` or fails closed. Evidence: `evidence/authorization-matrix.md`, `evidence/authorization-matrix.json`; fixed `CiRequest::CiGetRefStatus` drift and raised the `ClientRpcRequest` classification drift-test bound.
 - [ ] Verify auth-before-dispatch and presenter binding across direct, native, blob, proxy, and feature-gated handler paths.
 - [ ] Verify reserved storage prefixes cannot be disclosed or mutated through generic KV read/write/scan/watch/batch/conditional operations.
 - [ ] Verify SNIX, Forge, federation, deploy, jobs/CI, secrets/trust, and admin operations use domain-specific capabilities rather than generic prefixes.
