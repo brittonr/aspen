@@ -3,8 +3,17 @@
 //! Configures the Iroh Router with all protocol handlers including Raft, client,
 //! gossip, blobs, docs sync, log subscriber, and Nix cache gateway.
 
+use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::PermissionsExt;
+#[cfg(test)]
+use std::os::unix::fs::symlink;
 use std::sync::Arc;
 
+use anyhow::Context;
 use aspen::ClientProtocolHandler;
 use aspen::api::KeyValueStore;
 use aspen::cluster::config::NodeConfig;
@@ -277,14 +286,43 @@ pub fn setup_router(
     builder.spawn()
 }
 
+fn validate_sensitive_file(file: &fs::File) -> anyhow::Result<()> {
+    let metadata = file.metadata().context("failed to inspect sensitive file")?;
+    anyhow::ensure!(metadata.file_type().is_file(), "sensitive path is not a regular file");
+    let euid = unsafe { libc::geteuid() };
+    anyhow::ensure!(metadata.uid() == euid, "sensitive file is not owned by the current user");
+    Ok(())
+}
+
+fn write_sensitive_file(path: &std::path::Path, content: &str) -> anyhow::Result<()> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .context("failed to open sensitive file")?;
+    validate_sensitive_file(&file).context("refusing unsafe sensitive file")?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+        .context("failed to restrict sensitive file permissions before writing")?;
+    file.set_len(0).context("failed to truncate sensitive file after validation")?;
+    file.write_all(content.as_bytes()).context("failed to write sensitive file")?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+        .context("failed to restrict sensitive file permissions")?;
+    file.sync_all().context("failed to sync sensitive file")
+}
+
+fn shell_quote_path(path: &std::path::Path) -> String {
+    let path = path.display().to_string();
+    format!("'{}'", path.replace('\'', "'\\''"))
+}
+
 /// Generate and print cluster ticket for TUI connection.
 pub fn print_cluster_ticket(
     config: &NodeConfig,
     endpoint_addr: &iroh::EndpointAddr,
     secret_key: &iroh_base::SecretKey,
 ) -> anyhow::Result<()> {
-    use std::io::Write;
-
     use aspen::cluster::ticket::AspenClusterTicket;
     use iroh_gossip::proto::TopicId;
 
@@ -303,9 +341,9 @@ pub fn print_cluster_ticket(
         })
         .collect();
     info!(
-        ticket = %ticket_str,
         endpoint_id = %endpoint_addr.id,
         direct_addrs = ?direct_addrs,
+        ticket_bytes = ticket_str.len(),
         "cluster ticket generated with direct addresses"
     );
 
@@ -316,17 +354,9 @@ pub fn print_cluster_ticket(
         std::path::PathBuf::from(format!("/tmp/aspen-node-{}-ticket.txt", config.node_id))
     };
 
-    match std::fs::File::create(&ticket_file).and_then(|mut f| {
-        f.write_all(ticket_str.as_bytes())?;
-        f.sync_all()
-    }) {
-        Ok(()) => info!(path = %ticket_file.display(), "cluster ticket written to file"),
-        Err(e) => warn!(
-            path = %ticket_file.display(),
-            error = %e,
-            "failed to write cluster ticket to file"
-        ),
-    }
+    write_sensitive_file(&ticket_file, &ticket_str)
+        .with_context(|| format!("failed to write cluster ticket to {}", ticket_file.display()))?;
+    info!(path = %ticket_file.display(), "cluster ticket written to file");
 
     // Generate wildcard capability token for automerge sync.
     // Full capability grants read+write on all automerge:* keys.
@@ -343,18 +373,109 @@ pub fn print_cluster_ticket(
     let sync_ticket_str =
         sync_ticket.serialize().map_err(|e| anyhow::anyhow!("sync ticket serialization failed: {e}"))?;
 
-    info!(
-        sync_ticket = %sync_ticket_str,
-        "automerge sync ticket generated"
-    );
+    info!(sync_ticket_bytes = sync_ticket_str.len(), "automerge sync ticket generated");
+
+    let sync_ticket_file = ticket_file.with_file_name("automerge-sync-ticket.txt");
+    write_sensitive_file(&sync_ticket_file, &sync_ticket_str)
+        .with_context(|| format!("failed to write automerge sync ticket to {}", sync_ticket_file.display()))?;
+    info!(path = %sync_ticket_file.display(), "automerge sync ticket written to file");
+
+    let ticket_file_shell = shell_quote_path(&ticket_file);
+    let sync_ticket_file_shell = shell_quote_path(&sync_ticket_file);
 
     println!();
     println!("Connect with TUI:");
-    println!("  aspen-tui --ticket {}", ticket_str);
+    println!("  aspen-tui --ticket \"$(cat -- {ticket_file_shell})\"");
     println!();
     println!("Automerge sync (one string, includes auth):");
-    println!("  irohscii --cluster {}", sync_ticket_str);
+    println!("  irohscii --cluster \"$(cat -- {sync_ticket_file_shell})\"");
     println!();
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cluster_ticket_files_are_owner_only() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("cluster-ticket.txt");
+
+        write_sensitive_file(&path, "sensitive-ticket").expect("write sensitive ticket");
+
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn cluster_ticket_files_restrict_existing_files_before_rewrite() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("cluster-ticket.txt");
+        fs::write(&path, "old").expect("seed sensitive ticket");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("set permissive mode");
+
+        write_sensitive_file(&path, "sensitive-ticket").expect("rewrite sensitive ticket");
+
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(fs::read_to_string(&path).expect("read sensitive ticket"), "sensitive-ticket");
+    }
+
+    #[test]
+    fn cluster_ticket_files_reject_symlink_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let target_path = dir.path().join("target-ticket.txt");
+        let link_path = dir.path().join("cluster-ticket-link.txt");
+        fs::write(&target_path, "old-target").expect("seed symlink target");
+        symlink(&target_path, &link_path).expect("create symlink");
+
+        assert!(write_sensitive_file(&link_path, "sensitive-ticket").is_err());
+        assert_eq!(fs::read_to_string(&target_path).expect("read symlink target"), "old-target");
+    }
+
+    #[test]
+    fn cluster_ticket_files_reject_non_regular_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fifo_path = dir.path().join("cluster-ticket-fifo");
+        let fifo_c = std::ffi::CString::new(fifo_path.as_os_str().as_encoded_bytes()).expect("fifo path");
+        let rc = unsafe { libc::mkfifo(fifo_c.as_ptr(), 0o600) };
+        assert_eq!(rc, 0, "mkfifo failed");
+
+        assert!(write_sensitive_file(&fifo_path, "sensitive-ticket").is_err());
+    }
+
+    #[test]
+    fn shell_quote_path_handles_spaces_and_quotes() {
+        let path = std::path::Path::new("/tmp/aspen dogfood/o'clock/cluster-ticket.txt");
+        assert_eq!(shell_quote_path(path), "'/tmp/aspen dogfood/o'\\''clock/cluster-ticket.txt'");
+    }
+
+    #[test]
+    fn ticket_strings_are_not_logged_or_printed_directly() {
+        let source = include_str!("router.rs");
+        assert!(!source.contains(&format!("ticket = %{}", "ticket_str")));
+        assert!(!source.contains(&format!("sync_ticket = %{}", "sync_ticket_str")));
+        assert!(!source.contains(&format!("aspen-tui --ticket {brace}", brace = "{}")));
+        assert!(!source.contains(&format!("irohscii --cluster {brace}", brace = "{}")));
+        assert!(source.contains("aspen-tui --ticket \\\"$(cat -- {ticket_file_shell})\\\""));
+        assert!(source.contains("irohscii --cluster \\\"$(cat -- {sync_ticket_file_shell})\\\""));
+    }
+
+    #[test]
+    fn ticket_commands_are_printed_only_after_successful_file_writes() {
+        let source = include_str!("router.rs");
+        let cluster_write =
+            source.find("write_sensitive_file(&ticket_file, &ticket_str)").expect("cluster ticket write");
+        let sync_write =
+            source.find("write_sensitive_file(&sync_ticket_file, &sync_ticket_str)").expect("sync ticket write");
+        let tui_print = source.find("aspen-tui --ticket").expect("tui print");
+        let sync_print = source.find("irohscii --cluster").expect("sync print");
+
+        assert!(cluster_write < tui_print);
+        assert!(sync_write < sync_print);
+        assert!(source[cluster_write..tui_print].contains("?;"));
+        assert!(source[sync_write..sync_print].contains("?;"));
+    }
 }
