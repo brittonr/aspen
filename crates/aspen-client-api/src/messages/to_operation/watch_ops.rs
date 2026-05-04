@@ -47,6 +47,29 @@ mod tests {
     }
 
     #[test]
+    fn internal_watch_prefix_requires_admin() {
+        for prefix in ["", "_", "_ci:", "_lease:", "__worker:", "/_sys/"] {
+            let request = ClientRpcRequest::WatchCreate {
+                prefix: prefix.to_string(),
+                start_index: 0,
+                should_include_prev_value: false,
+            };
+
+            let Some(Some(operation)) = to_operation(&request) else {
+                panic!("internal watch should require authorization");
+            };
+
+            assert!(
+                matches!(&operation, Operation::ClusterAdmin { action } if action == "reserved_internal_scan"),
+                "prefix {prefix:?} produced {operation:?}"
+            );
+            assert!(!Capability::Read { prefix: String::new() }.authorizes(&operation));
+            assert!(!Capability::Watch { prefix: String::new() }.authorizes(&operation));
+            assert!(Capability::ClusterAdmin.authorizes(&operation));
+        }
+    }
+
+    #[test]
     fn broad_snix_watch_prefix_requires_admin() {
         let request = ClientRpcRequest::WatchCreate {
             prefix: "snix:".to_string(),

@@ -114,8 +114,68 @@ mod tests {
     }
 
     #[test]
+    fn generic_kv_operations_over_internal_prefixes_require_admin() {
+        let requests = [
+            ClientRpcRequest::ReadKey {
+                key: "_ci:runs:run-1".to_string(),
+            },
+            ClientRpcRequest::HashCheck {
+                key: "_secrets:kv:prod/db".to_string(),
+                expected_hash: [0; 32],
+            },
+            ClientRpcRequest::WriteKey {
+                key: "_lease:tenant".to_string(),
+                value: alloc::vec![1],
+            },
+            ClientRpcRequest::DeleteKey {
+                key: "__worker:worker-1:jobs".to_string(),
+            },
+            ClientRpcRequest::CompareAndSwapKey {
+                key: "/_sys/net/svc/api".to_string(),
+                expected: None,
+                new_value: alloc::vec![1],
+            },
+            ClientRpcRequest::CompareAndDeleteKey {
+                key: "_cache:narinfo:hash".to_string(),
+                expected: alloc::vec![1],
+            },
+        ];
+
+        for request in requests {
+            let operation = operation_for(&request);
+            assert!(
+                matches!(&operation, Operation::ClusterAdmin { action } if action == "reserved_internal_kv"),
+                "request {request:?} produced {operation:?}"
+            );
+            assert!(!Capability::Full { prefix: String::new() }.authorizes(&operation));
+            assert!(!Capability::Read { prefix: String::new() }.authorizes(&operation));
+            assert!(!Capability::Write { prefix: String::new() }.authorizes(&operation));
+            assert!(Capability::ClusterAdmin.authorizes(&operation));
+        }
+    }
+
+    #[test]
+    fn broad_scans_overlapping_internal_namespaces_require_admin() {
+        for prefix in ["", "_", "_ci", "_ci:", "_secrets:", "__worker:", "/_sys/"] {
+            let operation = operation_for(&ClientRpcRequest::ScanKeys {
+                prefix: prefix.to_string(),
+                limit: Some(100),
+                continuation_token: None,
+            });
+
+            assert!(
+                matches!(&operation, Operation::ClusterAdmin { action } if action == "reserved_internal_scan"),
+                "prefix {prefix:?} produced {operation:?}"
+            );
+            assert!(!Capability::Full { prefix: String::new() }.authorizes(&operation));
+            assert!(!Capability::Read { prefix: String::new() }.authorizes(&operation));
+            assert!(Capability::ClusterAdmin.authorizes(&operation));
+        }
+    }
+
+    #[test]
     fn broad_scans_overlapping_snix_namespaces_require_admin() {
-        for prefix in ["", "snix", "snix:", "snix:p", "snix:path"] {
+        for prefix in ["snix", "snix:", "snix:p", "snix:path"] {
             let operation = operation_for(&ClientRpcRequest::ScanKeys {
                 prefix: prefix.to_string(),
                 limit: Some(100),

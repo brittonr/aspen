@@ -30,6 +30,30 @@ use super::ClientRpcRequest;
 
 const SNIX_DIRECTORY_KEY_PREFIX: &str = "snix:dir:";
 const SNIX_PATHINFO_KEY_PREFIX: &str = "snix:pathinfo:";
+const RESERVED_INTERNAL_KEY_PREFIXES: &[&str] = &[
+    "_automerge:",
+    "_barrier:",
+    "_blob:",
+    "_cache:",
+    "_ci:",
+    "_counter:",
+    "_docs:",
+    "_forge:",
+    "_hooks:",
+    "_jobs:",
+    "_lease:",
+    "_lock:",
+    "_queue:",
+    "_ratelimit:",
+    "_rwlock:",
+    "_secrets:",
+    "_semaphore:",
+    "_service:",
+    "_sql:",
+    "_sys:",
+    "__worker:",
+    "/_sys/",
+];
 
 fn snix_resource_from_kv_key(key: &str) -> Option<String> {
     key.strip_prefix(SNIX_DIRECTORY_KEY_PREFIX)
@@ -41,6 +65,22 @@ fn key_is_reserved_snix(key: &str) -> bool {
     snix_resource_from_kv_key(key).is_some()
 }
 
+fn key_is_reserved_internal(key: &str) -> bool {
+    RESERVED_INTERNAL_KEY_PREFIXES.iter().any(|prefix| key.starts_with(prefix))
+}
+
+fn prefix_overlaps_reserved_internal(prefix: &str) -> bool {
+    RESERVED_INTERNAL_KEY_PREFIXES
+        .iter()
+        .any(|reserved| reserved.starts_with(prefix) || prefix.starts_with(reserved))
+}
+
+fn reserved_internal_admin_operation(action: &str) -> Operation {
+    Operation::ClusterAdmin {
+        action: action.to_string(),
+    }
+}
+
 fn reserved_snix_admin_operation(action: &str) -> Operation {
     Operation::ClusterAdmin {
         action: action.to_string(),
@@ -48,11 +88,19 @@ fn reserved_snix_admin_operation(action: &str) -> Operation {
 }
 
 fn snix_operation_for_read_key(key: &str) -> Operation {
+    if key_is_reserved_internal(key) {
+        return reserved_internal_admin_operation("reserved_internal_kv");
+    }
+
     snix_resource_from_kv_key(key)
         .map_or_else(|| Operation::Read { key: key.to_string() }, |resource| Operation::SnixRead { resource })
 }
 
 fn scan_operation_for_prefix(prefix: &str) -> Operation {
+    if prefix_overlaps_reserved_internal(prefix) {
+        return reserved_internal_admin_operation("reserved_internal_scan");
+    }
+
     if let Some(resource) = snix_resource_from_kv_key(prefix) {
         return Operation::SnixRead { resource };
     }
@@ -67,6 +115,10 @@ fn scan_operation_for_prefix(prefix: &str) -> Operation {
 }
 
 fn snix_operation_for_write_key(key: &str, value: Vec<u8>) -> Operation {
+    if key_is_reserved_internal(key) {
+        return reserved_internal_admin_operation("reserved_internal_kv");
+    }
+
     snix_resource_from_kv_key(key).map_or_else(
         || Operation::Write {
             key: key.to_string(),

@@ -5,7 +5,9 @@ use aspen_auth_core::Operation;
 use super::super::BatchCondition;
 use super::super::BatchWriteOperation;
 use super::super::ClientRpcRequest;
+use super::key_is_reserved_internal;
 use super::key_is_reserved_snix;
+use super::reserved_internal_admin_operation;
 use super::reserved_snix_admin_operation;
 
 fn batch_write_key(operation: &BatchWriteOperation) -> &str {
@@ -38,6 +40,10 @@ fn batch_operation_for_read_keys(keys: &[alloc::string::String]) -> Option<Opera
         return None;
     }
 
+    if keys.iter().any(|key| key_is_reserved_internal(key)) {
+        return Some(reserved_internal_admin_operation("reserved_internal_batch"));
+    }
+
     if keys.iter().any(|key| key_is_reserved_snix(key)) {
         return Some(reserved_snix_admin_operation("reserved_snix_batch"));
     }
@@ -48,6 +54,10 @@ fn batch_operation_for_read_keys(keys: &[alloc::string::String]) -> Option<Opera
 fn batch_operation_for_write_keys(keys: alloc::vec::Vec<alloc::string::String>) -> Option<Operation> {
     if keys.is_empty() {
         return None;
+    }
+
+    if keys.iter().any(|key| key_is_reserved_internal(key)) {
+        return Some(reserved_internal_admin_operation("reserved_internal_batch"));
     }
 
     if keys.iter().any(|key| key_is_reserved_snix(key)) {
@@ -159,6 +169,54 @@ mod tests {
         };
 
         assert_eq!(keys, alloc::vec!["condition/missing".to_string()]);
+    }
+
+    #[test]
+    fn internal_keys_in_batch_operations_require_admin() {
+        let read_request = ClientRpcRequest::BatchRead {
+            keys: alloc::vec!["_ci:runs:run-1".to_string(), "user/key".to_string()],
+        };
+        let Some(Some(read_operation)) = to_operation(&read_request) else {
+            panic!("internal batch read should require admin authorization");
+        };
+        assert!(
+            matches!(&read_operation, Operation::ClusterAdmin { action } if action == "reserved_internal_batch"),
+            "unexpected read operation: {read_operation:?}"
+        );
+
+        let write_request = ClientRpcRequest::BatchWrite {
+            operations: alloc::vec![BatchWriteOperation::Set {
+                key: "_secrets:kv:prod/db".to_string(),
+                value: alloc::vec![1],
+            }],
+        };
+        let Some(Some(write_operation)) = to_operation(&write_request) else {
+            panic!("internal batch write should require admin authorization");
+        };
+        assert!(
+            matches!(&write_operation, Operation::ClusterAdmin { action } if action == "reserved_internal_batch"),
+            "unexpected write operation: {write_operation:?}"
+        );
+    }
+
+    #[test]
+    fn internal_condition_keys_in_conditional_batch_require_admin() {
+        let request = ClientRpcRequest::ConditionalBatchWrite {
+            conditions: alloc::vec![BatchCondition::KeyExists {
+                key: "__worker:worker-1:jobs".to_string(),
+            }],
+            operations: alloc::vec![BatchWriteOperation::Delete {
+                key: "generic/key".to_string(),
+            }],
+        };
+
+        let Some(Some(operation)) = to_operation(&request) else {
+            panic!("internal condition key should require admin authorization");
+        };
+        assert!(
+            matches!(&operation, Operation::ClusterAdmin { action } if action == "reserved_internal_batch"),
+            "unexpected operation: {operation:?}"
+        );
     }
 
     #[test]

@@ -1,0 +1,107 @@
+{
+  "generated_at": "2026-05-04T22:40:13Z",
+  "scope": "Phase 3 reserved storage prefix audit for generic KV read/write/scan/watch/batch/conditional operations.",
+  "reserved_internal_prefixes": [
+    "_automerge:",
+    "_barrier:",
+    "_blob:",
+    "_cache:",
+    "_ci:",
+    "_counter:",
+    "_docs:",
+    "_forge:",
+    "_hooks:",
+    "_jobs:",
+    "_lease:",
+    "_lock:",
+    "_queue:",
+    "_ratelimit:",
+    "_rwlock:",
+    "_secrets:",
+    "_semaphore:",
+    "_service:",
+    "_sql:",
+    "_sys:",
+    "__worker:",
+    "/_sys/"
+  ],
+  "boundaries": [
+    {
+      "id": "reserved-prefix-registry",
+      "path": "crates/aspen-client-api/src/messages/to_operation/mod.rs",
+      "line": 33,
+      "snippet": "const RESERVED_INTERNAL_KEY_PREFIXES: &[&str] = &["
+    },
+    {
+      "id": "generic-read-write-guard",
+      "path": "crates/aspen-client-api/src/messages/to_operation/mod.rs",
+      "line": 90,
+      "snippet": "fn snix_operation_for_read_key(key: &str) -> Operation {"
+    },
+    {
+      "id": "generic-scan-watch-overlap-guard",
+      "path": "crates/aspen-client-api/src/messages/to_operation/mod.rs",
+      "line": 99,
+      "snippet": "fn scan_operation_for_prefix(prefix: &str) -> Operation {"
+    },
+    {
+      "id": "generic-write-guard",
+      "path": "crates/aspen-client-api/src/messages/to_operation/mod.rs",
+      "line": 117,
+      "snippet": "fn snix_operation_for_write_key(key: &str, value: Vec<u8>) -> Operation {"
+    },
+    {
+      "id": "batch-reserved-key-guard",
+      "path": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+      "line": 38,
+      "snippet": "fn batch_operation_for_read_keys(keys: &[alloc::string::String]) -> Option<Operation> {"
+    },
+    {
+      "id": "conditional-batch-condition-inclusion",
+      "path": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+      "line": 27,
+      "snippet": "fn conditional_batch_write_keys("
+    },
+    {
+      "id": "watch-uses-scan-guard",
+      "path": "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs",
+      "line": 9,
+      "snippet": "ClientRpcRequest::WatchCreate { prefix, .. } => Some(Some(scan_operation_for_prefix(prefix))),"
+    },
+    {
+      "id": "generic-capability-admin-only",
+      "path": "crates/aspen-auth-core/src/capability.rs",
+      "line": 411,
+      "snippet": "(Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => Some(true),"
+    }
+  ],
+  "negative_tests": [
+    {
+      "name": "generic_kv_operations_over_internal_prefixes_require_admin",
+      "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+      "line": 117
+    },
+    {
+      "name": "broad_scans_overlapping_internal_namespaces_require_admin",
+      "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+      "line": 158
+    },
+    {
+      "name": "internal_keys_in_batch_operations_require_admin",
+      "path": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+      "line": 175
+    },
+    {
+      "name": "internal_condition_keys_in_conditional_batch_require_admin",
+      "path": "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+      "line": 203
+    },
+    {
+      "name": "internal_watch_prefix_requires_admin",
+      "path": "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs",
+      "line": 50
+    }
+  ],
+  "finding": "Concrete bypass class fixed: generic KV read/write/hash/CAS/delete, scan/watch, batch read/write, and conditional batch condition keys over Aspen internal prefixes now fail closed to ClusterAdmin instead of being authorizable by broad generic data capabilities.",
+  "remaining_scope": "Domain APIs still map some internal prefixes to generic Operation::Read/Write; that is intentionally left for the next OpenSpec task on domain-specific capabilities."
+}
