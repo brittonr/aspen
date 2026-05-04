@@ -135,11 +135,11 @@ mod tests {
     #[test]
     fn error_display_health_check() {
         let err = DogfoodError::HealthCheck {
-            target: "aspen-abc...".to_string(),
+            target: "[REDACTED ticket; bytes=42]".to_string(),
             reason: "not healthy after 30s".to_string(),
         };
         let msg = err.to_string();
-        assert!(msg.contains("aspen-abc"));
+        assert!(msg.contains("[REDACTED ticket; bytes=42]"));
         assert!(msg.contains("not healthy"));
     }
 }

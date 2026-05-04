@@ -301,10 +301,13 @@ async fn wait_for_healthy(ticket: &str, timeout: Duration) -> DogfoodResult<()> 
     }
 }
 
-/// Truncate a ticket for log display.
+/// Redacted ticket label for log/error display.
+///
+/// Serialized cluster tickets are bearer connection credentials. Dogfood errors
+/// may be persisted into receipts, so never include even a prefix of the ticket
+/// in operator-visible evidence.
 pub(crate) fn ticket_preview(ticket: &str) -> String {
-    let len = ticket.len().min(24);
-    format!("{}...", &ticket[..len])
+    format!("[REDACTED ticket; bytes={}]", ticket.len())
 }
 
 /// Build the federation env var list for a cluster node.
@@ -419,16 +422,18 @@ mod tests {
     }
 
     #[test]
-    fn ticket_preview_truncates() {
+    fn ticket_preview_redacts_long_ticket_value() {
         let long = "a".repeat(100);
         let preview = ticket_preview(&long);
-        assert_eq!(preview.len(), 24 + 3); // 24 chars + "..."
+        assert_eq!(preview, "[REDACTED ticket; bytes=100]");
+        assert!(!preview.contains(&long[..24]));
     }
 
     #[test]
-    fn ticket_preview_short() {
+    fn ticket_preview_redacts_short_ticket_value() {
         let short = "abc";
         let preview = ticket_preview(short);
-        assert_eq!(preview, "abc...");
+        assert_eq!(preview, "[REDACTED ticket; bytes=3]");
+        assert!(!preview.contains(short));
     }
 }
