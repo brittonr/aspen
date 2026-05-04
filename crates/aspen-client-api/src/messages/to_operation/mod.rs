@@ -19,9 +19,62 @@ mod secrets_ops;
 mod sql_ops;
 mod watch_ops;
 
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+
 use aspen_auth_core::Operation;
 
 use super::ClientRpcRequest;
+
+const SNIX_DIRECTORY_KEY_PREFIX: &str = "snix:dir:";
+const SNIX_PATHINFO_KEY_PREFIX: &str = "snix:pathinfo:";
+
+fn snix_resource_from_kv_key(key: &str) -> Option<String> {
+    key.strip_prefix(SNIX_DIRECTORY_KEY_PREFIX)
+        .map(|digest| format!("dir:{digest}"))
+        .or_else(|| key.strip_prefix(SNIX_PATHINFO_KEY_PREFIX).map(|digest| format!("pathinfo:{digest}")))
+}
+
+fn key_is_reserved_snix(key: &str) -> bool {
+    snix_resource_from_kv_key(key).is_some()
+}
+
+fn reserved_snix_admin_operation(action: &str) -> Operation {
+    Operation::ClusterAdmin {
+        action: action.to_string(),
+    }
+}
+
+fn snix_operation_for_read_key(key: &str) -> Operation {
+    snix_resource_from_kv_key(key)
+        .map_or_else(|| Operation::Read { key: key.to_string() }, |resource| Operation::SnixRead { resource })
+}
+
+fn scan_operation_for_prefix(prefix: &str) -> Operation {
+    if let Some(resource) = snix_resource_from_kv_key(prefix) {
+        return Operation::SnixRead { resource };
+    }
+
+    if SNIX_DIRECTORY_KEY_PREFIX.starts_with(prefix) || SNIX_PATHINFO_KEY_PREFIX.starts_with(prefix) {
+        return reserved_snix_admin_operation("reserved_snix_scan");
+    }
+
+    Operation::Read {
+        key: prefix.to_string(),
+    }
+}
+
+fn snix_operation_for_write_key(key: &str, value: Vec<u8>) -> Operation {
+    snix_resource_from_kv_key(key).map_or_else(
+        || Operation::Write {
+            key: key.to_string(),
+            value,
+        },
+        |resource| Operation::SnixWrite { resource },
+    )
+}
 
 /// Convert the request to an authorization operation.
 ///

@@ -50,6 +50,99 @@ pub(crate) fn resp_err(code: &str, message: &str) -> KeyValueStoreError {
     }
 }
 
+const SNIX_DIRECTORY_KEY_PREFIX: &str = "snix:dir:";
+const SNIX_PATHINFO_KEY_PREFIX: &str = "snix:pathinfo:";
+
+fn snix_read_request_for_key(key: &str) -> Option<ClientRpcRequest> {
+    key.strip_prefix(SNIX_DIRECTORY_KEY_PREFIX)
+        .map(|digest| ClientRpcRequest::SnixDirectoryGet {
+            digest: digest.to_string(),
+        })
+        .or_else(|| {
+            key.strip_prefix(SNIX_PATHINFO_KEY_PREFIX).map(|digest| ClientRpcRequest::SnixPathInfoGet {
+                digest: digest.to_string(),
+            })
+        })
+}
+
+fn snix_write_request_for_set(key: &str, value: &str) -> Option<ClientRpcRequest> {
+    if key.starts_with(SNIX_DIRECTORY_KEY_PREFIX) {
+        Some(ClientRpcRequest::SnixDirectoryPut {
+            directory_bytes: value.to_string(),
+        })
+    } else if key.starts_with(SNIX_PATHINFO_KEY_PREFIX) {
+        Some(ClientRpcRequest::SnixPathInfoPut {
+            pathinfo_bytes: value.to_string(),
+        })
+    } else {
+        None
+    }
+}
+
+fn snix_read_result_from_response(
+    key: &str,
+    resp: ClientRpcResponse,
+) -> Option<Result<ReadResult, KeyValueStoreError>> {
+    match resp {
+        ClientRpcResponse::SnixDirectoryGetResult(r) => Some(if let Some(err) = r.error {
+            Err(KeyValueStoreError::Failed { reason: err })
+        } else {
+            Ok(ReadResult {
+                kv: r.directory_bytes.filter(|_| r.was_found).map(|value| KeyValueWithRevision {
+                    key: key.to_string(),
+                    value,
+                    version: 0,
+                    create_revision: 0,
+                    mod_revision: 0,
+                }),
+            })
+        }),
+        ClientRpcResponse::SnixPathInfoGetResult(r) => Some(if let Some(err) = r.error {
+            Err(KeyValueStoreError::Failed { reason: err })
+        } else {
+            Ok(ReadResult {
+                kv: r.pathinfo_bytes.filter(|_| r.was_found).map(|value| KeyValueWithRevision {
+                    key: key.to_string(),
+                    value,
+                    version: 0,
+                    create_revision: 0,
+                    mod_revision: 0,
+                }),
+            })
+        }),
+        ClientRpcResponse::Error(e) => Some(Err(resp_err(&e.code, &e.message))),
+        _ => None,
+    }
+}
+
+fn snix_write_result_from_response(
+    request: WriteRequest,
+    resp: ClientRpcResponse,
+) -> Option<Result<WriteResult, KeyValueStoreError>> {
+    match resp {
+        ClientRpcResponse::SnixDirectoryPutResult(r) => Some(if let Some(err) = r.error {
+            Err(KeyValueStoreError::Failed { reason: err })
+        } else {
+            Ok(WriteResult {
+                command: Some(request.command),
+                succeeded: Some(r.is_success),
+                ..Default::default()
+            })
+        }),
+        ClientRpcResponse::SnixPathInfoPutResult(r) => Some(if let Some(err) = r.error {
+            Err(KeyValueStoreError::Failed { reason: err })
+        } else {
+            Ok(WriteResult {
+                command: Some(request.command),
+                succeeded: Some(r.is_success),
+                ..Default::default()
+            })
+        }),
+        ClientRpcResponse::Error(e) => Some(Err(resp_err(&e.code, &e.message))),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,6 +183,65 @@ mod tests {
     }
 
     #[test]
+    fn snix_key_reads_use_snix_rpc_operations() {
+        assert!(matches!(
+            snix_read_request_for_key("snix:dir:abc"),
+            Some(ClientRpcRequest::SnixDirectoryGet { digest }) if digest == "abc"
+        ));
+        assert!(matches!(
+            snix_read_request_for_key("snix:pathinfo:def"),
+            Some(ClientRpcRequest::SnixPathInfoGet { digest }) if digest == "def"
+        ));
+        assert!(snix_read_request_for_key("other:key").is_none());
+    }
+
+    #[test]
+    fn snix_key_writes_use_snix_rpc_operations() {
+        assert!(matches!(
+            snix_write_request_for_set("snix:dir:abc", "encoded-dir"),
+            Some(ClientRpcRequest::SnixDirectoryPut { directory_bytes }) if directory_bytes == "encoded-dir"
+        ));
+        assert!(matches!(
+            snix_write_request_for_set("snix:pathinfo:def", "encoded-pathinfo"),
+            Some(ClientRpcRequest::SnixPathInfoPut { pathinfo_bytes }) if pathinfo_bytes == "encoded-pathinfo"
+        ));
+        assert!(snix_write_request_for_set("snix:blob:ghi", "encoded-blob").is_none());
+    }
+
+    #[test]
+    fn snix_responses_round_trip_through_kv_adapter_shapes() {
+        let read = snix_read_result_from_response(
+            "snix:dir:abc",
+            ClientRpcResponse::SnixDirectoryGetResult(aspen_client_api::SnixDirectoryGetResultResponse {
+                was_found: true,
+                directory_bytes: Some("encoded-dir".to_string()),
+                error: None,
+            }),
+        )
+        .expect("snix read response")
+        .expect("successful read result");
+        assert_eq!(read.kv.expect("kv").value, "encoded-dir");
+
+        let request = WriteRequest {
+            command: aspen_kv_types::WriteCommand::Set {
+                key: "snix:pathinfo:def".to_string(),
+                value: "encoded-pathinfo".to_string(),
+            },
+        };
+        let write = snix_write_result_from_response(
+            request,
+            ClientRpcResponse::SnixPathInfoPutResult(aspen_client_api::SnixPathInfoPutResultResponse {
+                is_success: true,
+                store_path: Some("/nix/store/example".to_string()),
+                error: None,
+            }),
+        )
+        .expect("snix write response")
+        .expect("successful write result");
+        assert_eq!(write.succeeded, Some(true));
+    }
+
+    #[test]
     fn test_client_kv_adapter_construction() {
         // Verify we can construct the adapter with an Arc<AspenClient>
         // We can't actually create a real AspenClient without a connection,
@@ -103,8 +255,8 @@ mod tests {
 #[async_trait]
 impl KvWrite for ClientKvAdapter {
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
-        let (key, value) = match &request.command {
-            aspen_kv_types::WriteCommand::Set { key, value } => (key.clone(), value.as_bytes().to_vec()),
+        let (key, value_string) = match &request.command {
+            aspen_kv_types::WriteCommand::Set { key, value } => (key.clone(), value.clone()),
             other => {
                 return Err(KeyValueStoreError::Failed {
                     reason: format!("unsupported write command for RPC adapter: {other:?}"),
@@ -112,8 +264,20 @@ impl KvWrite for ClientKvAdapter {
             }
         };
 
-        let rpc = ClientRpcRequest::WriteKey { key, value };
+        let snix_rpc = snix_write_request_for_set(&key, &value_string);
+        let expects_snix_response = snix_rpc.is_some();
+        let rpc = snix_rpc.unwrap_or_else(|| ClientRpcRequest::WriteKey {
+            key,
+            value: value_string.into_bytes(),
+        });
         let resp = self.client.send(rpc).await.map_err(rpc_err)?;
+        if expects_snix_response {
+            return snix_write_result_from_response(request, resp).unwrap_or_else(|| {
+                Err(KeyValueStoreError::Failed {
+                    reason: "unexpected non-SNIX response for SNIX write request".to_string(),
+                })
+            });
+        }
         match resp {
             ClientRpcResponse::WriteResult(r) => {
                 if let Some(err) = r.error {
@@ -136,10 +300,19 @@ impl KvWrite for ClientKvAdapter {
 #[async_trait]
 impl KvRead for ClientKvAdapter {
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
-        let rpc = ClientRpcRequest::ReadKey {
+        let snix_rpc = snix_read_request_for_key(&request.key);
+        let expects_snix_response = snix_rpc.is_some();
+        let rpc = snix_rpc.unwrap_or_else(|| ClientRpcRequest::ReadKey {
             key: request.key.clone(),
-        };
+        });
         let resp = self.client.send(rpc).await.map_err(rpc_err)?;
+        if expects_snix_response {
+            return snix_read_result_from_response(&request.key, resp).unwrap_or_else(|| {
+                Err(KeyValueStoreError::Failed {
+                    reason: "unexpected non-SNIX response for SNIX read request".to_string(),
+                })
+            });
+        }
         match resp {
             ClientRpcResponse::ReadResult(r) => {
                 if let Some(err) = r.error {

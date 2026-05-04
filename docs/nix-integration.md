@@ -172,8 +172,20 @@ Root/bootstrap tokens intentionally include empty-prefix `SnixRead` and
 `SnixWrite` capabilities so cluster operators retain full store authority.
 
 The gRPC bridge (`aspen-snix-bridge`) exposes these services to external `snix-store`
-and `nix` CLI tools. The HTTP gateway (`aspen-nix-cache-gateway`) serves them via the
-standard Nix binary cache protocol.
+and `nix` CLI tools. When connected to a live cluster, the bridge routes SNIX
+directory/path-info KV adapter reads and writes through the typed SNIX RPCs above
+instead of falling back to generic `ReadKey` / `WriteKey`, so delegated SNIX
+capability checks remain authoritative across the bridge and daemon protocols.
+Generic KV RPCs that directly target reserved `snix:dir:` or `snix:pathinfo:`
+keys/prefixes are also classified as SNIX read/write operations, including scans
+and watches used by PathInfoService listing/observation. Broader scans or watches
+whose prefixes overlap the SNIX reserved namespaces, such as `snix:` or the root
+prefix, require cluster-admin authority because a single operation would otherwise
+mix generic KV data with SNIX store metadata. Generic batch operations containing
+reserved SNIX keys also require cluster-admin authority instead of generic KV
+prefix capabilities.
+The HTTP gateway (`aspen-nix-cache-gateway`) serves them via the standard Nix
+binary cache protocol.
 
 ## NixOS VM Tests
 

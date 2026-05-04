@@ -5,6 +5,8 @@ use aspen_auth_core::Operation;
 use super::super::BatchCondition;
 use super::super::BatchWriteOperation;
 use super::super::ClientRpcRequest;
+use super::key_is_reserved_snix;
+use super::reserved_snix_admin_operation;
 
 fn batch_write_key(operation: &BatchWriteOperation) -> &str {
     match operation {
@@ -31,20 +33,41 @@ fn conditional_batch_write_keys(
         .collect()
 }
 
+fn batch_operation_for_read_keys(keys: &[alloc::string::String]) -> Option<Operation> {
+    if keys.is_empty() {
+        return None;
+    }
+
+    if keys.iter().any(|key| key_is_reserved_snix(key)) {
+        return Some(reserved_snix_admin_operation("reserved_snix_batch"));
+    }
+
+    Some(Operation::BatchRead { keys: keys.to_vec() })
+}
+
+fn batch_operation_for_write_keys(keys: alloc::vec::Vec<alloc::string::String>) -> Option<Operation> {
+    if keys.is_empty() {
+        return None;
+    }
+
+    if keys.iter().any(|key| key_is_reserved_snix(key)) {
+        return Some(reserved_snix_admin_operation("reserved_snix_batch"));
+    }
+
+    Some(Operation::BatchWrite { keys })
+}
+
 pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     match request {
         // Batch operations must authorize every requested key. Authorizing only
         // the first key lets a narrowly-scoped token smuggle out-of-scope reads
         // or writes later in the same atomic batch.
-        ClientRpcRequest::BatchRead { keys } => {
-            Some((!keys.is_empty()).then(|| Operation::BatchRead { keys: keys.clone() }))
-        }
-        ClientRpcRequest::BatchWrite { operations } => Some((!operations.is_empty()).then(|| Operation::BatchWrite {
-            keys: operations.iter().map(|operation| batch_write_key(operation).to_string()).collect(),
-        })),
+        ClientRpcRequest::BatchRead { keys } => Some(batch_operation_for_read_keys(keys)),
+        ClientRpcRequest::BatchWrite { operations } => Some(batch_operation_for_write_keys(
+            operations.iter().map(|operation| batch_write_key(operation).to_string()).collect(),
+        )),
         ClientRpcRequest::ConditionalBatchWrite { conditions, operations } => {
-            let keys = conditional_batch_write_keys(conditions, operations);
-            Some((!keys.is_empty()).then(|| Operation::BatchWrite { keys }))
+            Some(batch_operation_for_write_keys(conditional_batch_write_keys(conditions, operations)))
         }
 
         _ => None,
@@ -135,5 +158,53 @@ mod tests {
         };
 
         assert_eq!(keys, alloc::vec!["condition/missing".to_string()]);
+    }
+
+    #[test]
+    fn snix_keys_in_batch_operations_require_admin() {
+        let read_request = ClientRpcRequest::BatchRead {
+            keys: alloc::vec!["snix:dir:abc".to_string()],
+        };
+        let Some(Some(read_operation)) = to_operation(&read_request) else {
+            panic!("snix batch read should require admin authorization");
+        };
+        assert!(
+            matches!(&read_operation, Operation::ClusterAdmin { action } if action == "reserved_snix_batch"),
+            "unexpected read operation: {read_operation:?}"
+        );
+
+        let write_request = ClientRpcRequest::BatchWrite {
+            operations: alloc::vec![BatchWriteOperation::Set {
+                key: "snix:pathinfo:def".to_string(),
+                value: alloc::vec![1],
+            }],
+        };
+        let Some(Some(write_operation)) = to_operation(&write_request) else {
+            panic!("snix batch write should require admin authorization");
+        };
+        assert!(
+            matches!(&write_operation, Operation::ClusterAdmin { action } if action == "reserved_snix_batch"),
+            "unexpected write operation: {write_operation:?}"
+        );
+    }
+
+    #[test]
+    fn snix_condition_keys_in_conditional_batch_require_admin() {
+        let request = ClientRpcRequest::ConditionalBatchWrite {
+            conditions: alloc::vec![BatchCondition::KeyExists {
+                key: "snix:dir:condition".to_string(),
+            }],
+            operations: alloc::vec![BatchWriteOperation::Delete {
+                key: "generic/key".to_string(),
+            }],
+        };
+
+        let Some(Some(operation)) = to_operation(&request) else {
+            panic!("snix condition key should require admin authorization");
+        };
+        assert!(
+            matches!(&operation, Operation::ClusterAdmin { action } if action == "reserved_snix_batch"),
+            "unexpected operation: {operation:?}"
+        );
     }
 }
