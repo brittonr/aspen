@@ -345,6 +345,23 @@ async fn handle_client_request_check_rate_limit(
     }
 }
 
+fn client_request_auth_operation(
+    request: &ClientRpcRequest,
+    require_auth: bool,
+    has_token_verifier: bool,
+) -> Result<Option<aspen_auth::Operation>, &'static str> {
+    let operation = match request.to_operation() {
+        Some(op) => op,
+        None => return Ok(None),
+    };
+
+    if require_auth && !has_token_verifier {
+        return Err("Authentication required but no token verifier configured");
+    }
+
+    Ok(Some(operation))
+}
+
 /// Check authorization for a client request.
 async fn handle_client_request_check_auth(
     ctx: &ClientProtocolContext,
@@ -355,13 +372,18 @@ async fn handle_client_request_check_auth(
 ) -> anyhow::Result<bool> {
     debug_assert!(!client_id.as_bytes().is_empty());
     debug_assert!(matches!(token, Some(_) | None));
-    let verifier = match &ctx.token_verifier {
-        Some(v) => v,
-        None => return Ok(true),
+    let operation = match client_request_auth_operation(request, ctx.require_auth, ctx.token_verifier.is_some()) {
+        Ok(Some(op)) => op,
+        Ok(None) => return Ok(true),
+        Err(message) => {
+            warn!(client_id = %client_id, request_type = ?request, "Authentication required but token verifier is not configured");
+            handle_client_request_send_error(send, "UNAUTHORIZED", message).await?;
+            return Ok(false);
+        }
     };
 
-    let operation = match request.to_operation() {
-        Some(op) => op,
+    let verifier = match &ctx.token_verifier {
+        Some(v) => v,
         None => return Ok(true),
     };
 
@@ -572,6 +594,7 @@ async fn handle_client_request_inner(
 mod tests {
     use aspen_client_api::ClientRpcRequest;
 
+    use super::client_request_auth_operation;
     use super::handle_client_request_is_bootstrap;
     use super::handle_client_request_is_rate_limit_exempt;
 
@@ -587,5 +610,43 @@ mod tests {
         let request = ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] };
         assert!(!handle_client_request_is_bootstrap(&request));
         assert!(handle_client_request_is_rate_limit_exempt(&request));
+    }
+
+    #[test]
+    fn auth_gate_allows_public_requests_without_verifier() {
+        let request = ClientRpcRequest::Ping;
+        let decision = client_request_auth_operation(&request, true, false);
+        assert!(matches!(decision, Ok(None)));
+    }
+
+    #[test]
+    fn auth_gate_denies_authorized_requests_when_require_auth_lacks_verifier() {
+        let request = ClientRpcRequest::ReadKey { key: "secret".into() };
+        let decision = client_request_auth_operation(&request, true, false);
+        assert!(matches!(decision, Err("Authentication required but no token verifier configured")));
+    }
+
+    #[test]
+    fn auth_gate_requires_to_operation_before_dispatch() {
+        let request = ClientRpcRequest::ReadKey { key: "secret".into() };
+        assert!(matches!(client_request_auth_operation(&request, false, false), Ok(Some(_))));
+        assert!(matches!(client_request_auth_operation(&request, true, true), Ok(Some(_))));
+    }
+
+    #[test]
+    fn client_request_path_checks_auth_before_handler_dispatch() {
+        let source = include_str!("client.rs");
+        let auth_call = source
+            .find("handle_client_request_check_auth(&ctx")
+            .expect("client request path should call handle_client_request_check_auth");
+        let dispatch_call = source
+            .find("handle_client_request_dispatch(&mut send")
+            .expect("client request path should call handle_client_request_dispatch");
+        let auth_classifier_call = source
+            .find("client_request_auth_operation(request")
+            .expect("auth check should call client_request_auth_operation");
+
+        assert!(auth_classifier_call < auth_call);
+        assert!(auth_call < dispatch_call);
     }
 }
