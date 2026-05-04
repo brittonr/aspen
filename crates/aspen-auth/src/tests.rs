@@ -599,10 +599,16 @@ fn test_generate_root_token() {
     // Should be a bearer token
     assert!(matches!(token.audience, Audience::Bearer));
 
-    // Should have Full, ClusterAdmin, and Delegate capabilities
+    // Should have Full, ClusterAdmin, Delegate, and federation sync capabilities
     assert!(token.capabilities.contains(&Capability::Full { prefix: String::new() }));
     assert!(token.capabilities.contains(&Capability::ClusterAdmin));
     assert!(token.capabilities.contains(&Capability::Delegate));
+    assert!(token.capabilities.contains(&Capability::FederationPull {
+        repo_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::FederationPush {
+        repo_prefix: String::new(),
+    }));
 
     // Should have a nonce
     assert!(token.nonce.is_some());
@@ -634,6 +640,26 @@ fn test_generate_root_token() {
     verifier
         .authorize(&token, &Operation::ClusterAdmin { action: "init".into() }, None)
         .expect("root token should authorize cluster admin");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::FederationPull {
+                fed_id: "origin:repo".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize federation pull");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::FederationPush {
+                fed_id: "origin:repo".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize federation push");
 }
 
 // ============================================================================

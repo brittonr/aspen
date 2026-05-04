@@ -200,6 +200,8 @@ impl TokenBuilder {
 /// - `Full { prefix: "" }` - read/write/delete all keys
 /// - `ClusterAdmin` - cluster management operations
 /// - `Delegate` - ability to create child tokens
+/// - `FederationPull { repo_prefix: "" }` - pull any federated resource
+/// - `FederationPush { repo_prefix: "" }` - push any federated resource
 ///
 /// Use this during cluster bootstrap to create the initial admin token. Root tokens
 /// are intentionally bearer tokens so the first operator can bootstrap clients
@@ -225,6 +227,12 @@ pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result
         .with_capability(Capability::Full { prefix: String::new() })
         .with_capability(Capability::ClusterAdmin)
         .with_capability(Capability::Delegate)
+        .with_capability(Capability::FederationPull {
+            repo_prefix: String::new(),
+        })
+        .with_capability(Capability::FederationPush {
+            repo_prefix: String::new(),
+        })
         .with_lifetime(lifetime)
         .with_random_nonce()
         .build()

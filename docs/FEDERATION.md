@@ -638,6 +638,13 @@ The parent token must still carry `Delegate` plus capabilities that contain the
 requested child capabilities. The proxy fact does not grant authorization by
 itself; it only makes the bearer token eligible to cross the local proxy trust
 boundary. The remote cluster still authorizes the forwarded request normally.
+Federated read-shaped requests (`FederationSyncPeer`, `FederationFetchRefs`,
+`FederationPull`, `FederationGitListRefs`, `FederationGitFetch`, and
+`ForgeFetchFederated`) map to
+`Operation::FederationPull`; write-shaped sync requests (`FederationPush` and
+`FederationBidiSync`) map to `Operation::FederationPush`. Generic forge/KV
+write scopes are intentionally insufficient for these proxied federation
+operations.
 
 ### Loop Prevention
 
