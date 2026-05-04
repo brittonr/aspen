@@ -467,7 +467,10 @@ pub struct CiGetJobLogsResponse {
     pub last_index: u32,
     /// Whether there are more chunks available.
     pub has_more: bool,
-    /// Whether the log stream is complete (job finished).
+    /// Whether the log stream completion marker has been written.
+    ///
+    /// This is a log-stream completion signal only; use CI status/receipt fields
+    /// for job and pipeline terminal status labels.
     pub is_complete: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
@@ -744,5 +747,10 @@ mod tests {
         ] {
             assert!(deploy_doc.contains(&format!("`{label}`")), "deploy docs must mention CI status label `{label}`");
         }
+
+        assert!(deploy_doc.contains("`CI_LOG_COMPLETE_MARKER`"));
+        assert!(deploy_doc.contains("`_ci:logs:<run_id>:<job_id>:`"));
+        assert!(deploy_doc.contains("`CiGetJobLogsResponse.is_complete`"));
+        assert!(deploy_doc.contains("log stream is closed"));
     }
 }

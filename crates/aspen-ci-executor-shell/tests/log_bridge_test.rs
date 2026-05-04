@@ -2,10 +2,12 @@
 
 use std::sync::Arc;
 
+use aspen_ci_core::CI_LOG_COMPLETE_STATUS;
 use aspen_ci_executor_shell::CI_LOG_COMPLETE_MARKER;
 use aspen_ci_executor_shell::CI_LOG_KV_PREFIX;
 use aspen_ci_executor_shell::log_bridge;
 use aspen_core::KeyValueStore;
+use aspen_core::KvRead;
 use aspen_core::ReadRequest;
 
 #[tokio::test]
@@ -57,6 +59,6 @@ async fn test_stderr_captured_in_kv_log_store() {
 
     let marker_value = marker_result.unwrap().kv.expect("marker should have a value");
     let marker_json: serde_json::Value = serde_json::from_str(&marker_value.value).unwrap();
-    assert_eq!(marker_json["status"], "done");
+    assert_eq!(marker_json["status"], CI_LOG_COMPLETE_STATUS);
     assert!(marker_json["total_chunks"].as_u64().unwrap() >= 1);
 }

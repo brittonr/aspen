@@ -49,6 +49,7 @@ pub use config::retry_count_to_jobs_policy;
 pub use config::to_jobs_priority;
 pub use error::CiCoreError;
 pub use error::Result;
+pub use log_writer::CI_LOG_COMPLETE_STATUS;
 pub use log_writer::CiLogChunk;
 pub use log_writer::CiLogCompleteMarker;
 pub use verified::{

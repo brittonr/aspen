@@ -38,6 +38,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+pub use aspen_ci_core::CI_LOG_COMPLETE_STATUS;
 // Re-export log chunk types from aspen-ci-core
 pub use aspen_ci_core::CiLogChunk;
 pub use aspen_ci_core::CiLogCompleteMarker;
@@ -207,12 +208,9 @@ impl<S: KeyValueStore + ?Sized + 'static> CiLogWriter<S> {
     /// Mark the log stream as complete.
     ///
     /// Flushes any remaining buffer and writes a completion marker.
-    /// The completion marker signals to watchers that the job has finished.
-    ///
-    /// # Arguments
-    ///
-    /// * `status` - Final job status ("success", "failed", "cancelled")
-    pub async fn complete(&mut self, status: &str) -> Result<()> {
+    /// The completion marker signals to watchers that the log stream is closed;
+    /// job and pipeline result labels come from CI status/receipt APIs.
+    pub async fn complete(&mut self, _status: &str) -> Result<()> {
         // Flush remaining buffer
         self.flush().await?;
 
@@ -225,7 +223,7 @@ impl<S: KeyValueStore + ?Sized + 'static> CiLogWriter<S> {
         let marker = CiLogCompleteMarker {
             total_chunks: self.chunk_index,
             timestamp_ms,
-            status: status.to_string(),
+            status: CI_LOG_COMPLETE_STATUS.to_string(),
         };
         let marker_json = serde_json::to_string(&marker).map_err(|e| CiError::LogSerialization {
             reason: format!("failed to serialize completion marker: {}", e),
@@ -246,7 +244,7 @@ impl<S: KeyValueStore + ?Sized + 'static> CiLogWriter<S> {
             run_id = %self.run_id,
             job_id = %self.job_id,
             total_chunks = self.chunk_index,
-            status = %status,
+            status = %CI_LOG_COMPLETE_STATUS,
             "CI log stream completed"
         );
 
@@ -268,7 +266,7 @@ impl<S: KeyValueStore + ?Sized + 'static> CiLogWriter<S> {
 enum LogMessage {
     /// A log line to write.
     Line { content: String, stream: String },
-    /// Signal to complete the stream with the given status.
+    /// Signal to complete the stream.
     Complete { status: String },
 }
 
@@ -417,11 +415,9 @@ impl SpawnedLogWriter {
     /// Signal that the log stream is complete.
     ///
     /// This flushes remaining logs and writes a completion marker.
-    /// After calling this, no more logs should be written.
-    ///
-    /// # Arguments
-    ///
-    /// * `status` - Final job status ("success", "failed", "cancelled")
+    /// After calling this, no more logs should be written. The `status` argument
+    /// is accepted for compatibility but is not serialized as a job result; the
+    /// marker stores `CI_LOG_COMPLETE_STATUS`.
     pub async fn complete(&self, status: &str) -> std::result::Result<(), mpsc::error::SendError<()>> {
         self.tx
             .send(LogMessage::Complete {
@@ -477,13 +473,13 @@ mod tests {
         let marker = CiLogCompleteMarker {
             total_chunks: 100,
             timestamp_ms: 9876543210,
-            status: "success".to_string(),
+            status: CI_LOG_COMPLETE_STATUS.to_string(),
         };
 
         let json = serde_json::to_string(&marker).unwrap();
         let parsed: CiLogCompleteMarker = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed.total_chunks, 100);
-        assert_eq!(parsed.status, "success");
+        assert_eq!(parsed.status, CI_LOG_COMPLETE_STATUS);
     }
 }

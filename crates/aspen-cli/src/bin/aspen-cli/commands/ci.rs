@@ -12,6 +12,8 @@ use aspen_client_api::CI_TERMINAL_STATUS_LABELS;
 use aspen_client_api::CiRunReceipt;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_core::CI_LOG_COMPLETE_MARKER;
+use aspen_core::CI_LOG_KV_PREFIX;
 use clap::Args;
 use clap::Subcommand;
 use serde_json::json;
@@ -661,6 +663,16 @@ fn ci_status_is_terminal(status: &Option<String>) -> bool {
     status.as_ref().map(|s| CI_TERMINAL_STATUS_LABELS.contains(&s.as_str())).unwrap_or(false)
 }
 
+/// Build the canonical KV watch prefix for a CI job log stream.
+fn ci_log_watch_prefix(run_id: &str, job_id: &str) -> String {
+    format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:")
+}
+
+/// Detect the source-of-truth CI log stream completion marker.
+fn ci_log_is_completion_marker_key(key: &str) -> bool {
+    key.ends_with(CI_LOG_COMPLETE_MARKER)
+}
+
 async fn ci_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::CiListRuns {
@@ -837,7 +849,7 @@ async fn ci_logs(client: &AspenClient, args: LogsArgs, json: bool) -> Result<()>
 
     // Phase 2: Real-time streaming via WatchSession.
     // Falls back to polling if the watch connection fails.
-    let watch_prefix = format!("_ci:logs:{}:{}:", args.run_id, args.job_id);
+    let watch_prefix = ci_log_watch_prefix(&args.run_id, &args.job_id);
 
     match try_watch_logs(client, &watch_prefix, start_index, json).await {
         Ok(()) => Ok(()),
@@ -870,7 +882,7 @@ async fn try_watch_logs(client: &AspenClient, prefix: &str, last_chunk_index: u3
                 let key_str = String::from_utf8_lossy(&key);
 
                 // Check for completion marker.
-                if key_str.ends_with("__complete__") {
+                if ci_log_is_completion_marker_key(&key_str) {
                     return Ok(());
                 }
 
@@ -1083,5 +1095,15 @@ mod tests {
 
         assert!(!ci_status_is_terminal(&Some(CI_STATUS_RUNNING.to_string())));
         assert!(!ci_status_is_terminal(&None));
+    }
+
+    #[test]
+    fn ci_log_follow_uses_shared_completion_marker_contract() {
+        let prefix = ci_log_watch_prefix("run-1", "job-1");
+        assert_eq!(prefix, format!("{}run-1:job-1:", CI_LOG_KV_PREFIX));
+
+        let completion_key = format!("{prefix}{CI_LOG_COMPLETE_MARKER}");
+        assert!(ci_log_is_completion_marker_key(&completion_key));
+        assert!(!ci_log_is_completion_marker_key(&format!("{prefix}0000000001")));
     }
 }

@@ -49,17 +49,25 @@ pub struct CiLogChunk {
     pub timestamp_ms: u64,
 }
 
+/// Stable status stored in CI log completion markers.
+///
+/// This describes the log stream state, not the CI job's success/failure status.
+/// Operators should use `CiGetStatus` or `CiGetRunReceipt` for job and pipeline
+/// terminal labels.
+pub const CI_LOG_COMPLETE_STATUS: &str = "done";
+
 /// Completion marker metadata.
 ///
-/// Written when a CI job completes to signal that the log stream is complete.
-/// Watchers can check for this marker to know when to stop polling for new chunks.
+/// Written when a CI job log writer closes to signal that the log stream is
+/// complete. Watchers can check for this marker to know when to stop polling for
+/// new chunks; the marker status is a log-stream status, not the job result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiLogCompleteMarker {
     /// Total number of log chunks written.
     pub total_chunks: u32,
-    /// Timestamp when the job completed (ms since epoch).
+    /// Timestamp when the log stream completed (ms since epoch).
     pub timestamp_ms: u64,
-    /// Final job status.
+    /// Log-stream completion status (`CI_LOG_COMPLETE_STATUS`).
     pub status: String,
 }
 
@@ -88,14 +96,15 @@ mod tests {
         let marker = CiLogCompleteMarker {
             total_chunks: 100,
             timestamp_ms: 9876543210,
-            status: "success".to_string(),
+            status: CI_LOG_COMPLETE_STATUS.to_string(),
         };
 
         let json = serde_json::to_string(&marker).unwrap();
         let parsed: CiLogCompleteMarker = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed.total_chunks, 100);
-        assert_eq!(parsed.status, "success");
+        assert_eq!(parsed.status, CI_LOG_COMPLETE_STATUS);
+        assert_eq!(CI_LOG_COMPLETE_STATUS, "done");
     }
 
     /// Verify CiLogChunk can be deserialized from raw bytes, simulating

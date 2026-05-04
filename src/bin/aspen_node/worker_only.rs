@@ -934,8 +934,7 @@ async fn flush_log_chunk_rpc(
 ) {
     use aspen_client_api::BatchWriteOperation;
     use aspen_client_api::ClientRpcRequest;
-
-    const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
+    use aspen_core::CI_LOG_KV_PREFIX;
 
     let now_ms =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
@@ -982,11 +981,11 @@ async fn write_log_completion_marker_rpc(
     job_id: &str,
     total_chunks: u32,
 ) {
+    use aspen_ci::log_writer::CI_LOG_COMPLETE_STATUS;
     use aspen_client_api::BatchWriteOperation;
     use aspen_client_api::ClientRpcRequest;
-
-    const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
-    const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
+    use aspen_core::CI_LOG_COMPLETE_MARKER;
+    use aspen_core::CI_LOG_KV_PREFIX;
 
     let now_ms =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
@@ -995,7 +994,7 @@ async fn write_log_completion_marker_rpc(
     let marker_json = serde_json::json!({
         "total_chunks": total_chunks,
         "timestamp_ms": now_ms,
-        "status": "done",
+        "status": CI_LOG_COMPLETE_STATUS,
     });
 
     if let Ok(value) = serde_json::to_string(&marker_json) {

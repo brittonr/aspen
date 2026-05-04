@@ -115,18 +115,21 @@ pub const CI_LOG_FLUSH_INTERVAL_MS: u64 = 500;
 ///
 /// Used in:
 /// - `aspen-ci/log_writer.rs`: Log chunk key construction
-/// - `aspen-tui/iroh_client.rs`: WatchSession subscription prefix
-/// - `aspen-rpc-handlers/handlers/ci.rs`: Log scan operations
+/// - `aspen-cli/commands/ci.rs`: WatchSession subscription prefix
+/// - `aspen-tui/app/ci_ops.rs`: WatchSession subscription prefix
+/// - `aspen-ci-handler/handler/logs.rs`: Log scan operations
 pub const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
 
 /// KV suffix marker for log stream completion.
 ///
-/// Written when job completes to signal end-of-stream to watchers.
-/// Watchers can check for this key to detect job completion.
+/// Written when the log stream closes to signal end-of-stream to watchers.
+/// Watchers can check for this key to detect log-stream completion; CI job and
+/// pipeline result labels come from status/receipt APIs.
 ///
 /// Used in:
 /// - `aspen-ci/log_writer.rs`: Completion marker write
-/// - `aspen-tui/iroh_client.rs`: Stream termination detection
+/// - `aspen-cli/commands/ci.rs`: Stream termination detection
+/// - `aspen-tui/app/ci_ops.rs`: Stream termination detection
 pub const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
 
 /// Maximum log lines retained in TUI display buffer (10,000 lines).

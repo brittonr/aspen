@@ -126,7 +126,7 @@ Deploy jobs emit per-node progress as CI log lines with the `[deploy]` prefix:
 [deploy] Deployment completed (42s)
 ```
 
-Use `aspen-cli ci logs --follow <run_id> <deploy_job_id>` to watch in real time.
+Use `aspen-cli ci logs --follow <run_id> <deploy_job_id>` to watch in real time. Log following stops only when the shared CI log completion marker (`CI_LOG_COMPLETE_MARKER`) appears in the `_ci:logs:<run_id>:<job_id>:` KV stream, or when polling observes `CiGetJobLogsResponse.is_complete`. That marker means the log stream is closed; it is intentionally separate from CI job/pipeline result labels such as `success`, `failed`, or `cancelled`, which come from `ci status` and `ci receipt`.
 
 ## Native CI Run Receipts
 

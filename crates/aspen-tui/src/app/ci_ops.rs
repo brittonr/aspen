@@ -3,6 +3,8 @@
 use aspen_ci_core::log_writer::CiLogChunk;
 use aspen_client::watch::WatchEvent;
 use aspen_client::watch::WatchSession;
+use aspen_core::CI_LOG_COMPLETE_MARKER;
+use aspen_core::CI_LOG_KV_PREFIX;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::warn;
@@ -169,7 +171,7 @@ impl App {
             return;
         };
 
-        let watch_prefix = format!("_ci:logs:{}:{}:", run_id, job_id);
+        let watch_prefix = ci_log_watch_prefix(run_id, job_id);
 
         let (tx, rx) = mpsc::channel::<CiLogLine>(1000);
         self.ci_log_watch_rx = Some(rx);
@@ -253,7 +255,7 @@ async fn ci_log_watch_task(
             WatchEvent::Set { key, value, .. } | WatchEvent::SetWithTTL { key, value, .. } => {
                 let key_str = String::from_utf8_lossy(&key);
 
-                if key_str.ends_with("__complete__") {
+                if ci_log_is_completion_marker_key(&key_str) {
                     return;
                 }
 
@@ -297,5 +299,28 @@ async fn ci_log_watch_task(
             }
             _ => {}
         }
+    }
+}
+
+fn ci_log_watch_prefix(run_id: &str, job_id: &str) -> String {
+    format!("{CI_LOG_KV_PREFIX}{run_id}:{job_id}:")
+}
+
+fn ci_log_is_completion_marker_key(key: &str) -> bool {
+    key.ends_with(CI_LOG_COMPLETE_MARKER)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ci_log_watch_uses_shared_completion_marker_contract() {
+        let prefix = ci_log_watch_prefix("run-1", "job-1");
+        assert_eq!(prefix, format!("{}run-1:job-1:", CI_LOG_KV_PREFIX));
+
+        let completion_key = format!("{prefix}{CI_LOG_COMPLETE_MARKER}");
+        assert!(ci_log_is_completion_marker_key(&completion_key));
+        assert!(!ci_log_is_completion_marker_key(&format!("{prefix}0000000001")));
     }
 }

@@ -1,23 +1,30 @@
-## ADDED Requirements
+# CI Log Watch Specification
+
+## Purpose
+
+This spec defines push-based CI log streaming for CLI and TUI clients over Aspen WatchSession subscriptions.
+
+## Requirements
 
 ### Requirement: CLI follow mode uses push-based log streaming
 
-The CLI `ci logs --follow` command SHALL use a `WatchSession` KV prefix subscription to receive log chunks in real-time instead of polling. The subscription prefix SHALL be `_ci:logs:{run_id}:{job_id}:`.
+The CLI `ci logs --follow` command SHALL use a `WatchSession` KV prefix subscription to receive log chunks in real time instead of polling. The subscription prefix SHALL be `_ci:logs:{run_id}:{job_id}:`.
 
 #### Scenario: Follow a running job's logs
 
-- **WHEN** user runs `aspen-cli ci logs <run_id> <job_id> --follow` and the job is producing output
-- **THEN** new log chunks SHALL appear within 1 second of being flushed to KV (down from the previous 1-second polling interval plus RPC latency)
+- **WHEN** a user runs `aspen-cli ci logs <run_id> <job_id> --follow` and the job is producing output
+- **THEN** new log chunks SHALL appear within 1 second of being flushed to KV
 
-#### Scenario: Follow a job that hasn't started yet
+#### Scenario: Follow a job that has not started yet
 
-- **WHEN** user runs `ci logs --follow` before the job has produced any output
+- **WHEN** a user runs `ci logs --follow` before the job has produced any output
 - **THEN** the CLI SHALL wait for the watch connection and display chunks as they arrive, without exiting
 
-#### Scenario: Stream completes when job finishes
+#### Scenario: Stream completes when log writer closes
 
-- **WHEN** the watch subscription receives a Set event for the completion marker key (`__complete__`)
+- **WHEN** the watch subscription receives a Set event for the shared completion marker key (`CI_LOG_COMPLETE_MARKER`)
 - **THEN** the CLI SHALL print any remaining buffered output and exit with status 0
+- **AND** the marker SHALL mean the log stream is closed, not that the CI job succeeded or failed
 
 ### Requirement: Historical catch-up before watch
 
@@ -25,17 +32,17 @@ The CLI SHALL fetch all existing log chunks via `CiGetJobLogs` RPC before openin
 
 #### Scenario: Job already has partial output
 
-- **WHEN** user runs `ci logs --follow` on a job that has already produced 5 chunks
+- **WHEN** a user runs `ci logs --follow` on a job that has already produced 5 chunks
 - **THEN** the CLI SHALL display all 5 existing chunks immediately, then stream new chunks via watch
 
 #### Scenario: Job already completed
 
-- **WHEN** user runs `ci logs --follow` on a completed job
+- **WHEN** a user runs `ci logs --follow` on a completed job
 - **THEN** the CLI SHALL display all chunks and exit without opening a watch connection
 
 ### Requirement: Graceful fallback to polling
 
-If the `WatchSession` connection fails (connection refused, auth failure, or mid-stream disconnect), the CLI SHALL fall back to the existing 1-second polling loop without user-visible errors.
+If the `WatchSession` connection fails, the CLI SHALL fall back to the existing 1-second polling loop without user-visible errors.
 
 #### Scenario: Watch connection refused
 
@@ -53,7 +60,7 @@ The TUI log viewer SHALL use a background `WatchSubscription` to receive log upd
 
 #### Scenario: Open log viewer for running job
 
-- **WHEN** user opens the log viewer for a running job in the TUI
+- **WHEN** a user opens the log viewer for a running job in the TUI
 - **THEN** new log lines SHALL appear automatically as chunks are committed to KV
 
 #### Scenario: Log viewer auto-scroll
@@ -63,11 +70,11 @@ The TUI log viewer SHALL use a background `WatchSubscription` to receive log upd
 
 ### Requirement: AspenClient exposes connection primitives
 
-The CLI's `AspenClient` SHALL expose methods to access the iroh `Endpoint`, cluster identifier, and peer addresses, so that callers can construct `WatchSession` connections.
+The CLI's `AspenClient` SHALL expose methods to access the Iroh `Endpoint`, cluster identifier, and peer addresses, so that callers can construct `WatchSession` connections.
 
 #### Scenario: Access endpoint for watch connection
 
 - **WHEN** a caller needs to create a `WatchSession`
-- **THEN** `AspenClient::endpoint()` SHALL return a reference to the iroh `Endpoint`
+- **THEN** `AspenClient::endpoint()` SHALL return a reference to the Iroh `Endpoint`
 - **AND** `AspenClient::first_peer_addr()` SHALL return the first bootstrap peer's `EndpointAddr`
 - **AND** `AspenClient::cluster_id()` SHALL return the cluster identifier string

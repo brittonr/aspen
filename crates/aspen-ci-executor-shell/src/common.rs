@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use aspen_blob::BlobRef;
 use aspen_blob::prelude::*;
+use aspen_ci_core::log_writer::CI_LOG_COMPLETE_STATUS;
 use aspen_ci_core::log_writer::CiLogChunk;
 use aspen_ci_core::log_writer::CiLogCompleteMarker;
 use aspen_core::KeyValueStore;
@@ -515,16 +516,16 @@ pub async fn create_source_archive(source_dir: &Path, blob_store: &Arc<dyn BlobS
 // Log Bridge — shared CI log streaming for all executor workers
 // ============================================================================
 
-/// KV key prefix for CI log chunks.
-pub const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
 /// Completion marker suffix.
-pub const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
+pub use aspen_core::CI_LOG_COMPLETE_MARKER;
+/// KV key prefix for CI log chunks.
+pub use aspen_core::CI_LOG_KV_PREFIX;
 /// Maximum bytes buffered before flushing a chunk.
 pub const LOG_FLUSH_THRESHOLD: usize = 8 * 1024;
 /// Periodic flush interval in milliseconds.
 /// Ensures partial buffers are written to KV for real-time streaming,
 /// even when output is sparse and doesn't fill a full chunk.
-pub const LOG_FLUSH_INTERVAL_MS: u64 = 500;
+pub const LOG_FLUSH_INTERVAL_MS: u64 = aspen_core::CI_LOG_FLUSH_INTERVAL_MS;
 
 /// Bridge task: reads log lines from a channel, buffers them, and writes
 /// log chunks to KV. Flushes on size threshold OR periodic timer to ensure
@@ -584,7 +585,7 @@ pub async fn log_bridge(
     let marker = CiLogCompleteMarker {
         total_chunks: chunk_index,
         timestamp_ms: current_time_ms(),
-        status: "done".to_string(),
+        status: CI_LOG_COMPLETE_STATUS.to_string(),
     };
     if let Ok(json) = serde_json::to_string(&marker) {
         if let Err(error) = kv_store.write(WriteRequest::set(marker_key, json)).await {
@@ -637,4 +638,30 @@ async fn flush_log_chunk(
 
     *chunk_index = chunk_index.saturating_add(1);
     buffer.clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ci_log_constants_follow_core_source_of_truth() {
+        assert_eq!(CI_LOG_KV_PREFIX, aspen_core::CI_LOG_KV_PREFIX);
+        assert_eq!(CI_LOG_COMPLETE_MARKER, aspen_core::CI_LOG_COMPLETE_MARKER);
+        assert_eq!(LOG_FLUSH_INTERVAL_MS, aspen_core::CI_LOG_FLUSH_INTERVAL_MS);
+    }
+
+    #[test]
+    fn completion_marker_uses_log_stream_status_not_job_status() {
+        let marker = CiLogCompleteMarker {
+            total_chunks: 2,
+            timestamp_ms: 42,
+            status: CI_LOG_COMPLETE_STATUS.to_string(),
+        };
+
+        assert_eq!(marker.status, CI_LOG_COMPLETE_STATUS);
+        assert_ne!(marker.status, "success");
+        assert_ne!(marker.status, "failed");
+        assert_ne!(marker.status, "cancelled");
+    }
 }

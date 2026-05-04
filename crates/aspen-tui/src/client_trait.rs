@@ -182,7 +182,10 @@ pub struct CiJobLogsResult {
     pub last_index: u32,
     /// Whether there are more chunks available.
     pub has_more: bool,
-    /// Whether the log stream is complete (job finished).
+    /// Whether the log stream completion marker has been written.
+    ///
+    /// This is a log-stream completion signal only; use CI status/receipt fields
+    /// for job and pipeline terminal status labels.
     pub is_complete: bool,
 }
 
