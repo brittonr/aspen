@@ -14,6 +14,17 @@ pub const DOGFOOD_RUN_RECEIPT_SCHEMA: &str = "aspen.dogfood.run-receipt.v1";
 pub const MAX_RECEIPT_STAGES: usize = 16;
 pub const MAX_STAGE_ARTIFACTS: usize = 32;
 
+/// Dogfood receipt stage metadata used as the source of truth for acceptance
+/// lifecycle docs and tests.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DogfoodStageContract {
+    pub stage: DogfoodStageKind,
+    pub name: &'static str,
+    pub default_full_required: bool,
+    pub leave_running_required: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DogfoodRunReceipt {
     pub schema: String,
@@ -166,6 +177,57 @@ impl DogfoodStageKind {
         }
     }
 }
+
+/// Ordered dogfood full-run stage contract.
+///
+/// `full --leave-running` intentionally omits `stop` after successful receipt
+/// publication so operators can inspect the live cluster. All earlier stages are
+/// required in both success modes.
+#[cfg(test)]
+pub const DOGFOOD_FULL_STAGE_CONTRACTS: &[DogfoodStageContract] = &[
+    DogfoodStageContract {
+        stage: DogfoodStageKind::Start,
+        name: "start",
+        default_full_required: true,
+        leave_running_required: true,
+    },
+    DogfoodStageContract {
+        stage: DogfoodStageKind::Push,
+        name: "push",
+        default_full_required: true,
+        leave_running_required: true,
+    },
+    DogfoodStageContract {
+        stage: DogfoodStageKind::Build,
+        name: "build",
+        default_full_required: true,
+        leave_running_required: true,
+    },
+    DogfoodStageContract {
+        stage: DogfoodStageKind::Deploy,
+        name: "deploy",
+        default_full_required: true,
+        leave_running_required: true,
+    },
+    DogfoodStageContract {
+        stage: DogfoodStageKind::Verify,
+        name: "verify",
+        default_full_required: true,
+        leave_running_required: true,
+    },
+    DogfoodStageContract {
+        stage: DogfoodStageKind::PublishReceipt,
+        name: "publish_receipt",
+        default_full_required: true,
+        leave_running_required: true,
+    },
+    DogfoodStageContract {
+        stage: DogfoodStageKind::Stop,
+        name: "stop",
+        default_full_required: true,
+        leave_running_required: false,
+    },
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -465,5 +527,67 @@ mod tests {
             count: MAX_STAGE_ARTIFACTS + 1,
             max: MAX_STAGE_ARTIFACTS,
         });
+    }
+
+    #[test]
+    fn dogfood_full_stage_contract_matches_stage_names() {
+        let expected = [
+            DogfoodStageKind::Start,
+            DogfoodStageKind::Push,
+            DogfoodStageKind::Build,
+            DogfoodStageKind::Deploy,
+            DogfoodStageKind::Verify,
+            DogfoodStageKind::PublishReceipt,
+            DogfoodStageKind::Stop,
+        ];
+
+        assert_eq!(DOGFOOD_FULL_STAGE_CONTRACTS.len(), expected.len());
+
+        for (contract, expected_stage) in DOGFOOD_FULL_STAGE_CONTRACTS.iter().zip(expected) {
+            assert_eq!(contract.stage, expected_stage);
+            assert_eq!(contract.name, expected_stage.as_str());
+            assert!(contract.default_full_required, "default full requires `{}`", contract.name);
+        }
+
+        let leave_running_stages: Vec<&str> = DOGFOOD_FULL_STAGE_CONTRACTS
+            .iter()
+            .filter(|contract| contract.leave_running_required)
+            .map(|contract| contract.name)
+            .collect();
+
+        assert_eq!(leave_running_stages, ["start", "push", "build", "deploy", "verify", "publish_receipt"]);
+    }
+
+    #[test]
+    fn dogfood_full_stage_contract_is_documented() {
+        let deploy_doc = include_str!("../../../docs/deploy.md");
+
+        assert!(deploy_doc.contains("DOGFOOD_FULL_STAGE_CONTRACTS"));
+
+        for contract in DOGFOOD_FULL_STAGE_CONTRACTS {
+            let row_prefix = format!("| `{}` |", contract.name);
+            let row = deploy_doc
+                .lines()
+                .find(|line| line.starts_with(&row_prefix))
+                .unwrap_or_else(|| panic!("deploy docs must include `{}` dogfood stage row", contract.name));
+
+            let columns: Vec<&str> = row.split('|').map(str::trim).collect();
+            assert_eq!(
+                columns.get(2),
+                Some(&if contract.default_full_required {
+                    "required"
+                } else {
+                    "omitted"
+                })
+            );
+            assert_eq!(
+                columns.get(3),
+                Some(&if contract.leave_running_required {
+                    "required"
+                } else {
+                    "omitted"
+                })
+            );
+        }
     }
 }

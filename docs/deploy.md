@@ -186,7 +186,19 @@ nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts cluster-sho
 nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood receipts publish <run-id>
 ```
 
-A successful default acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, aggregate final status `succeeded`, no failure object, and succeeded stages for `start`, `push`, `build`, `deploy`, `verify`, `publish_receipt`, and `stop`. A successful `full --leave-running` receipt omits the `stop` stage because the cluster is intentionally left running for readback; run `nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood stop` after inspection. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback; in `receipts list`, any failed stage makes the aggregate final status `failed` even if cleanup later records a successful `stop` stage. In-cluster publication stores the same canonical receipt JSON at `dogfood/receipts/<run-id>.json`; it is live cluster evidence and does not replace the local receipt archive for ephemeral `full` runs that stop and remove the cluster.
+A successful acceptance receipt follows the test-visible `DOGFOOD_FULL_STAGE_CONTRACTS` contract in `crates/aspen-dogfood/src/receipt.rs`. The stage contract is the source of truth for the required stage names in docs and tests:
+
+| Stage | Default `full` | `full --leave-running` | Evidence role |
+| --- | --- | --- | --- |
+| `start` | required | required | Start the local dogfood cluster and persist its state file. |
+| `push` | required | required | Push the current source into Aspen Forge. |
+| `build` | required | required | Run native Aspen CI and record the CI run artifact. |
+| `deploy` | required | required | Deploy the built artifact through Aspen's deploy path. |
+| `verify` | required | required | Verify the deployed cluster health. |
+| `publish_receipt` | required | required | Publish the final success receipt into Aspen KV. |
+| `stop` | required | omitted | Stop and remove the ephemeral cluster; intentionally omitted when the operator asks to leave the cluster running for live readback. |
+
+A successful default acceptance receipt has schema `aspen.dogfood.run-receipt.v1`, command `full`, aggregate final status `succeeded`, no failure object, and every stage above marked `required` for default `full`. A successful `full --leave-running` receipt omits only stages marked `omitted` for `full --leave-running`; run `nix run .#dogfood-local -- --cluster-dir /tmp/aspen-dogfood stop` after inspection. Failure receipts are also persisted so the same commands can be used during incident review without relying on scrollback; in `receipts list`, any failed stage makes the aggregate final status `failed` even if cleanup later records a successful `stop` stage. In-cluster publication stores the same canonical receipt JSON at `dogfood/receipts/<run-id>.json`; it is live cluster evidence and does not replace the local receipt archive for ephemeral `full` runs that stop and remove the cluster.
 
 ## Troubleshooting
 
