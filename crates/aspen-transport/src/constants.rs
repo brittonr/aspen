@@ -2,6 +2,22 @@
 //!
 //! ALPN identifiers and resource limits for protocol handlers.
 
+/// Transport-owned ALPN protocol registration metadata.
+///
+/// This is the source of truth for Aspen protocol identifiers owned by
+/// `aspen-transport`. Application crates may own additional ALPNs next to their
+/// handlers, but transport-owned identifiers must be listed here so uniqueness,
+/// formatting, and documentation stay testable.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AlpnProtocolContract {
+    /// Symbolic constant name for the protocol ALPN.
+    pub name: &'static str,
+    /// ALPN bytes offered to Iroh/QUIC.
+    pub alpn: &'static [u8],
+    /// Owning protocol namespace.
+    pub namespace: &'static str,
+}
+
 /// ALPN protocol identifier for Raft RPC (legacy, no authentication).
 ///
 /// # Security Warning
@@ -85,6 +101,66 @@ pub const TRUST_ALPN: &[u8] = b"/aspen/trust/1";
 /// Canonical source: `aspen_dag::protocol::DAG_SYNC_ALPN`
 pub const DAG_SYNC_ALPN: &[u8] = b"/aspen/dag-sync/1";
 
+/// Transport-owned ALPN namespace contract.
+#[allow(deprecated)]
+pub const TRANSPORT_ALPN_PROTOCOLS: &[AlpnProtocolContract] = &[
+    AlpnProtocolContract {
+        name: "RAFT_ALPN",
+        alpn: RAFT_ALPN,
+        namespace: "raft-legacy",
+    },
+    AlpnProtocolContract {
+        name: "RAFT_AUTH_ALPN",
+        alpn: RAFT_AUTH_ALPN,
+        namespace: "raft",
+    },
+    AlpnProtocolContract {
+        name: "RAFT_SHARDED_ALPN",
+        alpn: RAFT_SHARDED_ALPN,
+        namespace: "raft-sharded",
+    },
+    AlpnProtocolContract {
+        name: "CLIENT_ALPN",
+        alpn: CLIENT_ALPN,
+        namespace: "client-rpc",
+    },
+    AlpnProtocolContract {
+        name: "LOG_SUBSCRIBER_ALPN",
+        alpn: LOG_SUBSCRIBER_ALPN,
+        namespace: "log-subscriber",
+    },
+    AlpnProtocolContract {
+        name: "NET_TUNNEL_ALPN",
+        alpn: NET_TUNNEL_ALPN,
+        namespace: "net-tunnel",
+    },
+    AlpnProtocolContract {
+        name: "NIX_CACHE_H3_ALPN",
+        alpn: NIX_CACHE_H3_ALPN,
+        namespace: "nix-cache-h3",
+    },
+    AlpnProtocolContract {
+        name: "FORGE_WEB_ALPN",
+        alpn: FORGE_WEB_ALPN,
+        namespace: "forge-web",
+    },
+    AlpnProtocolContract {
+        name: "NOSTR_WS_ALPN",
+        alpn: NOSTR_WS_ALPN,
+        namespace: "nostr-ws",
+    },
+    AlpnProtocolContract {
+        name: "TRUST_ALPN",
+        alpn: TRUST_ALPN,
+        namespace: "trust",
+    },
+    AlpnProtocolContract {
+        name: "DAG_SYNC_ALPN",
+        alpn: DAG_SYNC_ALPN,
+        namespace: "dag-sync",
+    },
+];
+
 /// Maximum concurrent Client connections.
 ///
 /// Set high enough to handle bursts of short-lived CLI connections.
@@ -102,3 +178,44 @@ pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u32 = 10;
 // Connection limits must be positive
 const _: () = assert!(MAX_CLIENT_CONNECTIONS > 0);
 const _: () = assert!(MAX_CLIENT_STREAMS_PER_CONNECTION > 0);
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+
+    #[test]
+    fn transport_alpn_protocols_are_unique_and_well_formed() {
+        let mut names = BTreeSet::new();
+        let mut alpns = BTreeSet::new();
+        let mut namespaces = BTreeSet::new();
+
+        for protocol in TRANSPORT_ALPN_PROTOCOLS {
+            assert!(!protocol.name.is_empty(), "ALPN contract names must be nonempty");
+            assert!(!protocol.namespace.is_empty(), "ALPN namespaces must be nonempty");
+            assert!(!protocol.alpn.is_empty(), "ALPN `{}` must be nonempty", protocol.name);
+            assert!(names.insert(protocol.name), "duplicate ALPN constant name `{}`", protocol.name);
+            assert!(namespaces.insert(protocol.namespace), "duplicate ALPN namespace `{}`", protocol.namespace);
+            assert!(alpns.insert(protocol.alpn), "duplicate ALPN bytes for `{}`", protocol.name);
+            assert!(
+                protocol.alpn.iter().all(|byte| byte.is_ascii_graphic()),
+                "ALPN `{}` must use printable non-whitespace ASCII bytes",
+                protocol.name
+            );
+        }
+    }
+
+    #[test]
+    fn transport_alpn_contract_is_documented() {
+        let adr = include_str!("../../../docs/adr/009-alpn-protocol-routing.md");
+
+        assert!(adr.contains("TRANSPORT_ALPN_PROTOCOLS"));
+        assert!(adr.contains("transport-owned"));
+
+        for protocol in TRANSPORT_ALPN_PROTOCOLS {
+            assert!(adr.contains(protocol.name), "ADR must document `{}`", protocol.name);
+            assert!(adr.contains(protocol.namespace), "ADR must document ALPN namespace `{}`", protocol.namespace);
+        }
+    }
+}
