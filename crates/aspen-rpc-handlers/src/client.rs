@@ -389,6 +389,11 @@ async fn handle_client_request_check_auth(
 
     match token {
         Some(cap_token) => {
+            // Bind key-audience tokens to the authenticated Iroh connection peer.
+            // `client_id` is copied from `Connection::remote_id()` in
+            // `handle_client_connection_inner`; do not derive it from request bytes
+            // or token contents, or a token for one Iroh identity could be replayed
+            // by another peer.
             let presenter = Some(client_id);
             if let Err(auth_err) = verifier.authorize(cap_token, &operation, presenter) {
                 warn!(client_id = %client_id, error = %auth_err, operation = ?operation, "Authorization failed");
@@ -592,6 +597,13 @@ async fn handle_client_request_inner(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use aspen_auth::AuthError;
+    use aspen_auth::Capability;
+    use aspen_auth::Operation;
+    use aspen_auth::TokenBuilder;
+    use aspen_auth::TokenVerifier;
     use aspen_client_api::ClientRpcRequest;
 
     use super::client_request_auth_operation;
@@ -634,6 +646,35 @@ mod tests {
     }
 
     #[test]
+    fn auth_gate_binds_key_audience_tokens_to_iroh_remote_id() {
+        let issuer = iroh::SecretKey::from([11u8; 32]);
+        let intended_client = iroh::SecretKey::from([12u8; 32]);
+        let replaying_client = iroh::SecretKey::from([13u8; 32]);
+        let operation = Operation::Read {
+            key: "client-bound/data".into(),
+        };
+        let token = TokenBuilder::new(issuer)
+            .for_key(intended_client.public())
+            .with_capability(Capability::Read {
+                prefix: "client-bound/".into(),
+            })
+            .with_lifetime(Duration::from_secs(60))
+            .build()
+            .expect("key-audience token should build");
+        let verifier = TokenVerifier::new();
+
+        verifier
+            .authorize(&token, &operation, Some(&intended_client.public()))
+            .expect("matching Iroh remote identity should authorize");
+
+        let replay = verifier.authorize(&token, &operation, Some(&replaying_client.public()));
+        assert!(matches!(replay, Err(AuthError::WrongAudience { .. })));
+
+        let no_presenter = verifier.authorize(&token, &operation, None);
+        assert!(matches!(no_presenter, Err(AuthError::AudienceRequired)));
+    }
+
+    #[test]
     fn client_request_path_checks_auth_before_handler_dispatch() {
         let source = include_str!("client.rs");
         let auth_call = source
@@ -648,5 +689,26 @@ mod tests {
 
         assert!(auth_classifier_call < auth_call);
         assert!(auth_call < dispatch_call);
+    }
+
+    #[test]
+    fn client_request_path_uses_connection_remote_id_as_auth_presenter() {
+        let source = include_str!("client.rs");
+        let remote_id = source
+            .find("let remote_node_id = connection.remote_id();")
+            .expect("client connection path should read Iroh remote_id");
+        let request_call = source
+            .find("handle_client_request((recv, send), ctx_clone, remote_node_id")
+            .expect("client request path should pass remote_id as client_id");
+        let presenter_binding = source
+            .find("let presenter = Some(client_id);")
+            .expect("auth gate should bind presenter to client_id");
+        let authorize_call = source
+            .find("verifier.authorize(cap_token, &operation, presenter)")
+            .expect("auth gate should pass presenter to verifier.authorize");
+
+        assert!(remote_id < request_call);
+        assert!(request_call < presenter_binding);
+        assert!(presenter_binding < authorize_call);
     }
 }
