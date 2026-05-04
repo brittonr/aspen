@@ -4,8 +4,14 @@
 //! capability tokens for the Aspen distributed system.
 
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::io::{self};
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::PermissionsExt;
+#[cfg(test)]
+use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -50,7 +56,7 @@ enum Commands {
         #[arg(long, default_value = "1d")]
         lifetime: String,
 
-        /// Output file (default: stdout).
+        /// Output file (default: stdout). Files are created/truncated with owner-only permissions.
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
@@ -80,7 +86,7 @@ enum Commands {
         #[arg(long)]
         audience: Option<String>,
 
-        /// Output file (default: stdout).
+        /// Output file (default: stdout). Files are created/truncated with owner-only permissions.
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
@@ -728,10 +734,31 @@ fn format_timestamp(unix_secs: u64) -> String {
     dt.to_rfc3339()
 }
 
-/// Write output to a file or stdout.
+fn validate_sensitive_output_file(file: &fs::File) -> Result<()> {
+    let metadata = file.metadata().context("failed to inspect output file")?;
+    anyhow::ensure!(metadata.file_type().is_file(), "token output path is not a regular file");
+    let euid = unsafe { libc::geteuid() };
+    anyhow::ensure!(metadata.uid() == euid, "token output file is not owned by the current user");
+    Ok(())
+}
+
+/// Write sensitive token output to a file with owner-only permissions or stdout.
 fn write_output(content: &str, path: Option<&std::path::Path>) -> Result<()> {
     if let Some(p) = path {
-        fs::write(p, content).context("failed to write output file")?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(p)
+            .context("failed to open output file")?;
+        validate_sensitive_output_file(&file).context("refusing unsafe token output file")?;
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .context("failed to restrict output file permissions before writing")?;
+        file.write_all(content.as_bytes()).context("failed to write output file")?;
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .context("failed to restrict output file permissions")?;
     } else {
         io::stdout().write_all(content.as_bytes()).context("failed to write to stdout")?;
         io::stdout().write_all(b"\n").context("failed to write newline to stdout")?;
@@ -742,6 +769,54 @@ fn write_output(content: &str, path: Option<&std::path::Path>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn token_output_files_are_owner_only() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output_path = dir.path().join("delegated-token.txt");
+
+        write_output("sensitive", Some(&output_path)).expect("write token output");
+
+        let mode = fs::metadata(&output_path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn token_output_restricts_existing_files_before_rewrite() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output_path = dir.path().join("existing-token.txt");
+        fs::write(&output_path, "old").expect("seed token output");
+        fs::set_permissions(&output_path, fs::Permissions::from_mode(0o644)).expect("set permissive mode");
+
+        write_output("new-sensitive", Some(&output_path)).expect("rewrite token output");
+
+        let mode = fs::metadata(&output_path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(fs::read_to_string(&output_path).expect("read token output"), "new-sensitive");
+    }
+
+    #[test]
+    fn token_output_rejects_symlink_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let target_path = dir.path().join("target-token.txt");
+        let link_path = dir.path().join("linked-token.txt");
+        fs::write(&target_path, "old-target").expect("seed symlink target");
+        symlink(&target_path, &link_path).expect("create symlink");
+
+        assert!(write_output("new-sensitive", Some(&link_path)).is_err());
+        assert_eq!(fs::read_to_string(&target_path).expect("read symlink target"), "old-target");
+    }
+
+    #[test]
+    fn token_output_rejects_non_regular_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fifo_path = dir.path().join("token-fifo");
+        let fifo_c = std::ffi::CString::new(fifo_path.as_os_str().as_encoded_bytes()).expect("fifo path");
+        let rc = unsafe { libc::mkfifo(fifo_c.as_ptr(), 0o600) };
+        assert_eq!(rc, 0, "mkfifo failed");
+
+        assert!(write_output("new-sensitive", Some(&fifo_path)).is_err());
+    }
 
     #[test]
     fn generate_root_output_reports_bearer_audience_in_json() {

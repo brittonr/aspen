@@ -3,6 +3,14 @@
 //! `NodeMode` wraps both `NodeHandle` and `ShardedNodeHandle` to allow
 //! the main function to work uniformly with both bootstrap modes.
 
+use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::PermissionsExt;
+#[cfg(test)]
+use std::os::unix::fs::symlink;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -239,7 +247,7 @@ where
         .context("failed to generate root token")?;
 
     let token_base64 = token.to_base64().context("failed to encode root token")?;
-    std::fs::write(token_path, &token_base64)
+    write_sensitive_file(token_path, &token_base64)
         .with_context(|| format!("failed to write token to {}", token_path.display()))?;
 
     info!(
@@ -249,6 +257,33 @@ where
     );
 
     store_token(token);
+    Ok(())
+}
+
+fn validate_sensitive_file(file: &fs::File) -> Result<()> {
+    let metadata = file.metadata().context("failed to inspect sensitive file")?;
+    anyhow::ensure!(metadata.file_type().is_file(), "sensitive path is not a regular file");
+    let euid = unsafe { libc::geteuid() };
+    anyhow::ensure!(metadata.uid() == euid, "sensitive file is not owned by the current user");
+    Ok(())
+}
+
+/// Write secret-bearing token material with owner-only permissions.
+fn write_sensitive_file(path: &std::path::Path, content: &str) -> Result<()> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .context("failed to open sensitive file")?;
+    validate_sensitive_file(&file).context("refusing unsafe sensitive file")?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+        .context("failed to restrict sensitive file permissions before writing")?;
+    file.write_all(content.as_bytes()).context("failed to write sensitive file")?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+        .context("failed to restrict sensitive file permissions")?;
     Ok(())
 }
 
@@ -278,4 +313,57 @@ fn setup_controllers(
 ) -> (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) {
     let raft_node = handle.storage.raft_node.clone();
     (raft_node.clone(), raft_node)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sensitive_files_are_owner_only() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("root-token.txt");
+
+        write_sensitive_file(&path, "sensitive-token").expect("write sensitive file");
+
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn sensitive_files_restrict_existing_files_before_rewrite() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("root-token.txt");
+        fs::write(&path, "old").expect("seed sensitive file");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("set permissive mode");
+
+        write_sensitive_file(&path, "sensitive-token").expect("rewrite sensitive file");
+
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(fs::read_to_string(&path).expect("read sensitive file"), "sensitive-token");
+    }
+
+    #[test]
+    fn sensitive_files_reject_symlink_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let target_path = dir.path().join("target-token.txt");
+        let link_path = dir.path().join("root-token-link.txt");
+        fs::write(&target_path, "old-target").expect("seed symlink target");
+        symlink(&target_path, &link_path).expect("create symlink");
+
+        assert!(write_sensitive_file(&link_path, "sensitive-token").is_err());
+        assert_eq!(fs::read_to_string(&target_path).expect("read symlink target"), "old-target");
+    }
+
+    #[test]
+    fn sensitive_files_reject_non_regular_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let fifo_path = dir.path().join("root-token-fifo");
+        let fifo_c = std::ffi::CString::new(fifo_path.as_os_str().as_encoded_bytes()).expect("fifo path");
+        let rc = unsafe { libc::mkfifo(fifo_c.as_ptr(), 0o600) };
+        assert_eq!(rc, 0, "mkfifo failed");
+
+        assert!(write_sensitive_file(&fifo_path, "sensitive-token").is_err());
+    }
 }

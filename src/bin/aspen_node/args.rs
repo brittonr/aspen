@@ -159,7 +159,8 @@ pub struct Args {
     /// Only generates a token when initializing a NEW cluster (not joining existing).
     /// The token is an intentional bearer token with full cluster access
     /// (all keys, admin, delegation); delegate key-bound child tokens for
-    /// day-to-day clients.
+    /// day-to-day clients. The output file is created/truncated with
+    /// owner-only permissions.
     #[arg(long)]
     pub output_root_token: Option<PathBuf>,
 
