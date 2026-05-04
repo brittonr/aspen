@@ -370,7 +370,9 @@ impl HandlerRegistry {
     ///
     /// `proxy_hops` tracks how many times this request has been proxied across
     /// clusters. Pass 0 for direct client requests. The value is extracted from
-    /// `AuthenticatedRequest.proxy_hops` by the client protocol handler.
+    /// `AuthenticatedRequest.proxy_hops` by the client protocol handler. `token`
+    /// carries the already-verified client capability token for cross-cluster
+    /// proxying; direct handler dispatch ignores it.
     ///
     /// # Errors
     ///
@@ -380,6 +382,7 @@ impl HandlerRegistry {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
         proxy_hops: u8,
+        token: Option<aspen_auth::CapabilityToken>,
     ) -> anyhow::Result<ClientRpcResponse> {
         let operation = rpc_operation_label(&request);
         let start = dispatch_started_at();
@@ -463,7 +466,7 @@ impl HandlerRegistry {
             // Try proxying if enabled and we have a proxy service
             if ctx.proxy_config.enabled {
                 if let Some(ref proxy_service) = self.proxy_service {
-                    match proxy_service.proxy_request(request.clone(), app_id, proxy_hops, ctx).await {
+                    match proxy_service.proxy_request(request.clone(), app_id, proxy_hops, token, ctx).await {
                         Ok(Some(response)) => return Ok(response),
                         Ok(None) => {
                             // Fall through to CapabilityUnavailable
@@ -995,7 +998,7 @@ mod tests {
             default_branch: None,
         };
 
-        let response = registry.dispatch(request, &ctx, 0).await.expect("dispatch should not error");
+        let response = registry.dispatch(request, &ctx, 0, None).await.expect("dispatch should not error");
         match response {
             ClientRpcResponse::CapabilityUnavailable(ref cap) => {
                 assert_eq!(cap.required_app, "forge");
@@ -1069,7 +1072,7 @@ mod tests {
         let registry = empty_registry();
         let request = ClientRpcRequest::Ping;
 
-        let result = registry.dispatch(request, &ctx, 0).await;
+        let result = registry.dispatch(request, &ctx, 0, None).await;
         assert!(result.is_err(), "core request with no handler should return Err, not CapabilityUnavailable");
     }
 
@@ -1107,7 +1110,7 @@ mod tests {
         let handler: Arc<dyn RequestHandler> = Arc::new(PingHandler);
         registry.add_handlers(vec![(handler, 100)]);
 
-        let response = registry.dispatch(ClientRpcRequest::Ping, &ctx, 0).await.expect("dispatch should succeed");
+        let response = registry.dispatch(ClientRpcRequest::Ping, &ctx, 0, None).await.expect("dispatch should succeed");
         assert!(matches!(response, ClientRpcResponse::Pong), "expected Pong response");
     }
 

@@ -128,7 +128,7 @@ async fn test_rpc_request_counters_in_prometheus_output() {
         let req = ClientRpcRequest::ReadKey {
             key: format!("key-{}", i),
         };
-        let resp = registry.dispatch(req, &ctx, 0).await.expect("dispatch ReadKey");
+        let resp = registry.dispatch(req, &ctx, 0, None).await.expect("dispatch ReadKey");
         assert!(matches!(resp, ClientRpcResponse::ReadResult(_)));
     }
 
@@ -138,12 +138,13 @@ async fn test_rpc_request_counters_in_prometheus_output() {
             key: format!("key-{}", i),
             value: vec![i as u8],
         };
-        let resp = registry.dispatch(req, &ctx, 0).await.expect("dispatch WriteKey");
+        let resp = registry.dispatch(req, &ctx, 0, None).await.expect("dispatch WriteKey");
         assert!(matches!(resp, ClientRpcResponse::WriteResult(_)));
     }
 
     // Query GetMetrics to get prometheus output.
-    let metrics_resp = registry.dispatch(ClientRpcRequest::GetMetrics, &ctx, 0).await.expect("dispatch GetMetrics");
+    let metrics_resp =
+        registry.dispatch(ClientRpcRequest::GetMetrics, &ctx, 0, None).await.expect("dispatch GetMetrics");
 
     let prometheus_text = match metrics_resp {
         ClientRpcResponse::Metrics(m) => m.prometheus_text,

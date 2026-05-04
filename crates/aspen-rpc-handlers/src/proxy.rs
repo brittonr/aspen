@@ -84,6 +84,15 @@ where
         .map_err(|error| error.context(error_context))
 }
 
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+fn proxied_authenticated_request(
+    request: ClientRpcRequest,
+    token: Option<aspen_auth::CapabilityToken>,
+    proxy_hops: u8,
+) -> AuthenticatedRequest {
+    AuthenticatedRequest::with_proxy_hops(request, token, proxy_hops + 1)
+}
+
 impl ProxyService {
     /// Create a new proxy service.
     ///
@@ -119,6 +128,7 @@ impl ProxyService {
         request: ClientRpcRequest,
         required_app: &str,
         proxy_hops: u8,
+        token: Option<aspen_auth::CapabilityToken>,
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<Option<ClientRpcResponse>> {
         // Check hop limit
@@ -168,7 +178,7 @@ impl ProxyService {
                     "attempting to proxy request to cluster (ranked)"
                 );
 
-                match self.send_to_cluster(&cluster, request.clone(), proxy_hops).await {
+                match self.send_to_cluster(&cluster, request.clone(), token.clone(), proxy_hops).await {
                     Ok(response) => {
                         info!(
                             app = required_app,
@@ -197,7 +207,7 @@ impl ProxyService {
         #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
         {
             // Without federation discovery, proxying is unavailable
-            let _ = (request, required_app, proxy_hops, ctx);
+            let _ = (request, required_app, proxy_hops, token, ctx);
             warn!("proxy request attempted but forge/global-discovery features not enabled");
             Ok(None)
         }
@@ -218,6 +228,7 @@ impl ProxyService {
         &self,
         cluster: &aspen_cluster::federation::DiscoveredCluster,
         request: ClientRpcRequest,
+        token: Option<aspen_auth::CapabilityToken>,
         proxy_hops: u8,
     ) -> anyhow::Result<ClientRpcResponse> {
         // Use the first known node key from the discovered cluster as the
@@ -237,7 +248,7 @@ impl ProxyService {
         .await
         .map_err(|_| anyhow::anyhow!("connection timeout"))??;
 
-        let authenticated_request = AuthenticatedRequest::with_proxy_hops(request, None, proxy_hops + 1);
+        let authenticated_request = proxied_authenticated_request(request, token, proxy_hops);
         let request_bytes = postcard::to_stdvec(&authenticated_request)?;
 
         let deadline = Instant::now() + self.config.timeout;
@@ -314,7 +325,7 @@ mod tests {
 
         // Request with hops at limit should return None
         let result = service
-            .proxy_request(ClientRpcRequest::Ping, "test-app", 3, &ctx)
+            .proxy_request(ClientRpcRequest::Ping, "test-app", 3, None, &ctx)
             .await
             .expect("proxy_request should not error");
 
@@ -342,12 +353,39 @@ mod tests {
             .build();
 
         let result = service
-            .proxy_request(ClientRpcRequest::Ping, "test-app", 0, &ctx)
+            .proxy_request(ClientRpcRequest::Ping, "test-app", 0, None, &ctx)
             .await
             .expect("proxy_request should not error");
 
         assert!(result.is_none(), "should return None without federation discovery");
 
         endpoint.close().await;
+    }
+
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    #[test]
+    fn proxied_authenticated_request_preserves_client_token() {
+        let issuer = iroh::SecretKey::from_bytes(&[7u8; 32]).public();
+        let token = aspen_auth::CapabilityToken {
+            version: 1,
+            issuer,
+            audience: aspen_auth::Audience::Bearer,
+            capabilities: vec![aspen_auth::Capability::Read {
+                prefix: "repo/".to_string(),
+            }],
+            issued_at: 1,
+            expires_at: 2,
+            nonce: Some([3u8; 16]),
+            proof: None,
+            delegation_depth: 0,
+            facts: Vec::new(),
+            signature: [4u8; 64],
+        };
+
+        let proxied = proxied_authenticated_request(ClientRpcRequest::Ping, Some(token.clone()), 2);
+
+        assert_eq!(proxied.proxy_hops, 3);
+        assert!(proxied.token.is_some(), "proxying must not strip the verified client capability token");
+        assert_eq!(proxied.token.expect("token should be forwarded").nonce, token.nonce);
     }
 }

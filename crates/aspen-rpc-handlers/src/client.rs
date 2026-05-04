@@ -494,11 +494,12 @@ async fn handle_client_request_dispatch(
     registry: &HandlerRegistry,
     ctx: &ClientProtocolContext,
     request: ClientRpcRequest,
+    token: Option<aspen_auth::CapabilityToken>,
     proxy_hops: u8,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
-    let response = match registry.dispatch(request, ctx, proxy_hops).await {
+    let response = match registry.dispatch(request, ctx, proxy_hops, token).await {
         Ok(resp) => resp,
         Err(err) => {
             warn!(error = %err, "Client request processing failed");
@@ -578,7 +579,7 @@ async fn handle_client_request_inner(
     };
 
     if !handle_client_request_blob(&mut send, &ctx, &request).await? {
-        handle_client_request_dispatch(&mut send, &registry, &ctx, request, proxy_hops).await?;
+        handle_client_request_dispatch(&mut send, &registry, &ctx, request, token, proxy_hops).await?;
     }
 
     let kv_store = ctx.kv_store.clone();
@@ -683,12 +684,16 @@ mod tests {
         let dispatch_call = source
             .find("handle_client_request_dispatch(&mut send")
             .expect("client request path should call handle_client_request_dispatch");
+        let dispatch_with_token = source
+            .find("handle_client_request_dispatch(&mut send, &registry, &ctx, request, token, proxy_hops)")
+            .expect("client request path should pass verified token into dispatch for proxy forwarding");
         let auth_classifier_call = source
             .find("client_request_auth_operation(request")
             .expect("auth check should call client_request_auth_operation");
 
         assert!(auth_classifier_call < auth_call);
         assert!(auth_call < dispatch_call);
+        assert_eq!(dispatch_call, dispatch_with_token);
     }
 
     #[test]
