@@ -834,7 +834,10 @@ mod tests {
 
         assert!(architecture_doc.contains("HandlerFactory::app_id()"));
         assert!(architecture_doc.contains("HandlerRegistry::new"));
+        assert!(architecture_doc.contains("RequestHandler::can_handle()"));
         assert!(architecture_doc.contains("native_handler_factories_advertise_their_required_app_namespace"));
+        assert!(architecture_doc.contains("native_contacts_requests_reach_net_dispatch_path"));
+        assert!(architecture_doc.contains("native_deploy_requests_reach_cluster_dispatch_path"));
     }
 
     #[cfg(feature = "net")]
@@ -866,6 +869,63 @@ mod tests {
         assert!(!ctx.app_registry.has_app("deploy"));
         let _registry = HandlerRegistry::new(&ctx, &plan).expect("registry initializes with deploy handler");
         assert!(ctx.app_registry.has_app("deploy"));
+    }
+
+    fn assert_native_dispatch_path(
+        registry: &HandlerRegistry,
+        request: &ClientRpcRequest,
+        expected_app: &'static str,
+        expected_handler: &'static str,
+    ) {
+        assert_eq!(request.required_app(), Some(expected_app));
+
+        let handlers = registry.handlers.load();
+        let matching_handlers: Vec<&'static str> = handlers
+            .iter()
+            .filter(|handler| handler.can_handle(request))
+            .map(|handler| handler.name())
+            .collect();
+
+        assert_eq!(
+            matching_handlers,
+            vec![expected_handler],
+            "app request `{}` must be accepted by exactly the expected native handler before fallback/proxy handling",
+            request.variant_name()
+        );
+    }
+
+    #[cfg(feature = "net")]
+    #[tokio::test]
+    async fn native_contacts_requests_reach_net_dispatch_path() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(47).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+        let mut plan = NativeHandlerPlan::core_only();
+        plan.set_net_enabled(true);
+        let registry = HandlerRegistry::new(&ctx, &plan).expect("registry initializes with net handler");
+
+        assert_native_dispatch_path(
+            &registry,
+            &ClientRpcRequest::NetList { tag_filter: None },
+            "contacts",
+            "NetHandler",
+        );
+    }
+
+    #[cfg(feature = "deploy")]
+    #[tokio::test]
+    async fn native_deploy_requests_reach_cluster_dispatch_path() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(48).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+        let registry = HandlerRegistry::new(&ctx, &NativeHandlerPlan::core_only())
+            .expect("registry initializes with deploy-capable cluster handler");
+
+        assert_native_dispatch_path(&registry, &ClientRpcRequest::ClusterDeployStatus, "deploy", "ClusterHandler");
     }
 
     #[test]
