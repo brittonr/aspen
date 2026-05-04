@@ -795,7 +795,7 @@ async fn test_git_push_clone_roundtrip() {
     let repo_id_hex = repo_id.to_hex();
 
     info!("Server endpoint: {:?}", server.endpoint_addr());
-    info!("Ticket: {}", ticket_str);
+    info!(ticket_bytes = ticket_str.len(), "cluster ticket generated");
     info!("Repo ID: {}", repo_id_hex);
 
     // Spawn server task

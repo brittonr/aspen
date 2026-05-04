@@ -15,11 +15,11 @@ use aspen::api::ReadRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;
 use aspen::cluster::ticket::AspenClusterTicket;
+use aspen::cluster::ticket::ClusterTopicId;
 use aspen::node::NodeBuilder;
 use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
 use iroh_gossip::proto::TopicId;
-use aspen::cluster::ticket::ClusterTopicId;
 use tempfile::TempDir;
 use tokio::time::sleep;
 use tracing::info;
@@ -180,7 +180,7 @@ async fn test_gossip_ticket_handling() -> Result<()> {
     let ticket = AspenClusterTicket::with_bootstrap(topic_id, TEST_CLUSTER_COOKIE.into(), endpoint_id);
     let ticket_str = ticket.serialize();
 
-    info!("Created gossip ticket: {}", ticket_str);
+    info!(ticket_bytes = ticket_str.len(), "created gossip ticket");
     assert!(ticket_str.starts_with("aspen"));
 
     // Deserialize the ticket
