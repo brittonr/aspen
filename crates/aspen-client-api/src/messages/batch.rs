@@ -3,6 +3,8 @@
 //! Request/response types for atomic multi-key batch read and write operations.
 
 use alloc::string::String;
+#[cfg(feature = "auth")]
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
@@ -23,23 +25,43 @@ pub enum BatchRequest {
 }
 
 #[cfg(feature = "auth")]
+fn batch_write_key(operation: &BatchWriteOperation) -> &str {
+    match operation {
+        BatchWriteOperation::Set { key, .. } | BatchWriteOperation::Delete { key } => key,
+    }
+}
+
+#[cfg(feature = "auth")]
+fn batch_condition_key(condition: &BatchCondition) -> &str {
+    match condition {
+        BatchCondition::ValueEquals { key, .. }
+        | BatchCondition::KeyExists { key }
+        | BatchCondition::KeyNotExists { key } => key,
+    }
+}
+
+#[cfg(feature = "auth")]
+fn conditional_batch_write_keys(conditions: &[BatchCondition], operations: &[BatchWriteOperation]) -> Vec<String> {
+    conditions
+        .iter()
+        .map(|condition| batch_condition_key(condition).to_string())
+        .chain(operations.iter().map(|operation| batch_write_key(operation).to_string()))
+        .collect()
+}
+
+#[cfg(feature = "auth")]
 impl BatchRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::BatchRead { keys } => keys.first().map(|key| Operation::Read { key: key.clone() }),
-            Self::BatchWrite { operations } | Self::ConditionalBatchWrite { operations, .. } => {
-                operations.first().map(|op| match op {
-                    BatchWriteOperation::Set { key, value } => Operation::Write {
-                        key: key.clone(),
-                        value: value.clone(),
-                    },
-                    BatchWriteOperation::Delete { key } => Operation::Write {
-                        key: key.clone(),
-                        value: vec![],
-                    },
-                })
+            Self::BatchRead { keys } => (!keys.is_empty()).then(|| Operation::BatchRead { keys: keys.clone() }),
+            Self::BatchWrite { operations } => (!operations.is_empty()).then(|| Operation::BatchWrite {
+                keys: operations.iter().map(|operation| batch_write_key(operation).to_string()).collect(),
+            }),
+            Self::ConditionalBatchWrite { conditions, operations } => {
+                let keys = conditional_batch_write_keys(conditions, operations);
+                (!keys.is_empty()).then(|| Operation::BatchWrite { keys })
             }
         }
     }
@@ -63,6 +85,96 @@ pub enum BatchCondition {
     KeyExists { key: String },
     /// Key must not exist.
     KeyNotExists { key: String },
+}
+
+#[cfg(all(test, feature = "auth"))]
+mod tests {
+    use aspen_auth_core::Operation;
+
+    use super::*;
+
+    #[test]
+    fn batch_request_to_operation_covers_every_read_key() {
+        let request = BatchRequest::BatchRead {
+            keys: alloc::vec!["allowed/a".to_string(), "denied/b".to_string()],
+        };
+
+        let Some(Operation::BatchRead { keys }) = request.to_operation() else {
+            panic!("batch request should produce batch-read authorization");
+        };
+
+        assert_eq!(keys, alloc::vec!["allowed/a".to_string(), "denied/b".to_string()]);
+    }
+
+    #[test]
+    fn batch_request_to_operation_covers_every_write_key() {
+        let request = BatchRequest::BatchWrite {
+            operations: alloc::vec![
+                BatchWriteOperation::Set {
+                    key: "allowed/a".to_string(),
+                    value: alloc::vec![1],
+                },
+                BatchWriteOperation::Delete {
+                    key: "denied/b".to_string(),
+                },
+            ],
+        };
+
+        let Some(Operation::BatchWrite { keys }) = request.to_operation() else {
+            panic!("batch request should produce batch-write authorization");
+        };
+
+        assert_eq!(keys, alloc::vec!["allowed/a".to_string(), "denied/b".to_string()]);
+    }
+
+    #[test]
+    fn conditional_batch_request_to_operation_covers_condition_and_write_keys() {
+        let request = BatchRequest::ConditionalBatchWrite {
+            conditions: alloc::vec![
+                BatchCondition::ValueEquals {
+                    key: "condition/value".to_string(),
+                    expected: alloc::vec![1],
+                },
+                BatchCondition::KeyExists {
+                    key: "condition/exists".to_string(),
+                },
+                BatchCondition::KeyNotExists {
+                    key: "condition/missing".to_string(),
+                },
+            ],
+            operations: alloc::vec![BatchWriteOperation::Set {
+                key: "write/a".to_string(),
+                value: alloc::vec![2],
+            }],
+        };
+
+        let Some(Operation::BatchWrite { keys }) = request.to_operation() else {
+            panic!("conditional batch request should authorize all condition and write keys");
+        };
+
+        assert_eq!(keys, alloc::vec![
+            "condition/value".to_string(),
+            "condition/exists".to_string(),
+            "condition/missing".to_string(),
+            "write/a".to_string(),
+        ],);
+    }
+
+    #[test]
+    fn conditional_batch_request_with_only_conditions_still_requires_authorization() {
+        let request = BatchRequest::ConditionalBatchWrite {
+            conditions: alloc::vec![BatchCondition::KeyExists {
+                key: "condition/exists".to_string(),
+            }],
+            operations: alloc::vec![],
+        };
+
+        let Some(Operation::BatchWrite { keys }) = request.to_operation() else {
+            panic!("condition-only batch request still reads condition keys");
+        };
+
+        assert_eq!(keys, alloc::vec!["condition/exists".to_string()]);
+    }
 }
 
 /// Batch read result response.

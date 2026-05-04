@@ -322,14 +322,10 @@ fn shell_pattern_contains(input: ShellPatternContainment<'_>) -> bool {
         return false;
     }
     if input.parent_pattern.ends_with('*') && input.child_pattern.ends_with('*') {
-        return input
-            .child_pattern
-            .starts_with(input.parent_pattern.trim_end_matches('*'));
+        return input.child_pattern.starts_with(input.parent_pattern.trim_end_matches('*'));
     }
     if input.parent_pattern.ends_with('*') {
-        return input
-            .child_pattern
-            .starts_with(input.parent_pattern.trim_end_matches('*'));
+        return input.child_pattern.starts_with(input.parent_pattern.trim_end_matches('*'));
     }
     input.parent_pattern == input.child_pattern
 }
@@ -351,48 +347,46 @@ impl Capability {
 
     fn authorizes_data(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
-            (Capability::Full { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(PrefixScope {
-                prefix,
-                candidate: key,
-            })),
-            (Capability::Full { prefix }, Operation::Write { key, .. }) => {
-                Some(matches_prefix_scope(PrefixScope {
-                    prefix,
-                    candidate: key,
-                }))
+            (Capability::Full { prefix }, Operation::Read { key }) => {
+                Some(matches_prefix_scope(PrefixScope { prefix, candidate: key }))
             }
-            (Capability::Full { prefix }, Operation::Delete { key }) => Some(matches_prefix_scope(PrefixScope {
+            (Capability::Full { prefix }, Operation::BatchRead { keys }) => {
+                Some(keys.iter().all(|key| matches_prefix_scope(PrefixScope { prefix, candidate: key })))
+            }
+            (Capability::Full { prefix }, Operation::Write { key, .. }) => {
+                Some(matches_prefix_scope(PrefixScope { prefix, candidate: key }))
+            }
+            (Capability::Full { prefix }, Operation::BatchWrite { keys }) => {
+                Some(keys.iter().all(|key| matches_prefix_scope(PrefixScope { prefix, candidate: key })))
+            }
+            (Capability::Full { prefix }, Operation::Delete { key }) => {
+                Some(matches_prefix_scope(PrefixScope { prefix, candidate: key }))
+            }
+            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => Some(matches_prefix_scope(PrefixScope {
                 prefix,
-                candidate: key,
+                candidate: key_prefix,
             })),
-            (Capability::Full { prefix }, Operation::Watch { key_prefix }) => Some(matches_prefix_scope(
-                PrefixScope {
-                    prefix,
-                    candidate: key_prefix,
-                },
-            )),
-            (Capability::Read { prefix }, Operation::Read { key }) => Some(matches_prefix_scope(PrefixScope {
-                prefix,
-                candidate: key,
-            })),
+            (Capability::Read { prefix }, Operation::Read { key }) => {
+                Some(matches_prefix_scope(PrefixScope { prefix, candidate: key }))
+            }
+            (Capability::Read { prefix }, Operation::BatchRead { keys }) => {
+                Some(keys.iter().all(|key| matches_prefix_scope(PrefixScope { prefix, candidate: key })))
+            }
             (Capability::Write { prefix }, Operation::Write { key, .. }) => {
-                Some(matches_prefix_scope(PrefixScope {
-                    prefix,
-                    candidate: key,
-                }))
+                Some(matches_prefix_scope(PrefixScope { prefix, candidate: key }))
+            }
+            (Capability::Write { prefix }, Operation::BatchWrite { keys }) => {
+                Some(keys.iter().all(|key| matches_prefix_scope(PrefixScope { prefix, candidate: key })))
             }
             (Capability::Delete { prefix }, Operation::Delete { key }) => {
+                Some(matches_prefix_scope(PrefixScope { prefix, candidate: key }))
+            }
+            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => {
                 Some(matches_prefix_scope(PrefixScope {
                     prefix,
-                    candidate: key,
+                    candidate: key_prefix,
                 }))
             }
-            (Capability::Watch { prefix }, Operation::Watch { key_prefix }) => Some(matches_prefix_scope(
-                PrefixScope {
-                    prefix,
-                    candidate: key_prefix,
-                },
-            )),
             (Capability::ClusterAdmin, Operation::ClusterAdmin { .. }) => Some(true),
             _ => None,
         }
@@ -813,6 +807,20 @@ pub enum Operation {
         /// Value to write (for logging/auditing).
         value: Vec<u8>,
     },
+    /// Read multiple keys.
+    ///
+    /// Batch authorization must cover every key, not just the first key.
+    BatchRead {
+        /// Keys to read.
+        keys: Vec<String>,
+    },
+    /// Write or delete multiple keys.
+    ///
+    /// Batch authorization must cover every key, not just the first key.
+    BatchWrite {
+        /// Keys affected by the batch.
+        keys: Vec<String>,
+    },
     /// Delete a key.
     Delete {
         /// Key to delete.
@@ -967,6 +975,8 @@ impl fmt::Display for Operation {
         match self {
             Operation::Read { key } => write!(f, "Read({})", key),
             Operation::Write { key, .. } => write!(f, "Write({})", key),
+            Operation::BatchRead { keys } => write!(f, "BatchRead({} keys)", keys.len()),
+            Operation::BatchWrite { keys } => write!(f, "BatchWrite({} keys)", keys.len()),
             Operation::Delete { key } => write!(f, "Delete({})", key),
             Operation::Watch { key_prefix } => write!(f, "Watch({})", key_prefix),
             Operation::ClusterAdmin { action } => write!(f, "ClusterAdmin({})", action),
@@ -1000,5 +1010,40 @@ impl fmt::Display for Operation {
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+
+    use super::*;
+
+    #[test]
+    fn read_capability_requires_every_batch_read_key_in_scope() {
+        let capability = Capability::Read {
+            prefix: "app/".to_string(),
+        };
+
+        assert!(capability.authorizes(&Operation::BatchRead {
+            keys: vec!["app/a".to_string(), "app/b".to_string()],
+        }));
+        assert!(!capability.authorizes(&Operation::BatchRead {
+            keys: vec!["app/a".to_string(), "other/b".to_string()],
+        }));
+    }
+
+    #[test]
+    fn write_capability_requires_every_batch_write_key_in_scope() {
+        let capability = Capability::Write {
+            prefix: "app/".to_string(),
+        };
+
+        assert!(capability.authorizes(&Operation::BatchWrite {
+            keys: vec!["app/a".to_string(), "app/b".to_string()],
+        }));
+        assert!(!capability.authorizes(&Operation::BatchWrite {
+            keys: vec!["app/a".to_string(), "other/b".to_string()],
+        }));
     }
 }
