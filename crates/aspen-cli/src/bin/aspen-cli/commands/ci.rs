@@ -7,6 +7,8 @@ use anyhow::Result;
 use aspen_ci_core::log_writer::CiLogChunk;
 use aspen_client::watch::WatchEvent;
 use aspen_client::watch::WatchSession;
+use aspen_client_api::CI_STATUS_SUCCESS;
+use aspen_client_api::CI_TERMINAL_STATUS_LABELS;
 use aspen_client_api::CiRunReceipt;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
@@ -89,7 +91,8 @@ pub struct ListArgs {
     #[arg(long)]
     pub repo_id: Option<String>,
 
-    /// Filter by status: pending, running, completed, failed, cancelled.
+    /// Filter by status; stable labels include initializing, checking_out,
+    /// checkout_failed, pending, running, success, failed, cancelled.
     #[arg(long)]
     pub status: Option<String>,
 
@@ -463,7 +466,7 @@ impl Outputable for CiRunReceiptOutput {
         let Some(receipt) = &self.receipt else {
             return format!("CI receipt not found: {}", self.error.as_deref().unwrap_or("unknown error"));
         };
-        let succeeded = receipt.stages.iter().filter(|stage| stage.status == "success").count();
+        let succeeded = receipt.stages.iter().filter(|stage| stage.status == CI_STATUS_SUCCESS).count();
         let total_jobs: usize = receipt.stages.iter().map(|stage| stage.jobs.len()).sum();
         let jobs_with_ids =
             receipt.stages.iter().flat_map(|stage| stage.jobs.iter()).filter(|job| job.job_id.is_some()).count();
@@ -655,7 +658,7 @@ fn ci_status_build_output(result: &aspen_client_api::CiGetStatusResponse) -> CiS
 
 /// Check if a pipeline status is terminal (no more polling needed).
 fn ci_status_is_terminal(status: &Option<String>) -> bool {
-    status.as_ref().map(|s| matches!(s.as_str(), "success" | "failed" | "cancelled")).unwrap_or(false)
+    status.as_ref().map(|s| CI_TERMINAL_STATUS_LABELS.contains(&s.as_str())).unwrap_or(false)
 }
 
 async fn ci_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
@@ -1055,5 +1058,30 @@ async fn ci_ref_status(client: &AspenClient, args: RefStatusArgs, json: bool) ->
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+#[cfg(test)]
+mod tests {
+    use aspen_client_api::CI_STATUS_CANCELLED;
+    use aspen_client_api::CI_STATUS_CHECKOUT_FAILED;
+    use aspen_client_api::CI_STATUS_FAILED;
+    use aspen_client_api::CI_STATUS_RUNNING;
+    use aspen_client_api::CI_STATUS_SUCCESS;
+
+    use super::*;
+
+    #[test]
+    fn ci_status_follow_terminal_contract_includes_all_terminal_labels() {
+        for label in [
+            CI_STATUS_CHECKOUT_FAILED,
+            CI_STATUS_SUCCESS,
+            CI_STATUS_FAILED,
+            CI_STATUS_CANCELLED,
+        ] {
+            assert!(ci_status_is_terminal(&Some(label.to_string())), "{label} must stop follow mode");
+        }
+
+        assert!(!ci_status_is_terminal(&Some(CI_STATUS_RUNNING.to_string())));
+        assert!(!ci_status_is_terminal(&None));
     }
 }

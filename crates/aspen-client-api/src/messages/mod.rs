@@ -116,6 +116,16 @@ pub use calendar::CalendarResponse;
 pub use calendar::CalendarSearchResponse;
 pub use calendar::EventInstance;
 pub use calendar::EventSummary;
+pub use ci::CI_RUN_RECEIPT_SCHEMA;
+pub use ci::CI_STATUS_CANCELLED;
+pub use ci::CI_STATUS_CHECKING_OUT;
+pub use ci::CI_STATUS_CHECKOUT_FAILED;
+pub use ci::CI_STATUS_FAILED;
+pub use ci::CI_STATUS_INITIALIZING;
+pub use ci::CI_STATUS_PENDING;
+pub use ci::CI_STATUS_RUNNING;
+pub use ci::CI_STATUS_SUCCESS;
+pub use ci::CI_TERMINAL_STATUS_LABELS;
 pub use ci::CacheDownloadResultResponse;
 pub use ci::CacheEntryResponse;
 #[cfg(feature = "ci")]

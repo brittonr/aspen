@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use aspen_client_api::CI_RUN_RECEIPT_SCHEMA;
 use aspen_client_api::CiCancelRunResponse;
 use aspen_client_api::CiGetRunReceiptResponse;
 use aspen_client_api::CiGetStatusResponse;
@@ -341,7 +342,7 @@ fn pipeline_run_to_receipt(run: &aspen_ci::orchestrator::PipelineRun) -> CiRunRe
         .collect();
 
     CiRunReceipt {
-        schema: "aspen.ci.run-receipt.v1".to_string(),
+        schema: CI_RUN_RECEIPT_SCHEMA.to_string(),
         run_id: run.id.clone(),
         pipeline_name: run.pipeline_name.clone(),
         repo_id: run.context.repo_id.to_hex(),
@@ -666,6 +667,11 @@ mod tests {
     use aspen_ci::orchestrator::PipelineRun;
     use aspen_ci::orchestrator::PipelineStatus;
     use aspen_ci::orchestrator::StageStatus;
+    use aspen_client_api::CI_STATUS_CANCELLED;
+    use aspen_client_api::CI_STATUS_CHECKOUT_FAILED;
+    use aspen_client_api::CI_STATUS_FAILED;
+    use aspen_client_api::CI_STATUS_SUCCESS;
+    use aspen_client_api::CI_TERMINAL_STATUS_LABELS;
     use aspen_client_api::CiTriggerPipelineResponse;
     use aspen_forge::identity::RepoId;
     use chrono::TimeZone;
@@ -705,6 +711,29 @@ mod tests {
         let result = trigger_response(response);
         assert!(!result.is_success);
         assert!(result.error.unwrap_or_default().contains("Invalid commit hash"));
+    }
+
+    #[test]
+    fn ci_terminal_status_contract_matches_pipeline_status() {
+        let terminal_statuses = [
+            PipelineStatus::CheckoutFailed,
+            PipelineStatus::Success,
+            PipelineStatus::Failed,
+            PipelineStatus::Cancelled,
+        ];
+        let terminal_labels: Vec<&str> = terminal_statuses.iter().map(|status| status.as_str()).collect();
+
+        assert_eq!(terminal_labels, CI_TERMINAL_STATUS_LABELS);
+        assert_eq!(CI_TERMINAL_STATUS_LABELS, [
+            CI_STATUS_CHECKOUT_FAILED,
+            CI_STATUS_SUCCESS,
+            CI_STATUS_FAILED,
+            CI_STATUS_CANCELLED
+        ]);
+
+        for status in terminal_statuses {
+            assert!(status.is_terminal(), "{} must be terminal", status.as_str());
+        }
     }
 
     #[test]
@@ -778,7 +807,7 @@ mod tests {
 
         let receipt = pipeline_run_to_receipt(&run);
 
-        assert_eq!(receipt.schema, "aspen.ci.run-receipt.v1");
+        assert_eq!(receipt.schema, CI_RUN_RECEIPT_SCHEMA);
         assert_eq!(receipt.run_id, "run-1");
         assert_eq!(receipt.repo_id, repo_id.to_hex());
         assert_eq!(receipt.commit_hash, hex::encode([9u8; 32]));

@@ -12,6 +12,27 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Schema identifier for native CI run receipts exposed to operators.
+pub const CI_RUN_RECEIPT_SCHEMA: &str = "aspen.ci.run-receipt.v1";
+
+/// Stable lowercase CI status labels shared by RPC responses, receipts, CLI, and docs.
+pub const CI_STATUS_INITIALIZING: &str = "initializing";
+pub const CI_STATUS_CHECKING_OUT: &str = "checking_out";
+pub const CI_STATUS_CHECKOUT_FAILED: &str = "checkout_failed";
+pub const CI_STATUS_PENDING: &str = "pending";
+pub const CI_STATUS_RUNNING: &str = "running";
+pub const CI_STATUS_SUCCESS: &str = "success";
+pub const CI_STATUS_FAILED: &str = "failed";
+pub const CI_STATUS_CANCELLED: &str = "cancelled";
+
+/// Terminal CI status labels. CLI follow mode must stop on every label in this list.
+pub const CI_TERMINAL_STATUS_LABELS: &[&str] = &[
+    CI_STATUS_CHECKOUT_FAILED,
+    CI_STATUS_SUCCESS,
+    CI_STATUS_FAILED,
+    CI_STATUS_CANCELLED,
+];
+
 fn default_completed_at_ms() -> Option<u64> {
     None
 }
@@ -207,7 +228,8 @@ pub struct CiTriggerPipelineResponse {
 pub struct CiStageInfo {
     /// Stage name.
     pub name: String,
-    /// Stage status: pending, running, succeeded, failed, cancelled.
+    /// Stage status: initializing, checking_out, checkout_failed, pending, running, success,
+    /// failed, cancelled.
     pub status: String,
     /// Jobs in this stage.
     pub jobs: Vec<CiJobInfo>,
@@ -220,7 +242,8 @@ pub struct CiJobInfo {
     pub id: String,
     /// Job name.
     pub name: String,
-    /// Job status: pending, running, succeeded, failed, cancelled.
+    /// Job status: initializing, checking_out, checkout_failed, pending, running, success, failed,
+    /// cancelled.
     pub status: String,
     /// Job start time (Unix timestamp in milliseconds).
     pub started_at_ms: Option<u64>,
@@ -243,7 +266,8 @@ pub struct CiGetStatusResponse {
     pub ref_name: Option<String>,
     /// Commit hash.
     pub commit_hash: Option<String>,
-    /// Pipeline status: pending, running, succeeded, failed, cancelled.
+    /// Pipeline status: initializing, checking_out, checkout_failed, pending, running, success,
+    /// failed, cancelled.
     pub status: Option<String>,
     /// Stage information.
     pub stages: Vec<CiStageInfo>,
@@ -697,4 +721,28 @@ pub struct CacheMigrationValidateResultResponse {
     pub missing_hashes: Vec<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ci_receipt_schema_and_status_labels_are_documented() {
+        let deploy_doc = include_str!("../../../../docs/deploy.md");
+
+        assert!(deploy_doc.contains(CI_RUN_RECEIPT_SCHEMA));
+        for label in [
+            CI_STATUS_INITIALIZING,
+            CI_STATUS_CHECKING_OUT,
+            CI_STATUS_CHECKOUT_FAILED,
+            CI_STATUS_PENDING,
+            CI_STATUS_RUNNING,
+            CI_STATUS_SUCCESS,
+            CI_STATUS_FAILED,
+            CI_STATUS_CANCELLED,
+        ] {
+            assert!(deploy_doc.contains(&format!("`{label}`")), "deploy docs must mention CI status label `{label}`");
+        }
+    }
 }

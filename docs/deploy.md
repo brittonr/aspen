@@ -140,7 +140,7 @@ aspen-cli ci receipt <run-id>
 aspen-cli --json ci receipt <run-id>
 ```
 
-The receipt schema is `aspen.ci.run-receipt.v1`. It includes run ID, repository ID, ref, commit hash, pipeline name, terminal/current status, timestamps, stages, and deterministically ordered jobs. Missing run IDs fail explicitly instead of fabricating evidence. This first slice is a projection of existing run state rather than a separate immutable receipt row.
+The receipt schema is `aspen.ci.run-receipt.v1`. It includes run ID, repository ID, ref, commit hash, pipeline name, terminal/current status, timestamps, stages, and deterministically ordered jobs. The stable CI status labels exposed by RPC responses, receipts, CLI filters, and `ci status --follow` are `initializing`, `checking_out`, `checkout_failed`, `pending`, `running`, `success`, `failed`, and `cancelled`; terminal labels are `checkout_failed`, `success`, `failed`, and `cancelled`. Missing run IDs fail explicitly instead of fabricating evidence. This first slice is a projection of existing run state rather than a separate immutable receipt row.
 
 ## Dogfood Script
 
