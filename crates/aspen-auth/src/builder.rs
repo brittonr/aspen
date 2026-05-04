@@ -202,6 +202,8 @@ impl TokenBuilder {
 /// - `Delegate` - ability to create child tokens
 /// - `FederationPull { repo_prefix: "" }` - pull any federated resource
 /// - `FederationPush { repo_prefix: "" }` - push any federated resource
+/// - `SnixRead { resource_prefix: "" }` - read any SNIX store resource
+/// - `SnixWrite { resource_prefix: "" }` - write any SNIX store resource
 ///
 /// Use this during cluster bootstrap to create the initial admin token. Root tokens
 /// are intentionally bearer tokens so the first operator can bootstrap clients
@@ -232,6 +234,12 @@ pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result
         })
         .with_capability(Capability::FederationPush {
             repo_prefix: String::new(),
+        })
+        .with_capability(Capability::SnixRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::SnixWrite {
+            resource_prefix: String::new(),
         })
         .with_lifetime(lifetime)
         .with_random_nonce()

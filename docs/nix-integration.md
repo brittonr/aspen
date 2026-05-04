@@ -159,6 +159,18 @@ All snix services share the same underlying Raft-replicated storage:
 - **DirectoryService** → Raft KV (directory tree nodes keyed by digest)
 - **PathInfoService** → Raft KV (store path metadata: NAR hash, size, references, signatures)
 
+## Authorization Contract
+
+SNIX DirectoryService and PathInfoService RPCs are authorized with SNIX-specific
+capabilities rather than generic KV scopes. Directory and path-info reads map to
+`Operation::SnixRead` resources (`dir:<digest>` and `pathinfo:<digest>`), while
+writes map to `Operation::SnixWrite` resource-class prefixes (`dir:` and
+`pathinfo:`). Generic `Read`, `Write`, or `Full` capabilities over `snix:` keys do
+not authorize SNIX store mutation; operators should delegate `SnixRead` /
+`SnixWrite` capabilities scoped to the resource class they intend to expose.
+Root/bootstrap tokens intentionally include empty-prefix `SnixRead` and
+`SnixWrite` capabilities so cluster operators retain full store authority.
+
 The gRPC bridge (`aspen-snix-bridge`) exposes these services to external `snix-store`
 and `nix` CLI tools. The HTTP gateway (`aspen-nix-cache-gateway`) serves them via the
 standard Nix binary cache protocol.

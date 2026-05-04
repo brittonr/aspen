@@ -281,6 +281,26 @@ pub enum Capability {
         /// Federated resource ID prefix.
         repo_prefix: String,
     },
+
+    // ==========================================================================
+    // SNIX Store Capabilities
+    // ==========================================================================
+    /// Read SNIX store resources matching a resource prefix.
+    ///
+    /// Authorizes DirectoryService and PathInfoService read operations for
+    /// resource IDs such as `dir:<digest>` or `pathinfo:<digest>`.
+    SnixRead {
+        /// SNIX resource ID prefix. Empty prefix matches all SNIX resources.
+        resource_prefix: String,
+    },
+    /// Write SNIX store resources matching a resource prefix.
+    ///
+    /// Authorizes DirectoryService and PathInfoService write operations for
+    /// resource IDs such as `dir:` or `pathinfo:`.
+    SnixWrite {
+        /// SNIX resource ID prefix. Empty prefix matches all SNIX resources.
+        resource_prefix: String,
+    },
 }
 
 fn matches_prefix_scope(scope: PrefixScope<'_>) -> bool {
@@ -342,6 +362,7 @@ impl Capability {
             .or_else(|| self.authorizes_pki(op))
             .or_else(|| self.authorizes_net(op))
             .or_else(|| self.authorizes_federation(op))
+            .or_else(|| self.authorizes_snix(op))
             .unwrap_or(false)
     }
 
@@ -539,6 +560,19 @@ impl Capability {
         }
     }
 
+    fn authorizes_snix(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::SnixRead { resource_prefix }, Operation::SnixRead { resource })
+            | (Capability::SnixWrite { resource_prefix }, Operation::SnixWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     /// Check if this capability authorizes executing a specific shell command.
     ///
     /// This is a convenience method for shell command authorization.
@@ -563,6 +597,7 @@ impl Capability {
             .or_else(|| self.contains_pki(other))
             .or_else(|| self.contains_net(other))
             .or_else(|| self.contains_federation(other))
+            .or_else(|| self.contains_snix(other))
             .unwrap_or(false)
     }
 
@@ -788,6 +823,27 @@ impl Capability {
             _ => None,
         }
     }
+
+    fn contains_snix(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::SnixRead {
+                    resource_prefix: parent,
+                },
+                Capability::SnixRead { resource_prefix: child },
+            )
+            | (
+                Capability::SnixWrite {
+                    resource_prefix: parent,
+                },
+                Capability::SnixWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
 }
 
 /// Operations that require authorization.
@@ -968,6 +1024,16 @@ pub enum Operation {
         /// Federated resource ID (short form).
         fed_id: String,
     },
+    /// Read a SNIX store resource.
+    SnixRead {
+        /// SNIX resource ID, e.g. `dir:<digest>` or `pathinfo:<digest>`.
+        resource: String,
+    },
+    /// Write a SNIX store resource.
+    SnixWrite {
+        /// SNIX resource ID or resource class prefix, e.g. `dir:` or `pathinfo:`.
+        resource: String,
+    },
 }
 
 impl fmt::Display for Operation {
@@ -1009,6 +1075,9 @@ impl fmt::Display for Operation {
             // Federation operations
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),
+            // SNIX operations
+            Operation::SnixRead { resource } => write!(f, "SnixRead({resource})"),
+            Operation::SnixWrite { resource } => write!(f, "SnixWrite({resource})"),
         }
     }
 }
@@ -1044,6 +1113,26 @@ mod tests {
         }));
         assert!(!capability.authorizes(&Operation::BatchWrite {
             keys: vec!["app/a".to_string(), "other/b".to_string()],
+        }));
+    }
+
+    #[test]
+    fn snix_capabilities_do_not_fall_back_to_generic_kv_scope() {
+        let generic_full = Capability::Full {
+            prefix: "snix:".to_string(),
+        };
+        let snix_write = Capability::SnixWrite {
+            resource_prefix: "dir:".to_string(),
+        };
+
+        let operation = Operation::SnixWrite {
+            resource: "dir:".to_string(),
+        };
+
+        assert!(!generic_full.authorizes(&operation));
+        assert!(snix_write.authorizes(&operation));
+        assert!(!snix_write.authorizes(&Operation::SnixWrite {
+            resource: "pathinfo:".to_string(),
         }));
     }
 }

@@ -183,19 +183,17 @@ impl CiRequest {
                 key: "_sys:nix-cache:public-key".to_string(),
             }),
 
-            Self::SnixDirectoryGet { digest } => Some(Operation::Read {
-                key: format!("snix:dir:{digest}"),
+            Self::SnixDirectoryGet { digest } => Some(Operation::SnixRead {
+                resource: format!("dir:{digest}"),
             }),
-            Self::SnixDirectoryPut { .. } => Some(Operation::Write {
-                key: "snix:dir:".to_string(),
-                value: vec![],
+            Self::SnixDirectoryPut { .. } => Some(Operation::SnixWrite {
+                resource: "dir:".to_string(),
             }),
-            Self::SnixPathInfoGet { digest } => Some(Operation::Read {
-                key: format!("snix:pathinfo:{digest}"),
+            Self::SnixPathInfoGet { digest } => Some(Operation::SnixRead {
+                resource: format!("pathinfo:{digest}"),
             }),
-            Self::SnixPathInfoPut { .. } => Some(Operation::Write {
-                key: "snix:pathinfo:".to_string(),
-                value: vec![],
+            Self::SnixPathInfoPut { .. } => Some(Operation::SnixWrite {
+                resource: "pathinfo:".to_string(),
             }),
 
             #[cfg(feature = "ci")]

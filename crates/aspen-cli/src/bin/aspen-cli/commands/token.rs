@@ -34,7 +34,7 @@ pub enum TokenCommand {
     ///
     /// Creates a root token signed by the provided secret key.
     /// If no capabilities are specified, generates a full root token
-    /// with Full, ClusterAdmin, and Delegate capabilities.
+    /// with Full, ClusterAdmin, Delegate, federation, and SNIX capabilities.
     Generate(GenerateArgs),
 
     /// Inspect a capability token.
@@ -168,6 +168,8 @@ pub fn parse_duration(s: &str) -> Result<Duration> {
 /// - `secrets-admin` → `SecretsAdmin`
 /// - `federation-pull` or `federation-pull:repo-prefix` → `FederationPull { repo_prefix }`
 /// - `federation-push` or `federation-push:repo-prefix` → `FederationPush { repo_prefix }`
+/// - `snix-read` or `snix-read:resource-prefix` → `SnixRead { resource_prefix }`
+/// - `snix-write` or `snix-write:resource-prefix` → `SnixWrite { resource_prefix }`
 pub fn parse_capability(s: &str) -> Result<Capability> {
     let s = s.trim();
 
@@ -184,6 +186,16 @@ pub fn parse_capability(s: &str) -> Result<Capability> {
         "federation-push" => {
             return Ok(Capability::FederationPush {
                 repo_prefix: String::new(),
+            });
+        }
+        "snix-read" => {
+            return Ok(Capability::SnixRead {
+                resource_prefix: String::new(),
+            });
+        }
+        "snix-write" => {
+            return Ok(Capability::SnixWrite {
+                resource_prefix: String::new(),
             });
         }
         _ => {}
@@ -242,10 +254,17 @@ pub fn parse_capability(s: &str) -> Result<Capability> {
         "federation-push" => Ok(Capability::FederationPush {
             repo_prefix: value.to_string(),
         }),
+        "snix-read" => Ok(Capability::SnixRead {
+            resource_prefix: value.to_string(),
+        }),
+        "snix-write" => Ok(Capability::SnixWrite {
+            resource_prefix: value.to_string(),
+        }),
         other => anyhow::bail!(
             "unknown capability type '{other}'. Valid types: full, read, write, delete, watch, \
              cluster-admin, delegate, shell, secrets-read, secrets-write, secrets-delete, \
-             secrets-list, secrets-full, secrets-admin, federation-pull, federation-push"
+             secrets-list, secrets-full, secrets-admin, federation-pull, federation-push, \
+             snix-read, snix-write"
         ),
     }
 }
@@ -395,9 +414,12 @@ fn format_capability(cap: &Capability) -> String {
         Capability::NetConnect { service_prefix } => format!("NetConnect (prefix: {service_prefix})"),
         Capability::NetPublish { service_prefix } => format!("NetPublish (prefix: {service_prefix})"),
         Capability::NetAdmin => "NetAdmin".to_string(),
-        // Federation sync
+        // Federation sync capabilities
         Capability::FederationPull { repo_prefix } => format!("FederationPull (prefix: {repo_prefix})"),
         Capability::FederationPush { repo_prefix } => format!("FederationPush (prefix: {repo_prefix})"),
+        // SNIX store capabilities
+        Capability::SnixRead { resource_prefix } => format!("SnixRead (prefix: {resource_prefix})"),
+        Capability::SnixWrite { resource_prefix } => format!("SnixWrite (prefix: {resource_prefix})"),
     }
 }
 
@@ -670,6 +692,22 @@ mod tests {
         let cap = parse_capability("federation-pull:forge:org-a/").unwrap();
         assert_eq!(cap, Capability::FederationPull {
             repo_prefix: "forge:org-a/".to_string(),
+        });
+    }
+
+    #[test]
+    fn test_parse_capability_snix_write() {
+        let cap = parse_capability("snix-write:pathinfo:").unwrap();
+        assert_eq!(cap, Capability::SnixWrite {
+            resource_prefix: "pathinfo:".to_string(),
+        });
+    }
+
+    #[test]
+    fn test_parse_capability_snix_read_all() {
+        let cap = parse_capability("snix-read").unwrap();
+        assert_eq!(cap, Capability::SnixRead {
+            resource_prefix: String::new(),
         });
     }
 

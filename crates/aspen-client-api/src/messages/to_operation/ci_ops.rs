@@ -78,21 +78,74 @@ fn to_operation_cache_snix(request: &ClientRpcRequest) -> Option<Option<Operatio
             }))
         }
 
-        ClientRpcRequest::SnixDirectoryGet { digest } => Some(Some(Operation::Read {
-            key: format!("snix:dir:{digest}"),
+        ClientRpcRequest::SnixDirectoryGet { digest } => Some(Some(Operation::SnixRead {
+            resource: format!("dir:{digest}"),
         })),
-        ClientRpcRequest::SnixDirectoryPut { .. } => Some(Some(Operation::Write {
-            key: "snix:dir:".to_string(),
-            value: vec![],
+        ClientRpcRequest::SnixDirectoryPut { .. } => Some(Some(Operation::SnixWrite {
+            resource: "dir:".to_string(),
         })),
-        ClientRpcRequest::SnixPathInfoGet { digest } => Some(Some(Operation::Read {
-            key: format!("snix:pathinfo:{digest}"),
+        ClientRpcRequest::SnixPathInfoGet { digest } => Some(Some(Operation::SnixRead {
+            resource: format!("pathinfo:{digest}"),
         })),
-        ClientRpcRequest::SnixPathInfoPut { .. } => Some(Some(Operation::Write {
-            key: "snix:pathinfo:".to_string(),
-            value: vec![],
+        ClientRpcRequest::SnixPathInfoPut { .. } => Some(Some(Operation::SnixWrite {
+            resource: "pathinfo:".to_string(),
         })),
 
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_auth_core::Capability;
+
+    use super::*;
+
+    fn operation_for(request: &ClientRpcRequest) -> Operation {
+        to_operation(request).flatten().expect("request should require auth")
+    }
+
+    #[test]
+    fn snix_requests_require_snix_scoped_operations() {
+        let directory_get = operation_for(&ClientRpcRequest::SnixDirectoryGet {
+            digest: "dir-digest".to_string(),
+        });
+        assert!(matches!(directory_get, Operation::SnixRead { resource } if resource == "dir:dir-digest"));
+
+        let directory_put = operation_for(&ClientRpcRequest::SnixDirectoryPut {
+            directory_bytes: "encoded-directory".to_string(),
+        });
+        assert!(matches!(directory_put, Operation::SnixWrite { resource } if resource == "dir:"));
+
+        let pathinfo_get = operation_for(&ClientRpcRequest::SnixPathInfoGet {
+            digest: "path-digest".to_string(),
+        });
+        assert!(matches!(pathinfo_get, Operation::SnixRead { resource } if resource == "pathinfo:path-digest"));
+
+        let pathinfo_put = operation_for(&ClientRpcRequest::SnixPathInfoPut {
+            pathinfo_bytes: "encoded-pathinfo".to_string(),
+        });
+        assert!(matches!(pathinfo_put, Operation::SnixWrite { resource } if resource == "pathinfo:"));
+    }
+
+    #[test]
+    fn generic_kv_scopes_do_not_authorize_snix_put_operations() {
+        let generic_full = Capability::Full {
+            prefix: "snix:".to_string(),
+        };
+        let generic_write = Capability::Write {
+            prefix: "snix:".to_string(),
+        };
+        let snix_write = Capability::SnixWrite {
+            resource_prefix: "dir:".to_string(),
+        };
+
+        let operation = operation_for(&ClientRpcRequest::SnixDirectoryPut {
+            directory_bytes: "encoded-directory".to_string(),
+        });
+
+        assert!(!generic_full.authorizes(&operation));
+        assert!(!generic_write.authorizes(&operation));
+        assert!(snix_write.authorizes(&operation));
     }
 }

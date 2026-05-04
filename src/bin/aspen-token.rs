@@ -677,6 +677,15 @@ fn parse_federation_capability(parts: &[&str]) -> Option<Capability> {
     }
 }
 
+fn parse_snix_capability(parts: &[&str]) -> Option<Capability> {
+    let resource_prefix = if parts.len() == 2 { parts[1] } else { "" }.to_string();
+    match parts[0] {
+        "snix-read" => Some(Capability::SnixRead { resource_prefix }),
+        "snix-write" => Some(Capability::SnixWrite { resource_prefix }),
+        _ => None,
+    }
+}
+
 fn is_federation_proxy_capability(capability: &Capability) -> bool {
     matches!(capability, Capability::FederationPull { .. } | Capability::FederationPush { .. })
 }
@@ -701,11 +710,15 @@ fn parse_capability(s: &str) -> Result<Capability> {
     if let Some(capability) = parse_federation_capability(&parts) {
         return Ok(capability);
     }
+    if let Some(capability) = parse_snix_capability(&parts) {
+        return Ok(capability);
+    }
 
     anyhow::bail!(
         "unknown capability type '{}'. Use: read:PREFIX, write:PREFIX, delete:PREFIX, \
          full:PREFIX, watch:PREFIX, cluster-admin, delegate, secrets-*:MOUNT:PREFIX, \
-         transit-*:KEY_PREFIX, pki-*, federation-pull[:PREFIX], federation-push[:PREFIX]",
+         transit-*:KEY_PREFIX, pki-*, federation-pull[:PREFIX], federation-push[:PREFIX], \
+         snix-read[:RESOURCE_PREFIX], snix-write[:RESOURCE_PREFIX]",
         parts[0]
     )
 }
@@ -753,6 +766,9 @@ fn format_capability(cap: &Capability) -> String {
         // Federation sync capabilities
         Capability::FederationPull { repo_prefix } => format!("federation-pull:{}", repo_prefix),
         Capability::FederationPush { repo_prefix } => format!("federation-push:{}", repo_prefix),
+        // SNIX store capabilities
+        Capability::SnixRead { resource_prefix } => format!("snix-read:{}", resource_prefix),
+        Capability::SnixWrite { resource_prefix } => format!("snix-write:{}", resource_prefix),
     }
 }
 
@@ -869,6 +885,16 @@ mod tests {
         let output = fs::read_to_string(output_path).expect("read root json");
         let value: serde_json::Value = serde_json::from_str(&output).expect("parse root json");
         assert_eq!(value["audience"], "Bearer (anyone)");
+    }
+
+    #[test]
+    fn parse_snix_capabilities() {
+        assert_eq!(parse_capability("snix-read:dir:").expect("snix read should parse"), Capability::SnixRead {
+            resource_prefix: "dir:".to_string(),
+        });
+        assert_eq!(parse_capability("snix-write:pathinfo:").expect("snix write should parse"), Capability::SnixWrite {
+            resource_prefix: "pathinfo:".to_string(),
+        });
     }
 
     #[test]

@@ -599,7 +599,7 @@ fn test_generate_root_token() {
     // Should be a bearer token
     assert!(matches!(token.audience, Audience::Bearer));
 
-    // Should have Full, ClusterAdmin, Delegate, and federation sync capabilities
+    // Should have Full, ClusterAdmin, Delegate, federation sync, and SNIX store capabilities
     assert!(token.capabilities.contains(&Capability::Full { prefix: String::new() }));
     assert!(token.capabilities.contains(&Capability::ClusterAdmin));
     assert!(token.capabilities.contains(&Capability::Delegate));
@@ -608,6 +608,12 @@ fn test_generate_root_token() {
     }));
     assert!(token.capabilities.contains(&Capability::FederationPush {
         repo_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::SnixRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::SnixWrite {
+        resource_prefix: String::new(),
     }));
 
     // Should have a nonce
@@ -660,6 +666,26 @@ fn test_generate_root_token() {
             None,
         )
         .expect("root token should authorize federation push");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::SnixRead {
+                resource: "dir:abc".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize SNIX reads");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::SnixWrite {
+                resource: "pathinfo:".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize SNIX writes");
 }
 
 // ============================================================================
