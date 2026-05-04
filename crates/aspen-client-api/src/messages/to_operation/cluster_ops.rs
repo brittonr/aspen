@@ -18,6 +18,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::TriggerSnapshot
         | ClientRpcRequest::PromoteLearner { .. }
         | ClientRpcRequest::AddPeer { .. }
+        | ClientRpcRequest::PluginReload { .. }
         | ClientRpcRequest::CheckpointWal => Some(Some(Operation::ClusterAdmin {
             action: "cluster_operation".to_string(),
         })),
@@ -32,6 +33,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::GetClusterState
         | ClientRpcRequest::GetClusterTicketCombined { .. }
         | ClientRpcRequest::GetMetrics
+        | ClientRpcRequest::GetNetworkMetrics
         | ClientRpcRequest::ListVaults
         | ClientRpcRequest::GetFederationStatus
         | ClientRpcRequest::ListDiscoveredClusters

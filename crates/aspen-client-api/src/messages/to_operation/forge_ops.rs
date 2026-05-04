@@ -31,6 +31,10 @@ fn jj_native_auth_operation(operation: &JjNativeOperation) -> Operation {
 
 pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     match request {
+        // Nostr challenge/verification bootstrap authentication and therefore
+        // must remain callable before a capability token exists.
+        ClientRpcRequest::NostrAuthChallenge { .. } | ClientRpcRequest::NostrAuthVerify { .. } => Some(None),
+
         ClientRpcRequest::ForgeJjNative { request } => Some(Some(jj_native_auth_operation(&request.operation))),
 
         // Forge write operations
@@ -52,6 +56,15 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::ForgeApprovePatch { .. }
         | ClientRpcRequest::ForgeMergePatch { .. }
         | ClientRpcRequest::ForgeClosePatch { .. }
+        | ClientRpcRequest::ForgeCreateDiscussion { .. }
+        | ClientRpcRequest::ForgeReplyDiscussion { .. }
+        | ClientRpcRequest::ForgeLockDiscussion { .. }
+        | ClientRpcRequest::ForgeUnlockDiscussion { .. }
+        | ClientRpcRequest::ForgeCloseDiscussion { .. }
+        | ClientRpcRequest::ForgeReopenDiscussion { .. }
+        | ClientRpcRequest::ForgeForkRepo { .. }
+        | ClientRpcRequest::ForgeSetMirror { .. }
+        | ClientRpcRequest::ForgeDisableMirror { .. }
         | ClientRpcRequest::TrustCluster { .. }
         | ClientRpcRequest::UntrustCluster { .. }
         | ClientRpcRequest::FederateRepository { .. }
@@ -70,7 +83,8 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::GitBridgePushComplete { .. } => Some(Some(forge_write_operation())),
 
         // Forge read operations
-        ClientRpcRequest::ForgeGetRepo { .. }
+        ClientRpcRequest::NostrGetProfile { .. }
+        | ClientRpcRequest::ForgeGetRepo { .. }
         | ClientRpcRequest::ForgeListRepos { .. }
         | ClientRpcRequest::ForgeGetBlob { .. }
         | ClientRpcRequest::ForgeGetTree { .. }
@@ -84,6 +98,11 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::ForgeListPatches { .. }
         | ClientRpcRequest::ForgeGetPatch { .. }
         | ClientRpcRequest::ForgeCheckMerge { .. }
+        | ClientRpcRequest::ForgeListDiscussions { .. }
+        | ClientRpcRequest::ForgeGetDiscussion { .. }
+        | ClientRpcRequest::ForgeGetMirrorStatus { .. }
+        | ClientRpcRequest::ForgeDiffCommits { .. }
+        | ClientRpcRequest::ForgeDiffRefs { .. }
         | ClientRpcRequest::ForgeGetDelegateKey { .. }
         | ClientRpcRequest::GitBridgeListRefs { .. }
         | ClientRpcRequest::GitBridgeFetch { .. }

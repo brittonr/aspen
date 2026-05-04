@@ -9,6 +9,7 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         // Key-value read operations
         ClientRpcRequest::ReadKey { key }
         | ClientRpcRequest::ScanKeys { prefix: key, .. }
+        | ClientRpcRequest::HashCheck { key, .. }
         | ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),
 
         // Key-value write operations
