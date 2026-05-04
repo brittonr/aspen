@@ -5,9 +5,9 @@
 
 ## Phase 2: Inventory and Threat Model
 
-- [ ] Build a structured audit inventory covering request enums, handlers, persisted prefixes, token/ticket files, CLI outputs, receipts, logs, external process boundaries, feature gates, and existing tests.
-- [ ] Write a threat model that maps assets, actors, trust boundaries, abuse cases, and expected controls for every audit domain.
-- [ ] Record which surfaces are intentionally public and which are protected by capability, presenter binding, cluster admin, federation proxy delegation, SNIX-specific caps, or filesystem permissions.
+- [x] Build a structured audit inventory covering request enums, handlers, persisted prefixes, token/ticket files, CLI outputs, receipts, logs, external process boundaries, feature gates, and existing tests. Evidence: `evidence/audit-inventory.md`, `evidence/audit-inventory.json`.
+- [x] Write a threat model that maps assets, actors, trust boundaries, abuse cases, and expected controls for every audit domain. Evidence: `evidence/threat-model.md`.
+- [x] Record which surfaces are intentionally public and which are protected by capability, presenter binding, cluster admin, federation proxy delegation, SNIX-specific caps, or filesystem permissions. Evidence: `evidence/authority-boundary-classification.md`.
 
 ## Phase 3: Authorization and Authority Boundary Audit
 

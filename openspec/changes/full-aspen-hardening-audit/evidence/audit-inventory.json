@@ -1,0 +1,302 @@
+{
+  "schema": "aspen.full-hardening-audit.inventory.v1",
+  "generated_on": "2026-05-04",
+  "source_policy": "static source handles only; no real token/ticket/secret files read",
+  "counts": {
+    "ClientRpcRequest_variants": 350,
+    "CiRequest_variants": 25,
+    "Operation_variants": 30,
+    "Capability_variants": 30,
+    "Audience_variants": 2
+  },
+  "variant_samples": {
+    "ClientRpcRequest_first_20": [
+      "GetHealth",
+      "GetRaftMetrics",
+      "GetLeader",
+      "GetNodeInfo",
+      "GetClusterTicket",
+      "InitCluster",
+      "InitClusterWithTrust",
+      "ReadKey",
+      "WriteKey",
+      "CompareAndSwapKey",
+      "CompareAndDeleteKey",
+      "TriggerSnapshot",
+      "AddLearner",
+      "ChangeMembership",
+      "Ping",
+      "GetClusterState",
+      "DeleteKey",
+      "ScanKeys",
+      "GetMetrics",
+      "GetNetworkMetrics"
+    ],
+    "CiRequest": [
+      "CiTriggerPipeline",
+      "CiGetStatus",
+      "CiGetRunReceipt",
+      "CiListRuns",
+      "CiCancelRun",
+      "CiWatchRepo",
+      "CiUnwatchRepo",
+      "CiListArtifacts",
+      "CiGetArtifact",
+      "CiGetJobLogs",
+      "CiSubscribeLogs",
+      "CiGetJobOutput",
+      "CiGetRefStatus",
+      "CacheQuery",
+      "CacheStats",
+      "CacheDownload",
+      "NixCacheGetPublicKey",
+      "SnixDirectoryGet",
+      "SnixDirectoryPut",
+      "SnixPathInfoGet",
+      "SnixPathInfoPut",
+      "CacheMigrationStart",
+      "CacheMigrationStatus",
+      "CacheMigrationCancel",
+      "CacheMigrationValidate"
+    ],
+    "Operation": [
+      "Read",
+      "Write",
+      "BatchRead",
+      "BatchWrite",
+      "Delete",
+      "Watch",
+      "ClusterAdmin",
+      "ShellExecute",
+      "SecretsRead",
+      "SecretsWrite",
+      "SecretsDelete",
+      "SecretsList",
+      "TransitEncrypt",
+      "TransitDecrypt",
+      "TransitSign",
+      "TransitVerify",
+      "TransitKeyManage",
+      "PkiIssue",
+      "PkiRevoke",
+      "PkiReadCa",
+      "PkiManage",
+      "SecretsAdmin",
+      "NetConnect",
+      "NetPublish",
+      "NetUnpublish",
+      "NetAdmin",
+      "FederationPull",
+      "FederationPush",
+      "SnixRead",
+      "SnixWrite"
+    ],
+    "Capability": [
+      "Read",
+      "Write",
+      "Delete",
+      "Full",
+      "Watch",
+      "ClusterAdmin",
+      "Delegate",
+      "ShellExecute",
+      "SecretsRead",
+      "SecretsWrite",
+      "SecretsDelete",
+      "SecretsList",
+      "SecretsFull",
+      "TransitEncrypt",
+      "TransitDecrypt",
+      "TransitSign",
+      "TransitVerify",
+      "TransitKeyManage",
+      "PkiIssue",
+      "PkiRevoke",
+      "PkiReadCa",
+      "PkiManage",
+      "SecretsAdmin",
+      "NetConnect",
+      "NetPublish",
+      "NetAdmin",
+      "FederationPull",
+      "FederationPush",
+      "SnixRead",
+      "SnixWrite"
+    ],
+    "Audience": [
+      "Key",
+      "Bearer"
+    ]
+  },
+  "surfaces": [
+    {
+      "domain": "auth/request-classification",
+      "asset": "client RPC operations",
+      "sources": [
+        "crates/aspen-client-api/src/messages/mod.rs:571",
+        "crates/aspen-client-api/src/messages/to_operation/mod.rs",
+        "crates/aspen-rpc-handlers/src/client.rs:353"
+      ],
+      "control": "ClientRpcRequest::to_operation -> Operation; public exemptions explicit; auth gate before HandlerRegistry dispatch",
+      "evidence": "enum counts + existing to_operation tests",
+      "next": "Phase 3 variant matrix and fail-closed drift test"
+    },
+    {
+      "domain": "auth/request-classification",
+      "asset": "CI domain operations",
+      "sources": [
+        "crates/aspen-client-api/src/messages/ci.rs:42"
+      ],
+      "control": "CiRequest mappings must mirror security-sensitive ClientRpcRequest operations where applicable",
+      "evidence": "CiRequest count and source handle",
+      "next": "Phase 3 CiRequest operation matrix"
+    },
+    {
+      "domain": "auth/capabilities",
+      "asset": "capability tokens and operation matching",
+      "sources": [
+        "crates/aspen-auth-core/src/capability.rs:113",
+        "crates/aspen-auth-core/src/capability.rs:853",
+        "crates/aspen-auth-core/src/token.rs:20"
+      ],
+      "control": "Capability::authorizes over explicit Operation variants; Audience::Key presenter binding where used",
+      "evidence": "Operation/Capability/Audience variant inventory",
+      "next": "Phase 3 negative capability tests"
+    },
+    {
+      "domain": "dispatch/proxy",
+      "asset": "handler dispatch and proxy forwarding",
+      "sources": [
+        "crates/aspen-rpc-core/src/handler.rs",
+        "crates/aspen-rpc-handlers/src/client.rs",
+        "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs"
+      ],
+      "control": "auth-before-dispatch; forwarded requests preserve verified tokens only when proxy policy permits",
+      "evidence": "source handles from previous hardening slices",
+      "next": "Phase 3 source-order/drift evidence"
+    },
+    {
+      "domain": "federation",
+      "asset": "federation credentials and pull/push scopes",
+      "sources": [
+        "crates/aspen-federation/src/token_store.rs",
+        "crates/aspen-federation/src/sync/handler.rs",
+        "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs"
+      ],
+      "control": "FederationPull/FederationPush operations; proxy bearer proof requirements; stored credential lookup by cluster key",
+      "evidence": "source handles and existing federation auth scope tests",
+      "next": "Phase 3 federation matrix"
+    },
+    {
+      "domain": "storage/reserved-prefixes",
+      "asset": "Raft KV and reserved domain prefixes",
+      "sources": [
+        "crates/aspen-raft-kv/src/lib.rs",
+        "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+        "crates/aspen-client-api/src/messages/batch.rs"
+      ],
+      "control": "domain-specific caps or fail-closed ClusterAdmin for reserved prefixes across read/write/scan/watch/batch/conditional keys",
+      "evidence": "recent SNIX reserved KV hardening commits + batch condition tests",
+      "next": "Phase 3 complete prefix inventory"
+    },
+    {
+      "domain": "snix/supply-chain",
+      "asset": "SNIX store/cache/build/eval authority",
+      "sources": [
+        "crates/aspen-snix/src",
+        "crates/aspen-snix-bridge/src",
+        "crates/aspen-ci-executor-nix/src",
+        "crates/aspen-nix-cache-gateway/src"
+      ],
+      "control": "SnixRead/SnixWrite capabilities for DirectoryService/PathInfoService; build sandbox and cache gateway documented separately",
+      "evidence": "crate source handles",
+      "next": "Phase 5 sandbox/cache gateway audit"
+    },
+    {
+      "domain": "secrets/trust",
+      "asset": "cluster secrets, trust shares, SOPS material",
+      "sources": [
+        "crates/aspen-trust/src",
+        "crates/aspen-secrets-core/src",
+        "crates/aspen-secrets/src",
+        "openspec/specs/trust-crypto-secrets-extraction/spec.md"
+      ],
+      "control": "secrets remain in intended core/runtime boundaries; no operator output of secret payloads",
+      "evidence": "existing trust/secrets extraction specs",
+      "next": "Phase 4 redaction and boundary checks"
+    },
+    {
+      "domain": "tokens/tickets/filesystem",
+      "asset": "cluster tickets, root/bootstrap tokens, Iroh secret keys",
+      "sources": [
+        "crates/aspen-ticket/src",
+        "crates/aspen-ci-executor-vm/src/config.rs:40",
+        "crates/aspen-cluster/src/endpoint_manager.rs:493"
+      ],
+      "control": "owner-only permissions for local secret keys/token/ticket files; never print credential values",
+      "evidence": "permission source handles; no real secret reads",
+      "next": "Phase 4 permission and output tests"
+    },
+    {
+      "domain": "jobs/ci/execution",
+      "asset": "shell worker, VM worker, CI execution, deploy control plane",
+      "sources": [
+        "crates/aspen-jobs-worker-shell/src/lib.rs:174",
+        "crates/aspen-ci-executor-vm/src/config.rs:26",
+        "crates/aspen-ci/src",
+        "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs"
+      ],
+      "control": "ShellExecute tokens; VM cluster ticket injection; deploy requires ClusterAdmin; receipts identify run/artifact handles",
+      "evidence": "source handles and deploy status auth tests",
+      "next": "Phase 5 execution boundary evidence"
+    },
+    {
+      "domain": "dogfood/operator-evidence",
+      "asset": "dogfood/CI/deploy receipts and diagnostics",
+      "sources": [
+        "crates/aspen-dogfood/src/receipt.rs",
+        "openspec/specs/dogfood-evidence/spec.md"
+      ],
+      "control": "schema-versioned receipts with identifiers and failure summaries, no credential values",
+      "evidence": "canonical dogfood evidence spec",
+      "next": "Phase 4 synthetic redaction fixtures"
+    },
+    {
+      "domain": "network/transport",
+      "asset": "Iroh ALPN, node/client/federation/blob/snapshot transports",
+      "sources": [
+        "crates/aspen-transport/src",
+        "crates/aspen-net/src/handler.rs",
+        "crates/aspen-rpc-core/src/handler.rs"
+      ],
+      "control": "protected control plane remains Iroh/Raft/auth path; HTTP surfaces are data-plane/compatibility only",
+      "evidence": "source handles and AGENTS.md project constraints",
+      "next": "Phase 5 transport boundary audit"
+    },
+    {
+      "domain": "nix/build/supply-chain",
+      "asset": "flake inputs, vendored deps, native build paths, fallback subprocesses",
+      "sources": [
+        "flake.nix",
+        "flake.lock",
+        "vendor/",
+        "crates/aspen-ci-executor-nix/src"
+      ],
+      "control": "pinned inputs; explicit fallback feature gates; build artifact identity",
+      "evidence": "flake lock + Tiger Style gate",
+      "next": "Phase 5 supply-chain evidence"
+    },
+    {
+      "domain": "unsafe/feature-gates",
+      "asset": "unsafe/public unsafe API and feature-gated authority surfaces",
+      "sources": [
+        "dylint.toml",
+        "Cargo.toml",
+        "crates/*/Cargo.toml"
+      ],
+      "control": "Tiger Style public_unsafe_api deny; feature-gated deps recorded for audit commands",
+      "evidence": "Tiger Style clean at previous commit; this inventory records feature coverage need",
+      "next": "Phase 5 unsafe/feature inventory"
+    }
+  ]
+}
