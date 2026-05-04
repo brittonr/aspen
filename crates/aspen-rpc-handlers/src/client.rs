@@ -676,11 +676,14 @@ mod tests {
     }
 
     #[test]
-    fn client_request_path_checks_auth_before_handler_dispatch() {
+    fn client_request_path_checks_auth_before_blob_and_handler_dispatch() {
         let source = include_str!("client.rs");
         let auth_call = source
             .find("handle_client_request_check_auth(&ctx")
             .expect("client request path should call handle_client_request_check_auth");
+        let blob_call = source
+            .find("handle_client_request_blob(&mut send")
+            .expect("client request path should route blob fast path through the shared request path");
         let dispatch_call = source
             .find("handle_client_request_dispatch(&mut send")
             .expect("client request path should call handle_client_request_dispatch");
@@ -692,7 +695,8 @@ mod tests {
             .expect("auth check should call client_request_auth_operation");
 
         assert!(auth_classifier_call < auth_call);
-        assert!(auth_call < dispatch_call);
+        assert!(auth_call < blob_call);
+        assert!(blob_call < dispatch_call);
         assert_eq!(dispatch_call, dispatch_with_token);
     }
 

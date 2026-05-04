@@ -1,0 +1,115 @@
+{
+  "generated_at": "2026-05-04T22:21:43Z",
+  "scope": "Phase 3 auth-before-dispatch evidence for client RPC, blob fast path, registry dispatch, and proxy fallback.",
+  "checks": [
+    {
+      "id": "parse-before-auth",
+      "file": "crates/aspen-rpc-handlers/src/client.rs",
+      "source": "handle_client_request_inner",
+      "guard": "handle_client_request_parse(&buffer)",
+      "sink": "handle_client_request_check_auth(&ctx",
+      "status": "verified",
+      "notes": "Request bytes are decoded into AuthenticatedRequest or legacy request before authorization classification.",
+      "guard_line": 541,
+      "sink_line": 554,
+      "order": "guard-before-sink"
+    },
+    {
+      "id": "auth-before-blob-fast-path",
+      "file": "crates/aspen-rpc-handlers/src/client.rs",
+      "source": "handle_client_request_inner",
+      "guard": "handle_client_request_check_auth(&ctx",
+      "sink": "handle_client_request_blob(&mut send",
+      "status": "verified",
+      "notes": "The blob streaming fast path is reached only after the shared auth gate succeeds.",
+      "guard_line": 554,
+      "sink_line": 581,
+      "order": "guard-before-sink"
+    },
+    {
+      "id": "auth-before-registry-dispatch",
+      "file": "crates/aspen-rpc-handlers/src/client.rs",
+      "source": "handle_client_request_inner",
+      "guard": "handle_client_request_check_auth(&ctx",
+      "sink": "handle_client_request_dispatch(&mut send",
+      "status": "verified",
+      "notes": "Registry dispatch for native/plugin handlers is reached only after the shared auth gate succeeds.",
+      "guard_line": 554,
+      "sink_line": 582,
+      "order": "guard-before-sink"
+    },
+    {
+      "id": "presenter-is-iroh-remote-id",
+      "file": "crates/aspen-rpc-handlers/src/client.rs",
+      "source": "handle_client_connection_inner -> handle_client_request_check_auth",
+      "guard": "let remote_node_id = connection.remote_id();",
+      "sink": "verifier.authorize(cap_token, &operation, presenter)",
+      "status": "verified",
+      "notes": "Key-audience token presenter is copied from the authenticated Iroh connection remote_id.",
+      "guard_line": 144,
+      "sink_line": 398,
+      "order": "guard-before-sink"
+    },
+    {
+      "id": "classifier-before-verifier",
+      "file": "crates/aspen-rpc-handlers/src/client.rs",
+      "source": "handle_client_request_check_auth",
+      "guard": "client_request_auth_operation(request",
+      "sink": "verifier.authorize(cap_token, &operation, presenter)",
+      "status": "verified",
+      "notes": "Authorization derives an Operation through ClientRpcRequest::to_operation before verifier authorization.",
+      "guard_line": 375,
+      "sink_line": 398,
+      "order": "guard-before-sink"
+    },
+    {
+      "id": "local-handlers-before-proxy",
+      "file": "crates/aspen-rpc-handlers/src/registry.rs",
+      "source": "HandlerRegistry::dispatch",
+      "guard": "if handler.can_handle(&request)",
+      "sink": "proxy_service.proxy_request(request.clone(), app_id, proxy_hops, token, ctx)",
+      "status": "verified",
+      "notes": "Proxy fallback runs only after local prefix and direct handler passes miss.",
+      "guard_line": 438,
+      "sink_line": 469,
+      "order": "guard-before-sink"
+    },
+    {
+      "id": "token-not-passed-to-local-handlers",
+      "file": "crates/aspen-rpc-handlers/src/registry.rs",
+      "source": "HandlerRegistry::dispatch",
+      "guard": "token: Option<aspen_auth::CapabilityToken>",
+      "sink": "let result = handler.handle(request, ctx).await;",
+      "status": "verified",
+      "notes": "Direct native/plugin handlers receive request and context only; token material is retained only for proxy fallback re-wrapping.",
+      "guard_line": 385,
+      "sink_line": 425,
+      "order": "guard-before-sink"
+    },
+    {
+      "id": "proxy-explicit-delegation",
+      "file": "crates/aspen-rpc-handlers/src/proxy.rs",
+      "source": "ProxyService::proxy_request",
+      "guard": "token_allows_proxying(token.as_ref())",
+      "sink": "proxied_authenticated_request(request, token, proxy_hops)",
+      "status": "verified",
+      "notes": "Authenticated cross-cluster proxying requires an explicit delegated bearer token with federation-proxy fact; key-bound and generic bearer tokens are rejected.",
+      "guard_line": 186,
+      "sink_line": 305,
+      "order": "guard-before-sink"
+    }
+  ],
+  "regression_tests": [
+    "client::tests::auth_gate_allows_public_requests_without_verifier",
+    "client::tests::auth_gate_denies_authorized_requests_when_require_auth_lacks_verifier",
+    "client::tests::auth_gate_requires_to_operation_before_dispatch",
+    "client::tests::auth_gate_binds_key_audience_tokens_to_iroh_remote_id",
+    "client::tests::client_request_path_checks_auth_before_blob_and_handler_dispatch",
+    "client::tests::client_request_path_uses_connection_remote_id_as_auth_presenter",
+    "registry::tests::registry_dispatch_fallbacks_run_after_local_handler_passes",
+    "registry::tests::registry_dispatch_receives_already_verified_token_only_for_proxy_fallback",
+    "proxy::tests::token_allows_proxying_only_for_public_or_explicit_delegated_bearer_presenters",
+    "proxy::tests::proxied_authenticated_request_preserves_client_token"
+  ],
+  "finding": "No unauthenticated protected request dispatch path found in audited client RPC path. Public/no-auth requests remain governed by to_operation()==None classification captured in authorization-matrix evidence."
+}

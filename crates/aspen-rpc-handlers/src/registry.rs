@@ -785,6 +785,47 @@ mod tests {
     }
 
     #[test]
+    fn registry_dispatch_fallbacks_run_after_local_handler_passes() {
+        let source = include_str!("registry.rs");
+        let handler_snapshot = source
+            .find("let handlers = self.handlers.load();")
+            .expect("dispatch should load handlers before fallback routing");
+        let prefix_pass = source
+            .find("if handler.claims_kv_prefix(&request)")
+            .expect("dispatch should check KV prefix handlers");
+        let direct_pass =
+            source.find("if handler.can_handle(&request)").expect("dispatch should check direct handlers");
+        let proxy_fallback = source
+            .find("proxy_service.proxy_request(request.clone(), app_id, proxy_hops, token, ctx)")
+            .expect("dispatch should forward only after local handlers miss");
+        let unavailable = source
+            .find("ClientRpcResponse::CapabilityUnavailable")
+            .expect("dispatch should fail closed when no local or proxied app handler is available");
+
+        assert!(handler_snapshot < prefix_pass);
+        assert!(prefix_pass < direct_pass);
+        assert!(direct_pass < proxy_fallback);
+        assert!(proxy_fallback < unavailable);
+    }
+
+    #[test]
+    fn registry_dispatch_receives_already_verified_token_only_for_proxy_fallback() {
+        let source = include_str!("registry.rs");
+        let signature = source
+            .find("token: Option<aspen_auth::CapabilityToken>")
+            .expect("dispatch should accept the already verified token from the client gate");
+        let direct_dispatch = source
+            .find("let result = handler.handle(request, ctx).await;")
+            .expect("direct handler dispatch should not receive raw token material");
+        let proxy_fallback = source
+            .find("proxy_service.proxy_request(request.clone(), app_id, proxy_hops, token, ctx)")
+            .expect("only proxy fallback should receive token for explicit re-wrapping");
+
+        assert!(signature < direct_dispatch);
+        assert!(direct_dispatch < proxy_fallback);
+    }
+
+    #[test]
     fn add_handlers_empty_vec_is_noop() {
         let registry = empty_registry();
         assert_eq!(registry.handlers.load().len(), 0);
