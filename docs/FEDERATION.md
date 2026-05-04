@@ -594,10 +594,17 @@ to a capable cluster.
 ### Proxy Flow
 
 1. Handler registry determines no local handler exists for the request.
-2. `ProxyService::proxy_request()` is called with the request, app ID, and current hop count.
-3. Proxy looks up known clusters with the required app (from gossip/discovery).
-4. Request is forwarded with `proxy_hops + 1` to prevent loops.
-5. Response is returned transparently to the original caller.
+2. `ProxyService::proxy_request()` is called with the request, app ID,
+   current hop count, and any already-verified client capability token.
+3. Proxy fails closed for key-bound capability tokens. Those tokens are bound
+   to the original Iroh presenter, while the remote cluster would see the proxy
+   node as the presenter; cross-cluster proxying therefore requires either an
+   intentionally public request or a bearer token.
+4. Proxy looks up known clusters with the required app (from gossip/discovery).
+5. Request is forwarded with `proxy_hops + 1` and the preserved bearer token to
+   prevent loops while keeping the remote cluster's normal authorization gate
+   authoritative.
+6. Response is returned transparently to the original caller.
 
 ### Loop Prevention
 

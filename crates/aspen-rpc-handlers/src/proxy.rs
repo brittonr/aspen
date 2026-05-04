@@ -28,6 +28,8 @@ use std::future::Future;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use anyhow::Context;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
+use aspen_auth::Audience;
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_client_api::AuthenticatedRequest;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_client_api::CLIENT_ALPN;
@@ -85,6 +87,14 @@ where
 }
 
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
+fn token_allows_proxying(token: Option<&aspen_auth::CapabilityToken>) -> bool {
+    match token.map(|capability_token| &capability_token.audience) {
+        Some(Audience::Key(_)) => false,
+        Some(Audience::Bearer) | None => true,
+    }
+}
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
 fn proxied_authenticated_request(
     request: ClientRpcRequest,
     token: Option<aspen_auth::CapabilityToken>,
@@ -134,6 +144,16 @@ impl ProxyService {
         // Check hop limit
         if proxy_hops >= self.config.max_hops {
             warn!(app = required_app, proxy_hops, max_hops = self.config.max_hops, "proxy hop limit exceeded");
+            return Ok(None);
+        }
+
+        // Key-bound client tokens are bound to the original Iroh presenter. A proxy
+        // would present its own node key to the remote cluster, so forwarding such a
+        // token cannot satisfy the remote audience check. Fail closed locally instead
+        // of turning key-bound tokens into ambiguous cross-cluster credentials.
+        #[cfg(all(feature = "forge", feature = "global-discovery"))]
+        if !token_allows_proxying(token.as_ref()) {
+            warn!(app = required_app, proxy_hops, "key-bound capability token cannot be proxied");
             return Ok(None);
         }
 
@@ -363,13 +383,12 @@ mod tests {
     }
 
     #[cfg(all(feature = "forge", feature = "global-discovery"))]
-    #[test]
-    fn proxied_authenticated_request_preserves_client_token() {
+    fn test_token(audience: aspen_auth::Audience) -> aspen_auth::CapabilityToken {
         let issuer = iroh::SecretKey::from_bytes(&[7u8; 32]).public();
-        let token = aspen_auth::CapabilityToken {
+        aspen_auth::CapabilityToken {
             version: 1,
             issuer,
-            audience: aspen_auth::Audience::Bearer,
+            audience,
             capabilities: vec![aspen_auth::Capability::Read {
                 prefix: "repo/".to_string(),
             }],
@@ -380,7 +399,25 @@ mod tests {
             delegation_depth: 0,
             facts: Vec::new(),
             signature: [4u8; 64],
-        };
+        }
+    }
+
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    #[test]
+    fn token_allows_proxying_only_for_public_or_bearer_presenters() {
+        let bearer = test_token(aspen_auth::Audience::Bearer);
+        let audience_key = iroh::SecretKey::from_bytes(&[8u8; 32]).public();
+        let key_bound = test_token(aspen_auth::Audience::Key(audience_key));
+
+        assert!(token_allows_proxying(None));
+        assert!(token_allows_proxying(Some(&bearer)));
+        assert!(!token_allows_proxying(Some(&key_bound)));
+    }
+
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    #[test]
+    fn proxied_authenticated_request_preserves_client_token() {
+        let token = test_token(aspen_auth::Audience::Bearer);
 
         let proxied = proxied_authenticated_request(ClientRpcRequest::Ping, Some(token.clone()), 2);
 
