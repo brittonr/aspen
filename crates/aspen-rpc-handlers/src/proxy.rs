@@ -87,10 +87,41 @@ where
 }
 
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
+const FEDERATION_PROXY_FACT_KEY: &str = "aspen:federation-proxy";
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+const FEDERATION_PROXY_FACT_VALUE: &[u8] = b"v1";
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+const MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS: u64 = 15 * 60;
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+fn token_lifetime_secs(token: &aspen_auth::CapabilityToken) -> u64 {
+    token.expires_at.saturating_sub(token.issued_at)
+}
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+fn token_has_federation_proxy_fact(token: &aspen_auth::CapabilityToken) -> bool {
+    token
+        .facts
+        .iter()
+        .any(|(key, value)| key == FEDERATION_PROXY_FACT_KEY && value.as_slice() == FEDERATION_PROXY_FACT_VALUE)
+}
+
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
 fn token_allows_proxying(token: Option<&aspen_auth::CapabilityToken>) -> bool {
-    match token.map(|capability_token| &capability_token.audience) {
-        Some(Audience::Key(_)) => false,
-        Some(Audience::Bearer) | None => true,
+    let Some(token) = token else {
+        return true;
+    };
+
+    match &token.audience {
+        Audience::Key(_) => false,
+        Audience::Bearer => {
+            token.proof.is_some()
+                && token.delegation_depth > 0
+                && token_lifetime_secs(token) <= MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS
+                && token_has_federation_proxy_fact(token)
+        }
     }
 }
 
@@ -149,11 +180,17 @@ impl ProxyService {
 
         // Key-bound client tokens are bound to the original Iroh presenter. A proxy
         // would present its own node key to the remote cluster, so forwarding such a
-        // token cannot satisfy the remote audience check. Fail closed locally instead
-        // of turning key-bound tokens into ambiguous cross-cluster credentials.
+        // token cannot satisfy the remote audience check. Generic bearer tokens are
+        // also rejected: authenticated cross-cluster proxying must use a short-lived,
+        // delegated bearer token with an explicit signed federation-proxy fact. Fail
+        // closed locally instead of turning broad credentials into implicit
+        // cross-cluster credentials.
         #[cfg(all(feature = "forge", feature = "global-discovery"))]
         if !token_allows_proxying(token.as_ref()) {
-            warn!(app = required_app, proxy_hops, "key-bound capability token cannot be proxied");
+            warn!(
+                app = required_app,
+                proxy_hops, "capability token cannot be proxied without explicit federation proxy delegation"
+            );
             return Ok(None);
         }
 
@@ -393,25 +430,39 @@ mod tests {
                 prefix: "repo/".to_string(),
             }],
             issued_at: 1,
-            expires_at: 2,
+            expires_at: 1 + MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS,
             nonce: Some([3u8; 16]),
-            proof: None,
-            delegation_depth: 0,
-            facts: Vec::new(),
+            proof: Some([5u8; 32]),
+            delegation_depth: 1,
+            facts: vec![(FEDERATION_PROXY_FACT_KEY.to_string(), FEDERATION_PROXY_FACT_VALUE.to_vec())],
             signature: [4u8; 64],
         }
     }
 
     #[cfg(all(feature = "forge", feature = "global-discovery"))]
     #[test]
-    fn token_allows_proxying_only_for_public_or_bearer_presenters() {
+    fn token_allows_proxying_only_for_public_or_explicit_delegated_bearer_presenters() {
         let bearer = test_token(aspen_auth::Audience::Bearer);
         let audience_key = iroh::SecretKey::from_bytes(&[8u8; 32]).public();
         let key_bound = test_token(aspen_auth::Audience::Key(audience_key));
+        let mut generic_bearer = bearer.clone();
+        generic_bearer.delegation_depth = 0;
+        generic_bearer.proof = None;
+        let mut malformed_delegated_bearer = bearer.clone();
+        malformed_delegated_bearer.proof = None;
+        let mut long_lived_bearer = bearer.clone();
+        long_lived_bearer.expires_at =
+            long_lived_bearer.issued_at.saturating_add(MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS + 1);
+        let mut unmarked_bearer = bearer.clone();
+        unmarked_bearer.facts = Vec::new();
 
         assert!(token_allows_proxying(None));
         assert!(token_allows_proxying(Some(&bearer)));
         assert!(!token_allows_proxying(Some(&key_bound)));
+        assert!(!token_allows_proxying(Some(&generic_bearer)));
+        assert!(!token_allows_proxying(Some(&malformed_delegated_bearer)));
+        assert!(!token_allows_proxying(Some(&long_lived_bearer)));
+        assert!(!token_allows_proxying(Some(&unmarked_bearer)));
     }
 
     #[cfg(all(feature = "forge", feature = "global-discovery"))]

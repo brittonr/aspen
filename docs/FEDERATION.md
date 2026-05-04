@@ -598,12 +598,15 @@ to a capable cluster.
    current hop count, and any already-verified client capability token.
 3. Proxy fails closed for key-bound capability tokens. Those tokens are bound
    to the original Iroh presenter, while the remote cluster would see the proxy
-   node as the presenter; cross-cluster proxying therefore requires either an
-   intentionally public request or a bearer token.
+   node as the presenter. Authenticated cross-cluster proxying therefore requires
+   a delegated bearer token whose signed fields make that path explicit:
+   `proof.is_some()`, `delegation_depth > 0`, lifetime no greater than 15
+   minutes, and fact `aspen:federation-proxy = b"v1"`. Generic/root bearer
+   credentials are not proxyable.
 4. Proxy looks up known clusters with the required app (from gossip/discovery).
-5. Request is forwarded with `proxy_hops + 1` and the preserved bearer token to
-   prevent loops while keeping the remote cluster's normal authorization gate
-   authoritative.
+5. Request is forwarded with `proxy_hops + 1`; when an explicit proxy bearer
+   token is present, it is preserved so the remote cluster's normal authorization
+   gate remains authoritative.
 6. Response is returned transparently to the original caller.
 
 ### Loop Prevention

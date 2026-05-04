@@ -69,8 +69,9 @@ pub struct CapabilityToken {
     pub delegation_depth: u8,
     /// Arbitrary key-value metadata (UCAN "facts").
     ///
-    /// Facts carry informational claims that don't affect authorization.
-    /// For federation: sync preferences, cluster metadata, subscription context.
+    /// Facts carry signed metadata that does not grant authorization by itself.
+    /// Higher-level routing/policy layers may require specific facts in addition
+    /// to normal capability checks (for example federation proxy eligibility).
     /// Explicit default helper preserves backward-compatible deserialization.
     #[serde(default = "default_token_facts")]
     pub facts: Vec<(String, Vec<u8>)>,
