@@ -63,7 +63,7 @@ fn main() {
 
     let args = Args::parse();
 
-    info!(ticket = %args.ticket, "connecting to Aspen cluster");
+    info!(ticket_bytes = args.ticket.len(), "connecting to Aspen cluster");
 
     // Connect to the Raft cluster
     let client = match FuseSyncClient::from_ticket(&args.ticket) {
@@ -118,4 +118,14 @@ fn main() {
     }
 
     info!("VirtioFS daemon stopped");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn cluster_ticket_value_is_not_logged() {
+        let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/bin/aspen-cluster-virtiofs-server.rs"));
+        assert!(!source.contains(&format!("ticket = %{}", "args.ticket")));
+        assert!(source.contains("ticket_bytes = args.ticket.len()"));
+    }
 }
