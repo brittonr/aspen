@@ -503,22 +503,55 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "ci")]
     #[test]
-    fn test_ci_request_variants_are_registered_as_ci_app_requests() {
-        let ci_request_names: std::collections::BTreeSet<&'static str> =
-            messages::request_metadata::REQUEST_VARIANT_NAMES
+    fn test_app_request_routing_tables_match_prefix_contracts() {
+        let app_prefix_contracts: &[(&str, &[&str])] = &[
+            ("automerge", &["Automerge"]),
+            ("calendar", &["Calendar"]),
+            ("ci", &["Ci"]),
+            ("contacts", &["Contacts", "Net"]),
+            ("deploy", &["ClusterDeploy", "ClusterRollback", "NodeRollback", "NodeUpgrade"]),
+            ("forge", &[
+                "FederateRepository",
+                "Federation",
+                "Forge",
+                "GetDiscoveredCluster",
+                "GetFederationStatus",
+                "GitBridge",
+                "Gossip",
+                "ListDiscoveredClusters",
+                "ListFederatedRepositories",
+                "StartGossip",
+                "StopGossip",
+                "TrustCluster",
+                "UntrustCluster",
+            ]),
+            ("hooks", &["Hook"]),
+            ("jobs", &["Job", "Worker"]),
+            ("secrets", &["Secrets"]),
+            ("snix", &["Cache", "NixCache", "Snix"]),
+            ("sql", &["ExecuteSql"]),
+        ];
+
+        for &(app, prefixes) in app_prefix_contracts {
+            let expected: std::collections::BTreeSet<&'static str> = messages::request_metadata::REQUEST_VARIANT_NAMES
                 .iter()
                 .copied()
-                .filter(|variant_name| variant_name.starts_with("Ci"))
+                .filter(|variant_name| prefixes.iter().any(|prefix| variant_name.starts_with(prefix)))
                 .collect();
-        let routed_ci_request_names: std::collections::BTreeSet<&'static str> =
-            messages::request_metadata::CI_REQUEST_VARIANTS.iter().copied().collect();
+            let actual: std::collections::BTreeSet<&'static str> = messages::request_metadata::REQUEST_VARIANT_NAMES
+                .iter()
+                .copied()
+                .filter(|variant_name| {
+                    messages::request_metadata::request_required_app_for_variant_name(variant_name) == Some(app)
+                })
+                .collect();
 
-        assert_eq!(
-            ci_request_names, routed_ci_request_names,
-            "every ClientRpcRequest variant whose name starts with `Ci` must route to the ci app"
-        );
+            assert_eq!(
+                expected, actual,
+                "request metadata drift for app `{app}`: prefix-owned variants must match required_app routing"
+            );
+        }
     }
 
     #[test]

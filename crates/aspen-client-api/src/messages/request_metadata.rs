@@ -31,6 +31,11 @@ pub(crate) fn request_required_app_variant_groups() -> &'static [&'static [&'sta
     request_metadata_apps::REQUIRED_APP_VARIANT_GROUPS
 }
 
+#[cfg(test)]
+pub(crate) fn request_required_app_for_variant_name(variant_name: &str) -> Option<&'static str> {
+    request_metadata_apps::request_required_app_for_variant(variant_name)
+}
+
 define_request_variant_name! {
     ClientRpcRequest::AddBlob { .. } => "AddBlob",
     ClientRpcRequest::AddLearner { .. } => "AddLearner",
