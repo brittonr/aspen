@@ -446,12 +446,44 @@ For more, see Simon Eskildsen's napkin math project.
 
 ---
 
+## Addendum: Automated linting contract
+
+Aspen enforces Tiger Style with the first-class `cargo-tigerstyle` Dylint runner. The workspace owns policy in two places:
+
+* `dylint.toml` controls thresholds, allowlists, disabled lints, and per-lint levels.
+* `[workspace.metadata.tigerstyle]` in `Cargo.toml` controls the default package scope and cargo-check arguments used by `cargo tigerstyle check` and `scripts/tigerstyle-check.sh`.
+
+Aspen pins `github:brittonr/tigerstyle-rs` through the `tigerstyle` flake input and hard-gates the default scope by promoting every shipped lint to `deny`. The shipped catalog has 38 lints across six domains:
+
+| Domain | Count | Lints |
+| --- | ---: | --- |
+| Safety | 18 | `compound_assertion`, `ignored_result`, `no_unwrap`, `no_panic`, `no_todo`, `unjustified_no_todo_allow`, `no_recursion`, `unchecked_narrowing`, `unchecked_division`, `unbounded_loop`, `catch_all_on_enum`, `explicit_defaults`, `unbounded_channel`, `unbounded_collection_growth`, `assertion_density`, `raw_arithmetic_overflow`, `sentinel_fallback`, `public_unsafe_api` |
+| Naming | 5 | `acronym_style`, `bool_naming`, `negated_predicate`, `numeric_units`, `float_for_currency` |
+| Structure | 10 | `function_length`, `nested_conditionals`, `platform_dependent_cast`, `usize_in_public_api`, `borrowed_argument_types`, `deref_polymorphism`, `too_many_parameters`, `compound_condition`, `unjustified_allow`, `ambiguous_params` |
+| Purity | 3 | `ambient_clock`, `verified_purity`, `contradictory_time` |
+| Concurrency | 1 | `multi_lock_ordering` |
+| Performance | 1 | `clone_then_borrow` |
+
+Use bare lint names in `dylint.toml` (`clone_then_borrow = "deny"`). In Rust source, prefer `#[allow(tigerstyle::clone_then_borrow, reason = "...")]` only in crates that can support the Dylint tool namespace; stable/published crates should use unqualified lint attrs with `#![allow(unknown_lints)]` instead.
+
+Run the local gate with:
+
+```bash
+scripts/tigerstyle-check.sh
+scripts/tigerstyle-check.sh -p aspen-core -- --all-targets
+cargo tigerstyle check --output-format json
+```
+
+JSON output is newline-delimited and includes `lint`, `group`, `severity`, `file`, `line`, `message`, optional `suggestion`, `applicability`, and `crate_name` fields. Use it for triage, but keep the human gate as the final proof because a zero-finding JSON stream can still accompany compile or integration failures.
+
+---
+
 ## Colophon
 
 This document is a "remix" inspired by the original **Tiger Style** guide from the TigerBeetle project. In the spirit of Remix Culture, parts of this document are verbatim copies of the original work, while other sections have been rewritten or adapted to fit the goals of this version. This remix builds upon the principles outlined in the original document with a more general approach.
 
 * **Maintained by:** Simon Klee
 * **Version:** 0.1-dev
-* **Last updated:** October 2024
+* **Last updated:** May 2026
 * **License:** CC BY 4.0
 * **Source:** [github.com/simonklee/tigerstyle](https://github.com/simonklee/tigerstyle)

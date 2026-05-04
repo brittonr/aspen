@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Run Tiger Style lints on Aspen via cargo-tigerstyle.
 #
-# In `nix develop`, cargo-tigerstyle is available directly.
-# Outside the devShell, builds cargo-tigerstyle from the sibling tigerstyle repo.
+# Runs the pinned upstream flake by default; set TIGERSTYLE_USE_PATH=1 to use a devShell binary.
 #
 # Configuration: dylint.toml (lint thresholds/levels) and
 # [workspace.metadata.tigerstyle] in Cargo.toml (default scope/args).
@@ -36,11 +35,12 @@ repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
 }
 cd "$repo_root"
 
-if command -v cargo-tigerstyle >/dev/null 2>&1; then
+if [[ "${TIGERSTYLE_USE_PATH:-0}" == "1" ]] && command -v cargo-tigerstyle >/dev/null 2>&1; then
   echo "[tigerstyle] using cargo-tigerstyle from PATH"
   exec cargo-tigerstyle check "$@"
 fi
 
-# Fallback: build from flake
-echo "[tigerstyle] cargo-tigerstyle not in PATH, building from flake..."
-exec nix run ../tigerstyle#cargo-tigerstyle -- check "$@"
+# Build from the pinned upstream flake
+_TIGERSTYLE_FLAKE="${TIGERSTYLE_FLAKE:-github:brittonr/tigerstyle-rs}"
+echo "[tigerstyle] running ${_TIGERSTYLE_FLAKE}#cargo-tigerstyle..."
+exec nix run "${_TIGERSTYLE_FLAKE}#cargo-tigerstyle" -- check "$@"

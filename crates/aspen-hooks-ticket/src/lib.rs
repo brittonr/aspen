@@ -486,7 +486,10 @@ fn validate_ticket_fields(ticket: &AspenHookTicket) -> HookTicketResult<()> {
 }
 
 fn saturating_usize_to_u32(value: usize) -> u32 {
-    u32::try_from(value).unwrap_or(u32::MAX)
+    match u32::try_from(value) {
+        Ok(converted_value) => converted_value,
+        Err(_) => u32::MAX,
+    }
 }
 
 #[cfg(feature = "std")]

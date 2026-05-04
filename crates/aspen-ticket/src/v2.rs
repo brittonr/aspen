@@ -241,7 +241,7 @@ impl AspenClusterTicket {
     /// Add a bootstrap peer.
     pub fn add_bootstrap_peer(&mut self, mut peer: BootstrapPeer) -> ClusterTicketResult<()> {
         ensure_bootstrap_capacity(self.bootstrap.len())?;
-        truncate_direct_addrs(&mut peer.direct_addrs);
+        peer.direct_addrs.truncate(MAX_DIRECT_ADDRS_PER_PEER);
         self.bootstrap.push(peer);
         Ok(())
     }
@@ -340,10 +340,6 @@ fn ensure_bootstrap_capacity(current_len: usize) -> ClusterTicketResult<()> {
         });
     }
     Ok(())
-}
-
-fn truncate_direct_addrs(direct_addrs: &mut Vec<SocketAddr>) {
-    direct_addrs.truncate(MAX_DIRECT_ADDRS_PER_PEER);
 }
 
 fn validate_bootstrap_count(count: usize) -> ClusterTicketResult<()> {

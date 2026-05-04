@@ -57,9 +57,9 @@
     };
 
     # Tiger Style lints - custom Dylint lints enforcing Tiger Style coding principles
-    # Local sibling repo; update with: nix flake update tigerstyle
+    # Upstream repo; update with: nix flake update tigerstyle
     tigerstyle = {
-      url = "git+file:///home/brittonr/git/tigerstyle";
+      url = "github:brittonr/tigerstyle-rs";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.rust-overlay.follows = "rust-overlay";
       inputs.crane.follows = "crane";

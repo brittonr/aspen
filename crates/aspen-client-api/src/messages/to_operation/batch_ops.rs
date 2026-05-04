@@ -136,6 +136,7 @@ mod tests {
             panic!("conditional batch write should require authorization for all condition and write keys");
         };
 
+        assert_eq!(keys.len(), 4);
         assert_eq!(keys, alloc::vec![
             "condition/value".to_string(),
             "condition/exists".to_string(),

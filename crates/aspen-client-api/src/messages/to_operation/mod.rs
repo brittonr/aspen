@@ -134,19 +134,21 @@ mod tests {
         include_str!("watch_ops.rs"),
     ];
 
+    const MAX_CLIENT_REQUEST_VARIANTS: usize = 256;
+
     fn request_variant_names() -> Vec<&'static str> {
-        let mut in_request_enum = false;
-        let mut variants = Vec::new();
+        let mut is_in_request_enum = false;
+        let mut variants = Vec::with_capacity(MAX_CLIENT_REQUEST_VARIANTS);
 
         for line in REQUEST_SOURCE.lines() {
             if line.trim() == "pub enum ClientRpcRequest {" {
-                in_request_enum = true;
+                is_in_request_enum = true;
                 continue;
             }
-            if in_request_enum && line == "}" {
+            if is_in_request_enum && line == "}" {
                 break;
             }
-            if !in_request_enum || !line.starts_with("    ") || line.starts_with("        ") {
+            if !is_in_request_enum || !line.starts_with("    ") || line.starts_with("        ") {
                 continue;
             }
 
@@ -163,10 +165,13 @@ mod tests {
             }
             let name = &trimmed[..name_len];
             if !variants.contains(&name) {
+                assert!(variants.len() < MAX_CLIENT_REQUEST_VARIANTS);
                 variants.push(name);
             }
         }
 
+        assert!(is_in_request_enum);
+        assert!(!variants.is_empty());
         variants
     }
 

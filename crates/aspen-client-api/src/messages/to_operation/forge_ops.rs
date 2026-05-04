@@ -8,6 +8,11 @@ use super::super::forge::JjNativeOperation;
 
 const FORGE_AUTH_KEY: &str = "_forge:";
 
+struct FederationResourceParts<'a> {
+    origin_or_repo: &'a str,
+    repo_id: &'a str,
+}
+
 fn forge_read_operation() -> Operation {
     Operation::Read {
         key: FORGE_AUTH_KEY.to_string(),
@@ -21,11 +26,11 @@ fn forge_write_operation() -> Operation {
     }
 }
 
-fn federation_resource_id(origin_or_repo: &str, repo_id: &str) -> String {
-    if origin_or_repo.is_empty() {
-        repo_id.to_string()
+fn federation_resource_id(parts: FederationResourceParts<'_>) -> String {
+    if parts.origin_or_repo.is_empty() {
+        parts.repo_id.to_string()
     } else {
-        alloc::format!("{origin_or_repo}:{repo_id}")
+        alloc::format!("{}:{}", parts.origin_or_repo, parts.repo_id)
     }
 }
 
@@ -51,10 +56,15 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         // Nostr challenge/verification bootstrap authentication and therefore
         // must remain callable before a capability token exists.
         ClientRpcRequest::NostrAuthChallenge { .. } | ClientRpcRequest::NostrAuthVerify { .. } => Some(None),
-
         ClientRpcRequest::ForgeJjNative { request } => Some(Some(jj_native_auth_operation(&request.operation))),
+        _ => forge_write_operation_for(request)
+            .or_else(|| federation_operation_for(request))
+            .or_else(|| forge_read_operation_for(request)),
+    }
+}
 
-        // Forge write operations
+fn forge_write_operation_for(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::ForgeCreateRepo { .. }
         | ClientRpcRequest::ForgeCreateRepoWithBackends { .. }
         | ClientRpcRequest::ForgeDeleteRepo { .. }
@@ -90,7 +100,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::GitBridgePushStart { .. }
         | ClientRpcRequest::GitBridgePushChunk { .. }
         | ClientRpcRequest::GitBridgePushComplete { .. } => Some(Some(forge_write_operation())),
+        _ => None,
+    }
+}
 
+fn federation_operation_for(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::FederationSyncPeer { peer_node_id, .. } => {
             Some(Some(federation_pull_operation(peer_node_id.clone())))
         }
@@ -100,7 +115,10 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         }
         | ClientRpcRequest::FederationGitFetch {
             origin_key, repo_id, ..
-        } => Some(Some(federation_pull_operation(federation_resource_id(origin_key, repo_id)))),
+        } => Some(Some(federation_pull_operation(federation_resource_id(FederationResourceParts {
+            origin_or_repo: origin_key,
+            repo_id,
+        })))),
         ClientRpcRequest::FederationPull {
             mirror_repo_id,
             repo_id,
@@ -114,8 +132,12 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         ClientRpcRequest::ForgeFetchFederated { federated_id, .. } => {
             Some(Some(federation_pull_operation(federated_id.clone())))
         }
+        _ => None,
+    }
+}
 
-        // Forge read operations
+fn forge_read_operation_for(request: &ClientRpcRequest) -> Option<Option<Operation>> {
+    match request {
         ClientRpcRequest::NostrGetProfile { .. }
         | ClientRpcRequest::ForgeGetRepo { .. }
         | ClientRpcRequest::ForgeListRepos { .. }
@@ -144,7 +166,6 @@ pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operatio
         | ClientRpcRequest::GitBridgeFetchComplete { .. }
         | ClientRpcRequest::GitBridgeProbeObjects { .. }
         | ClientRpcRequest::FederationListTokens => Some(Some(forge_read_operation())),
-
         _ => None,
     }
 }

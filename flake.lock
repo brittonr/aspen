@@ -257,17 +257,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1776795416,
-        "narHash": "sha256-LJn1F8cK6O5mooALkj9Qx9KFtJCtX5p7VpsD7xb6+9E=",
-        "ref": "refs/heads/main",
-        "rev": "5344b4f33551be3cafe6c05c6eaada3d4bab1282",
-        "revCount": 98,
-        "type": "git",
-        "url": "file:///home/brittonr/git/tigerstyle"
+        "lastModified": 1777907025,
+        "narHash": "sha256-cCujwf/wwOysZeNLJEEOmgqsEMO+BydJ4kyDjsRrv74=",
+        "owner": "brittonr",
+        "repo": "tigerstyle-rs",
+        "rev": "b2f9649d5c9f953587c4fdf97323721c99cb179a",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:///home/brittonr/git/tigerstyle"
+        "owner": "brittonr",
+        "repo": "tigerstyle-rs",
+        "type": "github"
       }
     },
     "unit2nix": {

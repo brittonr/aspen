@@ -51,6 +51,7 @@ mod tests {
             },
         ];
 
+        assert_eq!(requests.len(), 5);
         for request in &requests {
             assert!(matches!(
                 deploy_operation(request),
