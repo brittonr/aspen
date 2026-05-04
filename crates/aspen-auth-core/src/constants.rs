@@ -31,6 +31,15 @@ pub const MAX_REVOCATION_LIST_SIZE: u32 = 10_000;
 /// Tiger Style: Fixed tolerance for clock drift between nodes.
 pub const TOKEN_CLOCK_SKEW_SECS: u64 = 60;
 
+/// Signed token fact required for explicit cross-cluster proxy bearer tokens.
+pub const FEDERATION_PROXY_FACT_KEY: &str = "aspen:federation-proxy";
+
+/// Value for [`FEDERATION_PROXY_FACT_KEY`] in v1 proxy bearer tokens.
+pub const FEDERATION_PROXY_FACT_VALUE: &[u8] = b"v1";
+
+/// Maximum lifetime for explicit federation proxy bearer delegations: 15 minutes.
+pub const MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS: u64 = 15 * 60;
+
 // ============================================================================
 // Compile-Time Constant Assertions
 // ============================================================================
@@ -41,3 +50,4 @@ const _: () = assert!(MAX_DELEGATION_DEPTH > 0);
 const _: () = assert!(MAX_TOKEN_SIZE > 0);
 const _: () = assert!(MAX_REVOCATION_LIST_SIZE > 0);
 const _: () = assert!(TOKEN_CLOCK_SKEW_SECS > 0);
+const _: () = assert!(MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS > 0);

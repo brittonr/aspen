@@ -30,6 +30,12 @@ use anyhow::Context;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_auth::Audience;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
+use aspen_auth::constants::FEDERATION_PROXY_FACT_KEY;
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+use aspen_auth::constants::FEDERATION_PROXY_FACT_VALUE;
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
+use aspen_auth::constants::MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS;
+#[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_client_api::AuthenticatedRequest;
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 use aspen_client_api::CLIENT_ALPN;
@@ -85,15 +91,6 @@ where
         .map_err(anyhow::Error::new)
         .map_err(|error| error.context(error_context))
 }
-
-#[cfg(all(feature = "forge", feature = "global-discovery"))]
-const FEDERATION_PROXY_FACT_KEY: &str = "aspen:federation-proxy";
-
-#[cfg(all(feature = "forge", feature = "global-discovery"))]
-const FEDERATION_PROXY_FACT_VALUE: &[u8] = b"v1";
-
-#[cfg(all(feature = "forge", feature = "global-discovery"))]
-const MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS: u64 = 15 * 60;
 
 #[cfg(all(feature = "forge", feature = "global-discovery"))]
 fn token_lifetime_secs(token: &aspen_auth::CapabilityToken) -> u64 {

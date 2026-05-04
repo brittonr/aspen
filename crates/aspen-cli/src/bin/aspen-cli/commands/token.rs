@@ -8,9 +8,13 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_auth::Audience;
 use aspen_auth::Capability;
 use aspen_auth::CapabilityToken;
 use aspen_auth::TokenBuilder;
+use aspen_auth::constants::FEDERATION_PROXY_FACT_KEY;
+use aspen_auth::constants::FEDERATION_PROXY_FACT_VALUE;
+use aspen_auth::constants::MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS;
 use aspen_auth::generate_root_token;
 use clap::Args;
 use clap::Subcommand;
@@ -91,6 +95,14 @@ pub struct DelegateArgs {
     /// Must be subsets of the parent's capabilities.
     #[arg(long = "cap")]
     pub capabilities: Vec<String>,
+
+    /// Mark this delegated bearer token as an explicit federation proxy token.
+    ///
+    /// Requires federation-pull/federation-push capabilities, lifetime no greater
+    /// than 15 minutes, and adds the signed `aspen:federation-proxy = b"v1"`
+    /// fact required by proxy routing.
+    #[arg(long)]
+    pub federation_proxy: bool,
 }
 
 // =============================================================================
@@ -154,6 +166,8 @@ pub fn parse_duration(s: &str) -> Result<Duration> {
 /// - `secrets-list:mount:prefix` → `SecretsList { mount, prefix }`
 /// - `secrets-full:mount:prefix` → `SecretsFull { mount, prefix }`
 /// - `secrets-admin` → `SecretsAdmin`
+/// - `federation-pull` or `federation-pull:repo-prefix` → `FederationPull { repo_prefix }`
+/// - `federation-push` or `federation-push:repo-prefix` → `FederationPush { repo_prefix }`
 pub fn parse_capability(s: &str) -> Result<Capability> {
     let s = s.trim();
 
@@ -162,6 +176,16 @@ pub fn parse_capability(s: &str) -> Result<Capability> {
         "cluster-admin" => return Ok(Capability::ClusterAdmin),
         "delegate" => return Ok(Capability::Delegate),
         "secrets-admin" => return Ok(Capability::SecretsAdmin),
+        "federation-pull" => {
+            return Ok(Capability::FederationPull {
+                repo_prefix: String::new(),
+            });
+        }
+        "federation-push" => {
+            return Ok(Capability::FederationPush {
+                repo_prefix: String::new(),
+            });
+        }
         _ => {}
     }
 
@@ -212,10 +236,16 @@ pub fn parse_capability(s: &str) -> Result<Capability> {
             let (mount, prefix) = parse_mount_prefix(value)?;
             Ok(Capability::SecretsFull { mount, prefix })
         }
+        "federation-pull" => Ok(Capability::FederationPull {
+            repo_prefix: value.to_string(),
+        }),
+        "federation-push" => Ok(Capability::FederationPush {
+            repo_prefix: value.to_string(),
+        }),
         other => anyhow::bail!(
             "unknown capability type '{other}'. Valid types: full, read, write, delete, watch, \
              cluster-admin, delegate, shell, secrets-read, secrets-write, secrets-delete, \
-             secrets-list, secrets-full, secrets-admin"
+             secrets-list, secrets-full, secrets-admin, federation-pull, federation-push"
         ),
     }
 }
@@ -439,24 +469,62 @@ fn run_inspect(args: InspectArgs, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Return true when a child capability is safe for explicit federation-proxy tokens.
+fn is_federation_proxy_capability(capability: &Capability) -> bool {
+    matches!(capability, Capability::FederationPull { .. } | Capability::FederationPush { .. })
+}
+
+/// Build a delegated child token from already-parsed inputs.
+fn build_delegated_token(
+    parent: CapabilityToken,
+    secret_key: SecretKey,
+    lifetime: Duration,
+    capability_specs: &[String],
+    federation_proxy: bool,
+) -> Result<CapabilityToken> {
+    if capability_specs.is_empty() {
+        anyhow::bail!("at least one --cap is required for delegation");
+    }
+
+    if federation_proxy {
+        anyhow::ensure!(
+            lifetime.as_secs() <= MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS,
+            "federation proxy tokens must have lifetime no greater than {} seconds",
+            MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS
+        );
+    }
+
+    let mut builder = TokenBuilder::new(secret_key)
+        .delegated_from(parent)
+        .for_audience(Audience::Bearer)
+        .with_lifetime(lifetime)
+        .with_random_nonce();
+
+    for cap_str in capability_specs {
+        let cap = parse_capability(cap_str)?;
+        if federation_proxy {
+            anyhow::ensure!(
+                is_federation_proxy_capability(&cap),
+                "federation proxy tokens may only carry federation-pull or federation-push capabilities"
+            );
+        }
+        builder = builder.with_capability(cap);
+    }
+
+    if federation_proxy {
+        builder = builder.with_fact(FEDERATION_PROXY_FACT_KEY, FEDERATION_PROXY_FACT_VALUE);
+    }
+
+    builder.build().map_err(|e| anyhow::anyhow!("{}", e))
+}
+
 /// Delegate a child token from a parent.
 fn run_delegate(args: DelegateArgs, _json: bool) -> Result<()> {
     let parent = CapabilityToken::from_base64(&args.parent).context("failed to decode parent token")?;
     let secret_key = load_secret_key(args.secret_key_file.as_ref())?;
     let lifetime = parse_duration(&args.lifetime).context("invalid --lifetime")?;
 
-    if args.capabilities.is_empty() {
-        anyhow::bail!("at least one --cap is required for delegation");
-    }
-
-    let mut builder = TokenBuilder::new(secret_key).delegated_from(parent).with_lifetime(lifetime).with_random_nonce();
-
-    for cap_str in &args.capabilities {
-        let cap = parse_capability(cap_str)?;
-        builder = builder.with_capability(cap);
-    }
-
-    let child = builder.build().map_err(|e| anyhow::anyhow!("{}", e))?;
+    let child = build_delegated_token(parent, secret_key, lifetime, &args.capabilities, args.federation_proxy)?;
     let b64 = child.to_base64().map_err(|e| anyhow::anyhow!("{}", e))?;
     println!("{}", b64);
     Ok(())
@@ -595,6 +663,14 @@ mod tests {
     fn test_parse_capability_secrets_admin() {
         let cap = parse_capability("secrets-admin").unwrap();
         assert_eq!(cap, Capability::SecretsAdmin);
+    }
+
+    #[test]
+    fn test_parse_capability_federation_pull() {
+        let cap = parse_capability("federation-pull:forge:org-a/").unwrap();
+        assert_eq!(cap, Capability::FederationPull {
+            repo_prefix: "forge:org-a/".to_string(),
+        });
     }
 
     #[test]
@@ -828,6 +904,7 @@ mod tests {
             secret_key_file: Some(tmp.clone()),
             lifetime: "1h".to_string(),
             capabilities: vec!["read:logs/".to_string()],
+            federation_proxy: false,
         };
 
         let result = run_delegate(args, false);
@@ -856,6 +933,7 @@ mod tests {
             secret_key_file: Some(tmp.clone()),
             lifetime: "1h".to_string(),
             capabilities: vec!["read:logs/".to_string()],
+            federation_proxy: false,
         };
 
         let result = run_delegate(args, false);
@@ -888,6 +966,7 @@ mod tests {
             secret_key_file: Some(tmp.clone()),
             lifetime: "1h".to_string(),
             capabilities: vec!["write:data/".to_string()],
+            federation_proxy: false,
         };
 
         let result = run_delegate(args, false);
@@ -929,6 +1008,7 @@ mod tests {
             secret_key_file: Some(tmp.clone()),
             lifetime: "1h".to_string(),
             capabilities: vec!["read:logs/".to_string()],
+            federation_proxy: false,
         };
 
         let result = run_delegate(args, false);
@@ -955,12 +1035,91 @@ mod tests {
             secret_key_file: Some(tmp.clone()),
             lifetime: "1h".to_string(),
             capabilities: vec![], // No caps
+            federation_proxy: false,
         };
 
         let result = run_delegate(args, false);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("at least one --cap"));
         std::fs::remove_file(&tmp).ok();
+    }
+
+    #[test]
+    fn test_delegate_federation_proxy_marks_short_lived_bearer_token() {
+        let sk = SecretKey::generate(&mut rand::rng());
+        let parent = TokenBuilder::new(sk.clone())
+            .with_lifetime(Duration::from_secs(86400))
+            .with_capability(Capability::FederationPull {
+                repo_prefix: "forge:".to_string(),
+            })
+            .with_capability(Capability::Delegate)
+            .with_random_nonce()
+            .build()
+            .unwrap();
+
+        let child = build_delegated_token(
+            parent.clone(),
+            sk,
+            Duration::from_secs(MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS),
+            &["federation-pull:forge:".to_string()],
+            true,
+        )
+        .expect("proxy child token");
+
+        assert!(matches!(child.audience, Audience::Bearer));
+        assert!(child.proof.is_some());
+        assert_eq!(child.delegation_depth, parent.delegation_depth + 1);
+        assert!(child.expires_at.saturating_sub(child.issued_at) <= MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS);
+        assert!(child
+            .facts
+            .iter()
+            .any(|(key, value)| key == FEDERATION_PROXY_FACT_KEY && value.as_slice() == FEDERATION_PROXY_FACT_VALUE));
+    }
+
+    #[test]
+    fn test_delegate_federation_proxy_rejects_non_federation_capability() {
+        let sk = SecretKey::generate(&mut rand::rng());
+        let parent = TokenBuilder::new(sk.clone())
+            .with_capability(Capability::Full { prefix: "".to_string() })
+            .with_capability(Capability::Delegate)
+            .with_lifetime(Duration::from_secs(86400))
+            .with_random_nonce()
+            .build()
+            .unwrap();
+
+        let result = build_delegated_token(
+            parent,
+            sk,
+            Duration::from_secs(MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS),
+            &["full:".to_string()],
+            true,
+        );
+
+        assert!(result.unwrap_err().to_string().contains("may only carry federation-pull or federation-push"));
+    }
+
+    #[test]
+    fn test_delegate_federation_proxy_rejects_long_lifetime() {
+        let sk = SecretKey::generate(&mut rand::rng());
+        let parent = TokenBuilder::new(sk.clone())
+            .with_lifetime(Duration::from_secs(86400))
+            .with_capability(Capability::FederationPull {
+                repo_prefix: "forge:".to_string(),
+            })
+            .with_capability(Capability::Delegate)
+            .with_random_nonce()
+            .build()
+            .unwrap();
+
+        let result = build_delegated_token(
+            parent,
+            sk,
+            Duration::from_secs(MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS + 1),
+            &["federation-pull:forge:".to_string()],
+            true,
+        );
+
+        assert!(result.unwrap_err().to_string().contains("lifetime no greater than"));
     }
 
     // =========================================================================
@@ -1008,6 +1167,7 @@ mod tests {
             "1h",
             "--cap",
             "read:logs/",
+            "--federation-proxy",
         ]);
         assert!(cli.is_ok());
     }

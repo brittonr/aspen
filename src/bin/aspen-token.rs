@@ -24,6 +24,9 @@ use aspen::auth::Capability;
 use aspen::auth::CapabilityToken;
 use aspen::auth::TokenBuilder;
 use aspen::auth::TokenVerifier;
+use aspen::auth::constants::FEDERATION_PROXY_FACT_KEY;
+use aspen::auth::constants::FEDERATION_PROXY_FACT_VALUE;
+use aspen::auth::constants::MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS;
 use aspen::auth::generate_root_token;
 use clap::Parser;
 use clap::Subcommand;
@@ -86,6 +89,13 @@ enum Commands {
         #[arg(long)]
         audience: Option<String>,
 
+        /// Mark this delegated bearer token as an explicit federation proxy token.
+        ///
+        /// Requires bearer audience, federation-pull/federation-push capabilities,
+        /// and lifetime no greater than 15 minutes.
+        #[arg(long)]
+        federation_proxy: bool,
+
         /// Output file (default: stdout). Files are created/truncated with owner-only permissions.
         #[arg(long, short)]
         output: Option<PathBuf>,
@@ -130,6 +140,7 @@ fn main() -> Result<()> {
             capability,
             lifetime,
             audience,
+            federation_proxy,
             output,
         } => delegate_cmd(DelegateCmdInput {
             parent_token_b64: &parent_token,
@@ -137,6 +148,7 @@ fn main() -> Result<()> {
             capabilities: &capability,
             lifetime_str: &lifetime,
             audience_hex: audience.as_deref(),
+            federation_proxy,
             output_path: output.as_deref(),
             is_json_output: cli.json,
         }),
@@ -204,6 +216,7 @@ struct DelegateCmdInput<'a> {
     capabilities: &'a [String],
     lifetime_str: &'a str,
     audience_hex: Option<&'a str>,
+    federation_proxy: bool,
     output_path: Option<&'a std::path::Path>,
     is_json_output: bool,
 }
@@ -215,10 +228,28 @@ fn delegate_cmd(args: DelegateCmdInput<'_>) -> Result<()> {
     let parent_token = CapabilityToken::from_base64(args.parent_token_b64).context("failed to decode parent token")?;
     let issuer_key = parse_secret_key(args.parent_key_hex)?;
     let lifetime = parse_duration(args.lifetime_str)?;
+    if args.federation_proxy {
+        anyhow::ensure!(
+            args.audience_hex.is_none(),
+            "federation proxy tokens must use bearer audience; do not pass --audience"
+        );
+        anyhow::ensure!(
+            lifetime.as_secs() <= MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS,
+            "federation proxy tokens must have lifetime no greater than {} seconds",
+            MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS
+        );
+    }
+
     let mut builder = TokenBuilder::new(issuer_key.clone()).delegated_from(parent_token);
 
     for capability_str in args.capabilities {
         let capability = parse_capability(capability_str)?;
+        if args.federation_proxy {
+            anyhow::ensure!(
+                is_federation_proxy_capability(&capability),
+                "federation proxy tokens may only carry federation-pull or federation-push capabilities"
+            );
+        }
         builder = builder.with_capability(capability);
     }
 
@@ -230,6 +261,9 @@ fn delegate_cmd(args: DelegateCmdInput<'_>) -> Result<()> {
     }
 
     builder = builder.with_lifetime(lifetime).with_random_nonce();
+    if args.federation_proxy {
+        builder = builder.with_fact(FEDERATION_PROXY_FACT_KEY, FEDERATION_PROXY_FACT_VALUE);
+    }
     let token = builder.build().context("failed to build delegated token")?;
     let token_b64 = token.to_base64().context("failed to encode token")?;
 
@@ -239,6 +273,7 @@ fn delegate_cmd(args: DelegateCmdInput<'_>) -> Result<()> {
             "issuer": issuer_key.public().to_string(),
             "audience": format_audience(&token.audience),
             "capabilities": token.capabilities.iter().map(format_capability).collect::<Vec<_>>(),
+            "federation_proxy": args.federation_proxy,
             "expires_at": token.expires_at,
             "expires_at_iso": format_timestamp(token.expires_at),
         })
@@ -251,6 +286,7 @@ fn delegate_cmd(args: DelegateCmdInput<'_>) -> Result<()> {
              Issuer: {}\n\
              Audience: {}\n\
              Capabilities:\n{}\n\
+             Federation Proxy: {}\n\
              Expires: {} ({})",
             token_b64,
             issuer_key.public(),
@@ -261,6 +297,7 @@ fn delegate_cmd(args: DelegateCmdInput<'_>) -> Result<()> {
                 .map(|capability| format!("  - {}", format_capability(capability)))
                 .collect::<Vec<_>>()
                 .join("\n"),
+            if args.federation_proxy { "yes" } else { "no" },
             format_timestamp(token.expires_at),
             token.expires_at
         )
@@ -640,6 +677,10 @@ fn parse_federation_capability(parts: &[&str]) -> Option<Capability> {
     }
 }
 
+fn is_federation_proxy_capability(capability: &Capability) -> bool {
+    matches!(capability, Capability::FederationPull { .. } | Capability::FederationPush { .. })
+}
+
 fn parse_capability(s: &str) -> Result<Capability> {
     let parts: Vec<&str> = s.splitn(2, ':').collect();
     debug_assert!(!parts.is_empty());
@@ -828,6 +869,127 @@ mod tests {
         let output = fs::read_to_string(output_path).expect("read root json");
         let value: serde_json::Value = serde_json::from_str(&output).expect("parse root json");
         assert_eq!(value["audience"], "Bearer (anyone)");
+    }
+
+    #[test]
+    fn delegate_federation_proxy_marks_short_lived_bearer_token() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output_path = dir.path().join("proxy-token.json");
+        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let parent = TokenBuilder::new(issuer_key.clone())
+            .with_capability(Capability::FederationPull {
+                repo_prefix: "forge:".to_string(),
+            })
+            .with_capability(Capability::Delegate)
+            .with_lifetime(Duration::from_secs(3600))
+            .with_random_nonce()
+            .build()
+            .expect("parent token");
+
+        delegate_cmd(DelegateCmdInput {
+            parent_token_b64: &parent.to_base64().expect("parent b64"),
+            parent_key_hex: &hex::encode(issuer_key.to_bytes()),
+            capabilities: &["federation-pull:forge:".to_string()],
+            lifetime_str: "15m",
+            audience_hex: None,
+            federation_proxy: true,
+            output_path: Some(&output_path),
+            is_json_output: true,
+        })
+        .expect("delegate proxy token");
+
+        let output = fs::read_to_string(output_path).expect("read proxy json");
+        let value: serde_json::Value = serde_json::from_str(&output).expect("parse proxy json");
+        assert_eq!(value["federation_proxy"], true);
+        let token = CapabilityToken::from_base64(value["token"].as_str().expect("token string")).expect("decode token");
+        assert!(matches!(token.audience, Audience::Bearer));
+        assert!(token.proof.is_some());
+        assert_eq!(token.delegation_depth, parent.delegation_depth + 1);
+        assert!(token.expires_at.saturating_sub(token.issued_at) <= MAX_FEDERATION_PROXY_TOKEN_LIFETIME_SECS);
+        assert!(token
+            .facts
+            .iter()
+            .any(|(key, value)| key == FEDERATION_PROXY_FACT_KEY && value.as_slice() == FEDERATION_PROXY_FACT_VALUE));
+    }
+
+    #[test]
+    fn delegate_federation_proxy_rejects_explicit_audience() {
+        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let parent = TokenBuilder::new(issuer_key.clone())
+            .with_capability(Capability::FederationPull {
+                repo_prefix: "forge:".to_string(),
+            })
+            .with_capability(Capability::Delegate)
+            .with_lifetime(Duration::from_secs(3600))
+            .with_random_nonce()
+            .build()
+            .expect("parent token");
+
+        let audience_key = SecretKey::generate(&mut rand::rng()).public().to_string();
+        let result = delegate_cmd(DelegateCmdInput {
+            parent_token_b64: &parent.to_base64().expect("parent b64"),
+            parent_key_hex: &hex::encode(issuer_key.to_bytes()),
+            capabilities: &["federation-pull:forge:".to_string()],
+            lifetime_str: "15m",
+            audience_hex: Some(&audience_key),
+            federation_proxy: true,
+            output_path: None,
+            is_json_output: true,
+        });
+
+        assert!(result.unwrap_err().to_string().contains("must use bearer audience"));
+    }
+
+    #[test]
+    fn delegate_federation_proxy_rejects_non_federation_capability() {
+        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let parent = TokenBuilder::new(issuer_key.clone())
+            .with_capability(Capability::Full { prefix: "".to_string() })
+            .with_capability(Capability::Delegate)
+            .with_lifetime(Duration::from_secs(3600))
+            .with_random_nonce()
+            .build()
+            .expect("parent token");
+
+        let result = delegate_cmd(DelegateCmdInput {
+            parent_token_b64: &parent.to_base64().expect("parent b64"),
+            parent_key_hex: &hex::encode(issuer_key.to_bytes()),
+            capabilities: &["full:".to_string()],
+            lifetime_str: "15m",
+            audience_hex: None,
+            federation_proxy: true,
+            output_path: None,
+            is_json_output: true,
+        });
+
+        assert!(result.unwrap_err().to_string().contains("may only carry federation-pull or federation-push"));
+    }
+
+    #[test]
+    fn delegate_federation_proxy_rejects_long_lifetime() {
+        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let parent = TokenBuilder::new(issuer_key.clone())
+            .with_capability(Capability::FederationPull {
+                repo_prefix: "forge:".to_string(),
+            })
+            .with_capability(Capability::Delegate)
+            .with_lifetime(Duration::from_secs(3600))
+            .with_random_nonce()
+            .build()
+            .expect("parent token");
+
+        let result = delegate_cmd(DelegateCmdInput {
+            parent_token_b64: &parent.to_base64().expect("parent b64"),
+            parent_key_hex: &hex::encode(issuer_key.to_bytes()),
+            capabilities: &["federation-pull:forge:".to_string()],
+            lifetime_str: "16m",
+            audience_hex: None,
+            federation_proxy: true,
+            output_path: None,
+            is_json_output: true,
+        });
+
+        assert!(result.unwrap_err().to_string().contains("lifetime no greater than"));
     }
 
     #[test]

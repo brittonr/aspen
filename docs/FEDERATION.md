@@ -609,6 +609,36 @@ to a capable cluster.
    gate remains authoritative.
 6. Response is returned transparently to the original caller.
 
+### Proxy Token Minting
+
+Use a delegated proxy bearer token only for the cross-cluster call window; do
+not reuse root/bootstrap bearer credentials for proxying. Both offline token
+CLIs enforce the 15-minute lifetime cap, restrict proxy tokens to
+`federation-pull`/`federation-push` capabilities, and add the signed proxy fact:
+
+```bash
+aspen-token delegate \
+  --parent-token "$PARENT_TOKEN" \
+  --parent-key "$ISSUER_SECRET_KEY_HEX" \
+  --cap federation-pull:forge:org-a/ \
+  --lifetime 15m \
+  --federation-proxy \
+  --output /path/to/federation-proxy-token.json \
+  --json
+
+aspen-cli token delegate \
+  --parent "$PARENT_TOKEN" \
+  --secret-key-file /path/to/issuer-secret-key.hex \
+  --cap federation-pull:forge:org-a/ \
+  --lifetime 15m \
+  --federation-proxy
+```
+
+The parent token must still carry `Delegate` plus capabilities that contain the
+requested child capabilities. The proxy fact does not grant authorization by
+itself; it only makes the bearer token eligible to cross the local proxy trust
+boundary. The remote cluster still authorizes the forwarded request normally.
+
 ### Loop Prevention
 
 The `AuthenticatedRequest` carries a `proxy_hops: u8` field. Each proxy
