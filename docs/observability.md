@@ -34,6 +34,8 @@ Prometheus export normalizes dots to underscores: `aspen.rpc.duration_ms` → `a
 | `aspen.rpc.duration_ms` | histogram | `operation`, `handler` | Per-request latency in milliseconds |
 | `aspen.rpc.errors_total` | counter | `operation`, `handler` | Failed requests by operation and handler |
 
+The RPC `operation` label uses `ClientRpcRequest::variant_name()`, so Prometheus series names stay aligned with the wire/API request variant names rather than handler-local aliases.
+
 #### Raft State
 
 | Metric | Type | Labels | Description |

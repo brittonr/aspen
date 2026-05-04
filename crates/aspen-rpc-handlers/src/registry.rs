@@ -284,6 +284,16 @@ fn builtin_handler_factories(_plan: &NativeHandlerPlan) -> Vec<&'static dyn Hand
     factories
 }
 
+const RPC_REQUESTS_TOTAL_METRIC: &str = "aspen.rpc.requests_total";
+const RPC_DURATION_MS_METRIC: &str = "aspen.rpc.duration_ms";
+const RPC_ERRORS_TOTAL_METRIC: &str = "aspen.rpc.errors_total";
+const RPC_OPERATION_LABEL: &str = "operation";
+const RPC_HANDLER_LABEL: &str = "handler";
+
+fn rpc_operation_label(request: &ClientRpcRequest) -> &'static str {
+    request.variant_name()
+}
+
 #[allow(unknown_lints)]
 #[allow(
     ambient_clock,
@@ -371,9 +381,9 @@ impl HandlerRegistry {
         ctx: &ClientProtocolContext,
         proxy_hops: u8,
     ) -> anyhow::Result<ClientRpcResponse> {
-        let operation = request.variant_name();
+        let operation = rpc_operation_label(&request);
         let start = dispatch_started_at();
-        metrics::counter!("aspen.rpc.requests_total", "operation" => operation).increment(1);
+        metrics::counter!(RPC_REQUESTS_TOTAL_METRIC, RPC_OPERATION_LABEL => operation).increment(1);
 
         // Handle plugin reload directly — it requires access to the registry itself,
         // which individual handlers don't have.
@@ -381,10 +391,10 @@ impl HandlerRegistry {
         if let ClientRpcRequest::PluginReload { ref name } = request {
             let result = self.handle_plugin_reload(name.clone(), ctx).await;
             let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
-            metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => "HandlerRegistry")
+            metrics::histogram!(RPC_DURATION_MS_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => "HandlerRegistry")
                 .record(elapsed_ms);
             if result.is_err() {
-                metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => "HandlerRegistry")
+                metrics::counter!(RPC_ERRORS_TOTAL_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => "HandlerRegistry")
                     .increment(1);
             }
             return result;
@@ -411,10 +421,10 @@ impl HandlerRegistry {
                 );
                 let result = handler.handle(request, ctx).await;
                 let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
-                metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => handler_name)
+                metrics::histogram!(RPC_DURATION_MS_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => handler_name)
                     .record(elapsed_ms);
                 if result.is_err() {
-                    metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => handler_name)
+                    metrics::counter!(RPC_ERRORS_TOTAL_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => handler_name)
                         .increment(1);
                 }
                 return result;
@@ -431,10 +441,10 @@ impl HandlerRegistry {
                 );
                 let result = handler.handle(request, ctx).await;
                 let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
-                metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => handler_name)
+                metrics::histogram!(RPC_DURATION_MS_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => handler_name)
                     .record(elapsed_ms);
                 if result.is_err() {
-                    metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => handler_name)
+                    metrics::counter!(RPC_ERRORS_TOTAL_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => handler_name)
                         .increment(1);
                 }
                 return result;
@@ -442,9 +452,11 @@ impl HandlerRegistry {
         }
 
         // No handler matched — record error with handler="none"
-        metrics::counter!("aspen.rpc.errors_total", "operation" => operation, "handler" => "none").increment(1);
+        metrics::counter!(RPC_ERRORS_TOTAL_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => "none")
+            .increment(1);
         let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
-        metrics::histogram!("aspen.rpc.duration_ms", "operation" => operation, "handler" => "none").record(elapsed_ms);
+        metrics::histogram!(RPC_DURATION_MS_METRIC, RPC_OPERATION_LABEL => operation, RPC_HANDLER_LABEL => "none")
+            .record(elapsed_ms);
 
         // No handler found - check if this is an optional app request
         if let Some(app_id) = request.required_app() {
@@ -838,6 +850,31 @@ mod tests {
         assert!(architecture_doc.contains("native_handler_factories_advertise_their_required_app_namespace"));
         assert!(architecture_doc.contains("native_contacts_requests_reach_net_dispatch_path"));
         assert!(architecture_doc.contains("native_deploy_requests_reach_cluster_dispatch_path"));
+    }
+
+    #[test]
+    fn rpc_operation_metric_labels_use_request_variant_names() {
+        let cases = [
+            (ClientRpcRequest::Ping, "Ping"),
+            (ClientRpcRequest::GetMetrics, "GetMetrics"),
+            (ClientRpcRequest::NetList { tag_filter: None }, "NetList"),
+            (ClientRpcRequest::ClusterDeployStatus, "ClusterDeployStatus"),
+        ];
+
+        for (request, expected_operation) in cases {
+            assert_eq!(rpc_operation_label(&request), request.variant_name());
+            assert_eq!(rpc_operation_label(&request), expected_operation);
+        }
+    }
+
+    #[test]
+    fn rpc_operation_metric_contract_is_documented() {
+        let observability_doc = include_str!("../../../docs/observability.md");
+
+        assert!(observability_doc.contains(RPC_REQUESTS_TOTAL_METRIC));
+        assert!(observability_doc.contains(RPC_DURATION_MS_METRIC));
+        assert!(observability_doc.contains(RPC_ERRORS_TOTAL_METRIC));
+        assert!(observability_doc.contains("`operation` label uses `ClientRpcRequest::variant_name()`"));
     }
 
     #[cfg(feature = "net")]
