@@ -163,6 +163,7 @@ fn generate_root_cmd(
             "token": token_b64,
             "issuer": secret_key.public().to_string(),
             "secret_key": hex::encode(secret_key.to_bytes()),
+            "audience": format_audience(&token.audience),
             "expires_at": token.expires_at,
             "expires_at_iso": format_timestamp(token.expires_at),
         })
@@ -174,12 +175,14 @@ fn generate_root_cmd(
              Token: {}\n\
              Issuer Public Key: {}\n\
              Secret Key: {}\n\
+             Audience: {}\n\
              Expires: {} ({})\n\
              \n\
              Keep the secret key secure! It can be used to create more tokens.",
             token_b64,
             secret_key.public(),
             hex::encode(secret_key.to_bytes()),
+            format_audience(&token.audience),
             format_timestamp(token.expires_at),
             token.expires_at
         )
@@ -734,4 +737,32 @@ fn write_output(content: &str, path: Option<&std::path::Path>) -> Result<()> {
         io::stdout().write_all(b"\n").context("failed to write newline to stdout")?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_root_output_reports_bearer_audience_in_json() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output_path = dir.path().join("root-token.json");
+
+        generate_root_cmd(None, "1h", Some(&output_path), true).expect("generate root json");
+
+        let output = fs::read_to_string(output_path).expect("read root json");
+        let value: serde_json::Value = serde_json::from_str(&output).expect("parse root json");
+        assert_eq!(value["audience"], "Bearer (anyone)");
+    }
+
+    #[test]
+    fn generate_root_output_reports_bearer_audience_for_humans() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let output_path = dir.path().join("root-token.txt");
+
+        generate_root_cmd(None, "1h", Some(&output_path), false).expect("generate root text");
+
+        let output = fs::read_to_string(output_path).expect("read root text");
+        assert!(output.contains("Audience: Bearer (anyone)"));
+    }
 }

@@ -4,17 +4,16 @@
 
 use std::time::Duration;
 
-use iroh_base::PublicKey;
-use iroh_base::SecretKey;
-use rand::RngCore;
-
 use aspen_auth_core::Capability;
 use aspen_auth_core::CapabilityToken;
 use aspen_auth_core::constants::MAX_CAPABILITIES_PER_TOKEN;
 use aspen_auth_core::constants::MAX_DELEGATION_DEPTH;
+use iroh_base::PublicKey;
+use iroh_base::SecretKey;
+use rand::RngCore;
 
-use crate::AuthError;
 use crate::Audience;
+use crate::AuthError;
 use crate::utils::current_time_secs;
 
 /// Builder for creating capability tokens.
@@ -197,12 +196,15 @@ impl TokenBuilder {
 
 /// Generate a root capability token with full cluster access.
 ///
-/// This creates a token with:
+/// This creates a bearer token with:
 /// - `Full { prefix: "" }` - read/write/delete all keys
 /// - `ClusterAdmin` - cluster management operations
 /// - `Delegate` - ability to create child tokens
 ///
-/// Use this during cluster bootstrap to create the initial admin token.
+/// Use this during cluster bootstrap to create the initial admin token. Root tokens
+/// are intentionally bearer tokens so the first operator can bootstrap clients
+/// before a stable client Iroh public key is known. Delegate key-bound child
+/// tokens with [`TokenBuilder::for_key`] for day-to-day client use.
 ///
 /// # Arguments
 ///
