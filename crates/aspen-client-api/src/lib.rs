@@ -503,53 +503,27 @@ mod tests {
         }
     }
 
-    const APP_REQUEST_PREFIX_CONTRACTS: &[(&str, &[&str])] = &[
-        ("automerge", &["Automerge"]),
-        ("calendar", &["Calendar"]),
-        ("ci", &["Ci"]),
-        ("contacts", &["Contacts", "Net"]),
-        ("deploy", &["ClusterDeploy", "ClusterRollback", "NodeRollback", "NodeUpgrade"]),
-        ("forge", &[
-            "FederateRepository",
-            "Federation",
-            "Forge",
-            "GetDiscoveredCluster",
-            "GetFederationStatus",
-            "GitBridge",
-            "Gossip",
-            "ListDiscoveredClusters",
-            "ListFederatedRepositories",
-            "StartGossip",
-            "StopGossip",
-            "TrustCluster",
-            "UntrustCluster",
-        ]),
-        ("hooks", &["Hook"]),
-        ("jobs", &["Job", "Worker"]),
-        ("secrets", &["Secrets"]),
-        ("snix", &["Cache", "NixCache", "Snix"]),
-        ("sql", &["ExecuteSql"]),
-    ];
-
     #[test]
     fn test_app_request_routing_tables_match_prefix_contracts() {
-        for &(app, prefixes) in APP_REQUEST_PREFIX_CONTRACTS {
+        for contract in messages::request_metadata::app_request_namespace_prefix_contracts() {
             let expected: std::collections::BTreeSet<&'static str> = messages::request_metadata::REQUEST_VARIANT_NAMES
                 .iter()
                 .copied()
-                .filter(|variant_name| prefixes.iter().any(|prefix| variant_name.starts_with(prefix)))
+                .filter(|variant_name| contract.variant_prefixes.iter().any(|prefix| variant_name.starts_with(prefix)))
                 .collect();
             let actual: std::collections::BTreeSet<&'static str> = messages::request_metadata::REQUEST_VARIANT_NAMES
                 .iter()
                 .copied()
                 .filter(|variant_name| {
-                    messages::request_metadata::request_required_app_for_variant_name(variant_name) == Some(app)
+                    messages::request_metadata::request_required_app_for_variant_name(variant_name)
+                        == Some(contract.app)
                 })
                 .collect();
 
             assert_eq!(
                 expected, actual,
-                "request metadata drift for app `{app}`: prefix-owned variants must match required_app routing"
+                "request metadata drift for app `{}`: namespace prefix-owned variants must match required_app routing",
+                contract.app
             );
         }
     }
@@ -562,16 +536,24 @@ mod tests {
         assert!(architecture_doc.contains("request_metadata_apps/"));
         assert!(architecture_doc.contains("test_app_request_routing_tables_match_prefix_contracts"));
 
-        for &(app, prefixes) in APP_REQUEST_PREFIX_CONTRACTS {
-            let table_row =
-                architecture_doc.lines().find(|line| line.starts_with(&format!("| `{app}` |"))).unwrap_or_else(|| {
-                    panic!("architecture doc must describe routing metadata prefix contract for app `{app}`")
+        assert!(architecture_doc.contains("APP_REQUEST_NAMESPACE_PREFIX_CONTRACTS"));
+
+        for contract in messages::request_metadata::app_request_namespace_prefix_contracts() {
+            let table_row = architecture_doc
+                .lines()
+                .find(|line| line.starts_with(&format!("| `{}` |", contract.app)))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "architecture doc must describe routing metadata namespace prefix contract for app `{}`",
+                        contract.app
+                    )
                 });
 
-            for prefix in prefixes {
+            for prefix in contract.variant_prefixes {
                 assert!(
                     table_row.contains(&format!("`{prefix}*`")),
-                    "architecture doc must list `{prefix}*` in the routing metadata prefix row for app `{app}`"
+                    "architecture doc must list `{prefix}*` in the routing metadata namespace prefix row for app `{}`",
+                    contract.app
                 );
             }
         }

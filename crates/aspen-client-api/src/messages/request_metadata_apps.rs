@@ -3,6 +3,74 @@
 //! Each domain owns its own request-to-app mapping so adding a Forge RPC does
 //! not require editing a shared cross-domain table.
 
+#[cfg(test)]
+pub(crate) struct RequestAppNamespacePrefixContract {
+    pub(crate) app: &'static str,
+    pub(crate) variant_prefixes: &'static [&'static str],
+}
+
+#[cfg(test)]
+pub(crate) const APP_REQUEST_NAMESPACE_PREFIX_CONTRACTS: &[RequestAppNamespacePrefixContract] = &[
+    RequestAppNamespacePrefixContract {
+        app: "automerge",
+        variant_prefixes: &["Automerge"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "calendar",
+        variant_prefixes: &["Calendar"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "ci",
+        variant_prefixes: &["Ci"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "contacts",
+        variant_prefixes: &["Contacts", "Net"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "deploy",
+        variant_prefixes: &["ClusterDeploy", "ClusterRollback", "NodeRollback", "NodeUpgrade"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "forge",
+        variant_prefixes: &[
+            "FederateRepository",
+            "Federation",
+            "Forge",
+            "GetDiscoveredCluster",
+            "GetFederationStatus",
+            "GitBridge",
+            "Gossip",
+            "ListDiscoveredClusters",
+            "ListFederatedRepositories",
+            "StartGossip",
+            "StopGossip",
+            "TrustCluster",
+            "UntrustCluster",
+        ],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "hooks",
+        variant_prefixes: &["Hook"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "jobs",
+        variant_prefixes: &["Job", "Worker"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "secrets",
+        variant_prefixes: &["Secrets"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "snix",
+        variant_prefixes: &["Cache", "NixCache", "Snix"],
+    },
+    RequestAppNamespacePrefixContract {
+        app: "sql",
+        variant_prefixes: &["ExecuteSql"],
+    },
+];
+
 #[path = "request_metadata_apps/automerge.rs"]
 mod automerge;
 #[path = "request_metadata_apps/calendar.rs"]

@@ -36,6 +36,14 @@ pub(crate) fn request_required_app_for_variant_name(variant_name: &str) -> Optio
     request_metadata_apps::request_required_app_for_variant(variant_name)
 }
 
+#[cfg(test)]
+pub(crate) use request_metadata_apps::RequestAppNamespacePrefixContract;
+
+#[cfg(test)]
+pub(crate) fn app_request_namespace_prefix_contracts() -> &'static [RequestAppNamespacePrefixContract] {
+    request_metadata_apps::APP_REQUEST_NAMESPACE_PREFIX_CONTRACTS
+}
+
 define_request_variant_name! {
     ClientRpcRequest::AddBlob { .. } => "AddBlob",
     ClientRpcRequest::AddLearner { .. } => "AddLearner",
