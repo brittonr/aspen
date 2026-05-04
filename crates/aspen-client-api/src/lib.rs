@@ -503,6 +503,24 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "ci")]
+    #[test]
+    fn test_ci_request_variants_are_registered_as_ci_app_requests() {
+        let ci_request_names: std::collections::BTreeSet<&'static str> =
+            messages::request_metadata::REQUEST_VARIANT_NAMES
+                .iter()
+                .copied()
+                .filter(|variant_name| variant_name.starts_with("Ci"))
+                .collect();
+        let routed_ci_request_names: std::collections::BTreeSet<&'static str> =
+            messages::request_metadata::CI_REQUEST_VARIANTS.iter().copied().collect();
+
+        assert_eq!(
+            ci_request_names, routed_ci_request_names,
+            "every ClientRpcRequest variant whose name starts with `Ci` must route to the ci app"
+        );
+    }
+
     #[test]
     fn test_request_metadata_lookup_matches_sample_requests() {
         let mut cases = vec![
