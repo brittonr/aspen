@@ -5,6 +5,7 @@
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
@@ -176,37 +177,51 @@ impl SecretsRequest {
     fn to_operation_kv_transit(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::SecretsKvRead { mount, path, .. }
-            | Self::SecretsKvList { mount, path }
-            | Self::SecretsKvMetadata { mount, path } => Some(Operation::Read {
-                key: format!("_secrets:{}:{}", mount, path),
-            }),
-            Self::SecretsKvWrite { mount, path, .. }
-            | Self::SecretsKvDelete { mount, path, .. }
-            | Self::SecretsKvDestroy { mount, path, .. }
-            | Self::SecretsKvUndelete { mount, path, .. }
-            | Self::SecretsKvUpdateMetadata { mount, path, .. }
-            | Self::SecretsKvDeleteMetadata { mount, path } => Some(Operation::Write {
-                key: format!("_secrets:{}:{}", mount, path),
-                value: vec![],
-            }),
-
-            Self::SecretsTransitListKeys { mount } => Some(Operation::Read {
-                key: format!("_secrets:{}:", mount),
-            }),
-            Self::SecretsTransitCreateKey { mount, name, .. } | Self::SecretsTransitRotateKey { mount, name } => {
-                Some(Operation::Write {
-                    key: format!("_secrets:{}:{}", mount, name),
-                    value: vec![],
+            Self::SecretsKvRead { mount, path, .. } | Self::SecretsKvMetadata { mount, path } => {
+                Some(Operation::SecretsRead {
+                    mount: mount.clone(),
+                    path: path.clone(),
                 })
             }
-            Self::SecretsTransitEncrypt { mount, name, .. }
-            | Self::SecretsTransitDecrypt { mount, name, .. }
-            | Self::SecretsTransitSign { mount, name, .. }
-            | Self::SecretsTransitVerify { mount, name, .. }
+            Self::SecretsKvList { mount, path } => Some(Operation::SecretsList {
+                mount: mount.clone(),
+                path: path.clone(),
+            }),
+            Self::SecretsKvWrite { mount, path, .. }
+            | Self::SecretsKvUndelete { mount, path, .. }
+            | Self::SecretsKvUpdateMetadata { mount, path, .. } => Some(Operation::SecretsWrite {
+                mount: mount.clone(),
+                path: path.clone(),
+            }),
+            Self::SecretsKvDelete { mount, path, .. }
+            | Self::SecretsKvDestroy { mount, path, .. }
+            | Self::SecretsKvDeleteMetadata { mount, path } => Some(Operation::SecretsDelete {
+                mount: mount.clone(),
+                path: path.clone(),
+            }),
+
+            Self::SecretsTransitListKeys { mount } => Some(Operation::SecretsList {
+                mount: mount.clone(),
+                path: String::new(),
+            }),
+            Self::SecretsTransitCreateKey { mount, name, .. } | Self::SecretsTransitRotateKey { mount, name } => {
+                Some(Operation::TransitKeyManage {
+                    key_name: format!("{mount}:{name}"),
+                })
+            }
+            Self::SecretsTransitEncrypt { mount, name, .. } => Some(Operation::TransitEncrypt {
+                key_name: format!("{mount}:{name}"),
+            }),
+            Self::SecretsTransitDecrypt { mount, name, .. }
             | Self::SecretsTransitRewrap { mount, name, .. }
-            | Self::SecretsTransitDatakey { mount, name, .. } => Some(Operation::Read {
-                key: format!("_secrets:{}:{}", mount, name),
+            | Self::SecretsTransitDatakey { mount, name, .. } => Some(Operation::TransitDecrypt {
+                key_name: format!("{mount}:{name}"),
+            }),
+            Self::SecretsTransitSign { mount, name, .. } => Some(Operation::TransitSign {
+                key_name: format!("{mount}:{name}"),
+            }),
+            Self::SecretsTransitVerify { mount, name, .. } => Some(Operation::TransitVerify {
+                key_name: format!("{mount}:{name}"),
             }),
 
             _ => None,
@@ -216,35 +231,35 @@ impl SecretsRequest {
     fn to_operation_pki_nix_cache(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::SecretsPkiGetCrl { mount }
-            | Self::SecretsPkiListCerts { mount }
-            | Self::SecretsPkiListRoles { mount } => Some(Operation::Read {
-                key: format!("_secrets:{}:", mount),
+            Self::SecretsPkiGetCrl { .. } | Self::SecretsPkiListCerts { .. } => Some(Operation::PkiReadCa),
+            Self::SecretsPkiListRoles { mount } => Some(Operation::SecretsList {
+                mount: mount.clone(),
+                path: "roles/".to_string(),
             }),
-            Self::SecretsPkiGetRole { mount, name } => Some(Operation::Read {
-                key: format!("_secrets:{}:{}", mount, name),
+            Self::SecretsPkiGetRole { mount, name } => Some(Operation::SecretsRead {
+                mount: mount.clone(),
+                path: name.clone(),
             }),
-            Self::SecretsPkiGenerateRoot { mount, .. }
-            | Self::SecretsPkiGenerateIntermediate { mount, .. }
-            | Self::SecretsPkiSetSignedIntermediate { mount, .. }
-            | Self::SecretsPkiCreateRole { mount, .. }
-            | Self::SecretsPkiIssue { mount, .. }
-            | Self::SecretsPkiRevoke { mount, .. } => Some(Operation::Write {
-                key: format!("_secrets:{}:", mount),
-                value: vec![],
+            Self::SecretsPkiGenerateRoot { .. }
+            | Self::SecretsPkiGenerateIntermediate { .. }
+            | Self::SecretsPkiSetSignedIntermediate { .. }
+            | Self::SecretsPkiCreateRole { .. } => Some(Operation::PkiManage),
+            Self::SecretsPkiIssue { mount, role, .. } => Some(Operation::PkiIssue {
+                role: format!("{mount}:{role}"),
             }),
+            Self::SecretsPkiRevoke { .. } => Some(Operation::PkiRevoke),
 
-            Self::SecretsNixCacheGetPublicKey { mount, .. } => Some(Operation::Read {
-                key: format!("_secrets:{}:", mount),
+            Self::SecretsNixCacheGetPublicKey { mount, cache_name } => Some(Operation::TransitVerify {
+                key_name: format!("{mount}:{cache_name}"),
             }),
-            Self::SecretsNixCacheListKeys { mount } => Some(Operation::Read {
-                key: format!("_secrets:{}:", mount),
+            Self::SecretsNixCacheListKeys { mount } => Some(Operation::SecretsList {
+                mount: mount.clone(),
+                path: String::new(),
             }),
-            Self::SecretsNixCacheCreateKey { mount, .. }
-            | Self::SecretsNixCacheRotateKey { mount, .. }
-            | Self::SecretsNixCacheDeleteKey { mount, .. } => Some(Operation::Write {
-                key: format!("_secrets:{}:", mount),
-                value: vec![],
+            Self::SecretsNixCacheCreateKey { mount, cache_name }
+            | Self::SecretsNixCacheRotateKey { mount, cache_name }
+            | Self::SecretsNixCacheDeleteKey { mount, cache_name } => Some(Operation::TransitKeyManage {
+                key_name: format!("{mount}:{cache_name}"),
             }),
 
             _ => None,
