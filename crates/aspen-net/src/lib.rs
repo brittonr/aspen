@@ -70,4 +70,8 @@ impl HandlerFactory for NetHandlerFactory {
     fn priority(&self) -> u32 {
         250
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        Some("contacts")
+    }
 }

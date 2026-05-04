@@ -61,6 +61,17 @@ impl HandlerFactory for ClusterHandlerFactory {
     fn priority(&self) -> u32 {
         120
     }
+
+    fn app_id(&self) -> Option<&'static str> {
+        #[cfg(feature = "deploy")]
+        {
+            Some("deploy")
+        }
+        #[cfg(not(feature = "deploy"))]
+        {
+            None
+        }
+    }
 }
 
 // Self-register via inventory

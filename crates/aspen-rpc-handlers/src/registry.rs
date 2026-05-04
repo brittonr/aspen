@@ -778,6 +778,97 @@ mod tests {
     }
 
     #[test]
+    fn native_handler_factories_advertise_their_required_app_namespace() {
+        let mut cases: Vec<(&'static dyn HandlerFactory, ClientRpcRequest)> = Vec::new();
+
+        #[cfg(feature = "net")]
+        cases.push((&NET_HANDLER_FACTORY, ClientRpcRequest::NetList { tag_filter: None }));
+        #[cfg(feature = "deploy")]
+        cases.push((&CLUSTER_HANDLER_FACTORY, ClientRpcRequest::ClusterDeployStatus));
+        #[cfg(feature = "forge")]
+        cases.push((&FORGE_HANDLER_FACTORY, ClientRpcRequest::ForgeListRepos {
+            limit: None,
+            offset: None,
+        }));
+        #[cfg(feature = "jobs")]
+        cases.push((&JOB_HANDLER_FACTORY, ClientRpcRequest::JobList {
+            status: None,
+            job_type: None,
+            tags: Vec::new(),
+            limit: None,
+            continuation_token: None,
+        }));
+        #[cfg(feature = "ci-core")]
+        cases.push((&CI_HANDLER_FACTORY, ClientRpcRequest::CiListRuns {
+            repo_id: None,
+            status: None,
+            limit: None,
+        }));
+        #[cfg(feature = "ci-cache")]
+        cases.push((&CACHE_HANDLER_FACTORY, ClientRpcRequest::CacheStats));
+        #[cfg(feature = "ci-cache")]
+        cases.push((&CACHE_MIGRATION_HANDLER_FACTORY, ClientRpcRequest::CacheMigrationStatus));
+        #[cfg(feature = "secrets")]
+        cases.push((&SECRETS_HANDLER_FACTORY, ClientRpcRequest::SecretsKvRead {
+            mount: "secret".to_string(),
+            path: "example".to_string(),
+            version: None,
+        }));
+        #[cfg(feature = "snix")]
+        cases.push((&SNIX_HANDLER_FACTORY, ClientRpcRequest::SnixDirectoryGet { digest: "0".repeat(64) }));
+
+        for (factory, request) in cases {
+            assert_eq!(
+                factory.app_id(),
+                request.required_app(),
+                "native handler factory `{}` must advertise the same app namespace as `{}` routing metadata",
+                factory.name(),
+                request.variant_name()
+            );
+        }
+    }
+
+    #[test]
+    fn native_handler_app_contract_is_documented() {
+        let architecture_doc = include_str!("../../../docs/developer-guide/architecture.md");
+
+        assert!(architecture_doc.contains("HandlerFactory::app_id()"));
+        assert!(architecture_doc.contains("HandlerRegistry::new"));
+        assert!(architecture_doc.contains("native_handler_factories_advertise_their_required_app_namespace"));
+    }
+
+    #[cfg(feature = "net")]
+    #[tokio::test]
+    async fn handler_registry_registers_native_net_app_namespace() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(42).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+        let mut plan = NativeHandlerPlan::core_only();
+        plan.set_net_enabled(true);
+
+        assert!(!ctx.app_registry.has_app("contacts"));
+        let _registry = HandlerRegistry::new(&ctx, &plan).expect("registry initializes with net handler");
+        assert!(ctx.app_registry.has_app("contacts"));
+    }
+
+    #[cfg(feature = "deploy")]
+    #[tokio::test]
+    async fn handler_registry_registers_native_deploy_app_namespace() {
+        use aspen_core::EndpointProvider;
+
+        let mock_endpoint = Arc::new(aspen_rpc_core::test_support::MockEndpointProvider::with_seed(42).await)
+            as Arc<dyn EndpointProvider>;
+        let ctx = aspen_rpc_core::test_support::TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build();
+        let plan = NativeHandlerPlan::core_only();
+
+        assert!(!ctx.app_registry.has_app("deploy"));
+        let _registry = HandlerRegistry::new(&ctx, &plan).expect("registry initializes with deploy handler");
+        assert!(ctx.app_registry.has_app("deploy"));
+    }
+
+    #[test]
     fn add_handlers_sorts_by_priority() {
         let registry = empty_registry();
         let h1: Arc<dyn RequestHandler> = Arc::new(TestHandler { name: "high" });
