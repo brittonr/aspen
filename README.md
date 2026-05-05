@@ -6,7 +6,7 @@
 
 Distributed systems primitives in Rust, built on [iroh](https://github.com/n0-computer/iroh) P2P QUIC. Ordered transactional KV at the bottom (Raft consensus), everything else built on top as key reads and writes.
 
-Aspen's source lives in its own Git forge, built by its own CI, deployed to its own cluster. `nix run .#dogfood-local -- full` runs this end-to-end, writes an operator-visible receipt, and publishes the final success receipt into Aspen KV before cleanup; inspect local evidence later with `receipts list/show`, or use `full --leave-running` plus `receipts cluster-show` for live cluster-backed readback.
+Aspen's source lives in its own Git forge, built by its own CI, deployed to its own cluster. `nix run .#dogfood-local -- full` runs this end-to-end, writes an operator-visible receipt, and publishes the final success receipt into Aspen KV before cleanup; inspect local evidence later with `receipts list/show`, or use `full --leave-running` plus `receipts cluster-show` for live cluster-backed readback. See [Operator Receipts](docs/operator-receipts.md) for receipt fields, `jq` examples, and triage guidance.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ Pipelines auto-trigger on Forge pushes. Three executor backends:
 - **Nix** -- sandbox, reproducible flake builds, artifacts to iroh-blobs + binary cache
 - **VM** -- Cloud Hypervisor microVM for untrusted workloads
 
-Pipelines defined in [Nickel](https://nickel-lang.org/) (`.aspen/ci.ncl`). Jobs distributed across the cluster via the Raft-backed job queue. Operators can query native CI/deploy evidence with `aspen-cli ci receipt <run-id>` or `aspen-cli --json ci receipt <run-id>`; receipts use schema `aspen.ci.run-receipt.v1` and include deterministic stage/job summaries with job IDs for log follow-up.
+Pipelines defined in [Nickel](https://nickel-lang.org/) (`.aspen/ci.ncl`). Jobs distributed across the cluster via the Raft-backed job queue. Operators can query native CI/deploy evidence with `aspen-cli ci receipt <run-id>` or `aspen-cli --json ci receipt <run-id>`; receipts use schema `aspen.ci.run-receipt.v1` and include deterministic stage/job summaries with job IDs for log follow-up. See [Operator Receipts](docs/operator-receipts.md) for CI receipt artifact metadata and `jq` examples.
 
 ## Federation
 
@@ -145,6 +145,8 @@ madsim for deterministic simulation, proptest/Bolero for property-based testing 
 - [Host ABI](docs/HOST_ABI.md)
 - [Identity Persistence](docs/identity-persistence.md)
 - [KV Branching](docs/kv-branching.md)
+- [Observability](docs/observability.md)
+- [Operator Receipts](docs/operator-receipts.md)
 - [Plugin Development](docs/PLUGIN_DEVELOPMENT.md)
 - [SOPS Secrets](docs/sops.md)
 - [Tiger Style](docs/tigerstyle.md)
