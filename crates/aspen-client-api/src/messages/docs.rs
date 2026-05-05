@@ -58,15 +58,17 @@ impl DocsRequest {
     pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::DocsSet { key, value } => Some(Operation::Write {
-                key: format!("_docs:{key}"),
-                value: value.clone(),
+            Self::DocsSet { key, .. } => Some(Operation::DocsWrite {
+                resource: format!("doc:{key}"),
             }),
-            Self::DocsGet { key } | Self::DocsDelete { key } => Some(Operation::Read {
-                key: format!("_docs:{key}"),
+            Self::DocsGet { key } => Some(Operation::DocsRead {
+                resource: format!("doc:{key}"),
             }),
-            Self::DocsList { .. } | Self::DocsStatus => Some(Operation::Read {
-                key: "_docs:".to_string(),
+            Self::DocsDelete { key } => Some(Operation::DocsWrite {
+                resource: format!("doc:{key}"),
+            }),
+            Self::DocsList { .. } | Self::DocsStatus => Some(Operation::DocsRead {
+                resource: "doc:".to_string(),
             }),
             Self::AddPeerCluster { .. }
             | Self::RemovePeerCluster { .. }

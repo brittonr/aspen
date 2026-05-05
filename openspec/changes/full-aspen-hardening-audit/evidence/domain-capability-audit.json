@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-05T00:40:21Z",
+  "generated": "2026-05-05T00:50:05Z",
   "scanner": "production to_operation files before #[cfg(test)] modules; generic data operations on known internal-domain files/prefix windows",
   "completed_slices": [
     {
@@ -21,21 +21,28 @@
     {
       "surface": "Jobs/workers",
       "evidence": "JobsRead/JobsWrite mappings and generic _jobs:/__worker: negative tests"
+    },
+    {
+      "surface": "Blob/docs/hooks",
+      "evidence": "BlobRead/BlobWrite, DocsRead/DocsWrite, and HooksRead/HooksWrite mappings; generic _blob:/_docs:/_hooks: negative tests"
     }
   ],
-  "ci_jobs_slice": {
+  "blob_docs_hooks_slice": {
     "generic_prefixes": [
-      "_ci:",
-      "_jobs:",
-      "__worker:"
+      "_blob:",
+      "_docs:",
+      "_hooks:"
     ],
     "mappings": {
-      "CI reads": "Operation::CiRead",
-      "CI writes": "Operation::CiWrite",
-      "job/worker reads": "Operation::JobsRead",
-      "job/worker writes": "Operation::JobsWrite"
+      "blob reads": "Operation::BlobRead",
+      "blob writes": "Operation::BlobWrite",
+      "docs reads": "Operation::DocsRead",
+      "docs writes": "Operation::DocsWrite",
+      "hook reads": "Operation::HooksRead",
+      "hook writes": "Operation::HooksWrite"
     },
-    "generic_prefix_capabilities_rejected": true
+    "generic_prefix_capabilities_rejected": true,
+    "docs_delete_requires_write": true
   },
   "regressions": [
     "secrets_kv_requests_use_secrets_capabilities_not_generic_prefixes",
@@ -48,7 +55,13 @@
     "ci_requests_require_ci_scoped_operations",
     "generic_ci_prefixes_do_not_authorize_ci_requests",
     "job_requests_use_jobs_capabilities_not_generic_prefixes",
-    "generic_jobs_prefixes_do_not_authorize_job_requests"
+    "generic_jobs_prefixes_do_not_authorize_job_requests",
+    "blob_requests_use_blob_capabilities_not_generic_prefixes",
+    "generic_blob_prefixes_do_not_authorize_blob_requests",
+    "docs_requests_use_docs_capabilities_not_generic_prefixes",
+    "generic_docs_prefixes_do_not_authorize_docs_requests",
+    "hook_requests_use_hook_capabilities_not_generic_prefixes",
+    "generic_hook_prefixes_do_not_authorize_hook_requests"
   ],
   "remaining_generic_internal_domain_mappings": [
     {
@@ -60,31 +73,6 @@
       "path": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
       "line": 27,
       "text": "| ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
-      "line": 16,
-      "text": "| ClientRpcRequest::DownloadBlobByProvider { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
-      "line": 26,
-      "text": "| ClientRpcRequest::GetBlobReplicationStatus { hash } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
-      "line": 29,
-      "text": "ClientRpcRequest::ListBlobs { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
-      "line": 34,
-      "text": "ClientRpcRequest::BlobReplicatePull { hash, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
-      "line": 38,
-      "text": "ClientRpcRequest::TriggerBlobReplication { hash, .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
@@ -197,31 +185,6 @@
       "text": "ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
-      "line": 10,
-      "text": "ClientRpcRequest::DocsSet { key, value } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
-      "line": 14,
-      "text": "ClientRpcRequest::DocsGet { key } | ClientRpcRequest::DocsDelete { key } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
-      "line": 17,
-      "text": "ClientRpcRequest::DocsList { .. } | ClientRpcRequest::DocsStatus => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs",
-      "line": 10,
-      "text": "ClientRpcRequest::HookList | ClientRpcRequest::HookGetMetrics { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs",
-      "line": 13,
-      "text": "ClientRpcRequest::HookTrigger { .. } => Some(Some(Operation::Write {"
-    },
-    {
       "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 20,
       "text": "ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),"
@@ -287,5 +250,5 @@
       "text": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
     }
   ],
-  "remaining_count": 47
+  "remaining_count": 37
 }

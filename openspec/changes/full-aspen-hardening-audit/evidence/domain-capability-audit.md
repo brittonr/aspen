@@ -1,27 +1,30 @@
 # Domain Capability Audit Evidence
 
-Generated: `2026-05-05T00:40:21Z`
+Generated: `2026-05-05T00:50:05Z`
 
 ## Completed focused slices
 
-This evidence extends the Phase 3 domain-specific capability audit with a focused CI/jobs slice. It does not claim the broad domain-capability task is complete. The remaining list is generated from production `to_operation` code before test modules.
+This evidence extends the Phase 3 domain-specific capability audit with a focused blob/docs/hooks slice. It does not claim the broad domain-capability task is complete. The remaining list is generated from production `to_operation` code before test modules.
 
 - **Secrets/trust** — domain-specific secrets/transit/PKI operations; generic _secrets: Read/Write negative tests.
 - **SNIX store** — SnixRead/SnixWrite mappings and generic snix: negative tests.
 - **Net service mesh** — NetPublish/NetUnpublish/NetConnect/NetAdmin mappings; generic /_sys/net/svc/ negative tests.
 - **CI pipeline** — CiRead/CiWrite mappings and generic _ci: negative tests.
 - **Jobs/workers** — JobsRead/JobsWrite mappings and generic _jobs:/__worker: negative tests.
+- **Blob/docs/hooks** — BlobRead/BlobWrite, DocsRead/DocsWrite, and HooksRead/HooksWrite mappings; generic _blob:/_docs:/_hooks: negative tests.
 
-## CI/jobs slice finding
+## Blob/docs/hooks slice finding
 
-CI pipeline and job/worker requests previously mapped to generic data operations over `_ci:`, `_jobs:`, and `__worker:` prefixes. They now map to domain-specific operations:
+Blob storage, docs, and hook requests previously mapped to generic data operations over `_blob:`, `_docs:`, and `_hooks:` prefixes. They now map to domain-specific operations:
 
-- CI read surfaces -> `Operation::CiRead { resource }`
-- CI mutation surfaces -> `Operation::CiWrite { resource }`
-- Job/worker read surfaces -> `Operation::JobsRead { resource }`
-- Job/worker mutation surfaces -> `Operation::JobsWrite { resource }`
+- Blob reads -> `Operation::BlobRead { resource }`
+- Blob mutations and replication controls -> `Operation::BlobWrite { resource }`
+- Docs reads -> `Operation::DocsRead { resource }`
+- Docs set/delete mutations -> `Operation::DocsWrite { resource }`
+- Hook list/metrics -> `Operation::HooksRead { resource }`
+- Hook trigger -> `Operation::HooksWrite { resource }`
 
-Generic `Capability::Read` / `Capability::Write` over `_ci:`, `_jobs:`, or worker prefixes no longer authorize the audited CI/jobs requests; `Capability::CiRead`, `Capability::CiWrite`, `Capability::JobsRead`, or `Capability::JobsWrite` are required.
+Generic `Capability::Read` / `Capability::Write` over `_blob:`, `_docs:`, or `_hooks:` no longer authorize audited blob/docs/hooks requests. This slice also corrects docs delete classification from read-like to write-like authorization.
 
 ## Regression coverage
 
@@ -36,18 +39,19 @@ Generic `Capability::Read` / `Capability::Write` over `_ci:`, `_jobs:`, or worke
 - `generic_ci_prefixes_do_not_authorize_ci_requests`
 - `job_requests_use_jobs_capabilities_not_generic_prefixes`
 - `generic_jobs_prefixes_do_not_authorize_job_requests`
+- `blob_requests_use_blob_capabilities_not_generic_prefixes`
+- `generic_blob_prefixes_do_not_authorize_blob_requests`
+- `docs_requests_use_docs_capabilities_not_generic_prefixes`
+- `generic_docs_prefixes_do_not_authorize_docs_requests`
+- `hook_requests_use_hook_capabilities_not_generic_prefixes`
+- `generic_hook_prefixes_do_not_authorize_hook_requests`
 
 ## Remaining generic internal-domain mappings
 
-These 47 production source handles keep the broad Phase 3 task open for additional focused slices. This pass intentionally re-baselines the list with a stricter generated scanner and does not include test assertions.
+These 37 production source handles keep the broad Phase 3 task open for additional focused slices. This pass intentionally re-baselines the list with a stricter generated scanner and does not include test assertions.
 
 - `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs:16` — `| ClientRpcRequest::AutomergeReceiveSyncMessage { .. } => Some(Some(Operation::Write {`
 - `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs:27` — `| ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs:16` — `| ClientRpcRequest::DownloadBlobByProvider { .. } => Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs:26` — `| ClientRpcRequest::GetBlobReplicationStatus { hash } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs:29` — `ClientRpcRequest::ListBlobs { .. } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs:34` — `ClientRpcRequest::BlobReplicatePull { hash, .. } => Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/blob_ops.rs:38` — `ClientRpcRequest::TriggerBlobReplication { hash, .. } => Some(Some(Operation::Write {`
 - `crates/aspen-client-api/src/messages/to_operation/ci_ops.rs:65` — `Some(Some(Operation::Read {`
 - `crates/aspen-client-api/src/messages/to_operation/ci_ops.rs:69` — `ClientRpcRequest::CacheStats => Some(Some(Operation::Read {`
 - `crates/aspen-client-api/src/messages/to_operation/ci_ops.rs:72` — `ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {`
@@ -70,11 +74,6 @@ These 47 production source handles keep the broad Phase 3 task open for addition
 - `crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:161` — `| ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => Some(Some(Operation::Write {`
 - `crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:166` — `| ClientRpcRequest::ServiceGetInstance { service_name, .. } => Some(Some(Operation::Read {`
 - `crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs:169` — `ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/docs_ops.rs:10` — `ClientRpcRequest::DocsSet { key, value } => Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/docs_ops.rs:14` — `ClientRpcRequest::DocsGet { key } | ClientRpcRequest::DocsDelete { key } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/docs_ops.rs:17` — `ClientRpcRequest::DocsList { .. } | ClientRpcRequest::DocsStatus => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs:10` — `ClientRpcRequest::HookList | ClientRpcRequest::HookGetMetrics { .. } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs:13` — `ClientRpcRequest::HookTrigger { .. } => Some(Some(Operation::Write {`
 - `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs:20` — `ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),`
 - `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs:32` — `ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {`
 - `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs:38` — `Some(Some(Operation::Write {`

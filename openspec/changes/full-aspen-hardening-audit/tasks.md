@@ -17,7 +17,8 @@
 - [ ] Verify SNIX, Forge, federation, deploy, jobs/CI, secrets/trust, and admin operations use domain-specific capabilities rather than generic prefixes.
   - Secrets/trust high-risk slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; secrets, transit, PKI, and Nix-cache signing requests now use domain-specific operations instead of generic `_secrets:` data prefixes.
   - Net service-mesh slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; publish/unpublish/lookup/list now require net-domain capabilities instead of generic `/_sys/net/svc/` data prefixes.
-  - CI/jobs slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; CI pipeline and job/worker requests now require `CiRead`/`CiWrite`/`JobsRead`/`JobsWrite` instead of generic `_ci:`, `_jobs:`, or `__worker:` data prefixes. Remaining generic internal-domain mappings stay open for follow-up slices.
+  - CI/jobs slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; CI pipeline and job/worker requests now require `CiRead`/`CiWrite`/`JobsRead`/`JobsWrite` instead of generic `_ci:`, `_jobs:`, or `__worker:` data prefixes.
+  - Blob/docs/hooks slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; blob, docs, and hooks requests now require `BlobRead`/`BlobWrite`/`DocsRead`/`DocsWrite`/`HooksRead`/`HooksWrite` instead of generic `_blob:`, `_docs:`, or `_hooks:` data prefixes. Remaining generic internal-domain mappings stay open for follow-up slices.
 - [ ] Add or update negative drift tests for every high-risk bypass class discovered by the matrix.
 
 ## Phase 4: Credential, Redaction, and Evidence Audit

@@ -27,12 +27,17 @@ impl HooksRequest {
     pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::List | Self::GetMetrics { .. } => Some(Operation::Read {
-                key: "_hooks:".to_string(),
+            Self::List => Some(Operation::HooksRead {
+                resource: "hook:".to_string(),
             }),
-            Self::Trigger { .. } => Some(Operation::Write {
-                key: "_hooks:".to_string(),
-                value: vec![],
+            Self::GetMetrics { handler_name } => Some(Operation::HooksRead {
+                resource: match handler_name.as_deref() {
+                    Some(handler_name) => format!("hook:{handler_name}:metrics"),
+                    None => "hook:metrics".to_string(),
+                },
+            }),
+            Self::Trigger { event_type, .. } => Some(Operation::HooksWrite {
+                resource: format!("event:{event_type}"),
             }),
         }
     }

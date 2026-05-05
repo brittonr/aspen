@@ -286,6 +286,40 @@ pub enum Capability {
     },
 
     // ==========================================================================
+    // Blob, Docs, and Hook Capabilities
+    // ==========================================================================
+    /// Read blob metadata or content matching a resource prefix.
+    BlobRead {
+        /// Blob resource prefix.
+        resource_prefix: String,
+    },
+    /// Mutate blob state matching a resource prefix.
+    BlobWrite {
+        /// Blob resource prefix.
+        resource_prefix: String,
+    },
+    /// Read docs state matching a resource prefix.
+    DocsRead {
+        /// Docs resource prefix.
+        resource_prefix: String,
+    },
+    /// Mutate docs state matching a resource prefix.
+    DocsWrite {
+        /// Docs resource prefix.
+        resource_prefix: String,
+    },
+    /// Read hook metadata or metrics matching a resource prefix.
+    HooksRead {
+        /// Hooks resource prefix.
+        resource_prefix: String,
+    },
+    /// Trigger or mutate hooks matching a resource prefix.
+    HooksWrite {
+        /// Hooks resource prefix.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Capabilities
     // ==========================================================================
     /// Pull (read) federated resources matching a repo prefix.
@@ -386,6 +420,7 @@ impl Capability {
             .or_else(|| self.authorizes_pki(op))
             .or_else(|| self.authorizes_net(op))
             .or_else(|| self.authorizes_ci_jobs(op))
+            .or_else(|| self.authorizes_blob_docs_hooks(op))
             .or_else(|| self.authorizes_federation(op))
             .or_else(|| self.authorizes_snix(op))
             .unwrap_or(false)
@@ -592,6 +627,23 @@ impl Capability {
         }
     }
 
+    fn authorizes_blob_docs_hooks(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::BlobRead { resource_prefix }, Operation::BlobRead { resource })
+            | (Capability::BlobWrite { resource_prefix }, Operation::BlobWrite { resource })
+            | (Capability::DocsRead { resource_prefix }, Operation::DocsRead { resource })
+            | (Capability::DocsWrite { resource_prefix }, Operation::DocsWrite { resource })
+            | (Capability::HooksRead { resource_prefix }, Operation::HooksRead { resource })
+            | (Capability::HooksWrite { resource_prefix }, Operation::HooksWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn authorizes_federation(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
             (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
@@ -642,6 +694,7 @@ impl Capability {
             .or_else(|| self.contains_pki(other))
             .or_else(|| self.contains_net(other))
             .or_else(|| self.contains_ci_jobs(other))
+            .or_else(|| self.contains_blob_docs_hooks(other))
             .or_else(|| self.contains_federation(other))
             .or_else(|| self.contains_snix(other))
             .unwrap_or(false)
@@ -890,6 +943,51 @@ impl Capability {
         }
     }
 
+    fn contains_blob_docs_hooks(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::BlobRead {
+                    resource_prefix: parent,
+                },
+                Capability::BlobRead { resource_prefix: child },
+            )
+            | (
+                Capability::BlobWrite {
+                    resource_prefix: parent,
+                },
+                Capability::BlobWrite { resource_prefix: child },
+            )
+            | (
+                Capability::DocsRead {
+                    resource_prefix: parent,
+                },
+                Capability::DocsRead { resource_prefix: child },
+            )
+            | (
+                Capability::DocsWrite {
+                    resource_prefix: parent,
+                },
+                Capability::DocsWrite { resource_prefix: child },
+            )
+            | (
+                Capability::HooksRead {
+                    resource_prefix: parent,
+                },
+                Capability::HooksRead { resource_prefix: child },
+            )
+            | (
+                Capability::HooksWrite {
+                    resource_prefix: parent,
+                },
+                Capability::HooksWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
     fn contains_federation(&self, other: &Capability) -> Option<bool> {
         match (self, other) {
             (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
@@ -1115,6 +1213,40 @@ pub enum Operation {
     },
 
     // ==========================================================================
+    // Blob, Docs, and Hook Operations
+    // ==========================================================================
+    /// Read blob state.
+    BlobRead {
+        /// Blob resource identifier.
+        resource: String,
+    },
+    /// Mutate blob state.
+    BlobWrite {
+        /// Blob resource identifier.
+        resource: String,
+    },
+    /// Read docs state.
+    DocsRead {
+        /// Docs resource identifier.
+        resource: String,
+    },
+    /// Mutate docs state.
+    DocsWrite {
+        /// Docs resource identifier.
+        resource: String,
+    },
+    /// Read hook state.
+    HooksRead {
+        /// Hooks resource identifier.
+        resource: String,
+    },
+    /// Mutate hook state.
+    HooksWrite {
+        /// Hooks resource identifier.
+        resource: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Operations
     // ==========================================================================
     /// Pull (read) a federated resource.
@@ -1180,6 +1312,13 @@ impl fmt::Display for Operation {
             Operation::CiWrite { resource } => write!(f, "CiWrite({resource})"),
             Operation::JobsRead { resource } => write!(f, "JobsRead({resource})"),
             Operation::JobsWrite { resource } => write!(f, "JobsWrite({resource})"),
+            // Blob/docs/hook operations
+            Operation::BlobRead { resource } => write!(f, "BlobRead({resource})"),
+            Operation::BlobWrite { resource } => write!(f, "BlobWrite({resource})"),
+            Operation::DocsRead { resource } => write!(f, "DocsRead({resource})"),
+            Operation::DocsWrite { resource } => write!(f, "DocsWrite({resource})"),
+            Operation::HooksRead { resource } => write!(f, "HooksRead({resource})"),
+            Operation::HooksWrite { resource } => write!(f, "HooksWrite({resource})"),
             // Federation operations
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),
