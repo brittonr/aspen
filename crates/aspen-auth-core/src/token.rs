@@ -6,6 +6,7 @@
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::fmt;
 
 use iroh_base::PublicKey;
 use serde::Deserialize;
@@ -44,7 +45,7 @@ pub enum Audience {
 /// - Fixed size proof hashes (32 bytes)
 /// - Fixed size signatures (64 bytes)
 /// - Bounded delegation depth (max 8 levels)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CapabilityToken {
     /// Version for future compatibility.
     pub version: u8,
@@ -82,6 +83,24 @@ pub struct CapabilityToken {
 
 fn default_token_facts() -> Vec<(String, Vec<u8>)> {
     Vec::new()
+}
+
+impl fmt::Debug for CapabilityToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CapabilityToken")
+            .field("version", &self.version)
+            .field("issuer", &self.issuer)
+            .field("audience", &self.audience)
+            .field("capabilities", &self.capabilities)
+            .field("issued_at", &self.issued_at)
+            .field("expires_at", &self.expires_at)
+            .field("has_nonce", &self.nonce.is_some())
+            .field("has_proof", &self.proof.is_some())
+            .field("delegation_depth", &self.delegation_depth)
+            .field("facts_count", &self.facts.len())
+            .field("signature", &"<redacted: 64 bytes>")
+            .finish()
+    }
 }
 
 fn max_token_size_usize() -> usize {
@@ -243,6 +262,22 @@ mod i7_serialization_tests {
         let decoded_text = CapabilityToken::from_base64(&encoded_text).expect("golden token base64 decodes");
         assert_eq!(decoded_text.capabilities, token.capabilities);
         assert_eq!(decoded_text.facts, token.facts);
+    }
+
+    #[test]
+    fn capability_token_debug_redacts_reconstructable_material() {
+        let token = golden_token();
+        let debug = format!("{token:?}");
+
+        assert!(debug.contains("CapabilityToken"));
+        assert!(debug.contains("has_nonce"));
+        assert!(debug.contains("has_proof"));
+        assert!(debug.contains("facts_count"));
+        assert!(debug.contains("<redacted: 64 bytes>"));
+        assert!(!debug.contains("signature: [165"));
+        assert!(!debug.contains("nonce: Some"));
+        assert!(!debug.contains("proof: Some"));
+        assert!(!debug.contains("i7-golden"));
     }
 
     #[test]

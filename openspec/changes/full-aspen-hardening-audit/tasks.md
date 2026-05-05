@@ -31,7 +31,7 @@
 - [ ] Audit token/ticket generation, delegation, persistence, file permissions, revocation/rotation, and root/bootstrap semantics.
 - [ ] Audit CLI output, logs, errors, debug formatting, receipts, test fixtures, and docs for credential leakage using synthetic secret-like fixtures only.
 - [ ] Verify dogfood, CI, deploy, and diagnostic receipts identify artifacts/runs without log scraping or credential values.
-- [ ] Add redaction regressions for any output surface that handles token/ticket/secret-like material.
+- [x] Add redaction regressions for any output surface that handles token/ticket/secret-like material. Evidence: `evidence/token-ticket-redaction.md`, `evidence/token-ticket-redaction.json`; added custom `Debug` implementations and negative regressions for capability tokens, client tickets, and signed cluster tickets so reconstructable nonce/proof/facts/signature/auth-token material is not printed.
 
 ## Phase 5: Execution, Network, and Supply-Chain Audit
 

@@ -3,6 +3,8 @@
 //! Client tickets contain bootstrap information and access control
 //! for connecting to an Aspen cluster.
 
+use std::fmt;
+
 use anyhow::Context;
 use anyhow::Result;
 use iroh::EndpointAddr;
@@ -22,7 +24,7 @@ pub const CLIENT_TICKET_PREFIX: &str = "aspenclient";
 /// - Cluster identification
 /// - Access control (read-only vs read-write)
 /// - Optional expiration and authentication
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AspenClientTicket {
     /// Cluster identifier (typically hash of cluster cookie).
     pub cluster_id: String,
@@ -36,6 +38,19 @@ pub struct AspenClientTicket {
     pub auth_token: Option<[u8; 32]>,
     /// Priority hint for overlay ordering.
     pub priority: u8,
+}
+
+impl fmt::Debug for AspenClientTicket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AspenClientTicket")
+            .field("cluster_id", &self.cluster_id)
+            .field("bootstrap_peers", &self.bootstrap_peers)
+            .field("access", &self.access)
+            .field("expires_at_secs", &self.expires_at_secs)
+            .field("has_auth_token", &self.auth_token.is_some())
+            .field("priority", &self.priority)
+            .finish()
+    }
 }
 
 impl AspenClientTicket {
@@ -153,6 +168,20 @@ mod tests {
         assert_eq!(ticket.expires_at_secs, 1234567890);
         assert_eq!(ticket.auth_token, Some(auth_token));
         assert_eq!(ticket.priority, 5);
+    }
+
+    #[test]
+    fn client_ticket_debug_redacts_auth_token_bytes() {
+        let addr = test_endpoint_addr();
+        let ticket = AspenClientTicket::new("debug-cluster", vec![addr])
+            .with_access(AccessLevel::ReadWrite)
+            .with_auth_token([42u8; 32]);
+        let debug = format!("{ticket:?}");
+
+        assert!(debug.contains("AspenClientTicket"));
+        assert!(debug.contains("has_auth_token: true"));
+        assert!(!debug.contains("auth_token: Some"));
+        assert!(!debug.contains("[42"));
     }
 
     #[test]

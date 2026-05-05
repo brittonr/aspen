@@ -3,6 +3,7 @@
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::fmt;
 #[cfg(any(test, feature = "std"))]
 use std::time::SystemTime;
 #[cfg(any(test, feature = "std"))]
@@ -25,7 +26,7 @@ use crate::constants::DEFAULT_TICKET_VALIDITY_SECS;
 use crate::constants::SIGNED_TICKET_VERSION;
 
 /// Signed cluster ticket with Ed25519 signature verification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SignedAspenClusterTicket {
     /// Protocol version for forward compatibility.
     pub version: u8,
@@ -57,6 +58,21 @@ struct SignMaterialInput<'a> {
     issued_at_secs: u64,
     expires_at_secs: u64,
     nonce: [u8; 16],
+}
+
+impl fmt::Debug for SignedAspenClusterTicket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SignedAspenClusterTicket")
+            .field("version", &self.version)
+            .field("ticket_cluster_id", &self.ticket.cluster_id)
+            .field("bootstrap_peer_count", &self.ticket.bootstrap.len())
+            .field("issuer", &self.issuer)
+            .field("issued_at_secs", &self.issued_at_secs)
+            .field("expires_at_secs", &self.expires_at_secs)
+            .field("nonce", &"<redacted: 16 bytes>")
+            .field("signature", &"<redacted>")
+            .finish()
+    }
 }
 
 impl SignedAspenClusterTicket {
@@ -282,6 +298,33 @@ fn generate_nonce() -> [u8; 16] {
     let mut nonce = [0u8; 16];
     rand::rng().fill_bytes(&mut nonce);
     nonce
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    #[test]
+    fn signed_ticket_debug_redacts_replay_and_signature_material() {
+        let ticket =
+            AspenClusterTicket::new(crate::ClusterTopicId::from_bytes([7u8; 32]), "redaction-cluster".to_string());
+        let secret_key = SecretKey::from([9u8; 32]);
+        let signed = sign_with_material(SignMaterialInput {
+            ticket,
+            secret_key: &secret_key,
+            issued_at_secs: 1_700_000_000,
+            expires_at_secs: 1_700_000_900,
+            nonce: [0xAB; 16],
+        });
+        let debug = format!("{signed:?}");
+
+        assert!(debug.contains("SignedAspenClusterTicket"));
+        assert!(debug.contains("bootstrap_peer_count"));
+        assert!(debug.contains("<redacted: 16 bytes>"));
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("nonce: [171"));
+        assert!(!debug.contains("signature: Signature"));
+    }
 }
 
 #[cfg(test)]

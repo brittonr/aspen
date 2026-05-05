@@ -1,0 +1,116 @@
+{
+  "generated": "2026-05-05T02:20:02Z",
+  "change": "full-aspen-hardening-audit",
+  "phase": "Phase 4: Credential, Redaction, and Evidence Audit",
+  "scope": "focused debug redaction regressions for token and ticket types",
+  "synthetic_only": true,
+  "source_handles": [
+    {
+      "path": "crates/aspen-auth-core/src/token.rs",
+      "type": "CapabilityToken",
+      "change": "derived Debug replaced with custom redacted Debug",
+      "redacted_fields": [
+        "nonce",
+        "proof",
+        "facts",
+        "signature"
+      ],
+      "retained_fields": [
+        "version",
+        "issuer",
+        "audience",
+        "capabilities",
+        "issued_at",
+        "expires_at",
+        "delegation_depth",
+        "has_nonce",
+        "has_proof",
+        "facts_count"
+      ],
+      "regression": "capability_token_debug_redacts_reconstructable_material"
+    },
+    {
+      "path": "crates/aspen-client/src/ticket.rs",
+      "type": "AspenClientTicket",
+      "change": "derived Debug replaced with custom redacted Debug",
+      "redacted_fields": [
+        "auth_token"
+      ],
+      "retained_fields": [
+        "cluster_id",
+        "bootstrap_peers",
+        "access",
+        "expires_at_secs",
+        "has_auth_token",
+        "priority"
+      ],
+      "regression": "client_ticket_debug_redacts_auth_token_bytes"
+    },
+    {
+      "path": "crates/aspen-ticket/src/signed.rs",
+      "type": "SignedAspenClusterTicket",
+      "change": "derived Debug replaced with custom redacted Debug",
+      "redacted_fields": [
+        "nonce",
+        "signature",
+        "inner serialized ticket"
+      ],
+      "retained_fields": [
+        "version",
+        "ticket_cluster_id",
+        "bootstrap_peer_count",
+        "issuer",
+        "issued_at_secs",
+        "expires_at_secs"
+      ],
+      "regression": "signed_ticket_debug_redacts_replay_and_signature_material"
+    }
+  ],
+  "verification": [
+    {
+      "command": "rustfmt crates/aspen-auth-core/src/token.rs crates/aspen-client/src/ticket.rs crates/aspen-ticket/src/signed.rs",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test -p aspen-auth-core capability_token_debug_redacts_reconstructable_material -- --nocapture",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test -p aspen-client client_ticket_debug_redacts_auth_token_bytes -- --nocapture",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test -p aspen-ticket signed_ticket_debug_redacts_replay_and_signature_material -- --nocapture",
+      "status": "passed"
+    },
+    {
+      "command": "cargo check -p aspen-auth-core -p aspen-client -p aspen-ticket",
+      "status": "passed"
+    },
+    {
+      "command": "scripts/tigerstyle-check.sh",
+      "status": "passed"
+    },
+    {
+      "command": "openspec validate full-aspen-hardening-audit --strict --json",
+      "status": "passed"
+    },
+    {
+      "command": "python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify full-aspen-hardening-audit --json || true",
+      "status": "expected incomplete umbrella warning: 11 done / 11 todo"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    },
+    {
+      "command": "python -m json.tool openspec/changes/full-aspen-hardening-audit/evidence/token-ticket-redaction.json >/dev/null",
+      "status": "passed"
+    }
+  ],
+  "finding": "Derived Debug could expose raw synthetic nonce/proof/facts/signature/auth-token fields in human-readable output; custom Debug implementations now expose only presence/count metadata or explicit redaction markers.",
+  "non_goals": [
+    "does not complete the entire Phase 4 token/ticket persistence audit",
+    "does not alter serialization or wire format"
+  ]
+}
