@@ -738,6 +738,7 @@ pub async fn handle_cancel_run(
 mod tests {
     use std::collections::HashMap;
     use std::path::Path;
+    use std::sync::Arc;
 
     use aspen_ci::orchestrator::JobStatus;
     use aspen_ci::orchestrator::PipelineContext;
@@ -830,6 +831,58 @@ mod tests {
         assert!(context.source_hash.is_none());
     }
 
+    fn receipt_test_run(run_id: &str, job_id: &str) -> PipelineRun {
+        let repo_id = RepoId([7u8; 32]);
+        let created_at = Utc.with_ymd_and_hms(2026, 5, 3, 20, 0, 0).single().expect("valid time");
+        let started_at = Utc.with_ymd_and_hms(2026, 5, 3, 20, 1, 0).single().expect("valid time");
+        let completed_at = Utc.with_ymd_and_hms(2026, 5, 3, 20, 2, 0).single().expect("valid time");
+        let mut jobs = HashMap::new();
+        jobs.insert("zeta".to_string(), JobStatus {
+            job_id: None,
+            status: PipelineStatus::Success,
+            started_at: Some(started_at),
+            completed_at: Some(completed_at),
+            output: None,
+            error: None,
+        });
+        jobs.insert("alpha".to_string(), JobStatus {
+            job_id: Some(serde_json::from_value(serde_json::json!(job_id)).unwrap()),
+            status: PipelineStatus::Failed,
+            started_at: Some(started_at),
+            completed_at: Some(completed_at),
+            output: None,
+            error: Some("boom".to_string()),
+        });
+        PipelineRun {
+            id: run_id.to_string(),
+            pipeline_name: "dogfood".to_string(),
+            context: PipelineContext {
+                repo_id,
+                commit_hash: [9u8; 32],
+                ref_name: "refs/heads/main".to_string(),
+                triggered_by: "test".to_string(),
+                run_id: run_id.to_string(),
+                env: HashMap::new(),
+                checkout_dir: None,
+                source_hash: None,
+            },
+            status: PipelineStatus::Failed,
+            created_at,
+            started_at: Some(started_at),
+            completed_at: Some(completed_at),
+            stages: vec![StageStatus {
+                name: "build".to_string(),
+                status: PipelineStatus::Failed,
+                started_at: Some(started_at),
+                completed_at: Some(completed_at),
+                jobs,
+            }],
+            workflow_id: None,
+            error_message: Some("pipeline failed".to_string()),
+            has_pending_deploys: false,
+        }
+    }
+
     #[test]
     fn pipeline_run_to_receipt_is_schema_versioned_and_sorts_jobs() {
         let repo_id = RepoId([7u8; 32]);
@@ -916,5 +969,76 @@ mod tests {
         assert_eq!(receipt.stages[0].jobs[0].artifacts[0].name, "a-result");
         assert_eq!(receipt.stages[0].jobs[0].artifacts[0].blob_hash, "aaa");
         assert!(receipt.stages[0].jobs[1].artifacts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_run_receipt_reads_artifact_metadata_from_kv() {
+        let kv_store: Arc<dyn aspen_core::KeyValueStore> = aspen_testing_core::DeterministicKeyValueStore::new();
+        let job_manager = Arc::new(aspen_jobs::JobManager::new(kv_store.clone()));
+        let workflow_manager = Arc::new(aspen_jobs::WorkflowManager::new(job_manager.clone(), kv_store.clone()));
+        let orchestrator = Arc::new(aspen_ci::PipelineOrchestrator::new(
+            aspen_ci::PipelineOrchestratorConfig::default(),
+            workflow_manager,
+            job_manager,
+            None,
+            kv_store.clone(),
+        ));
+
+        let run_id = "run-native-artifact-receipt";
+        let job_id = "job-native-artifacts";
+        let run = receipt_test_run(run_id, job_id);
+        kv_store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set {
+                    key: format!("_ci:runs:{run_id}"),
+                    value: serde_json::to_string(&run).expect("run serializes"),
+                },
+            })
+            .await
+            .expect("run is written to KV");
+
+        for (key_suffix, name, blob_hash, size_bytes) in
+            [("z-result", "z-result", "bbb", 20), ("a-result", "a-result", "aaa", 10)]
+        {
+            let mut extra = HashMap::new();
+            extra.insert("producer".to_string(), "native-ci".to_string());
+            let metadata = super::super::artifacts::ArtifactMetadata {
+                blob_hash: blob_hash.to_string(),
+                name: name.to_string(),
+                size_bytes,
+                content_type: "text/plain".to_string(),
+                created_at: "2026-05-03T20:02:00Z".to_string(),
+                run_id: Some(run_id.to_string()),
+                extra,
+            };
+            kv_store
+                .write(aspen_core::WriteRequest {
+                    command: aspen_core::WriteCommand::Set {
+                        key: format!("_ci:artifacts:{job_id}:{key_suffix}"),
+                        value: serde_json::to_string(&metadata).expect("artifact metadata serializes"),
+                    },
+                })
+                .await
+                .expect("artifact metadata is written to KV");
+        }
+
+        let response = handle_get_run_receipt(Some(&orchestrator), kv_store.as_ref(), run_id.to_string())
+            .await
+            .expect("receipt handler succeeds");
+        let result = match response {
+            ClientRpcResponse::CiGetRunReceiptResult(result) => result,
+            other => panic!("expected CiGetRunReceiptResult, got {other:?}"),
+        };
+
+        assert!(result.was_found);
+        assert!(result.error.is_none());
+        let receipt = result.receipt.expect("receipt is returned");
+        let alpha = receipt.stages[0].jobs.iter().find(|job| job.name == "alpha").expect("alpha job is present");
+        assert_eq!(alpha.job_id.as_deref(), Some(job_id));
+        assert_eq!(alpha.artifacts.len(), 2);
+        assert_eq!(alpha.artifacts[0].name, "a-result");
+        assert_eq!(alpha.artifacts[0].blob_hash, "aaa");
+        assert_eq!(alpha.artifacts[0].metadata.get("producer").map(String::as_str), Some("native-ci"));
+        assert_eq!(alpha.artifacts[1].name, "z-result");
     }
 }
