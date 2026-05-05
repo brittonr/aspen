@@ -86,26 +86,37 @@ impl JobsRequest {
     pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::JobSubmit { .. }
-            | Self::JobCancel { .. }
-            | Self::JobUpdateProgress { .. }
-            | Self::WorkerRegister { .. }
-            | Self::WorkerHeartbeat { .. }
-            | Self::WorkerDeregister { .. } => Some(Operation::Write {
-                key: "_jobs:".to_string(),
-                value: vec![],
+            Self::JobSubmit { job_type, .. } => Some(Operation::JobsWrite {
+                resource: format!("type:{job_type}"),
             }),
-            Self::JobGet { .. } | Self::JobList { .. } | Self::JobQueueStats | Self::WorkerStatus => {
-                Some(Operation::Read {
-                    key: "_jobs:".to_string(),
-                })
-            }
-            Self::WorkerPollJobs { worker_id, .. } => Some(Operation::Read {
-                key: format!("__worker:{worker_id}:jobs"),
+            Self::JobCancel { job_id, .. } | Self::JobUpdateProgress { job_id, .. } => Some(Operation::JobsWrite {
+                resource: format!("job:{job_id}"),
             }),
-            Self::WorkerCompleteJob { worker_id, .. } => Some(Operation::Write {
-                key: format!("__worker:{worker_id}:complete"),
-                value: vec![],
+            Self::WorkerRegister { worker_id, .. }
+            | Self::WorkerHeartbeat { worker_id, .. }
+            | Self::WorkerDeregister { worker_id } => Some(Operation::JobsWrite {
+                resource: format!("worker:{worker_id}"),
+            }),
+            Self::JobGet { job_id } => Some(Operation::JobsRead {
+                resource: format!("job:{job_id}"),
+            }),
+            Self::JobList { job_type, .. } => Some(Operation::JobsRead {
+                resource: match job_type.as_deref() {
+                    Some(job_type) => format!("type:{job_type}"),
+                    None => "job:".to_string(),
+                },
+            }),
+            Self::JobQueueStats => Some(Operation::JobsRead {
+                resource: "queue:stats".to_string(),
+            }),
+            Self::WorkerStatus => Some(Operation::JobsRead {
+                resource: "worker:".to_string(),
+            }),
+            Self::WorkerPollJobs { worker_id, .. } => Some(Operation::JobsRead {
+                resource: format!("worker:{worker_id}:jobs"),
+            }),
+            Self::WorkerCompleteJob { worker_id, .. } => Some(Operation::JobsWrite {
+                resource: format!("worker:{worker_id}:complete"),
             }),
         }
     }

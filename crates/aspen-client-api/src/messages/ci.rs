@@ -134,39 +134,42 @@ impl CiRequest {
     fn to_operation_pipeline(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::CiGetStatus { run_id } | Self::CiGetRunReceipt { run_id } => Some(Operation::Read {
-                key: format!("_ci:runs:{}", run_id),
+            Self::CiGetStatus { run_id } | Self::CiGetRunReceipt { run_id } => Some(Operation::CiRead {
+                resource: format!("run:{run_id}"),
             }),
-            Self::CiListRuns { repo_id, .. } => Some(Operation::Read {
-                key: format!("_ci:runs:{}", repo_id.as_deref().unwrap_or("")),
+            Self::CiListRuns { repo_id, .. } => Some(Operation::CiRead {
+                resource: match repo_id.as_deref() {
+                    Some(repo_id) => format!("repo:{repo_id}"),
+                    None => "run:".to_string(),
+                },
             }),
             Self::CiTriggerPipeline { repo_id, .. }
             | Self::CiWatchRepo { repo_id }
-            | Self::CiUnwatchRepo { repo_id } => Some(Operation::Write {
-                key: format!("_ci:repos:{}", repo_id),
-                value: vec![],
+            | Self::CiUnwatchRepo { repo_id } => Some(Operation::CiWrite {
+                resource: format!("repo:{repo_id}"),
             }),
-            Self::CiCancelRun { run_id, .. } => Some(Operation::Write {
-                key: format!("_ci:runs:{}", run_id),
-                value: vec![],
+            Self::CiCancelRun { run_id, .. } => Some(Operation::CiWrite {
+                resource: format!("run:{run_id}"),
             }),
-            Self::CiListArtifacts { job_id, run_id } => Some(Operation::Read {
-                key: format!("_ci:artifacts:{}:{}", job_id, run_id.as_deref().unwrap_or("")),
+            Self::CiListArtifacts { job_id, run_id } => Some(Operation::CiRead {
+                resource: match run_id {
+                    Some(run_id) => format!("run:{run_id}:artifact:{job_id}"),
+                    None => format!("artifact:{job_id}"),
+                },
             }),
-            Self::CiGetArtifact { blob_hash } => Some(Operation::Read {
-                key: format!("_ci:artifacts:{}", blob_hash),
+            Self::CiGetArtifact { blob_hash } => Some(Operation::CiRead {
+                resource: format!("artifact:{blob_hash}"),
             }),
-            Self::CiGetJobLogs { run_id, job_id, .. } => Some(Operation::Read {
-                key: format!("_ci:logs:{}:{}", run_id, job_id),
+            Self::CiGetJobLogs { run_id, job_id, .. } | Self::CiSubscribeLogs { run_id, job_id, .. } => {
+                Some(Operation::CiRead {
+                    resource: format!("run:{run_id}:log:{job_id}"),
+                })
+            }
+            Self::CiGetJobOutput { run_id, job_id } => Some(Operation::CiRead {
+                resource: format!("run:{run_id}:output:{job_id}"),
             }),
-            Self::CiSubscribeLogs { run_id, job_id, .. } => Some(Operation::Read {
-                key: format!("_ci:logs:{}:{}", run_id, job_id),
-            }),
-            Self::CiGetJobOutput { run_id, job_id } => Some(Operation::Read {
-                key: format!("_ci:runs:{}:{}", run_id, job_id),
-            }),
-            Self::CiGetRefStatus { repo_id, ref_name } => Some(Operation::Read {
-                key: format!("_ci:ref-status:{}:{}", repo_id, ref_name),
+            Self::CiGetRefStatus { repo_id, ref_name } => Some(Operation::CiRead {
+                resource: format!("repo:{repo_id}:ref:{ref_name}"),
             }),
 
             _ => None,

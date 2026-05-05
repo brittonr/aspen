@@ -262,6 +262,30 @@ pub enum Capability {
     NetAdmin,
 
     // ==========================================================================
+    // CI and Job Capabilities
+    // ==========================================================================
+    /// Read CI pipeline state matching a resource prefix.
+    CiRead {
+        /// CI resource prefix (for example, "run:" or "repo:<id>").
+        resource_prefix: String,
+    },
+    /// Mutate CI pipeline state matching a resource prefix.
+    CiWrite {
+        /// CI resource prefix.
+        resource_prefix: String,
+    },
+    /// Read job/worker state matching a resource prefix.
+    JobsRead {
+        /// Jobs resource prefix (for example, "job:" or "worker:<id>").
+        resource_prefix: String,
+    },
+    /// Mutate job/worker state matching a resource prefix.
+    JobsWrite {
+        /// Jobs resource prefix.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Capabilities
     // ==========================================================================
     /// Pull (read) federated resources matching a repo prefix.
@@ -361,6 +385,7 @@ impl Capability {
             .or_else(|| self.authorizes_transit(op))
             .or_else(|| self.authorizes_pki(op))
             .or_else(|| self.authorizes_net(op))
+            .or_else(|| self.authorizes_ci_jobs(op))
             .or_else(|| self.authorizes_federation(op))
             .or_else(|| self.authorizes_snix(op))
             .unwrap_or(false)
@@ -547,6 +572,26 @@ impl Capability {
         }
     }
 
+    fn authorizes_ci_jobs(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::CiRead { resource_prefix }, Operation::CiRead { resource })
+            | (Capability::CiWrite { resource_prefix }, Operation::CiWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            (Capability::JobsRead { resource_prefix }, Operation::JobsRead { resource })
+            | (Capability::JobsWrite { resource_prefix }, Operation::JobsWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn authorizes_federation(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
             (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
@@ -596,6 +641,7 @@ impl Capability {
             .or_else(|| self.contains_transit(other))
             .or_else(|| self.contains_pki(other))
             .or_else(|| self.contains_net(other))
+            .or_else(|| self.contains_ci_jobs(other))
             .or_else(|| self.contains_federation(other))
             .or_else(|| self.contains_snix(other))
             .unwrap_or(false)
@@ -811,6 +857,39 @@ impl Capability {
         }
     }
 
+    fn contains_ci_jobs(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::CiRead {
+                    resource_prefix: parent,
+                },
+                Capability::CiRead { resource_prefix: child },
+            )
+            | (
+                Capability::CiWrite {
+                    resource_prefix: parent,
+                },
+                Capability::CiWrite { resource_prefix: child },
+            )
+            | (
+                Capability::JobsRead {
+                    resource_prefix: parent,
+                },
+                Capability::JobsRead { resource_prefix: child },
+            )
+            | (
+                Capability::JobsWrite {
+                    resource_prefix: parent,
+                },
+                Capability::JobsWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
     fn contains_federation(&self, other: &Capability) -> Option<bool> {
         match (self, other) {
             (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
@@ -1012,6 +1091,30 @@ pub enum Operation {
     },
 
     // ==========================================================================
+    // CI and Job Operations
+    // ==========================================================================
+    /// Read CI pipeline state.
+    CiRead {
+        /// CI resource identifier.
+        resource: String,
+    },
+    /// Mutate CI pipeline state.
+    CiWrite {
+        /// CI resource identifier.
+        resource: String,
+    },
+    /// Read job or worker state.
+    JobsRead {
+        /// Jobs resource identifier.
+        resource: String,
+    },
+    /// Mutate job or worker state.
+    JobsWrite {
+        /// Jobs resource identifier.
+        resource: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Operations
     // ==========================================================================
     /// Pull (read) a federated resource.
@@ -1072,6 +1175,11 @@ impl fmt::Display for Operation {
             Operation::NetPublish { service } => write!(f, "NetPublish({service})"),
             Operation::NetUnpublish { service } => write!(f, "NetUnpublish({service})"),
             Operation::NetAdmin { action } => write!(f, "NetAdmin({action})"),
+            // CI and job operations
+            Operation::CiRead { resource } => write!(f, "CiRead({resource})"),
+            Operation::CiWrite { resource } => write!(f, "CiWrite({resource})"),
+            Operation::JobsRead { resource } => write!(f, "JobsRead({resource})"),
+            Operation::JobsWrite { resource } => write!(f, "JobsWrite({resource})"),
             // Federation operations
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),

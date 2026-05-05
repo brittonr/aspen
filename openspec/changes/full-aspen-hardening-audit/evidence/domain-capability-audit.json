@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-05T00:02:09Z",
+  "generated": "2026-05-05T00:40:21Z",
   "scanner": "production to_operation files before #[cfg(test)] modules; generic data operations on known internal-domain files/prefix windows",
   "completed_slices": [
     {
@@ -13,15 +13,27 @@
     {
       "surface": "Net service mesh",
       "evidence": "NetPublish/NetUnpublish/NetConnect/NetAdmin mappings; generic /_sys/net/svc/ negative tests"
+    },
+    {
+      "surface": "CI pipeline",
+      "evidence": "CiRead/CiWrite mappings and generic _ci: negative tests"
+    },
+    {
+      "surface": "Jobs/workers",
+      "evidence": "JobsRead/JobsWrite mappings and generic _jobs:/__worker: negative tests"
     }
   ],
-  "net_slice": {
-    "generic_prefix": "/_sys/net/svc/",
+  "ci_jobs_slice": {
+    "generic_prefixes": [
+      "_ci:",
+      "_jobs:",
+      "__worker:"
+    ],
     "mappings": {
-      "NetPublish": "Operation::NetPublish",
-      "NetUnpublish": "Operation::NetUnpublish",
-      "NetLookup": "Operation::NetConnect(port=0)",
-      "NetList": "Operation::NetAdmin"
+      "CI reads": "Operation::CiRead",
+      "CI writes": "Operation::CiWrite",
+      "job/worker reads": "Operation::JobsRead",
+      "job/worker writes": "Operation::JobsWrite"
     },
     "generic_prefix_capabilities_rejected": true
   },
@@ -32,7 +44,11 @@
     "snix_requests_require_snix_scoped_operations",
     "generic_kv_scopes_do_not_authorize_snix_put_operations",
     "net_registry_requests_use_net_capabilities_not_sys_prefixes",
-    "generic_sys_prefixes_do_not_authorize_net_registry_requests"
+    "generic_sys_prefixes_do_not_authorize_net_registry_requests",
+    "ci_requests_require_ci_scoped_operations",
+    "generic_ci_prefixes_do_not_authorize_ci_requests",
+    "job_requests_use_jobs_capabilities_not_generic_prefixes",
+    "generic_jobs_prefixes_do_not_authorize_job_requests"
   ],
   "remaining_generic_internal_domain_mappings": [
     {
@@ -72,72 +88,22 @@
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 14,
+      "line": 65,
       "text": "Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 18,
-      "text": "ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 21,
-      "text": "ClientRpcRequest::CiListRuns { repo_id, .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 26,
-      "text": "| ClientRpcRequest::CiUnwatchRepo { repo_id } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 30,
-      "text": "ClientRpcRequest::CiCancelRun { run_id, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 34,
-      "text": "ClientRpcRequest::CiListArtifacts { job_id, run_id } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 37,
-      "text": "ClientRpcRequest::CiGetArtifact { blob_hash } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 40,
-      "text": "ClientRpcRequest::CiGetJobLogs { run_id, job_id, .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 43,
-      "text": "ClientRpcRequest::CiSubscribeLogs { run_id, job_id, .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 46,
-      "text": "ClientRpcRequest::CiGetJobOutput { run_id, job_id } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 57,
-      "text": "Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 61,
+      "line": 69,
       "text": "ClientRpcRequest::CacheStats => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 64,
+      "line": 72,
       "text": "ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 76,
+      "line": 84,
       "text": "Some(Some(Operation::Read {"
     },
     {
@@ -256,26 +222,6 @@
       "text": "ClientRpcRequest::HookTrigger { .. } => Some(Some(Operation::Write {"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
-      "line": 15,
-      "text": "| ClientRpcRequest::WorkerDeregister { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
-      "line": 24,
-      "text": "| ClientRpcRequest::WorkerStatus => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
-      "line": 29,
-      "text": "ClientRpcRequest::WorkerPollJobs { worker_id, .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
-      "line": 32,
-      "text": "ClientRpcRequest::WorkerCompleteJob { worker_id, .. } => Some(Some(Operation::Write {"
-    },
-    {
       "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 20,
       "text": "ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),"
@@ -341,5 +287,5 @@
       "text": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
     }
   ],
-  "remaining_count": 61
+  "remaining_count": 47
 }
