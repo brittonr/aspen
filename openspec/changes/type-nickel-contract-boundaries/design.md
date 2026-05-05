@@ -47,6 +47,21 @@ Aspen has several existing Nickel seams: `.aspen/ci.ncl`, `crates/aspen-ci/src/c
 
 **Implementation:** Add a checker that regenerates Rust-derived contracts and fails on uncommitted diffs; run `nickel typecheck`/`nickel export`; run Rust round-trip/serde tests for the originating DTOs.
 
+### 5. Reuse Crunch Nickel patterns where they fit Aspen
+
+**Choice:** Treat `../crunch/crunch` as prior art for vendorable Nickel idioms, not as a wholesale schema source. Aspen should adapt the small, generic pieces and keep Aspen-specific names, bounds, and Rust DTO ownership.
+
+**Candidates to vendor/adapt:**
+
+- `lib/contracts.ncl`: small reusable predicate contracts for names, store paths, systems, hash algorithms/modes, sandbox modes, and tagged-input shapes. Aspen can reuse this style for snix/cache executor policy, test artifacts, and build receipts.
+- `lib/project.ncl`, `lib/project_outputs.ncl`, and `builders/mk_derivation.ncl`: derivation/project-output contracts with defaults and output selection patterns. Aspen can adapt these for CI job outputs, snix derivation policy, and dogfood build target manifests.
+- `lib/inventory.ncl` and `lib/system_module.ncl`: minimal machine/service/module inventory contracts. Aspen can adapt this for node/cluster profile and deploy topology validation.
+- `crates/crunch-glue/src/types.rs`: Rust structs mirroring Nickel-authored contracts, including custom deserialization for Nickel enum tags or strings. Aspen can reuse the boundary pattern for Nickel-authored config exports consumed by Rust.
+- `crates/crunch-project-core/src/manifest.rs`: alloc-friendly Rust DTOs with defaults, version compatibility checks, bounded vectors, duplicate/reference validation, and serde-tagged enums. Aspen can adapt these conventions for Rust-derived contract families.
+- `src/build_report.rs`, `src/operator_diagnostics.rs`, `src/witness_rebuild.rs`, and `crates/crunch-attestation-core/src/schema.rs`: schema-versioned operator evidence/report structs. Aspen should use these as examples for dogfood/native CI receipt contracts and preflight/diagnostic evidence.
+
+**Do not vendor directly:** Crunch derivation semantics, store-path hashing behavior, bootstrap-specific witness workflows, or runtime build behavior. Those are Crunch-owned behavior, while Aspen only needs the typed contract/evidence patterns.
+
 ## Risks / Trade-offs
 
 **Generated Nickel loses semantic contracts** → Mitigate with Aspen schema annotations or post-generation contract overlays for bounds, non-empty strings, max lengths, and secrecy policies.

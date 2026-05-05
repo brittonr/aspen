@@ -5,6 +5,7 @@
 ## Phase 1: Contract Registry and Source-of-Truth Classification
 
 - [ ] I1 Inventory existing Nickel and schema-bearing Rust surfaces: CI config, deploy protocol, dogfood/CI receipts, node config, test harness manifests, crate-extraction policy, feature bundles, trust/bootstrap policy, snix executor policy, and patchbay/network scenarios.
+- [ ] I1a Compare `../crunch/crunch` Nickel/Rust schema patterns and explicitly classify each reusable piece as vendored, adapted, or rejected before implementing Aspen contracts.
 - [ ] I2 Add a contract registry document or manifest that classifies each family as `rust-derived` or `nickel-authored`, names its owning Rust module or Nickel file, and records generation/check commands.
 - [ ] I3 Document explicit non-candidates: Raft behavior, protocol discriminant ownership, cryptographic internals, secret values, and hot-path runtime constants.
 
